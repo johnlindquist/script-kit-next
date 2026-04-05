@@ -29,19 +29,48 @@ pub(crate) struct AcpInlineSetupState {
     pub catalog_entries: Vec<AcpAgentCatalogEntry>,
 }
 
+/// Returns `true` if at least one launchable agent exists that is NOT the
+/// currently selected one.
+fn has_launchable_alternative(
+    selected_agent: Option<&AcpAgentCatalogEntry>,
+    catalog_entries: &[AcpAgentCatalogEntry],
+) -> bool {
+    let selected_id = selected_agent.map(|agent| agent.id.as_ref());
+    catalog_entries
+        .iter()
+        .any(|entry| entry.is_launchable() && Some(entry.id.as_ref()) != selected_id)
+}
+
 impl AcpInlineSetupState {
     /// Build inline setup state from a runtime `SetupRequired` event.
     ///
     /// Called when the ACP client emits `AcpEvent::SetupRequired` during a
-    /// live session (e.g. auth expired mid-conversation). Preserves the
-    /// selected agent context so the recovery card can show agent-specific
-    /// guidance.
+    /// live session (e.g. auth expired mid-conversation). Now receives the
+    /// full catalog so it can suggest switching to a ready alternative.
     pub(crate) fn from_runtime_setup_required(
         selected_agent: Option<AcpAgentCatalogEntry>,
+        catalog_entries: Vec<AcpAgentCatalogEntry>,
         reason: &str,
         auth_methods: &[String],
     ) -> Self {
+        let can_switch = has_launchable_alternative(selected_agent.as_ref(), &catalog_entries);
+
         match reason {
+            "auth_required" if can_switch => Self {
+                title: "Authentication required".into(),
+                body: if auth_methods.is_empty() {
+                    "The selected ACP agent needs authentication, but another ready agent is available.".into()
+                } else {
+                    format!(
+                        "The selected ACP agent needs authentication ({}) but another ready agent is available.",
+                        auth_methods.join(", ")
+                    ).into()
+                },
+                primary_action: AcpSetupAction::SelectAgent,
+                secondary_action: Some(AcpSetupAction::Retry),
+                selected_agent,
+                catalog_entries,
+            },
             "auth_required" => Self {
                 title: "Authentication required".into(),
                 body: if auth_methods.is_empty() {
@@ -56,7 +85,17 @@ impl AcpInlineSetupState {
                 primary_action: AcpSetupAction::Authenticate,
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
-                catalog_entries: Vec::new(),
+                catalog_entries,
+            },
+            _ if can_switch => Self {
+                title: "ACP agent setup required".into(),
+                body:
+                    "The selected ACP agent cannot continue, but another ready agent is available."
+                        .into(),
+                primary_action: AcpSetupAction::SelectAgent,
+                secondary_action: Some(AcpSetupAction::Retry),
+                selected_agent,
+                catalog_entries,
             },
             _ => Self {
                 title: "ACP agent setup required".into(),
@@ -64,7 +103,7 @@ impl AcpInlineSetupState {
                 primary_action: AcpSetupAction::Retry,
                 secondary_action: Some(AcpSetupAction::OpenCatalog),
                 selected_agent,
-                catalog_entries: Vec::new(),
+                catalog_entries,
             },
         }
     }
@@ -72,12 +111,21 @@ impl AcpInlineSetupState {
     pub(crate) fn from_resolution(resolution: &AcpLaunchResolution) -> Self {
         let selected_agent = resolution.selected_agent.clone();
         let catalog_entries = resolution.catalog_entries.clone();
+        let can_switch = has_launchable_alternative(selected_agent.as_ref(), &catalog_entries);
 
         match resolution.blocker {
             Some(AcpLaunchBlocker::NoAgentsAvailable) => Self {
                 title: "No ACP agents available".into(),
                 body: "Add an ACP agent in ~/.scriptkit/acp/agents.json, then retry.".into(),
                 primary_action: AcpSetupAction::OpenCatalog,
+                secondary_action: Some(AcpSetupAction::Retry),
+                selected_agent,
+                catalog_entries,
+            },
+            Some(AcpLaunchBlocker::AgentNotInstalled) if can_switch => Self {
+                title: "Agent install required".into(),
+                body: "The preferred ACP agent is not installed, but another ready agent is available.".into(),
+                primary_action: AcpSetupAction::SelectAgent,
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
                 catalog_entries,
@@ -93,11 +141,27 @@ impl AcpInlineSetupState {
                 selected_agent,
                 catalog_entries,
             },
+            Some(AcpLaunchBlocker::AuthenticationRequired) if can_switch => Self {
+                title: "Authentication required".into(),
+                body: "The selected ACP agent needs authentication, but another ready agent is available.".into(),
+                primary_action: AcpSetupAction::SelectAgent,
+                secondary_action: Some(AcpSetupAction::Retry),
+                selected_agent,
+                catalog_entries,
+            },
             Some(AcpLaunchBlocker::AuthenticationRequired) => Self {
                 title: "Authentication required".into(),
                 body: "Authenticate the selected ACP agent, then retry this chat.".into(),
                 primary_action: AcpSetupAction::Authenticate,
                 secondary_action: Some(AcpSetupAction::SelectAgent),
+                selected_agent,
+                catalog_entries,
+            },
+            Some(AcpLaunchBlocker::AgentMisconfigured) if can_switch => Self {
+                title: "Agent configuration required".into(),
+                body: "The selected ACP agent is misconfigured, but another ready agent is available.".into(),
+                primary_action: AcpSetupAction::SelectAgent,
+                secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
                 catalog_entries,
             },

@@ -163,8 +163,7 @@ pub fn ensure_snap_overlay_windows(cx: &mut App) -> Result<()> {
         let full_w = pixels_to_i32(full.size.width);
         let full_h = pixels_to_i32(full.size.height);
 
-        let visible =
-            get_visible_display_bounds(full_x + (full_w / 2), full_y + (full_h / 2));
+        let visible = get_visible_display_bounds(full_x + (full_w / 2), full_y + (full_h / 2));
 
         let local_x = visible.x - full_x;
         let local_y = visible.y - full_y;
@@ -202,8 +201,7 @@ pub fn ensure_snap_overlay_windows(cx: &mut App) -> Result<()> {
                         // SAFETY: ns_view is a valid NSView from a just-created GPUI window.
                         // We obtain the parent NSWindow via -[NSView window] on the main thread.
                         unsafe {
-                            let ns_window: cocoa::base::id =
-                                msg_send![ns_view, window];
+                            let ns_window: cocoa::base::id = msg_send![ns_view, window];
                             configure_snap_overlay_window_native(ns_window);
                         }
                     }

@@ -66,11 +66,9 @@ fn assert_expanded_builtin_surface(name: &str, entry_source: &str, layout_source
     // Layout must route through the shared expanded-view scaffold or shell
     assert!(
         layout_source.contains("render_expanded_view_scaffold(")
-            || layout_source.contains("render_expanded_view_prompt_shell(")
-            // Clipboard history uses manual expanded layout with shared hint strip
-            || (layout_source.contains("render_simple_hint_strip(")
-                && layout_source.contains("HEADER_PADDING_X")),
-        "{name} layout should use shared expanded-view scaffold/shell or manual expanded layout with shared tokens"
+            || layout_source.contains("render_expanded_view_scaffold_with_hints(")
+            || layout_source.contains("render_expanded_view_prompt_shell("),
+        "{name} layout should use shared expanded-view scaffold/shell"
     );
 
     // Must NOT use old PromptFooter
@@ -100,6 +98,7 @@ fn assert_expanded_builtin_surface(name: &str, entry_source: &str, layout_source
     eprintln!(
         "{{\"audit\":\"expanded_contract\",\"surface\":\"{name}\",\"scaffold_used\":{},\"divider_absent\":true,\"footer_absent\":true,\"layout_mode\":\"expanded\"}}",
         layout_source.contains("render_expanded_view_scaffold(")
+            || layout_source.contains("render_expanded_view_scaffold_with_hints(")
             || layout_source.contains("render_expanded_view_prompt_shell(")
     );
 }
@@ -121,6 +120,20 @@ fn file_search_enforces_expanded_view_contract() {
         "file_search",
         FILE_SEARCH_ENTRY_SOURCE,
         FILE_SEARCH_LAYOUT_SOURCE,
+    );
+}
+
+// ---- File search mini footer contract ----
+
+#[test]
+fn file_search_mini_footer_uses_universal_hint_contract() {
+    assert!(
+        FILE_SEARCH_LAYOUT_SOURCE.contains("emit_prompt_hint_audit(\"file_search\""),
+        "file_search mini layout should emit a prompt hint audit"
+    );
+    assert!(
+        FILE_SEARCH_LAYOUT_SOURCE.contains("universal_prompt_hints()"),
+        "file_search mini layout should use universal prompt hints"
     );
 }
 

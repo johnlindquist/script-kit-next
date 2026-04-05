@@ -1099,7 +1099,10 @@ fn has_concurrent_prompt_api_usage(script: &str) -> bool {
                 .unwrap_or(normalized.len());
             let window = &normalized[start..end];
 
-            if PROMPT_APIS.iter().any(|prompt_api| window.contains(prompt_api)) {
+            if PROMPT_APIS
+                .iter()
+                .any(|prompt_api| window.contains(prompt_api))
+            {
                 return true;
             }
 
@@ -1929,11 +1932,9 @@ await div(JSON.stringify([url1, url2, url3]));
 "#;
 
         let contract = audit_generated_script_contract(input);
-        assert!(
-            !contract
-                .warnings
-                .contains(&"concurrent_prompt_apis".to_string())
-        );
+        assert!(!contract
+            .warnings
+            .contains(&"concurrent_prompt_apis".to_string()));
     }
 
     #[test]
@@ -1953,9 +1954,8 @@ const urls = await Promise.all([
 await div(JSON.stringify(urls));
 "#;
 
-        let error =
-            prepare_script_from_ai_response_with_contract("open three windows", input)
-                .expect_err("concurrent prompt APIs must be rejected");
+        let error = prepare_script_from_ai_response_with_contract("open three windows", input)
+            .expect_err("concurrent prompt APIs must be rejected");
 
         let message = format!("{error:#}");
         assert!(message.contains("concurrent_prompt_apis"));

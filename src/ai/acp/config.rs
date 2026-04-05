@@ -297,9 +297,7 @@ pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
         let bytes = std::fs::read(&catalog_path)
             .with_context(|| format!("read ACP agents catalog at {}", catalog_path.display()))?;
         let file: super::catalog::AcpAgentCatalogFile = serde_json::from_slice(&bytes)
-            .with_context(|| {
-                format!("parse ACP agents catalog at {}", catalog_path.display())
-            })?;
+            .with_context(|| format!("parse ACP agents catalog at {}", catalog_path.display()))?;
         // Deduplicate: skip catalog entries whose id already exists.
         for agent in file.agents {
             if !agents.iter().any(|existing| existing.id == agent.id) {
@@ -336,8 +334,7 @@ pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
                 args: vec!["@zed-industries/codex-acp".to_string()],
             }),
             auth: Some(AcpAgentAuthHint {
-                summary: "Authenticate with ChatGPT, CODEX_API_KEY, or OPENAI_API_KEY."
-                    .to_string(),
+                summary: "Authenticate with ChatGPT, CODEX_API_KEY, or OPENAI_API_KEY.".to_string(),
             }),
         });
     }
@@ -380,11 +377,7 @@ pub(crate) fn load_acp_agent_catalog_entries(
                 if spec.args.is_empty() {
                     gpui::SharedString::from(spec.command.clone())
                 } else {
-                    gpui::SharedString::from(format!(
-                        "{} {}",
-                        spec.command,
-                        spec.args.join(" ")
-                    ))
+                    gpui::SharedString::from(format!("{} {}", spec.command, spec.args.join(" ")))
                 }
             });
 

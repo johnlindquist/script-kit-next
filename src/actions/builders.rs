@@ -40,7 +40,10 @@ pub use file_path::{
     FileSearchDirectoryInfo, FileSearchSortMode,
 };
 pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions};
-pub use script_context::{get_acp_chat_actions, get_global_actions, get_script_context_actions};
+pub(crate) use script_context::{
+    acp_switch_agent_id_from_action, get_acp_chat_actions, get_acp_chat_actions_with_agents,
+    get_global_actions, get_script_context_actions,
+};
 pub use scriptlet::get_scriptlet_context_actions_with_custom;
 
 #[cfg(test)]

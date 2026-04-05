@@ -14,9 +14,9 @@
 //! - `handlers` — Client-side handler implementing the ACP `Client` trait.
 //! - `client` — ACP runtime: subprocess lifecycle, initialize, session/prompt loop.
 
+pub(crate) mod catalog;
 pub(crate) mod chat_window;
 pub(crate) mod client;
-pub(crate) mod catalog;
 pub(crate) mod config;
 pub(crate) mod context;
 pub(crate) mod events;
@@ -33,11 +33,11 @@ pub(crate) mod view;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use client::{AcpConnection, AcpRuntime};
 pub(crate) use catalog::{
     default_acp_agents_path, AcpAgentAuthState, AcpAgentCatalogEntry, AcpAgentCatalogFile,
     AcpAgentConfigState, AcpAgentInstallState, AcpAgentSource,
 };
+pub(crate) use client::{AcpConnection, AcpRuntime};
 pub(crate) use config::{
     claude_code_agent_config_cached, load_acp_agent_catalog_entries, load_acp_agent_configs,
     load_preferred_acp_agent_id, persist_preferred_acp_agent_id, prewarm_agent_config,
@@ -54,13 +54,12 @@ pub(crate) use permission_broker::{
     AcpApprovalRequest, AcpApprovalRequestInput, AcpPermissionBroker,
 };
 pub(crate) use preflight::{
-    resolve_default_acp_launch, setup_title_for_resolution, AcpLaunchBlocker,
-    AcpLaunchResolution,
+    resolve_default_acp_launch, setup_title_for_resolution, AcpLaunchBlocker, AcpLaunchResolution,
 };
 pub(crate) use provider::AcpProvider;
+pub(crate) use setup_state::{AcpInlineSetupState, AcpSetupAction};
 pub(crate) use thread::{
     AcpContextBootstrapState, AcpThread, AcpThreadInit, AcpThreadMessage, AcpThreadStatus,
     AcpToolCallState,
 };
-pub(crate) use setup_state::{AcpInlineSetupState, AcpSetupAction};
 pub(crate) use view::{AcpChatSession, AcpChatView};

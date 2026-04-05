@@ -21,8 +21,9 @@ mod primitives;
 mod system;
 
 pub use acp_state::{
-    AcpAcceptedItem, AcpInputLayoutMetrics, AcpKeyRoute, AcpKeyRouteTelemetry, AcpPickerState,
-    AcpStateSnapshot, AcpWaitCondition, ACP_STATE_SCHEMA_VERSION,
+    AcpAcceptedItem, AcpInputLayoutMetrics, AcpInputLayoutTelemetry, AcpKeyRoute,
+    AcpKeyRouteTelemetry, AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpStateSnapshot,
+    AcpWaitCondition, ACP_STATE_SCHEMA_VERSION,
 };
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
 pub use batch_wait::{

@@ -533,6 +533,59 @@ pub fn get_global_actions() -> Vec<Action> {
     vec![]
 }
 
+#[allow(dead_code)] // Used by the binary ACP actions surface.
+const ACP_SWITCH_AGENT_ACTION_PREFIX: &str = "acp_switch_agent:";
+
+#[allow(dead_code)] // Used by the binary ACP actions surface.
+fn acp_agent_source_label(source: crate::ai::acp::AcpAgentSource) -> &'static str {
+    match source {
+        crate::ai::acp::AcpAgentSource::LegacyClaudeCode => "Legacy",
+        crate::ai::acp::AcpAgentSource::ScriptKitCatalog => "Catalog",
+        crate::ai::acp::AcpAgentSource::BuiltIn => "Built-in",
+    }
+}
+
+#[allow(dead_code)] // Used by the binary ACP actions surface.
+fn acp_agent_state_label(entry: &crate::ai::acp::AcpAgentCatalogEntry) -> &'static str {
+    match (entry.install_state, entry.auth_state, entry.config_state) {
+        (crate::ai::acp::AcpAgentInstallState::Unsupported, _, _) => "Unsupported",
+        (crate::ai::acp::AcpAgentInstallState::NeedsInstall, _, _) => "Needs install",
+        (_, crate::ai::acp::AcpAgentAuthState::NeedsAuthentication, _) => "Needs auth",
+        (
+            _,
+            _,
+            crate::ai::acp::AcpAgentConfigState::Missing
+            | crate::ai::acp::AcpAgentConfigState::Invalid,
+        ) => "Needs config",
+        _ => "Ready",
+    }
+}
+
+#[allow(dead_code)] // Used by the binary ACP actions surface.
+fn acp_agent_switch_description(
+    entry: &crate::ai::acp::AcpAgentCatalogEntry,
+    is_selected: bool,
+) -> String {
+    let source = acp_agent_source_label(entry.source);
+    let state = acp_agent_state_label(entry);
+
+    if is_selected {
+        format!("Currently selected ACP agent. {source} · {state}")
+    } else {
+        format!("Reconnect ACP chat using this agent. {source} · {state}")
+    }
+}
+
+#[allow(dead_code)] // Used by the binary ACP actions surface.
+fn acp_switch_agent_action_id(agent_id: &str) -> String {
+    format!("{ACP_SWITCH_AGENT_ACTION_PREFIX}{agent_id}")
+}
+
+#[allow(dead_code)] // Used by ACP chat action dispatch in the binary target.
+pub(crate) fn acp_switch_agent_id_from_action(action_id: &str) -> Option<&str> {
+    action_id.strip_prefix(ACP_SWITCH_AGENT_ACTION_PREFIX)
+}
+
 /// Actions available in the ACP chat view (Cmd+K menu).
 #[allow(dead_code)]
 pub fn get_acp_chat_actions() -> Vec<Action> {
@@ -709,6 +762,39 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_icon(IconName::Close)
         .with_section("Window"),
     ]
+}
+
+#[allow(dead_code)] // Used by the binary ACP actions surface.
+pub(crate) fn get_acp_chat_actions_with_agents(
+    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
+    selected_agent_id: Option<&str>,
+) -> Vec<Action> {
+    let mut actions = get_acp_chat_actions();
+
+    if catalog_entries.is_empty() {
+        return actions;
+    }
+
+    let selected_agent_id = selected_agent_id.filter(|id| !id.is_empty());
+    actions.extend(catalog_entries.iter().map(|entry| {
+        let is_selected = selected_agent_id == Some(entry.id.as_ref());
+        let title = if is_selected {
+            format!("Current Agent: {}", entry.display_name)
+        } else {
+            format!("Use {}", entry.display_name)
+        };
+
+        Action::new(
+            acp_switch_agent_action_id(entry.id.as_ref()),
+            title,
+            Some(acp_agent_switch_description(entry, is_selected)),
+            ActionCategory::ScriptContext,
+        )
+        .with_icon(IconName::Terminal)
+        .with_section("Agent")
+    }));
+
+    actions
 }
 
 #[cfg(test)]
@@ -1018,5 +1104,87 @@ mod tests {
                 "toggle_info must be present in {label} context actions"
             );
         }
+    }
+
+    fn sample_acp_agent(
+        id: &str,
+        display_name: &str,
+        source: crate::ai::acp::AcpAgentSource,
+        install_state: crate::ai::acp::AcpAgentInstallState,
+        auth_state: crate::ai::acp::AcpAgentAuthState,
+        config_state: crate::ai::acp::AcpAgentConfigState,
+    ) -> crate::ai::acp::AcpAgentCatalogEntry {
+        crate::ai::acp::AcpAgentCatalogEntry {
+            id: id.to_string().into(),
+            display_name: display_name.to_string().into(),
+            source,
+            install_state,
+            auth_state,
+            config_state,
+            install_hint: None,
+            config_hint: None,
+            config: None,
+        }
+    }
+
+    #[test]
+    fn test_acp_chat_actions_with_agents_adds_agent_section_entries() {
+        let actions = get_acp_chat_actions_with_agents(
+            &[
+                sample_acp_agent(
+                    "codex-acp",
+                    "Codex (ACP)",
+                    crate::ai::acp::AcpAgentSource::BuiltIn,
+                    crate::ai::acp::AcpAgentInstallState::Ready,
+                    crate::ai::acp::AcpAgentAuthState::Unknown,
+                    crate::ai::acp::AcpAgentConfigState::Valid,
+                ),
+                sample_acp_agent(
+                    "opencode",
+                    "OpenCode",
+                    crate::ai::acp::AcpAgentSource::BuiltIn,
+                    crate::ai::acp::AcpAgentInstallState::NeedsInstall,
+                    crate::ai::acp::AcpAgentAuthState::Unknown,
+                    crate::ai::acp::AcpAgentConfigState::Valid,
+                ),
+            ],
+            Some("codex-acp"),
+        );
+
+        let current = actions
+            .iter()
+            .find(|action| action.id == "acp_switch_agent:codex-acp")
+            .expect("current agent action should exist");
+        assert_eq!(current.title, "Current Agent: Codex (ACP)");
+        assert_eq!(current.section.as_deref(), Some("Agent"));
+        assert!(
+            current
+                .description
+                .as_deref()
+                .is_some_and(|description| description.contains("Currently selected ACP agent")),
+            "current agent description should explain selection state"
+        );
+
+        let alternate = actions
+            .iter()
+            .find(|action| action.id == "acp_switch_agent:opencode")
+            .expect("alternate agent action should exist");
+        assert_eq!(alternate.title, "Use OpenCode");
+        assert!(
+            alternate
+                .description
+                .as_deref()
+                .is_some_and(|description| description.contains("Needs install")),
+            "alternate agent description should include readiness state"
+        );
+    }
+
+    #[test]
+    fn test_acp_switch_agent_action_parser_returns_agent_id() {
+        assert_eq!(
+            acp_switch_agent_id_from_action("acp_switch_agent:codex-acp"),
+            Some("codex-acp")
+        );
+        assert_eq!(acp_switch_agent_id_from_action("acp_retry_last"), None);
     }
 }

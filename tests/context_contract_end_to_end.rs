@@ -24,10 +24,7 @@ fn parse_mentions(raw: &str) -> (String, Vec<AiContextPart>) {
         let trimmed = line.trim();
         let matched = specs
             .iter()
-            .find(|spec| {
-                spec.mention == Some(trimmed)
-                    || spec.mention_aliases.contains(&trimmed)
-            });
+            .find(|spec| spec.mention == Some(trimmed) || spec.mention_aliases.contains(&trimmed));
 
         if let Some(spec) = matched {
             parts.push(AiContextPart::ResourceUri {
@@ -55,7 +52,11 @@ fn explicit_context_surfaces_share_one_contract_end_to_end() {
     let (cleaned, mention_parts) = parse_mentions(raw);
 
     assert_eq!(cleaned, "Please summarize what matters.");
-    assert_eq!(mention_parts.len(), 2, "should parse @snapshot and @browser");
+    assert_eq!(
+        mention_parts.len(),
+        2,
+        "should parse @snapshot and @browser"
+    );
 
     // Step 2: Simulate pending context chips (from UI actions)
     let pending = vec![
@@ -140,16 +141,8 @@ fn all_mention_tokens_parse_via_canonical_contract() {
                 1,
                 "mention {mention} should produce exactly one part"
             );
-            assert_eq!(
-                parts[0].source(),
-                spec.uri,
-                "URI mismatch for {mention}"
-            );
-            assert_eq!(
-                parts[0].label(),
-                spec.label,
-                "label mismatch for {mention}"
-            );
+            assert_eq!(parts[0].source(), spec.uri, "URI mismatch for {mention}");
+            assert_eq!(parts[0].label(), spec.label, "label mismatch for {mention}");
         }
     }
 }
@@ -165,10 +158,7 @@ fn provider_backed_mentions_resolve_end_to_end() {
     assert_eq!(parts.len(), 4, "should parse all 4 provider-backed tokens");
 
     // Verify URIs point to real provider-backed resources
-    let uris: Vec<&str> = parts
-        .iter()
-        .map(|p| p.source())
-        .collect();
+    let uris: Vec<&str> = parts.iter().map(|p| p.source()).collect();
     assert!(uris.contains(&"kit://clipboard-history"));
     assert!(uris.contains(&"kit://git-diff"));
     assert!(uris.contains(&"kit://scripts"));

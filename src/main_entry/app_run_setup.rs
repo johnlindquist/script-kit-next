@@ -2174,6 +2174,9 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                     });
                                                 }
                                             });
+                                        } else if view.show_actions_popup && key_lower == "escape" {
+                                            logging::log("STDIN", "SimulateKey: Escape - close ACP actions dialog");
+                                            view.close_actions_popup(ActionsDialogHost::AcpChat, window, ctx);
                                         } else if key_lower == "escape" {
                                             logging::log("STDIN", "SimulateKey: Escape - return to main menu from ACP chat");
                                             view.close_tab_ai_harness_terminal(ctx);

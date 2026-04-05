@@ -20,7 +20,7 @@
  * tool receipts so the agent can inspect proof at every step.
  */
 
-import { resolve, join } from "path";
+import { resolve } from "path";
 
 const SCHEMA_VERSION = 1;
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
@@ -50,7 +50,7 @@ interface StepReceipt {
 
 async function runTool(
   cmd: string[],
-  label: string
+  _label: string
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(cmd, {
     stdout: "pipe",
@@ -92,6 +92,44 @@ async function step(
       durationMs: Date.now() - start,
     };
   }
+}
+
+/**
+ * Send a protocol command via session.sh rpc and return structured result.
+ * Surfaces the full waitForResult / batchResult trace receipt on failure.
+ */
+async function rpc(
+  session: string,
+  jsonCmd: string,
+  opts: { expect?: string; timeout?: number } = {}
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const args = [
+    "bash",
+    "scripts/agentic/session.sh",
+    "rpc",
+    session,
+    jsonCmd,
+  ];
+  if (opts.expect) {
+    args.push("--expect", opts.expect);
+  }
+  if (opts.timeout) {
+    args.push("--timeout", String(opts.timeout));
+  }
+  return runTool(args, "rpc");
+}
+
+/**
+ * Fire-and-forget send via session.sh send.
+ */
+async function send(
+  session: string,
+  jsonCmd: string
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  return runTool(
+    ["bash", "scripts/agentic/session.sh", "send", session, jsonCmd],
+    "send"
+  );
 }
 
 function parseArgs() {
@@ -155,40 +193,39 @@ async function recipePreflight(session: string): Promise<RecipeReceipt> {
 async function recipeAcpOpen(session: string): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
 
-  // 1. Show window
+  // 1. Show window + trigger ACP in one batch, then waitFor acpReady
   steps.push(
-    await step("show", async () => {
-      const r = await runTool(
-        [
-          "bash",
-          "scripts/agentic/session.sh",
-          "send",
-          session,
-          '{"type":"show"}',
-        ],
-        "show"
-      );
-      await Bun.sleep(1500);
-      return r;
-    })
+    await step("show-and-trigger-acp", () =>
+      send(session, '{"type":"show"}')
+    )
   );
 
-  // 2. Trigger ACP
+  // macOS focus-settling delay: the window needs a moment to
+  // become frontmost after show before triggerBuiltin can target it.
+  await Bun.sleep(300);
+
   steps.push(
-    await step("trigger-acp", async () => {
-      const r = await runTool(
-        [
-          "bash",
-          "scripts/agentic/session.sh",
-          "send",
-          session,
-          '{"type":"triggerBuiltin","name":"tab-ai"}',
-        ],
-        "trigger-acp"
-      );
-      await Bun.sleep(5000);
-      return r;
-    })
+    await step("trigger-acp", () =>
+      send(session, '{"type":"triggerBuiltin","name":"tab-ai"}')
+    )
+  );
+
+  // 2. Wait for ACP to be ready using waitFor instead of fixed sleep
+  steps.push(
+    await step("wait-acp-ready", () =>
+      rpc(
+        session,
+        JSON.stringify({
+          type: "waitFor",
+          requestId: "w-acp-ready",
+          condition: { type: "acpReady" },
+          timeout: 8000,
+          pollInterval: 25,
+          trace: "onFailure",
+        }),
+        { expect: "waitForResult", timeout: 10000 }
+      )
+    )
   );
 
   // 3. Focus window
@@ -258,17 +295,33 @@ async function recipeAcpPickerAccept(
 
   // 2. Type @ to open picker (native input)
   steps.push(
-    await step("type-at-trigger", async () => {
-      const r = await runTool(
+    await step("type-at-trigger", () =>
+      runTool(
         ["bun", "scripts/agentic/macos-input.ts", "type", "@"],
         "type-at"
-      );
-      await Bun.sleep(1000);
-      return r;
-    })
+      )
+    )
   );
 
-  // 3. Verify picker opened (state receipt first)
+  // 3. Wait for picker to open using waitFor instead of fixed sleep
+  steps.push(
+    await step("wait-picker-open", () =>
+      rpc(
+        session,
+        JSON.stringify({
+          type: "waitFor",
+          requestId: "w-picker-open",
+          condition: { type: "acpPickerOpen" },
+          timeout: 3000,
+          pollInterval: 25,
+          trace: "onFailure",
+        }),
+        { expect: "waitForResult", timeout: 5000 }
+      )
+    )
+  );
+
+  // 4. Verify picker opened (state receipt first)
   steps.push(
     await step("verify-picker-open", () =>
       runTool(
@@ -286,19 +339,35 @@ async function recipeAcpPickerAccept(
     )
   );
 
-  // 4. Accept with native key
+  // 5. Accept with native key
   steps.push(
-    await step(`native-${acceptKey}`, async () => {
-      const r = await runTool(
+    await step(`native-${acceptKey}`, () =>
+      runTool(
         ["bun", "scripts/agentic/macos-input.ts", "key", acceptKey],
         `native-${acceptKey}`
-      );
-      await Bun.sleep(500);
-      return r;
-    })
+      )
+    )
   );
 
-  // 5. Verify picker closed + item accepted (state receipt + screenshot)
+  // 6. Wait for picker to close and item to be accepted
+  steps.push(
+    await step("wait-item-accepted", () =>
+      rpc(
+        session,
+        JSON.stringify({
+          type: "waitFor",
+          requestId: "w-item-accepted",
+          condition: { type: "acpItemAccepted" },
+          timeout: 3000,
+          pollInterval: 25,
+          trace: "onFailure",
+        }),
+        { expect: "waitForResult", timeout: 5000 }
+      )
+    )
+  );
+
+  // 7. Verify picker closed + item accepted (state receipt + screenshot)
   steps.push(
     await step("verify-accepted", () =>
       runTool(
@@ -315,19 +384,6 @@ async function recipeAcpPickerAccept(
         "verify-accepted"
       )
     )
-  );
-
-  // 6. Grep ACP telemetry logs for picker_accepted
-  steps.push(
-    await step("check-telemetry", async () => {
-      const sessionDir =
-        process.env.SCRIPT_KIT_SESSION_DIR ?? "/tmp/sk-agentic-sessions";
-      const logPath = join(sessionDir, session, "app.log");
-      return runTool(
-        ["grep", "-c", "acp_picker_accepted\\|picker.*accept", logPath],
-        "grep-telemetry"
-      );
-    })
   );
 
   const allPass = steps.every((s) => s.status === "pass");

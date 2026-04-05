@@ -7,7 +7,9 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 
-use crate::storybook::{story_container, story_item, story_section, Story, StorySurface, StoryVariant};
+use crate::storybook::{
+    story_container, story_item, story_section, Story, StorySurface, StoryVariant,
+};
 use crate::theme::get_cached_theme;
 
 const PANEL_W: f32 = 312.0;
@@ -25,51 +27,107 @@ const INK: u32 = 0x0f172a;
 const STEEL: u32 = 0x1e293b;
 
 const VARIANTS: [VariantSpec; 15] = [
-    VariantSpec::new("contrast-mask", "Contrast Mask", "Backdrop suppression before tinting.")
-        .backdrop(BackdropMode::DarkMask)
-        .panel(PanelMode::Mask),
-    VariantSpec::new("refracted-copy", "Refracted Copy", "Single echoed backdrop copy.")
-        .backdrop(BackdropMode::Ghosted)
-        .panel(PanelMode::GhostSingle),
-    VariantSpec::new("dual-refraction", "Dual Refraction", "Two echoed copies for light splitting.")
-        .backdrop(BackdropMode::DoubleGhost)
-        .panel(PanelMode::GhostDual),
-    VariantSpec::new("condensation-band", "Condensation Band", "Top bloom plus interior streaks.")
-        .backdrop(BackdropMode::Condensed)
-        .panel(PanelMode::Condensation),
-    VariantSpec::new("laminated-sheet", "Laminated Sheet", "Bright laminated sheet with hard edge.")
-        .backdrop(BackdropMode::LightMask)
-        .panel(PanelMode::Laminated),
-    VariantSpec::new("edge-strip", "Edge Strip", "Separate lower edge to fake thickness.")
-        .backdrop(BackdropMode::DarkMask)
-        .panel(PanelMode::EdgeStrip),
+    VariantSpec::new(
+        "contrast-mask",
+        "Contrast Mask",
+        "Backdrop suppression before tinting.",
+    )
+    .backdrop(BackdropMode::DarkMask)
+    .panel(PanelMode::Mask),
+    VariantSpec::new(
+        "refracted-copy",
+        "Refracted Copy",
+        "Single echoed backdrop copy.",
+    )
+    .backdrop(BackdropMode::Ghosted)
+    .panel(PanelMode::GhostSingle),
+    VariantSpec::new(
+        "dual-refraction",
+        "Dual Refraction",
+        "Two echoed copies for light splitting.",
+    )
+    .backdrop(BackdropMode::DoubleGhost)
+    .panel(PanelMode::GhostDual),
+    VariantSpec::new(
+        "condensation-band",
+        "Condensation Band",
+        "Top bloom plus interior streaks.",
+    )
+    .backdrop(BackdropMode::Condensed)
+    .panel(PanelMode::Condensation),
+    VariantSpec::new(
+        "laminated-sheet",
+        "Laminated Sheet",
+        "Bright laminated sheet with hard edge.",
+    )
+    .backdrop(BackdropMode::LightMask)
+    .panel(PanelMode::Laminated),
+    VariantSpec::new(
+        "edge-strip",
+        "Edge Strip",
+        "Separate lower edge to fake thickness.",
+    )
+    .backdrop(BackdropMode::DarkMask)
+    .panel(PanelMode::EdgeStrip),
     VariantSpec::new("halo-lift", "Halo Lift", "Let halo do more work than fill.")
         .backdrop(BackdropMode::Halo)
         .panel(PanelMode::Halo),
-    VariantSpec::new("noise-grain", "Noise Grain", "Surface grain to break the alpha-card feel.")
-        .backdrop(BackdropMode::Ghosted)
-        .panel(PanelMode::Noise),
-    VariantSpec::new("washed-backdrop", "Washed Backdrop", "Bleach backdrop instead of deepening the card.")
-        .backdrop(BackdropMode::Bleached)
-        .panel(PanelMode::Bleached),
-    VariantSpec::new("stacked-ghost", "Stacked Ghost", "Three staggered backdrop echoes.")
-        .backdrop(BackdropMode::TripleGhost)
-        .panel(PanelMode::GhostStack),
-    VariantSpec::new("cool-saturation", "Cool Saturation", "Blue-biased glass like CSS saturate hacks.")
-        .backdrop(BackdropMode::Cool)
-        .panel(PanelMode::Cool),
-    VariantSpec::new("warm-satin", "Warm Satin", "Amber satin acrylic instead of neutral frost.")
-        .backdrop(BackdropMode::Warm)
-        .panel(PanelMode::Warm),
-    VariantSpec::new("mask-window", "Mask Window", "Stronger clipped backdrop window under a quieter card.")
-        .backdrop(BackdropMode::Windowed)
-        .panel(PanelMode::Quiet),
-    VariantSpec::new("offset-proxy", "Offset Proxy", "Backdrop shifted to feel optically displaced.")
-        .backdrop(BackdropMode::OffsetGhost)
-        .panel(PanelMode::Offset),
-    VariantSpec::new("best-attempt", "Best Attempt", "Combined suppression, ghosting, edge, and grain.")
-        .backdrop(BackdropMode::Best)
-        .panel(PanelMode::Best),
+    VariantSpec::new(
+        "noise-grain",
+        "Noise Grain",
+        "Surface grain to break the alpha-card feel.",
+    )
+    .backdrop(BackdropMode::Ghosted)
+    .panel(PanelMode::Noise),
+    VariantSpec::new(
+        "washed-backdrop",
+        "Washed Backdrop",
+        "Bleach backdrop instead of deepening the card.",
+    )
+    .backdrop(BackdropMode::Bleached)
+    .panel(PanelMode::Bleached),
+    VariantSpec::new(
+        "stacked-ghost",
+        "Stacked Ghost",
+        "Three staggered backdrop echoes.",
+    )
+    .backdrop(BackdropMode::TripleGhost)
+    .panel(PanelMode::GhostStack),
+    VariantSpec::new(
+        "cool-saturation",
+        "Cool Saturation",
+        "Blue-biased glass like CSS saturate hacks.",
+    )
+    .backdrop(BackdropMode::Cool)
+    .panel(PanelMode::Cool),
+    VariantSpec::new(
+        "warm-satin",
+        "Warm Satin",
+        "Amber satin acrylic instead of neutral frost.",
+    )
+    .backdrop(BackdropMode::Warm)
+    .panel(PanelMode::Warm),
+    VariantSpec::new(
+        "mask-window",
+        "Mask Window",
+        "Stronger clipped backdrop window under a quieter card.",
+    )
+    .backdrop(BackdropMode::Windowed)
+    .panel(PanelMode::Quiet),
+    VariantSpec::new(
+        "offset-proxy",
+        "Offset Proxy",
+        "Backdrop shifted to feel optically displaced.",
+    )
+    .backdrop(BackdropMode::OffsetGhost)
+    .panel(PanelMode::Offset),
+    VariantSpec::new(
+        "best-attempt",
+        "Best Attempt",
+        "Combined suppression, ghosting, edge, and grain.",
+    )
+    .backdrop(BackdropMode::Best)
+    .panel(PanelMode::Best),
 ];
 
 #[derive(Clone, Copy)]
@@ -182,13 +240,18 @@ impl Story for FrostedSurfaceVariationsStory {
     fn variants(&self) -> Vec<StoryVariant> {
         VARIANTS
             .iter()
-            .map(|spec| StoryVariant::default_named(spec.id, spec.name).description(spec.description))
+            .map(|spec| {
+                StoryVariant::default_named(spec.id, spec.name).description(spec.description)
+            })
             .collect()
     }
 }
 
 fn variant_spec(id: &str) -> &'static VariantSpec {
-    VARIANTS.iter().find(|spec| spec.id == id).unwrap_or(&VARIANTS[0])
+    VARIANTS
+        .iter()
+        .find(|spec| spec.id == id)
+        .unwrap_or(&VARIANTS[0])
 }
 
 fn render_scene(spec: &VariantSpec) -> Div {
@@ -336,9 +399,11 @@ fn backdrop_proxy(mode: BackdropMode) -> Div {
                 linear_color_stop(rgba_hex(0x0b0d11, 0x68), 1.0),
             ))
             .child(proxy_streaks(rgba_hex(0xffffff, 0x0e), 8)),
-        BackdropMode::Ghosted => base
-            .bg(rgba_hex(ICE, 0x10))
-            .child(proxy_text(rgba_hex(0xffffff, 0x18), px(12.), px(24.))),
+        BackdropMode::Ghosted => base.bg(rgba_hex(ICE, 0x10)).child(proxy_text(
+            rgba_hex(0xffffff, 0x18),
+            px(12.),
+            px(24.),
+        )),
         BackdropMode::DoubleGhost => base
             .bg(linear_gradient(
                 180.,
@@ -359,9 +424,11 @@ fn backdrop_proxy(mode: BackdropMode) -> Div {
                 linear_color_stop(rgba_hex(0x0b0d11, 0x54), 1.0),
             ))
             .child(proxy_streaks(rgba_hex(PEARL, 0x12), 14)),
-        BackdropMode::LightMask => base
-            .bg(rgba_hex(0xeff4fa, 0x58))
-            .child(proxy_text(rgba_hex(INK, 0x14), px(12.), px(26.))),
+        BackdropMode::LightMask => base.bg(rgba_hex(0xeff4fa, 0x58)).child(proxy_text(
+            rgba_hex(INK, 0x14),
+            px(12.),
+            px(26.),
+        )),
         BackdropMode::Halo => base.bg(rgba_hex(MINT, 0x10)).shadow(vec![BoxShadow {
             color: hsla_hex(ICE, 0x1a),
             offset: point(px(0.), px(12.)),
@@ -394,9 +461,10 @@ fn backdrop_proxy(mode: BackdropMode) -> Div {
             .border_1()
             .border_color(rgba_hex(PEARL, 0x10))
             .child(proxy_streaks(rgba_hex(PEARL, 0x0e), 11)),
-        BackdropMode::OffsetGhost => base
-            .bg(rgba_hex(ICE, 0x0a))
-            .child(proxy_text(rgba_hex(PEARL, 0x14), px(24.), px(18.))),
+        BackdropMode::OffsetGhost => {
+            base.bg(rgba_hex(ICE, 0x0a))
+                .child(proxy_text(rgba_hex(PEARL, 0x14), px(24.), px(18.)))
+        }
         BackdropMode::Best => base
             .bg(linear_gradient(
                 180.,
@@ -434,10 +502,19 @@ fn proxy_text(color: Rgba, left: Pixels, top: Pixels) -> Div {
 }
 
 fn proxy_streaks(color: Rgba, count: usize) -> Div {
-    div().absolute().top(px(0.)).left(px(0.)).right(px(0.)).bottom(px(0.)).children(
-        (0..count).map(|index| {
+    div()
+        .absolute()
+        .top(px(0.))
+        .left(px(0.))
+        .right(px(0.))
+        .bottom(px(0.))
+        .children((0..count).map(|index| {
             let top = 10.0 + index as f32 * 11.0;
-            let width = if index % 3 == 0 { PANEL_W - 24.0 } else { PANEL_W - 54.0 };
+            let width = if index % 3 == 0 {
+                PANEL_W - 24.0
+            } else {
+                PANEL_W - 54.0
+            };
 
             div()
                 .absolute()
@@ -446,13 +523,17 @@ fn proxy_streaks(color: Rgba, count: usize) -> Div {
                 .w(px(width))
                 .h(px(1.))
                 .bg(color)
-        }),
-    )
+        }))
 }
 
 fn surface_noise(color: Rgba) -> Div {
-    div().absolute().top(px(0.)).left(px(0.)).right(px(0.)).bottom(px(0.)).children(
-        (0..28).map(|index| {
+    div()
+        .absolute()
+        .top(px(0.))
+        .left(px(0.))
+        .right(px(0.))
+        .bottom(px(0.))
+        .children((0..28).map(|index| {
             let x = 12.0 + ((index * 17) % 260) as f32;
             let y = 10.0 + ((index * 23) % 150) as f32;
             let w = if index % 3 == 0 { 2.0 } else { 1.0 };
@@ -465,8 +546,7 @@ fn surface_noise(color: Rgba) -> Div {
                 .w(px(w))
                 .h(px(h))
                 .bg(color)
-        }),
-    )
+        }))
 }
 
 fn frosted_panel(mode: PanelMode) -> Div {
@@ -503,7 +583,9 @@ fn frosted_panel(mode: PanelMode) -> Div {
         .when_some(style.inner_ghost, |panel, ghost| panel.child(ghost))
         .when_some(style.bottom_edge, |panel, edge| panel.child(edge))
         .when_some(style.surface_noise, |panel, noise| panel.child(noise))
-        .when(style.show_streaks, |panel| panel.child(proxy_streaks(style.streak_color, 10)))
+        .when(style.show_streaks, |panel| {
+            panel.child(proxy_streaks(style.streak_color, 10))
+        })
         .child(
             div()
                 .absolute()
@@ -554,16 +636,10 @@ fn frosted_panel(mode: PanelMode) -> Div {
                                 .child(style.copy.to_string()),
                         ),
                 )
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .gap(px(8.))
-                        .children([
-                            footer_chip("Method", style.label),
-                            footer_chip("Aim", "optical layer"),
-                        ]),
-                ),
+                .child(div().flex().flex_row().gap(px(8.)).children([
+                    footer_chip("Method", style.label),
+                    footer_chip("Aim", "optical layer"),
+                ])),
         )
 }
 

@@ -239,7 +239,9 @@ fn harness_guidance_includes_prompt_sequencing_rule() {
     let skill = include_str!("../kit-init/skills/script-authoring/SKILL.md");
 
     assert!(
-        starter.contains("Never use `Promise.all`, `Promise.race`, `Promise.any`, or `Promise.allSettled`"),
+        starter.contains(
+            "Never use `Promise.all`, `Promise.race`, `Promise.any`, or `Promise.allSettled`"
+        ),
         "starter guidance must forbid concurrent Promise combinators with prompt APIs"
     );
     assert!(

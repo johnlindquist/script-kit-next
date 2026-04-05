@@ -190,11 +190,13 @@ fn classify_agent_source_distinguishes_legacy_from_builtin() {
     // The classifier must assign LegacyClaudeCode to "claude-code" and
     // BuiltIn to the well-known auto-detected agents.
     assert!(
-        ACP_CONFIG_SOURCE.contains(r#""claude-code" => super::catalog::AcpAgentSource::LegacyClaudeCode"#),
+        ACP_CONFIG_SOURCE
+            .contains(r#""claude-code" => super::catalog::AcpAgentSource::LegacyClaudeCode"#),
         "claude-code must be classified as LegacyClaudeCode"
     );
     assert!(
-        ACP_CONFIG_SOURCE.contains(r#""opencode" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn"#),
+        ACP_CONFIG_SOURCE
+            .contains(r#""opencode" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn"#),
         "opencode and codex-acp must be classified as BuiltIn"
     );
 }
@@ -225,7 +227,8 @@ const SETUP_STATE_SOURCE: &str = include_str!("../src/ai/acp/setup_state.rs");
 #[test]
 fn acp_thread_init_includes_selected_agent() {
     assert!(
-        ACP_THREAD_SOURCE.contains("pub selected_agent: Option<super::catalog::AcpAgentCatalogEntry>"),
+        ACP_THREAD_SOURCE
+            .contains("pub selected_agent: Option<super::catalog::AcpAgentCatalogEntry>"),
         "AcpThreadInit must carry the selected agent catalog entry"
     );
 }

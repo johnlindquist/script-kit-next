@@ -295,8 +295,7 @@ impl ContextAttachmentKind {
         context_attachment_specs()
             .iter()
             .find(|spec| {
-                spec.slash_command == Some(trimmed)
-                    || spec.slash_aliases.contains(&trimmed)
+                spec.slash_command == Some(trimmed) || spec.slash_aliases.contains(&trimmed)
             })
             .map(|spec| spec.kind)
     }
@@ -305,10 +304,7 @@ impl ContextAttachmentKind {
         let trimmed = input.trim();
         context_attachment_specs()
             .iter()
-            .find(|spec| {
-                spec.mention == Some(trimmed)
-                    || spec.mention_aliases.contains(&trimmed)
-            })
+            .find(|spec| spec.mention == Some(trimmed) || spec.mention_aliases.contains(&trimmed))
             .map(|spec| spec.kind)
     }
 }

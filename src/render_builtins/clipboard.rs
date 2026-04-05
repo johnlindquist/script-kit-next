@@ -8,7 +8,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::expanded("clipboard_history", true),
+            &crate::components::PromptChromeAudit::expanded("clipboard_history", false),
         );
         // Use theme for all colors - consistent with main menu
         let tokens = get_tokens(self.current_design);
@@ -272,6 +272,7 @@ impl ScriptListApp {
         let text_primary = self.theme.colors.text.primary;
         #[allow(unused_variables)]
         let text_muted = self.theme.colors.text.muted;
+        let text_dimmed = self.theme.colors.text.dimmed;
 
 
         // Build virtualized list
@@ -472,42 +473,60 @@ impl ScriptListApp {
             &design_visual,
         );
 
-        // Emit hint audit for the expanded-view footer
-        let hints = crate::components::universal_prompt_hints();
-        crate::components::emit_prompt_hint_audit("clipboard_history", &hints);
-
-        tracing::info!(
-            surface = "clipboard_history",
-            layout_mode = "expanded",
-            divider_chrome_removed = true,
-            header_status_text_removed = true,
-            "clipboard_history: expanded-view shell migration checkpoint"
-        );
-
-        // Header: bare input only — no extra status text, no divider
-        let header_element = div().flex_1().flex().flex_row().items_center().child(
-            Input::new(&self.gpui_input_state)
-                .w_full()
-                .h(px(28.))
-                .px(px(0.))
-                .py(px(0.))
-                .with_size(Size::Size(px(design_typography.font_size_xl)))
-                .appearance(false)
-                .bordered(false)
-                .focus_bordered(false),
-        );
+        let header_element = div()
+            .flex_1()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            .child(
+                div().flex_1().flex().flex_row().items_center().child(
+                    Input::new(&self.gpui_input_state)
+                        .w_full()
+                        .h(px(28.))
+                        .px(px(0.))
+                        .py(px(0.))
+                        .with_size(Size::Size(px(design_typography.font_size_xl)))
+                        .appearance(false)
+                        .bordered(false)
+                        .focus_bordered(false),
+                ),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(rgb(text_dimmed))
+                    .child(format!("{} entries", self.cached_clipboard_entries.len())),
+            );
 
         // List pane with scrollbar overlay
         let list_pane = div()
             .relative()
             .w_full()
             .h_full()
+            .min_h(px(0.))
             .py(px(design_spacing.padding_xs))
             .child(list_element)
             .child(list_scrollbar);
 
-        // Assemble via shared expanded-view scaffold
-        crate::components::render_expanded_view_scaffold(header_element, list_pane, preview_panel)
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("clipboard_history", &hints);
+
+        tracing::info!(
+            target: "script_kit::prompt_chrome",
+            surface = "clipboard_history",
+            layout_mode = "expanded_scaffold",
+            "clipboard_history_chrome_checkpoint"
+        );
+
+        // Assemble via shared expanded-view scaffold with explicit hints
+        crate::components::render_expanded_view_scaffold_with_hints(
+            header_element,
+            list_pane,
+            preview_panel,
+            hints,
+            None,
+        )
             .text_color(rgb(text_primary))
             .font_family(design_typography.font_family)
             .key_context("clipboard_history")
@@ -526,8 +545,8 @@ mod clipboard_chrome_audit {
 
         // Must route through the shared expanded-view scaffold
         assert!(
-            source.contains("render_expanded_view_scaffold("),
-            "clipboard must use the shared expanded-view scaffold"
+            source.contains("render_expanded_view_scaffold_with_hints("),
+            "clipboard must use the shared expanded-view scaffold with hints"
         );
 
         // Must emit expanded layout audit
@@ -543,11 +562,11 @@ mod clipboard_chrome_audit {
             "clipboard must not use SectionDivider — expanded shell has no divider"
         );
 
-        // Must NOT have extra header status text (split to avoid self-match)
+        // Header entry count is acceptable as a secondary label in the scaffold header
         let entries_label = "{} ".to_owned() + "entries";
         assert!(
-            !source.contains(&entries_label),
-            "clipboard must not show extra entries count header label"
+            source.contains(&entries_label),
+            "clipboard should show entries count in the scaffold header"
         );
 
         // Must NOT use legacy PromptFooter

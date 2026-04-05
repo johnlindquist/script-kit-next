@@ -3575,14 +3575,14 @@ fn acp_view_renders_markdown_messages() {
 }
 
 #[test]
-fn acp_view_has_permission_overlay() {
+fn acp_view_has_inline_permission_card() {
     assert!(
-        ACP_VIEW_SOURCE.contains("render_permission_overlay"),
-        "AcpChatView must render a permission approval overlay"
+        ACP_VIEW_SOURCE.contains("render_permission_inline_card"),
+        "AcpChatView must render an inline permission approval card"
     );
     assert!(
         ACP_VIEW_SOURCE.contains("approve_pending_permission"),
-        "AcpChatView overlay must call approve_pending_permission"
+        "AcpChatView permission card must call approve_pending_permission"
     );
 }
 

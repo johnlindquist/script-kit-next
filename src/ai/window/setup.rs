@@ -180,11 +180,7 @@ impl AiApp {
     ///
     /// Seeds a default catalog if none exists, then opens it in the default
     /// editor so the user can add, fix, or remove agent entries.
-    pub(super) fn open_acp_agents_catalog(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn open_acp_agents_catalog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let path = crate::ai::acp::default_acp_agents_path();
         tracing::info!(
             target: "script_kit::tab_ai",

@@ -1364,19 +1364,16 @@ mod prompt_layout_shell_tests {
             !source.contains("SectionDivider::new()"),
             "clipboard_history_layout.rs should not use SectionDivider (whisper chrome: spacing defines structure)"
         );
-        // Uses shared header padding tokens
+        // Uses universal prompt hints
         assert!(
-            source.contains("HEADER_PADDING_X"),
-            "clipboard_history_layout.rs should use chrome HEADER_PADDING_X"
+            source.contains("universal_prompt_hints()"),
+            "clipboard_history_layout.rs should use canonical universal prompt hints"
         );
+        // Must route through the shared expanded-view scaffold
         assert!(
-            source.contains("HEADER_PADDING_Y"),
-            "clipboard_history_layout.rs should use chrome HEADER_PADDING_Y"
-        );
-        // Canonical hint strip footer
-        assert!(
-            source.contains("render_simple_hint_strip("),
-            "clipboard_history_layout.rs should render a minimal hint strip footer"
+            source.contains("render_expanded_view_scaffold_with_hints(")
+                || source.contains("render_expanded_view_scaffold("),
+            "clipboard_history_layout.rs should route through the shared expanded-view scaffold"
         );
         // No PromptFooter after migration
         assert!(

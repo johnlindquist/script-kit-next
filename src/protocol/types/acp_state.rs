@@ -191,7 +191,7 @@ pub struct AcpKeyRouteTelemetry {
     /// Whether the picker was open at the time of the key press.
     pub picker_open: bool,
 
-    /// Whether the permission overlay was active.
+    /// Whether an ACP permission approval surface was active.
     pub permission_active: bool,
 
     /// Cursor index before the key was processed.
@@ -213,7 +213,7 @@ pub struct AcpKeyRouteTelemetry {
 pub enum AcpKeyRoute {
     /// Key was handled by the picker (navigation or accept).
     Picker,
-    /// Key was handled by the permission overlay.
+    /// Key was handled by the permission approval surface.
     Permission,
     /// Key was handled by the search overlay.
     Search,
@@ -225,6 +225,53 @@ pub enum AcpKeyRoute {
     Propagated,
     /// Key was handled by the setup mode handler.
     Setup,
+}
+
+/// Structured telemetry event emitted when a picker item is accepted.
+///
+/// Emitted on `script_kit::acp_telemetry` target alongside the key-route event.
+/// Preserves the trigger, item identity, and cursor position so agents can
+/// verify acceptance without fuzzy log matching.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpPickerItemAcceptedTelemetry {
+    /// Trigger character that opened the picker: `@` or `/`.
+    pub trigger: String,
+
+    /// Human-readable label of the accepted item.
+    pub item_label: String,
+
+    /// Machine ID of the accepted item (e.g. `built_in:context`).
+    pub item_id: String,
+
+    /// The key that caused the accept: `"enter"` or `"tab"`.
+    pub accepted_via_key: String,
+
+    /// Cursor character index after the accepted text was inserted.
+    pub cursor_after: usize,
+
+    /// Whether the accept also caused a message submission.
+    pub caused_submit: bool,
+}
+
+/// Structured telemetry event for single-line input layout after mutations.
+///
+/// Emitted on `script_kit::acp_telemetry` target after acceptance or cursor
+/// moves that may shift the visible window.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpInputLayoutTelemetry {
+    /// Total character count in the input.
+    pub char_count: usize,
+
+    /// Visible window start (character index).
+    pub visible_start: usize,
+
+    /// Visible window end (character index, exclusive).
+    pub visible_end: usize,
+
+    /// Cursor position within the visible window (0-based from visible_start).
+    pub cursor_in_window: usize,
 }
 
 #[cfg(test)]
@@ -307,8 +354,7 @@ mod tests {
         assert_eq!(json["inputLayout"]["charCount"], 42);
         assert_eq!(json["inputLayout"]["visibleStart"], 10);
 
-        let back: AcpStateSnapshot =
-            serde_json::from_value(json).expect("deserialize with layout");
+        let back: AcpStateSnapshot = serde_json::from_value(json).expect("deserialize with layout");
         assert_eq!(back, snap);
     }
 
@@ -545,5 +591,178 @@ mod tests {
         let cond: AcpWaitCondition =
             serde_json::from_value(json).expect("deserialize external JSON");
         assert_eq!(cond, AcpWaitCondition::AcpCursorAt { index: 42 });
+    }
+
+    // ── AcpPickerItemAcceptedTelemetry serde ───────────────────
+
+    #[test]
+    fn acp_picker_item_accepted_telemetry_round_trips() {
+        let telemetry = AcpPickerItemAcceptedTelemetry {
+            trigger: "@".to_string(),
+            item_label: "context".to_string(),
+            item_id: "built_in:context".to_string(),
+            accepted_via_key: "enter".to_string(),
+            cursor_after: 9,
+            caused_submit: false,
+        };
+        let json = serde_json::to_value(&telemetry).expect("serialize");
+        assert_eq!(json["trigger"], "@");
+        assert_eq!(json["itemLabel"], "context");
+        assert_eq!(json["itemId"], "built_in:context");
+        assert_eq!(json["acceptedViaKey"], "enter");
+        assert_eq!(json["cursorAfter"], 9);
+        assert_eq!(json["causedSubmit"], false);
+
+        let back: AcpPickerItemAcceptedTelemetry =
+            serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back, telemetry);
+    }
+
+    #[test]
+    fn acp_picker_item_accepted_telemetry_tab_vs_enter_distinct() {
+        let enter = AcpPickerItemAcceptedTelemetry {
+            trigger: "@".to_string(),
+            item_label: "context".to_string(),
+            item_id: "built_in:context".to_string(),
+            accepted_via_key: "enter".to_string(),
+            cursor_after: 9,
+            caused_submit: false,
+        };
+        let tab = AcpPickerItemAcceptedTelemetry {
+            accepted_via_key: "tab".to_string(),
+            ..enter.clone()
+        };
+        let enter_json = serde_json::to_value(&enter).expect("serialize enter");
+        let tab_json = serde_json::to_value(&tab).expect("serialize tab");
+
+        assert_eq!(enter_json["acceptedViaKey"], "enter");
+        assert_eq!(tab_json["acceptedViaKey"], "tab");
+        assert_ne!(
+            enter_json["acceptedViaKey"], tab_json["acceptedViaKey"],
+            "enter and tab must produce distinct acceptedViaKey values"
+        );
+    }
+
+    #[test]
+    fn acp_picker_item_accepted_telemetry_slash_trigger() {
+        let telemetry = AcpPickerItemAcceptedTelemetry {
+            trigger: "/".to_string(),
+            item_label: "compact".to_string(),
+            item_id: "slash:compact".to_string(),
+            accepted_via_key: "enter".to_string(),
+            cursor_after: 9,
+            caused_submit: true,
+        };
+        let json = serde_json::to_value(&telemetry).expect("serialize");
+        assert_eq!(json["trigger"], "/");
+        assert_eq!(json["causedSubmit"], true);
+
+        let back: AcpPickerItemAcceptedTelemetry =
+            serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back, telemetry);
+    }
+
+    // ── AcpInputLayoutTelemetry serde ──────────────────────────
+
+    #[test]
+    fn acp_input_layout_telemetry_round_trips() {
+        let telemetry = AcpInputLayoutTelemetry {
+            char_count: 42,
+            visible_start: 10,
+            visible_end: 35,
+            cursor_in_window: 5,
+        };
+        let json = serde_json::to_value(&telemetry).expect("serialize");
+        assert_eq!(json["charCount"], 42);
+        assert_eq!(json["visibleStart"], 10);
+        assert_eq!(json["visibleEnd"], 35);
+        assert_eq!(json["cursorInWindow"], 5);
+
+        let back: AcpInputLayoutTelemetry = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back, telemetry);
+    }
+
+    #[test]
+    fn acp_input_layout_telemetry_matches_layout_metrics_fields() {
+        // Verify the telemetry mirrors AcpInputLayoutMetrics field names exactly.
+        let metrics = AcpInputLayoutMetrics {
+            char_count: 24,
+            visible_start: 0,
+            visible_end: 24,
+            cursor_in_window: 11,
+        };
+        let telemetry = AcpInputLayoutTelemetry {
+            char_count: metrics.char_count,
+            visible_start: metrics.visible_start,
+            visible_end: metrics.visible_end,
+            cursor_in_window: metrics.cursor_in_window,
+        };
+        let m_json = serde_json::to_value(&metrics).expect("serialize metrics");
+        let t_json = serde_json::to_value(&telemetry).expect("serialize telemetry");
+        assert_eq!(
+            m_json, t_json,
+            "telemetry and metrics must serialize to identical JSON"
+        );
+    }
+
+    // ── Key route telemetry with picker-accepted context ───────
+
+    #[test]
+    fn acp_key_route_telemetry_enter_picker_accept() {
+        let route_event = AcpKeyRouteTelemetry {
+            key: "enter".to_string(),
+            route: AcpKeyRoute::Picker,
+            picker_open: true,
+            permission_active: false,
+            cursor_before: 1,
+            cursor_after: 9,
+            caused_submit: false,
+            consumed: true,
+        };
+        let json = serde_json::to_value(&route_event).expect("serialize");
+        assert_eq!(json["key"], "enter");
+        assert_eq!(json["route"], "picker");
+        assert!(json["pickerOpen"].as_bool().expect("bool"));
+    }
+
+    #[test]
+    fn acp_key_route_telemetry_tab_picker_accept() {
+        let route_event = AcpKeyRouteTelemetry {
+            key: "tab".to_string(),
+            route: AcpKeyRoute::Picker,
+            picker_open: true,
+            permission_active: false,
+            cursor_before: 1,
+            cursor_after: 9,
+            caused_submit: false,
+            consumed: true,
+        };
+        let json = serde_json::to_value(&route_event).expect("serialize");
+        assert_eq!(json["key"], "tab");
+        assert_eq!(json["route"], "picker");
+    }
+
+    #[test]
+    fn acp_key_route_enter_vs_tab_distinct_key_field() {
+        let enter = AcpKeyRouteTelemetry {
+            key: "enter".to_string(),
+            route: AcpKeyRoute::Picker,
+            picker_open: true,
+            permission_active: false,
+            cursor_before: 1,
+            cursor_after: 9,
+            caused_submit: false,
+            consumed: true,
+        };
+        let tab = AcpKeyRouteTelemetry {
+            key: "tab".to_string(),
+            ..enter.clone()
+        };
+        let e_json = serde_json::to_value(&enter).expect("serialize enter");
+        let t_json = serde_json::to_value(&tab).expect("serialize tab");
+        assert_ne!(
+            e_json["key"], t_json["key"],
+            "enter and tab key-route events must have distinct key fields"
+        );
     }
 }

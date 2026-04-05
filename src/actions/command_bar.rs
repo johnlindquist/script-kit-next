@@ -682,7 +682,14 @@ impl CommandBar {
         self.is_open = true;
 
         // Open the vibrancy window at the specified position
-        match open_actions_window(cx, bounds, display_id, dialog, position) {
+        match open_actions_window(
+            cx,
+            window.window_handle(),
+            bounds,
+            display_id,
+            dialog,
+            position,
+        ) {
             Ok(_) => {
                 logging::log(
                     "COMMAND_BAR",

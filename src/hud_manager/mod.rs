@@ -13,8 +13,8 @@ use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::logging;
 use crate::theme::get_cached_theme;
 use gpui::{
-    div, point, prelude::*, px, rgb, size, App, Context, ElementId, Render, SharedString,
-    Window, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
+    div, point, prelude::*, px, rgb, size, App, Context, ElementId, Render, SharedString, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowOptions,
 };
 use gpui_component::tooltip::Tooltip;
 use parking_lot::Mutex;
@@ -252,7 +252,11 @@ impl HudView {
 }
 
 fn hud_dimensions_for_text(text: &str) -> (f32, f32) {
-    let longest_line = text.lines().map(|line| line.chars().count()).max().unwrap_or(0);
+    let longest_line = text
+        .lines()
+        .map(|line| line.chars().count())
+        .max()
+        .unwrap_or(0);
     let line_count = text.lines().count().max(1);
     let estimated_width = 140.0 + (longest_line as f32 * 6.5);
     let width = estimated_width.clamp(HUD_MIN_WIDTH, HUD_MAX_WIDTH);

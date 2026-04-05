@@ -608,6 +608,51 @@ impl ScriptListApp {
             return DispatchOutcome::not_handled();
         };
 
+        if let Some(agent_id) = crate::actions::acp_switch_agent_id_from_action(action_id) {
+            let current_selected_agent_id = {
+                let view = entity.read(cx);
+                match &view.session {
+                    crate::ai::acp::AcpChatSession::Setup(state) => {
+                        state.selected_agent.as_ref().map(|agent| agent.id.to_string())
+                    }
+                    crate::ai::acp::AcpChatSession::Live(_) => {
+                        crate::ai::acp::load_preferred_acp_agent_id()
+                    }
+                }
+            };
+
+            let agent_display_name = crate::ai::acp::load_acp_agent_catalog_entries()
+                .ok()
+                .and_then(|entries| {
+                    entries
+                        .into_iter()
+                        .find(|entry| entry.id.as_ref() == agent_id)
+                        .map(|entry| entry.display_name.to_string())
+                })
+                .unwrap_or_else(|| agent_id.to_string());
+
+            if current_selected_agent_id.as_deref() == Some(agent_id) {
+                let mut outcome = DispatchOutcome::success();
+                outcome.user_message =
+                    Some(format!("ACP is already using {agent_display_name}"));
+                return outcome;
+            }
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_switch_agent_requested",
+                agent_id,
+                agent_display_name = %agent_display_name,
+            );
+            crate::ai::acp::persist_preferred_acp_agent_id(Some(agent_id.to_string()));
+            self.close_tab_ai_harness_terminal(cx);
+            self.open_tab_ai_chat(cx);
+
+            let mut outcome = DispatchOutcome::success();
+            outcome.user_message = Some(format!("Switching ACP agent to {agent_display_name}\u{2026}"));
+            return outcome;
+        }
+
         match action_id {
             "acp_copy_last_response" => {
                 let entity = entity.clone();

@@ -8,29 +8,40 @@
  *
  * The reliable ACP verification order is:
  *   1. State receipt (getAcpState) — machine-readable proof
- *   2. Screenshot capture — visual proof
- *   3. Image-read verification — confirm visuals match expectations
+ *   2. Screenshot capture — visual proof (secondary confirmation)
+ *   3. Note: actual image-read / pixel inspection is NOT performed automatically.
+ *      The screenshot is captured and its metadata recorded, but a human or
+ *      external vision tool must inspect the PNG to confirm visual correctness.
  *
  * Usage:
  *   bun scripts/agentic/verify-shot.ts --session NAME [options]
  *
  * Options:
- *   --session NAME           Session name (default: "default")
- *   --label LABEL            Human-readable step label (default: "verify")
- *   --out PATH               Screenshot output path (default: test-screenshots/<label>-<ts>.png)
- *   --acp-status STATUS      Assert ACP status equals this value
- *   --acp-picker-open        Assert picker is open
- *   --acp-picker-closed      Assert picker is closed
- *   --acp-input-contains STR Assert input text contains substring
- *   --acp-input-match STR    Assert input text equals exactly
- *   --acp-cursor-at N        Assert cursor is at character index N
- *   --acp-item-accepted      Assert lastAcceptedItem is non-null
- *   --acp-context-ready      Assert contextReady is true
- *   --skip-screenshot        Only run state assertions, skip capture
- *   --skip-state             Only capture screenshot, skip ACP state query
- *   --request-id ID          Request ID for getAcpState (default: auto-generated)
- *   --json                   (default) Output JSON receipt
- *   --help                   Show this help
+ *   --session NAME              Session name (default: "default")
+ *   --label LABEL               Human-readable step label (default: "verify")
+ *   --out PATH                  Screenshot output path (default: test-screenshots/<label>-<ts>.png)
+ *   --acp-status STATUS         Assert ACP status equals this value
+ *   --acp-picker-open           Assert picker is open
+ *   --acp-picker-closed         Assert picker is closed
+ *   --acp-input-contains STR    Assert input text contains substring
+ *   --acp-input-match STR       Assert input text equals exactly
+ *   --acp-cursor-at N           Assert cursor is at character index N
+ *   --acp-item-accepted         Assert lastAcceptedItem is non-null
+ *   --acp-accepted-label STR    Assert lastAcceptedItem.label equals STR
+ *   --acp-accepted-trigger STR  Assert lastAcceptedItem.trigger equals STR (@ or /)
+ *   --acp-context-ready         Assert contextReady is true
+ *   --acp-no-selection          Assert hasSelection is false
+ *   --acp-has-selection         Assert hasSelection is true
+ *   --acp-no-permission         Assert hasPendingPermission is false
+ *   --acp-has-permission        Assert hasPendingPermission is true
+ *   --acp-visible-start N       Assert inputLayout.visibleStart equals N
+ *   --acp-visible-end N         Assert inputLayout.visibleEnd equals N
+ *   --acp-cursor-in-window N    Assert inputLayout.cursorInWindow equals N
+ *   --skip-screenshot           Only run state assertions, skip capture
+ *   --skip-state                Only capture screenshot, skip ACP state query
+ *   --request-id ID             Request ID for getAcpState (default: auto-generated)
+ *   --json                      (default) Output JSON receipt
+ *   --help                      Show this help
  *
  * Exit codes:
  *   0 = all assertions passed
@@ -70,6 +81,10 @@ interface ScreenshotResult {
   captured: boolean;
   path: string | null;
   sizeBytes: number | null;
+  width: number | null;
+  height: number | null;
+  captureMethod: "window.ts" | "captureWindow" | null;
+  windowFrontmost: boolean | null;
   error: string | null;
 }
 
@@ -104,6 +119,14 @@ function parseArgs() {
       opts.acpItemAccepted = true;
     } else if (arg === "--acp-context-ready") {
       opts.acpContextReady = true;
+    } else if (arg === "--acp-no-selection") {
+      opts.acpNoSelection = true;
+    } else if (arg === "--acp-has-selection") {
+      opts.acpHasSelection = true;
+    } else if (arg === "--acp-no-permission") {
+      opts.acpNoPermission = true;
+    } else if (arg === "--acp-has-permission") {
+      opts.acpHasPermission = true;
     } else if (arg === "--json") {
       // default, no-op
     } else if (arg.startsWith("--") && i + 1 < args.length) {
@@ -113,6 +136,13 @@ function parseArgs() {
   }
 
   return opts;
+}
+
+function hasOpt(
+  opts: Record<string, string | boolean>,
+  key: string
+): boolean {
+  return Object.prototype.hasOwnProperty.call(opts, key);
 }
 
 async function sendSessionCommand(
@@ -134,103 +164,107 @@ async function queryAcpState(
   session: string,
   requestId: string
 ): Promise<AcpStateResult> {
+  const sessionScript = join(PROJECT_ROOT, "scripts/agentic/session.sh");
   const cmd = JSON.stringify({
     type: "getAcpState",
     requestId,
   });
 
-  const { ok, stderr } = await sendSessionCommand(session, cmd);
-  if (!ok) {
-    return {
-      queried: true,
-      snapshot: null,
-      error: `Failed to send getAcpState: ${stderr}`,
-    };
-  }
-
-  // Read the log to find the acpStateResult response
-  const sessionDir =
-    process.env.SCRIPT_KIT_SESSION_DIR ?? "/tmp/sk-agentic-sessions";
-  const logPath = join(sessionDir, session, "app.log");
-
-  // Wait briefly for the response to appear in logs
-  await Bun.sleep(500);
-
-  if (!existsSync(logPath)) {
-    return {
-      queried: true,
-      snapshot: null,
-      error: `Log file not found: ${logPath}`,
-    };
-  }
-
-  // Grep the log for the response
-  const grepProc = Bun.spawn(
-    ["grep", "-a", `acpStateResult.*${requestId}`, logPath],
+  const proc = Bun.spawn(
+    [
+      "bash",
+      sessionScript,
+      "rpc",
+      session,
+      cmd,
+      "--expect",
+      "acpStateResult",
+      "--timeout",
+      "3000",
+    ],
     {
       stdout: "pipe",
       stderr: "pipe",
     }
   );
-  const grepOut = await new Response(grepProc.stdout).text();
-  await grepProc.exited;
+  const stdout = await new Response(proc.stdout).text();
+  const stderr = await new Response(proc.stderr).text();
+  const code = await proc.exited;
 
-  if (!grepOut.trim()) {
-    // Also try looking for the JSON response directly
-    const grep2 = Bun.spawn(
-      ["grep", "-a", `"requestId":"${requestId}"`, logPath],
-      {
-        stdout: "pipe",
-        stderr: "pipe",
-      }
-    );
-    const grep2Out = await new Response(grep2.stdout).text();
-    await grep2.exited;
-
-    if (!grep2Out.trim()) {
-      return {
-        queried: true,
-        snapshot: null,
-        error: `No acpStateResult found in logs for requestId=${requestId}. The app may not support getAcpState yet, or the ACP view is not open.`,
-      };
-    }
-
-    // Try to parse JSON from the line
-    try {
-      const line = grep2Out.trim().split("\n").pop() ?? "";
-      const jsonStart = line.indexOf("{");
-      if (jsonStart >= 0) {
-        const parsed = JSON.parse(line.slice(jsonStart));
-        return { queried: true, snapshot: parsed, error: null };
-      }
-    } catch {
-      // fall through
-    }
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    parsed = JSON.parse(stdout) as Record<string, unknown>;
+  } catch {
+    parsed = null;
   }
 
-  // Try to parse the acpStateResult from log output
-  try {
-    const lastLine = grepOut.trim().split("\n").pop() ?? "";
-    const jsonStart = lastLine.indexOf("{");
-    if (jsonStart >= 0) {
-      const parsed = JSON.parse(lastLine.slice(jsonStart));
-      return { queried: true, snapshot: parsed, error: null };
-    }
-  } catch {
-    // fall through
+  if (code !== 0) {
+    const errorMessage =
+      parsed &&
+      typeof parsed.error === "object" &&
+      parsed.error != null &&
+      typeof (parsed.error as Record<string, unknown>).message === "string"
+        ? String((parsed.error as Record<string, unknown>).message)
+        : stderr.trim() || stdout.trim() || "RPC failed";
+    return {
+      queried: true,
+      snapshot: null,
+      error: `Failed to query getAcpState: ${errorMessage}`,
+    };
+  }
+
+  const response = parsed?.response;
+  if (!response || typeof response !== "object") {
+    return {
+      queried: true,
+      snapshot: null,
+      error: "RPC completed but did not return an acpStateResult payload",
+    };
+  }
+
+  if ((response as Record<string, unknown>).type !== "acpStateResult") {
+    return {
+      queried: true,
+      snapshot: null,
+      error: "RPC returned an unexpected response type",
+    };
   }
 
   return {
     queried: true,
-    snapshot: null,
-    error: `Found log entry but could not parse ACP state JSON`,
+    snapshot: response as Record<string, unknown>,
+    error: null,
   };
+}
+
+async function getImageDimensions(
+  filePath: string
+): Promise<{ width: number | null; height: number | null }> {
+  try {
+    const proc = Bun.spawn(
+      ["sips", "-g", "pixelWidth", "-g", "pixelHeight", filePath],
+      { stdout: "pipe", stderr: "pipe" }
+    );
+    const out = await new Response(proc.stdout).text();
+    await proc.exited;
+    const wMatch = out.match(/pixelWidth:\s*(\d+)/);
+    const hMatch = out.match(/pixelHeight:\s*(\d+)/);
+    return {
+      width: wMatch ? parseInt(wMatch[1], 10) : null,
+      height: hMatch ? parseInt(hMatch[1], 10) : null,
+    };
+  } catch {
+    return { width: null, height: null };
+  }
 }
 
 async function captureScreenshot(
   session: string,
   outPath: string
 ): Promise<ScreenshotResult> {
+  let captureMethod: "window.ts" | "captureWindow" | null = null;
+  let windowFrontmost: boolean | null = null;
+
   // Use the window.ts helper for reliable capture
   const windowScript = join(PROJECT_ROOT, "scripts/agentic/window.ts");
   const proc = Bun.spawn(["bun", windowScript, "capture", outPath], {
@@ -241,8 +275,21 @@ async function captureScreenshot(
   const stderr = await new Response(proc.stderr).text();
   const code = await proc.exited;
 
-  if (code !== 0) {
+  if (code === 0) {
+    captureMethod = "window.ts";
+    // Parse window.ts envelope for frontmost status
+    try {
+      const envelope = JSON.parse(stdout);
+      if (envelope?.data) {
+        windowFrontmost = true; // window.ts focuses before capture
+      }
+    } catch {
+      // couldn't parse — still captured
+    }
+  } else {
     // Fallback: use session-based captureWindow
+    captureMethod = "captureWindow";
+    windowFrontmost = null; // captureWindow doesn't guarantee frontmost
     const captureCmd = JSON.stringify({
       type: "captureWindow",
       title: "",
@@ -259,6 +306,10 @@ async function captureScreenshot(
         captured: false,
         path: outPath,
         sizeBytes: null,
+        width: null,
+        height: null,
+        captureMethod: "captureWindow",
+        windowFrontmost: null,
         error: `Capture failed. window.ts: ${stderr.trim()}. session captureWindow: ${sessErr}`,
       };
     }
@@ -272,15 +323,25 @@ async function captureScreenshot(
       captured: false,
       path: outPath,
       sizeBytes: null,
+      width: null,
+      height: null,
+      captureMethod,
+      windowFrontmost,
       error: "Screenshot file not created after capture",
     };
   }
 
   const stats = statSync(outPath);
+  const dims = await getImageDimensions(outPath);
+
   return {
     captured: true,
     path: outPath,
     sizeBytes: stats.size,
+    width: dims.width,
+    height: dims.height,
+    captureMethod,
+    windowFrontmost,
     error: null,
   };
 }
@@ -293,7 +354,7 @@ function runAssertions(
 
   if (!snapshot) {
     // If state was expected but missing, every assertion fails
-    if (opts.acpStatus) {
+    if (hasOpt(opts, "acpStatus")) {
       results.push({
         name: "acp-status",
         expected: String(opts.acpStatus),
@@ -317,7 +378,7 @@ function runAssertions(
         passed: false,
       });
     }
-    if (opts.acpInputContains) {
+    if (hasOpt(opts, "acpInputContains")) {
       results.push({
         name: "acp-input-contains",
         expected: `contains "${opts.acpInputContains}"`,
@@ -325,7 +386,7 @@ function runAssertions(
         passed: false,
       });
     }
-    if (opts.acpInputMatch) {
+    if (hasOpt(opts, "acpInputMatch")) {
       results.push({
         name: "acp-input-match",
         expected: String(opts.acpInputMatch),
@@ -333,7 +394,7 @@ function runAssertions(
         passed: false,
       });
     }
-    if (opts.acpCursorAt) {
+    if (hasOpt(opts, "acpCursorAt")) {
       results.push({
         name: "acp-cursor-at",
         expected: String(opts.acpCursorAt),
@@ -357,11 +418,83 @@ function runAssertions(
         passed: false,
       });
     }
+    if (hasOpt(opts, "acpAcceptedLabel")) {
+      results.push({
+        name: "acp-accepted-label",
+        expected: String(opts.acpAcceptedLabel),
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (hasOpt(opts, "acpAcceptedTrigger")) {
+      results.push({
+        name: "acp-accepted-trigger",
+        expected: String(opts.acpAcceptedTrigger),
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (opts.acpNoSelection) {
+      results.push({
+        name: "acp-no-selection",
+        expected: "false",
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (opts.acpHasSelection) {
+      results.push({
+        name: "acp-has-selection",
+        expected: "true",
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (opts.acpNoPermission) {
+      results.push({
+        name: "acp-no-permission",
+        expected: "false",
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (opts.acpHasPermission) {
+      results.push({
+        name: "acp-has-permission",
+        expected: "true",
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (hasOpt(opts, "acpVisibleStart")) {
+      results.push({
+        name: "acp-visible-start",
+        expected: String(opts.acpVisibleStart),
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (hasOpt(opts, "acpVisibleEnd")) {
+      results.push({
+        name: "acp-visible-end",
+        expected: String(opts.acpVisibleEnd),
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (hasOpt(opts, "acpCursorInWindow")) {
+      results.push({
+        name: "acp-cursor-in-window",
+        expected: String(opts.acpCursorInWindow),
+        actual: "<no state>",
+        passed: false,
+      });
+    }
     return results;
   }
 
   // Status assertion
-  if (opts.acpStatus) {
+  if (hasOpt(opts, "acpStatus")) {
     const actual = String(snapshot.status ?? "<missing>");
     results.push({
       name: "acp-status",
@@ -396,7 +529,7 @@ function runAssertions(
   }
 
   // Input contains assertion
-  if (opts.acpInputContains) {
+  if (hasOpt(opts, "acpInputContains")) {
     const inputText = String(snapshot.inputText ?? "");
     const substring = String(opts.acpInputContains);
     results.push({
@@ -408,7 +541,7 @@ function runAssertions(
   }
 
   // Input match assertion
-  if (opts.acpInputMatch) {
+  if (hasOpt(opts, "acpInputMatch")) {
     const inputText = String(snapshot.inputText ?? "");
     const expected = String(opts.acpInputMatch);
     results.push({
@@ -420,7 +553,7 @@ function runAssertions(
   }
 
   // Cursor position assertion
-  if (opts.acpCursorAt) {
+  if (hasOpt(opts, "acpCursorAt")) {
     const cursorIndex = Number(snapshot.cursorIndex ?? -1);
     const expected = Number(opts.acpCursorAt);
     results.push({
@@ -453,6 +586,110 @@ function runAssertions(
     });
   }
 
+  // Accepted item label assertion
+  if (hasOpt(opts, "acpAcceptedLabel")) {
+    const item = snapshot.lastAcceptedItem as Record<string, unknown> | null;
+    const actual = item ? String(item.label ?? "<missing>") : "<no item>";
+    const expected = String(opts.acpAcceptedLabel);
+    results.push({
+      name: "acp-accepted-label",
+      expected,
+      actual,
+      passed: actual === expected,
+    });
+  }
+
+  // Accepted item trigger assertion
+  if (hasOpt(opts, "acpAcceptedTrigger")) {
+    const item = snapshot.lastAcceptedItem as Record<string, unknown> | null;
+    const actual = item ? String(item.trigger ?? "<missing>") : "<no item>";
+    const expected = String(opts.acpAcceptedTrigger);
+    results.push({
+      name: "acp-accepted-trigger",
+      expected,
+      actual,
+      passed: actual === expected,
+    });
+  }
+
+  // Selection assertions
+  if (opts.acpNoSelection) {
+    const hasSel = snapshot.hasSelection === true;
+    results.push({
+      name: "acp-no-selection",
+      expected: "false",
+      actual: String(hasSel),
+      passed: !hasSel,
+    });
+  }
+
+  if (opts.acpHasSelection) {
+    const hasSel = snapshot.hasSelection === true;
+    results.push({
+      name: "acp-has-selection",
+      expected: "true",
+      actual: String(hasSel),
+      passed: hasSel,
+    });
+  }
+
+  // Permission assertions
+  if (opts.acpNoPermission) {
+    const hasPerm = snapshot.hasPendingPermission === true;
+    results.push({
+      name: "acp-no-permission",
+      expected: "false",
+      actual: String(hasPerm),
+      passed: !hasPerm,
+    });
+  }
+
+  if (opts.acpHasPermission) {
+    const hasPerm = snapshot.hasPendingPermission === true;
+    results.push({
+      name: "acp-has-permission",
+      expected: "true",
+      actual: String(hasPerm),
+      passed: hasPerm,
+    });
+  }
+
+  // Input layout assertions
+  const layout = snapshot.inputLayout as Record<string, unknown> | null;
+
+  if (hasOpt(opts, "acpVisibleStart")) {
+    const expected = Number(opts.acpVisibleStart);
+    const actual = layout ? Number(layout.visibleStart ?? -1) : -1;
+    results.push({
+      name: "acp-visible-start",
+      expected: String(expected),
+      actual: layout ? String(actual) : "<no layout>",
+      passed: actual === expected,
+    });
+  }
+
+  if (hasOpt(opts, "acpVisibleEnd")) {
+    const expected = Number(opts.acpVisibleEnd);
+    const actual = layout ? Number(layout.visibleEnd ?? -1) : -1;
+    results.push({
+      name: "acp-visible-end",
+      expected: String(expected),
+      actual: layout ? String(actual) : "<no layout>",
+      passed: actual === expected,
+    });
+  }
+
+  if (hasOpt(opts, "acpCursorInWindow")) {
+    const expected = Number(opts.acpCursorInWindow);
+    const actual = layout ? Number(layout.cursorInWindow ?? -1) : -1;
+    results.push({
+      name: "acp-cursor-in-window",
+      expected: String(expected),
+      actual: layout ? String(actual) : "<no layout>",
+      passed: actual === expected,
+    });
+  }
+
   return results;
 }
 
@@ -468,25 +705,35 @@ if (opts.help) {
 Captures a screenshot and verifies ACP state assertions. Returns a JSON receipt.
 
 Options:
-  --session NAME           Session name (default: "default")
-  --label LABEL            Human-readable step label (default: "verify")
-  --out PATH               Screenshot output path (auto-generated if omitted)
-  --acp-status STATUS      Assert ACP status equals this value
-  --acp-picker-open        Assert picker is open
-  --acp-picker-closed      Assert picker is closed
-  --acp-input-contains STR Assert input text contains substring
-  --acp-input-match STR    Assert input text equals exactly
-  --acp-cursor-at N        Assert cursor is at character index N
-  --acp-item-accepted      Assert lastAcceptedItem is non-null
-  --acp-context-ready      Assert contextReady is true
-  --skip-screenshot        Only run state assertions, skip capture
-  --skip-state             Only capture screenshot, skip state query
-  --request-id ID          Request ID for getAcpState (auto-generated)
+  --session NAME              Session name (default: "default")
+  --label LABEL               Human-readable step label (default: "verify")
+  --out PATH                  Screenshot output path (auto-generated if omitted)
+  --acp-status STATUS         Assert ACP status equals this value
+  --acp-picker-open           Assert picker is open
+  --acp-picker-closed         Assert picker is closed
+  --acp-input-contains STR    Assert input text contains substring
+  --acp-input-match STR       Assert input text equals exactly
+  --acp-cursor-at N           Assert cursor is at character index N
+  --acp-item-accepted         Assert lastAcceptedItem is non-null
+  --acp-accepted-label STR    Assert lastAcceptedItem.label equals STR
+  --acp-accepted-trigger STR  Assert lastAcceptedItem.trigger equals STR (@ or /)
+  --acp-context-ready         Assert contextReady is true
+  --acp-no-selection          Assert hasSelection is false
+  --acp-has-selection         Assert hasSelection is true
+  --acp-no-permission         Assert hasPendingPermission is false
+  --acp-has-permission        Assert hasPendingPermission is true
+  --acp-visible-start N       Assert inputLayout.visibleStart equals N
+  --acp-visible-end N         Assert inputLayout.visibleEnd equals N
+  --acp-cursor-in-window N    Assert inputLayout.cursorInWindow equals N
+  --skip-screenshot           Only run state assertions, skip capture
+  --skip-state                Only capture screenshot, skip state query
+  --request-id ID             Request ID for getAcpState (auto-generated)
 
 Verification order (ACP golden path):
   1. State receipt first (getAcpState) — machine-readable proof
-  2. Screenshot capture — visual proof
-  3. Assertions check both sources
+  2. Screenshot capture — secondary visual proof (metadata only; no automatic
+     pixel inspection is performed — a human or vision tool must read the PNG)
+  3. Assertions check ACP state fields
 
 Exit 0 = all assertions pass. Exit 1 = assertion failure. Exit 2 = infra error.`);
   process.exit(0);
