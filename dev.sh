@@ -45,6 +45,11 @@ if [ -t 1 ] && [ -n "${TERM:-}" ] && [ "${TERM}" != "dumb" ]; then
     cargo_watch_args+=(-c)
 fi
 
+# IMPORTANT:
+# Launch speed for autonomous agents is dominated by "time to usable session",
+# not just Rust startup time. Keep watch scope narrow and avoid adding extra
+# pre-run shell work here unless it directly improves readiness or rebuild time.
+#
 # Run cargo watch with auto-rebuild
 # -x run: Execute 'cargo run' on file changes
 # -c: Clear screen between runs for cleaner output

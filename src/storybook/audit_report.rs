@@ -465,6 +465,7 @@ pub fn render_prompt_chrome_consistency_markdown(report: &AuditReport) -> String
             "- Scope: prompt and builtin chrome surfaces only. Excluded this pass: {}.",
             REPORT_SCOPE_EXCLUSIONS.join(", ")
         ),
+        "- Verification precondition: keep only one visible target window per GPUI window kind when using `simulateGpuiEvent`; ambiguous same-kind routing now fails closed.".to_string(),
     ];
 
     if !exceptions.is_empty() {

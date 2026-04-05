@@ -5,6 +5,7 @@ Scanned 7 prompt/builtin surfaces. 7 pass, 0 warning, 0 error. 1 intentional exc
 
 ## Scope Notes
 - Scope: prompt and builtin chrome surfaces only. Excluded this pass: ACP compact-chat popup surfaces (for example src/ai/acp/model_selector_popup.rs).
+- Verification precondition: keep only one visible target window per GPUI window kind when using `simulateGpuiEvent`; ambiguous same-kind routing now fails closed.
 - Intentional exception: render_prompts::term.
 
 ## Surface Status

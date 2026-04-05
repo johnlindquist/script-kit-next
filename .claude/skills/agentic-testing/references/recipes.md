@@ -181,7 +181,6 @@ Named patterns agents select based on what they changed.
 **Preferred: Use the canonical CLI command (fully non-interactive):**
 ```bash
 bash scripts/agentic/session.sh start default
-sleep 3
 bun scripts/agentic/index.ts acp-accept --session default --key enter --vision
 # Parse the JSON receipt — proofBundle contains state, probe, screenshot, visionCrops.
 # Exit code 0 + proofBundle.state confirming expected ACP fields = PASS.
@@ -207,7 +206,6 @@ R="bash scripts/agentic/session.sh rpc default"
 
 # 1. Start session
 bash scripts/agentic/session.sh start default
-sleep 3
 
 # 2. Show window
 $S '{"type":"show"}'

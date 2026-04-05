@@ -18,6 +18,8 @@ SCHEMA_VERSION=1
 SESSION_DIR="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions}"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BINARY="${PROJECT_ROOT}/target/debug/script-kit-gpui"
+READY_TIMEOUT_MS="${SCRIPT_KIT_SESSION_READY_TIMEOUT_MS:-3000}"
+READY_LOG_MARKER="APP_READY|main-window-ready show=false focus=false stdin-safe"
 
 # --- helpers ----------------------------------------------------------------
 
@@ -41,6 +43,33 @@ json_error() {
 }
 
 session_dir() { echo "${SESSION_DIR}/$1"; }
+
+# Wait for the APP_READY log marker instead of a fixed sleep.
+# Returns via printf the number of milliseconds waited.
+# Exit codes: 0 = marker found, 1 = timeout, 2 = process exited early.
+wait_for_ready_log() {
+  local log_path="$1"
+  local pid="$2"
+  local timeout_ms="${3:-$READY_TIMEOUT_MS}"
+  local waited=0
+  local step_ms=25
+
+  while [ "$waited" -lt "$timeout_ms" ]; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      printf '%s' "$waited"
+      return 2
+    fi
+    if [ -f "$log_path" ] && grep -Fq "$READY_LOG_MARKER" "$log_path" 2>/dev/null; then
+      printf '%s' "$waited"
+      return 0
+    fi
+    sleep 0.025
+    waited=$((waited + step_ms))
+  done
+
+  printf '%s' "$waited"
+  return 1
+}
 
 # --- start ------------------------------------------------------------------
 
@@ -87,7 +116,9 @@ cmd_start() {
         "pipe:\"${input_fifo}\"" \
         "log:\"${log_path}\"" \
         "responses:\"${responses_path}\"" \
-        "resumed:true"
+        "resumed:true" \
+        "ready:true" \
+        "readyWaitMs:0"
       return 0
     else
       log "Stale session '${name}': ${reason}. Cleaning up."
@@ -158,24 +189,43 @@ cmd_start() {
   local app_pid=$!
   echo "$app_pid" > "$pid_path"
 
-  # Give the app a moment to start
-  sleep 0.5
+  # Wait for APP_READY log marker instead of a fixed sleep.
+  local ready=false
+  local ready_wait_ms=0
+  if ready_wait_ms="$(wait_for_ready_log "$log_path" "$app_pid" "$READY_TIMEOUT_MS")"; then
+    ready=true
+    log "Session '${name}' reached readiness marker in ${ready_wait_ms}ms"
+  else
+    local ready_status=$?
+    if [ "$ready_status" -eq 2 ]; then
+      kill "$fwd_pid" 2>/dev/null || true
+      wait "$fwd_pid" 2>/dev/null || true
+      json_error "start_failed" "App process exited before readiness marker. Check ${log_path}"
+      rm -rf "${sdir}"
+      return 1
+    fi
+    log "Session '${name}' did not emit readiness marker within ${READY_TIMEOUT_MS}ms; continuing"
+  fi
 
-  # Verify it's still alive
+  # Final liveness check
   if ! kill -0 "$app_pid" 2>/dev/null; then
+    kill "$fwd_pid" 2>/dev/null || true
+    wait "$fwd_pid" 2>/dev/null || true
     json_error "start_failed" "App process exited immediately. Check ${log_path}"
     rm -rf "${sdir}"
     return 1
   fi
 
-  log "Started session '${name}' (pid ${app_pid})"
+  log "Started session '${name}' (pid ${app_pid}, ready=${ready}, waited=${ready_wait_ms}ms)"
   json_envelope "ok" \
     "session:\"${name}\"" \
     "pid:${app_pid}" \
     "pipe:\"${input_fifo}\"" \
     "log:\"${log_path}\"" \
     "responses:\"${responses_path}\"" \
-    "resumed:false"
+    "resumed:false" \
+    "ready:${ready}" \
+    "readyWaitMs:${ready_wait_ms}"
 }
 
 # --- send -------------------------------------------------------------------
