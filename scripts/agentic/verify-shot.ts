@@ -47,6 +47,8 @@
  *   --skip-screenshot           Only run state assertions, skip capture
  *   --skip-state                Only capture screenshot, skip ACP state query
  *   --skip-probe                Skip ACP test probe query
+ *   --target-json JSON           ACP window target for getAcpState/getAcpTestProbe RPCs
+ *                               (same AutomationWindowTarget shape as the Rust protocol)
  *   --request-id ID             Request ID for getAcpState (default: auto-generated)
  *   --json                      (default) Output JSON receipt
  *   --help                      Show this help
@@ -207,13 +209,18 @@ async function sendSessionCommand(
 
 async function queryAcpState(
   session: string,
-  requestId: string
+  requestId: string,
+  target?: Record<string, unknown>
 ): Promise<AcpStateResult> {
   const sessionScript = join(PROJECT_ROOT, "scripts/agentic/session.sh");
-  const cmd = JSON.stringify({
+  const payload: Record<string, unknown> = {
     type: "getAcpState",
     requestId,
-  });
+  };
+  if (target) {
+    payload.target = target;
+  }
+  const cmd = JSON.stringify(payload);
 
   const proc = Bun.spawn(
     [
@@ -285,14 +292,19 @@ async function queryAcpState(
 async function queryAcpTestProbe(
   session: string,
   requestId: string,
-  tail: number
+  tail: number,
+  target?: Record<string, unknown>
 ): Promise<ProbeResult> {
   const sessionScript = join(PROJECT_ROOT, "scripts/agentic/session.sh");
-  const cmd = JSON.stringify({
+  const payload: Record<string, unknown> = {
     type: "getAcpTestProbe",
     requestId,
     tail,
-  });
+  };
+  if (target) {
+    payload.target = target;
+  }
+  const cmd = JSON.stringify(payload);
 
   const proc = Bun.spawn(
     [
@@ -1205,6 +1217,7 @@ Options:
   --skip-screenshot           Only run state assertions, skip capture
   --skip-state                Only capture screenshot, skip state query
   --skip-probe                Skip ACP test probe query
+  --target-json JSON          ACP window target for getAcpState/getAcpTestProbe RPCs
   --request-id ID             Request ID for getAcpState (auto-generated)
 
 Verification order (ACP golden path):
@@ -1229,6 +1242,18 @@ const skipState = opts.skipState === true;
 const skipProbe = opts.skipProbe === true;
 const probeTail = Number(opts.probeTail ?? 20);
 
+// Parse --target-json for ACP window targeting
+let targetJson: Record<string, unknown> | undefined;
+if (typeof opts.targetJson === "string") {
+  try {
+    targetJson = JSON.parse(opts.targetJson) as Record<string, unknown>;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(`Invalid --target-json: ${reason}`);
+    process.exit(2);
+  }
+}
+
 // Determine output path
 let outPath: string;
 if (opts.out) {
@@ -1247,7 +1272,7 @@ if (opts.out) {
 // Step 1: Query ACP state (unless skipped)
 let stateResult: AcpStateResult | null = null;
 if (!skipState) {
-  stateResult = await queryAcpState(session, requestId);
+  stateResult = await queryAcpState(session, requestId, targetJson);
 }
 
 // Step 2: Query ACP test probe only when probe assertions are requested
@@ -1255,7 +1280,7 @@ let probeResult: ProbeResult | null = null;
 const needsProbe = shouldQueryProbe(opts, skipProbe);
 if (needsProbe) {
   const probeRequestId = `${requestId}-probe`;
-  probeResult = await queryAcpTestProbe(session, probeRequestId, probeTail);
+  probeResult = await queryAcpTestProbe(session, probeRequestId, probeTail, targetJson);
   diag("verify_shot_probe_loaded", {
     label,
     queried: probeResult.queried,

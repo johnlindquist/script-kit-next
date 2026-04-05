@@ -315,3 +315,153 @@ fn multiple_acp_detached_windows_indexed_targeting() {
 
     cleanup(&p, &["acp-0", "acp-1", "acp-2"]);
 }
+
+// ── resetAcpTestProbe with target ──────────────────────────────────
+
+#[test]
+fn reset_acp_test_probe_with_detached_target_round_trips() {
+    use script_kit_gpui::protocol::Message;
+
+    let json = serde_json::json!({
+        "type": "resetAcpTestProbe",
+        "requestId": "probe-reset-detached-1",
+        "target": {
+            "type": "kind",
+            "kind": "acpDetached",
+            "index": 0
+        }
+    });
+
+    let msg: Message = serde_json::from_value(json)
+        .expect("should parse resetAcpTestProbe with AcpDetached target");
+
+    let re_serialized = serde_json::to_value(&msg).expect("re-serialize");
+    assert_eq!(
+        re_serialized["type"].as_str(),
+        Some("resetAcpTestProbe")
+    );
+    assert_eq!(
+        re_serialized["requestId"].as_str(),
+        Some("probe-reset-detached-1")
+    );
+    assert_eq!(
+        re_serialized["target"]["kind"].as_str(),
+        Some("acpDetached")
+    );
+}
+
+#[test]
+fn reset_acp_test_probe_without_target_backward_compatible() {
+    use script_kit_gpui::protocol::Message;
+
+    let json = serde_json::json!({
+        "type": "resetAcpTestProbe",
+        "requestId": "probe-reset-legacy"
+    });
+
+    let msg: Message = serde_json::from_value(json)
+        .expect("should parse legacy resetAcpTestProbe without target");
+
+    let re_serialized = serde_json::to_value(&msg).expect("re-serialize");
+    assert_eq!(
+        re_serialized["type"].as_str(),
+        Some("resetAcpTestProbe")
+    );
+    assert_eq!(
+        re_serialized["requestId"].as_str(),
+        Some("probe-reset-legacy")
+    );
+    // target should not be present in serialized output
+    assert!(
+        re_serialized.get("target").is_none()
+            || re_serialized["target"].is_null(),
+        "target should be omitted for legacy requests"
+    );
+}
+
+// ── AcpResolvedTarget in state responses ──────────────────────────────
+
+#[test]
+fn acp_state_result_with_resolved_target_round_trips() {
+    use script_kit_gpui::protocol::{AcpResolvedTarget, AcpStateSnapshot, Message};
+
+    let mut state = AcpStateSnapshot::default();
+    state.resolved_target = Some(AcpResolvedTarget {
+        window_id: "acpDetached:thread-1".to_string(),
+        window_kind: "acpDetached".to_string(),
+        title: Some("Script Kit AI".to_string()),
+    });
+
+    let response = Message::acp_state_result("acp-state-resolved-1".to_string(), state);
+    let json = serde_json::to_value(&response).expect("serialize");
+
+    assert_eq!(json["type"].as_str(), Some("acpStateResult"));
+    assert_eq!(
+        json["resolvedTarget"]["windowId"].as_str(),
+        Some("acpDetached:thread-1")
+    );
+    assert_eq!(
+        json["resolvedTarget"]["windowKind"].as_str(),
+        Some("acpDetached")
+    );
+    assert_eq!(
+        json["resolvedTarget"]["title"].as_str(),
+        Some("Script Kit AI")
+    );
+
+    // Schema version should be 2 with resolved_target support
+    assert_eq!(
+        json["schemaVersion"].as_u64(),
+        Some(script_kit_gpui::protocol::ACP_STATE_SCHEMA_VERSION as u64)
+    );
+}
+
+#[test]
+fn acp_state_result_without_resolved_target_omits_field() {
+    use script_kit_gpui::protocol::{AcpStateSnapshot, Message};
+
+    let state = AcpStateSnapshot::default();
+    let response = Message::acp_state_result("acp-state-main-compat".to_string(), state);
+    let json = serde_json::to_value(&response).expect("serialize");
+
+    assert!(
+        json.get("resolvedTarget").is_none()
+            || json["resolvedTarget"].is_null(),
+        "resolvedTarget should be absent when None"
+    );
+}
+
+// ── waitFor with ACP detached target round-trips ─────────────────────
+
+#[test]
+fn wait_for_with_acp_detached_target_round_trips() {
+    use script_kit_gpui::protocol::Message;
+
+    let json = serde_json::json!({
+        "type": "waitFor",
+        "requestId": "acp-wait-detached-1",
+        "condition": {
+            "type": "acpAcceptedViaKey",
+            "key": "enter"
+        },
+        "target": {
+            "type": "kind",
+            "kind": "acpDetached",
+            "index": 0
+        },
+        "timeout": 3000,
+        "pollInterval": 25,
+        "trace": "onFailure"
+    });
+
+    let msg: Message = serde_json::from_value(json)
+        .expect("should parse waitFor with AcpDetached target");
+
+    let re_serialized = serde_json::to_value(&msg).expect("re-serialize");
+    assert_eq!(re_serialized["type"].as_str(), Some("waitFor"));
+    assert_eq!(
+        re_serialized["target"]["kind"].as_str(),
+        Some("acpDetached")
+    );
+    assert_eq!(re_serialized["timeout"].as_u64(), Some(3000));
+}

@@ -57,11 +57,17 @@ fn resolve_main_only_target(
 }
 
 /// Which window an ACP read should target.
+#[derive(Clone)]
 enum AcpReadTarget {
     /// Read from the main window's ACP view (current behavior).
-    Main,
+    Main {
+        info: Option<crate::protocol::AutomationWindowInfo>,
+    },
     /// Read from the detached ACP chat window's entity.
-    Detached(gpui::Entity<crate::ai::acp::view::AcpChatView>),
+    Detached {
+        info: crate::protocol::AutomationWindowInfo,
+        entity: gpui::Entity<crate::ai::acp::view::AcpChatView>,
+    },
 }
 
 /// Resolve an automation target for ACP read operations (getAcpState, getAcpTestProbe).
@@ -76,7 +82,7 @@ fn resolve_acp_read_target(
 ) -> Result<AcpReadTarget, crate::protocol::TransactionError> {
     // No explicit target → default to main window (preserves existing behavior).
     let Some(target) = target else {
-        return Ok(AcpReadTarget::Main);
+        return Ok(AcpReadTarget::Main { info: None });
     };
 
     let resolved = crate::windows::resolve_automation_window(Some(target)).map_err(|err| {
@@ -101,7 +107,9 @@ fn resolve_acp_read_target(
                 window_id = %resolved.id,
                 "automation.acp_target.main"
             );
-            Ok(AcpReadTarget::Main)
+            Ok(AcpReadTarget::Main {
+                info: Some(resolved),
+            })
         }
         crate::protocol::AutomationWindowKind::AcpDetached => {
             // Try to get the live entity from the detached window.
@@ -115,7 +123,10 @@ fn resolve_acp_read_target(
                         kind = ?resolved.kind,
                         "automation.acp_target.detached_resolved"
                     );
-                    Ok(AcpReadTarget::Detached(entity))
+                    Ok(AcpReadTarget::Detached {
+                        info: resolved,
+                        entity,
+                    })
                 }
                 None => {
                     tracing::warn!(
@@ -148,6 +159,51 @@ fn resolve_acp_read_target(
             )))
         }
     }
+}
+
+/// Build an `AcpResolvedTarget` from a resolved `AcpReadTarget` and emit
+/// a structured `acp_target_resolved` log line.
+fn build_acp_resolved_target(
+    request_id: &str,
+    op: &'static str,
+    acp_target: &AcpReadTarget,
+) -> Option<crate::protocol::AcpResolvedTarget> {
+    let (window_id, window_kind, title) = match acp_target {
+        AcpReadTarget::Main { info } => {
+            if let Some(info) = info {
+                (
+                    info.id.clone(),
+                    "main".to_string(),
+                    info.title.clone(),
+                )
+            } else {
+                (
+                    "main".to_string(),
+                    "main".to_string(),
+                    Some("Script Kit".to_string()),
+                )
+            }
+        }
+        AcpReadTarget::Detached { info, .. } => {
+            (info.id.clone(), "acpDetached".to_string(), info.title.clone())
+        }
+    };
+
+    tracing::info!(
+        target: "script_kit::automation",
+        event = "acp_target_resolved",
+        request_id = %request_id,
+        window_id = %window_id,
+        kind = %window_kind,
+        title = ?title,
+        op = op,
+    );
+
+    Some(crate::protocol::AcpResolvedTarget {
+        window_id,
+        window_kind,
+        title,
+    })
 }
 
 fn resolve_ai_start_chat_provider(
@@ -1697,13 +1753,16 @@ impl ScriptListApp {
                     }
                 };
 
-                let state = match acp_target {
-                    AcpReadTarget::Main => self.collect_acp_state(cx),
-                    AcpReadTarget::Detached(entity) => {
+                let resolved_target = build_acp_resolved_target(&request_id, "getAcpState", &acp_target);
+
+                let mut state = match &acp_target {
+                    AcpReadTarget::Main { .. } => self.collect_acp_state(cx),
+                    AcpReadTarget::Detached { entity, .. } => {
                         let view = entity.read(cx);
                         view.collect_acp_state_snapshot(cx)
                     }
                 };
+                state.resolved_target = resolved_target;
 
                 tracing::info!(
                     target: "script_kit::acp_telemetry",
@@ -1761,14 +1820,36 @@ impl ScriptListApp {
                     "acp_setup_action.request"
                 );
 
-                // Reject non-main targets.
-                if target.is_some() {
-                    if let Err(error) =
-                        resolve_main_only_target(&request_id, "performAcpSetupAction", target.as_ref())
-                    {
+                // Resolve the ACP target — now accepts both Main and AcpDetached.
+                let acp_target = match resolve_acp_read_target(
+                    &request_id,
+                    "performAcpSetupAction",
+                    target.as_ref(),
+                ) {
+                    Ok(t) => t,
+                    Err(error) => {
                         let response = Message::acp_setup_action_result_error(
                             request_id.clone(),
-                            format!("target_unsupported_non_main: {}", error.message),
+                            error.message,
+                        );
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(response);
+                        }
+                        return;
+                    }
+                };
+
+                // For Main targets, verify the main window is actually showing AcpChatView.
+                if matches!(acp_target, AcpReadTarget::Main { .. }) {
+                    if !matches!(self.current_view, AppView::AcpChatView { .. }) {
+                        tracing::warn!(
+                            target: "script_kit::automation",
+                            request_id = %request_id,
+                            "automation.acp_action_target_main_view_missing"
+                        );
+                        let response = Message::acp_setup_action_result_error(
+                            request_id.clone(),
+                            "performAcpSetupAction resolved the main ACP target but the main window is not currently showing AcpChatView".to_string(),
                         );
                         if let Some(ref sender) = self.response_sender {
                             let _ = sender.try_send(response);
@@ -1777,17 +1858,42 @@ impl ScriptListApp {
                     }
                 }
 
-                // Dispatch the action to the ACP view.
-                let result = match &self.current_view {
-                    AppView::AcpChatView { entity } => {
+                tracing::info!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    resolved_target = match &acp_target {
+                        AcpReadTarget::Main { .. } => "main",
+                        AcpReadTarget::Detached { .. } => "detached",
+                    },
+                    "automation.acp_action_target_resolved"
+                );
+
+                let resolved_target =
+                    build_acp_resolved_target(&request_id, "performAcpSetupAction", &acp_target);
+
+                // Dispatch the action to the resolved ACP view.
+                let result = match acp_target.clone() {
+                    AcpReadTarget::Main { .. } => match &self.current_view {
+                        AppView::AcpChatView { entity } => entity.update(cx, |view, cx| {
+                            view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
+                        }),
+                        _ => Err("current main view is not AcpChatView".to_string()),
+                    },
+                    AcpReadTarget::Detached { entity, .. } => {
                         entity.update(cx, |view, cx| {
                             view.perform_setup_automation_action(action, agent_id.as_deref(), cx)
                         })
                     }
-                    _ => Err("current view is not AcpChatView".to_string()),
                 };
 
-                let state = self.collect_acp_state(cx);
+                let mut state = match &acp_target {
+                    AcpReadTarget::Main { .. } => self.collect_acp_state(cx),
+                    AcpReadTarget::Detached { entity, .. } => {
+                        let view = entity.read(cx);
+                        view.collect_acp_state_snapshot(cx)
+                    }
+                };
+                state.resolved_target = resolved_target;
 
                 let response = match result {
                     Ok(()) => Message::acp_setup_action_result_success(request_id.clone(), state),
@@ -1812,20 +1918,56 @@ impl ScriptListApp {
                 }
             }
 
-            PromptMessage::ResetAcpTestProbe { request_id } => {
-                // Global-only: always resets the main window's probe.
-                // No target field — see message variant doc comment.
+            PromptMessage::ResetAcpTestProbe { request_id, target } => {
                 tracing::info!(
                     category = "ACP_PROBE",
                     request_id = %request_id,
-                    scope = "global",
+                    target = ?target,
                     "acp_test_probe.reset"
                 );
 
-                self.reset_acp_test_probe(cx);
+                // Resolve target: Main → main window, AcpDetached → detached entity,
+                // anything else → structured error.
+                let acp_target = match resolve_acp_read_target(&request_id, "resetAcpTestProbe", target.as_ref()) {
+                    Ok(t) => t,
+                    Err(error) => {
+                        let mut probe = protocol::AcpTestProbeSnapshot::default();
+                        probe.warnings = vec![format!(
+                            "target_unsupported: {}",
+                            error.message
+                        )];
+                        let response = Message::acp_test_probe_result(request_id.clone(), probe);
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(response);
+                        }
+                        return;
+                    }
+                };
+
+                let resolved_target = build_acp_resolved_target(&request_id, "resetAcpTestProbe", &acp_target);
+
+                match &acp_target {
+                    AcpReadTarget::Main { .. } => {
+                        self.reset_acp_test_probe(cx);
+                    }
+                    AcpReadTarget::Detached { entity, .. } => {
+                        entity.update(cx, |view, _cx| {
+                            view.reset_test_probe();
+                        });
+                    }
+                };
 
                 // Respond with the current (now-empty) probe snapshot.
-                let probe = self.collect_acp_test_probe(protocol::ACP_TEST_PROBE_MAX_EVENTS, cx);
+                let mut probe = match &acp_target {
+                    AcpReadTarget::Main { .. } => {
+                        self.collect_acp_test_probe(protocol::ACP_TEST_PROBE_MAX_EVENTS, cx)
+                    }
+                    AcpReadTarget::Detached { entity, .. } => {
+                        let view = entity.read(cx);
+                        view.test_probe_snapshot(protocol::ACP_TEST_PROBE_MAX_EVENTS, cx)
+                    }
+                };
+                probe.state.resolved_target = resolved_target;
                 let response = Message::acp_test_probe_result(request_id.clone(), probe);
 
                 if let Some(ref sender) = self.response_sender {
@@ -1877,13 +2019,16 @@ impl ScriptListApp {
                     }
                 };
 
-                let probe = match acp_target {
-                    AcpReadTarget::Main => self.collect_acp_test_probe(tail, cx),
-                    AcpReadTarget::Detached(entity) => {
+                let resolved_target = build_acp_resolved_target(&request_id, "getAcpTestProbe", &acp_target);
+
+                let mut probe = match &acp_target {
+                    AcpReadTarget::Main { .. } => self.collect_acp_test_probe(tail, cx),
+                    AcpReadTarget::Detached { entity, .. } => {
                         let view = entity.read(cx);
                         view.test_probe_snapshot(tail, cx)
                     }
                 };
+                probe.state.resolved_target = resolved_target;
                 let response = Message::acp_test_probe_result(request_id.clone(), probe);
 
                 if let Some(ref sender) = self.response_sender {
@@ -2052,23 +2197,68 @@ impl ScriptListApp {
                 let poll_ms = poll_interval.unwrap_or(25);
                 let rid = request_id.clone();
 
-                // Fail closed: reject non-main targets before any polling.
-                if target.is_some() {
-                    match resolve_main_only_target(&rid, "waitFor", target.as_ref()) {
-                        Ok(_resolved) => { /* main window — proceed */ }
-                        Err(error) => {
-                            if let Some(ref sender) = self.response_sender {
-                                let _ = sender.try_send(Message::wait_for_result(
-                                    request_id.clone(),
-                                    false,
-                                    0,
-                                    Some(error),
-                                ));
+                // Determine if this is an ACP-specific condition.
+                let is_acp_condition = matches!(
+                    &condition,
+                    protocol::WaitCondition::Detailed(
+                        protocol::WaitDetailedCondition::AcpReady
+                        | protocol::WaitDetailedCondition::AcpPickerOpen
+                        | protocol::WaitDetailedCondition::AcpPickerClosed
+                        | protocol::WaitDetailedCondition::AcpItemAccepted
+                        | protocol::WaitDetailedCondition::AcpCursorAt { .. }
+                        | protocol::WaitDetailedCondition::AcpStatus { .. }
+                        | protocol::WaitDetailedCondition::AcpInputMatch { .. }
+                        | protocol::WaitDetailedCondition::AcpInputContains { .. }
+                        | protocol::WaitDetailedCondition::AcpAcceptedViaKey { .. }
+                        | protocol::WaitDetailedCondition::AcpAcceptedLabel { .. }
+                        | protocol::WaitDetailedCondition::AcpAcceptedCursorAt { .. }
+                        | protocol::WaitDetailedCondition::AcpInputLayoutMatch { .. }
+                        | protocol::WaitDetailedCondition::AcpSetupVisible
+                        | protocol::WaitDetailedCondition::AcpSetupReasonCode { .. }
+                        | protocol::WaitDetailedCondition::AcpSetupPrimaryAction { .. }
+                        | protocol::WaitDetailedCondition::AcpSetupAgentPickerOpen
+                        | protocol::WaitDetailedCondition::AcpSetupSelectedAgent { .. }
+                    )
+                );
+
+                // Resolve target: ACP conditions accept AcpDetached; others are main-only.
+                let detached_entity: Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> =
+                    if target.is_some() {
+                        if is_acp_condition {
+                            match resolve_acp_read_target(&rid, "waitFor", target.as_ref()) {
+                                Ok(AcpReadTarget::Detached { entity, .. }) => Some(entity),
+                                Ok(AcpReadTarget::Main { .. }) => None,
+                                Err(error) => {
+                                    if let Some(ref sender) = self.response_sender {
+                                        let _ = sender.try_send(Message::wait_for_result(
+                                            request_id.clone(),
+                                            false,
+                                            0,
+                                            Some(error),
+                                        ));
+                                    }
+                                    return;
+                                }
                             }
-                            return;
+                        } else {
+                            match resolve_main_only_target(&rid, "waitFor", target.as_ref()) {
+                                Ok(_resolved) => None,
+                                Err(error) => {
+                                    if let Some(ref sender) = self.response_sender {
+                                        let _ = sender.try_send(Message::wait_for_result(
+                                            request_id.clone(),
+                                            false,
+                                            0,
+                                            Some(error),
+                                        ));
+                                    }
+                                    return;
+                                }
+                            }
                         }
-                    }
-                }
+                    } else {
+                        None
+                    };
 
                 tracing::info!(
                     category = "AUTOMATION",
@@ -2080,7 +2270,7 @@ impl ScriptListApp {
                 );
 
                 // Check if condition is already satisfied
-                if self.wait_condition_satisfied(&condition, cx) {
+                if self.wait_condition_satisfied_for_target(&condition, detached_entity.as_ref(), cx) {
                     let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, true);
                     let trace = if include_trace {
                         let started_at_ms = protocol::transaction_trace::now_epoch_ms();
@@ -2127,6 +2317,7 @@ impl ScriptListApp {
                     // Poll asynchronously
                     let sender = self.response_sender.clone();
                     let condition = condition.clone();
+                    let detached_entity = detached_entity.clone();
                     cx.spawn(async move |this, cx| {
                         let started_at_ms = protocol::transaction_trace::now_epoch_ms();
                         let start = std::time::Instant::now();
@@ -2184,7 +2375,7 @@ impl ScriptListApp {
                                 break;
                             }
                             match this.update(cx, |this, cx| {
-                                this.wait_condition_satisfied(&condition, cx)
+                                this.wait_condition_satisfied_for_target(&condition, detached_entity.as_ref(), cx)
                             }) {
                                 Ok(true) => {
                                     let elapsed_ms = start.elapsed().as_millis() as u64;
@@ -3940,6 +4131,121 @@ impl ScriptListApp {
         }
     }
 
+    /// Check if a wait condition is currently satisfied, reading ACP data
+    /// from the given detached entity (if provided) instead of the main window.
+    ///
+    /// Non-ACP conditions always read from the main window regardless.
+    fn wait_condition_satisfied_for_target(
+        &self,
+        condition: &protocol::WaitCondition,
+        detached_entity: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
+        cx: &Context<Self>,
+    ) -> bool {
+        match condition {
+            // Non-ACP conditions: delegate to main-window logic
+            protocol::WaitCondition::Named(_) => self.wait_condition_satisfied(condition, cx),
+            protocol::WaitCondition::Detailed(detailed) => {
+                // Check if this is an ACP condition
+                let is_acp = matches!(
+                    detailed,
+                    protocol::WaitDetailedCondition::AcpReady
+                        | protocol::WaitDetailedCondition::AcpPickerOpen
+                        | protocol::WaitDetailedCondition::AcpPickerClosed
+                        | protocol::WaitDetailedCondition::AcpItemAccepted
+                        | protocol::WaitDetailedCondition::AcpCursorAt { .. }
+                        | protocol::WaitDetailedCondition::AcpStatus { .. }
+                        | protocol::WaitDetailedCondition::AcpInputMatch { .. }
+                        | protocol::WaitDetailedCondition::AcpInputContains { .. }
+                        | protocol::WaitDetailedCondition::AcpAcceptedViaKey { .. }
+                        | protocol::WaitDetailedCondition::AcpAcceptedLabel { .. }
+                        | protocol::WaitDetailedCondition::AcpAcceptedCursorAt { .. }
+                        | protocol::WaitDetailedCondition::AcpInputLayoutMatch { .. }
+                        | protocol::WaitDetailedCondition::AcpSetupVisible
+                        | protocol::WaitDetailedCondition::AcpSetupReasonCode { .. }
+                        | protocol::WaitDetailedCondition::AcpSetupPrimaryAction { .. }
+                        | protocol::WaitDetailedCondition::AcpSetupAgentPickerOpen
+                        | protocol::WaitDetailedCondition::AcpSetupSelectedAgent { .. }
+                );
+
+                if !is_acp || detached_entity.is_none() {
+                    return self.wait_condition_satisfied(condition, cx);
+                }
+
+                // ACP condition with a detached entity — read from it.
+                let state = self.collect_acp_state_for_target(detached_entity, cx);
+                let probe_fn = || self.collect_acp_test_probe_for_target(detached_entity, 1, cx);
+
+                match detailed {
+                    protocol::WaitDetailedCondition::AcpReady => {
+                        state.context_ready && state.status == "idle"
+                    }
+                    protocol::WaitDetailedCondition::AcpPickerOpen => {
+                        state.picker.as_ref().is_some_and(|p| p.open)
+                    }
+                    protocol::WaitDetailedCondition::AcpPickerClosed => {
+                        state.picker.is_none() || state.picker.as_ref().is_some_and(|p| !p.open)
+                    }
+                    protocol::WaitDetailedCondition::AcpItemAccepted => {
+                        state.last_accepted_item.is_some()
+                    }
+                    protocol::WaitDetailedCondition::AcpCursorAt { index } => {
+                        state.cursor_index == *index
+                    }
+                    protocol::WaitDetailedCondition::AcpStatus { status } => {
+                        state.status == *status
+                    }
+                    protocol::WaitDetailedCondition::AcpInputMatch { text } => {
+                        state.input_text == *text
+                    }
+                    protocol::WaitDetailedCondition::AcpInputContains { substring } => {
+                        state.input_text.contains(substring.as_str())
+                    }
+                    protocol::WaitDetailedCondition::AcpAcceptedViaKey { key } => {
+                        let probe = probe_fn();
+                        probe.accepted_items.last().is_some_and(|item| item.accepted_via_key == *key)
+                    }
+                    protocol::WaitDetailedCondition::AcpAcceptedLabel { label } => {
+                        let probe = probe_fn();
+                        probe.accepted_items.last().is_some_and(|item| item.item_label == *label)
+                    }
+                    protocol::WaitDetailedCondition::AcpAcceptedCursorAt { index } => {
+                        let probe = probe_fn();
+                        probe.accepted_items.last().is_some_and(|item| item.cursor_after == *index)
+                    }
+                    protocol::WaitDetailedCondition::AcpInputLayoutMatch {
+                        visible_start, visible_end, cursor_in_window,
+                    } => {
+                        let probe = probe_fn();
+                        probe.input_layout.as_ref().is_some_and(|layout| {
+                            layout.visible_start == *visible_start
+                                && layout.visible_end == *visible_end
+                                && layout.cursor_in_window == *cursor_in_window
+                        })
+                    }
+                    protocol::WaitDetailedCondition::AcpSetupVisible => {
+                        state.setup.is_some()
+                    }
+                    protocol::WaitDetailedCondition::AcpSetupReasonCode { reason_code } => {
+                        state.setup.as_ref().is_some_and(|s| s.reason_code == *reason_code)
+                    }
+                    protocol::WaitDetailedCondition::AcpSetupPrimaryAction { action } => {
+                        state.setup.as_ref().is_some_and(|s| s.primary_action == *action)
+                    }
+                    protocol::WaitDetailedCondition::AcpSetupAgentPickerOpen => {
+                        state.setup.as_ref().is_some_and(|s| s.agent_picker_open)
+                    }
+                    protocol::WaitDetailedCondition::AcpSetupSelectedAgent { agent_id } => {
+                        state.setup.as_ref().is_some_and(|s| {
+                            s.selected_agent_id.as_ref().is_some_and(|id| id == agent_id)
+                        })
+                    }
+                    // Non-ACP conditions (already handled above, but required for exhaustiveness)
+                    _ => self.wait_condition_satisfied(condition, cx),
+                }
+            }
+        }
+    }
+
     /// Get the current prompt type as a string.
     fn current_prompt_type(&self) -> String {
         match &self.current_view {
@@ -4001,6 +4307,31 @@ impl ScriptListApp {
 
         // Extract state from the ACP view's public API.
         view.collect_acp_state_snapshot(cx)
+    }
+
+    /// Collect ACP state from the given detached entity, or fall through to main.
+    fn collect_acp_state_for_target(
+        &self,
+        detached_entity: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
+        cx: &Context<Self>,
+    ) -> protocol::AcpStateSnapshot {
+        match detached_entity {
+            Some(entity) => entity.read(cx).collect_acp_state_snapshot(cx),
+            None => self.collect_acp_state(cx),
+        }
+    }
+
+    /// Collect ACP test probe from the given detached entity, or fall through to main.
+    fn collect_acp_test_probe_for_target(
+        &self,
+        detached_entity: Option<&gpui::Entity<crate::ai::acp::view::AcpChatView>>,
+        tail: usize,
+        cx: &Context<Self>,
+    ) -> protocol::AcpTestProbeSnapshot {
+        match detached_entity {
+            Some(entity) => entity.read(cx).test_probe_snapshot(tail, cx),
+            None => self.collect_acp_test_probe(tail, cx),
+        }
     }
 
     /// Reset the ACP test probe ring buffer.

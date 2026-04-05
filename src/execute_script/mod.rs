@@ -1554,14 +1554,16 @@ impl ScriptListApp {
                                     }
 
                                     // Handle ResetAcpTestProbe - forward to UI thread
-                                    if let Message::ResetAcpTestProbe { request_id } = &msg {
+                                    if let Message::ResetAcpTestProbe { request_id, target } = &msg {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
+                                            target = ?target,
                                             "ResetAcpTestProbe request"
                                         );
                                         let prompt_msg = PromptMessage::ResetAcpTestProbe {
                                             request_id: request_id.clone(),
+                                            target: target.clone(),
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(

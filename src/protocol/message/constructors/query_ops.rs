@@ -315,7 +315,21 @@ impl Message {
 
     /// Create a resetAcpTestProbe request
     pub fn reset_acp_test_probe(request_id: String) -> Self {
-        Message::ResetAcpTestProbe { request_id }
+        Message::ResetAcpTestProbe {
+            request_id,
+            target: None,
+        }
+    }
+
+    /// Create a resetAcpTestProbe request targeting a specific ACP surface
+    pub fn reset_acp_test_probe_targeted(
+        request_id: String,
+        target: AutomationWindowTarget,
+    ) -> Self {
+        Message::ResetAcpTestProbe {
+            request_id,
+            target: Some(target),
+        }
     }
 
     /// Create a getAcpTestProbe request

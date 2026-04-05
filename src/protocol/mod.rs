@@ -73,8 +73,9 @@ pub use semantic_id::{generate_semantic_id, generate_semantic_id_named, value_to
 #[allow(unused_imports)]
 pub use types::{
     AcpAcceptedItem, AcpInputLayoutMetrics, AcpInputLayoutTelemetry, AcpKeyRoute,
-    AcpKeyRouteTelemetry, AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpSetupActionKind,
-    AcpSetupSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot, AcpWaitCondition, AiChatInfo,
+    AcpKeyRouteTelemetry, AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpResolvedTarget,
+    AcpSetupActionKind, AcpSetupSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot,
+    AcpWaitCondition, AiChatInfo,
     AiContextPartInput, AiMessageInfo, AutomationSurfaceSnapshot, AutomationWindowBounds,
     AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget, BatchCommand, BatchOptions,
     BatchResultEntry, BoxModelSides, ChatMessagePosition, ChatMessageRole, ChatPromptConfig,

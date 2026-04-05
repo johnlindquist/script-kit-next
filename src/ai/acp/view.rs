@@ -409,6 +409,7 @@ impl AcpChatView {
 
         AcpStateSnapshot {
             schema_version: ACP_STATE_SCHEMA_VERSION,
+            resolved_target: None, // Populated by the caller (prompt handler) based on target resolution.
             status: status_str.to_string(),
             input_text,
             cursor_index,
@@ -3147,16 +3148,29 @@ impl AcpChatView {
             return;
         };
 
-        // Persist selection synchronously so any subsequent reopen reads the
-        // correct preference immediately — no race with a background writer.
-        let persist_result =
-            crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(agent.id.to_string()));
+        // Skip the blocking disk write when the user confirms the already-selected agent.
+        let already_selected = current_setup
+            .selected_agent
+            .as_ref()
+            .is_some_and(|selected| selected.id == agent.id);
+
+        let persist_result: Result<(), anyhow::Error> = if already_selected {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_setup_agent_persist_skipped_same_selection",
+                agent_id = %agent.id,
+            );
+            Ok(())
+        } else {
+            crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(agent.id.to_string()))
+        };
 
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_setup_agent_persist_before_retry",
             agent_id = %agent.id,
             persisted = persist_result.is_ok(),
+            already_selected,
         );
 
         // Re-resolve against the catalog to rebuild card title/body/actions.
@@ -3170,13 +3184,14 @@ impl AcpChatView {
             current_setup.launch_requirements,
         );
 
-        // Update the live thread's selected agent so recovery state is
-        // immediately truthful without waiting for a reopen.
-        if let AcpChatSession::Live(thread) = &self.session {
-            let next_agent_for_thread = next_setup.selected_agent.clone();
-            thread.update(cx, |thread, cx| {
-                thread.replace_selected_agent(next_agent_for_thread, cx);
-            });
+        // Update the live thread's selected agent only when the selection changed.
+        if !already_selected {
+            if let AcpChatSession::Live(thread) = &self.session {
+                let next_agent_for_thread = next_setup.selected_agent.clone();
+                thread.update(cx, |thread, cx| {
+                    thread.replace_selected_agent(next_agent_for_thread, cx);
+                });
+            }
         }
 
         let should_auto_retry = resolution.is_ready() && persist_result.is_ok();
@@ -3191,6 +3206,7 @@ impl AcpChatView {
             needs_image = current_setup.launch_requirements.needs_image,
             catalog_count = current_setup.catalog_entries.len(),
             auto_retry = should_auto_retry,
+            already_selected,
         );
 
         self.replace_active_setup_state(next_setup, cx);
@@ -3202,6 +3218,7 @@ impl AcpChatView {
                 agent_id = %agent.id,
                 needs_embedded_context = current_setup.launch_requirements.needs_embedded_context,
                 needs_image = current_setup.launch_requirements.needs_image,
+                already_selected,
             );
             self.queue_setup_retry_request(cx);
         }

@@ -25,9 +25,10 @@ mod system;
 
 pub use acp_state::{
     AcpAcceptedItem, AcpInputLayoutMetrics, AcpInputLayoutTelemetry, AcpKeyRoute,
-    AcpKeyRouteTelemetry, AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpSetupActionKind,
-    AcpSetupSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot, AcpWaitCondition,
-    ACP_STATE_SCHEMA_VERSION, ACP_TEST_PROBE_MAX_EVENTS, ACP_TEST_PROBE_SCHEMA_VERSION,
+    AcpKeyRouteTelemetry, AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpResolvedTarget,
+    AcpSetupActionKind, AcpSetupSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot,
+    AcpWaitCondition, ACP_STATE_SCHEMA_VERSION, ACP_TEST_PROBE_MAX_EVENTS,
+    ACP_TEST_PROBE_SCHEMA_VERSION,
 };
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
 pub use automation_surface::{AutomationSurfaceSnapshot, AUTOMATION_SURFACE_SCHEMA_VERSION};
