@@ -14,6 +14,7 @@
  *   acp-enter-accept   Compatibility alias for --key enter
  *   acp-tab-accept     Compatibility alias for --key tab
  *   acp-open           Open ACP and verify it reaches ready state
+ *   acp-setup-recovery Recovery from ACP setup state; select agent with --select-agent ID
  *   preflight          Check all prerequisites (session, window, permissions)
  *   help               Show this help
  *
@@ -148,7 +149,13 @@ function parseArgs() {
       ? (args[keyIdx + 1] as "enter" | "tab")
       : "enter";
   const vision = args.includes("--vision");
-  return { recipe, session, key, vision };
+  const selectAgentIdx = args.indexOf("--select-agent");
+  const selectAgent =
+    selectAgentIdx >= 0 && args[selectAgentIdx + 1]
+      ? args[selectAgentIdx + 1]
+      : undefined;
+  const json = args.includes("--json");
+  return { recipe, session, key, vision, selectAgent, json };
 }
 
 // ---------------------------------------------------------------------------
@@ -506,11 +513,236 @@ async function recipeAcpPickerAccept(
   };
 }
 
+async function recipeAcpSetupRecovery(
+  session: string,
+  selectAgent?: string
+): Promise<RecipeReceipt> {
+  const steps: StepReceipt[] = [];
+
+  // 1. Show window
+  steps.push(
+    await step("show", () => send(session, '{"type":"show"}'))
+  );
+
+  await Bun.sleep(300);
+
+  // 2. Trigger ACP
+  steps.push(
+    await step("trigger-acp", () =>
+      send(session, '{"type":"triggerBuiltin","name":"tab-ai"}')
+    )
+  );
+
+  // 3. Wait for setup card to appear (or acpReady if no setup needed)
+  const waitSetupStep = await step("wait-setup-visible", () =>
+    rpc(
+      session,
+      JSON.stringify({
+        type: "waitFor",
+        requestId: "w-setup-visible",
+        condition: { type: "acpSetupVisible" },
+        timeout: 8000,
+        pollInterval: 25,
+        trace: "onFailure",
+      }),
+      { expect: "waitForResult", timeout: 10000 }
+    )
+  );
+  steps.push(waitSetupStep);
+
+  if (waitSetupStep.status !== "pass") {
+    // Setup card never appeared — might already be ready or error
+    const verifyStep = await step("verify-no-setup", () =>
+      runTool(
+        [
+          "bun",
+          "scripts/agentic/verify-shot.ts",
+          "--session",
+          session,
+          "--label",
+          "setup-not-found",
+          "--skip-screenshot",
+          "--skip-probe",
+          "--acp-status",
+          "setup",
+        ],
+        "verify-no-setup"
+      )
+    );
+    steps.push(verifyStep);
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "acp-setup-recovery",
+      status: "fail",
+      steps,
+      summary:
+        "Setup card did not appear — ACP may already be ready or failed to open",
+    };
+  }
+
+  // 4. State-only verification of setup card
+  steps.push(
+    await step("verify-setup-visible", () =>
+      runTool(
+        [
+          "bun",
+          "scripts/agentic/verify-shot.ts",
+          "--session",
+          session,
+          "--label",
+          "setup",
+          "--skip-screenshot",
+          "--skip-probe",
+          "--acp-setup-visible",
+        ],
+        "verify-setup"
+      )
+    )
+  );
+
+  // 5. If --select-agent provided, drive the setup recovery flow
+  if (selectAgent) {
+    // 5a. Open agent picker
+    steps.push(
+      await step("open-setup-agent-picker", () =>
+        rpc(
+          session,
+          JSON.stringify({
+            type: "performAcpSetupAction",
+            requestId: "a-open-picker",
+            action: "openAgentPicker",
+          }),
+          { expect: "acpSetupActionResult", timeout: 5000 }
+        )
+      )
+    );
+
+    // 5b. Wait for picker to open
+    steps.push(
+      await step("wait-agent-picker-open", () =>
+        rpc(
+          session,
+          JSON.stringify({
+            type: "waitFor",
+            requestId: "w-agent-picker-open",
+            condition: { type: "acpSetupAgentPickerOpen" },
+            timeout: 3000,
+            pollInterval: 25,
+            trace: "onFailure",
+          }),
+          { expect: "waitForResult", timeout: 5000 }
+        )
+      )
+    );
+
+    // 5c. Select the agent
+    steps.push(
+      await step("select-setup-agent", () =>
+        rpc(
+          session,
+          JSON.stringify({
+            type: "performAcpSetupAction",
+            requestId: "a-select-agent",
+            action: "selectAgent",
+            agentId: selectAgent,
+          }),
+          { expect: "acpSetupActionResult", timeout: 5000 }
+        )
+      )
+    );
+
+    // 5d. Wait for either acpReady or still-blocked setup
+    // Try acpReady first with a short timeout
+    const waitReadyStep = await step("wait-ready-or-still-blocked", () =>
+      rpc(
+        session,
+        JSON.stringify({
+          type: "waitFor",
+          requestId: "w-ready-after-select",
+          condition: { type: "acpReady" },
+          timeout: 3000,
+          pollInterval: 25,
+          trace: "onFailure",
+        }),
+        { expect: "waitForResult", timeout: 5000 }
+      )
+    );
+    steps.push(waitReadyStep);
+  }
+
+  // 6. Final verification — screenshot + state for proof
+  const verifyArgs = [
+    "bun",
+    "scripts/agentic/verify-shot.ts",
+    "--session",
+    session,
+    "--label",
+    "setup-final",
+    "--skip-probe",
+  ];
+  // If agent was selected and we expect it to resolve, verify ACP is no longer in setup
+  // Otherwise just capture the final state
+  steps.push(
+    await step("verify-final", () =>
+      runTool(verifyArgs, "verify-final")
+    )
+  );
+
+  const allPass = steps.every((s) => s.status === "pass");
+
+  // Extract final ACP state from the verify-final step for the receipt
+  const verifyFinalStep = steps.find((s) => s.name === "verify-final");
+  const finalState =
+    verifyFinalStep?.output &&
+    typeof verifyFinalStep.output === "object" &&
+    !("raw" in (verifyFinalStep.output as Record<string, unknown>))
+      ? (verifyFinalStep.output as Record<string, unknown>).state
+      : null;
+  const finalSetup =
+    finalState && typeof finalState === "object"
+      ? (finalState as Record<string, unknown>).setup
+      : null;
+
+  // Log recipe completion
+  console.error(
+    JSON.stringify({
+      event: "acp_setup_recovery_complete",
+      finalStatus:
+        finalState && typeof finalState === "object"
+          ? (finalState as Record<string, unknown>).status
+          : null,
+      finalReasonCode:
+        finalSetup && typeof finalSetup === "object"
+          ? (finalSetup as Record<string, unknown>).reasonCode
+          : null,
+    })
+  );
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    recipe: "acp-setup-recovery",
+    status: allPass
+      ? "pass"
+      : steps.some((s) => s.status === "error")
+        ? "error"
+        : "fail",
+    steps,
+    summary: allPass
+      ? selectAgent
+        ? `ACP setup recovery completed — agent ${selectAgent} selected`
+        : "ACP setup state verified"
+      : `Failed at: ${steps
+          .filter((s) => s.status !== "pass")
+          .map((s) => s.name)
+          .join(", ")}`,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 
-const { recipe, session, key, vision } = parseArgs();
+const { recipe, session, key, vision, selectAgent } = parseArgs();
 
 let result: RecipeReceipt;
 
@@ -541,9 +773,13 @@ switch (recipe) {
     });
     break;
 
+  case "acp-setup-recovery":
+    result = await recipeAcpSetupRecovery(session, selectAgent);
+    break;
+
   case "help":
   case "--help":
-    console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
+    console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision] [--select-agent ID]
 
 Recipes:
   preflight          Check prerequisites (session, window, permissions)
@@ -551,11 +787,13 @@ Recipes:
   acp-accept         Full ACP picker accept; choose key with --key enter|tab
   acp-enter-accept   Compatibility alias for --key enter
   acp-tab-accept     Compatibility alias for --key tab
+  acp-setup-recovery Recovery from ACP setup; select agent with --select-agent ID
   help               Show this help
 
 Examples:
   bun scripts/agentic/index.ts acp-accept --session default --key enter
-  bun scripts/agentic/index.ts acp-accept --session default --key tab --vision`);
+  bun scripts/agentic/index.ts acp-accept --session default --key tab --vision
+  bun scripts/agentic/index.ts acp-setup-recovery --session default --select-agent opencode --json`);
     process.exit(0);
     break;
 

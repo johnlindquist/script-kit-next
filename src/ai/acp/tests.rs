@@ -328,7 +328,6 @@ const RENDER_IMPL_SOURCE: &str = include_str!("../../main_sections/render_impl.r
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../../main_sections/app_view_state.rs");
 const APP_RUN_SETUP_SOURCE: &str = include_str!("../../main_entry/app_run_setup.rs");
 const ACP_MOD_SOURCE: &str = include_str!("mod.rs");
-const ACP_MODEL_SELECTOR_POPUP_SOURCE: &str = include_str!("model_selector_popup.rs");
 const ACP_PICKER_POPUP_SOURCE: &str = include_str!("picker_popup.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
 
@@ -497,14 +496,6 @@ fn acp_picker_popup_module_is_registered() {
 }
 
 #[test]
-fn acp_model_selector_popup_module_is_registered() {
-    assert!(
-        ACP_MOD_SOURCE.contains("pub(crate) mod model_selector_popup;"),
-        "ACP module should register the detached model selector popup module"
-    );
-}
-
-#[test]
 fn acp_picker_migration_uses_popup_window_instead_of_inline_layer() {
     assert!(
         !ACP_VIEW_SOURCE.contains("acp-mention-picker-layer"),
@@ -514,19 +505,6 @@ fn acp_picker_migration_uses_popup_window_instead_of_inline_layer() {
         ACP_PICKER_POPUP_SOURCE.contains("WindowKind::PopUp")
             && ACP_PICKER_POPUP_SOURCE.contains("AcpMentionPopupWindow"),
         "ACP picker migration should render through a popup window entity"
-    );
-}
-
-#[test]
-fn acp_model_selector_migration_uses_popup_window_instead_of_inline_layer() {
-    assert!(
-        !ACP_VIEW_SOURCE.contains("fn render_model_selector"),
-        "ACP chat view should no longer render the model selector inline"
-    );
-    assert!(
-        ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("WindowKind::PopUp")
-            && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("AcpModelSelectorPopupWindow"),
-        "ACP model selector should render through a popup window entity"
     );
 }
 
@@ -557,23 +535,10 @@ fn acp_picker_refresh_and_navigation_sync_popup_window() {
 }
 
 #[test]
-fn acp_model_selector_button_and_selection_sync_popup_window() {
-    assert!(
-        ACP_VIEW_SOURCE.contains("this.cache_popup_parent_window(window, cx);")
-            && ACP_VIEW_SOURCE
-                .contains("this.sync_model_selector_popup_window_from_cached_parent(cx);")
-            && ACP_VIEW_SOURCE.contains("pub(super) fn select_model_from_popup"),
-        "model selector interactions should open and close through the detached popup window"
-    );
-}
-
-#[test]
 fn acp_view_exposes_escape_popup_dismiss_helper() {
     assert!(
         ACP_VIEW_SOURCE.contains("pub(crate) fn dismiss_escape_popup")
             && ACP_VIEW_SOURCE.contains("self.model_selector_open = false;")
-            && ACP_VIEW_SOURCE
-                .contains("self.sync_model_selector_popup_window_from_cached_parent(cx);")
             && ACP_VIEW_SOURCE.contains("self.mention_session = None;")
             && ACP_VIEW_SOURCE.contains("self.sync_mention_popup_window_from_cached_parent(cx);"),
         "ACP view should expose a helper that dismisses the detached ACP popups on Escape"
@@ -947,8 +912,101 @@ fn tab_ai_mode_derives_launch_requirements() {
         "tab_ai_mode must derive AcpLaunchRequirements"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("acp_launch_requirements_derived"),
-        "tab_ai_mode must log requirements derivation"
+        TAB_AI_MODE_SOURCE.contains("acp_open_retry_request_consumed"),
+        "tab_ai_mode must log retry request consumption with requirements"
+    );
+}
+
+#[test]
+fn acp_retry_request_from_setup_state_preserves_agent_and_requirements() {
+    use super::setup_state::AcpInlineSetupState;
+    use super::view::AcpRetryRequest;
+
+    let setup = AcpInlineSetupState {
+        reason_code: "authenticationRequired",
+        title: "Auth required".into(),
+        body: "test".into(),
+        primary_action: super::setup_state::AcpSetupAction::Retry,
+        secondary_action: None,
+        selected_agent: Some(super::catalog::AcpAgentCatalogEntry {
+            id: "opencode".into(),
+            display_name: "OpenCode".into(),
+            source: super::catalog::AcpAgentSource::ScriptKitCatalog,
+            install_state: super::catalog::AcpAgentInstallState::Ready,
+            auth_state: super::catalog::AcpAgentAuthState::Unknown,
+            config_state: super::catalog::AcpAgentConfigState::Valid,
+            install_hint: None,
+            config_hint: None,
+            supports_embedded_context: Some(true),
+            supports_image: None,
+            last_session_ok: false,
+            config: None,
+        }),
+        catalog_entries: Vec::new(),
+        launch_requirements: super::preflight::AcpLaunchRequirements {
+            needs_embedded_context: true,
+            needs_image: false,
+        },
+    };
+
+    let request = AcpRetryRequest::from_setup_state(&setup);
+    assert_eq!(request.preferred_agent_id.as_deref(), Some("opencode"));
+    assert!(request.launch_requirements.needs_embedded_context);
+    assert!(!request.launch_requirements.needs_image);
+}
+
+#[test]
+fn acp_retry_request_from_setup_state_without_agent() {
+    use super::view::AcpRetryRequest;
+
+    let setup = super::setup_state::AcpInlineSetupState {
+        reason_code: "noAgentsAvailable",
+        title: "No agents".into(),
+        body: "test".into(),
+        primary_action: super::setup_state::AcpSetupAction::OpenCatalog,
+        secondary_action: None,
+        selected_agent: None,
+        catalog_entries: Vec::new(),
+        launch_requirements: super::preflight::AcpLaunchRequirements::default(),
+    };
+
+    let request = AcpRetryRequest::from_setup_state(&setup);
+    assert_eq!(request.preferred_agent_id, None);
+    assert!(!request.launch_requirements.needs_embedded_context);
+    assert!(!request.launch_requirements.needs_image);
+}
+
+#[test]
+fn tab_ai_mode_consumes_retry_request_before_preference() {
+    // Verify the open path checks for retry request before loading preference.
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("take_acp_retry_request_from_current_view"),
+        "tab_ai_mode must check for retry request from current view"
+    );
+    // The retry request should be checked before load_preferred_acp_agent_id.
+    let retry_pos = TAB_AI_MODE_SOURCE
+        .find("take_acp_retry_request_from_current_view")
+        .expect("must have retry request extraction");
+    let pref_pos = TAB_AI_MODE_SOURCE
+        .find("load_preferred_acp_agent_id")
+        .expect("must still fall back to preference loading");
+    assert!(
+        retry_pos < pref_pos,
+        "retry request must be consumed before preference fallback"
+    );
+}
+
+#[test]
+fn acp_view_queues_retry_payload_on_setup_retry() {
+    // The view must queue the payload with structured tracing.
+    let view_source = include_str!("view.rs");
+    assert!(
+        view_source.contains("acp_setup_retry_payload_queued"),
+        "view must emit acp_setup_retry_payload_queued tracing event"
+    );
+    assert!(
+        view_source.contains("queue_setup_retry_request"),
+        "Retry action must call queue_setup_retry_request"
     );
 }
 

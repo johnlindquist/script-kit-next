@@ -37,6 +37,11 @@
  *   --acp-visible-start N       Assert inputLayout.visibleStart equals N
  *   --acp-visible-end N         Assert inputLayout.visibleEnd equals N
  *   --acp-cursor-in-window N    Assert inputLayout.cursorInWindow equals N
+ *   --acp-setup-visible         Assert setup card is present (status == "setup")
+ *   --acp-setup-reason CODE     Assert setup.reasonCode equals CODE
+ *   --acp-setup-primary-action A  Assert setup.primaryAction equals A
+ *   --acp-setup-selected-agent ID Assert setup.selectedAgentId equals ID
+ *   --acp-setup-agent-picker-open Assert setup.agentPickerOpen is true
  *   --probe-tail N              Number of probe events to request (default: 20)
  *   --emit-vision-crops         Emit vision check entries with crop regions for external readers
  *   --skip-screenshot           Only run state assertions, skip capture
@@ -159,6 +164,10 @@ function parseArgs() {
       opts.acpNoPermission = true;
     } else if (arg === "--acp-has-permission") {
       opts.acpHasPermission = true;
+    } else if (arg === "--acp-setup-visible") {
+      opts.acpSetupVisible = true;
+    } else if (arg === "--acp-setup-agent-picker-open") {
+      opts.acpSetupAgentPickerOpen = true;
     } else if (arg === "--emit-vision-crops") {
       opts.emitVisionCrops = true;
     } else if (arg === "--skip-probe") {
@@ -725,6 +734,46 @@ function runAssertions(
         passed: false,
       });
     }
+    if (opts.acpSetupVisible) {
+      results.push({
+        name: "acp-setup-visible",
+        expected: "true",
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (hasOpt(opts, "acpSetupReason")) {
+      results.push({
+        name: "acp-setup-reason",
+        expected: String(opts.acpSetupReason),
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (hasOpt(opts, "acpSetupPrimaryAction")) {
+      results.push({
+        name: "acp-setup-primary-action",
+        expected: String(opts.acpSetupPrimaryAction),
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (hasOpt(opts, "acpSetupSelectedAgent")) {
+      results.push({
+        name: "acp-setup-selected-agent",
+        expected: String(opts.acpSetupSelectedAgent),
+        actual: "<no state>",
+        passed: false,
+      });
+    }
+    if (opts.acpSetupAgentPickerOpen) {
+      results.push({
+        name: "acp-setup-agent-picker-open",
+        expected: "true",
+        actual: "<no state>",
+        passed: false,
+      });
+    }
     return results;
   }
 
@@ -925,6 +974,61 @@ function runAssertions(
     });
   }
 
+  // ACP setup assertions
+  const setup = snapshot.setup as Record<string, unknown> | null;
+
+  if (opts.acpSetupVisible) {
+    results.push({
+      name: "acp-setup-visible",
+      expected: "true",
+      actual: setup ? "true" : "false",
+      passed: setup != null,
+    });
+  }
+
+  if (hasOpt(opts, "acpSetupReason")) {
+    const expected = String(opts.acpSetupReason);
+    const actual = setup ? String(setup.reasonCode ?? "<missing>") : "<no setup>";
+    results.push({
+      name: "acp-setup-reason",
+      expected,
+      actual,
+      passed: actual === expected,
+    });
+  }
+
+  if (hasOpt(opts, "acpSetupPrimaryAction")) {
+    const expected = String(opts.acpSetupPrimaryAction);
+    const actual = setup ? String(setup.primaryAction ?? "<missing>") : "<no setup>";
+    results.push({
+      name: "acp-setup-primary-action",
+      expected,
+      actual,
+      passed: actual === expected,
+    });
+  }
+
+  if (hasOpt(opts, "acpSetupSelectedAgent")) {
+    const expected = String(opts.acpSetupSelectedAgent);
+    const actual = setup ? String(setup.selectedAgentId ?? "<none>") : "<no setup>";
+    results.push({
+      name: "acp-setup-selected-agent",
+      expected,
+      actual,
+      passed: actual === expected,
+    });
+  }
+
+  if (opts.acpSetupAgentPickerOpen) {
+    const actual = setup ? String(setup.agentPickerOpen ?? false) : "false";
+    results.push({
+      name: "acp-setup-agent-picker-open",
+      expected: "true",
+      actual,
+      passed: actual === "true",
+    });
+  }
+
   return results;
 }
 
@@ -1091,6 +1195,11 @@ Options:
   --acp-visible-start N       Assert inputLayout.visibleStart equals N
   --acp-visible-end N         Assert inputLayout.visibleEnd equals N
   --acp-cursor-in-window N    Assert inputLayout.cursorInWindow equals N
+  --acp-setup-visible         Assert setup card is present (status == "setup")
+  --acp-setup-reason CODE     Assert setup.reasonCode equals CODE
+  --acp-setup-primary-action A  Assert setup.primaryAction equals A
+  --acp-setup-selected-agent ID Assert setup.selectedAgentId equals ID
+  --acp-setup-agent-picker-open Assert setup.agentPickerOpen is true
   --probe-tail N              Number of probe events to request (default: 20)
   --emit-vision-crops         Emit vision check entries with crop regions
   --skip-screenshot           Only run state assertions, skip capture

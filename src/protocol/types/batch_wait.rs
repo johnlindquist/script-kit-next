@@ -104,6 +104,24 @@ pub enum WaitDetailedCondition {
         #[serde(rename = "cursorInWindow")]
         cursor_in_window: usize,
     },
+    /// ACP setup: wait until the setup card is visible (status == "setup" with setup payload).
+    AcpSetupVisible,
+    /// ACP setup: wait until the setup reason code matches.
+    AcpSetupReasonCode {
+        #[serde(rename = "reasonCode")]
+        reason_code: String,
+    },
+    /// ACP setup: wait until the setup primary action matches.
+    AcpSetupPrimaryAction {
+        action: crate::protocol::types::acp_state::AcpSetupActionKind,
+    },
+    /// ACP setup: wait until the setup agent picker overlay is open.
+    AcpSetupAgentPickerOpen,
+    /// ACP setup: wait until the setup selected agent matches.
+    AcpSetupSelectedAgent {
+        #[serde(rename = "agentId")]
+        agent_id: String,
+    },
 }
 
 /// Union of named and detailed wait conditions.

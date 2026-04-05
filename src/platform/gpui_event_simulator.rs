@@ -11,20 +11,13 @@
 //! not from the library crate directly, so they appear unused to `--lib`.
 #![allow(dead_code)]
 
-/// Returns `true` when the caller explicitly asked for a specific window
-/// (by `id`, `titleContains`, or `kind` with `index > 0`), meaning dispatch
-/// must not silently collapse multiple same-kind windows into one `WindowRole`.
-fn target_needs_stable_identity(
-    target: Option<&crate::protocol::AutomationWindowTarget>,
+/// Returns `true` when GPUI dispatch still collapses all windows of this kind
+/// to a single `WindowRole`, meaning it cannot distinguish between multiple
+/// visible windows of the same kind.
+fn kind_collapses_to_single_window_role(
+    kind: crate::protocol::AutomationWindowKind,
 ) -> bool {
-    match target {
-        Some(crate::protocol::AutomationWindowTarget::Id { .. }) => true,
-        Some(crate::protocol::AutomationWindowTarget::TitleContains { .. }) => true,
-        Some(crate::protocol::AutomationWindowTarget::Kind {
-            index: Some(index), ..
-        }) => *index > 0,
-        _ => false,
-    }
+    automation_kind_to_window_role(kind).is_some()
 }
 
 /// Count how many visible windows share the given [`AutomationWindowKind`].
@@ -146,14 +139,17 @@ pub(crate) fn dispatch_gpui_event(
         "gpui_event_simulation.dispatch"
     );
 
-    // 2a. Ambiguity guard — reject when the target needs stable identity
-    //     but multiple visible windows share the resolved kind, because
-    //     the WindowRole mapping cannot distinguish between them.
+    // 2a. Ambiguity guard — fail closed whenever the resolved kind still
+    //     routes through a single WindowRole and more than one visible
+    //     window shares that kind.  This is unconditional: even an
+    //     unqualified `{"type":"kind","kind":"acpDetached"}` target is
+    //     rejected when two detached ACP windows are visible, because
+    //     GPUI dispatch cannot distinguish between them.
     let visible_count = visible_window_count_for_kind(resolved.kind);
-    if target_needs_stable_identity(target) && visible_count > 1 {
+    if kind_collapses_to_single_window_role(resolved.kind) && visible_count > 1 {
         let msg = format!(
-            "Resolved target {} ({:?}) is ambiguous: GPUI dispatch still collapses \
-             to WindowRole and {} visible windows share this kind",
+            "Resolved target {} ({:?}) is ambiguous: {} visible windows share this kind \
+             and GPUI dispatch still routes through one WindowRole",
             resolved.id, resolved.kind, visible_count
         );
         tracing::warn!(

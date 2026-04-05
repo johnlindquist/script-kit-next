@@ -333,6 +333,50 @@ impl Message {
     }
 
     // ============================================================
+    // Constructor methods for ACP setup actions
+    // ============================================================
+
+    /// Create a performAcpSetupAction request
+    pub fn perform_acp_setup_action(
+        request_id: String,
+        action: AcpSetupActionKind,
+        agent_id: Option<String>,
+    ) -> Self {
+        Message::PerformAcpSetupAction {
+            request_id,
+            action,
+            agent_id,
+            target: None,
+        }
+    }
+
+    /// Create a successful ACP setup action result
+    pub fn acp_setup_action_result_success(
+        request_id: String,
+        state: AcpStateSnapshot,
+    ) -> Self {
+        Message::AcpSetupActionResult {
+            request_id,
+            success: true,
+            error: None,
+            state: Some(state),
+        }
+    }
+
+    /// Create a failed ACP setup action result
+    pub fn acp_setup_action_result_error(
+        request_id: String,
+        error: String,
+    ) -> Self {
+        Message::AcpSetupActionResult {
+            request_id,
+            success: false,
+            error: Some(error),
+            state: None,
+        }
+    }
+
+    // ============================================================
     // Constructor methods for wait/batch transaction layer
     // ============================================================
 

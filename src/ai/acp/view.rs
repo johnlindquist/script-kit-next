@@ -86,6 +86,31 @@ pub(crate) enum AcpChatSession {
     Setup(Box<super::setup_state::AcpInlineSetupState>),
 }
 
+/// Explicit relaunch payload queued when setup retry is requested.
+///
+/// Carries the selected agent id and capability requirements from the
+/// setup card so the next ACP open path can consume them ahead of
+/// fallback preference loading.
+#[derive(Debug, Clone)]
+pub(crate) struct AcpRetryRequest {
+    pub preferred_agent_id: Option<String>,
+    pub launch_requirements: super::preflight::AcpLaunchRequirements,
+}
+
+impl AcpRetryRequest {
+    pub(crate) fn from_setup_state(
+        setup: &super::setup_state::AcpInlineSetupState,
+    ) -> Self {
+        Self {
+            preferred_agent_id: setup
+                .selected_agent
+                .as_ref()
+                .map(|agent| agent.id.to_string()),
+            launch_requirements: setup.launch_requirements,
+        }
+    }
+}
+
 /// GPUI view entity wrapping an `AcpThread` for the Tab AI surface.
 pub(crate) struct AcpChatView {
     /// The ACP session — either a live thread or inline setup state.
@@ -121,8 +146,6 @@ pub(crate) struct AcpChatView {
     mention_session: Option<AcpMentionSession>,
     /// Cached parent window metadata for the detached picker popup.
     mention_popup_parent_window: Option<AcpMentionPopupParentWindow>,
-    /// Cached parent window metadata for the detached model selector popup.
-    model_selector_popup_parent_window: Option<AcpMentionPopupParentWindow>,
     /// Canonical inline tokens that currently own their attached context part.
     ///
     /// This preserves non-inline chip attachments during mention sync while
@@ -134,6 +157,8 @@ pub(crate) struct AcpChatView {
     last_accepted_item: Option<crate::protocol::AcpAcceptedItem>,
     /// Bounded test probe ring buffer for agentic verification.
     test_probe: AcpTestProbe,
+    /// Queued retry payload from setup card — consumed by the ACP open path.
+    pending_retry_request: Option<AcpRetryRequest>,
 }
 
 /// Bounded ring buffer for ACP test probe events.
@@ -203,7 +228,6 @@ impl AcpChatView {
             display_id: window.display(cx).map(|display| display.id()),
         };
         self.mention_popup_parent_window = Some(parent);
-        self.model_selector_popup_parent_window = Some(parent);
     }
 
     fn mention_popup_snapshot(
@@ -258,75 +282,9 @@ impl AcpChatView {
         }
     }
 
-    fn model_selector_popup_snapshot(
-        &self,
-        cx: &App,
-    ) -> Option<crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot> {
-        if !self.model_selector_open {
-            return None;
-        }
-
-        let thread = self.live_thread().read(cx);
-        let selected_id = thread.selected_model_id().map(str::to_string);
-        let entries = thread
-            .available_models()
-            .iter()
-            .map(
-                |model| crate::ai::acp::model_selector_popup::AcpModelSelectorPopupEntry {
-                    id: model.id.clone(),
-                    display: SharedString::from(
-                        model
-                            .display_name
-                            .clone()
-                            .unwrap_or_else(|| model.id.clone()),
-                    ),
-                    is_selected: selected_id.as_deref() == Some(model.id.as_str()),
-                },
-            )
-            .collect();
-
-        Some(crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot { entries })
-    }
-
-    pub(super) fn sync_model_selector_popup_window_from_cached_parent(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(parent) = self.model_selector_popup_parent_window else {
-            crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
-            return;
-        };
-
-        let source_view = cx.entity().downgrade();
-        if let Some(snapshot) = self.model_selector_popup_snapshot(cx) {
-            let _ = crate::ai::acp::model_selector_popup::sync_model_selector_popup_window(
-                cx,
-                crate::ai::acp::model_selector_popup::AcpModelSelectorPopupRequest {
-                    parent_window_handle: parent.handle,
-                    parent_bounds: parent.bounds,
-                    display_id: parent.display_id,
-                    source_view,
-                    snapshot,
-                },
-            );
-        } else {
-            crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
-        }
-    }
-
-    pub(super) fn select_model_from_popup(&mut self, model_id: &str, cx: &mut Context<Self>) {
-        self.live_thread().update(cx, |thread, cx| {
-            thread.select_model(model_id, cx);
-        });
-        self.model_selector_open = false;
-        self.sync_model_selector_popup_window_from_cached_parent(cx);
-        cx.notify();
-    }
-
     pub(crate) fn dismiss_escape_popup(&mut self, cx: &mut Context<Self>) -> bool {
         if self.model_selector_open {
             self.model_selector_open = false;
-            self.sync_model_selector_popup_window_from_cached_parent(cx);
             cx.notify();
             return true;
         }
@@ -377,11 +335,28 @@ impl AcpChatView {
             ACP_STATE_SCHEMA_VERSION,
         };
 
+        // Build setup snapshot from either session mode.
+        let setup_snapshot = self.build_setup_protocol_snapshot(cx);
+
         if self.is_setup_mode() {
-            return AcpStateSnapshot {
+            let snapshot = AcpStateSnapshot {
                 status: "setup".to_string(),
+                setup: setup_snapshot,
                 ..Default::default()
             };
+
+            if let Some(ref setup) = snapshot.setup {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_setup_snapshot_built",
+                    reason_code = %setup.reason_code,
+                    primary_action = ?setup.primary_action,
+                    compatible_count = setup.compatible_agent_ids.len(),
+                    agent_picker_open = setup.agent_picker_open,
+                );
+            }
+
+            return snapshot;
         }
 
         let thread = self.live_thread().read(cx);
@@ -425,6 +400,13 @@ impl AcpChatView {
         let (visible_start, visible_end) = thread.input.visible_window_range(60);
         let cursor_in_window = cursor_index.saturating_sub(visible_start);
 
+        // If the live thread has a runtime recovery setup card, include it.
+        let live_setup = if thread.setup_state().is_some() {
+            setup_snapshot
+        } else {
+            None
+        };
+
         let context_ready = thread.context_bootstrap_state() != AcpContextBootstrapState::Preparing;
 
         AcpStateSnapshot {
@@ -446,7 +428,37 @@ impl AcpChatView {
                 visible_end,
                 cursor_in_window,
             }),
+            setup: live_setup,
             warnings: Vec::new(),
+        }
+    }
+
+    /// Build a protocol-layer setup snapshot from the current session state.
+    fn build_setup_protocol_snapshot(
+        &self,
+        cx: &App,
+    ) -> Option<crate::protocol::AcpSetupSnapshot> {
+        let (agent_picker_open, agent_picker_selected_id) =
+            if let Some(ref picker) = self.setup_agent_picker {
+                let selected_id = picker
+                    .items
+                    .get(picker.selected_index)
+                    .map(|entry| entry.id.to_string());
+                (true, selected_id)
+            } else {
+                (false, None)
+            };
+
+        match &self.session {
+            AcpChatSession::Setup(setup) => {
+                Some(setup.to_protocol_snapshot(agent_picker_open, agent_picker_selected_id))
+            }
+            AcpChatSession::Live(thread) => {
+                let t = thread.read(cx);
+                t.setup_state().map(|s| {
+                    s.to_protocol_snapshot(agent_picker_open, agent_picker_selected_id)
+                })
+            }
         }
     }
 
@@ -540,11 +552,11 @@ impl AcpChatView {
             _slash_discovery_task: slash_task,
             mention_session: None,
             mention_popup_parent_window: None,
-            model_selector_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
             test_probe: AcpTestProbe::default(),
+            pending_retry_request: None,
         }
     }
 
@@ -580,11 +592,11 @@ impl AcpChatView {
             _slash_discovery_task: noop_slash,
             mention_session: None,
             mention_popup_parent_window: None,
-            model_selector_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
             test_probe: AcpTestProbe::default(),
+            pending_retry_request: None,
         }
     }
 
@@ -1998,7 +2010,6 @@ impl AcpChatView {
                                 this.mention_session = None;
                                 this.history_menu = None;
                                 this.sync_mention_popup_window_from_cached_parent(cx);
-                                this.sync_model_selector_popup_window_from_cached_parent(cx);
                                 cx.notify();
                             }))
                             .child(model_display)
@@ -2506,6 +2517,47 @@ impl AcpChatView {
         use crate::ai::context_mentions::{parse_inline_context_mentions, part_to_inline_token};
 
         let text = self.live_thread().read(cx).input.text().to_string();
+
+        // ── Fast path: no `@` in text ────────────────────────────
+        // When the composer has no `@` at all, skip the full parse.
+        // If we still own inline tokens, remove the corresponding stale
+        // context parts exactly once, then clear ownership.
+        if !text.contains('@') {
+            if self.inline_owned_context_tokens.is_empty() {
+                return;
+            }
+            let mut removed_tokens = Vec::new();
+            self.live_thread().update(cx, |thread, cx| {
+                let stale_indices: Vec<usize> = thread
+                    .pending_context_parts()
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(ix, part)| {
+                        let token = part_to_inline_token(part)?;
+                        self.inline_owned_context_tokens
+                            .contains(&token)
+                            .then_some((ix, token))
+                    })
+                    .map(|(ix, token)| {
+                        removed_tokens.push(token);
+                        ix
+                    })
+                    .collect();
+                for ix in stale_indices.into_iter().rev() {
+                    thread.remove_context_part(ix, cx);
+                }
+            });
+            self.inline_owned_context_tokens.clear();
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_inline_mentions_cleared",
+                removed_count = removed_tokens.len(),
+                removed_tokens = ?removed_tokens,
+                text_len = text.len(),
+            );
+            return;
+        }
+
         let parsed = parse_inline_context_mentions(&text);
 
         // Use canonical tokens for dedup and ownership tracking.
@@ -2980,6 +3032,31 @@ impl AcpChatView {
         }
     }
 
+    /// Take the pending retry request, if any. Used by the ACP open path
+    /// to consume an explicit relaunch payload ahead of fallback preference.
+    pub(crate) fn take_retry_request(&mut self) -> Option<AcpRetryRequest> {
+        self.pending_retry_request.take()
+    }
+
+    /// Queue an explicit relaunch payload from the current setup state.
+    /// Called on retry so the next ACP open path reuses the selected agent
+    /// and capability requirements instead of re-deriving them.
+    fn queue_setup_retry_request(&mut self, cx: &mut Context<Self>) {
+        let Some(setup) = self.read_active_setup_state(cx) else {
+            return;
+        };
+        let request = AcpRetryRequest::from_setup_state(&setup);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_setup_retry_payload_queued",
+            preferred_agent_id = ?request.preferred_agent_id,
+            needs_embedded_context = request.launch_requirements.needs_embedded_context,
+            needs_image = request.launch_requirements.needs_image,
+        );
+        self.pending_retry_request = Some(request);
+        cx.propagate();
+    }
+
     /// Read the active setup state from either session mode.
     fn read_active_setup_state(
         &self,
@@ -3133,7 +3210,7 @@ impl AcpChatView {
                 needs_embedded_context = current_setup.launch_requirements.needs_embedded_context,
                 needs_image = current_setup.launch_requirements.needs_image,
             );
-            self.handle_setup_action(super::setup_state::AcpSetupAction::Retry, cx);
+            self.queue_setup_retry_request(cx);
         }
     }
 
@@ -3152,8 +3229,7 @@ impl AcpChatView {
                     target: "script_kit::tab_ai",
                     event = "acp_setup_retry_requested",
                 );
-                // Propagate so the parent (tab_ai_mode) can re-run preflight.
-                cx.propagate();
+                self.queue_setup_retry_request(cx);
             }
             super::setup_state::AcpSetupAction::OpenCatalog => {
                 tracing::info!(
@@ -3168,6 +3244,98 @@ impl AcpChatView {
                     event = "acp_setup_external_action_requested",
                     action = ?action,
                 );
+            }
+        }
+    }
+
+    // ── Automation setup action dispatch ─���───────────────────
+
+    /// Perform a setup action from the automation protocol.
+    ///
+    /// Returns `Ok(())` on success, or an error message if the action
+    /// cannot be performed in the current state.
+    pub(crate) fn perform_setup_automation_action(
+        &mut self,
+        action: crate::protocol::AcpSetupActionKind,
+        agent_id: Option<&str>,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        use crate::protocol::AcpSetupActionKind;
+
+        match action {
+            AcpSetupActionKind::OpenAgentPicker => {
+                if !self.has_active_setup(cx) {
+                    return Err("no active setup card".to_string());
+                }
+                self.open_setup_agent_picker(cx);
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_setup_action_completed",
+                    action = "openAgentPicker",
+                    success = true,
+                );
+                Ok(())
+            }
+            AcpSetupActionKind::CloseAgentPicker => {
+                self.setup_agent_picker = None;
+                cx.notify();
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_setup_action_completed",
+                    action = "closeAgentPicker",
+                    success = true,
+                );
+                Ok(())
+            }
+            AcpSetupActionKind::SelectAgent => {
+                let target_id = agent_id.ok_or_else(|| {
+                    "selectAgent requires an agentId field".to_string()
+                })?;
+                if !self.has_active_setup(cx) {
+                    return Err("no active setup card".to_string());
+                }
+                // Open the picker if not already open, select the target agent,
+                // then confirm — replicating the user flow deterministically.
+                self.open_setup_agent_picker(cx);
+                if let Some(ref mut picker) = self.setup_agent_picker {
+                    if let Some(idx) = picker
+                        .items
+                        .iter()
+                        .position(|entry| entry.id.as_ref() == target_id)
+                    {
+                        picker.selected_index = idx;
+                    } else {
+                        self.setup_agent_picker = None;
+                        return Err(format!("agent '{}' not found in catalog", target_id));
+                    }
+                }
+                self.confirm_setup_agent_picker(cx);
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_setup_action_completed",
+                    action = "selectAgent",
+                    success = true,
+                    selected_agent_id = target_id,
+                );
+                Ok(())
+            }
+            AcpSetupActionKind::Retry
+            | AcpSetupActionKind::Install
+            | AcpSetupActionKind::Authenticate
+            | AcpSetupActionKind::OpenCatalog => {
+                if !self.has_active_setup(cx) {
+                    return Err("no active setup card".to_string());
+                }
+                let internal = super::setup_state::AcpSetupAction::from_protocol_kind(action);
+                self.handle_setup_action(internal, cx);
+                let action_name = format!("{:?}", action);
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_setup_action_completed",
+                    action = %action_name,
+                    success = true,
+                );
+                Ok(())
             }
         }
     }
@@ -3454,7 +3622,6 @@ impl AcpChatView {
         // Close model selector on any non-modifier key
         if self.model_selector_open {
             self.model_selector_open = false;
-            self.sync_model_selector_popup_window_from_cached_parent(cx);
             cx.notify();
         }
 

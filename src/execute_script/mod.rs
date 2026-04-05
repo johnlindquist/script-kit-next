@@ -1529,6 +1529,30 @@ impl ScriptListApp {
                                         continue;
                                     }
 
+                                    // Handle PerformAcpSetupAction - forward to UI thread
+                                    if let Message::PerformAcpSetupAction { request_id, action, agent_id, target } = &msg {
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            request_id = %request_id,
+                                            action = ?action,
+                                            "PerformAcpSetupAction request"
+                                        );
+                                        let prompt_msg = PromptMessage::PerformAcpSetupAction {
+                                            request_id: request_id.clone(),
+                                            action: *action,
+                                            agent_id: agent_id.clone(),
+                                            target: target.clone(),
+                                        };
+                                        if tx.send_blocking(prompt_msg).is_err() {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                "Prompt channel closed, reader exiting"
+                                            );
+                                            break;
+                                        }
+                                        continue;
+                                    }
+
                                     // Handle ResetAcpTestProbe - forward to UI thread
                                     if let Message::ResetAcpTestProbe { request_id } = &msg {
                                         tracing::info!(

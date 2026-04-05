@@ -7,6 +7,9 @@ use anyhow::{Context, Result};
 
 const REPORT_SLUG: &str = "prompt-chrome-consistency";
 const REPORT_TITLE: &str = "Prompt Chrome Consistency Audit";
+const REPORT_SCOPE_EXCLUSIONS: &[&str] = &[
+    "ACP compact-chat popup surfaces (for example src/ai/acp/model_selector_popup.rs)",
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AuditSeverity {
@@ -66,6 +69,14 @@ impl AuditSurfaceResult {
             "pass"
         }
     }
+
+    pub fn has_only_info_findings(&self) -> bool {
+        !self.findings.is_empty()
+            && self
+                .findings
+                .iter()
+                .all(|finding| matches!(finding.severity, AuditSeverity::Info))
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -117,7 +128,10 @@ const SURFACES: &[SurfaceSpec] = &[
     },
     SurfaceSpec {
         surface: "clipboard_history",
-        files: &["src/render_builtins/clipboard_history_layout.rs"],
+        files: &[
+            "src/render_builtins/clipboard.rs",
+            "src/render_builtins/clipboard_history_layout.rs",
+        ],
         accepted_hint_surfaces: &["clipboard_history"],
     },
     SurfaceSpec {
@@ -179,6 +193,14 @@ fn read_source_files(
     Ok(loaded)
 }
 
+fn documented_exception_surfaces<'a>(surfaces: &'a [AuditSurfaceResult]) -> Vec<&'a str> {
+    surfaces
+        .iter()
+        .filter(|surface| surface.has_only_info_findings())
+        .map(|surface| surface.surface)
+        .collect()
+}
+
 fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResult> {
     let sources = read_source_files(repo_root, spec.files)?;
     let combined = sources
@@ -217,6 +239,15 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
         ],
     );
 
+    let uses_expanded_scaffold = contains_any(
+        &combined,
+        &[
+            "render_expanded_view_scaffold(",
+            "render_expanded_view_scaffold_with_hints(",
+            "render_expanded_view_prompt_shell(",
+        ],
+    );
+
     match spec.surface {
         "file_search" => {
             if has_file_search_skeleton_loading(&combined)
@@ -247,7 +278,7 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
             if has_custom_file_search_hints {
                 findings.push(warning(
                     "non-universal footer hints",
-                    "File Search mini mode still advertises `\u{21b5} Open`, `\u{2318}\u{21b5} Ask AI`, and `\u{21e5} Navigate` instead of the canonical `\u{21b5} Run`, `\u{2318}K Actions`, `Tab AI` trio.",
+                    "File Search mini mode still advertises `↵ Open`, `⌘↵ Ask AI`, and `⇥ Navigate` instead of the canonical `↵ Run`, `⌘K Actions`, `Tab AI` trio.",
                     vec!["src/render_builtins/file_search_layout.rs".to_string()],
                 ));
             }
@@ -363,14 +394,9 @@ pub fn build_prompt_chrome_consistency_report(repo_root: &Path) -> Result<AuditR
         .count();
     let pass_count = surfaces.len() - warning_count - error_count;
 
-    let drift_surfaces = surfaces
-        .iter()
-        .filter(|surface| surface.status() == "warning" || surface.status() == "error")
-        .map(|surface| surface.surface)
-        .collect::<Vec<_>>()
-        .join(", ");
+    let exceptions = documented_exception_surfaces(&surfaces);
 
-    let summary = if drift_surfaces.is_empty() {
+    let summary = if warning_count == 0 && error_count == 0 && exceptions.is_empty() {
         format!(
             "Scanned {} prompt/builtin surfaces. {} pass, {} warning, {} error. No current drift markers were detected.",
             surfaces.len(),
@@ -378,7 +404,24 @@ pub fn build_prompt_chrome_consistency_report(repo_root: &Path) -> Result<AuditR
             warning_count,
             error_count
         )
+    } else if warning_count == 0 && error_count == 0 {
+        format!(
+            "Scanned {} prompt/builtin surfaces. {} pass, {} warning, {} error. {} intentional exception{} documented: {}.",
+            surfaces.len(),
+            pass_count,
+            warning_count,
+            error_count,
+            exceptions.len(),
+            if exceptions.len() == 1 { "" } else { "s" },
+            exceptions.join(", ")
+        )
     } else {
+        let drift_surfaces = surfaces
+            .iter()
+            .filter(|surface| surface.status() == "warning" || surface.status() == "error")
+            .map(|surface| surface.surface)
+            .collect::<Vec<_>>()
+            .join(", ");
         format!(
             "Scanned {} prompt/builtin surfaces. {} pass, {} warning, {} error. Highest-leverage current drifts: {}.",
             surfaces.len(),
@@ -389,6 +432,18 @@ pub fn build_prompt_chrome_consistency_report(repo_root: &Path) -> Result<AuditR
         )
     };
 
+    tracing::info!(
+        target: "script_kit::audit",
+        slug = REPORT_SLUG,
+        pass_count,
+        warning_count,
+        error_count,
+        exception_count = exceptions.len(),
+        exceptions = ?exceptions,
+        scope_exclusions = ?REPORT_SCOPE_EXCLUSIONS,
+        "prompt chrome audit summary built"
+    );
+
     Ok(AuditReport {
         slug: REPORT_SLUG,
         title: REPORT_TITLE,
@@ -398,16 +453,33 @@ pub fn build_prompt_chrome_consistency_report(repo_root: &Path) -> Result<AuditR
 }
 
 pub fn render_prompt_chrome_consistency_markdown(report: &AuditReport) -> String {
+    let exceptions = documented_exception_surfaces(&report.surfaces);
+
     let mut lines = vec![
         format!("# {}", report.title),
         String::new(),
         "## Summary".to_string(),
         report.summary.clone(),
         String::new(),
-        "## Surface Status".to_string(),
-        "| Surface | Status | Files |".to_string(),
-        "| --- | --- | --- |".to_string(),
+        "## Scope Notes".to_string(),
+        format!(
+            "- Scope: prompt and builtin chrome surfaces only. Excluded this pass: {}.",
+            REPORT_SCOPE_EXCLUSIONS.join(", ")
+        ),
     ];
+
+    if !exceptions.is_empty() {
+        lines.push(format!(
+            "- Intentional exception{}: {}.",
+            if exceptions.len() == 1 { "" } else { "s" },
+            exceptions.join(", ")
+        ));
+    }
+
+    lines.push(String::new());
+    lines.push("## Surface Status".to_string());
+    lines.push("| Surface | Status | Files |".to_string());
+    lines.push("| --- | --- | --- |".to_string());
 
     for surface in &report.surfaces {
         lines.push(format!(
@@ -426,7 +498,7 @@ pub fn render_prompt_chrome_consistency_markdown(report: &AuditReport) -> String
 
         if surface.findings.is_empty() {
             lines.push(
-                "- pass \u{2014} no drift markers detected in the audited source files."
+                "- pass — no drift markers detected in the audited source files."
                     .to_string(),
             );
             lines.push(String::new());
@@ -435,7 +507,7 @@ pub fn render_prompt_chrome_consistency_markdown(report: &AuditReport) -> String
 
         for finding in &surface.findings {
             lines.push(format!(
-                "- {} \u{2014} **{}**",
+                "- {} — **{}**",
                 finding.severity.as_str(),
                 finding.title
             ));
@@ -496,37 +568,35 @@ mod tests {
     }
 
     #[test]
-    fn prompt_chrome_consistency_report_flags_file_search_drift() {
+    fn prompt_chrome_consistency_report_all_surfaces_pass() {
         let report = report();
-        let file_search = surface(&report, "file_search");
-        assert_eq!(file_search.status(), "warning");
-
-        assert!(file_search
-            .findings
+        let warning_count = report
+            .surfaces
             .iter()
-            .any(|finding| finding.title == "non-universal footer hints"));
-
-        assert!(file_search
-            .findings
+            .filter(|s| s.status() == "warning")
+            .count();
+        let error_count = report
+            .surfaces
             .iter()
-            .any(|finding| finding.title == "missing prompt hint audit"));
+            .filter(|s| s.status() == "error")
+            .count();
+        assert_eq!(report.surfaces.len(), 7, "expected 7 audited surfaces");
+        assert_eq!(warning_count, 0, "expected 0 warnings");
+        assert_eq!(error_count, 0, "expected 0 errors");
     }
 
     #[test]
-    fn prompt_chrome_consistency_report_flags_clipboard_history_drift() {
+    fn prompt_chrome_consistency_report_file_search_passes() {
+        let report = report();
+        let file_search = surface(&report, "file_search");
+        assert_eq!(file_search.status(), "pass");
+    }
+
+    #[test]
+    fn prompt_chrome_consistency_report_clipboard_history_passes() {
         let report = report();
         let clipboard_history = surface(&report, "clipboard_history");
-        assert_eq!(clipboard_history.status(), "warning");
-
-        assert!(clipboard_history
-            .findings
-            .iter()
-            .any(|finding| finding.title == "missing runtime chrome audit"));
-
-        assert!(clipboard_history
-            .findings
-            .iter()
-            .any(|finding| finding.title == "manual expanded layout"));
+        assert_eq!(clipboard_history.status(), "pass");
     }
 
     #[test]
@@ -534,6 +604,7 @@ mod tests {
         let report = report();
         let term = surface(&report, "render_prompts::term");
         assert_eq!(term.status(), "pass");
+        assert!(term.has_only_info_findings());
         assert!(term
             .findings
             .iter()
@@ -541,16 +612,30 @@ mod tests {
     }
 
     #[test]
-    fn prompt_chrome_consistency_markdown_contains_summary_and_findings() {
+    fn prompt_chrome_consistency_summary_mentions_intentional_exception() {
+        let report = report();
+        assert!(
+            report
+                .summary
+                .contains("1 intentional exception documented: render_prompts::term"),
+            "summary should mention the term exception: {}",
+            report.summary
+        );
+    }
+
+    #[test]
+    fn prompt_chrome_consistency_markdown_contains_scope_notes() {
         let report = report();
         let markdown = render_prompt_chrome_consistency_markdown(&report);
 
         assert!(markdown.contains("# Prompt Chrome Consistency Audit"));
         assert!(markdown.contains("## Summary"));
+        assert!(markdown.contains("## Scope Notes"));
+        assert!(markdown.contains("Excluded this pass:"));
+        assert!(markdown.contains("model_selector_popup.rs"));
         assert!(markdown.contains("## Surface Status"));
         assert!(markdown.contains("## Findings"));
-        assert!(markdown.contains("### file_search"));
-        assert!(markdown.contains("### clipboard_history"));
+        assert!(markdown.contains("Intentional exception: render_prompts::term"));
     }
 
     #[test]
@@ -566,6 +651,7 @@ mod tests {
         let markdown =
             fs::read_to_string(&output).expect("written report should be readable as text");
         assert!(markdown.contains("# Prompt Chrome Consistency Audit"));
+        assert!(markdown.contains("## Scope Notes"));
         assert!(markdown.contains("## Findings"));
     }
 
