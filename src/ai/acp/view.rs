@@ -2146,11 +2146,21 @@ impl AcpChatView {
         );
     }
 
-    /// Apply a hint chip token by writing it into the composer and running
-    /// it through the normal picker acceptance path.
+    /// Apply a hint chip token by inserting it at the cursor (or replacing
+    /// the active trigger) and running it through the normal picker acceptance
+    /// path. Preserves surrounding composer text.
     pub(super) fn apply_picker_hint_token(&mut self, token: &str, cx: &mut Context<Self>) {
+        let (text, cursor) = {
+            let thread = self.live_thread().read(cx);
+            (thread.input.text().to_string(), thread.input.cursor())
+        };
+
+        let (next_text, next_cursor) =
+            Self::replace_active_trigger_or_insert_at_cursor(&text, cursor, token);
+
         self.live_thread().update(cx, |thread, cx| {
-            thread.input.set_text(token.to_string());
+            thread.input.set_text(next_text);
+            thread.input.set_cursor(next_cursor);
             cx.notify();
         });
         self.refresh_mention_session(cx);
@@ -2159,6 +2169,7 @@ impl AcpChatView {
             event = "acp_picker_hint_applied",
             token,
             has_session = self.mention_session.is_some(),
+            cursor_after = next_cursor,
         );
         if self.mention_session.is_some() {
             self.accept_mention_selection_impl(false, cx);
@@ -2171,11 +2182,25 @@ impl AcpChatView {
     }
 
     pub(super) fn insert_picker_hint_prefix(&mut self, prefix: &str, cx: &mut Context<Self>) {
-        let live_thread = self.live_thread().clone();
-        live_thread.update(cx, |thread, cx| {
-            thread.input.set_text(prefix.to_string());
+        let (text, cursor) = {
+            let thread = self.live_thread().read(cx);
+            (thread.input.text().to_string(), thread.input.cursor())
+        };
+
+        let (next_text, next_cursor) =
+            Self::replace_active_trigger_or_insert_at_cursor(&text, cursor, prefix);
+
+        self.live_thread().update(cx, |thread, cx| {
+            thread.input.set_text(next_text);
+            thread.input.set_cursor(next_cursor);
             cx.notify();
         });
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_picker_hint_prefix_inserted",
+            prefix,
+            cursor_after = next_cursor,
+        );
         self.refresh_mention_session(cx);
         self.sync_inline_mentions(cx);
         self.sync_mention_popup_window_from_cached_parent(cx);
@@ -2194,6 +2219,50 @@ impl AcpChatView {
         if let Some(session) = self.mention_session.as_mut() {
             if !session.items.is_empty() {
                 session.selected_index = index.min(session.items.len().saturating_sub(1));
+            }
+        }
+    }
+
+    /// Insert `replacement` at the cursor, replacing the active trigger range
+    /// if one is found. Preserves surrounding text and returns the updated
+    /// text plus the new cursor position.
+    fn replace_active_trigger_or_insert_at_cursor(
+        text: &str,
+        cursor: usize,
+        replacement: &str,
+    ) -> (String, usize) {
+        let content = replacement.trim();
+        let wants_trailing_space = replacement
+            .chars()
+            .last()
+            .is_some_and(char::is_whitespace);
+
+        match Self::find_active_trigger(text, cursor) {
+            Some((_trigger, trigger_range, _query)) => {
+                let mut inserted = content.to_string();
+                if wants_trailing_space {
+                    inserted.push(' ');
+                }
+                let cursor_after = trigger_range.start + inserted.chars().count();
+                let next_text =
+                    Self::replace_text_in_char_range(text, trigger_range, &inserted);
+                (next_text, cursor_after)
+            }
+            None => {
+                let prev = cursor.checked_sub(1).and_then(|ix| text.chars().nth(ix));
+                let next = text.chars().nth(cursor);
+                let mut formatted = String::new();
+                if prev.is_some_and(|ch| !ch.is_whitespace()) {
+                    formatted.push(' ');
+                }
+                formatted.push_str(content);
+                if wants_trailing_space || next.is_some_and(|ch| !ch.is_whitespace()) {
+                    formatted.push(' ');
+                }
+                let cursor_after = cursor + formatted.trim_end().chars().count();
+                let next_text =
+                    Self::replace_text_in_char_range(text, cursor..cursor, &formatted);
+                (next_text, cursor_after)
             }
         }
     }
@@ -2930,6 +2999,8 @@ impl AcpChatView {
             });
         }
 
+        let should_auto_retry = resolution.is_ready();
+
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_setup_agent_confirmed_for_runtime_recovery",
@@ -2939,9 +3010,21 @@ impl AcpChatView {
             needs_embedded_context = current_setup.launch_requirements.needs_embedded_context,
             needs_image = current_setup.launch_requirements.needs_image,
             catalog_count = current_setup.catalog_entries.len(),
+            auto_retry = should_auto_retry,
         );
 
         self.replace_active_setup_state(next_setup, cx);
+
+        if should_auto_retry {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_setup_agent_ready_retrying",
+                agent_id = %agent.id,
+                needs_embedded_context = current_setup.launch_requirements.needs_embedded_context,
+                needs_image = current_setup.launch_requirements.needs_image,
+            );
+            self.handle_setup_action(super::setup_state::AcpSetupAction::Retry, cx);
+        }
     }
 
     /// Handle a setup action triggered by the user.
@@ -4361,6 +4444,14 @@ mod tests {
     fn replace_text_in_char_range_preserves_surrounding_text() {
         let updated = AcpChatView::replace_text_in_char_range("hello @con", 6..10, "@snapshot ");
         assert_eq!(updated, "hello @snapshot ");
+    }
+
+    #[test]
+    fn hint_prefix_replacement_preserves_deliberate_trailing_space() {
+        let (updated, cursor) =
+            AcpChatView::replace_active_trigger_or_insert_at_cursor("/he", 3, "/help ");
+        assert_eq!(updated, "/help ");
+        assert_eq!(cursor, 6, "cursor should land after the preserved trailing space");
     }
 
     #[test]

@@ -234,20 +234,7 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
 fn provider_backed_mention_available(
     kind: crate::ai::context_contract::ContextAttachmentKind,
 ) -> bool {
-    use crate::ai::context_contract::ContextAttachmentKind;
-    use crate::mcp_resources::ProviderJsonResourceKind;
-    match kind {
-        ContextAttachmentKind::Dictation => {
-            crate::mcp_resources::has_provider_json_resource(ProviderJsonResourceKind::Dictation)
-        }
-        ContextAttachmentKind::Calendar => {
-            crate::mcp_resources::has_provider_json_resource(ProviderJsonResourceKind::Calendar)
-        }
-        ContextAttachmentKind::Notifications => crate::mcp_resources::has_provider_json_resource(
-            ProviderJsonResourceKind::Notifications,
-        ),
-        _ => true,
-    }
+    kind.provider_data_available()
 }
 
 /// Resolve a built-in mention token, gating provider-backed kinds on data
