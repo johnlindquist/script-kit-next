@@ -2453,3 +2453,37 @@ Returns a compact, machine-readable inspection snapshot of one exact automation 
 | `screenshot_capture_failed: <message>` | OS screenshot capture failed (dimensions and probes unavailable) |
 | `semantic_elements_non_main_pending` | Semantic element collection not yet implemented for this window kind |
 | `semantic_elements_detached_acp_pending` | Semantic element collection for detached ACP windows is pending |
+
+### Replayable Agentic Scenarios (Proof Bundles)
+
+Cross-window automation changes should be verified with replayable scenario proof bundles rather than ad-hoc shell sequences. Each scenario resolves one exact target once, reuses that exact `targetJson` for every subsequent request, and records the exact `windowId` and `surfaceId` in the emitted proof bundle.
+
+**Default detached ACP verification recipe:**
+
+```bash
+bash scripts/agentic/session.sh start default
+bun scripts/agentic/index.ts scenario \
+  --session default \
+  --scenario detached-acp-exact-id \
+  --index 0
+bash scripts/agentic/session.sh stop default
+```
+
+**Proof bundle schema (v2):**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `schemaVersion` | number | Always `2` |
+| `scenario` | string | Scenario identifier (e.g. `"detached-acp-exact-id"`) |
+| `resolvedTarget.windowId` | string | Exact automation window ID resolved once at scenario start |
+| `resolvedTarget.windowKind` | string | Window kind (e.g. `"acpDetached"`) |
+| `resolvedTarget.title` | string? | Window title if available |
+| `resolvedTarget.surfaceId` | string? | OS surface ID if available |
+| `steps` | ProofBundleStep[] | Ordered step receipts |
+| `warnings` | string[] | Machine-readable warnings from any step |
+
+**Step types:** `resolveTarget`, `inspect` (via `inspectAutomationWindow`), `simulateGpuiEvent`, `waitFor`
+
+Each step records `type`, `at` (ISO 8601 timestamp), `request` (full command sent), and `response` (full response received).
+
+**Key contract:** The `detached-acp-exact-id` scenario promotes the resolved automation window ID to an exact `{"type":"id","id":"..."}` target on the first step. All subsequent steps reuse that exact target — no re-resolution by family or kind.
