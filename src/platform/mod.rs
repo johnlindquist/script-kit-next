@@ -16,6 +16,7 @@
 //! to call them without conditional compilation at the call site.
 
 mod display;
+pub(crate) mod gpui_event_simulator;
 
 include!("app_window_management.rs");
 include!("visibility_focus.rs");

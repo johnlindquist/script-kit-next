@@ -3537,6 +3537,45 @@ impl ScriptListApp {
                 tracing::info!(category = "DEBUG_GRID", "HideGrid from script");
                 self.hide_grid(cx);
             }
+            PromptMessage::SimulateGpuiEvent {
+                request_id,
+                target,
+                event,
+            } => {
+                tracing::info!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    target = ?target,
+                    event = ?event,
+                    "gpui_event_simulation.entity_received"
+                );
+
+                let result = crate::platform::gpui_event_simulator::dispatch_gpui_event(
+                    &request_id,
+                    target.as_ref(),
+                    &event,
+                    cx,
+                );
+
+                let response = if result.success {
+                    Message::simulate_gpui_event_result_success(request_id)
+                } else {
+                    Message::simulate_gpui_event_result_error(
+                        request_id,
+                        result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                    )
+                };
+
+                if let Some(ref sender) = self.response_sender {
+                    if let Err(e) = sender.try_send(response) {
+                        tracing::error!(
+                            target: "script_kit::automation",
+                            error = %e,
+                            "Failed to send GPUI event simulation response"
+                        );
+                    }
+                }
+            }
         }
     }
 

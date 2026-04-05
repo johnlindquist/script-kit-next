@@ -285,4 +285,10 @@ enum PromptMessage {
         trace: protocol::TransactionTraceMode,
         target: Option<protocol::AutomationWindowTarget>,
     },
+    /// Dispatch a GPUI event through the real input pipeline to a target window
+    SimulateGpuiEvent {
+        request_id: String,
+        target: Option<protocol::AutomationWindowTarget>,
+        event: protocol::SimulatedGpuiEvent,
+    },
 }
