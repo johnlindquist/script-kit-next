@@ -249,6 +249,51 @@ mod tests {
     }
 
     #[test]
+    fn auth_required_agent_is_skipped_for_auto_selection() {
+        let agents = vec![
+            make_entry(
+                "needs-auth",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::NeedsAuthentication,
+                AcpAgentConfigState::Valid,
+            ),
+            make_entry(
+                "ready",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Authenticated,
+                AcpAgentConfigState::Valid,
+            ),
+        ];
+        let result = resolve_default_acp_launch(&agents, None);
+        assert_eq!(result.selected_agent_id(), Some("ready"));
+        assert!(result.blocker.is_none());
+    }
+
+    #[test]
+    fn preferred_auth_required_agent_gets_blocker() {
+        let agents = vec![
+            make_entry(
+                "needs-auth",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::NeedsAuthentication,
+                AcpAgentConfigState::Valid,
+            ),
+            make_entry(
+                "ready",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Authenticated,
+                AcpAgentConfigState::Valid,
+            ),
+        ];
+        let result = resolve_default_acp_launch(&agents, Some("needs-auth"));
+        assert_eq!(result.selected_agent_id(), Some("needs-auth"));
+        assert_eq!(
+            result.blocker,
+            Some(AcpLaunchBlocker::AuthenticationRequired)
+        );
+    }
+
+    #[test]
     fn setup_title_covers_all_blockers() {
         let titles = vec![
             setup_title_for_resolution(&AcpLaunchResolution {

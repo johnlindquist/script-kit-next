@@ -297,6 +297,25 @@ impl Message {
     }
 
     // ============================================================
+    // Constructor methods for ACP test probe
+    // ============================================================
+
+    /// Create a resetAcpTestProbe request
+    pub fn reset_acp_test_probe(request_id: String) -> Self {
+        Message::ResetAcpTestProbe { request_id }
+    }
+
+    /// Create a getAcpTestProbe request
+    pub fn get_acp_test_probe(request_id: String, tail: Option<usize>) -> Self {
+        Message::GetAcpTestProbe { request_id, tail }
+    }
+
+    /// Create an ACP test probe result response
+    pub fn acp_test_probe_result(request_id: String, probe: AcpTestProbeSnapshot) -> Self {
+        Message::AcpTestProbeResult { request_id, probe }
+    }
+
+    // ============================================================
     // Constructor methods for wait/batch transaction layer
     // ============================================================
 

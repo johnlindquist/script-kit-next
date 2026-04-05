@@ -402,6 +402,42 @@ macro_rules! protocol_message_variants_query_ops {
     },
 
     // ============================================================
+    // ACP TEST PROBE
+    // ============================================================
+    /// Reset the ACP test probe ring buffer, clearing prior events.
+    ///
+    /// Agents should call this before a test sequence to get a clean
+    /// baseline for verifying picker acceptance and key routing.
+    #[serde(rename = "resetAcpTestProbe")]
+    ResetAcpTestProbe {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Request a bounded snapshot of recent ACP test probe events.
+    ///
+    /// Returns key-route, picker-acceptance, and input-layout telemetry
+    /// from the bounded ring buffer, plus the current ACP state.
+    #[serde(rename = "getAcpTestProbe")]
+    GetAcpTestProbe {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Maximum number of events to return per category (default: 32).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tail: Option<usize>,
+    },
+
+    /// Response with ACP test probe snapshot.
+    #[serde(rename = "acpTestProbeResult")]
+    AcpTestProbeResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Bounded probe snapshot with telemetry events and current state.
+        #[serde(flatten)]
+        probe: AcpTestProbeSnapshot,
+    },
+
+    // ============================================================
     // WAIT / BATCH — Deterministic Transaction Layer
     // ============================================================
     /// Poll until a UI condition is satisfied or timeout expires.

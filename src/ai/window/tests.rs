@@ -2152,6 +2152,12 @@ fn test_palette_slash_mention_produce_identical_parts() {
         types::{ContextPickerItemKind, ContextPickerTrigger},
     };
 
+    // Provider-gated items are hidden when no data exists; publish test data
+    // so they appear in the picker for this parity test.
+    crate::mcp_resources::publish_dictation_json(r#"{"test":true}"#);
+    crate::mcp_resources::publish_calendar_json(r#"{"test":true}"#);
+    crate::mcp_resources::publish_notifications_json(r#"{"test":true}"#);
+
     for spec in context_attachment_specs() {
         // Part from canonical contract
         let canonical_part = spec.kind.part();
@@ -2205,6 +2211,9 @@ fn test_palette_slash_mention_produce_identical_parts() {
             spec.kind,
         );
     }
+
+    // Clean up provider slots
+    crate::mcp_resources::clear_provider_json_slots();
 }
 
 /// Picker snapshot is machine-readable and matches actual state.

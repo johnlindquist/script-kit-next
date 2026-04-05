@@ -237,6 +237,9 @@ bun scripts/agentic/verify-shot.ts --session default \
 
 # 13. Cleanup
 bash scripts/agentic/session.sh stop default
+
+# 14. Verify cleanup succeeded before reporting
+bash scripts/agentic/session.sh status default
 ```
 
 **Or use the orchestrator:**
@@ -252,6 +255,7 @@ bun scripts/agentic/index.ts acp-enter-accept --session default
 - Window focus must be verified before sending native input
 - If the captured window does not match the real ACP shell/chrome/layout, stop and re-run through the actual runtime path instead of using the screenshot as evidence
 - On failure, `waitForResult` includes a trace receipt with per-poll snapshots when `trace: "onFailure"` is set
+- Cleanup is part of the recipe: do not report completion until the started session is stopped and verified dead
 
 **Pass:** All waitFor conditions resolve, verify-shot assertions pass, cursor lands after inserted text.
 **Fail:** `waitForResult` returns `success: false` with trace receipt. Common causes:

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use anyhow::Context as _;
@@ -350,9 +350,14 @@ pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
 }
 
 /// Build resolved catalog entries with install/auth/config state.
+///
+/// Overlays persisted runtime state (auth state, auth methods) from
+/// `~/.scriptkit/acp/agent-runtime-state.json` so preflight sees truthful
+/// auth state instead of always starting at `Unknown`.
 pub(crate) fn load_acp_agent_catalog_entries(
 ) -> anyhow::Result<Vec<super::catalog::AcpAgentCatalogEntry>> {
     let agents = load_acp_agent_configs()?;
+    let runtime_states = load_acp_agent_runtime_states();
 
     let entries = agents
         .into_iter()
@@ -371,6 +376,12 @@ pub(crate) fn load_acp_agent_catalog_entries(
                 super::catalog::AcpAgentConfigState::Valid
             };
 
+            // Overlay persisted runtime auth state when available.
+            let auth_state = runtime_states
+                .get(&agent.id)
+                .and_then(|state| state.auth_state)
+                .unwrap_or(super::catalog::AcpAgentAuthState::Unknown);
+
             let source = classify_agent_source(&agent.id);
 
             let install_hint = agent.install.as_ref().map(|spec| {
@@ -388,7 +399,7 @@ pub(crate) fn load_acp_agent_catalog_entries(
                 display_name = %agent.display_name,
                 source = ?source,
                 install_state = ?install_state,
-                auth_state = ?super::catalog::AcpAgentAuthState::Unknown,
+                auth_state = ?auth_state,
                 config_state = ?config_state,
             );
 
@@ -397,7 +408,7 @@ pub(crate) fn load_acp_agent_catalog_entries(
                 display_name: agent.display_name.clone().into(),
                 source,
                 install_state,
-                auth_state: super::catalog::AcpAgentAuthState::Unknown,
+                auth_state,
                 config_state,
                 install_hint,
                 config_hint: Some(
@@ -456,6 +467,190 @@ pub(crate) fn persist_preferred_acp_agent_id(agent_id: Option<String>) {
                     event = "acp_agent_selection_persisted",
                     ?agent_id,
                 );
+            }
+        })
+        .ok();
+}
+
+// ---------------------------------------------------------------------------
+// ACP agent runtime state persistence
+// ---------------------------------------------------------------------------
+
+const ACP_AGENT_RUNTIME_STATE_SCHEMA_VERSION: u32 = 1;
+
+/// File-backed ACP agent runtime state cache.
+///
+/// Persisted at `~/.scriptkit/acp/agent-runtime-state.json` and overlaid onto
+/// catalog entries at load time so preflight sees truthful auth state.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AcpAgentRuntimeStateFile {
+    pub schema_version: u32,
+    #[serde(default)]
+    pub agents: HashMap<String, AcpAgentRuntimeState>,
+}
+
+impl Default for AcpAgentRuntimeStateFile {
+    fn default() -> Self {
+        Self {
+            schema_version: ACP_AGENT_RUNTIME_STATE_SCHEMA_VERSION,
+            agents: HashMap::new(),
+        }
+    }
+}
+
+/// Runtime state for a single ACP agent, cached between sessions.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AcpAgentRuntimeState {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_state: Option<super::catalog::AcpAgentAuthState>,
+    #[serde(default)]
+    pub auth_methods: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_embedded_context: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_image: Option<bool>,
+    #[serde(default)]
+    pub last_session_ok: bool,
+}
+
+impl AcpAgentRuntimeState {
+    fn auth_state_rank(state: Option<super::catalog::AcpAgentAuthState>) -> u8 {
+        match state {
+            Some(super::catalog::AcpAgentAuthState::Unknown) => 1,
+            Some(super::catalog::AcpAgentAuthState::Authenticated) => 2,
+            Some(super::catalog::AcpAgentAuthState::NeedsAuthentication) => 3,
+            None => 0,
+        }
+    }
+
+    /// Merge a new runtime snapshot into the existing persisted state without
+    /// regressing known auth facts when background writes complete out of order.
+    fn merged_with(&self, next: &Self) -> Self {
+        let auth_state =
+            if Self::auth_state_rank(next.auth_state) >= Self::auth_state_rank(self.auth_state) {
+                next.auth_state
+            } else {
+                self.auth_state
+            };
+
+        Self {
+            auth_state,
+            auth_methods: if next.auth_methods.is_empty() {
+                self.auth_methods.clone()
+            } else {
+                next.auth_methods.clone()
+            },
+            supports_embedded_context: next
+                .supports_embedded_context
+                .or(self.supports_embedded_context),
+            supports_image: next.supports_image.or(self.supports_image),
+            last_session_ok: next.last_session_ok || self.last_session_ok,
+        }
+    }
+}
+
+/// Default path for the ACP agent runtime state file.
+pub(crate) fn default_acp_agent_runtime_state_path() -> PathBuf {
+    crate::setup::get_kit_path()
+        .join("acp")
+        .join("agent-runtime-state.json")
+}
+
+/// Load all persisted ACP agent runtime states from disk.
+pub(crate) fn load_acp_agent_runtime_states() -> HashMap<String, AcpAgentRuntimeState> {
+    let path = default_acp_agent_runtime_state_path();
+    let bytes = match std::fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(_) => return HashMap::new(),
+    };
+    match serde_json::from_slice::<AcpAgentRuntimeStateFile>(&bytes) {
+        Ok(file) => {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_agent_runtime_state_loaded",
+                path = %path.display(),
+                agent_count = file.agents.len(),
+            );
+            file.agents
+        }
+        Err(error) => {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "acp_agent_runtime_state_load_failed",
+                path = %path.display(),
+                error = %error,
+            );
+            HashMap::new()
+        }
+    }
+}
+
+/// Persist runtime state for a single agent on a background thread.
+pub(crate) fn persist_acp_agent_runtime_state(agent_id: String, next: AcpAgentRuntimeState) {
+    std::thread::Builder::new()
+        .name("acp-save-runtime-state".into())
+        .spawn(move || {
+            let path = default_acp_agent_runtime_state_path();
+
+            let mut file = std::fs::read(&path)
+                .ok()
+                .and_then(|bytes| serde_json::from_slice::<AcpAgentRuntimeStateFile>(&bytes).ok())
+                .unwrap_or_default();
+
+            let merged = file
+                .agents
+                .get(&agent_id)
+                .map(|current| current.merged_with(&next))
+                .unwrap_or_else(|| next.clone());
+
+            file.agents.insert(agent_id.clone(), merged.clone());
+
+            if let Some(parent) = path.parent() {
+                if let Err(error) = std::fs::create_dir_all(parent) {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_agent_runtime_state_persist_failed",
+                        path = %path.display(),
+                        error = %error,
+                        agent_id = %agent_id,
+                    );
+                    return;
+                }
+            }
+
+            match serde_json::to_vec_pretty(&file) {
+                Ok(bytes) => {
+                    if let Err(error) = std::fs::write(&path, bytes) {
+                        tracing::warn!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_agent_runtime_state_persist_failed",
+                            path = %path.display(),
+                            error = %error,
+                            agent_id = %agent_id,
+                        );
+                    } else {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_agent_runtime_state_persisted",
+                            path = %path.display(),
+                            agent_id = %agent_id,
+                            auth_state = ?merged.auth_state,
+                            auth_method_count = merged.auth_methods.len(),
+                            last_session_ok = merged.last_session_ok,
+                        );
+                    }
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_agent_runtime_state_persist_failed",
+                        path = %path.display(),
+                        error = %error,
+                        agent_id = %agent_id,
+                    );
+                }
             }
         })
         .ok();
@@ -583,5 +778,118 @@ mod tests {
         let infos = config.model_infos();
         assert_eq!(infos[0].display_name, "Gemini 2.5 Pro");
         assert_eq!(infos[0].context_window, 1_000_000);
+    }
+
+    #[test]
+    fn runtime_state_file_round_trip() {
+        let json = r#"{
+            "schemaVersion": 1,
+            "agents": {
+                "codex-acp": {
+                    "authState": "needsAuthentication",
+                    "authMethods": ["chatgpt-login", "openai-api-key"],
+                    "supportsEmbeddedContext": true,
+                    "supportsImage": false,
+                    "lastSessionOk": false
+                }
+            }
+        }"#;
+        let file: AcpAgentRuntimeStateFile =
+            serde_json::from_str(json).expect("runtime state should parse");
+        assert_eq!(file.schema_version, 1);
+        assert_eq!(file.agents.len(), 1);
+        let codex = file.agents.get("codex-acp").expect("codex-acp entry");
+        assert_eq!(
+            codex.auth_state,
+            Some(crate::ai::acp::catalog::AcpAgentAuthState::NeedsAuthentication)
+        );
+        assert_eq!(codex.auth_methods, vec!["chatgpt-login", "openai-api-key"]);
+        assert_eq!(codex.supports_embedded_context, Some(true));
+        assert_eq!(codex.supports_image, Some(false));
+        assert!(!codex.last_session_ok);
+    }
+
+    #[test]
+    fn runtime_state_file_defaults_on_missing_fields() {
+        let json = r#"{"schemaVersion": 1, "agents": {"test": {}}}"#;
+        let file: AcpAgentRuntimeStateFile =
+            serde_json::from_str(json).expect("should parse with defaults");
+        let state = file.agents.get("test").expect("test entry");
+        assert!(state.auth_state.is_none());
+        assert!(state.auth_methods.is_empty());
+        assert!(state.supports_embedded_context.is_none());
+        assert!(state.supports_image.is_none());
+        assert!(!state.last_session_ok);
+    }
+
+    #[test]
+    fn runtime_state_serialize_skips_none_fields() {
+        let state = AcpAgentRuntimeState {
+            auth_state: Some(crate::ai::acp::catalog::AcpAgentAuthState::Authenticated),
+            auth_methods: vec!["terminal".to_string()],
+            supports_embedded_context: None,
+            supports_image: None,
+            last_session_ok: true,
+        };
+        let json = serde_json::to_string(&state).expect("should serialize");
+        assert!(!json.contains("supportsEmbeddedContext"));
+        assert!(!json.contains("supportsImage"));
+        assert!(json.contains("authenticated"));
+    }
+
+    #[test]
+    fn runtime_state_merge_does_not_regress_auth_state() {
+        let current = AcpAgentRuntimeState {
+            auth_state: Some(crate::ai::acp::catalog::AcpAgentAuthState::Authenticated),
+            auth_methods: vec!["chatgpt-login".to_string()],
+            supports_embedded_context: Some(true),
+            supports_image: Some(true),
+            last_session_ok: true,
+        };
+        let stale_initialize = AcpAgentRuntimeState {
+            auth_state: Some(crate::ai::acp::catalog::AcpAgentAuthState::Unknown),
+            auth_methods: vec!["chatgpt-login".to_string(), "openai-api-key".to_string()],
+            supports_embedded_context: Some(true),
+            supports_image: Some(false),
+            last_session_ok: false,
+        };
+
+        let merged = current.merged_with(&stale_initialize);
+        assert_eq!(
+            merged.auth_state,
+            Some(crate::ai::acp::catalog::AcpAgentAuthState::Authenticated)
+        );
+        assert_eq!(
+            merged.auth_methods,
+            vec!["chatgpt-login".to_string(), "openai-api-key".to_string()]
+        );
+        assert_eq!(merged.supports_embedded_context, Some(true));
+        assert_eq!(merged.supports_image, Some(false));
+        assert!(merged.last_session_ok);
+    }
+
+    #[test]
+    fn runtime_state_merge_allows_auth_required_to_override_unknown() {
+        let current = AcpAgentRuntimeState {
+            auth_state: Some(crate::ai::acp::catalog::AcpAgentAuthState::Unknown),
+            auth_methods: vec!["chatgpt-login".to_string()],
+            supports_embedded_context: Some(true),
+            supports_image: Some(true),
+            last_session_ok: false,
+        };
+        let auth_required = AcpAgentRuntimeState {
+            auth_state: Some(crate::ai::acp::catalog::AcpAgentAuthState::NeedsAuthentication),
+            auth_methods: vec!["chatgpt-login".to_string()],
+            supports_embedded_context: Some(true),
+            supports_image: Some(true),
+            last_session_ok: false,
+        };
+
+        let merged = current.merged_with(&auth_required);
+        assert_eq!(
+            merged.auth_state,
+            Some(crate::ai::acp::catalog::AcpAgentAuthState::NeedsAuthentication)
+        );
+        assert!(!merged.last_session_ok);
     }
 }

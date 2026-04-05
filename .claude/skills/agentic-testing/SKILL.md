@@ -25,6 +25,7 @@ Verify code changes by observing the running app. Build, start via named pipe, i
 - ALL verification is read-only: build, launch, screenshot, grep, read logs
 - Temp files (pipes, screenshots) go in project `test-screenshots/` or `/tmp`
 - The app runs locally only — never connect to production
+- Every verification run MUST stop every Script Kit process/session it started before reporting results
 
 ## Surface Identity Rules (MANDATORY)
 
@@ -149,6 +150,9 @@ Log format: `TIMESTAMP|LEVEL|CATEGORY|cid=CORRELATION_ID message`
 # Session-based (preferred)
 bash scripts/agentic/session.sh stop default
 
+# Verify the session is actually gone before reporting success
+bash scripts/agentic/session.sh status default
+
 # Legacy fd 3 cleanup (single-shell only)
 # exec 3>&-
 # rm -f "$PIPE"
@@ -156,9 +160,16 @@ bash scripts/agentic/session.sh stop default
 # wait $APP_PID 2>/dev/null || true
 ```
 
+Cleanup is mandatory, even after failures or interrupted runs.
+
+- Do not report PASS or FAIL until the session you started has been stopped.
+- If you launched Script Kit via `session.sh`, run `session.sh stop NAME` and verify the session is no longer alive.
+- If you launched Script Kit directly, kill that specific PID and `wait` for it.
+- Do not leave orphan `script-kit-gpui` processes behind from agentic testing.
+
 ### 8. Report
-- **PASS**: build succeeded + expected screenshots match + expected log output
-- **FAIL**: describe what went wrong with evidence (screenshot, log line)
+- **PASS**: build succeeded + expected screenshots match + expected log output + cleanup confirmed
+- **FAIL**: describe what went wrong with evidence (screenshot, log line), then still clean up the launched process/session
 
 ## Timing Guidelines
 
@@ -193,6 +204,7 @@ The session wrapper uses a background forwarder process so any shell can send co
 - Use `session.sh send` for all protocol commands — do not assume fd 3 survives across steps
 - Check session health with `session.sh status` or `session-state.ts` before sending commands
 - Stop sessions with `session.sh stop` when done — do not leave orphan processes
+- Treat cleanup as part of the test itself: a run is incomplete until the session is stopped and verified dead
 
 ## Screenshot Assertion (verify-shot.ts)
 

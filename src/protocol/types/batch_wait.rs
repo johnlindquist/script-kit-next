@@ -77,6 +77,30 @@ pub enum WaitDetailedCondition {
     AcpInputContains {
         substring: String,
     },
+    /// ACP proof: wait until a picker item was accepted via a specific key.
+    AcpAcceptedViaKey {
+        /// The key that must have caused acceptance: `"enter"` or `"tab"`.
+        key: String,
+    },
+    /// ACP proof: wait until a picker item with a specific label was accepted.
+    AcpAcceptedLabel {
+        /// The label of the accepted item.
+        label: String,
+    },
+    /// ACP proof: wait until the cursor reaches a specific index after acceptance.
+    AcpAcceptedCursorAt {
+        /// Target cursor index after the accepted text was inserted.
+        index: usize,
+    },
+    /// ACP proof: wait until the input layout matches specific visibility metrics.
+    AcpInputLayoutMatch {
+        /// Visible window start (character index).
+        visible_start: usize,
+        /// Visible window end (character index, exclusive).
+        visible_end: usize,
+        /// Cursor position within the visible window (0-based from visible_start).
+        cursor_in_window: usize,
+    },
 }
 
 /// Union of named and detailed wait conditions.
