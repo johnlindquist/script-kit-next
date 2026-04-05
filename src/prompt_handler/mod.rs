@@ -860,12 +860,61 @@ impl ScriptListApp {
                 cx.notify();
             }
 
-            PromptMessage::GetState { request_id } => {
+            PromptMessage::GetState { request_id, target } => {
                 tracing::info!(
                     category = "UI",
                     request_id = %request_id,
+                    target = ?target,
                     "Collecting state for request"
                 );
+
+                // Validate target if explicitly specified (non-main targets
+                // are not yet wired to secondary window state providers).
+                if let Some(ref t) = target {
+                    if !matches!(t, protocol::AutomationWindowTarget::Main | protocol::AutomationWindowTarget::Focused) {
+                        match crate::windows::resolve_automation_window(Some(t)) {
+                            Ok(resolved) if resolved.kind != protocol::AutomationWindowKind::Main => {
+                                tracing::warn!(
+                                    target: "script_kit::automation",
+                                    request_id = %request_id,
+                                    resolved_kind = ?resolved.kind,
+                                    "getState: secondary window state not yet routed, returning error"
+                                );
+                                if let Some(ref sender) = self.response_sender {
+                                    let _ = sender.try_send(Message::state_result(
+                                        request_id.clone(),
+                                        "error".to_string(),
+                                        None,
+                                        None,
+                                        String::new(),
+                                        0, 0, -1, None, false, false,
+                                    ));
+                                }
+                                return;
+                            }
+                            Err(err) => {
+                                tracing::warn!(
+                                    target: "script_kit::automation",
+                                    request_id = %request_id,
+                                    error = %err,
+                                    "getState: target resolution failed"
+                                );
+                                if let Some(ref sender) = self.response_sender {
+                                    let _ = sender.try_send(Message::state_result(
+                                        request_id.clone(),
+                                        "error".to_string(),
+                                        None,
+                                        None,
+                                        String::new(),
+                                        0, 0, -1, None, false, false,
+                                    ));
+                                }
+                                return;
+                            }
+                            _ => {} // Main kind — fall through to normal handling
+                        }
+                    }
+                }
 
                 // Collect current UI state
                 let (
@@ -1485,12 +1534,39 @@ impl ScriptListApp {
                 }
             }
 
-            PromptMessage::GetAcpState { request_id } => {
+            PromptMessage::GetAcpState { request_id, target } => {
                 tracing::info!(
                     category = "ACP_STATE",
                     request_id = %request_id,
+                    target = ?target,
                     "acp_state.request"
                 );
+
+                // Validate target — if a non-main target is explicitly requested,
+                // resolve it but note that secondary ACP state routing is not yet
+                // wired (the ACP state is always collected from the main window's
+                // chat view). This logs the target for observability.
+                if let Some(ref t) = target {
+                    match crate::windows::resolve_automation_window(Some(t)) {
+                        Ok(resolved) => {
+                            tracing::info!(
+                                target: "script_kit::automation",
+                                request_id = %request_id,
+                                window_id = %resolved.id,
+                                kind = ?resolved.kind,
+                                "acp_state.target_resolved"
+                            );
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                target: "script_kit::automation",
+                                request_id = %request_id,
+                                error = %err,
+                                "acp_state.target_resolution_failed"
+                            );
+                        }
+                    }
+                }
 
                 let state = self.collect_acp_state(cx);
 
@@ -1569,14 +1645,38 @@ impl ScriptListApp {
                 }
             }
 
-            PromptMessage::GetAcpTestProbe { request_id, tail } => {
+            PromptMessage::GetAcpTestProbe { request_id, tail, target } => {
                 let tail = tail.unwrap_or(protocol::ACP_TEST_PROBE_MAX_EVENTS).clamp(1, protocol::ACP_TEST_PROBE_MAX_EVENTS);
                 tracing::info!(
                     category = "ACP_PROBE",
                     request_id = %request_id,
                     tail,
+                    target = ?target,
                     "acp_test_probe.request"
                 );
+
+                // Log target resolution for observability
+                if let Some(ref t) = target {
+                    match crate::windows::resolve_automation_window(Some(t)) {
+                        Ok(resolved) => {
+                            tracing::info!(
+                                target: "script_kit::automation",
+                                request_id = %request_id,
+                                window_id = %resolved.id,
+                                kind = ?resolved.kind,
+                                "acp_test_probe.target_resolved"
+                            );
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                target: "script_kit::automation",
+                                request_id = %request_id,
+                                error = %err,
+                                "acp_test_probe.target_resolution_failed"
+                            );
+                        }
+                    }
+                }
 
                 let probe = self.collect_acp_test_probe(tail, cx);
                 let response = Message::acp_test_probe_result(request_id.clone(), probe);
@@ -1602,15 +1702,55 @@ impl ScriptListApp {
                 }
             }
 
-            PromptMessage::GetElements { request_id, limit } => {
+            PromptMessage::GetElements { request_id, limit, target } => {
                 let max_elements = limit.unwrap_or(50).clamp(1, 1000);
 
                 tracing::info!(
                     category = "UI_ELEMENTS",
                     request_id = %request_id,
                     limit = max_elements,
+                    target = ?target,
                     "ui.elements.request"
                 );
+
+                // Validate target — log resolution for observability.
+                // Currently element collection always uses the main window's
+                // current_view. Non-main targets are validated but not yet
+                // routed to secondary window element collectors.
+                if let Some(ref t) = target {
+                    match crate::windows::resolve_automation_window(Some(t)) {
+                        Ok(resolved) => {
+                            tracing::info!(
+                                target: "script_kit::automation",
+                                request_id = %request_id,
+                                window_id = %resolved.id,
+                                kind = ?resolved.kind,
+                                "ui.elements.target_resolved"
+                            );
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                target: "script_kit::automation",
+                                request_id = %request_id,
+                                error = %err,
+                                "ui.elements.target_resolution_failed"
+                            );
+                            // Return empty elements with a warning instead of
+                            // silently falling back to the main window.
+                            if let Some(ref sender) = self.response_sender {
+                                let _ = sender.try_send(Message::elements_result(
+                                    request_id.clone(),
+                                    Vec::new(),
+                                    0,
+                                    None,
+                                    None,
+                                    vec![format!("target_resolution_failed: {}", err)],
+                                ));
+                            }
+                            return;
+                        }
+                    }
+                }
 
                 let outcome = self.collect_visible_elements(max_elements, cx);
                 let returned_count = outcome.elements.len();
@@ -1717,10 +1857,34 @@ impl ScriptListApp {
                 timeout,
                 poll_interval,
                 trace: trace_mode,
+                target,
             } => {
                 let timeout_ms = timeout.unwrap_or(5_000);
                 let poll_ms = poll_interval.unwrap_or(25);
                 let rid = request_id.clone();
+
+                // Log target resolution for observability
+                if let Some(ref t) = target {
+                    match crate::windows::resolve_automation_window(Some(t)) {
+                        Ok(resolved) => {
+                            tracing::info!(
+                                target: "script_kit::automation",
+                                request_id = %rid,
+                                window_id = %resolved.id,
+                                kind = ?resolved.kind,
+                                "automation.wait_for.target_resolved"
+                            );
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                target: "script_kit::automation",
+                                request_id = %rid,
+                                error = %err,
+                                "automation.wait_for.target_resolution_failed"
+                            );
+                        }
+                    }
+                }
 
                 tracing::info!(
                     category = "AUTOMATION",
@@ -1944,6 +2108,7 @@ impl ScriptListApp {
                 commands,
                 options,
                 trace: trace_mode,
+                target,
             } => {
                 let opts = options.unwrap_or(protocol::BatchOptions {
                     stop_on_error: true,
@@ -1953,11 +2118,35 @@ impl ScriptListApp {
                 let rid = request_id.clone();
                 let sender = self.response_sender.clone();
 
+                // Log target resolution for observability
+                if let Some(ref t) = target {
+                    match crate::windows::resolve_automation_window(Some(t)) {
+                        Ok(resolved) => {
+                            tracing::info!(
+                                target: "script_kit::automation",
+                                request_id = %rid,
+                                window_id = %resolved.id,
+                                kind = ?resolved.kind,
+                                "automation.batch.target_resolved"
+                            );
+                        }
+                        Err(err) => {
+                            tracing::warn!(
+                                target: "script_kit::automation",
+                                request_id = %rid,
+                                error = %err,
+                                "automation.batch.target_resolution_failed"
+                            );
+                        }
+                    }
+                }
+
                 tracing::info!(
                     category = "AUTOMATION",
                     request_id = %rid,
                     command_count = commands.len(),
                     trace_mode = ?trace_mode,
+                    target = ?target,
                     "automation.batch.started"
                 );
 

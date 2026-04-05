@@ -191,11 +191,13 @@ enum PromptMessage {
     /// Request to get current UI state - triggers StateResult response
     GetState {
         request_id: String,
+        target: Option<protocol::AutomationWindowTarget>,
     },
     /// Request visible UI elements - triggers ElementsResult response
     GetElements {
         request_id: String,
         limit: Option<usize>,
+        target: Option<protocol::AutomationWindowTarget>,
     },
     /// Request to get layout info with component tree and computed styles
     GetLayoutInfo {
@@ -254,6 +256,7 @@ enum PromptMessage {
     /// Request machine-readable ACP state snapshot
     GetAcpState {
         request_id: String,
+        target: Option<protocol::AutomationWindowTarget>,
     },
     /// Reset the ACP test probe ring buffer
     ResetAcpTestProbe {
@@ -263,6 +266,7 @@ enum PromptMessage {
     GetAcpTestProbe {
         request_id: String,
         tail: Option<usize>,
+        target: Option<protocol::AutomationWindowTarget>,
     },
     /// Wait for a UI condition to be satisfied (polling)
     WaitFor {
@@ -271,6 +275,7 @@ enum PromptMessage {
         timeout: Option<u64>,
         poll_interval: Option<u64>,
         trace: protocol::TransactionTraceMode,
+        target: Option<protocol::AutomationWindowTarget>,
     },
     /// Execute a batch of atomic UI commands as a transaction
     Batch {
@@ -278,5 +283,6 @@ enum PromptMessage {
         commands: Vec<protocol::BatchCommand>,
         options: Option<protocol::BatchOptions>,
         trace: protocol::TransactionTraceMode,
+        target: Option<protocol::AutomationWindowTarget>,
     },
 }

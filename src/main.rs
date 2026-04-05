@@ -30,7 +30,8 @@ use process_manager::PROCESS_MANAGER;
 
 // Platform utilities - mouse position, display info, window movement, screenshots
 use platform::{
-    calculate_eye_line_bounds_on_mouse_display, capture_app_screenshot, capture_window_by_title,
+    calculate_eye_line_bounds_on_mouse_display, capture_targeted_screenshot,
+    capture_window_by_title,
 };
 #[macro_use]
 extern crate objc;

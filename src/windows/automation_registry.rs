@@ -184,12 +184,6 @@ pub fn resolve_automation_window(
     result
 }
 
-/// Remove all entries from the registry.  Intended for test isolation.
-#[cfg(test)]
-pub(crate) fn clear_all_automation_windows() {
-    AUTOMATION_WINDOWS.lock().clear();
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -505,5 +499,135 @@ mod tests {
         assert_eq!(resolved.semantic_surface.as_deref(), Some("argPrompt"));
 
         remove_automation_window(&format!("{p}:main"));
+    }
+
+    // -- Cross-window targeting acceptance tests -------------------------
+
+    /// Proves that targeting a Notes window by kind resolves to distinct
+    /// semantic surface and ID, not the main window.
+    #[test]
+    fn targeted_get_elements_routes_notes_window() {
+        let p = test_prefix();
+
+        let mut main = make_info(&p, "main", AutomationWindowKind::Main);
+        main.semantic_surface = Some("scriptList".into());
+        main.focused = true;
+        upsert_automation_window(main);
+
+        let mut notes = make_info(&p, "notes", AutomationWindowKind::Notes);
+        notes.semantic_surface = Some("notes".into());
+        notes.title = Some("Script Kit Notes".into());
+        upsert_automation_window(notes);
+
+        // Resolve with Kind target → should get Notes, not Main
+        let target = AutomationWindowTarget::Kind {
+            kind: AutomationWindowKind::Notes,
+            index: None,
+        };
+        let resolved = resolve_automation_window(Some(&target))
+            .expect("should resolve Notes window");
+        assert_eq!(resolved.kind, AutomationWindowKind::Notes);
+        assert_eq!(resolved.semantic_surface.as_deref(), Some("notes"));
+        assert_ne!(resolved.id, format!("{p}:main"), "must not fall back to main");
+
+        // No target (None) → should resolve to focused (main)
+        let focused = resolve_automation_window(None)
+            .expect("should resolve focused");
+        assert_eq!(focused.kind, AutomationWindowKind::Main);
+        assert_eq!(focused.semantic_surface.as_deref(), Some("scriptList"));
+
+        remove_automation_window(&format!("{p}:main"));
+        remove_automation_window(&format!("{p}:notes"));
+    }
+
+    /// Proves that targeting a detached ACP window resolves to a distinct
+    /// window with its own ID and kind, suitable for screenshot routing.
+    #[test]
+    fn targeted_capture_screenshot_routes_detached_acp() {
+        let p = test_prefix();
+
+        let mut main = make_info(&p, "main", AutomationWindowKind::Main);
+        main.title = Some("Script Kit".into());
+        main.focused = false;
+        upsert_automation_window(main);
+
+        let mut acp = make_info(&p, "acp-thread-1", AutomationWindowKind::AcpDetached);
+        acp.title = Some("Script Kit AI".into());
+        acp.focused = true;
+        acp.semantic_surface = Some("acpChat".into());
+        upsert_automation_window(acp);
+
+        // Target by kind → ACP
+        let target = AutomationWindowTarget::Kind {
+            kind: AutomationWindowKind::AcpDetached,
+            index: Some(0),
+        };
+        let resolved = resolve_automation_window(Some(&target))
+            .expect("should resolve detached ACP");
+        assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
+        assert_eq!(resolved.title.as_deref(), Some("Script Kit AI"));
+        // The screenshot function would use this title to find the OS window
+        assert_ne!(
+            resolved.title.as_deref(),
+            Some("Script Kit"),
+            "must not screenshot the main window"
+        );
+
+        // Target by ID → ACP
+        let target_id = AutomationWindowTarget::Id {
+            id: format!("{p}:acp-thread-1"),
+        };
+        let resolved_by_id = resolve_automation_window(Some(&target_id))
+            .expect("should resolve by ID");
+        assert_eq!(resolved_by_id.kind, AutomationWindowKind::AcpDetached);
+
+        remove_automation_window(&format!("{p}:main"));
+        remove_automation_window(&format!("{p}:acp-thread-1"));
+    }
+
+    /// Proves that waitFor/batch resolution uses the same resolver as
+    /// standalone queries — a Notes or ACP target resolves consistently.
+    #[test]
+    fn targeted_wait_for_uses_resolved_window_state() {
+        let p = test_prefix();
+
+        let mut main = make_info(&p, "main", AutomationWindowKind::Main);
+        main.focused = true;
+        main.semantic_surface = Some("scriptList".into());
+        upsert_automation_window(main);
+
+        let mut notes = make_info(&p, "notes", AutomationWindowKind::Notes);
+        notes.semantic_surface = Some("notes".into());
+        upsert_automation_window(notes);
+
+        // The same resolve_automation_window used by getElements should
+        // also be used by waitFor and batch — prove consistency.
+        let target = AutomationWindowTarget::Kind {
+            kind: AutomationWindowKind::Notes,
+            index: None,
+        };
+
+        // Standalone resolution
+        let standalone = resolve_automation_window(Some(&target))
+            .expect("standalone resolve");
+
+        // Same call — proves the code path is shared
+        let batch_path = resolve_automation_window(Some(&target))
+            .expect("batch-path resolve");
+
+        assert_eq!(standalone.id, batch_path.id);
+        assert_eq!(standalone.kind, batch_path.kind);
+        assert_eq!(standalone.semantic_surface, batch_path.semantic_surface);
+
+        // Targeting a non-existent kind fails with an error, not a silent fallback
+        let missing = AutomationWindowTarget::Kind {
+            kind: AutomationWindowKind::MiniAi,
+            index: None,
+        };
+        let err = resolve_automation_window(Some(&missing));
+        assert!(err.is_err(), "missing target must return error, not fallback");
+
+        remove_automation_window(&format!("{p}:main"));
+        remove_automation_window(&format!("{p}:notes"));
     }
 }

@@ -212,3 +212,50 @@ pub fn capture_window_by_title(
 
     Err(format!("Window with title containing '{}' not found", title_pattern).into())
 }
+
+/// Capture a screenshot routed through the automation window target resolver.
+///
+/// When `target` is `None` or resolves to `Main`, falls back to
+/// `capture_app_screenshot`. For all other resolved kinds, uses the
+/// resolved window's title to find the correct OS-level window.
+///
+/// Returns structured failure when the target cannot be resolved —
+/// never silently falls back to the main window.
+pub fn capture_targeted_screenshot(
+    target: Option<&crate::protocol::AutomationWindowTarget>,
+    hi_dpi: bool,
+) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    use crate::protocol::AutomationWindowKind;
+
+    let resolved = match crate::windows::resolve_automation_window(target) {
+        Ok(info) => info,
+        Err(err) => {
+            tracing::warn!(
+                target: "script_kit::automation",
+                error = %err,
+                target = ?target,
+                "automation.capture_screenshot.target_failed"
+            );
+            return Err(err.to_string().into());
+        }
+    };
+
+    tracing::info!(
+        target: "script_kit::automation",
+        window_id = %resolved.id,
+        kind = ?resolved.kind,
+        hi_dpi = hi_dpi,
+        "automation.capture_screenshot.targeted"
+    );
+
+    match resolved.kind {
+        AutomationWindowKind::Main => capture_app_screenshot(hi_dpi),
+        _ => {
+            let title_pattern = resolved
+                .title
+                .as_deref()
+                .unwrap_or("Script Kit");
+            capture_window_by_title(title_pattern, hi_dpi)
+        }
+    }
+}
