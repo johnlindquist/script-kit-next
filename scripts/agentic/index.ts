@@ -651,37 +651,55 @@ async function recipeAcpSetupRecovery(
       )
     );
 
-    // 5d. Wait for either acpReady or still-blocked setup
-    // Try acpReady first with a short timeout
-    const waitReadyStep = await step("wait-ready-or-still-blocked", () =>
-      rpc(
-        session,
-        JSON.stringify({
-          type: "waitFor",
-          requestId: "w-ready-after-select",
-          condition: { type: "acpReady" },
-          timeout: 3000,
-          pollInterval: 25,
-          trace: "onFailure",
-        }),
-        { expect: "waitForResult", timeout: 5000 }
+    // 5d. Wait for selected-agent confirmation
+    steps.push(
+      await step("wait-selected-agent", () =>
+        rpc(
+          session,
+          JSON.stringify({
+            type: "waitFor",
+            requestId: "w-selected-agent",
+            condition: { type: "acpSetupSelectedAgent", agentId: selectAgent },
+            timeout: 3000,
+            pollInterval: 25,
+            trace: "onFailure",
+          }),
+          { expect: "waitForResult", timeout: 5000 }
+        )
       )
     );
-    steps.push(waitReadyStep);
+
+    // 5e. Wait for ACP to become ready after agent selection
+    steps.push(
+      await step("wait-ready", () =>
+        rpc(
+          session,
+          JSON.stringify({
+            type: "waitFor",
+            requestId: "w-ready-after-select",
+            condition: { type: "acpReady" },
+            timeout: 8000,
+            pollInterval: 25,
+            trace: "onFailure",
+          }),
+          { expect: "waitForResult", timeout: 10000 }
+        )
+      )
+    );
   }
 
-  // 6. Final verification — screenshot + state for proof
+  // 6. Final verification — assert expected ACP status based on flow
   const verifyArgs = [
     "bun",
     "scripts/agentic/verify-shot.ts",
     "--session",
     session,
     "--label",
-    "setup-final",
+    selectAgent ? "setup-recovered" : "setup-final",
     "--skip-probe",
+    "--acp-status",
+    selectAgent ? "idle" : "setup",
   ];
-  // If agent was selected and we expect it to resolve, verify ACP is no longer in setup
-  // Otherwise just capture the final state
   steps.push(
     await step("verify-final", () =>
       runTool(verifyArgs, "verify-final")
@@ -703,7 +721,7 @@ async function recipeAcpSetupRecovery(
       ? (finalState as Record<string, unknown>).setup
       : null;
 
-  // Log recipe completion
+  // Log recipe completion as single-line JSON on stderr
   console.error(
     JSON.stringify({
       event: "acp_setup_recovery_complete",
@@ -715,6 +733,7 @@ async function recipeAcpSetupRecovery(
         finalSetup && typeof finalSetup === "object"
           ? (finalSetup as Record<string, unknown>).reasonCode
           : null,
+      selectedAgent: selectAgent ?? null,
     })
   );
 
@@ -729,8 +748,8 @@ async function recipeAcpSetupRecovery(
     steps,
     summary: allPass
       ? selectAgent
-        ? `ACP setup recovery completed — agent ${selectAgent} selected`
-        : "ACP setup state verified"
+        ? `ACP setup recovered via ${selectAgent}`
+        : "ACP setup card rendered"
       : `Failed at: ${steps
           .filter((s) => s.status !== "pass")
           .map((s) => s.name)
