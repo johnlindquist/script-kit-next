@@ -46,6 +46,13 @@ struct AcpMentionSession {
     items: Vec<ContextPickerItem>,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct AcpMentionPopupParentWindow {
+    handle: gpui::AnyWindowHandle,
+    bounds: gpui::Bounds<gpui::Pixels>,
+    display_id: Option<gpui::DisplayId>,
+}
+
 /// Click handler type for collapsible block toggle.
 type ToggleHandler = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>;
 
@@ -112,6 +119,8 @@ pub(crate) struct AcpChatView {
     _slash_discovery_task: Task<()>,
     /// Active @-mention picker session (None = picker hidden).
     mention_session: Option<AcpMentionSession>,
+    /// Cached parent window metadata for the detached picker popup.
+    mention_popup_parent_window: Option<AcpMentionPopupParentWindow>,
     /// Canonical inline tokens that currently own their attached context part.
     ///
     /// This preserves non-inline chip attachments during mention sync while
@@ -174,6 +183,66 @@ impl AcpChatView {
             }
             ContextPickerItemKind::File(_) => format!("file:{}", item.label),
             ContextPickerItemKind::Folder(_) => format!("folder:{}", item.label),
+        }
+    }
+
+    fn cache_mention_popup_parent_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.mention_popup_parent_window = Some(AcpMentionPopupParentWindow {
+            handle: window.window_handle(),
+            bounds: window.bounds(),
+            display_id: window.display(cx).map(|display| display.id()),
+        });
+    }
+
+    fn mention_popup_snapshot(
+        &self,
+        cx: &App,
+    ) -> Option<(
+        crate::ai::acp::picker_popup::AcpMentionPopupSnapshot,
+        f32,
+        f32,
+    )> {
+        let session = self.mention_session.as_ref()?.clone();
+        let parent = self.mention_popup_parent_window?;
+        let input_text = self.live_thread().read(cx).input.text().to_string();
+        let window_width = parent.bounds.size.width.as_f32();
+        let (left, top, width) =
+            self.mention_picker_anchor_for_session(&session, &input_text, window_width);
+
+        Some((
+            crate::ai::acp::picker_popup::AcpMentionPopupSnapshot {
+                trigger: session.trigger,
+                selected_index: session.selected_index,
+                items: session.items,
+                width,
+            },
+            left,
+            top,
+        ))
+    }
+
+    pub(super) fn sync_mention_popup_window_from_cached_parent(&mut self, cx: &mut Context<Self>) {
+        let Some(parent) = self.mention_popup_parent_window else {
+            crate::ai::acp::picker_popup::close_mention_popup_window(cx);
+            return;
+        };
+
+        let source_view = cx.entity().downgrade();
+        if let Some((snapshot, left, top)) = self.mention_popup_snapshot(cx) {
+            let _ = crate::ai::acp::picker_popup::sync_mention_popup_window(
+                cx,
+                crate::ai::acp::picker_popup::AcpMentionPopupRequest {
+                    parent_window_handle: parent.handle,
+                    parent_bounds: parent.bounds,
+                    display_id: parent.display_id,
+                    source_view,
+                    snapshot,
+                    left,
+                    top,
+                },
+            );
+        } else {
+            crate::ai::acp::picker_popup::close_mention_popup_window(cx);
         }
     }
 
@@ -374,6 +443,7 @@ impl AcpChatView {
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
             mention_session: None,
+            mention_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
@@ -412,6 +482,7 @@ impl AcpChatView {
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
             mention_session: None,
+            mention_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
@@ -1982,7 +2053,7 @@ impl AcpChatView {
     /// Re-derive the mention session from current input state.
     ///
     /// Called after every input mutation and cursor movement.
-    fn refresh_mention_session(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn refresh_mention_session(&mut self, cx: &mut Context<Self>) {
         let (text, cursor, available_commands) = {
             let thread = self.live_thread().read(cx);
             (
@@ -2054,6 +2125,7 @@ impl AcpChatView {
 
         self.mention_session = next_session;
         self.log_mention_visible_range("refresh");
+        self.sync_mention_popup_window_from_cached_parent(cx);
         cx.notify();
     }
 
@@ -2076,7 +2148,7 @@ impl AcpChatView {
 
     /// Apply a hint chip token by writing it into the composer and running
     /// it through the normal picker acceptance path.
-    fn apply_picker_hint_token(&mut self, token: &str, cx: &mut Context<Self>) {
+    pub(super) fn apply_picker_hint_token(&mut self, token: &str, cx: &mut Context<Self>) {
         self.live_thread().update(cx, |thread, cx| {
             thread.input.set_text(token.to_string());
             cx.notify();
@@ -2093,8 +2165,20 @@ impl AcpChatView {
         } else {
             self.sync_inline_mentions(cx);
             self.mention_session = None;
+            self.sync_mention_popup_window_from_cached_parent(cx);
             cx.notify();
         }
+    }
+
+    pub(super) fn insert_picker_hint_prefix(&mut self, prefix: &str, cx: &mut Context<Self>) {
+        let live_thread = self.live_thread().clone();
+        live_thread.update(cx, |thread, cx| {
+            thread.input.set_text(prefix.to_string());
+            cx.notify();
+        });
+        self.refresh_mention_session(cx);
+        self.sync_inline_mentions(cx);
+        self.sync_mention_popup_window_from_cached_parent(cx);
     }
 
     /// Accept the currently selected picker row.
@@ -2102,8 +2186,16 @@ impl AcpChatView {
     /// Both Enter and Tab autocomplete the focused picker row. Literal slash
     /// commands are inserted into the composer; slash-picked context items
     /// attach a pending context part and remove the typed `/query` token.
-    fn accept_mention_selection(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn accept_mention_selection(&mut self, cx: &mut Context<Self>) {
         self.accept_mention_selection_impl(false, cx);
+    }
+
+    pub(super) fn select_mention_index(&mut self, index: usize) {
+        if let Some(session) = self.mention_session.as_mut() {
+            if !session.items.is_empty() {
+                session.selected_index = index.min(session.items.len().saturating_sub(1));
+            }
+        }
     }
 
     /// Replace a char-range in the given text with `replacement`.
@@ -2198,6 +2290,7 @@ impl AcpChatView {
                         cx.notify();
                     }
                 });
+                self.sync_mention_popup_window_from_cached_parent(cx);
                 cx.notify();
                 return;
             }
@@ -2278,6 +2371,7 @@ impl AcpChatView {
             );
             cx.notify();
         }
+        self.sync_mention_popup_window_from_cached_parent(cx);
     }
 
     /// Return highlight ranges for inline `@mentions` that are **actually
@@ -2407,15 +2501,17 @@ impl AcpChatView {
     /// Composer text size used for the inline ACP input.
     const ACP_INPUT_FONT_SIZE: f32 = 17.0;
 
+    /// Approximate glyph width used for popup anchoring and visible-window math.
+    const ACP_INPUT_APPROX_CHAR_WIDTH: f32 = 8.5;
+
     fn acp_input_max_visible_chars(&self, window: &Window) -> usize {
         const ACP_INPUT_MIN_VISIBLE_CHARS: usize = 18;
         const ACP_INPUT_MAX_VISIBLE_CHARS: usize = 96;
-        const ACP_INPUT_APPROX_CHAR_WIDTH_PX: f32 = 8.5;
         const ACP_INPUT_HORIZONTAL_PADDING_PX: f32 = 48.0;
 
         let window_width = window.window_bounds().get_bounds().size.width.as_f32();
         let usable_width = (window_width - ACP_INPUT_HORIZONTAL_PADDING_PX).max(160.0);
-        let visible_chars = (usable_width / ACP_INPUT_APPROX_CHAR_WIDTH_PX).floor() as usize;
+        let visible_chars = (usable_width / Self::ACP_INPUT_APPROX_CHAR_WIDTH).floor() as usize;
         visible_chars.clamp(ACP_INPUT_MIN_VISIBLE_CHARS, ACP_INPUT_MAX_VISIBLE_CHARS)
     }
 
@@ -2432,21 +2528,12 @@ impl AcpChatView {
         anchor_left.clamp(min_left, max_left)
     }
 
-    fn measure_acp_input_prefix_width(window: &Window, prefix: &str) -> f32 {
+    fn measure_acp_input_prefix_width(prefix: &str) -> f32 {
         if prefix.is_empty() {
             return 0.0;
         }
 
-        let style = gpui::TextStyle {
-            font_size: px(Self::ACP_INPUT_FONT_SIZE).into(),
-            ..Default::default()
-        };
-        let run = style.to_run(prefix.len());
-        window
-            .text_system()
-            .layout_line(prefix, px(Self::ACP_INPUT_FONT_SIZE), &[run], None)
-            .width
-            .as_f32()
+        prefix.chars().count() as f32 * Self::ACP_INPUT_APPROX_CHAR_WIDTH
     }
 
     /// Returns the maximum text wrapping width for the ACP composer.
@@ -2456,17 +2543,16 @@ impl AcpChatView {
 
     /// Returns the ACP composer cursor position `(x, y)` after rendering `text`,
     /// accounting for explicit newlines and simple visual wrapping.
-    fn measure_acp_input_cursor_position(window: &Window, text: &str) -> (f32, f32) {
+    fn measure_acp_input_cursor_position(text: &str, window_width: f32) -> (f32, f32) {
         if text.is_empty() {
             return (0.0, 0.0);
         }
-        let window_width = window.window_bounds().get_bounds().size.width.as_f32();
         let wrap_width = Self::composer_wrap_width_for_window(window_width);
         let logical_lines: Vec<&str> = text.split('\n').collect();
         let mut visual_row = 0usize;
         let mut cursor_x = 0.0f32;
         for (ix, logical_line) in logical_lines.iter().enumerate() {
-            let width = Self::measure_acp_input_prefix_width(window, logical_line);
+            let width = Self::measure_acp_input_prefix_width(logical_line);
             let wraps = if logical_line.is_empty() {
                 1usize
             } else {
@@ -2492,9 +2578,8 @@ impl AcpChatView {
         &self,
         session: &AcpMentionSession,
         input_text: &str,
-        window: &Window,
+        window_width: f32,
     ) -> (f32, f32, f32) {
-        let window_width = window.window_bounds().get_bounds().size.width.as_f32();
         let picker_width = Self::mention_picker_width_for_window(window_width);
         let trigger_start_byte = Self::char_to_byte_offset(input_text, session.trigger_range.start);
         let prefix = &input_text[..trigger_start_byte];
@@ -2502,9 +2587,11 @@ impl AcpChatView {
             ContextPickerTrigger::Mention => "@",
             ContextPickerTrigger::Slash => "/",
         };
-        let trigger_width = Self::measure_acp_input_prefix_width(window, trigger_text);
-        let (after_trigger_x, after_trigger_y) =
-            Self::measure_acp_input_cursor_position(window, &format!("{prefix}{trigger_text}"));
+        let trigger_width = Self::measure_acp_input_prefix_width(trigger_text);
+        let (after_trigger_x, after_trigger_y) = Self::measure_acp_input_cursor_position(
+            &format!("{prefix}{trigger_text}"),
+            window_width,
+        );
         let unclamped_left = Self::ACP_INPUT_PADDING_X + (after_trigger_x - trigger_width).max(0.0);
         let left = Self::clamp_mention_picker_left(unclamped_left, picker_width, window_width);
         let top = Self::ACP_INPUT_PADDING_Y
@@ -2535,143 +2622,6 @@ impl AcpChatView {
     /// Compute the visible range of items around the selected index.
     fn mention_visible_range(session: &AcpMentionSession) -> std::ops::Range<usize> {
         Self::mention_visible_range_for(session.selected_index, session.items.len())
-    }
-
-    /// Render the mention picker dropdown using the shared dense-monoline
-    /// row contract (`context_picker_row`).
-    fn render_mention_picker(
-        &self,
-        session: &AcpMentionSession,
-        width: f32,
-        cx: &mut Context<Self>,
-    ) -> gpui::AnyElement {
-        use crate::ai::context_picker_row::render_dense_monoline_picker_row;
-
-        let theme = theme::get_cached_theme();
-        let visible = Self::mention_visible_range(session);
-        let fg: gpui::Hsla = rgb(theme.colors.text.primary).into();
-        let muted_fg: gpui::Hsla = rgb(theme.colors.text.muted).into();
-
-        div()
-            .id("acp-mention-picker")
-            .w(px(width))
-            // Vibrancy-friendly: near-transparent bg, no border/rounded
-            .bg(fg.opacity(0.02))
-            .py(px(2.0))
-            .children(
-                session
-                    .items
-                    .iter()
-                    .enumerate()
-                    .skip(visible.start)
-                    .take(visible.len())
-                    .map(|(idx, item)| {
-                        let is_selected = idx == session.selected_index;
-                        render_dense_monoline_picker_row(
-                            SharedString::from(format!("acp-mention-row-{idx}")),
-                            item.label.clone(),
-                            item.meta.clone(),
-                            &item.label_highlight_indices,
-                            &item.meta_highlight_indices,
-                            is_selected,
-                            fg,
-                            muted_fg,
-                        )
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, _event, _window, cx| {
-                            if let Some(session) = this.mention_session.as_mut() {
-                                session.selected_index = idx;
-                            }
-                            this.accept_mention_selection(cx);
-                        }))
-                        .into_any_element()
-                    }),
-            )
-            .into_any_element()
-    }
-
-    /// Render empty state for the unified picker with clickable hint chips.
-    /// Shows trigger-appropriate hints based on whether `@` or `/` was typed.
-    fn render_mention_empty_state(&self, width: f32, cx: &mut Context<Self>) -> gpui::AnyElement {
-        use crate::ai::context_picker_row::{GHOST, HINT, MUTED_OP};
-        use crate::list_item::FONT_MONO;
-
-        let cached_theme = theme::get_cached_theme();
-        let fg: gpui::Hsla = rgb(cached_theme.colors.text.primary).into();
-        let muted_fg: gpui::Hsla = rgb(cached_theme.colors.text.muted).into();
-        let trigger = self
-            .mention_session
-            .as_ref()
-            .map(|s| s.trigger)
-            .unwrap_or(ContextPickerTrigger::Mention);
-        let is_slash = trigger == ContextPickerTrigger::Slash;
-        let hints = crate::ai::window::context_picker::empty_state_hints(trigger);
-
-        let mut chips: Vec<gpui::AnyElement> = Vec::new();
-        for hint in hints {
-            let hint_display = SharedString::from(hint.display);
-            let hint_insertion = hint.insertion.to_string();
-            let close_after_apply = !hint.insertion.ends_with(':');
-            chips.push(
-                div()
-                    .id(SharedString::from(format!("mention-hint-{}", hint.display)))
-                    .px(px(6.0))
-                    .py(px(2.0))
-                    .rounded(px(4.0))
-                    .bg(fg.opacity(GHOST))
-                    .hover(|el| el.bg(fg.opacity(0.08)))
-                    .cursor_pointer()
-                    .on_click(cx.listener(move |this, _, _window, cx| {
-                        tracing::info!(
-                            target: "script_kit::tab_ai",
-                            event = "acp_mention_empty_hint_applied",
-                            display = %hint_display,
-                            insertion = %hint_insertion,
-                        );
-                        if close_after_apply {
-                            this.apply_picker_hint_token(&hint_insertion, cx);
-                        } else {
-                            let live_t = this.live_thread().clone();
-                            live_t.update(cx, |thread, cx| {
-                                thread.input.set_text(hint_insertion.clone());
-                                cx.notify();
-                            });
-                            this.refresh_mention_session(cx);
-                            this.sync_inline_mentions(cx);
-                        }
-                    }))
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_family(FONT_MONO)
-                            .text_color(muted_fg.opacity(HINT))
-                            .child(SharedString::from(hint.display)),
-                    )
-                    .into_any_element(),
-            );
-        }
-
-        div()
-            .id("acp-mention-empty-state")
-            .w(px(width))
-            .bg(fg.opacity(0.02))
-            .py(px(4.0))
-            .px(px(6.0))
-            .flex()
-            .flex_col()
-            .gap(px(4.0))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(muted_fg.opacity(MUTED_OP))
-                    .child(if is_slash {
-                        "No matching commands"
-                    } else {
-                        "No matching context"
-                    }),
-            )
-            .child(div().flex().items_center().gap(px(4.0)).children(chips))
-            .into_any_element()
     }
 
     // ── Slash command helpers ─────────────────────────────────────
@@ -3623,6 +3573,7 @@ impl AcpChatView {
                     }
                 }
                 self.log_mention_visible_range("keyboard_prev");
+                self.sync_mention_popup_window_from_cached_parent(cx);
                 cx.notify();
                 cx.stop_propagation();
                 return;
@@ -3641,6 +3592,7 @@ impl AcpChatView {
                     }
                 }
                 self.log_mention_visible_range("keyboard_next");
+                self.sync_mention_popup_window_from_cached_parent(cx);
                 cx.notify();
                 cx.stop_propagation();
                 return;
@@ -3696,6 +3648,7 @@ impl AcpChatView {
             }
             if crate::ui_foundation::is_key_escape(key) {
                 self.mention_session = None;
+                self.sync_mention_popup_window_from_cached_parent(cx);
                 cx.notify();
                 cx.stop_propagation();
                 return;
@@ -3725,6 +3678,7 @@ impl AcpChatView {
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
             let cursor_before = self.live_thread().read(cx).input.cursor();
             self.mention_session = None;
+            self.sync_mention_popup_window_from_cached_parent(cx);
             let _ = self
                 .live_thread()
                 .update(cx, |thread, cx| thread.submit_input(cx));
@@ -3886,6 +3840,7 @@ impl Render for AcpChatView {
                 cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                     let key = event.keystroke.key.as_str();
                     let modifiers = &event.keystroke.modifiers;
+                    this.cache_mention_popup_parent_window(window, cx);
 
                     // Cmd+W in detached window: close the window directly.
                     // In the main panel, Cmd+W is handled by the interceptor.
@@ -3927,7 +3882,7 @@ impl Render for AcpChatView {
                             // Empirical: px(17) here renders identically to px(16) in
                             // the main menu input.  The 1px offset is a GPUI layout quirk —
                             // both paths target the same visual size (design_typography.font_size_lg).
-                            .text_size(px(17.0))
+                            .text_size(px(Self::ACP_INPUT_FONT_SIZE))
                             .line_height(px(22.0))
                             .text_color(if input_text.is_empty() {
                                 rgb(theme.colors.text.muted)
@@ -4050,25 +4005,6 @@ impl Render for AcpChatView {
                         .child(
                             div().text_xs().opacity(0.25).child("esc \u{00d7}"),
                         ),
-                )
-            })
-            // ── Unified picker (@ mentions + / commands) ─────────
-            .when_some(self.mention_session.clone(), |d, session| {
-                let (picker_left, picker_top, picker_width) =
-                    self.mention_picker_anchor_for_session(&session, &input_text, window);
-                let picker = if session.items.is_empty() {
-                    self.render_mention_empty_state(picker_width, cx)
-                } else {
-                    self.render_mention_picker(&session, picker_width, cx)
-                };
-                d.child(
-                    div()
-                        .id("acp-mention-picker-layer")
-                        .absolute()
-                        .left(px(picker_left))
-                        .top(px(picker_top))
-                        .w(px(picker_width))
-                        .child(picker),
                 )
             })
             // ── History picker (below input, replaces message list) ──

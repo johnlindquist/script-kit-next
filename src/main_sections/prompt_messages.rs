@@ -270,11 +270,13 @@ enum PromptMessage {
         condition: protocol::WaitCondition,
         timeout: Option<u64>,
         poll_interval: Option<u64>,
+        trace: protocol::TransactionTraceMode,
     },
     /// Execute a batch of atomic UI commands as a transaction
     Batch {
         request_id: String,
         commands: Vec<protocol::BatchCommand>,
         options: Option<protocol::BatchOptions>,
+        trace: protocol::TransactionTraceMode,
     },
 }

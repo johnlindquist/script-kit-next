@@ -1716,34 +1716,61 @@ impl ScriptListApp {
                 condition,
                 timeout,
                 poll_interval,
+                trace: trace_mode,
             } => {
                 let timeout_ms = timeout.unwrap_or(5_000);
                 let poll_ms = poll_interval.unwrap_or(25);
                 let rid = request_id.clone();
 
                 tracing::info!(
-                    category = "WAIT",
+                    category = "AUTOMATION",
                     request_id = %rid,
                     timeout_ms = timeout_ms,
                     poll_ms = poll_ms,
-                    "wait_for.start"
+                    trace_mode = ?trace_mode,
+                    "automation.wait_for.started"
                 );
 
                 // Check if condition is already satisfied
                 if self.wait_condition_satisfied(&condition, cx) {
+                    let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, true);
+                    let trace = if include_trace {
+                        let started_at_ms = protocol::transaction_trace::now_epoch_ms();
+                        Some(protocol::TransactionTrace {
+                            request_id: rid.clone(),
+                            status: protocol::TransactionTraceStatus::Ok,
+                            started_at_ms,
+                            total_elapsed_ms: 0,
+                            failed_at: None,
+                            commands: vec![protocol::TransactionCommandTrace {
+                                index: 0,
+                                command: "waitFor".to_string(),
+                                started_at_ms,
+                                elapsed_ms: 0,
+                                before: protocol::UiStateSnapshot::default(),
+                                after: protocol::UiStateSnapshot::default(),
+                                polls: Vec::new(),
+                                error: None,
+                            }],
+                        })
+                    } else {
+                        None
+                    };
                     tracing::info!(
                         category = "AUTOMATION",
                         request_id = %rid,
                         success = true,
                         elapsed_ms = 0_u64,
                         error_code = "",
+                        trace_included = include_trace,
                         "automation.wait_for.completed"
                     );
-                    let response = Message::wait_for_result(
+                    let response = Message::wait_for_result_with_trace(
                         request_id.clone(),
                         true,
                         0,
                         None::<crate::protocol::TransactionError>,
+                        trace,
                     );
                     if let Some(ref sender) = self.response_sender {
                         let _ = sender.try_send(response);
@@ -1753,6 +1780,7 @@ impl ScriptListApp {
                     let sender = self.response_sender.clone();
                     let condition = condition.clone();
                     cx.spawn(async move |this, cx| {
+                        let started_at_ms = protocol::transaction_trace::now_epoch_ms();
                         let start = std::time::Instant::now();
                         let timeout_dur = std::time::Duration::from_millis(timeout_ms);
                         let poll_dur = std::time::Duration::from_millis(poll_ms);
@@ -1760,24 +1788,49 @@ impl ScriptListApp {
                             cx.background_executor().timer(poll_dur).await;
                             if start.elapsed() >= timeout_dur {
                                 let elapsed_ms = start.elapsed().as_millis() as u64;
+                                let error = crate::protocol::TransactionError {
+                                    code: crate::protocol::TransactionErrorCode::WaitConditionTimeout,
+                                    message: format!("Timeout after {}ms waiting for {:?}", timeout_ms, condition),
+                                    suggestion: None,
+                                };
+                                let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, false);
+                                let trace = if include_trace {
+                                    Some(protocol::TransactionTrace {
+                                        request_id: rid.clone(),
+                                        status: protocol::TransactionTraceStatus::Timeout,
+                                        started_at_ms,
+                                        total_elapsed_ms: elapsed_ms,
+                                        failed_at: Some(0),
+                                        commands: vec![protocol::TransactionCommandTrace {
+                                            index: 0,
+                                            command: "waitFor".to_string(),
+                                            started_at_ms,
+                                            elapsed_ms,
+                                            before: protocol::UiStateSnapshot::default(),
+                                            after: protocol::UiStateSnapshot::default(),
+                                            polls: Vec::new(),
+                                            error: Some(error.clone()),
+                                        }],
+                                    })
+                                } else {
+                                    None
+                                };
                                 tracing::info!(
                                     category = "AUTOMATION",
                                     request_id = %rid,
                                     success = false,
                                     elapsed_ms = elapsed_ms,
                                     error_code = "wait_condition_timeout",
+                                    trace_included = include_trace,
                                     "automation.wait_for.completed"
                                 );
                                 if let Some(ref s) = sender {
-                                    let _ = s.try_send(Message::wait_for_result(
+                                    let _ = s.try_send(Message::wait_for_result_with_trace(
                                         rid.clone(),
                                         false,
-                                        start.elapsed().as_millis() as u64,
-                                        Some(crate::protocol::TransactionError {
-                                            code: crate::protocol::TransactionErrorCode::WaitConditionTimeout,
-                                            message: format!("Timeout after {}ms", timeout_ms),
-                                            suggestion: None,
-                                        }),
+                                        elapsed_ms,
+                                        Some(error),
+                                        trace,
                                     ));
                                 }
                                 break;
@@ -1787,44 +1840,94 @@ impl ScriptListApp {
                             }) {
                                 Ok(true) => {
                                     let elapsed_ms = start.elapsed().as_millis() as u64;
+                                    let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, true);
+                                    let trace = if include_trace {
+                                        Some(protocol::TransactionTrace {
+                                            request_id: rid.clone(),
+                                            status: protocol::TransactionTraceStatus::Ok,
+                                            started_at_ms,
+                                            total_elapsed_ms: elapsed_ms,
+                                            failed_at: None,
+                                            commands: vec![protocol::TransactionCommandTrace {
+                                                index: 0,
+                                                command: "waitFor".to_string(),
+                                                started_at_ms,
+                                                elapsed_ms,
+                                                before: protocol::UiStateSnapshot::default(),
+                                                after: protocol::UiStateSnapshot::default(),
+                                                polls: Vec::new(),
+                                                error: None,
+                                            }],
+                                        })
+                                    } else {
+                                        None
+                                    };
                                     tracing::info!(
                                         category = "AUTOMATION",
                                         request_id = %rid,
                                         success = true,
                                         elapsed_ms = elapsed_ms,
                                         error_code = "",
+                                        trace_included = include_trace,
                                         "automation.wait_for.completed"
                                     );
                                     if let Some(ref s) = sender {
-                                        let _ = s.try_send(Message::wait_for_result(
+                                        let _ = s.try_send(Message::wait_for_result_with_trace(
                                             rid.clone(),
                                             true,
-                                            start.elapsed().as_millis() as u64,
+                                            elapsed_ms,
                                             None::<crate::protocol::TransactionError>,
+                                            trace,
                                         ));
                                     }
                                     break;
                                 }
                                 Ok(false) => continue,
                                 Err(_) => {
+                                    let elapsed_ms = start.elapsed().as_millis() as u64;
+                                    let error = crate::protocol::TransactionError {
+                                        code: crate::protocol::TransactionErrorCode::ActionFailed,
+                                        message: "Entity dropped during WaitFor".to_string(),
+                                        suggestion: None,
+                                    };
+                                    let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, false);
+                                    let trace = if include_trace {
+                                        Some(protocol::TransactionTrace {
+                                            request_id: rid.clone(),
+                                            status: protocol::TransactionTraceStatus::Failed,
+                                            started_at_ms,
+                                            total_elapsed_ms: elapsed_ms,
+                                            failed_at: Some(0),
+                                            commands: vec![protocol::TransactionCommandTrace {
+                                                index: 0,
+                                                command: "waitFor".to_string(),
+                                                started_at_ms,
+                                                elapsed_ms,
+                                                before: protocol::UiStateSnapshot::default(),
+                                                after: protocol::UiStateSnapshot::default(),
+                                                polls: Vec::new(),
+                                                error: Some(error.clone()),
+                                            }],
+                                        })
+                                    } else {
+                                        None
+                                    };
                                     tracing::info!(
                                         category = "AUTOMATION",
                                         request_id = %rid,
                                         success = false,
-                                        elapsed_ms = start.elapsed().as_millis() as u64,
+                                        elapsed_ms = elapsed_ms,
                                         error_code = "action_failed",
+                                        trace_included = include_trace,
                                         "automation.wait_for.completed"
                                     );
                                     if let Some(ref s) = sender {
-                                        let _ = s.try_send(Message::wait_for_result(
+                                        let _ = s.try_send(Message::wait_for_result_with_trace(
                                             rid.clone(),
                                             false,
-                                            start.elapsed().as_millis() as u64,
-                                            Some(crate::protocol::TransactionError {
-                                                code: crate::protocol::TransactionErrorCode::ActionFailed,
-                                                message: "Entity dropped during WaitFor".to_string(),
-                                                suggestion: None,
-                                            }),
+                                            elapsed_ms,
+                                            Some(error),
+                                            trace,
                                         ));
                                     }
                                     break;
@@ -1840,6 +1943,7 @@ impl ScriptListApp {
                 request_id,
                 commands,
                 options,
+                trace: trace_mode,
             } => {
                 let opts = options.unwrap_or(protocol::BatchOptions {
                     stop_on_error: true,
@@ -1850,10 +1954,11 @@ impl ScriptListApp {
                 let sender = self.response_sender.clone();
 
                 tracing::info!(
-                    category = "BATCH",
+                    category = "AUTOMATION",
                     request_id = %rid,
                     command_count = commands.len(),
-                    "batch.start"
+                    trace_mode = ?trace_mode,
+                    "automation.batch.started"
                 );
 
                 cx.spawn(async move |this, cx| {
@@ -2202,8 +2307,40 @@ impl ScriptListApp {
                     }
 
                     let total_elapsed = batch_start.elapsed().as_millis() as u64;
+                    let success = !failed;
                     let failed_at = if failed {
                         results.iter().position(|r| !r.success)
+                    } else {
+                        None
+                    };
+
+                    let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, success);
+                    let trace = if include_trace {
+                        let started_at_ms = protocol::transaction_trace::now_epoch_ms()
+                            .saturating_sub(total_elapsed);
+                        Some(protocol::TransactionTrace {
+                            request_id: rid.clone(),
+                            status: if success {
+                                protocol::TransactionTraceStatus::Ok
+                            } else {
+                                protocol::TransactionTraceStatus::Failed
+                            },
+                            started_at_ms,
+                            total_elapsed_ms: total_elapsed,
+                            failed_at,
+                            commands: results.iter().map(|r| {
+                                protocol::TransactionCommandTrace {
+                                    index: r.index,
+                                    command: r.command.clone(),
+                                    started_at_ms,
+                                    elapsed_ms: r.elapsed.unwrap_or(0),
+                                    before: protocol::UiStateSnapshot::default(),
+                                    after: protocol::UiStateSnapshot::default(),
+                                    polls: Vec::new(),
+                                    error: r.error.clone(),
+                                }
+                            }).collect(),
+                        })
                     } else {
                         None
                     };
@@ -2211,19 +2348,21 @@ impl ScriptListApp {
                     tracing::info!(
                         category = "AUTOMATION",
                         request_id = %rid,
-                        success = !failed,
+                        success = success,
                         total_elapsed_ms = total_elapsed,
                         failed_at = ?failed_at,
+                        trace_included = include_trace,
                         "automation.batch.completed"
                     );
 
                     if let Some(ref s) = sender {
-                        let _ = s.try_send(Message::batch_result(
+                        let _ = s.try_send(Message::batch_result_with_trace(
                             rid.clone(),
-                            !failed,
+                            success,
                             results,
                             failed_at,
                             total_elapsed,
+                            trace,
                         ));
                     }
                 })

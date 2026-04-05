@@ -599,6 +599,210 @@ fn wait_for_request_parses_with_acp_input_layout_match() {
 }
 
 // ============================================================
+// waitFor trace propagation — request parsing and result embedding
+// ============================================================
+
+#[test]
+fn wait_for_request_parses_trace_on_failure() {
+    let json = serde_json::json!({
+        "type": "waitFor",
+        "requestId": "wf-trace",
+        "condition": { "type": "acpAcceptedViaKey", "key": "enter" },
+        "timeout": 100,
+        "pollInterval": 25,
+        "trace": "onFailure"
+    });
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse waitFor with trace");
+
+    match msg {
+        crate::protocol::Message::WaitFor {
+            request_id,
+            trace,
+            ..
+        } => {
+            assert_eq!(request_id, "wf-trace");
+            assert_eq!(trace, crate::protocol::TransactionTraceMode::OnFailure);
+        }
+        other => panic!("Expected WaitFor, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wait_for_request_parses_trace_on() {
+    let json = serde_json::json!({
+        "type": "waitFor",
+        "requestId": "wf-trace-on",
+        "condition": "windowVisible",
+        "trace": "on"
+    });
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse waitFor with trace on");
+
+    match msg {
+        crate::protocol::Message::WaitFor { trace, .. } => {
+            assert_eq!(trace, crate::protocol::TransactionTraceMode::On);
+        }
+        other => panic!("Expected WaitFor, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wait_for_request_defaults_trace_off() {
+    let json = serde_json::json!({
+        "type": "waitFor",
+        "requestId": "wf-no-trace",
+        "condition": "windowVisible"
+    });
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse waitFor without trace");
+
+    match msg {
+        crate::protocol::Message::WaitFor { trace, .. } => {
+            assert_eq!(trace, crate::protocol::TransactionTraceMode::Off);
+        }
+        other => panic!("Expected WaitFor, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wait_for_result_with_trace_serializes_correctly() {
+    let trace = crate::protocol::TransactionTrace {
+        request_id: "wf-trace".to_string(),
+        status: crate::protocol::TransactionTraceStatus::Timeout,
+        started_at_ms: 1000,
+        total_elapsed_ms: 100,
+        failed_at: Some(0),
+        commands: vec![crate::protocol::TransactionCommandTrace {
+            index: 0,
+            command: "waitFor".to_string(),
+            started_at_ms: 1000,
+            elapsed_ms: 100,
+            before: crate::protocol::UiStateSnapshot::default(),
+            after: crate::protocol::UiStateSnapshot::default(),
+            polls: Vec::new(),
+            error: Some(crate::protocol::TransactionError::wait_timeout(
+                "Timeout after 100ms waiting for AcpAcceptedViaKey { key: \"enter\" }",
+            )),
+        }],
+    };
+    let msg = crate::protocol::Message::wait_for_result_with_trace(
+        "wf-trace".to_string(),
+        false,
+        100,
+        Some(crate::protocol::TransactionError::wait_timeout(
+            "Timeout after 100ms",
+        )),
+        Some(trace),
+    );
+    let json = serde_json::to_value(&msg).expect("serialize waitForResult with trace");
+
+    assert_eq!(json["type"], "waitForResult");
+    assert_eq!(json["requestId"], "wf-trace");
+    assert_eq!(json["success"], false);
+    assert_eq!(json["elapsed"], 100);
+    assert!(json["error"].is_object(), "error should be present");
+    assert!(json["trace"].is_object(), "trace should be present");
+    assert_eq!(json["trace"]["requestId"], "wf-trace");
+    assert_eq!(json["trace"]["status"], "timeout");
+    assert_eq!(json["trace"]["failedAt"], 0);
+    assert_eq!(json["trace"]["commands"][0]["command"], "waitFor");
+}
+
+#[test]
+fn wait_for_result_without_trace_omits_trace_field() {
+    let msg = crate::protocol::Message::wait_for_result_with_trace(
+        "wf-no-trace".to_string(),
+        true,
+        50,
+        None::<crate::protocol::TransactionError>,
+        None,
+    );
+    let json = serde_json::to_value(&msg).expect("serialize");
+
+    assert_eq!(json["type"], "waitForResult");
+    assert_eq!(json["success"], true);
+    assert!(
+        json.get("trace").is_none(),
+        "trace should be omitted when None"
+    );
+}
+
+// ============================================================
+// batch trace propagation — request parsing and result embedding
+// ============================================================
+
+#[test]
+fn batch_request_parses_trace_on_failure() {
+    let json = serde_json::json!({
+        "type": "batch",
+        "requestId": "b-trace",
+        "commands": [
+            { "type": "waitFor", "condition": "windowVisible", "timeout": 100 }
+        ],
+        "trace": "onFailure"
+    });
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse batch with trace");
+
+    match msg {
+        crate::protocol::Message::Batch {
+            request_id,
+            trace,
+            ..
+        } => {
+            assert_eq!(request_id, "b-trace");
+            assert_eq!(trace, crate::protocol::TransactionTraceMode::OnFailure);
+        }
+        other => panic!("Expected Batch, got: {:?}", other),
+    }
+}
+
+#[test]
+fn batch_result_with_trace_serializes_correctly() {
+    let trace = crate::protocol::TransactionTrace {
+        request_id: "b-trace".to_string(),
+        status: crate::protocol::TransactionTraceStatus::Failed,
+        started_at_ms: 2000,
+        total_elapsed_ms: 150,
+        failed_at: Some(0),
+        commands: vec![crate::protocol::TransactionCommandTrace {
+            index: 0,
+            command: "waitFor".to_string(),
+            started_at_ms: 2000,
+            elapsed_ms: 150,
+            before: crate::protocol::UiStateSnapshot::default(),
+            after: crate::protocol::UiStateSnapshot::default(),
+            polls: Vec::new(),
+            error: Some(crate::protocol::TransactionError::wait_timeout("Timeout")),
+        }],
+    };
+    let msg = crate::protocol::Message::batch_result_with_trace(
+        "b-trace".to_string(),
+        false,
+        vec![crate::protocol::BatchResultEntry {
+            index: 0,
+            success: false,
+            command: "waitFor".to_string(),
+            elapsed: Some(150),
+            value: None,
+            error: Some(crate::protocol::TransactionError::wait_timeout("Timeout")),
+        }],
+        Some(0),
+        150,
+        Some(trace),
+    );
+    let json = serde_json::to_value(&msg).expect("serialize batchResult with trace");
+
+    assert_eq!(json["type"], "batchResult");
+    assert_eq!(json["requestId"], "b-trace");
+    assert_eq!(json["success"], false);
+    assert!(json["trace"].is_object(), "trace should be present");
+    assert_eq!(json["trace"]["status"], "failed");
+    assert_eq!(json["trace"]["failedAt"], 0);
+}
+
+// ============================================================
 // resetAcpTestProbe / getAcpTestProbe / acpTestProbeResult
 // ============================================================
 

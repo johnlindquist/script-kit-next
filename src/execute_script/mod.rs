@@ -1590,12 +1590,13 @@ impl ScriptListApp {
                                         condition,
                                         timeout,
                                         poll_interval,
-                                        ..
+                                        trace,
                                     } = &msg
                                     {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
+                                            trace_mode = ?trace,
                                             "WaitFor request"
                                         );
                                         let prompt_msg = PromptMessage::WaitFor {
@@ -1603,6 +1604,7 @@ impl ScriptListApp {
                                             condition: condition.clone(),
                                             timeout: *timeout,
                                             poll_interval: *poll_interval,
+                                            trace: *trace,
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(
@@ -1619,19 +1621,21 @@ impl ScriptListApp {
                                         request_id,
                                         commands,
                                         options,
-                                        ..
+                                        trace,
                                     } = &msg
                                     {
                                         tracing::info!(
                                             category = "EXEC",
                                             request_id = %request_id,
                                             command_count = commands.len(),
+                                            trace_mode = ?trace,
                                             "Batch request"
                                         );
                                         let prompt_msg = PromptMessage::Batch {
                                             request_id: request_id.clone(),
                                             commands: commands.clone(),
                                             options: options.clone(),
+                                            trace: *trace,
                                         };
                                         if tx.send_blocking(prompt_msg).is_err() {
                                             tracing::info!(

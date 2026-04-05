@@ -540,10 +540,26 @@ if (ensureFocus && command !== "check" && command !== "help" && command !== "--h
   const focusResult = await ensureFocusViaWindowTs(focusTitle);
   focusEnforced = true;
   if (!focusResult.frontmost) {
-    stderrLog("focus_enforcement_warning", {
-      message: "Window may not be frontmost after focus enforcement",
+    stderrLog("focus_enforcement_failed", {
+      frontmost: focusResult.frontmost,
+      focused: focusResult.focused,
       focusTitle,
     });
+    emit({
+      schemaVersion: SCHEMA_VERSION,
+      status: "error",
+      command,
+      error: {
+        code: "FOCUS_NOT_CONFIRMED",
+        message: "Script Kit window was not frontmost after focus enforcement",
+      },
+      data: {
+        frontmost: focusResult.frontmost,
+        focused: focusResult.focused,
+        focusTitle,
+      },
+    } as Envelope<any>);
+    process.exit(1);
   }
 }
 

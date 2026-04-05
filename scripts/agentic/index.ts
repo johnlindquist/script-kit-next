@@ -36,6 +36,8 @@ interface RecipeReceipt {
   status: "pass" | "fail" | "error";
   steps: StepReceipt[];
   summary: string;
+  /** When --vision is requested, the final verify-shot proof bundle is surfaced here unchanged. */
+  proofBundle?: unknown;
 }
 
 interface StepReceipt {
@@ -156,15 +158,54 @@ function parseArgs() {
 async function recipePreflight(session: string): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
 
-  // Check session health
-  steps.push(
-    await step("session-status", () =>
-      runTool(
-        ["bash", "scripts/agentic/session.sh", "status", session],
-        "session-status"
-      )
+  // Check session health via session.sh status
+  const sessionStatusStep = await step("session-status", () =>
+    runTool(
+      ["bash", "scripts/agentic/session.sh", "status", session],
+      "session-status"
     )
   );
+
+  // Parse the session JSON and enforce health invariants
+  const sessionJson = sessionStatusStep.output as Record<string, unknown> | null;
+  if (sessionJson && typeof sessionJson === "object" && !("raw" in sessionJson)) {
+    const status = sessionJson.status as string | undefined;
+    const alive = sessionJson.alive as boolean | undefined;
+    const forwarderAlive = sessionJson.forwarderAlive as boolean | undefined;
+    const healthy = sessionJson.healthy as boolean | undefined;
+
+    if (
+      status === "not_found" ||
+      alive === false ||
+      forwarderAlive === false ||
+      healthy === false
+    ) {
+      const issues = (sessionJson.issues as string[]) ?? [];
+      sessionStatusStep.status = "fail";
+      sessionStatusStep.output = {
+        ...sessionJson,
+        _preflightVerdict: "unhealthy",
+        _failReasons: [
+          ...(status === "not_found" ? ["status:not_found"] : []),
+          ...(alive === false ? ["alive:false"] : []),
+          ...(forwarderAlive === false ? ["forwarderAlive:false"] : []),
+          ...(healthy === false ? ["healthy:false"] : []),
+          ...issues.map((i: string) => `issue:${i}`),
+        ],
+      };
+    }
+  }
+  steps.push(sessionStatusStep);
+
+  // Check session health via session-state.ts (cross-validates)
+  const sessionStateStep = await step("session-state", () =>
+    runTool(
+      ["bun", "scripts/agentic/session-state.ts", "--session", session],
+      "session-state"
+    )
+  );
+  // session-state.ts already exits non-zero when unhealthy, so step() maps that
+  steps.push(sessionStateStep);
 
   // Check window status
   steps.push(
@@ -314,20 +355,29 @@ async function recipeAcpPickerAccept(
   );
 
   // 3. Type @ to open picker (native input with focus enforcement)
-  steps.push(
-    await step("type-at-trigger", () =>
-      runTool(
-        [
-          "bun",
-          "scripts/agentic/macos-input.ts",
-          "type",
-          "@",
-          "--ensure-focus",
-        ],
-        "type-at"
-      )
+  const typeAtStep = await step("type-at-trigger", () =>
+    runTool(
+      [
+        "bun",
+        "scripts/agentic/macos-input.ts",
+        "type",
+        "@",
+        "--ensure-focus",
+      ],
+      "type-at"
     )
   );
+  steps.push(typeAtStep);
+
+  if (typeAtStep.status !== "pass") {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: `acp-${acceptKey}-accept`,
+      status: "fail",
+      steps,
+      summary: `Native input failed at type-at-trigger: focus not confirmed or input not delivered`,
+    };
+  }
 
   // 4. Wait for picker to open using waitFor instead of fixed sleep
   steps.push(
@@ -368,20 +418,29 @@ async function recipeAcpPickerAccept(
   );
 
   // 6. Accept with native key (with focus enforcement)
-  steps.push(
-    await step(`native-${acceptKey}`, () =>
-      runTool(
-        [
-          "bun",
-          "scripts/agentic/macos-input.ts",
-          "key",
-          acceptKey,
-          "--ensure-focus",
-        ],
-        `native-${acceptKey}`
-      )
+  const nativeKeyStep = await step(`native-${acceptKey}`, () =>
+    runTool(
+      [
+        "bun",
+        "scripts/agentic/macos-input.ts",
+        "key",
+        acceptKey,
+        "--ensure-focus",
+      ],
+      `native-${acceptKey}`
     )
   );
+  steps.push(nativeKeyStep);
+
+  if (nativeKeyStep.status !== "pass") {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: `acp-${acceptKey}-accept`,
+      status: "fail",
+      steps,
+      summary: `Native input failed at native-${acceptKey}: focus not confirmed or key not delivered`,
+    };
+  }
 
   // 7. Wait for key-specific acceptance proof (not generic acpItemAccepted)
   steps.push(
@@ -422,6 +481,12 @@ async function recipeAcpPickerAccept(
   );
 
   const allPass = steps.every((s) => s.status === "pass");
+
+  // Extract the verify-accepted step's proof bundle for top-level access
+  const verifyStep = steps.find((s) => s.name === "verify-accepted");
+  const proofBundle =
+    opts.emitVision && verifyStep?.output ? verifyStep.output : undefined;
+
   return {
     schemaVersion: SCHEMA_VERSION,
     recipe: `acp-${acceptKey}-accept`,
@@ -437,6 +502,7 @@ async function recipeAcpPickerAccept(
           .filter((s) => s.status !== "pass")
           .map((s) => s.name)
           .join(", ")}`,
+    ...(proofBundle ? { proofBundle } : {}),
   };
 }
 

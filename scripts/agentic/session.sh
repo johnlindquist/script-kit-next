@@ -52,11 +52,34 @@ cmd_start() {
   local log_path="${sdir}/app.log"
   local responses_path="${sdir}/responses.ndjson"
 
-  # Resume if healthy
+  # Resume only if ALL components are healthy: app PID, forwarder PID, input FIFO, primary pipe
   if [ -f "${sdir}/pid" ]; then
     local old_pid
     old_pid="$(cat "${sdir}/pid")"
-    if kill -0 "$old_pid" 2>/dev/null; then
+    local old_fwd_pid=""
+    if [ -f "${sdir}/fwd_pid" ]; then
+      old_fwd_pid="$(cat "${sdir}/fwd_pid")"
+    fi
+    local primary_pipe="${sdir}/pipe"
+
+    local can_resume=true
+    local reason=""
+
+    if ! kill -0 "$old_pid" 2>/dev/null; then
+      can_resume=false
+      reason="app process (pid ${old_pid}) dead"
+    elif [ -z "$old_fwd_pid" ] || ! kill -0 "$old_fwd_pid" 2>/dev/null; then
+      can_resume=false
+      reason="forwarder process (pid ${old_fwd_pid:-unknown}) dead"
+    elif [ ! -p "$input_fifo" ]; then
+      can_resume=false
+      reason="input FIFO missing"
+    elif [ ! -p "$primary_pipe" ]; then
+      can_resume=false
+      reason="primary pipe missing"
+    fi
+
+    if [ "$can_resume" = true ]; then
       log "Resuming existing session '${name}' (pid ${old_pid})"
       json_envelope "ok" \
         "session:\"${name}\"" \
@@ -67,7 +90,14 @@ cmd_start() {
         "resumed:true"
       return 0
     else
-      log "Stale session '${name}' (pid ${old_pid} dead). Cleaning up."
+      log "Stale session '${name}': ${reason}. Cleaning up."
+      # Kill any remaining processes before cleanup
+      if kill -0 "$old_pid" 2>/dev/null; then
+        kill "$old_pid" 2>/dev/null || true
+      fi
+      if [ -n "$old_fwd_pid" ] && kill -0 "$old_fwd_pid" 2>/dev/null; then
+        kill "$old_fwd_pid" 2>/dev/null || true
+      fi
       rm -rf "${sdir}"
     fi
   fi
@@ -178,6 +208,19 @@ cmd_send() {
     fi
   fi
 
+  # Verify forwarder is alive — fail fast instead of hanging on a dead pipe
+  if [ -f "${sdir}/fwd_pid" ]; then
+    local fwd_pid
+    fwd_pid="$(cat "${sdir}/fwd_pid")"
+    if ! kill -0 "$fwd_pid" 2>/dev/null; then
+      json_error "forwarder_dead" "Session '${name}' input forwarder is not running."
+      return 1
+    fi
+  else
+    json_error "forwarder_dead" "Session '${name}' input forwarder PID file missing."
+    return 1
+  fi
+
   # Write command to the input FIFO (non-blocking via timeout)
   if printf '%s\n' "$cmd" > "$input_fifo" 2>/dev/null; then
     json_envelope "ok" "session:\"${name}\"" "sent:true"
@@ -231,6 +274,19 @@ cmd_rpc() {
       json_error "session_dead" "Session '${name}' app process (pid ${pid}) is not running."
       return 1
     fi
+  fi
+
+  # Verify forwarder is alive
+  if [ -f "${sdir}/fwd_pid" ]; then
+    local fwd_pid
+    fwd_pid="$(cat "${sdir}/fwd_pid")"
+    if ! kill -0 "$fwd_pid" 2>/dev/null; then
+      json_error "forwarder_dead" "Session '${name}' input forwarder is not running."
+      return 1
+    fi
+  else
+    json_error "forwarder_dead" "Session '${name}' input forwarder PID file missing."
+    return 1
   fi
 
   # Parse optional flags
@@ -294,9 +350,12 @@ cmd_status() {
   local pid="0"
   local alive="false"
   local pipe_path="${sdir}/input"
+  local primary_pipe="${sdir}/pipe"
   local log_path="${sdir}/app.log"
   local responses_path="${sdir}/responses.ndjson"
   local pipe_writable="false"
+  local forwarder_alive="false"
+  local fwd_pid="0"
 
   if [ -f "${sdir}/pid" ]; then
     pid="$(cat "${sdir}/pid")"
@@ -305,14 +364,51 @@ cmd_status() {
     fi
   fi
 
+  if [ -f "${sdir}/fwd_pid" ]; then
+    fwd_pid="$(cat "${sdir}/fwd_pid")"
+    if kill -0 "$fwd_pid" 2>/dev/null; then
+      forwarder_alive="true"
+    fi
+  fi
+
   if [ -p "$pipe_path" ]; then
     pipe_writable="true"
+  fi
+
+  # Healthy = app alive AND forwarder alive AND both FIFOs exist
+  local healthy="false"
+  if [ "$alive" = "true" ] && [ "$forwarder_alive" = "true" ] \
+     && [ -p "$pipe_path" ] && [ -p "$primary_pipe" ]; then
+    healthy="true"
+  fi
+
+  # Collect issues
+  local issues="[]"
+  local issue_items=""
+  if [ "$alive" = "false" ]; then
+    issue_items="${issue_items:+$issue_items,}\"app_process_dead\""
+  fi
+  if [ "$forwarder_alive" = "false" ]; then
+    issue_items="${issue_items:+$issue_items,}\"forwarder_dead\""
+  fi
+  if [ ! -p "$pipe_path" ]; then
+    issue_items="${issue_items:+$issue_items,}\"input_fifo_missing\""
+  fi
+  if [ ! -p "$primary_pipe" ]; then
+    issue_items="${issue_items:+$issue_items,}\"primary_pipe_missing\""
+  fi
+  if [ -n "$issue_items" ]; then
+    issues="[${issue_items}]"
   fi
 
   json_envelope "ok" \
     "session:\"${name}\"" \
     "pid:${pid}" \
     "alive:${alive}" \
+    "forwarderPid:${fwd_pid}" \
+    "forwarderAlive:${forwarder_alive}" \
+    "healthy:${healthy}" \
+    "issues:${issues}" \
     "pipe:\"${pipe_path}\"" \
     "pipeWritable:${pipe_writable}" \
     "log:\"${log_path}\"" \

@@ -178,22 +178,24 @@ Named patterns agents select based on what they changed.
 
 **This is the definitive ACP interaction verification recipe.** Use it whenever ACP behavior needs proving. Future agents should default to this recipe for any ACP change.
 
-**Preferred: Use the canonical CLI command:**
+**Preferred: Use the canonical CLI command (fully non-interactive):**
 ```bash
 bash scripts/agentic/session.sh start default
 sleep 3
-bun scripts/agentic/index.ts acp-accept --session default --key enter
-# Read the final screenshot PNG to confirm visually
+bun scripts/agentic/index.ts acp-accept --session default --key enter --vision
+# Parse the JSON receipt — proofBundle contains state, probe, screenshot, visionCrops.
+# Exit code 0 + proofBundle.state confirming expected ACP fields = PASS.
+# No manual PNG reading required.
 bash scripts/agentic/session.sh stop default
 ```
 
-The `acp-accept` command encodes the full golden path:
+The `acp-accept --vision` command encodes the full golden path:
 - Resets ACP test probe before native interaction
 - Uses `macos-input.ts --ensure-focus` for native typing and acceptance
 - State-only intermediate checkpoints (no wasted screenshots)
 - Waits for `acpAcceptedViaKey` (key-specific, not generic)
 - One final screenshot + probe assertion as visual proof
-- Pass `--vision` for vision crop entries
+- Returns a `proofBundle` with `state`, `probe`, `screenshot`, `visionCrops`
 
 **Surface rule:** This recipe verifies the real ACP runtime surface only. Screenshots from synthetic `AcpChatView` wrappers, debug-only windows, or component harnesses do not count.
 
@@ -286,8 +288,8 @@ bash scripts/agentic/session.sh status default
 
 **Preferred: Use the canonical CLI for both keys:**
 ```bash
-bun scripts/agentic/index.ts acp-accept --session default --key enter
-bun scripts/agentic/index.ts acp-accept --session default --key tab
+bun scripts/agentic/index.ts acp-accept --session default --key enter --vision
+bun scripts/agentic/index.ts acp-accept --session default --key tab --vision
 ```
 
 **Pass:** Both Tab and Enter produce the same accepted state and cursor position.
@@ -308,6 +310,19 @@ bun scripts/agentic/index.ts acp-accept --session default --key tab
 6. Query `getAcpState` again → verify `cursorIndex` decreased by 5, `visibleStart`/`visibleEnd` adjusted if needed
 7. Capture second screenshot
 8. Compare: the input container should not have shifted height or layout
+
+**Canonical input-stability assertion (no screenshot needed):**
+```bash
+bun scripts/agentic/verify-shot.ts --session default \
+  --label input-stability \
+  --skip-screenshot \
+  --acp-visible-start 12 \
+  --acp-visible-end 52 \
+  --acp-cursor-in-window 39
+```
+
+This verifies cursor position within the visible text window and catches scroll jumps,
+layout shifts, and cursor-out-of-view regressions without requiring a screenshot.
 
 **Pass:** Cursor moves correctly, layout metrics track, no visual jump between captures.
 **Fail:** `cursorInWindow` doesn't match expected position, or `visibleStart` jumps unexpectedly. Check ACP input scroll/viewport logic.

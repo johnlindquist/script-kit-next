@@ -251,11 +251,42 @@ bun scripts/agentic/verify-shot.ts --session default \
 | `--acp-input-contains STR` | Input text contains substring |
 | `--acp-input-match STR` | Input text matches exactly |
 | `--acp-cursor-at N` | Cursor at character index N |
-| `--acp-item-accepted` | A picker item was accepted |
+| `--acp-item-accepted` | A picker item was accepted (lastAcceptedItem non-null) |
+| `--acp-accepted-label STR` | lastAcceptedItem.label equals STR |
+| `--acp-accepted-trigger STR` | lastAcceptedItem.trigger equals STR (@ or /) |
 | `--acp-accepted-via KEY` | Probe confirms acceptance via enter or tab |
+| `--acp-cursor-after-accepted N` | Probe confirms cursor landed at index N after acceptance |
 | `--acp-context-ready` | Context bootstrap complete |
+| `--acp-no-selection` | No text selection active (hasSelection is false) |
+| `--acp-has-selection` | Text selection is active (hasSelection is true) |
+| `--acp-no-permission` | No pending permission (hasPendingPermission is false) |
+| `--acp-has-permission` | Pending permission present (hasPendingPermission is true) |
+| `--acp-visible-start N` | inputLayout.visibleStart equals N (first visible char index) |
+| `--acp-visible-end N` | inputLayout.visibleEnd equals N (last visible char index) |
+| `--acp-cursor-in-window N` | inputLayout.cursorInWindow equals N (cursor position in viewport) |
+
+**Proof bundle fields:** The receipt includes stable top-level fields for machine consumption:
+`state` (ACP snapshot), `probe` (test probe snapshot), `screenshot` (path + capture metadata),
+`visionCrops` (structured image check entries). These are the canonical fields for automated parsing.
 
 **Exit codes:** 0 = pass, 1 = assertion failure, 2 = infrastructure error.
+
+### Canonical input-stability proof
+
+Use visible-text-window assertions to verify single-line input rendering and cursor tracking
+without a screenshot:
+
+```bash
+bun scripts/agentic/verify-shot.ts --session default \
+  --label input-stability \
+  --skip-screenshot \
+  --acp-visible-start 12 \
+  --acp-visible-end 52 \
+  --acp-cursor-in-window 39
+```
+
+This proves the cursor is within the visible window and the viewport bounds are stable,
+which catches scroll jumps, layout shifts, and cursor-out-of-view regressions.
 
 **Strict capture:** When ACP assertions are present, `verify-shot.ts` requires
 `window.ts` quartz capture with frontmost confirmation. If focus drifts, the
@@ -286,6 +317,7 @@ What `acp-accept` guarantees:
 - Waits for `acpAcceptedViaKey` (key-specific proof, not generic `acpItemAccepted`)
 - Keeps exactly **one final screenshot** as visual proof
 - Emits vision crops only when `--vision` is requested
+- When `--vision` is used, surfaces the full proof bundle (with `state`, `probe`, `screenshot`, `visionCrops`) as `proofBundle` in the recipe receipt
 
 ### Other recipes
 
@@ -330,6 +362,9 @@ Each recipe returns a machine-readable JSON receipt:
 }
 ```
 
+When `--vision` is used, a `proofBundle` field is added containing the verify-shot receipt
+with `state`, `probe`, `screenshot`, and `visionCrops` for direct machine consumption.
+
 The wrapper does **not** replace the lower-level commands — use `session.sh`,
 `macos-input.ts`, `window.ts`, and `verify-shot.ts` directly when you need
 finer control.
@@ -340,15 +375,23 @@ The **mandatory** verification flow for any ACP interaction testing.
 **Prefer the canonical CLI** (`bun scripts/agentic/index.ts acp-accept`) over
 reconstructing the manual steps below.
 
-### Canonical (one command)
+### Canonical (one command, fully non-interactive)
 
 ```bash
 bash scripts/agentic/session.sh start default
 sleep 3
-bun scripts/agentic/index.ts acp-accept --session default --key enter
-# Read the final screenshot PNG to confirm visually
+bun scripts/agentic/index.ts acp-accept --session default --key enter --vision
+# The recipe returns a machine-readable JSON receipt with proofBundle.
+# Parse proofBundle.state, proofBundle.probe, proofBundle.screenshot, proofBundle.visionCrops
+# to verify ACP behavior programmatically. No manual PNG reading required.
 bash scripts/agentic/session.sh stop default
 ```
+
+The `--vision` flag makes the recipe return a `proofBundle` containing all
+machine-readable proof. The golden path is complete when the exit code is 0
+and the `proofBundle.state` and `proofBundle.probe` fields confirm the expected
+ACP state. Screenshot files are still written for archival but are not the
+primary verification mechanism.
 
 ### Manual (when you need finer control)
 
