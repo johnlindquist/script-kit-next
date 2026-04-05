@@ -30,6 +30,9 @@ pub(crate) enum AcpLaunchBlocker {
 pub(crate) struct AcpLaunchResolution {
     pub selected_agent: Option<AcpAgentCatalogEntry>,
     pub blocker: Option<AcpLaunchBlocker>,
+    /// The full catalog used for this resolution, carried so setup UIs can
+    /// render the same agent list without re-loading from disk.
+    pub catalog_entries: Vec<AcpAgentCatalogEntry>,
 }
 
 impl AcpLaunchResolution {
@@ -65,6 +68,7 @@ pub(crate) fn resolve_default_acp_launch(
         return AcpLaunchResolution {
             selected_agent: None,
             blocker: Some(AcpLaunchBlocker::NoAgentsAvailable),
+            catalog_entries: agents.to_vec(),
         };
     };
 
@@ -87,6 +91,7 @@ pub(crate) fn resolve_default_acp_launch(
     AcpLaunchResolution {
         selected_agent: Some(selected_agent),
         blocker,
+        catalog_entries: agents.to_vec(),
     }
 }
 
@@ -264,26 +269,32 @@ mod tests {
             setup_title_for_resolution(&AcpLaunchResolution {
                 selected_agent: None,
                 blocker: Some(AcpLaunchBlocker::NoAgentsAvailable),
+                catalog_entries: vec![],
             }),
             setup_title_for_resolution(&AcpLaunchResolution {
                 selected_agent: None,
                 blocker: Some(AcpLaunchBlocker::AgentNotInstalled),
+                catalog_entries: vec![],
             }),
             setup_title_for_resolution(&AcpLaunchResolution {
                 selected_agent: None,
                 blocker: Some(AcpLaunchBlocker::AuthenticationRequired),
+                catalog_entries: vec![],
             }),
             setup_title_for_resolution(&AcpLaunchResolution {
                 selected_agent: None,
                 blocker: Some(AcpLaunchBlocker::AgentMisconfigured),
+                catalog_entries: vec![],
             }),
             setup_title_for_resolution(&AcpLaunchResolution {
                 selected_agent: None,
                 blocker: Some(AcpLaunchBlocker::UnsupportedAgent),
+                catalog_entries: vec![],
             }),
             setup_title_for_resolution(&AcpLaunchResolution {
                 selected_agent: None,
                 blocker: None,
+                catalog_entries: vec![],
             }),
         ];
         // Each title is non-empty and unique

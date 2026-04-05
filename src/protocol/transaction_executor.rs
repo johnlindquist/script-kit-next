@@ -100,6 +100,9 @@ fn matches_condition(snapshot: &UiStateSnapshot, condition: &WaitCondition) -> (
         WaitCondition::Detailed(WaitDetailedCondition::StateMatch { state }) => {
             (matches_state(snapshot, state), Vec::new())
         }
+        // ACP-specific conditions are not evaluated against UiStateSnapshot;
+        // they require an ACP-specific matcher. Default to not-matched here.
+        _ => (false, Vec::new()),
     }
 }
 

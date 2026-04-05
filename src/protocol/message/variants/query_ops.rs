@@ -379,6 +379,29 @@ macro_rules! protocol_message_variants_query_ops {
     },
 
     // ============================================================
+    // ACP STATE QUERY
+    // ============================================================
+    /// Request machine-readable ACP chat view state for agentic testing.
+    ///
+    /// Returns input text, cursor position, picker state, accepted item
+    /// metadata, thread status, and layout stability metrics.
+    #[serde(rename = "getAcpState")]
+    GetAcpState {
+        #[serde(rename = "requestId")]
+        request_id: String,
+    },
+
+    /// Response with ACP chat view state snapshot.
+    #[serde(rename = "acpStateResult")]
+    AcpStateResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Machine-readable ACP state snapshot.
+        #[serde(flatten)]
+        state: AcpStateSnapshot,
+    },
+
+    // ============================================================
     // WAIT / BATCH — Deterministic Transaction Layer
     // ============================================================
     /// Poll until a UI condition is satisfied or timeout expires.

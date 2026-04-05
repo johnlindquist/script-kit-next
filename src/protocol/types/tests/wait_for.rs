@@ -272,3 +272,201 @@ fn wait_for_result_round_trips() {
         other => panic!("Expected WaitForResult, got: {:?}", other),
     }
 }
+
+// ============================================================
+// ACP-specific wait conditions — serde roundtrip
+// ============================================================
+
+#[test]
+fn wait_acp_ready_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpReady);
+    let json = serde_json::to_value(&cond).expect("serialize acpReady");
+    assert_eq!(json["type"], "acpReady");
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize acpReady");
+    assert_eq!(back, cond);
+}
+
+#[test]
+fn wait_acp_picker_open_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpPickerOpen);
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpPickerOpen");
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+#[test]
+fn wait_acp_picker_closed_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpPickerClosed);
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpPickerClosed");
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+#[test]
+fn wait_acp_item_accepted_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpItemAccepted);
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpItemAccepted");
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+#[test]
+fn wait_acp_cursor_at_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpCursorAt { index: 15 });
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpCursorAt");
+    assert_eq!(json["index"], 15);
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+#[test]
+fn wait_acp_status_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpStatus {
+        status: "streaming".to_string(),
+    });
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpStatus");
+    assert_eq!(json["status"], "streaming");
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+#[test]
+fn wait_acp_input_match_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpInputMatch {
+        text: "@context ".to_string(),
+    });
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpInputMatch");
+    assert_eq!(json["text"], "@context ");
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+#[test]
+fn wait_acp_input_contains_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpInputContains {
+        substring: "hello".to_string(),
+    });
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpInputContains");
+    assert_eq!(json["substring"], "hello");
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+// ============================================================
+// ACP wait conditions — full protocol message roundtrip
+// ============================================================
+
+#[test]
+fn wait_for_request_parses_with_acp_ready_condition() {
+    let json = serde_json::json!({
+        "type": "waitFor",
+        "requestId": "acp-1",
+        "condition": { "type": "acpReady" },
+        "timeout": 3000,
+    });
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse waitFor acpReady");
+
+    match msg {
+        crate::protocol::Message::WaitFor {
+            request_id,
+            condition,
+            timeout,
+            ..
+        } => {
+            assert_eq!(request_id, "acp-1");
+            assert_eq!(
+                condition,
+                WaitCondition::Detailed(WaitDetailedCondition::AcpReady)
+            );
+            assert_eq!(timeout, Some(3000));
+        }
+        other => panic!("Expected WaitFor, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wait_for_request_parses_with_acp_cursor_at_condition() {
+    let json = serde_json::json!({
+        "type": "waitFor",
+        "requestId": "acp-2",
+        "condition": { "type": "acpCursorAt", "index": 42 },
+    });
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse waitFor acpCursorAt");
+
+    match msg {
+        crate::protocol::Message::WaitFor {
+            condition, ..
+        } => {
+            assert_eq!(
+                condition,
+                WaitCondition::Detailed(WaitDetailedCondition::AcpCursorAt { index: 42 })
+            );
+        }
+        other => panic!("Expected WaitFor, got: {:?}", other),
+    }
+}
+
+// ============================================================
+// getAcpState / acpStateResult — protocol message roundtrip
+// ============================================================
+
+#[test]
+fn get_acp_state_request_parses() {
+    let json = r#"{"type":"getAcpState","requestId":"acp-state-1"}"#;
+    let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse getAcpState");
+
+    match msg {
+        crate::protocol::Message::GetAcpState { request_id } => {
+            assert_eq!(request_id, "acp-state-1");
+        }
+        other => panic!("Expected GetAcpState, got: {:?}", other),
+    }
+}
+
+#[test]
+fn acp_state_result_round_trips() {
+    let snapshot = crate::protocol::AcpStateSnapshot {
+        schema_version: crate::protocol::ACP_STATE_SCHEMA_VERSION,
+        status: "idle".to_string(),
+        input_text: "test".to_string(),
+        cursor_index: 4,
+        has_selection: false,
+        selection_range: None,
+        message_count: 2,
+        picker: None,
+        last_accepted_item: None,
+        context_chip_count: 1,
+        context_ready: true,
+        has_pending_permission: false,
+        input_layout: None,
+    };
+    let msg = crate::protocol::Message::acp_state_result("acp-rt".to_string(), snapshot);
+    let json = serde_json::to_value(&msg).expect("serialize acpStateResult");
+
+    assert_eq!(json["type"], "acpStateResult");
+    assert_eq!(json["requestId"], "acp-rt");
+    assert_eq!(json["schemaVersion"], crate::protocol::ACP_STATE_SCHEMA_VERSION);
+    assert_eq!(json["status"], "idle");
+    assert_eq!(json["inputText"], "test");
+    assert_eq!(json["cursorIndex"], 4);
+    assert_eq!(json["messageCount"], 2);
+    assert_eq!(json["contextChipCount"], 1);
+    assert!(json["contextReady"].as_bool().unwrap_or(false));
+}

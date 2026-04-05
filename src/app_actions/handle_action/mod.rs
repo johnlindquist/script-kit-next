@@ -1006,7 +1006,7 @@ impl ScriptListApp {
                     for msg in &messages {
                         let role_label = match msg.role {
                             crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
-                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Claude Code**",
+                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Assistant**",
                             crate::ai::acp::thread::AcpThreadMessageRole::Thought => "**Thinking**",
                             crate::ai::acp::thread::AcpThreadMessageRole::Tool => "**Tool**",
                             crate::ai::acp::thread::AcpThreadMessageRole::System => "**System**",

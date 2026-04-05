@@ -25,6 +25,8 @@ pub(crate) struct AcpInlineSetupState {
     pub primary_action: AcpSetupAction,
     pub secondary_action: Option<AcpSetupAction>,
     pub selected_agent: Option<AcpAgentCatalogEntry>,
+    /// The catalog entries available for agent selection in setup mode.
+    pub catalog_entries: Vec<AcpAgentCatalogEntry>,
 }
 
 impl AcpInlineSetupState {
@@ -54,6 +56,7 @@ impl AcpInlineSetupState {
                 primary_action: AcpSetupAction::Authenticate,
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
+                catalog_entries: Vec::new(),
             },
             _ => Self {
                 title: "ACP agent setup required".into(),
@@ -61,12 +64,14 @@ impl AcpInlineSetupState {
                 primary_action: AcpSetupAction::Retry,
                 secondary_action: Some(AcpSetupAction::OpenCatalog),
                 selected_agent,
+                catalog_entries: Vec::new(),
             },
         }
     }
 
     pub(crate) fn from_resolution(resolution: &AcpLaunchResolution) -> Self {
         let selected_agent = resolution.selected_agent.clone();
+        let catalog_entries = resolution.catalog_entries.clone();
 
         match resolution.blocker {
             Some(AcpLaunchBlocker::NoAgentsAvailable) => Self {
@@ -75,6 +80,7 @@ impl AcpInlineSetupState {
                 primary_action: AcpSetupAction::OpenCatalog,
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
+                catalog_entries,
             },
             Some(AcpLaunchBlocker::AgentNotInstalled) => Self {
                 title: "Agent install required".into(),
@@ -83,23 +89,26 @@ impl AcpInlineSetupState {
                     .and_then(|agent| agent.install_hint.clone())
                     .unwrap_or_else(|| "Install the selected ACP agent, then retry.".into()),
                 primary_action: AcpSetupAction::Install,
-                secondary_action: Some(AcpSetupAction::Retry),
+                secondary_action: Some(AcpSetupAction::SelectAgent),
                 selected_agent,
+                catalog_entries,
             },
             Some(AcpLaunchBlocker::AuthenticationRequired) => Self {
                 title: "Authentication required".into(),
                 body: "Authenticate the selected ACP agent, then retry this chat.".into(),
                 primary_action: AcpSetupAction::Authenticate,
-                secondary_action: Some(AcpSetupAction::Retry),
+                secondary_action: Some(AcpSetupAction::SelectAgent),
                 selected_agent,
+                catalog_entries,
             },
             Some(AcpLaunchBlocker::AgentMisconfigured) => Self {
                 title: "Agent configuration required".into(),
                 body: "Fix the agent configuration in ~/.scriptkit/acp/agents.json, then retry."
                     .into(),
                 primary_action: AcpSetupAction::OpenCatalog,
-                secondary_action: Some(AcpSetupAction::Retry),
+                secondary_action: Some(AcpSetupAction::SelectAgent),
                 selected_agent,
+                catalog_entries,
             },
             Some(AcpLaunchBlocker::UnsupportedAgent) => Self {
                 title: "Unsupported ACP agent".into(),
@@ -107,6 +116,7 @@ impl AcpInlineSetupState {
                 primary_action: AcpSetupAction::SelectAgent,
                 secondary_action: Some(AcpSetupAction::OpenCatalog),
                 selected_agent,
+                catalog_entries,
             },
             None => Self {
                 title: "ACP ready".into(),
@@ -114,6 +124,7 @@ impl AcpInlineSetupState {
                 primary_action: AcpSetupAction::Retry,
                 secondary_action: None,
                 selected_agent,
+                catalog_entries,
             },
         }
     }

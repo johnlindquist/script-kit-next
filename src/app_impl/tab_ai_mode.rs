@@ -1016,6 +1016,7 @@ impl ScriptListApp {
                     primary_action: crate::ai::acp::AcpSetupAction::OpenCatalog,
                     secondary_action: Some(crate::ai::acp::AcpSetupAction::Retry),
                     selected_agent: None,
+                    catalog_entries: Vec::new(),
                 };
                 let view_entity =
                     cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));

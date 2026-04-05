@@ -53,6 +53,30 @@ pub enum WaitDetailedCondition {
     StateMatch {
         state: StateMatchSpec,
     },
+    /// ACP-specific: wait until the ACP view is ready (context bootstrapped, idle).
+    AcpReady,
+    /// ACP-specific: wait until the mention/slash picker is open.
+    AcpPickerOpen,
+    /// ACP-specific: wait until the mention/slash picker is closed.
+    AcpPickerClosed,
+    /// ACP-specific: wait until a picker item has been accepted.
+    AcpItemAccepted,
+    /// ACP-specific: wait until the cursor reaches a specific character index.
+    AcpCursorAt {
+        index: usize,
+    },
+    /// ACP-specific: wait until the ACP thread reaches a specific status.
+    AcpStatus {
+        status: String,
+    },
+    /// ACP-specific: wait until the ACP input text matches exactly.
+    AcpInputMatch {
+        text: String,
+    },
+    /// ACP-specific: wait until the ACP input text contains a substring.
+    AcpInputContains {
+        substring: String,
+    },
 }
 
 /// Union of named and detailed wait conditions.

@@ -115,6 +115,17 @@ pub(crate) struct AcpChatView {
     /// This preserves non-inline chip attachments during mention sync while
     /// still letting deleted inline mentions remove the parts they created.
     inline_owned_context_tokens: HashSet<String>,
+    /// Agent picker overlay state for setup mode (None = hidden).
+    setup_agent_picker: Option<AcpSetupAgentPickerState>,
+    /// Most recently accepted picker item (for telemetry/testing).
+    last_accepted_item: Option<crate::protocol::AcpAcceptedItem>,
+}
+
+/// State for the setup-mode agent selection picker.
+#[derive(Debug, Clone)]
+struct AcpSetupAgentPickerState {
+    items: Vec<super::catalog::AcpAgentCatalogEntry>,
+    selected_index: usize,
 }
 
 impl AcpChatView {
@@ -147,6 +158,93 @@ impl AcpChatView {
         match &self.session {
             AcpChatSession::Live(t) => t,
             AcpChatSession::Setup(_) => unreachable!("live_thread called in setup mode"),
+        }
+    }
+
+    /// Build a machine-readable ACP state snapshot for agentic testing.
+    ///
+    /// Returns cursor, picker, accepted item, thread status, layout metrics,
+    /// and context readiness — everything an agent needs to verify ACP
+    /// interactions without screenshots.
+    pub(crate) fn collect_acp_state_snapshot(
+        &self,
+        cx: &App,
+    ) -> crate::protocol::AcpStateSnapshot {
+        use crate::protocol::{
+            AcpInputLayoutMetrics, AcpPickerState as PickerState, AcpStateSnapshot,
+            ACP_STATE_SCHEMA_VERSION,
+        };
+
+        if self.is_setup_mode() {
+            return AcpStateSnapshot {
+                status: "setup".to_string(),
+                ..Default::default()
+            };
+        }
+
+        let thread = self.live_thread().read(cx);
+        let status_str = match thread.status {
+            AcpThreadStatus::Idle => "idle",
+            AcpThreadStatus::Streaming => "streaming",
+            AcpThreadStatus::WaitingForPermission => "waitingForPermission",
+            AcpThreadStatus::Error => "error",
+        };
+
+        let input_text = thread.input.text().to_string();
+        let cursor_index = thread.input.cursor();
+        let selection = thread.input.selection();
+        let has_selection = !selection.is_empty();
+        let selection_range = if has_selection {
+            let (start, end) = selection.range();
+            Some([start, end])
+        } else {
+            None
+        };
+
+        let picker = self.mention_session.as_ref().map(|session| {
+            let selected_label = session
+                .items
+                .get(session.selected_index)
+                .map(|item| item.label.to_string());
+            let trigger = match session.trigger {
+                ContextPickerTrigger::Mention => "@",
+                ContextPickerTrigger::Slash => "/",
+            };
+            PickerState {
+                open: true,
+                trigger: trigger.to_string(),
+                item_count: session.items.len(),
+                selected_index: session.selected_index,
+                selected_label,
+            }
+        });
+
+        let char_count = input_text.chars().count();
+        let (visible_start, visible_end) = thread.input.visible_window_range(60);
+        let cursor_in_window = cursor_index.saturating_sub(visible_start);
+
+        let context_ready =
+            thread.context_bootstrap_state() != AcpContextBootstrapState::Preparing;
+
+        AcpStateSnapshot {
+            schema_version: ACP_STATE_SCHEMA_VERSION,
+            status: status_str.to_string(),
+            input_text,
+            cursor_index,
+            has_selection,
+            selection_range,
+            message_count: thread.messages.len(),
+            picker,
+            last_accepted_item: self.last_accepted_item.clone(),
+            context_chip_count: thread.pending_context_parts().len(),
+            context_ready,
+            has_pending_permission: thread.pending_permission.is_some(),
+            input_layout: Some(AcpInputLayoutMetrics {
+                char_count,
+                visible_start,
+                visible_end,
+                cursor_in_window,
+            }),
         }
     }
 
@@ -239,6 +337,8 @@ impl AcpChatView {
             _slash_discovery_task: slash_task,
             mention_session: None,
             inline_owned_context_tokens: HashSet::new(),
+            setup_agent_picker: None,
+            last_accepted_item: None,
         }
     }
 
@@ -273,6 +373,8 @@ impl AcpChatView {
             _slash_discovery_task: noop_slash,
             mention_session: None,
             inline_owned_context_tokens: HashSet::new(),
+            setup_agent_picker: None,
+            last_accepted_item: None,
         }
     }
 
@@ -1636,6 +1738,11 @@ impl AcpChatView {
             None => return,
         };
 
+        let trigger_str = match session.trigger {
+            ContextPickerTrigger::Mention => "@",
+            ContextPickerTrigger::Slash => "/",
+        };
+
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_picker_item_accepted",
@@ -1644,6 +1751,15 @@ impl AcpChatView {
             item_id = %item.id,
             item_label = %item.label,
         );
+
+        // Record accepted item for telemetry / getAcpState queries.
+        // cursor_after is set to 0 here and updated after insertion below.
+        self.last_accepted_item = Some(crate::protocol::AcpAcceptedItem {
+            label: item.label.to_string(),
+            id: item.id.to_string(),
+            trigger: trigger_str.to_string(),
+            cursor_after: 0, // Updated after insertion.
+        });
 
         // ── Literal ACP slash commands stay in the composer as `/command ` text ──
         if session.trigger == ContextPickerTrigger::Slash {
@@ -1663,6 +1779,9 @@ impl AcpChatView {
                     command = %command,
                     submit,
                 );
+                if let Some(ref mut accepted) = self.last_accepted_item {
+                    accepted.cursor_after = next_cursor;
+                }
                 self.live_thread().update(cx, |thread, cx| {
                     thread.input.set_text(next_text);
                     thread.input.set_cursor(next_cursor);
@@ -1711,6 +1830,10 @@ impl AcpChatView {
         };
         let next_cursor = Self::caret_after_replacement(&session.trigger_range, &replacement);
 
+        if let Some(ref mut accepted) = self.last_accepted_item {
+            accepted.cursor_after = next_cursor;
+        }
+
         let next_text = Self::replace_text_in_char_range(
             &current_text,
             session.trigger_range.clone(),
@@ -1758,7 +1881,7 @@ impl AcpChatView {
 
         parse_inline_context_mentions(text)
             .into_iter()
-            .filter(|mention| attached_tokens.contains(&mention.token))
+            .filter(|mention| attached_tokens.contains(&mention.canonical_token))
             .map(|mention| TextHighlightRange {
                 start: mention.range.start,
                 end: mention.range.end,
@@ -1776,10 +1899,10 @@ impl AcpChatView {
         let text = self.live_thread().read(cx).input.text().to_string();
         let parsed = parse_inline_context_mentions(&text);
 
-        let desired_parts: Vec<AiContextPart> = parsed.iter().map(|m| m.part.clone()).collect();
-        let desired_tokens: HashSet<String> = desired_parts
+        // Use canonical tokens for dedup and ownership tracking.
+        let desired_tokens: HashSet<String> = parsed
             .iter()
-            .filter_map(part_to_inline_token)
+            .map(|m| m.canonical_token.clone())
             .collect();
         let mut new_inline_owned_tokens = HashSet::new();
 
@@ -1806,12 +1929,10 @@ impl AcpChatView {
                 .iter()
                 .filter_map(part_to_inline_token)
                 .collect();
-            for part in desired_parts {
-                if let Some(token) = part_to_inline_token(&part) {
-                    if !existing_tokens.contains(&token) {
-                        thread.add_context_part(part, cx);
-                        new_inline_owned_tokens.insert(token);
-                    }
+            for mention in &parsed {
+                if !existing_tokens.contains(&mention.canonical_token) {
+                    thread.add_context_part(mention.part.clone(), cx);
+                    new_inline_owned_tokens.insert(mention.canonical_token.clone());
                 }
             }
         });
@@ -1824,6 +1945,7 @@ impl AcpChatView {
             target: "script_kit::tab_ai",
             event = "acp_inline_mentions_synced",
             inline_count = parsed.len(),
+            canonical_count = desired_tokens.len(),
             text_len = text.len(),
         );
     }
@@ -2141,19 +2263,37 @@ impl AcpChatView {
         state: &super::setup_state::AcpInlineSetupState,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
-        let action_hint: &str = match state.primary_action {
-            super::setup_state::AcpSetupAction::Retry => "Press Tab to retry",
+        let action_hint: String = match state.primary_action {
+            super::setup_state::AcpSetupAction::Retry => "Press Tab to retry".to_string(),
             super::setup_state::AcpSetupAction::Install => {
-                "Install the agent, then press Tab to retry"
+                "Install the agent, then press Tab to retry".to_string()
             }
             super::setup_state::AcpSetupAction::Authenticate => {
-                "Authenticate, then press Tab to retry"
+                "Authenticate, then press Tab to retry".to_string()
             }
             super::setup_state::AcpSetupAction::OpenCatalog => {
-                "Edit ~/.scriptkit/acp/agents.json, then press Tab to retry"
+                "Edit ~/.scriptkit/acp/agents.json, then press Tab to retry".to_string()
             }
-            super::setup_state::AcpSetupAction::SelectAgent => "Select a different agent",
+            super::setup_state::AcpSetupAction::SelectAgent => {
+                "Press Enter to select a different agent".to_string()
+            }
         };
+
+        let secondary_hint: Option<String> = state.secondary_action.map(|action| match action {
+            super::setup_state::AcpSetupAction::SelectAgent => {
+                "Enter: select agent".to_string()
+            }
+            super::setup_state::AcpSetupAction::Retry => "Tab: retry".to_string(),
+            super::setup_state::AcpSetupAction::OpenCatalog => {
+                "Edit agents.json".to_string()
+            }
+            _ => String::new(),
+        });
+
+        let agent_name: Option<String> = state
+            .selected_agent
+            .as_ref()
+            .map(|a| format!("Selected: {}", a.display_name));
 
         div()
             .id("acp-inline-setup")
@@ -2178,18 +2318,325 @@ impl AcpChatView {
                     .text_center()
                     .child(state.body.clone()),
             )
+            .when_some(agent_name, |d, name| {
+                d.child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(theme.colors.text.muted))
+                        .child(name),
+                )
+            })
+            // Show the agent picker when open.
+            .when_some(self.render_setup_agent_picker_inline(), |d, picker| {
+                d.child(picker)
+            })
             .child(
                 div()
                     .text_xs()
                     .text_color(rgb(theme.colors.text.muted))
                     .child(action_hint),
             )
+            .when_some(secondary_hint.filter(|s| !s.is_empty()), |d, hint| {
+                d.child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(theme.colors.text.muted))
+                        .opacity(0.6)
+                        .child(hint),
+                )
+            })
             .into_any_element()
     }
 
+    /// Render the setup agent picker inline (non-mut version for use in render).
+    fn render_setup_agent_picker_inline(&self) -> Option<gpui::AnyElement> {
+        let picker = self.setup_agent_picker.as_ref()?;
+        let theme = theme::get_cached_theme();
+
+        let rows: Vec<gpui::AnyElement> = picker
+            .items
+            .iter()
+            .enumerate()
+            .map(|(ix, item)| {
+                let is_selected = ix == picker.selected_index;
+                let status_text: String = format!(
+                    "{:?} \u{00b7} {:?} \u{00b7} {:?}",
+                    item.source, item.install_state, item.config_state,
+                );
+                div()
+                    .id(gpui::ElementId::Name(
+                        format!("acp-setup-agent-{ix}").into(),
+                    ))
+                    .w_full()
+                    .px(px(10.0))
+                    .py(px(5.0))
+                    .when(is_selected, |d| {
+                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x14))
+                            .border_l_2()
+                            .border_color(rgb(theme.colors.accent.selected))
+                    })
+                    .when(!is_selected, |d| {
+                        d.border_l_2().border_color(gpui::transparent_black())
+                    })
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(1.0))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(theme.colors.text.primary))
+                                    .child(item.display_name.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(rgb(theme.colors.text.muted))
+                                    .child(status_text),
+                            ),
+                    )
+                    .into_any_element()
+            })
+            .collect();
+
+        Some(
+            div()
+                .id("acp-setup-agent-picker-container")
+                .w_full()
+                .max_w(px(400.0))
+                .max_h(px(220.0))
+                .overflow_y_scroll()
+                .rounded(px(8.0))
+                .bg(rgb(theme.colors.background.search_box))
+                .border_1()
+                .border_color(rgba((theme.colors.ui.border << 8) | 0x40))
+                .py(px(4.0))
+                .child(
+                    div()
+                        .px(px(10.0))
+                        .py(px(4.0))
+                        .text_xs()
+                        .text_color(rgb(theme.colors.text.muted))
+                        .child("Select an ACP agent"),
+                )
+                .children(rows)
+                .child(
+                    div()
+                        .w_full()
+                        .px(px(10.0))
+                        .pt(px(6.0))
+                        .pb(px(4.0))
+                        .border_t_1()
+                        .border_color(rgba((theme.colors.ui.border << 8) | 0x15))
+                        .text_xs()
+                        .text_color(rgb(theme.colors.text.muted))
+                        .child(
+                            "\u{2191}\u{2193} navigate \u{00b7} Enter select \u{00b7} Esc close",
+                        ),
+                )
+                .into_any_element(),
+        )
+    }
+
+    /// Access the mutable setup state, if in setup mode.
+    fn setup_state_mut(&mut self) -> Option<&mut super::setup_state::AcpInlineSetupState> {
+        match &mut self.session {
+            AcpChatSession::Setup(setup) => Some(setup.as_mut()),
+            AcpChatSession::Live(_) => None,
+        }
+    }
+
+    /// Open the agent selection picker overlay in setup mode.
+    fn open_setup_agent_picker(&mut self, cx: &mut Context<Self>) {
+        let Some(setup) = self.setup_state_mut() else {
+            return;
+        };
+        if setup.catalog_entries.is_empty() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_setup_agent_picker_empty_catalog",
+            );
+            return;
+        }
+        let selected_index = setup
+            .selected_agent
+            .as_ref()
+            .and_then(|selected| {
+                setup
+                    .catalog_entries
+                    .iter()
+                    .position(|entry| entry.id == selected.id)
+            })
+            .unwrap_or(0);
+
+        self.setup_agent_picker = Some(AcpSetupAgentPickerState {
+            items: setup.catalog_entries.clone(),
+            selected_index,
+        });
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_setup_agent_picker_opened",
+            item_count = self
+                .setup_agent_picker
+                .as_ref()
+                .map(|p| p.items.len())
+                .unwrap_or(0),
+            selected_index,
+        );
+        cx.notify();
+    }
+
+    /// Confirm the currently highlighted agent in the setup picker,
+    /// persist it as the preferred agent, and close the picker.
+    fn confirm_setup_agent_picker(&mut self, cx: &mut Context<Self>) {
+        let Some(picker) = self.setup_agent_picker.take() else {
+            return;
+        };
+        let Some(agent) = picker.items.get(picker.selected_index).cloned() else {
+            return;
+        };
+        let Some(setup) = self.setup_state_mut() else {
+            return;
+        };
+        setup.selected_agent = Some(agent.clone());
+        crate::ai::acp::persist_preferred_acp_agent_id(Some(agent.id.to_string()));
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_setup_agent_selected",
+            agent_id = %agent.id,
+            display_name = %agent.display_name,
+            install_state = ?agent.install_state,
+            auth_state = ?agent.auth_state,
+            config_state = ?agent.config_state,
+        );
+        cx.notify();
+    }
+
+    /// Handle a setup action triggered by the user.
+    fn handle_setup_action(
+        &mut self,
+        action: super::setup_state::AcpSetupAction,
+        cx: &mut Context<Self>,
+    ) {
+        match action {
+            super::setup_state::AcpSetupAction::SelectAgent => {
+                self.open_setup_agent_picker(cx);
+            }
+            super::setup_state::AcpSetupAction::Retry => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_setup_retry_requested",
+                );
+                // Propagate so the parent (tab_ai_mode) can re-run preflight.
+                cx.propagate();
+            }
+            super::setup_state::AcpSetupAction::OpenCatalog => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_setup_open_catalog_requested",
+                );
+            }
+            super::setup_state::AcpSetupAction::Install
+            | super::setup_state::AcpSetupAction::Authenticate => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_setup_external_action_requested",
+                    action = ?action,
+                );
+            }
+        }
+    }
+
+    /// Emit structured ACP key-routing telemetry.
+    ///
+    /// Logged on `script_kit::acp_telemetry` target. Contains no user content —
+    /// only the key name, route, indices, and booleans.
+    fn emit_key_route_telemetry(
+        &self,
+        key: &str,
+        route: crate::protocol::AcpKeyRoute,
+        cursor_before: usize,
+        cursor_after: usize,
+        caused_submit: bool,
+        consumed: bool,
+    ) {
+        let picker_open = self.mention_session.is_some();
+        // Note: telemetry-only field; we don't have cx here so we report
+        // based on best local knowledge. The actual permission state is
+        // checked in handle_key_down where cx is available.
+        let permission_active = false;
+        tracing::info!(
+            target: "script_kit::acp_telemetry",
+            event = "acp_key_routed",
+            key = %key,
+            route = ?route,
+            picker_open,
+            permission_active,
+            cursor_before,
+            cursor_after,
+            caused_submit,
+            consumed,
+        );
+    }
+
     fn handle_key_down(&mut self, event: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
-        // Setup mode: only propagate keys, no thread interaction.
+        // Setup mode: handle agent picker and setup actions.
         if self.is_setup_mode() {
+            let key = event.keystroke.key.as_str();
+
+            // Agent picker is open — intercept navigation keys.
+            if let Some(ref mut picker) = self.setup_agent_picker {
+                if crate::ui_foundation::is_key_up(key) {
+                    if picker.selected_index > 0 {
+                        picker.selected_index -= 1;
+                    }
+                    cx.notify();
+                    cx.stop_propagation();
+                    return;
+                }
+                if crate::ui_foundation::is_key_down(key) {
+                    if picker.selected_index + 1 < picker.items.len() {
+                        picker.selected_index += 1;
+                    }
+                    cx.notify();
+                    cx.stop_propagation();
+                    return;
+                }
+                if crate::ui_foundation::is_key_enter(key) {
+                    self.confirm_setup_agent_picker(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                if crate::ui_foundation::is_key_escape(key) {
+                    self.setup_agent_picker = None;
+                    cx.notify();
+                    cx.stop_propagation();
+                    return;
+                }
+                // Other keys fall through.
+                cx.propagate();
+                return;
+            }
+
+            // No picker open — handle setup-level keys.
+            if crate::ui_foundation::is_key_tab(key) {
+                // Tab in setup = retry (re-run preflight with potentially new agent).
+                self.handle_setup_action(super::setup_state::AcpSetupAction::Retry, cx);
+                return;
+            }
+            if crate::ui_foundation::is_key_enter(key) {
+                // Enter triggers the primary action.
+                let action = match &self.session {
+                    AcpChatSession::Setup(state) => state.primary_action,
+                    _ => return,
+                };
+                self.handle_setup_action(action, cx);
+                cx.stop_propagation();
+                return;
+            }
+
             cx.propagate();
             return;
         }
@@ -2562,7 +3009,17 @@ impl AcpChatView {
                 // Both Enter and Tab autocomplete the focused picker item.
                 // Submitting the ACP message still requires a later Enter after
                 // the picker closes.
+                let cursor_before = self.live_thread().read(cx).input.cursor();
                 self.accept_mention_selection_impl(false, cx);
+                let cursor_after = self.live_thread().read(cx).input.cursor();
+                self.emit_key_route_telemetry(
+                    key,
+                    crate::protocol::AcpKeyRoute::Picker,
+                    cursor_before,
+                    cursor_after,
+                    false,
+                    true,
+                );
                 cx.stop_propagation();
                 return;
             }
@@ -2595,8 +3052,17 @@ impl AcpChatView {
 
         // Enter submits.
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
+            let cursor_before = self.live_thread().read(cx).input.cursor();
             self.mention_session = None;
             let _ = self.live_thread().update(cx, |thread, cx| thread.submit_input(cx));
+            self.emit_key_route_telemetry(
+                key,
+                crate::protocol::AcpKeyRoute::Composer,
+                cursor_before,
+                0,
+                true,
+                true,
+            );
             cx.stop_propagation();
             return;
         }
@@ -2747,7 +3213,7 @@ impl Render for AcpChatView {
                                             .ml(px(-2.0))
                                             .text_color(rgb(theme.colors.text.muted))
                                             .child(if is_empty {
-                                                "Ask Claude Code\u{2026}"
+                                                "Ask anything\u{2026}"
                                             } else {
                                                 "Follow up\u{2026}"
                                             }),

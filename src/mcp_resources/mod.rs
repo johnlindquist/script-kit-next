@@ -1082,25 +1082,64 @@ pub fn clear_focused_item() {
 }
 
 // ---------------------------------------------------------------
-// Env-backed JSON resources: dictation, calendar, notifications
+// Provider-backed JSON resources: dictation, calendar, notifications
+//
+// Resolution priority:
+// 1. In-process JSON slot (published by app features at runtime)
+// 2. Environment variable (legacy / external script bridge)
+// 3. Static empty fallback envelope
 // ---------------------------------------------------------------
 
-/// Read a JSON resource backed by an environment variable, falling back to
-/// a static empty envelope when the variable is unset.
-fn read_env_backed_json_resource(
+static DICTATION_JSON_SLOT: parking_lot::Mutex<Option<String>> =
+    parking_lot::Mutex::new(None);
+static CALENDAR_JSON_SLOT: parking_lot::Mutex<Option<String>> =
+    parking_lot::Mutex::new(None);
+static NOTIFICATIONS_JSON_SLOT: parking_lot::Mutex<Option<String>> =
+    parking_lot::Mutex::new(None);
+
+/// Publish dictation data into the in-process slot for `kit://dictation`.
+pub fn publish_dictation_json(json: impl Into<String>) {
+    *DICTATION_JSON_SLOT.lock() = Some(json.into());
+}
+
+/// Publish calendar data into the in-process slot for `kit://calendar`.
+pub fn publish_calendar_json(json: impl Into<String>) {
+    *CALENDAR_JSON_SLOT.lock() = Some(json.into());
+}
+
+/// Publish notifications data into the in-process slot for `kit://notifications`.
+pub fn publish_notifications_json(json: impl Into<String>) {
+    *NOTIFICATIONS_JSON_SLOT.lock() = Some(json.into());
+}
+
+/// Clear all provider JSON slots (e.g. on app reset).
+pub fn clear_provider_json_slots() {
+    *DICTATION_JSON_SLOT.lock() = None;
+    *CALENDAR_JSON_SLOT.lock() = None;
+    *NOTIFICATIONS_JSON_SLOT.lock() = None;
+}
+
+/// Read a JSON resource from an in-process slot, falling back to an environment
+/// variable, then to a static empty envelope.
+fn read_slot_or_env_backed_json_resource(
     uri: &str,
+    slot_value: Option<String>,
     env_key: &str,
     empty_json: &str,
     event_name: &'static str,
 ) -> Result<ResourceContent, String> {
-    let text = std::env::var(env_key).unwrap_or_else(|_| empty_json.to_string());
+    let slot_present = slot_value.is_some();
+    let text = slot_value
+        .or_else(|| std::env::var(env_key).ok())
+        .unwrap_or_else(|| empty_json.to_string());
     tracing::info!(
         target: "ai",
         event = %event_name,
         %uri,
         env_key,
+        slot_present,
         bytes = text.len(),
-        "mcp_env_json_resource_read"
+        "mcp_provider_json_resource_read"
     );
     Ok(ResourceContent {
         uri: uri.to_string(),
@@ -1110,8 +1149,9 @@ fn read_env_backed_json_resource(
 }
 
 fn read_dictation_resource(uri: &str) -> Result<ResourceContent, String> {
-    read_env_backed_json_resource(
+    read_slot_or_env_backed_json_resource(
         uri,
+        DICTATION_JSON_SLOT.lock().clone(),
         "SCRIPT_KIT_DICTATION_JSON",
         r#"{"schemaVersion":1,"type":"dictation","ok":true,"available":false,"items":[],"note":"No dictation provider configured."}"#,
         "mcp_dictation_resource_read",
@@ -1119,8 +1159,9 @@ fn read_dictation_resource(uri: &str) -> Result<ResourceContent, String> {
 }
 
 fn read_calendar_resource(uri: &str) -> Result<ResourceContent, String> {
-    read_env_backed_json_resource(
+    read_slot_or_env_backed_json_resource(
         uri,
+        CALENDAR_JSON_SLOT.lock().clone(),
         "SCRIPT_KIT_CALENDAR_JSON",
         r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":false,"items":[],"note":"No calendar provider configured."}"#,
         "mcp_calendar_resource_read",
@@ -1128,8 +1169,9 @@ fn read_calendar_resource(uri: &str) -> Result<ResourceContent, String> {
 }
 
 fn read_notifications_resource(uri: &str) -> Result<ResourceContent, String> {
-    read_env_backed_json_resource(
+    read_slot_or_env_backed_json_resource(
         uri,
+        NOTIFICATIONS_JSON_SLOT.lock().clone(),
         "SCRIPT_KIT_NOTIFICATIONS_JSON",
         r#"{"schemaVersion":1,"type":"notifications","ok":true,"available":false,"items":[],"note":"No notifications provider configured."}"#,
         "mcp_notifications_resource_read",

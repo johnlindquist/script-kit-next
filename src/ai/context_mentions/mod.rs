@@ -21,6 +21,9 @@ pub(crate) struct InlineContextMention {
     pub(crate) range: std::ops::Range<usize>,
     /// The raw token text (e.g. `@browser`, `@file:/tmp/demo.rs`).
     pub(crate) token: String,
+    /// The canonical token for this mention, used for ownership tracking and
+    /// highlight matching. Aliases resolve to the primary mention token.
+    pub(crate) canonical_token: String,
     /// The resolved context part for this mention.
     pub(crate) part: AiContextPart,
 }
@@ -62,6 +65,12 @@ pub(crate) fn parse_context_mentions(raw_content: &str) -> ParsedContextMentions
     }
 }
 
+/// Trim trailing punctuation that is not part of the mention token itself.
+/// E.g. `@browser,` → `@browser`, `@git-diff.` → `@git-diff`.
+fn trim_inline_token_trailing_punctuation(token: &str) -> &str {
+    token.trim_end_matches([',', '.', ';', ':', ')', ']', '}'])
+}
+
 /// Scan `text` for inline `@mention` tokens and resolve each to an
 /// `AiContextPart`. Supports built-in mentions (`@browser`, `@git-status`,
 /// etc.) and file mentions (`@file:/path`).
@@ -85,27 +94,34 @@ pub(crate) fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMent
         while i < chars.len() && !chars[i].is_whitespace() {
             i += 1;
         }
-        let token: String = chars[start..i].iter().collect();
+        let raw_token: String = chars[start..i].iter().collect();
+        let trimmed = trim_inline_token_trailing_punctuation(&raw_token);
+        let trimmed_char_len = trimmed.chars().count();
+        let end = start + trimmed_char_len;
 
         let part = if let Some(kind) =
-            crate::ai::context_contract::ContextAttachmentKind::from_mention_line(&token)
+            crate::ai::context_contract::ContextAttachmentKind::from_mention_line(trimmed)
         {
             Some(kind.part())
         } else {
-            parse_file_mention(&token)
+            parse_file_mention(trimmed)
         };
 
         if let Some(part) = part {
+            let canonical_token =
+                part_to_inline_token(&part).unwrap_or_else(|| trimmed.to_string());
             tracing::info!(
                 target: "ai",
                 event = "inline_context_token_resolved",
-                token = %token,
+                token = %trimmed,
+                canonical_token = %canonical_token,
                 source = %part.source(),
                 label = %part.label(),
             );
             out.push(InlineContextMention {
-                range: start..i,
-                token,
+                range: start..end,
+                token: trimmed.to_string(),
+                canonical_token,
                 part,
             });
         }

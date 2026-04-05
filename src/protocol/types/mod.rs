@@ -9,6 +9,7 @@
 //! - Element types for UI querying
 //! - Error data types
 
+pub(crate) mod acp_state;
 mod ai;
 pub(crate) mod batch_wait;
 mod chat;
@@ -19,6 +20,10 @@ mod menu_bar;
 mod primitives;
 mod system;
 
+pub use acp_state::{
+    AcpAcceptedItem, AcpInputLayoutMetrics, AcpKeyRoute, AcpKeyRouteTelemetry, AcpPickerState,
+    AcpStateSnapshot, AcpWaitCondition, ACP_STATE_SCHEMA_VERSION,
+};
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
 pub use batch_wait::{
     BatchCommand, BatchOptions, BatchResultEntry, StateMatchSpec, TransactionCommandTrace,
