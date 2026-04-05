@@ -1040,10 +1040,7 @@ fn attach_actions_popup_to_parent_window(
     }
 }
 
-/// Open the actions window as a separate floating window with vibrancy
-///
-/// The window is positioned relative to the parent window and attached as a
-/// native child on macOS so the parent retains Raycast-like active chrome.
+/// Open the actions window as a separate floating window with vibrancy.
 /// It does NOT take keyboard focus - the parent window keeps focus and routes
 /// keyboard events to the shared ActionsDialog entity.
 ///
@@ -1148,7 +1145,7 @@ pub fn open_actions_window(
     #[cfg(target_os = "macos")]
     {
         let configure_result = handle.update(cx, move |_this, window, cx| {
-            window.defer(cx, move |window, cx| {
+            window.defer(cx, move |window, _cx| {
                 if let Some(ns_window) = actions_popup_ns_window(window) {
                     // SAFETY: `ns_window` comes from the live GPUI popup window via
                     // `actions_popup_ns_window`, so it is a valid AppKit NSWindow

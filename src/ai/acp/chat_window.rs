@@ -363,7 +363,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
         )
     });
 
-    let Ok((parent_window_handle, bounds, display_id)) = window_info else {
+    let Ok((_parent_window_handle, bounds, display_id)) = window_info else {
         return;
     };
 

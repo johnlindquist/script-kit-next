@@ -142,10 +142,9 @@ impl ScriptListApp {
         });
 
         // Get main window bounds and display_id for positioning
+        let parent_window_handle = window.window_handle();
         let main_bounds = window.bounds();
         let display_id = window.display(cx).map(|d| d.id());
-        let parent_window_handle = window.window_handle();
-
         logging::log(
             "ACTIONS",
             &format!(
@@ -295,10 +294,9 @@ impl ScriptListApp {
             });
 
             // Get main window bounds and display_id for positioning
+            let parent_window_handle = window.window_handle();
             let main_bounds = window.bounds();
             let display_id = window.display(cx).map(|d| d.id());
-            let parent_window_handle = window.window_handle();
-
             logging::log(
                 "ACTIONS",
                 &format!(

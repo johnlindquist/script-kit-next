@@ -573,3 +573,390 @@ fn sdk_reference_batch_description_documents_error_codes_and_trace() {
         "batch description must document action_failed code"
     );
 }
+
+// ============================================================
+// inspectAutomationWindow — schema-versioned response contracts
+// ============================================================
+
+use script_kit_gpui::protocol::{
+    AutomationInspectSnapshot, AutomationWindowBounds, AutomationWindowInfo, AutomationWindowKind,
+    AutomationWindowTarget, InspectBoundsInScreenshot, InspectPoint, SuggestedHitPoint,
+    AUTOMATION_INSPECT_SCHEMA_VERSION,
+};
+
+use std::sync::atomic::{AtomicU32, Ordering};
+static INSPECT_COUNTER: AtomicU32 = AtomicU32::new(80_000);
+fn inspect_prefix() -> String {
+    let n = INSPECT_COUNTER.fetch_add(1, Ordering::SeqCst);
+    format!("insp{n}")
+}
+
+fn make_window(
+    prefix: &str,
+    id: &str,
+    kind: AutomationWindowKind,
+    bounds: Option<AutomationWindowBounds>,
+) -> AutomationWindowInfo {
+    AutomationWindowInfo {
+        id: format!("{prefix}:{id}"),
+        kind,
+        title: Some(format!("Window {id}")),
+        focused: false,
+        visible: true,
+        semantic_surface: None,
+        bounds,
+    }
+}
+
+fn inspect_cleanup(prefix: &str, ids: &[&str]) {
+    for id in ids {
+        script_kit_gpui::windows::remove_automation_window(&format!("{prefix}:{id}"));
+    }
+}
+
+/// Schema version must be the current constant (v2).
+#[test]
+fn inspect_schema_version_is_current() {
+    assert_eq!(
+        AUTOMATION_INSPECT_SCHEMA_VERSION, 2,
+        "Schema version must be 2"
+    );
+}
+
+/// Popup inspect response must include geometry fields when bounds exist.
+#[test]
+fn inspect_popup_response_has_geometry_fields() {
+    let p = inspect_prefix();
+
+    let main = make_window(
+        &p,
+        "main",
+        AutomationWindowKind::Main,
+        Some(AutomationWindowBounds {
+            x: 100.0,
+            y: 50.0,
+            width: 800.0,
+            height: 600.0,
+        }),
+    );
+    let actions = make_window(
+        &p,
+        "actions",
+        AutomationWindowKind::ActionsDialog,
+        Some(AutomationWindowBounds {
+            x: 300.0,
+            y: 200.0,
+            width: 520.0,
+            height: 384.0,
+        }),
+    );
+    script_kit_gpui::windows::upsert_automation_window(main);
+    script_kit_gpui::windows::upsert_automation_window(actions);
+
+    let target = AutomationWindowTarget::Id {
+        id: format!("{p}:actions"),
+    };
+    let resolved =
+        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
+
+    let target_bounds = script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved)
+        .expect("must compute target bounds");
+    let hit_point = script_kit_gpui::protocol::default_surface_hit_point(&target_bounds);
+    let suggested =
+        script_kit_gpui::protocol::default_suggested_hit_points(&resolved, Some(&target_bounds));
+
+    // Build a response-shaped snapshot as the handler would
+    let snapshot = AutomationInspectSnapshot {
+        schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
+        window_id: resolved.id.clone(),
+        window_kind: format!("{:?}", resolved.kind),
+        title: resolved.title.clone(),
+        resolved_bounds: resolved.bounds.clone(),
+        target_bounds_in_screenshot: Some(target_bounds.clone()),
+        surface_hit_point: Some(hit_point.clone()),
+        suggested_hit_points: suggested.clone(),
+        elements: Vec::new(),
+        total_count: 0,
+        focused_semantic_id: None,
+        selected_semantic_id: None,
+        screenshot_width: Some(800),
+        screenshot_height: Some(600),
+        pixel_probes: Vec::new(),
+        os_window_id: None,
+        warnings: vec!["panel_only_actions_dialog".to_string()],
+    };
+
+    // Serialize and verify JSON contract
+    let json = serde_json::to_value(&snapshot).expect("serialize");
+
+    assert_eq!(json["schemaVersion"], 2);
+    assert_eq!(json["windowKind"], "ActionsDialog");
+    assert!(json["targetBoundsInScreenshot"].is_object());
+    assert!(json["surfaceHitPoint"].is_object());
+    assert!(json["suggestedHitPoints"].is_array());
+    assert!(!json["suggestedHitPoints"].as_array().unwrap().is_empty());
+
+    // Target bounds must be offset from main
+    let tb = &json["targetBoundsInScreenshot"];
+    assert_eq!(tb["x"], 200.0); // 300 - 100
+    assert_eq!(tb["y"], 150.0); // 200 - 50
+    assert_eq!(tb["width"], 520.0);
+    assert_eq!(tb["height"], 384.0);
+
+    // Suggested hit point semantic ID must match the surface kind
+    let shp = &json["suggestedHitPoints"][0];
+    assert_eq!(shp["semanticId"], "panel:actions-dialog");
+    assert_eq!(shp["reason"], "surface_center");
+
+    inspect_cleanup(&p, &["main", "actions"]);
+}
+
+/// Detached window inspect response must have origin at (0, 0).
+#[test]
+fn inspect_detached_response_has_origin_bounds() {
+    let p = inspect_prefix();
+
+    let notes = make_window(
+        &p,
+        "notes",
+        AutomationWindowKind::Notes,
+        Some(AutomationWindowBounds {
+            x: 500.0,
+            y: 300.0,
+            width: 350.0,
+            height: 280.0,
+        }),
+    );
+    script_kit_gpui::windows::upsert_automation_window(notes);
+
+    let target = AutomationWindowTarget::Id {
+        id: format!("{p}:notes"),
+    };
+    let resolved =
+        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
+
+    let target_bounds =
+        script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved).expect("must compute");
+
+    assert!(
+        (target_bounds.x - 0.0).abs() < f64::EPSILON,
+        "Detached window bounds must start at x=0"
+    );
+    assert!(
+        (target_bounds.y - 0.0).abs() < f64::EPSILON,
+        "Detached window bounds must start at y=0"
+    );
+    assert!(
+        (target_bounds.width - 350.0).abs() < f64::EPSILON,
+        "Width must match resolved bounds"
+    );
+    assert!(
+        (target_bounds.height - 280.0).abs() < f64::EPSILON,
+        "Height must match resolved bounds"
+    );
+
+    inspect_cleanup(&p, &["notes"]);
+}
+
+/// AcpDetached inspect response must use the correct semantic ID.
+#[test]
+fn inspect_acp_detached_suggested_hit_uses_correct_semantic_id() {
+    let p = inspect_prefix();
+
+    let acp = make_window(
+        &p,
+        "acp",
+        AutomationWindowKind::AcpDetached,
+        Some(AutomationWindowBounds {
+            x: 200.0,
+            y: 100.0,
+            width: 480.0,
+            height: 440.0,
+        }),
+    );
+    script_kit_gpui::windows::upsert_automation_window(acp);
+
+    let target = AutomationWindowTarget::Id {
+        id: format!("{p}:acp"),
+    };
+    let resolved =
+        script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
+
+    let target_bounds =
+        script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved).expect("must compute");
+    let suggested =
+        script_kit_gpui::protocol::default_suggested_hit_points(&resolved, Some(&target_bounds));
+
+    assert_eq!(suggested.len(), 1);
+    assert_eq!(suggested[0].semantic_id, "input:acp-composer");
+    assert_eq!(suggested[0].reason, "surface_center");
+    // Center of (0, 0, 480, 440) = (240, 220)
+    assert!(
+        (suggested[0].x - 240.0).abs() < f64::EPSILON,
+        "Hit x should be 240, got {}",
+        suggested[0].x
+    );
+    assert!(
+        (suggested[0].y - 220.0).abs() < f64::EPSILON,
+        "Hit y should be 220, got {}",
+        suggested[0].y
+    );
+
+    inspect_cleanup(&p, &["acp"]);
+}
+
+/// Missing bounds must produce empty suggested hit points (fail closed).
+#[test]
+fn inspect_no_bounds_produces_no_suggested_hits() {
+    let info = AutomationWindowInfo {
+        id: "test:no-bounds".to_string(),
+        kind: AutomationWindowKind::Notes,
+        title: Some("Notes".to_string()),
+        focused: false,
+        visible: true,
+        semantic_surface: None,
+        bounds: None,
+    };
+
+    let target_bounds = script_kit_gpui::protocol::target_bounds_in_screenshot(&info);
+    assert!(target_bounds.is_none(), "No bounds → None");
+
+    let suggested = script_kit_gpui::protocol::default_suggested_hit_points(&info, None);
+    assert!(suggested.is_empty(), "No bounds → no suggested hit points");
+}
+
+/// Error snapshot for failed target resolution must have empty geometry.
+#[test]
+fn inspect_error_snapshot_has_empty_geometry() {
+    let snapshot = AutomationInspectSnapshot {
+        schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
+        window_id: String::new(),
+        window_kind: "unknown".to_string(),
+        title: None,
+        resolved_bounds: None,
+        target_bounds_in_screenshot: None,
+        surface_hit_point: None,
+        suggested_hit_points: Vec::new(),
+        elements: Vec::new(),
+        total_count: 0,
+        focused_semantic_id: None,
+        selected_semantic_id: None,
+        screenshot_width: None,
+        screenshot_height: None,
+        pixel_probes: Vec::new(),
+        os_window_id: None,
+        warnings: vec!["target_resolution_failed: no such window".to_string()],
+    };
+
+    let json = serde_json::to_value(&snapshot).expect("serialize");
+
+    // Geometry fields must be absent (skip_serializing_if)
+    assert!(json.get("targetBoundsInScreenshot").is_none());
+    assert!(json.get("surfaceHitPoint").is_none());
+    assert!(json.get("resolvedBounds").is_none());
+    assert!(json["suggestedHitPoints"].as_array().is_none()); // empty vec is skipped
+
+    // Warning must be present
+    let warnings = json["warnings"].as_array().expect("warnings array");
+    assert_eq!(warnings.len(), 1);
+    assert!(warnings[0]
+        .as_str()
+        .unwrap()
+        .starts_with("target_resolution_failed"));
+}
+
+/// Inspect snapshot round-trips correctly with all v2 geometry fields populated.
+#[test]
+fn inspect_snapshot_v2_geometry_round_trip() {
+    let snapshot = AutomationInspectSnapshot {
+        schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
+        window_id: "actionsDialog:main".to_string(),
+        window_kind: "ActionsDialog".to_string(),
+        title: Some("Actions".to_string()),
+        resolved_bounds: Some(AutomationWindowBounds {
+            x: 620.0,
+            y: 242.0,
+            width: 520.0,
+            height: 384.0,
+        }),
+        target_bounds_in_screenshot: Some(InspectBoundsInScreenshot {
+            x: 380.0,
+            y: 118.0,
+            width: 520.0,
+            height: 384.0,
+        }),
+        surface_hit_point: Some(InspectPoint { x: 640.0, y: 310.0 }),
+        suggested_hit_points: vec![SuggestedHitPoint {
+            semantic_id: "panel:actions-dialog".to_string(),
+            x: 640.0,
+            y: 310.0,
+            reason: "surface_center".to_string(),
+        }],
+        elements: Vec::new(),
+        total_count: 0,
+        focused_semantic_id: Some("panel:actions-dialog".to_string()),
+        selected_semantic_id: None,
+        screenshot_width: Some(1280),
+        screenshot_height: Some(820),
+        pixel_probes: Vec::new(),
+        os_window_id: None,
+        warnings: Vec::new(),
+    };
+
+    let json_str = serde_json::to_string(&snapshot).expect("serialize");
+    let parsed: AutomationInspectSnapshot = serde_json::from_str(&json_str).expect("deserialize");
+    assert_eq!(parsed, snapshot, "v2 snapshot must round-trip exactly");
+
+    // Verify camelCase wire names
+    assert!(json_str.contains("targetBoundsInScreenshot"));
+    assert!(json_str.contains("surfaceHitPoint"));
+    assert!(json_str.contains("suggestedHitPoints"));
+    assert!(json_str.contains("resolvedBounds"));
+}
+
+/// Each window kind gets the correct suggested hit point semantic ID.
+#[test]
+fn inspect_suggested_hit_semantic_ids_per_kind() {
+    let expected = vec![
+        (AutomationWindowKind::ActionsDialog, "panel:actions-dialog"),
+        (AutomationWindowKind::PromptPopup, "panel:prompt-popup"),
+        (AutomationWindowKind::Notes, "input:notes-editor"),
+        (AutomationWindowKind::AcpDetached, "input:acp-composer"),
+        (AutomationWindowKind::Main, "panel:window"),
+    ];
+
+    let bounds = InspectBoundsInScreenshot {
+        x: 0.0,
+        y: 0.0,
+        width: 400.0,
+        height: 300.0,
+    };
+
+    for (kind, expected_id) in expected {
+        let info = AutomationWindowInfo {
+            id: format!("{kind:?}:test"),
+            kind,
+            title: None,
+            focused: false,
+            visible: true,
+            semantic_surface: None,
+            bounds: Some(AutomationWindowBounds {
+                x: 0.0,
+                y: 0.0,
+                width: 400.0,
+                height: 300.0,
+            }),
+        };
+
+        let hits = script_kit_gpui::protocol::default_suggested_hit_points(&info, Some(&bounds));
+        assert_eq!(
+            hits.len(),
+            1,
+            "{kind:?} should have exactly one suggested hit"
+        );
+        assert_eq!(
+            hits[0].semantic_id, expected_id,
+            "{kind:?} semantic_id mismatch"
+        );
+    }
+}

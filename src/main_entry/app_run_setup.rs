@@ -2233,15 +2233,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         } else if has_cmd && key_lower == "p" {
                                             logging::log("STDIN", "SimulateKey: Cmd+P - toggle history");
                                             entity_clone.update(ctx, |chat, cx| {
-                                                if chat.history_menu.is_some() {
-                                                    chat.history_menu = None;
-                                                } else {
-                                                    let entries = crate::ai::acp::history::load_history();
-                                                    if !entries.is_empty() {
-                                                        chat.history_menu = Some((0, String::new(), entries));
-                                                    }
-                                                }
-                                                cx.notify();
+                                                chat.toggle_history_popup(window, cx);
                                             });
                                         } else if view.show_actions_popup && key_lower == "escape" {
                                             logging::log("STDIN", "SimulateKey: Escape - close ACP actions dialog");

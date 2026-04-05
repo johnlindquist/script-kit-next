@@ -284,6 +284,62 @@ impl AcpChatView {
         }
     }
 
+    fn history_popup_snapshot(
+        &self,
+    ) -> Option<crate::ai::acp::history_popup::AcpHistoryPopupSnapshot> {
+        let (selected_index, filter, all_entries) = self.history_menu.as_ref()?;
+        let entries = if filter.is_empty() {
+            all_entries.clone()
+        } else {
+            let query = filter.to_lowercase();
+            all_entries
+                .iter()
+                .filter(|entry| entry.first_message.to_lowercase().contains(&query))
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let selected_index = if entries.is_empty() {
+            0
+        } else {
+            (*selected_index).min(entries.len().saturating_sub(1))
+        };
+
+        Some(crate::ai::acp::history_popup::AcpHistoryPopupSnapshot {
+            title: if filter.is_empty() {
+                SharedString::from("Recent Conversations (⌘P)")
+            } else {
+                SharedString::from(format!("Search: {filter}"))
+            },
+            selected_index,
+            entries,
+        })
+    }
+
+    pub(super) fn sync_history_popup_window_from_cached_parent(&mut self, cx: &mut Context<Self>) {
+        let Some(parent) = self.mention_popup_parent_window else {
+            crate::ai::acp::history_popup::close_history_popup_window(cx);
+            return;
+        };
+
+        let source_view = cx.entity().downgrade();
+        if let Some(snapshot) = self.history_popup_snapshot() {
+            if let Err(error) = crate::ai::acp::history_popup::sync_history_popup_window(
+                cx,
+                crate::ai::acp::history_popup::AcpHistoryPopupRequest {
+                    parent_window_handle: parent.handle,
+                    parent_bounds: parent.bounds,
+                    display_id: parent.display_id,
+                    source_view,
+                    snapshot,
+                },
+            ) {
+                tracing::error!(error = %error, "acp_history_popup_sync_failed");
+            }
+        } else {
+            crate::ai::acp::history_popup::close_history_popup_window(cx);
+        }
+    }
+
     fn model_selector_popup_snapshot(
         &self,
         cx: &App,
@@ -356,6 +412,50 @@ impl AcpChatView {
         cx.notify();
     }
 
+    pub(crate) fn select_history_from_popup(
+        &mut self,
+        entry: &super::history::AcpHistoryEntry,
+        cx: &mut Context<Self>,
+    ) {
+        self.history_menu = None;
+        self.sync_history_popup_window_from_cached_parent(cx);
+        if let Some(conv) = super::history::load_conversation(&entry.session_id) {
+            self.live_thread().update(cx, |thread, cx| {
+                thread.load_saved_messages(&conv.messages, cx);
+            });
+            self.collapsed_ids.clear();
+        } else {
+            self.live_thread().update(cx, |thread, cx| {
+                thread.input.set_text(entry.first_message.clone());
+                cx.notify();
+            });
+        }
+        cx.notify();
+    }
+
+    fn toggle_history_popup_from_cached_parent(&mut self, cx: &mut Context<Self>) {
+        if self.history_menu.is_some() {
+            self.history_menu = None;
+        } else {
+            let entries = super::history::load_history();
+            if !entries.is_empty() {
+                self.attach_menu_open = false;
+                self.model_selector_open = false;
+                self.mention_session = None;
+                self.history_menu = Some((0, String::new(), entries));
+            }
+        }
+        self.sync_mention_popup_window_from_cached_parent(cx);
+        self.sync_model_selector_popup_window_from_cached_parent(cx);
+        self.sync_history_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_history_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.cache_popup_parent_window(window, cx);
+        self.toggle_history_popup_from_cached_parent(cx);
+    }
+
     pub(crate) fn dismiss_escape_popup(&mut self, cx: &mut Context<Self>) -> bool {
         if self.model_selector_open {
             self.model_selector_open = false;
@@ -375,7 +475,7 @@ impl AcpChatView {
     }
 
     pub(crate) fn has_escape_dismissible_popup(&self) -> bool {
-        self.model_selector_open || self.mention_session.is_some()
+        self.model_selector_open || self.mention_session.is_some() || self.history_menu.is_some()
     }
 
     /// Access the live thread entity, if in live mode.
@@ -2090,6 +2190,7 @@ impl AcpChatView {
                                 this.mention_session = None;
                                 this.history_menu = None;
                                 this.sync_mention_popup_window_from_cached_parent(cx);
+                                this.sync_history_popup_window_from_cached_parent(cx);
                                 this.sync_model_selector_popup_window_from_cached_parent(cx);
                                 cx.notify();
                             }))
@@ -4054,15 +4155,7 @@ impl AcpChatView {
 
         // ── Cmd+P → toggle conversation history picker ──────────
         if modifiers.platform && key.eq_ignore_ascii_case("p") {
-            if self.history_menu.is_some() {
-                self.history_menu = None;
-            } else {
-                let entries = super::history::load_history();
-                if !entries.is_empty() {
-                    self.history_menu = Some((0, String::new(), entries));
-                }
-            }
-            cx.notify();
+            self.toggle_history_popup_from_cached_parent(cx);
             cx.stop_propagation();
             return;
         }
@@ -4083,39 +4176,31 @@ impl AcpChatView {
 
             if crate::ui_foundation::is_key_up(key) {
                 *idx = idx.saturating_sub(1);
+                self.sync_history_popup_window_from_cached_parent(cx);
                 cx.notify();
                 cx.stop_propagation();
                 return;
             }
             if crate::ui_foundation::is_key_down(key) {
                 *idx = (*idx + 1).min(count.saturating_sub(1));
+                self.sync_history_popup_window_from_cached_parent(cx);
                 cx.notify();
                 cx.stop_propagation();
                 return;
             }
             if crate::ui_foundation::is_key_enter(key) {
                 let selected = filtered.get(*idx).cloned().cloned();
-                self.history_menu = None;
                 if let Some(entry) = selected {
-                    // Try to load full conversation; fall back to inserting first message
-                    if let Some(conv) = super::history::load_conversation(&entry.session_id) {
-                        self.live_thread().update(cx, |thread, cx| {
-                            thread.load_saved_messages(&conv.messages, cx);
-                        });
-                        self.collapsed_ids.clear();
-                    } else {
-                        self.live_thread().update(cx, |thread, cx| {
-                            thread.input.set_text(entry.first_message.clone());
-                            cx.notify();
-                        });
-                    }
+                    self.select_history_from_popup(&entry, cx);
+                } else {
+                    self.sync_history_popup_window_from_cached_parent(cx);
                 }
-                cx.notify();
                 cx.stop_propagation();
                 return;
             }
             if crate::ui_foundation::is_key_escape(key) {
                 self.history_menu = None;
+                self.sync_history_popup_window_from_cached_parent(cx);
                 cx.notify();
                 cx.stop_propagation();
                 return;
@@ -4123,6 +4208,7 @@ impl AcpChatView {
             if crate::ui_foundation::is_key_backspace(key) {
                 filter.pop();
                 *idx = 0;
+                self.sync_history_popup_window_from_cached_parent(cx);
                 cx.notify();
                 cx.stop_propagation();
                 return;
@@ -4132,6 +4218,7 @@ impl AcpChatView {
                 if !ch.is_empty() && !modifiers.platform && !modifiers.control {
                     filter.push_str(ch);
                     *idx = 0;
+                    self.sync_history_popup_window_from_cached_parent(cx);
                     cx.notify();
                     cx.stop_propagation();
                     return;
@@ -4615,105 +4702,6 @@ impl Render for AcpChatView {
                         ),
                 )
             })
-            // ── History picker (below input, replaces message list) ──
-            .when_some(
-                self.history_menu
-                    .as_ref()
-                    .map(|(idx, filter, entries)| (*idx, filter.clone(), entries.clone())),
-                |d, (idx, filter, all_entries)| {
-                    let theme = theme::get_cached_theme();
-                    // Apply filter
-                    let entries: Vec<_> = if filter.is_empty() {
-                        all_entries
-                    } else {
-                        let q = filter.to_lowercase();
-                        all_entries
-                            .into_iter()
-                            .filter(|e| e.first_message.to_lowercase().contains(&q))
-                            .collect()
-                    };
-                    d.child(
-                        div().w_full().px(px(8.0)).child(
-                            div()
-                                .id("acp-history-picker")
-                                .w_full()
-                                .max_h(px(300.0))
-                                .overflow_y_scroll()
-                                .rounded(px(8.0))
-                                .bg(rgb(theme.colors.background.search_box))
-                                .border_1()
-                                .border_color(rgba((theme.colors.ui.border << 8) | 0x40))
-                                .py(px(4.0))
-                                .child(
-                                    div()
-                                        .px(px(10.0))
-                                        .py(px(4.0))
-                                        .text_xs()
-                                        .opacity(0.45)
-                                        .child(if filter.is_empty() {
-                                            "Recent Conversations (\u{2318}P)".to_string()
-                                        } else {
-                                            format!("Search: {filter}")
-                                        }),
-                                )
-                                .children(entries.iter().enumerate().map(|(i, entry)| {
-                                    let is_selected = i == idx;
-                                    let date = entry
-                                        .timestamp
-                                        .split('T')
-                                        .next()
-                                        .unwrap_or(&entry.timestamp);
-                                    div()
-                                        .w_full()
-                                        .px(px(10.0))
-                                        .py(px(5.0))
-                                        .when(is_selected, |d| {
-                                            d.bg(rgba((theme.colors.accent.selected << 8) | 0x14))
-                                                .border_l_2()
-                                                .border_color(rgb(theme.colors.accent.selected))
-                                        })
-                                        .when(!is_selected, |d| {
-                                            d.border_l_2().border_color(gpui::transparent_black())
-                                        })
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_col()
-                                                .gap(px(1.0))
-                                                .child(
-                                                    div()
-                                                        .text_sm()
-                                                        .child(entry.first_message.clone()),
-                                                )
-                                                .child(div().text_xs().opacity(0.40).child(
-                                                    format!(
-                                                        "{} messages \u{00b7} {}",
-                                                        entry.message_count, date
-                                                    ),
-                                                )),
-                                        )
-                                }))
-                                // Keyboard hint at bottom
-                                .child(
-                                    div()
-                                        .w_full()
-                                        .px(px(10.0))
-                                        .pt(px(6.0))
-                                        .pb(px(4.0))
-                                        .border_t_1()
-                                        .border_color(rgba(
-                                            (theme.colors.ui.border << 8) | 0x15,
-                                        ))
-                                        .text_xs()
-                                        .opacity(0.35)
-                                        .child(
-                                            "\u{2191}\u{2193} navigate \u{00b7} Enter load \u{00b7} Esc close \u{00b7} type to search",
-                                        ),
-                                ),
-                        ),
-                    )
-                },
-            )
             // ── Message list (middle, virtualized) ────────────
             .when(is_empty, |d| {
                 d.child(
