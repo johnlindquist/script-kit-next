@@ -805,6 +805,9 @@ Commands:
 Focus enforcement:
   --ensure-focus                 Focus Script Kit window before input (delegates to window.ts)
   --focus-title SUBSTR           Title substring for focus target (default: "${DEFAULT_FOCUS_TITLE}")
+  --session NAME                 Use session.sh to show window before focusing (more reliable)
+  --target SURFACE               Target a specific automation surface (main, acp, actions, notes, ai)
+                                 Requires --ensure-focus. Resolves via window.ts list.
 
 Named keys: enter, tab, escape, space, delete, backspace,
             up, down, left, right, home, end, pageup, pagedown,
@@ -824,8 +827,9 @@ Output:
 
 Focus delegation:
   When --ensure-focus is set, focus is enforced via window.ts (retry 3, settle 200ms).
-  This replaces the old inline activation path. The focusEnforced field in the response
-  confirms whether focus was enforced before input delivery.
+  When --session is also set, the window is first shown via session.sh send before focusing.
+  When --target is set, the target automation surface is resolved via window.ts list.
+  The focusEnforced, session, and target fields in the response confirm the focus path used.
 
 Permission requirements:
   - Accessibility: System Preferences → Privacy & Security → Accessibility
