@@ -208,6 +208,20 @@ pub fn open_chat_window_with_thread(
     Ok(())
 }
 
+/// Return a strong reference to the detached ACP chat view entity, if the
+/// detached window is open and was opened with a live thread.
+///
+/// This is used by the automation substrate to read ACP state and test-probe
+/// data from the detached window without routing through the main window.
+pub fn get_detached_acp_view_entity() -> Option<Entity<AcpChatView>> {
+    let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+    let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+    guard
+        .as_ref()
+        .and_then(|state| state.view_entity.as_ref())
+        .and_then(|weak| weak.upgrade())
+}
+
 /// Close the detached AI chat window.
 #[allow(dead_code)]
 pub fn close_chat_window(cx: &mut App) {

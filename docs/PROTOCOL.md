@@ -2174,17 +2174,17 @@ Enumerate all automation-addressable windows.
 
 ### ACP targetability contract
 
-`getAcpState` and `getAcpTestProbe` accept an optional `target` field but currently execute only against the main window's ACP view. Non-main targets fail closed with a structured result containing the `target_unsupported_non_main` warning — they do **not** silently fall back to the main window.
+`getAcpState` and `getAcpTestProbe` accept an optional `target` field and support both the **main window** and **detached ACP** (`acpDetached`) targets. When targeting a detached ACP window, the response contains real state from the detached view entity. Non-ACP secondary targets (Notes, Ai, etc.) fail closed with a structured `target_unsupported` warning.
 
-`resetAcpTestProbe` is **global-only**: it always resets the main window's probe ring buffer and does not accept a `target` field. Once ACP state is per-window, a targeted variant will be introduced.
+`resetAcpTestProbe` is **global-only**: it always resets the main window's probe ring buffer and does not accept a `target` field.
 
-**Targeted getAcpState (non-main target → fail closed):**
+**Targeted getAcpState (detached ACP → real state):**
 
 ```json
 {"type": "getAcpState", "requestId": "acp-state-1", "target": {"type": "kind", "kind": "acpDetached"}}
 ```
 
-**Response:**
+**Response** (returns real state from the detached ACP view):
 ```json
 {
   "type": "acpStateResult",
@@ -2194,31 +2194,79 @@ Enumerate all automation-addressable windows.
   "inputText": "",
   "cursorIndex": 0,
   "hasSelection": false,
-  "messageCount": 0,
+  "messageCount": 3,
   "contextChipCount": 0,
   "contextReady": true,
   "hasPendingPermission": false,
-  "warnings": ["target_unsupported_non_main: getAcpState currently supports only the main automation window; resolved acpDetached (AcpDetached)"]
+  "warnings": []
 }
 ```
 
-**Targeted getAcpTestProbe (non-main target → fail closed):**
+**Targeted getAcpTestProbe (detached ACP → real probe):**
 
 ```json
 {"type": "getAcpTestProbe", "requestId": "acp-probe-1", "target": {"type": "kind", "kind": "acpDetached"}}
 ```
 
-**Response:**
+**Response** (returns real probe data from the detached ACP view):
 ```json
 {
   "type": "acpTestProbeResult",
   "requestId": "acp-probe-1",
   "schemaVersion": 1,
-  "eventSeq": 0,
+  "eventSeq": 42,
   "keyRoutes": [],
   "acceptedItems": [],
-  "state": {"schemaVersion": 1, "status": "idle", "inputText": "", "cursorIndex": 0, "hasSelection": false, "messageCount": 0, "contextChipCount": 0, "contextReady": true, "hasPendingPermission": false},
-  "warnings": ["target_unsupported_non_main: getAcpTestProbe currently supports only the main automation window; resolved acpDetached (AcpDetached)"]
+  "state": {"schemaVersion": 1, "status": "idle", "inputText": "", "cursorIndex": 0, "hasSelection": false, "messageCount": 3, "contextChipCount": 0, "contextReady": true, "hasPendingPermission": false},
+  "warnings": []
+}
+```
+
+**Non-ACP secondary target (e.g. Notes → fail closed):**
+
+```json
+{"type": "getAcpState", "requestId": "acp-state-notes", "target": {"type": "kind", "kind": "notes"}}
+```
+
+**Response:**
+```json
+{
+  "type": "acpStateResult",
+  "requestId": "acp-state-notes",
+  "schemaVersion": 1,
+  "status": "idle",
+  "inputText": "",
+  "cursorIndex": 0,
+  "hasSelection": false,
+  "messageCount": 0,
+  "contextChipCount": 0,
+  "contextReady": true,
+  "hasPendingPermission": false,
+  "warnings": ["target_unsupported: getAcpState supports only Main and AcpDetached targets; resolved notes:1 (Notes)"]
+}
+```
+
+**Detached ACP target with no live entity (placeholder window → fail closed):**
+
+```json
+{"type": "getAcpState", "requestId": "acp-state-placeholder", "target": {"type": "kind", "kind": "acpDetached"}}
+```
+
+**Response:**
+```json
+{
+  "type": "acpStateResult",
+  "requestId": "acp-state-placeholder",
+  "schemaVersion": 1,
+  "status": "idle",
+  "inputText": "",
+  "cursorIndex": 0,
+  "hasSelection": false,
+  "messageCount": 0,
+  "contextChipCount": 0,
+  "contextReady": true,
+  "hasPendingPermission": false,
+  "warnings": ["target_unsupported: getAcpState resolved detached ACP target acpDetached:1 but no live view entity is available (window may be a placeholder or closed)"]
 }
 ```
 
@@ -2276,8 +2324,8 @@ High-fidelity event simulation through GPUI's real event pipeline (unlike legacy
 | `getState` | UI state for targeted window |
 | `getElements` | Semantic elements for targeted window (main-only, non-main fails closed) |
 | `captureScreenshot` | Screenshot of targeted window (uses bounds for scoring; fails closed on ambiguous tie) |
-| `getAcpState` | ACP state (main-only, non-main returns default + `target_unsupported_non_main` warning) |
-| `getAcpTestProbe` | Test probe (main-only, non-main returns default + `target_unsupported_non_main` warning) |
+| `getAcpState` | ACP state (Main + AcpDetached targets supported; non-ACP secondary targets return default + `target_unsupported` warning) |
+| `getAcpTestProbe` | Test probe (Main + AcpDetached targets supported; non-ACP secondary targets return default + `target_unsupported` warning) |
 | `resetAcpTestProbe` | **Global-only** — no `target` field, always resets main window probe |
 | `simulateClick` | Click in targeted window |
 | `waitFor` | Poll condition on targeted window (main-only, non-main fails closed) |
