@@ -1146,6 +1146,7 @@ impl ScriptListApp {
                     initial_input: acp_initial_input.clone(),
                     display_name: agent_display_name.into(),
                     selected_agent: acp_launch_resolution.selected_agent.clone(),
+                    available_agents: acp_launch_resolution.catalog_entries.clone(),
                     available_models: agent_models,
                     selected_model_id: default_model_id,
                 },

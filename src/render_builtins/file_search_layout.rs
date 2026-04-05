@@ -90,11 +90,8 @@
         );
 
         if is_mini {
-            let hints: Vec<SharedString> = vec![
-                "\u{21b5} Open".into(),
-                "\u{2318}\u{21b5} Ask AI".into(),
-                "\u{21e5} Navigate".into(),
-            ];
+            let hints = crate::components::universal_prompt_hints();
+            crate::components::emit_prompt_hint_audit("file_search", &hints);
             crate::components::render_minimal_list_prompt_scaffold(
                 header_element,
                 list_pane,

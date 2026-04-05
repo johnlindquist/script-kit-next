@@ -1090,12 +1090,9 @@ pub fn clear_focused_item() {
 // 3. Static empty fallback envelope
 // ---------------------------------------------------------------
 
-static DICTATION_JSON_SLOT: parking_lot::Mutex<Option<String>> =
-    parking_lot::Mutex::new(None);
-static CALENDAR_JSON_SLOT: parking_lot::Mutex<Option<String>> =
-    parking_lot::Mutex::new(None);
-static NOTIFICATIONS_JSON_SLOT: parking_lot::Mutex<Option<String>> =
-    parking_lot::Mutex::new(None);
+static DICTATION_JSON_SLOT: parking_lot::Mutex<Option<String>> = parking_lot::Mutex::new(None);
+static CALENDAR_JSON_SLOT: parking_lot::Mutex<Option<String>> = parking_lot::Mutex::new(None);
+static NOTIFICATIONS_JSON_SLOT: parking_lot::Mutex<Option<String>> = parking_lot::Mutex::new(None);
 
 /// Publish dictation data into the in-process slot for `kit://dictation`.
 pub fn publish_dictation_json(json: impl Into<String>) {

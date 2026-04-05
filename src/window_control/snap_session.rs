@@ -37,10 +37,7 @@ pub enum SnapSessionPhase {
 #[derive(Debug, Clone)]
 pub enum SnapSessionOutcome {
     /// Session committed: the window was snapped to a target.
-    Committed {
-        tile: TilePosition,
-        bounds: Bounds,
-    },
+    Committed { tile: TilePosition, bounds: Bounds },
     /// Session cancelled: no active target when movement settled.
     Cancelled,
 }
@@ -295,8 +292,11 @@ pub fn prime_snap_session(session: &mut SnapSession, now: Instant) {
     session.has_moved = true;
     session.last_movement_time = Some(now);
     session.phase = SnapSessionPhase::Tracking;
-    session.active_match =
-        best_snap_match(&session.last_window_bounds, &session.targets, MIN_OVERLAP_RATIO);
+    session.active_match = best_snap_match(
+        &session.last_window_bounds,
+        &session.targets,
+        MIN_OVERLAP_RATIO,
+    );
 
     tracing::info!(
         target: "script_kit::snap_session",

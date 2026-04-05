@@ -134,11 +134,9 @@ pub(crate) fn build_initialize_request() -> InitializeRequest {
     InitializeRequest::new(ProtocolVersion::V1)
         .client_capabilities(
             ClientCapabilities::new()
-                .fs(
-                    FileSystemCapabilities::new()
-                        .read_text_file(true)
-                        .write_text_file(true),
-                )
+                .fs(FileSystemCapabilities::new()
+                    .read_text_file(true)
+                    .write_text_file(true))
                 .terminal(true)
                 .auth(AuthCapabilities::new().terminal(true)),
         )

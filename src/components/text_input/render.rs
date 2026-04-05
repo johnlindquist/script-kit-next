@@ -135,15 +135,10 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
                 config.transform,
             ));
         } else {
-            content =
-                content.child(
-                    div()
-                        .whitespace_nowrap()
-                        .child(format_single_line_segment(
-                            &segments.before,
-                            config.transform,
-                        )),
-                );
+            content = content.child(div().whitespace_nowrap().child(format_single_line_segment(
+                &segments.before,
+                config.transform,
+            )));
         }
     }
     if segments.show_cursor {
@@ -176,14 +171,10 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
                 config.transform,
             ));
         } else {
-            content = content.child(
-                div()
-                    .whitespace_nowrap()
-                    .child(format_single_line_segment(
-                        &segments.after,
-                        config.transform,
-                    )),
-            );
+            content = content.child(div().whitespace_nowrap().child(format_single_line_segment(
+                &segments.after,
+                config.transform,
+            )));
         }
     }
     if segments.show_trailing_indicator {

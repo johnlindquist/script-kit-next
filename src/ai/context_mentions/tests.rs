@@ -73,8 +73,7 @@ fn parse_context_mentions_handles_all_resource_directives() {
 
 #[test]
 fn parse_context_mentions_preserves_body_ordering() {
-    let parsed =
-        parse_context_mentions("Line one.\n@snapshot\nLine two.\n@selection\nLine three.");
+    let parsed = parse_context_mentions("Line one.\n@snapshot\nLine two.\n@selection\nLine three.");
 
     assert_eq!(parsed.cleaned_content, "Line one.\nLine two.\nLine three.");
     assert_eq!(parsed.parts.len(), 2);
@@ -287,8 +286,7 @@ fn parse_context_mentions_handles_all_provider_backed_directives() {
 
 #[test]
 fn parse_inline_mentions_multiple_provider_backed() {
-    let mentions =
-        parse_inline_context_mentions("Review @clipboard and @git-diff for issues");
+    let mentions = parse_inline_context_mentions("Review @clipboard and @git-diff for issues");
     assert_eq!(mentions.len(), 2);
     assert_eq!(mentions[0].token, "@clipboard");
     assert_eq!(mentions[1].token, "@git-diff");

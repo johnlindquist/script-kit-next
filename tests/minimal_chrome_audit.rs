@@ -44,10 +44,11 @@ fn clipboard_history_uses_shared_expanded_view_contract() {
         "clipboard history layout should not use PromptFooter"
     );
 
-    // Layout uses shared hint strip and header tokens (manual expanded layout)
+    // Layout must route through the shared expanded-view scaffold
     assert!(
-        layout_source.contains("render_simple_hint_strip("),
-        "clipboard history layout should use the shared hint strip footer"
+        layout_source.contains("render_expanded_view_scaffold_with_hints(")
+            || layout_source.contains("render_expanded_view_scaffold("),
+        "clipboard history layout should route through the shared expanded-view scaffold"
     );
 
     // No SectionDivider — expanded view uses spacing, not dividers
@@ -93,6 +94,16 @@ fn file_search_uses_shared_expanded_view_contract() {
     assert!(
         layout_source.contains("render_expanded_view_scaffold("),
         "file search layout should route through the shared expanded-view scaffold"
+    );
+
+    // Mini branch must use universal hints and emit hint audit
+    assert!(
+        layout_source.contains("emit_prompt_hint_audit(\"file_search\""),
+        "file search mini layout should emit prompt hint audit"
+    );
+    assert!(
+        layout_source.contains("universal_prompt_hints()"),
+        "file search mini layout should use the canonical universal hints"
     );
 
     // No old PromptFooter

@@ -302,10 +302,14 @@ pub fn toggle_detached_actions(cx: &mut App) {
 
     // Get window bounds and display from the detached chat window
     let window_info = handle.update(cx, |_root, window, cx| {
-        (window.bounds(), window.display(cx).map(|d| d.id()))
+        (
+            window.window_handle(),
+            window.bounds(),
+            window.display(cx).map(|d| d.id()),
+        )
     });
 
-    let Ok((bounds, display_id)) = window_info else {
+    let Ok((parent_window_handle, bounds, display_id)) = window_info else {
         return;
     };
 
@@ -356,6 +360,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
 
     let actions_handle = match actions::open_actions_window(
         cx,
+        parent_window_handle,
         bounds,
         display_id,
         dialog,
@@ -440,7 +445,9 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
                             .messages
                             .iter()
                             .rev()
-                            .find(|m| matches!(m.role, super::thread::AcpThreadMessageRole::Assistant))
+                            .find(|m| {
+                                matches!(m.role, super::thread::AcpThreadMessageRole::Assistant)
+                            })
                             .map(|m| m.body.to_string())
                     })
                 };

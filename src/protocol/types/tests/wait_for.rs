@@ -411,9 +411,7 @@ fn wait_for_request_parses_with_acp_cursor_at_condition() {
         serde_json::from_value(json).expect("parse waitFor acpCursorAt");
 
     match msg {
-        crate::protocol::Message::WaitFor {
-            condition, ..
-        } => {
+        crate::protocol::Message::WaitFor { condition, .. } => {
             assert_eq!(
                 condition,
                 WaitCondition::Detailed(WaitDetailedCondition::AcpCursorAt { index: 42 })
@@ -462,7 +460,10 @@ fn acp_state_result_round_trips() {
 
     assert_eq!(json["type"], "acpStateResult");
     assert_eq!(json["requestId"], "acp-rt");
-    assert_eq!(json["schemaVersion"], crate::protocol::ACP_STATE_SCHEMA_VERSION);
+    assert_eq!(
+        json["schemaVersion"],
+        crate::protocol::ACP_STATE_SCHEMA_VERSION
+    );
     assert_eq!(json["status"], "idle");
     assert_eq!(json["inputText"], "test");
     assert_eq!(json["cursorIndex"], 4);

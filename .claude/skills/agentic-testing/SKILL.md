@@ -26,6 +26,19 @@ Verify code changes by observing the running app. Build, start via named pipe, i
 - Temp files (pipes, screenshots) go in project `test-screenshots/` or `/tmp`
 - The app runs locally only — never connect to production
 
+## Surface Identity Rules (MANDATORY)
+
+- Always verify the real user-facing surface through its real runtime entry path first.
+- For Script Kit UI, prefer stdin JSON commands, built-in routing, and real app windows over ad hoc component harnesses.
+- Never treat an isolated GPUI entity, temporary debug window, story, off-screen render, or synthetic wrapper as proof of a real product surface unless the user explicitly asks for component-level verification.
+- Before trusting a screenshot, confirm the captured surface matches the intended product surface:
+  - same entry path
+  - same window/shell
+  - same wrapper/root chrome
+  - same footer, sizing, and layout structure
+- If the screenshot does not clearly match the real surface, stop and re-route verification to the real surface instead of iterating on the fake one.
+- For ACP specifically, `AcpChatView` in isolation is not sufficient proof. Default to the real ACP entry path (`triggerBuiltin tab-ai`, detached chat window routing, or another production runtime path) before using any synthetic ACP harness.
+
 ## The Pattern
 
 Every verification follows the same core loop:
@@ -122,6 +135,7 @@ sleep 1
 - `title` is substring match. `""` matches any window.
 - Path must be absolute — use `$(pwd)/` prefix.
 - Always `sleep 1` after capture for file write.
+- The screenshot must come from the real runtime surface you are verifying, not a synthetic component window.
 - **Read the PNG** to visually verify. Never assume correctness without checking.
 
 ### 6. Read Logs
@@ -148,17 +162,22 @@ bash scripts/agentic/session.sh stop default
 
 ## Timing Guidelines
 
-| Action | Sleep after |
-|--------|------------|
-| App startup | 3s |
-| `show` window | 1.5s |
-| `setFilter` | 1s |
-| `triggerBuiltin` (opens new view) | 3-5s |
-| `simulateKey` (view transition) | 1.5s |
-| `simulateKey` (text input) | 0.1s |
-| `captureWindow` | 1s |
-| ACP context bootstrap | 5-8s |
-| ACP response streaming | 10-20s |
+| Action | Wait strategy |
+|--------|--------------|
+| App startup | 3s sleep |
+| `show` window | 0.3s macOS focus-settling delay |
+| `setFilter` | 1s sleep or waitFor stateMatch |
+| `triggerBuiltin` (opens new view) | waitFor appropriate condition |
+| `simulateKey` (view transition) | 1.5s sleep |
+| `simulateKey` (text input) | 0.1s sleep |
+| `captureWindow` | 1s sleep (file write) |
+| ACP context bootstrap | `waitFor(acpReady, timeout=8000)` |
+| ACP picker open | `waitFor(acpPickerOpen, timeout=3000)` |
+| ACP picker accept | `waitFor(acpItemAccepted, timeout=3000)` |
+| ACP response streaming | 10-20s or waitFor(acpStatus) |
+
+**Rule:** Use `waitFor` for all ACP state transitions. Only use fixed sleeps
+for macOS focus-settling (0.3s) and file I/O (1s screenshot write).
 
 ## Session Management
 
@@ -247,30 +266,44 @@ bun scripts/agentic/index.ts acp-enter-accept --session default
 bun scripts/agentic/index.ts acp-tab-accept --session default
 ```
 
-The wrapper returns per-step JSON receipts from the underlying tools. It does
-**not** replace the lower-level commands — use them directly when you need
-finer control or different assertion combinations.
+The orchestrator uses `waitFor` protocol commands for all ACP state transitions:
+- `acp-open`: sends `show` + `triggerBuiltin tab-ai`, then `waitFor(acpReady)`
+- `acp-*-accept`: opens ACP, types `@`, `waitFor(acpPickerOpen)`, native key, `waitFor(acpItemAccepted)`
+
+Each step surfaces the full `waitForResult` receipt (including trace on failure)
+in the per-step JSON output. The wrapper does **not** replace the lower-level
+commands — use them directly when you need finer control.
 
 ## ACP Golden Path (Critical)
 
-The **mandatory** verification flow for any ACP interaction testing:
+The **mandatory** verification flow for any ACP interaction testing.
+Uses `waitFor` protocol commands for deterministic state transitions
+instead of fixed sleeps.
 
 ```
-1. session start       → session alive
-2. show                → window visible
-3. triggerBuiltin tab-ai → ACP opens
-4. wait / sleep        → context bootstraps
-5. focus window        → frontmost confirmed
-6. native type (macos-input.ts) → open picker
-7. native Enter or Tab → accept picker item
-8. getAcpState         → state receipt (MUST come before screenshot)
-9. captureWindow       → screenshot captured
-10. verify-shot.ts     → assertions pass on state + visual
-11. grep telemetry     → acp_picker_item_accepted / acp_picker_tab_accept in logs
+1. session start                               → session alive
+2. show                                        → window visible
+3. triggerBuiltin tab-ai                       → ACP opens
+4. waitFor(acpReady, timeout=8000)             → context bootstrapped (deterministic)
+5. focus window                                → frontmost confirmed
+6. native type @ (macos-input.ts)              → open picker
+7. waitFor(acpPickerOpen, timeout=3000)        → picker open (deterministic)
+8. native Enter or Tab                         → accept picker item
+9. waitFor(acpItemAccepted, timeout=3000)      → item accepted (deterministic)
+10. getAcpState                                → state receipt (MUST come before screenshot)
+11. captureWindow                              → screenshot captured
+12. verify-shot.ts                             → assertions pass on state + visual
 ```
+
+**waitFor replaces fixed sleeps.** Each `waitFor` polls at 25ms intervals
+and returns a `waitForResult` receipt with `success`, `elapsed`, and an
+optional `trace` (included automatically on failure when `trace: "onFailure"`).
 
 **State receipt before screenshot is non-negotiable.** If the state says the
 picker is still open but the screenshot looks fine, the test must FAIL.
+
+**Any remaining sleeps** in the recipes are brief macOS focus-settling delays
+(~300ms) with explicit comments. They are not proof of ACP state.
 
 ## Verification Recipes
 
@@ -285,3 +318,4 @@ See [references/recipes.md](references/recipes.md) for named verification patter
 - Always unset API keys if you need the setup card: `unset ANTHROPIC_API_KEY`.
 - For ACP picker testing, use **native macOS input** (`macos-input.ts`) instead of `simulateKey` — synthetic keys bypass GPUI's native key interception and do not faithfully exercise picker selection behavior.
 - Use `getAcpState` to verify picker acceptance, cursor landing, and input content — do not rely solely on screenshots for ACP state verification.
+- Use `waitFor` commands via `session.sh rpc` for deterministic ACP state transitions — do not use fixed sleeps as proof of ACP state.

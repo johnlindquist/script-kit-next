@@ -26,6 +26,8 @@ Named patterns agents select based on what they changed.
 
 **When:** Changes to ACP chat view, Tab AI entry, context bootstrap.
 
+**Surface rule:** Verify the real ACP chat opened through the product entry path. Do not prove ACP UI changes by instantiating `AcpChatView` in an isolated temporary window.
+
 **Steps:**
 1. Build: `cargo build`
 2. Start session, show window
@@ -176,75 +178,89 @@ Named patterns agents select based on what they changed.
 
 **This is the definitive ACP interaction verification recipe.** Use it whenever ACP behavior needs proving. Future agents should default to this recipe for any ACP change.
 
+**Surface rule:** This recipe verifies the real ACP runtime surface only. Screenshots from synthetic `AcpChatView` wrappers, debug-only windows, or component harnesses do not count.
+
 **Steps:**
 
 ```bash
+S="bash scripts/agentic/session.sh send default"
+R="bash scripts/agentic/session.sh rpc default"
+
 # 1. Start session
 bash scripts/agentic/session.sh start default
 sleep 3
 
 # 2. Show window
-bash scripts/agentic/session.sh send default '{"type":"show"}'
-sleep 1.5
+$S '{"type":"show"}'
+sleep 0.3  # macOS focus-settling delay, not ACP proof
 
 # 3. Open ACP
-bash scripts/agentic/session.sh send default '{"type":"triggerBuiltin","name":"tab-ai"}'
-sleep 5
+$S '{"type":"triggerBuiltin","name":"tab-ai"}'
 
-# 4. Verify ACP ready (state receipt BEFORE screenshot)
+# 4. Wait for ACP ready (deterministic, replaces sleep 5)
+$R '{"type":"waitFor","requestId":"w-ready","condition":{"type":"acpReady"},"timeout":8000,"pollInterval":25,"trace":"onFailure"}' \
+  --expect waitForResult --timeout 10000
+
+# 5. Verify ACP ready (state receipt BEFORE screenshot)
 bun scripts/agentic/verify-shot.ts --session default \
   --label acp-ready \
   --acp-context-ready
 
-# 5. Focus window for native input
+# 6. Focus window for native input
 bun scripts/agentic/window.ts focus
-sleep 0.3
+sleep 0.3  # macOS focus-settling delay
 
-# 6. Type @ to open picker (NATIVE input, not simulateKey)
+# 7. Type @ to open picker (NATIVE input, not simulateKey)
 bun scripts/agentic/macos-input.ts type "@"
-sleep 1
 
-# 7. Verify picker opened
+# 8. Wait for picker to open (deterministic, replaces sleep 1)
+$R '{"type":"waitFor","requestId":"w-picker","condition":{"type":"acpPickerOpen"},"timeout":3000,"pollInterval":25,"trace":"onFailure"}' \
+  --expect waitForResult --timeout 5000
+
+# 9. Verify picker opened
 bun scripts/agentic/verify-shot.ts --session default \
   --label picker-open \
   --acp-picker-open
 
-# 8. Accept with native Enter (or Tab)
+# 10. Accept with native Enter (or Tab)
 bun scripts/agentic/macos-input.ts key enter
-sleep 0.5
 
-# 9. Verify accepted: picker closed + item recorded + cursor moved
+# 11. Wait for item accepted (deterministic, replaces sleep 0.5)
+$R '{"type":"waitFor","requestId":"w-accepted","condition":{"type":"acpItemAccepted"},"timeout":3000,"pollInterval":25,"trace":"onFailure"}' \
+  --expect waitForResult --timeout 5000
+
+# 12. Verify accepted: picker closed + item recorded + cursor moved
 bun scripts/agentic/verify-shot.ts --session default \
   --label item-accepted \
   --acp-picker-closed \
   --acp-item-accepted
 
-# 10. Check telemetry logs
-grep -i "acp_picker_item_accepted\|acp_picker_tab_accept\|picker.*accept\|route.*picker" \
-  /tmp/sk-agentic-sessions/default/app.log | tail -5
-
-# 11. Cleanup
+# 13. Cleanup
 bash scripts/agentic/session.sh stop default
 ```
 
-**Or use the orchestrator (after Phase 1 is proven stable):**
+**Or use the orchestrator:**
 ```bash
 bun scripts/agentic/index.ts acp-enter-accept --session default
 ```
 
 **Critical invariants:**
+- `waitFor` conditions are the primary proof of ACP state transitions — not fixed sleeps
 - `getAcpState` **must** be queried before screenshot capture at every verification point
 - The test MUST FAIL if `getAcpState` says picker is still open, even if the screenshot looks correct
 - Native macOS input (`macos-input.ts`) is required for picker acceptance testing — `simulateKey` bypasses native key routing
 - Window focus must be verified before sending native input
-- Telemetry logs must show `acp_picker_item_accepted`, `acp_picker_tab_accept`, or equivalent route confirmation
+- If the captured window does not match the real ACP shell/chrome/layout, stop and re-run through the actual runtime path instead of using the screenshot as evidence
+- On failure, `waitForResult` includes a trace receipt with per-poll snapshots when `trace: "onFailure"` is set
 
-**Pass:** All verify-shot assertions pass, telemetry confirms picker acceptance, cursor lands after inserted text.
-**Fail:** State receipt contradicts expected outcome. Common causes:
+**Pass:** All waitFor conditions resolve, verify-shot assertions pass, cursor lands after inserted text.
+**Fail:** `waitForResult` returns `success: false` with trace receipt. Common causes:
+- `acpReady` timeout → ACP context bootstrap failed or took too long
+- `acpPickerOpen` timeout → `@` input not received or picker not triggered
+- `acpItemAccepted` timeout → Enter/Tab routed to composer submit instead of picker accept
 - Picker still open after Enter → Enter routed to composer submit instead of picker accept
 - No `lastAcceptedItem` → picker was never open when Enter was pressed
 - Cursor at wrong index → text insertion logic off
-- No telemetry → ACP key routing not instrumented
 
 ---
 

@@ -183,19 +183,48 @@ pub(crate) struct ContextPickerEmptyStateHint {
 /// These are the canonical entries shared by both the AI window picker and
 /// ACP.  `@file:<path>` uses `insertion: "@file:"` so clicking it keeps
 /// the picker open for file suggestions instead of fabricating a fake path.
-pub(crate) fn empty_state_hints(trigger: ContextPickerTrigger) -> &'static [ContextPickerEmptyStateHint] {
+pub(crate) fn empty_state_hints(
+    trigger: ContextPickerTrigger,
+) -> &'static [ContextPickerEmptyStateHint] {
     static MENTION_HINTS: &[ContextPickerEmptyStateHint] = &[
-        ContextPickerEmptyStateHint { display: "@screenshot", insertion: "@screenshot" },
-        ContextPickerEmptyStateHint { display: "@clipboard", insertion: "@clipboard" },
-        ContextPickerEmptyStateHint { display: "@git-diff", insertion: "@git-diff" },
-        ContextPickerEmptyStateHint { display: "@recent-scripts", insertion: "@recent-scripts" },
-        ContextPickerEmptyStateHint { display: "@calendar", insertion: "@calendar" },
-        ContextPickerEmptyStateHint { display: "@file:<path>", insertion: "@file:" },
+        ContextPickerEmptyStateHint {
+            display: "@screenshot",
+            insertion: "@screenshot",
+        },
+        ContextPickerEmptyStateHint {
+            display: "@clipboard",
+            insertion: "@clipboard",
+        },
+        ContextPickerEmptyStateHint {
+            display: "@git-diff",
+            insertion: "@git-diff",
+        },
+        ContextPickerEmptyStateHint {
+            display: "@recent-scripts",
+            insertion: "@recent-scripts",
+        },
+        ContextPickerEmptyStateHint {
+            display: "@calendar",
+            insertion: "@calendar",
+        },
+        ContextPickerEmptyStateHint {
+            display: "@file:<path>",
+            insertion: "@file:",
+        },
     ];
     static SLASH_HINTS: &[ContextPickerEmptyStateHint] = &[
-        ContextPickerEmptyStateHint { display: "/compact", insertion: "/compact " },
-        ContextPickerEmptyStateHint { display: "/clear", insertion: "/clear " },
-        ContextPickerEmptyStateHint { display: "/help", insertion: "/help " },
+        ContextPickerEmptyStateHint {
+            display: "/compact",
+            insertion: "/compact ",
+        },
+        ContextPickerEmptyStateHint {
+            display: "/clear",
+            insertion: "/clear ",
+        },
+        ContextPickerEmptyStateHint {
+            display: "/help",
+            insertion: "/help ",
+        },
     ];
     match trigger {
         ContextPickerTrigger::Mention => MENTION_HINTS,
@@ -267,10 +296,7 @@ fn file_search_query(trigger: ContextPickerTrigger, query: &str) -> Option<Strin
     None
 }
 
-fn split_file_query(
-    base_dir: &std::path::Path,
-    raw_query: &str,
-) -> (std::path::PathBuf, String) {
+fn split_file_query(base_dir: &std::path::Path, raw_query: &str) -> (std::path::PathBuf, String) {
     if raw_query.is_empty() {
         return (base_dir.to_path_buf(), String::new());
     }
@@ -384,7 +410,6 @@ fn score_builtin_seed(
 
     (best_score, best_label_hits, best_meta_hits)
 }
-
 
 impl AiApp {
     /// Synchronize the `context_picker_list_state` item count with the
@@ -794,11 +819,7 @@ pub fn score_builtin_with_trigger(
 }
 
 /// Collect file and folder items from the given directory matching the query.
-fn collect_file_items(
-    dir: &std::path::Path,
-    raw_query: &str,
-    items: &mut Vec<ContextPickerItem>,
-) {
+fn collect_file_items(dir: &std::path::Path, raw_query: &str, items: &mut Vec<ContextPickerItem>) {
     let (search_dir, name_filter) = split_file_query(dir, raw_query);
 
     let read_dir = match std::fs::read_dir(&search_dir) {

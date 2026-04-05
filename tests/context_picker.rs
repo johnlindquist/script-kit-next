@@ -338,7 +338,9 @@ fn new_entries_are_queryable() {
 fn slash_mode_stays_command_only() {
     let items = build_slash_picker_items("sel", ["compact", "clear", "help"]);
     assert!(
-        items.iter().all(|item| matches!(item.kind, ContextPickerItemKind::SlashCommand(_))),
+        items
+            .iter()
+            .all(|item| matches!(item.kind, ContextPickerItemKind::SlashCommand(_))),
         "Slash mode should only return slash commands"
     );
 }

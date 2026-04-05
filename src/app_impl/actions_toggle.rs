@@ -162,6 +162,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
         main_bounds: gpui::Bounds<gpui::Pixels>,
         display_id: Option<gpui::DisplayId>,
+        parent_window_handle: gpui::AnyWindowHandle,
         dialog: Entity<ActionsDialog>,
         position: crate::actions::WindowPosition,
         opened_log: &'static str,
@@ -169,7 +170,14 @@ impl ScriptListApp {
     ) {
         cx.spawn(async move |this, cx| {
             cx.update(|cx| {
-                match open_actions_window(cx, main_bounds, display_id, dialog, position) {
+                match open_actions_window(
+                    cx,
+                    parent_window_handle,
+                    main_bounds,
+                    display_id,
+                    dialog,
+                    position,
+                ) {
                     Ok(_handle) => {
                         logging::log("ACTIONS", opened_log);
                     }
@@ -251,6 +259,37 @@ impl ScriptListApp {
             self.begin_actions_popup_window_open(cx, window);
 
             let is_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
+            let acp_actions = if let AppView::AcpChatView { ref entity } = self.current_view {
+                let selected_agent_id = {
+                    let view = entity.read(cx);
+                    match &view.session {
+                        crate::ai::acp::AcpChatSession::Setup(state) => {
+                            state.selected_agent.as_ref().map(|agent| agent.id.to_string())
+                        }
+                        crate::ai::acp::AcpChatSession::Live(_) => {
+                            crate::ai::acp::load_preferred_acp_agent_id()
+                        }
+                    }
+                };
+                let catalog_entries = match crate::ai::acp::load_acp_agent_catalog_entries() {
+                    Ok(entries) => entries,
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_actions_catalog_load_failed",
+                            error = %error,
+                        );
+                        Vec::new()
+                    }
+                };
+
+                crate::actions::get_acp_chat_actions_with_agents(
+                    &catalog_entries,
+                    selected_agent_id.as_deref(),
+                )
+            } else {
+                Vec::new()
+            };
             let script_info = self.get_focused_script_info();
 
             // Get the full scriptlet with actions if focused item is a scriptlet
@@ -267,7 +306,7 @@ impl ScriptListApp {
                     ActionsDialog::from_actions_with_context(
                         focus_handle,
                         std::sync::Arc::new(|_action_id| {}),
-                        crate::actions::get_acp_chat_actions(),
+                        acp_actions,
                         None,
                         None,
                         theme_arc,
@@ -340,6 +379,7 @@ impl ScriptListApp {
             // screen or at wrong coordinates when the main window was on a secondary display.
             let main_bounds = window.bounds();
             let display_id = window.display(cx).map(|d| d.id());
+            let parent_window_handle = window.window_handle();
 
             logging::log(
                 "ACTIONS",
@@ -356,6 +396,7 @@ impl ScriptListApp {
                 cx,
                 main_bounds,
                 display_id,
+                parent_window_handle,
                 dialog,
                 position,
                 "Actions popup window opened",
@@ -495,12 +536,14 @@ impl ScriptListApp {
             // Get main window bounds for positioning
             let main_bounds = window.bounds();
             let display_id = window.display(cx).map(|d| d.id());
+            let parent_window_handle = window.window_handle();
 
             // Open the actions window — same as toggle_chat_actions
             Self::spawn_open_actions_window(
                 cx,
                 main_bounds,
                 display_id,
+                parent_window_handle,
                 dialog,
                 crate::actions::WindowPosition::BottomRight,
                 "Webcam actions popup window opened",
@@ -565,11 +608,13 @@ impl ScriptListApp {
 
             let main_bounds = window.bounds();
             let display_id = window.display(cx).map(|d| d.id());
+            let parent_window_handle = window.window_handle();
 
             Self::spawn_open_actions_window(
                 cx,
                 main_bounds,
                 display_id,
+                parent_window_handle,
                 dialog,
                 crate::actions::WindowPosition::BottomRight,
                 "Terminal actions popup window opened",
@@ -688,6 +733,7 @@ impl ScriptListApp {
             // Get main window bounds and display_id for positioning
             let main_bounds = window.bounds();
             let display_id = window.display(cx).map(|d| d.id());
+            let parent_window_handle = window.window_handle();
 
             logging::log(
                 "ACTIONS",
@@ -706,6 +752,7 @@ impl ScriptListApp {
                 cx,
                 main_bounds,
                 display_id,
+                parent_window_handle,
                 dialog,
                 position,
                 "Chat actions popup window opened",

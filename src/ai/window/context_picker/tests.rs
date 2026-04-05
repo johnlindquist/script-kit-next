@@ -407,8 +407,13 @@ fn extract_bare_slash_at_start() {
 #[test]
 fn slash_mode_only_includes_agent_slash_commands() {
     let items = build_slash_picker_items("", ["compact", "clear", "help"]);
-    assert!(!items.is_empty(), "Slash mode should include provided commands");
-    assert!(items.iter().all(|item| matches!(item.kind, ContextPickerItemKind::SlashCommand(_))));
+    assert!(
+        !items.is_empty(),
+        "Slash mode should include provided commands"
+    );
+    assert!(items
+        .iter()
+        .all(|item| matches!(item.kind, ContextPickerItemKind::SlashCommand(_))));
 }
 
 #[test]
@@ -755,14 +760,19 @@ fn context_picker_state_clamp_on_empty_filter() {
 #[test]
 fn slash_mode_empty_without_agent_commands() {
     let items = build_slash_picker_items("any", std::iter::empty::<&str>());
-    assert!(items.is_empty(), "Slash mode should not surface context attachments");
+    assert!(
+        items.is_empty(),
+        "Slash mode should not surface context attachments"
+    );
 }
 
 #[test]
 fn slash_sel_does_not_surface_selection_context() {
     let items = build_slash_picker_items("sel", ["compact", "clear", "help"]);
     assert!(
-        items.iter().all(|item| !matches!(item.kind, ContextPickerItemKind::BuiltIn(_))),
+        items
+            .iter()
+            .all(|item| !matches!(item.kind, ContextPickerItemKind::BuiltIn(_))),
         "Slash mode should never return context attachments"
     );
 }
@@ -828,9 +838,9 @@ fn slash_and_mention_highlights_both_cover_query_length() {
     let mention_query = "bro";
     let slash_query = "com";
     let slash_items = build_slash_picker_items(slash_query, ["compact", "clear", "help"]);
-    let slash_compact = slash_items.iter().find(|i| {
-        matches!(&i.kind, ContextPickerItemKind::SlashCommand(command) if command == "compact")
-    });
+    let slash_compact = slash_items.iter().find(
+        |i| matches!(&i.kind, ContextPickerItemKind::SlashCommand(command) if command == "compact"),
+    );
 
     let mention_items = build_picker_items(ContextPickerTrigger::Mention, mention_query);
     let mention_browser = mention_items.iter().find(|i| {
@@ -902,7 +912,10 @@ fn fuzzy_match_scores_below_substring() {
         substring_score,
         fuzzy_score,
     );
-    assert_eq!(fuzzy_score, 50, "Fuzzy-only matches should score exactly 50");
+    assert_eq!(
+        fuzzy_score, 50,
+        "Fuzzy-only matches should score exactly 50"
+    );
 }
 
 #[test]

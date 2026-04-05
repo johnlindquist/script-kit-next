@@ -136,10 +136,7 @@ mod tests {
     #[test]
     fn empty_catalog_returns_no_agents_blocker() {
         let result = resolve_default_acp_launch(&[], None);
-        assert_eq!(
-            result.blocker,
-            Some(AcpLaunchBlocker::NoAgentsAvailable)
-        );
+        assert_eq!(result.blocker, Some(AcpLaunchBlocker::NoAgentsAvailable));
         assert!(!result.is_ready());
         assert!(result.selected_agent.is_none());
     }
@@ -197,10 +194,7 @@ mod tests {
         ];
         let result = resolve_default_acp_launch(&agents, Some("preferred-blocked"));
         assert_eq!(result.selected_agent_id(), Some("preferred-blocked"));
-        assert_eq!(
-            result.blocker,
-            Some(AcpLaunchBlocker::AgentNotInstalled)
-        );
+        assert_eq!(result.blocker, Some(AcpLaunchBlocker::AgentNotInstalled));
     }
 
     #[test]
@@ -212,10 +206,7 @@ mod tests {
             AcpAgentConfigState::Valid,
         )];
         let result = resolve_default_acp_launch(&agents, None);
-        assert_eq!(
-            result.blocker,
-            Some(AcpLaunchBlocker::AgentNotInstalled)
-        );
+        assert_eq!(result.blocker, Some(AcpLaunchBlocker::AgentNotInstalled));
     }
 
     #[test]
@@ -227,10 +218,7 @@ mod tests {
             AcpAgentConfigState::Valid,
         )];
         let result = resolve_default_acp_launch(&agents, None);
-        assert_eq!(
-            result.blocker,
-            Some(AcpLaunchBlocker::UnsupportedAgent)
-        );
+        assert_eq!(result.blocker, Some(AcpLaunchBlocker::UnsupportedAgent));
     }
 
     #[test]
@@ -257,10 +245,7 @@ mod tests {
             AcpAgentConfigState::Invalid,
         )];
         let result = resolve_default_acp_launch(&agents, None);
-        assert_eq!(
-            result.blocker,
-            Some(AcpLaunchBlocker::AgentMisconfigured)
-        );
+        assert_eq!(result.blocker, Some(AcpLaunchBlocker::AgentMisconfigured));
     }
 
     #[test]
@@ -301,8 +286,7 @@ mod tests {
         for title in &titles {
             assert!(!title.is_empty());
         }
-        let unique: std::collections::HashSet<&str> =
-            titles.iter().map(|t| t.as_ref()).collect();
+        let unique: std::collections::HashSet<&str> = titles.iter().map(|t| t.as_ref()).collect();
         assert_eq!(unique.len(), titles.len(), "all titles should be unique");
     }
 }

@@ -6,8 +6,10 @@ const BLOCK_MESSAGE =
   "Multiple AI agents are working against this branch. Please wait a few minutes for them to finish, then continue your work";
 
 type HookPayload = {
+  tool_name?: string;
   tool_input?: {
     command?: string;
+    cmd?: string;
   };
 };
 
@@ -21,7 +23,7 @@ type PermissionDecision = {
 
 const input = readFileSync(0, "utf8");
 const payload = JSON.parse(input) as HookPayload;
-const command = payload.tool_input?.command ?? "";
+const command = payload.tool_input?.command ?? payload.tool_input?.cmd ?? "";
 
 const COMMAND_SEPARATORS = new Set(["&&", "||", ";", "|", "&"]);
 const WRAPPER_COMMANDS = new Set(["command", "builtin", "env", "nohup"]);

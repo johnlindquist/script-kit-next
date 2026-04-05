@@ -86,7 +86,10 @@ struct SurfaceSpec {
 const SURFACES: &[SurfaceSpec] = &[
     SurfaceSpec {
         surface: "render_prompts::select",
-        files: &["src/render_prompts/other.rs", "src/prompts/select/render.rs"],
+        files: &[
+            "src/render_prompts/other.rs",
+            "src/prompts/select/render.rs",
+        ],
         accepted_hint_surfaces: &["render_prompts::select"],
     },
     SurfaceSpec {
@@ -131,11 +134,7 @@ fn contains_any(haystack: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| haystack.contains(needle))
 }
 
-fn info(
-    title: &'static str,
-    summary: impl Into<String>,
-    evidence: Vec<String>,
-) -> AuditFinding {
+fn info(title: &'static str, summary: impl Into<String>, evidence: Vec<String>) -> AuditFinding {
     AuditFinding {
         severity: AuditSeverity::Info,
         title,
@@ -144,11 +143,7 @@ fn info(
     }
 }
 
-fn warning(
-    title: &'static str,
-    summary: impl Into<String>,
-    evidence: Vec<String>,
-) -> AuditFinding {
+fn warning(title: &'static str, summary: impl Into<String>, evidence: Vec<String>) -> AuditFinding {
     AuditFinding {
         severity: AuditSeverity::Warning,
         title,
@@ -414,10 +409,7 @@ pub fn render_prompt_chrome_consistency_markdown(report: &AuditReport) -> String
             ));
             lines.push(format!("  - {}", finding.summary));
             if !finding.evidence.is_empty() {
-                lines.push(format!(
-                    "  - Evidence: `{}`",
-                    finding.evidence.join("`, `")
-                ));
+                lines.push(format!("  - Evidence: `{}`", finding.evidence.join("`, `")));
             }
         }
 

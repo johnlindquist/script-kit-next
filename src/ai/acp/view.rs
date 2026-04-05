@@ -1,8 +1,8 @@
 //! ACP chat view.
 //!
 //! Renders an ACP conversation thread with markdown-rendered messages,
-//! role-aware cards, empty/streaming/error states, and permission approval
-//! overlay. Wraps an `AcpThread` entity for the Tab AI surface.
+//! role-aware cards, empty/streaming/error states, and inline permission
+//! approval cards. Wraps an `AcpThread` entity for the Tab AI surface.
 
 use std::collections::HashSet;
 use std::time::Duration;
@@ -28,10 +28,10 @@ use super::thread::{
 use super::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpApprovalRequest};
 
 use crate::ai::message_parts::AiContextPart;
-use crate::ai::window::context_picker::{build_picker_items, build_slash_picker_items};
 use crate::ai::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger,
 };
+use crate::ai::window::context_picker::{build_picker_items, build_slash_picker_items};
 
 /// Active @-mention session state for the ACP inline context picker.
 #[derive(Debug, Clone)]
@@ -86,8 +86,10 @@ pub(crate) struct AcpChatView {
     focus_handle: FocusHandle,
     /// Virtualized variable-height message list state.
     pub(crate) list_state: ListState,
-    /// Index of the currently highlighted permission option in the overlay.
+    /// Index of the currently highlighted permission option in the inline card.
     permission_index: usize,
+    /// Whether the inline permission options list is expanded.
+    permission_options_open: bool,
     /// Message IDs that are currently collapsed (thinking/tool blocks).
     pub(crate) collapsed_ids: HashSet<u64>,
     /// Track message count for list splice updates.
@@ -129,11 +131,29 @@ struct AcpSetupAgentPickerState {
 }
 
 impl AcpChatView {
+    fn composer_is_active(
+        window_active: bool,
+        view_focused: bool,
+        actions_window_open: bool,
+    ) -> bool {
+        window_active && view_focused && !actions_window_open
+    }
+
     fn char_to_byte_offset(text: &str, char_idx: usize) -> usize {
         text.char_indices()
             .nth(char_idx)
             .map(|(byte_idx, _)| byte_idx)
             .unwrap_or(text.len())
+    }
+
+    fn telemetry_item_id(item: &ContextPickerItem) -> String {
+        match &item.kind {
+            ContextPickerItemKind::BuiltIn(_) | ContextPickerItemKind::SlashCommand(_) => {
+                item.id.to_string()
+            }
+            ContextPickerItemKind::File(_) => format!("file:{}", item.label),
+            ContextPickerItemKind::Folder(_) => format!("folder:{}", item.label),
+        }
     }
 
     /// Access the live thread entity, if in live mode.
@@ -166,10 +186,7 @@ impl AcpChatView {
     /// Returns cursor, picker, accepted item, thread status, layout metrics,
     /// and context readiness — everything an agent needs to verify ACP
     /// interactions without screenshots.
-    pub(crate) fn collect_acp_state_snapshot(
-        &self,
-        cx: &App,
-    ) -> crate::protocol::AcpStateSnapshot {
+    pub(crate) fn collect_acp_state_snapshot(&self, cx: &App) -> crate::protocol::AcpStateSnapshot {
         use crate::protocol::{
             AcpInputLayoutMetrics, AcpPickerState as PickerState, AcpStateSnapshot,
             ACP_STATE_SCHEMA_VERSION,
@@ -223,8 +240,7 @@ impl AcpChatView {
         let (visible_start, visible_end) = thread.input.visible_window_range(60);
         let cursor_in_window = cursor_index.saturating_sub(visible_start);
 
-        let context_ready =
-            thread.context_bootstrap_state() != AcpContextBootstrapState::Preparing;
+        let context_ready = thread.context_bootstrap_state() != AcpContextBootstrapState::Preparing;
 
         AcpStateSnapshot {
             schema_version: ACP_STATE_SCHEMA_VERSION,
@@ -325,6 +341,7 @@ impl AcpChatView {
             focus_handle: cx.focus_handle(),
             list_state,
             permission_index: 0,
+            permission_options_open: false,
             collapsed_ids: HashSet::new(),
             last_message_count: 0,
             cursor_visible: true,
@@ -361,6 +378,7 @@ impl AcpChatView {
             focus_handle: cx.focus_handle(),
             list_state,
             permission_index: 0,
+            permission_options_open: false,
             collapsed_ids: HashSet::new(),
             last_message_count: 0,
             cursor_visible: false,
@@ -425,7 +443,7 @@ impl AcpChatView {
         commands
     }
 
-    /// Consume Tab / Shift+Tab. When the permission overlay is open,
+    /// Consume Tab / Shift+Tab. When a permission card is active,
     /// cycle the highlighted option; otherwise just swallow the key so
     /// the global interceptors do not re-open a fresh ACP chat.
     pub(crate) fn handle_tab_key(&mut self, has_shift: bool, cx: &mut Context<Self>) -> bool {
@@ -445,12 +463,31 @@ impl AcpChatView {
         if option_count > 0 {
             self.permission_index =
                 Self::step_permission_index(self.permission_index, option_count, has_shift);
+            self.permission_options_open = option_count > 1;
             cx.notify();
             return true;
         }
 
         // Plain Tab accepts the focused picker item (same as Enter but without submit).
         if !has_shift && self.mention_session.is_some() {
+            let pre_accept_item = self.mention_session.as_ref().and_then(|s| {
+                s.items.get(s.selected_index).map(|item| {
+                    let trigger_str = match s.trigger {
+                        crate::ai::window::context_picker::types::ContextPickerTrigger::Mention => {
+                            "@"
+                        }
+                        crate::ai::window::context_picker::types::ContextPickerTrigger::Slash => {
+                            "/"
+                        }
+                    };
+                    (
+                        trigger_str.to_string(),
+                        item.label.to_string(),
+                        Self::telemetry_item_id(item),
+                    )
+                })
+            });
+            let cursor_before = self.live_thread().read(cx).input.cursor();
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "acp_picker_tab_accept",
@@ -461,6 +498,28 @@ impl AcpChatView {
                     .unwrap_or(0),
             );
             self.accept_mention_selection_impl(false, cx);
+            let cursor_after = self.live_thread().read(cx).input.cursor();
+            self.emit_key_route_telemetry(
+                "tab",
+                crate::protocol::AcpKeyRoute::Picker,
+                cursor_before,
+                cursor_after,
+                false,
+                true,
+            );
+            if let Some((trigger, label, id)) = pre_accept_item {
+                self.emit_picker_accepted_telemetry(
+                    &trigger,
+                    &label,
+                    &id,
+                    "tab",
+                    cursor_after,
+                    false,
+                );
+            }
+            if let Some(ref layout) = self.collect_acp_state_snapshot(cx).input_layout {
+                self.emit_input_layout_telemetry(layout);
+            }
             return true;
         }
 
@@ -470,9 +529,124 @@ impl AcpChatView {
 
     fn approve_permission(&mut self, option_id: Option<String>, cx: &mut Context<Self>) {
         self.permission_index = 0;
+        self.permission_options_open = false;
         self.live_thread().update(cx, |thread, cx| {
             thread.approve_pending_permission(option_id, cx);
         });
+    }
+
+    fn permission_request_tool_call_id(request: &AcpApprovalRequest) -> Option<&str> {
+        let tool_call_id = request.preview.as_ref()?.tool_call_id.trim();
+        if tool_call_id.is_empty() {
+            None
+        } else {
+            Some(tool_call_id)
+        }
+    }
+
+    fn permission_request_matches_message(
+        msg: &AcpThreadMessage,
+        request: &AcpApprovalRequest,
+    ) -> bool {
+        msg.tool_call_id
+            .as_deref()
+            .zip(Self::permission_request_tool_call_id(request))
+            .is_some_and(|(msg_id, request_id)| msg_id == request_id)
+    }
+
+    fn selected_permission_option<'a>(
+        &self,
+        request: &'a AcpApprovalRequest,
+    ) -> Option<(usize, &'a AcpApprovalOption)> {
+        let index = self.normalized_permission_index(request.options.len());
+        request.options.get(index).map(|option| (index, option))
+    }
+
+    fn first_allow_once_option(
+        request: &AcpApprovalRequest,
+    ) -> Option<(usize, &AcpApprovalOption)> {
+        request
+            .options
+            .iter()
+            .enumerate()
+            .find(|(_, option)| !option.is_reject() && !option.is_persistent_allow())
+    }
+
+    fn first_allow_option(request: &AcpApprovalRequest) -> Option<(usize, &AcpApprovalOption)> {
+        request
+            .options
+            .iter()
+            .enumerate()
+            .find(|(_, option)| !option.is_reject())
+    }
+
+    fn first_reject_option(request: &AcpApprovalRequest) -> Option<(usize, &AcpApprovalOption)> {
+        request
+            .options
+            .iter()
+            .enumerate()
+            .find(|(_, option)| option.is_reject())
+    }
+
+    fn preferred_allow_option<'a>(
+        &self,
+        request: &'a AcpApprovalRequest,
+    ) -> Option<(usize, &'a AcpApprovalOption)> {
+        match self.selected_permission_option(request) {
+            Some((index, option)) if !option.is_reject() => Some((index, option)),
+            _ => {
+                Self::first_allow_once_option(request).or_else(|| Self::first_allow_option(request))
+            }
+        }
+    }
+
+    fn approve_preferred_allow_option(
+        &mut self,
+        request: &AcpApprovalRequest,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if let Some((index, option)) = self.preferred_allow_option(request) {
+            self.permission_index = index;
+            self.approve_permission(Some(option.option_id.clone()), cx);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn approve_reject_option(
+        &mut self,
+        request: &AcpApprovalRequest,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if let Some((index, option)) = Self::first_reject_option(request) {
+            self.permission_index = index;
+            self.approve_permission(Some(option.option_id.clone()), cx);
+            true
+        } else {
+            self.approve_permission(None, cx);
+            true
+        }
+    }
+
+    fn toggle_permission_options(
+        &mut self,
+        request: &AcpApprovalRequest,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if request.options.len() <= 1 {
+            return false;
+        }
+
+        if !self.permission_options_open {
+            if let Some((index, _)) = self.preferred_allow_option(request) {
+                self.permission_index = index;
+            }
+        }
+
+        self.permission_options_open = !self.permission_options_open;
+        cx.notify();
+        true
     }
 
     fn normalized_permission_index(&self, option_count: usize) -> usize {
@@ -499,7 +673,7 @@ impl AcpChatView {
         }
     }
 
-    /// Handle key events when the permission overlay is displayed.
+    /// Handle key events when an inline permission card is active.
     /// Returns `true` if the key was consumed.
     fn handle_permission_key_down(
         &mut self,
@@ -508,12 +682,39 @@ impl AcpChatView {
         cx: &mut Context<Self>,
     ) -> bool {
         let key = event.keystroke.key.as_str();
+        let modifiers = &event.keystroke.modifiers;
         let option_count = request.options.len();
         self.permission_index = self.normalized_permission_index(option_count);
+
+        if modifiers.platform
+            && !modifiers.alt
+            && !modifiers.control
+            && key.eq_ignore_ascii_case("y")
+        {
+            return self.approve_preferred_allow_option(request, cx);
+        }
+
+        if modifiers.platform
+            && modifiers.alt
+            && !modifiers.control
+            && key.eq_ignore_ascii_case("a")
+        {
+            self.toggle_permission_options(request, cx);
+            return true;
+        }
+
+        if modifiers.platform
+            && modifiers.alt
+            && !modifiers.control
+            && key.eq_ignore_ascii_case("z")
+        {
+            return self.approve_reject_option(request, cx);
+        }
 
         if crate::ui_foundation::is_key_up(key) {
             self.permission_index =
                 Self::step_permission_index(self.permission_index, option_count, true);
+            self.permission_options_open = option_count > 1;
             cx.notify();
             return true;
         }
@@ -521,6 +722,7 @@ impl AcpChatView {
         if crate::ui_foundation::is_key_down(key) {
             self.permission_index =
                 Self::step_permission_index(self.permission_index, option_count, false);
+            self.permission_options_open = option_count > 1;
             cx.notify();
             return true;
         }
@@ -530,16 +732,24 @@ impl AcpChatView {
             "j" | "J" => {
                 self.permission_index =
                     Self::step_permission_index(self.permission_index, option_count, false);
+                self.permission_options_open = option_count > 1;
                 cx.notify();
                 return true;
             }
             "k" | "K" => {
                 self.permission_index =
                     Self::step_permission_index(self.permission_index, option_count, true);
+                self.permission_options_open = option_count > 1;
                 cx.notify();
                 return true;
             }
             _ => {}
+        }
+
+        if crate::ui_foundation::is_key_escape(key) && self.permission_options_open {
+            self.permission_options_open = false;
+            cx.notify();
+            return true;
         }
 
         if crate::ui_foundation::is_key_escape(key) {
@@ -554,7 +764,7 @@ impl AcpChatView {
             {
                 self.approve_permission(Some(option.option_id.clone()), cx);
             } else {
-                self.approve_permission(None, cx);
+                let _ = self.approve_preferred_allow_option(request, cx);
             }
             return true;
         }
@@ -981,25 +1191,30 @@ impl AcpChatView {
     }
 
     fn render_permission_section(title: &'static str, text: String) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+
         div()
             .pt(px(8.0))
             .child(
                 div()
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
-                    .opacity(0.64)
+                    .opacity(0.48)
                     .child(title),
             )
             .child(
                 div()
                     .mt(px(4.0))
-                    .max_h(px(140.0))
+                    .max_h(px(120.0))
                     .overflow_y_hidden()
-                    .rounded(px(8.0))
-                    .bg(rgba(0x00000018))
-                    .px(px(10.0))
-                    .py(px(8.0))
+                    .border_l_2()
+                    .border_color(rgba((theme.colors.ui.border << 8) | 0x18))
+                    .bg(rgba((theme.colors.text.primary << 8) | 0x04))
+                    .pl(px(10.0))
+                    .pr(px(8.0))
+                    .py(px(6.0))
                     .text_xs()
+                    .opacity(0.76)
                     .child(text),
             )
             .into_any_element()
@@ -1025,33 +1240,34 @@ impl AcpChatView {
         };
 
         div()
-            .pt(px(8.0))
+            .pt(px(6.0))
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap_2()
+                    .gap(px(8.0))
                     .child(
                         div()
-                            .px(px(8.0))
-                            .py(px(4.0))
+                            .px(px(7.0))
+                            .py(px(3.0))
                             .rounded(px(999.0))
                             .bg(badge_bg)
                             .border_1()
                             .border_color(badge_border)
                             .text_xs()
-                            .opacity(0.8)
+                            .opacity(0.68)
                             .child(preview.kind.badge_label()),
                     )
                     .child(
                         div()
                             .text_sm()
                             .font_weight(FontWeight::SEMIBOLD)
+                            .opacity(0.92)
                             .child(preview.tool_title.clone()),
                     ),
             )
             .when_some(preview.subject.clone(), |d, subject| {
-                d.child(div().pt(px(6.0)).text_sm().opacity(0.82).child(subject))
+                d.child(div().pt(px(4.0)).text_sm().opacity(0.68).child(subject))
             })
             .into_any_element()
     }
@@ -1060,171 +1276,328 @@ impl AcpChatView {
         option: &AcpApprovalOption,
         index: usize,
         is_selected: bool,
-        cx: &mut Context<Self>,
+        view: WeakEntity<AcpChatView>,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
         let option_id = option.option_id.clone();
 
-        let (bg, _border, caption) = if option.is_reject() {
+        let (accent, bg, hover_bg, caption) = if option.is_reject() {
             (
+                rgba(0xEF4444AA),
                 if is_selected {
-                    rgba(0xEF444424)
+                    rgba(0xEF444418)
                 } else {
-                    rgba(0xEF444412)
+                    rgba(0xEF444406)
                 },
-                rgba(0xEF444460),
-                "Cancel this request",
+                rgba(0xEF444410),
+                "Deny this request",
             )
         } else if option.is_persistent_allow() {
             (
+                rgb(theme.colors.accent.selected),
                 if is_selected {
-                    rgba((theme.colors.accent.selected << 8) | 0x22)
+                    rgba((theme.colors.accent.selected << 8) | 0x18)
                 } else {
-                    rgba((theme.colors.accent.selected << 8) | 0x12)
+                    rgba((theme.colors.accent.selected << 8) | 0x06)
                 },
-                rgba((theme.colors.accent.selected << 8) | 0x48),
+                rgba((theme.colors.accent.selected << 8) | 0x10),
                 "Remember this choice",
             )
         } else {
             (
+                rgb(theme.colors.accent.selected),
                 if is_selected {
-                    rgba((theme.colors.accent.selected << 8) | 0x1C)
+                    rgba((theme.colors.accent.selected << 8) | 0x12)
                 } else {
-                    rgba((theme.colors.text.primary << 8) | 0x08)
+                    rgba((theme.colors.text.primary << 8) | 0x04)
                 },
-                if is_selected {
-                    rgba((theme.colors.accent.selected << 8) | 0x60)
-                } else {
-                    rgba((theme.colors.ui.border << 8) | 0x30)
-                },
-                "Allow once",
+                rgba((theme.colors.text.primary << 8) | 0x08),
+                "Approve once",
             )
         };
 
         div()
             .id(SharedString::from(format!("perm-opt-{index}")))
-            .mt(px(6.0))
-            .px(px(12.0))
-            .py(px(8.0))
-            .rounded(px(8.0))
+            .mt(px(4.0))
+            .pl(px(10.0))
+            .pr(px(6.0))
+            .py(px(6.0))
+            .border_l_2()
+            .border_color(if is_selected {
+                accent
+            } else {
+                rgba(0x00000000)
+            })
             .cursor_pointer()
             .bg(bg)
-            .when(is_selected, |d| {
-                d.border_l_2().border_color(if option.is_reject() {
-                    rgba(0xEF4444AA)
-                } else {
-                    rgb(theme.colors.accent.selected)
-                })
+            .hover(move |d| d.bg(hover_bg))
+            .on_click(move |_event, _window, cx| {
+                if let Some(entity) = view.upgrade() {
+                    entity.update(cx, |this, cx| {
+                        this.permission_index = index;
+                        this.approve_permission(Some(option_id.clone()), cx);
+                    });
+                }
             })
-            .when(!is_selected, |d| {
-                d.border_l_2().border_color(gpui::transparent_black())
-            })
-            .hover(|d| d.bg(rgba((theme.colors.text.primary << 8) | 0x0C)))
-            .on_click(cx.listener(move |this, _event, _window, cx| {
-                this.approve_permission(Some(option_id.clone()), cx);
-            }))
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(6.0))
+                    .justify_between()
+                    .gap(px(8.0))
                     .child(
                         div()
                             .text_sm()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .child(format!("{}", index + 1)),
+                            .child(option.name.clone()),
                     )
-                    .child(div().text_sm().child(option.name.clone())),
+                    .child(
+                        div()
+                            .text_xs()
+                            .opacity(0.34)
+                            .child(format!("{}", index + 1)),
+                    ),
             )
-            .child(div().pt(px(2.0)).text_xs().opacity(0.45).child(caption))
+            .child(div().pt(px(2.0)).text_xs().opacity(0.42).child(caption))
             .into_any_element()
     }
 
-    fn render_permission_overlay(
+    fn render_permission_inline_card(
         request: &AcpApprovalRequest,
         selected_index: usize,
-        cx: &mut Context<Self>,
+        options_open: bool,
+        view: WeakEntity<AcpChatView>,
     ) -> gpui::AnyElement {
         let theme = theme::get_cached_theme();
         let preview = request.preview.clone();
         let selected_index = selected_index.min(request.options.len().saturating_sub(1));
+        let show_options_button = request.options.len() > 2
+            || request
+                .options
+                .iter()
+                .any(|option| option.is_persistent_allow());
+        let selected_option_label = request
+            .options
+            .get(selected_index)
+            .map(|option| option.name.clone())
+            .unwrap_or_else(|| "Options".to_string());
+        let shortcut_hint = if show_options_button {
+            "\u{2318}Y Allow \u{00b7} \u{2318}\u{2325}A Options \u{00b7} \u{2318}\u{2325}Z Deny"
+        } else {
+            "\u{2318}Y Allow \u{00b7} \u{2318}\u{2325}Z Deny \u{00b7} Esc Cancel"
+        };
+
+        let accent = preview
+            .as_ref()
+            .map(|preview| match preview.kind {
+                AcpApprovalPreviewKind::Read => rgba((theme.colors.ui.border << 8) | 0x44),
+                AcpApprovalPreviewKind::Write => rgb(theme.colors.accent.selected),
+                AcpApprovalPreviewKind::Execute => rgba(0xF59E0BCC),
+                AcpApprovalPreviewKind::Generic => rgba((theme.colors.ui.border << 8) | 0x32),
+            })
+            .unwrap_or_else(|| rgb(theme.colors.accent.selected));
+
+        let allow_request = request.clone();
+        let allow_view = view.clone();
+        let deny_request = request.clone();
+        let deny_view = view.clone();
+        let options_request = request.clone();
+        let options_view = view.clone();
 
         div()
-            .absolute()
-            .top_0()
-            .left_0()
-            .right_0()
-            .bottom_0()
-            .bg(theme::modal_overlay_bg(&theme, 0x80))
-            .flex()
-            .items_center()
-            .justify_center()
+            .id("acp-inline-permission-card")
+            .w_full()
+            .mt(px(6.0))
+            .ml(px(12.0))
+            .pl(px(10.0))
+            .pr(px(8.0))
+            .py(px(8.0))
+            .border_l_2()
+            .border_color(accent)
+            .bg(rgba((theme.colors.text.primary << 8) | 0x04))
             .child(
                 div()
-                    .w(px(640.0))
-                    .max_w_full()
-                    .mx_4()
-                    .p_4()
-                    .rounded(px(14.0))
-                    .bg(rgb(theme.colors.background.search_box))
-                    .border_1()
-                    .border_color(rgba((theme.colors.ui.border << 8) | 0x99))
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .opacity(0.48)
+                    .child(request.title.clone()),
+            )
+            .when_some(preview.clone(), |d, preview| {
+                d.child(Self::render_permission_header(&preview))
+                    .when_some(preview.summary, |d, summary| {
+                        d.child(div().pt(px(6.0)).text_sm().opacity(0.72).child(summary))
+                    })
+                    .when_some(preview.input_preview, |d, input| {
+                        d.child(Self::render_permission_section("Input", input))
+                    })
+                    .when_some(preview.output_preview, |d, output| {
+                        d.child(Self::render_permission_section("Output", output))
+                    })
+            })
+            .when(preview.is_none(), |d| {
+                d.child(
+                    div()
+                        .pt(px(6.0))
+                        .text_sm()
+                        .opacity(0.72)
+                        .child(request.body.clone()),
+                )
+            })
+            .child(
+                div()
+                    .pt(px(8.0))
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.0))
                     .child(
                         div()
-                            .text_base()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(request.title.clone()),
+                            .flex()
+                            .items_center()
+                            .gap(px(8.0))
+                            .child(
+                                div()
+                                    .id("acp-inline-permission-allow")
+                                    .px(px(10.0))
+                                    .py(px(6.0))
+                                    .cursor_pointer()
+                                    .border_l_2()
+                                    .border_color(rgb(theme.colors.accent.selected))
+                                    .bg(rgba((theme.colors.accent.selected << 8) | 0x12))
+                                    .hover(|d| {
+                                        d.bg(rgba((theme.colors.accent.selected << 8) | 0x1C))
+                                    })
+                                    .on_click(move |_event, _window, cx| {
+                                        if let Some(entity) = allow_view.upgrade() {
+                                            entity.update(cx, |this, cx| {
+                                                let _ = this.approve_preferred_allow_option(
+                                                    &allow_request,
+                                                    cx,
+                                                );
+                                            });
+                                        }
+                                    })
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(8.0))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .child("Allow"),
+                                            )
+                                            .child(
+                                                div().text_xs().opacity(0.42).child("\u{2318}Y"),
+                                            ),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .id("acp-inline-permission-deny")
+                                    .px(px(10.0))
+                                    .py(px(6.0))
+                                    .cursor_pointer()
+                                    .border_l_2()
+                                    .border_color(rgba(0xEF4444AA))
+                                    .bg(rgba(0xEF444408))
+                                    .hover(|d| d.bg(rgba(0xEF444414)))
+                                    .on_click(move |_event, _window, cx| {
+                                        if let Some(entity) = deny_view.upgrade() {
+                                            entity.update(cx, |this, cx| {
+                                                let _ =
+                                                    this.approve_reject_option(&deny_request, cx);
+                                            });
+                                        }
+                                    })
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(8.0))
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .child("Deny"),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .opacity(0.42)
+                                                    .child("\u{2318}\u{2325}Z"),
+                                            ),
+                                    ),
+                            ),
                     )
-                    // ── Structured preview sections ──────────────
-                    .when_some(preview.clone(), |d, preview| {
-                        d.child(Self::render_permission_header(&preview))
-                            .when_some(preview.summary, |d, summary| {
-                                d.child(Self::render_permission_section("Summary", summary))
-                            })
-                            .when_some(preview.input_preview, |d, input| {
-                                d.child(Self::render_permission_section("Input", input))
-                            })
-                            .when_some(preview.output_preview, |d, output| {
-                                d.child(Self::render_permission_section("Output", output))
-                            })
-                            .when(!preview.option_summary.is_empty(), |d| {
-                                d.child(
-                                    div()
-                                        .pt(px(8.0))
-                                        .text_xs()
-                                        .opacity(0.52)
-                                        .child(format!(
-                                            "Available options: {}",
-                                            preview.option_summary.join(" \u{00b7} ")
-                                        )),
-                                )
-                            })
-                    })
-                    // ── Fallback to body when no preview ─────────
-                    .when(preview.is_none(), |d| {
+                    .when(show_options_button, |d| {
                         d.child(
                             div()
-                                .pt(px(8.0))
-                                .pb(px(12.0))
-                                .text_sm()
-                                .opacity(0.76)
-                                .child(request.body.clone()),
+                                .id("acp-inline-permission-options")
+                                .px(px(10.0))
+                                .py(px(6.0))
+                                .cursor_pointer()
+                                .border_l_2()
+                                .border_color(if options_open {
+                                    rgb(theme.colors.accent.selected)
+                                } else {
+                                    rgba(0x00000000)
+                                })
+                                .bg(rgba((theme.colors.text.primary << 8) | 0x06))
+                                .hover(|this| {
+                                    this.bg(rgba((theme.colors.text.primary << 8) | 0x0C))
+                                })
+                                .on_click(move |_event, _window, cx| {
+                                    if let Some(entity) = options_view.upgrade() {
+                                        entity.update(cx, |this, cx| {
+                                            let _ = this
+                                                .toggle_permission_options(&options_request, cx);
+                                        });
+                                    }
+                                })
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.0))
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .child(selected_option_label.clone()),
+                                        )
+                                        .child(div().text_xs().opacity(0.42).child(
+                                            if options_open {
+                                                "\u{2318}\u{2325}A \u{25BE}"
+                                            } else {
+                                                "\u{2318}\u{2325}A \u{25B8}"
+                                            },
+                                        )),
+                                ),
                         )
-                    })
-                    // ── Option list with semantic rows ───────────
-                    .children(request.options.iter().enumerate().map(|(i, option)| {
-                        Self::render_permission_option_row(option, i, i == selected_index, cx)
-                    }))
-                    // ── Keyboard hint strip ──────────────────────
-                    .child(
-                        div()
-                            .pt(px(12.0))
-                            .text_xs()
-                            .opacity(0.56)
-                            .child(
-                                "\u{2191}\u{2193} navigate \u{00b7} 1\u{2013}9 pick \u{00b7} Enter confirm \u{00b7} Esc cancel",
-                            ),
-                    ),
+                    }),
+            )
+            .when(options_open && request.options.len() > 1, |d| {
+                d.child(
+                    div()
+                        .pt(px(6.0))
+                        .children(request.options.iter().enumerate().map(|(i, option)| {
+                            Self::render_permission_option_row(
+                                option,
+                                i,
+                                i == selected_index,
+                                view.clone(),
+                            )
+                        })),
+                )
+            })
+            .child(
+                div()
+                    .pt(px(8.0))
+                    .text_xs()
+                    .opacity(0.42)
+                    .child(shortcut_hint),
             )
             .into_any_element()
     }
@@ -1416,7 +1789,10 @@ impl AcpChatView {
 
     fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = theme::get_cached_theme();
-        let is_streaming = matches!(self.live_thread().read(cx).status, AcpThreadStatus::Streaming);
+        let is_streaming = matches!(
+            self.live_thread().read(cx).status,
+            AcpThreadStatus::Streaming
+        );
 
         // Hint strip opacity: match main menu's OPACITY_TEXT_MUTED (0.65)
         let hint_text_hex = theme.colors.text.primary;
@@ -1468,8 +1844,11 @@ impl AcpChatView {
                     })
                     // Model selector button
                     .child({
-                        let model_display =
-                            self.live_thread().read(cx).selected_model_display().to_string();
+                        let model_display = self
+                            .live_thread()
+                            .read(cx)
+                            .selected_model_display()
+                            .to_string();
                         let is_open = self.model_selector_open;
                         let chevron = if is_open { "\u{25B4}" } else { "\u{25BE}" }; // ▴ / ▾
                         div()
@@ -1540,7 +1919,9 @@ impl AcpChatView {
             btn = btn
                 .cursor_pointer()
                 .on_click(cx.listener(|this, _event, _window, cx| {
-                    let _ = this.live_thread().update(cx, |thread, cx| thread.submit_input(cx));
+                    let _ = this
+                        .live_thread()
+                        .update(cx, |thread, cx| thread.submit_input(cx));
                 }));
         } else if is_streaming {
             btn = btn
@@ -1594,7 +1975,7 @@ impl AcpChatView {
             .map(|s| s.selected_index)
             .unwrap_or(0);
 
-        self.mention_session = match Self::find_active_trigger(&text, cursor) {
+        let next_session = match Self::find_active_trigger(&text, cursor) {
             Some((trigger, trigger_range, query)) => {
                 let items = match trigger {
                     ContextPickerTrigger::Mention => build_picker_items(trigger, &query),
@@ -1643,6 +2024,12 @@ impl AcpChatView {
             }
             None => None,
         };
+
+        if next_session.is_some() {
+            self.last_accepted_item = None;
+        }
+
+        self.mention_session = next_session;
         self.log_mention_visible_range("refresh");
         cx.notify();
     }
@@ -1714,10 +2101,7 @@ impl AcpChatView {
 
     /// Return the caret position immediately after replacing `char_range`
     /// with `replacement`.
-    fn caret_after_replacement(
-        char_range: &std::ops::Range<usize>,
-        replacement: &str,
-    ) -> usize {
+    fn caret_after_replacement(char_range: &std::ops::Range<usize>, replacement: &str) -> usize {
         char_range.start + replacement.chars().count()
     }
 
@@ -1900,11 +2284,10 @@ impl AcpChatView {
         let parsed = parse_inline_context_mentions(&text);
 
         // Use canonical tokens for dedup and ownership tracking.
-        let desired_tokens: HashSet<String> = parsed
-            .iter()
-            .map(|m| m.canonical_token.clone())
-            .collect();
+        let desired_tokens: HashSet<String> =
+            parsed.iter().map(|m| m.canonical_token.clone()).collect();
         let mut new_inline_owned_tokens = HashSet::new();
+        let mut removed_tokens = Vec::new();
 
         self.live_thread().update(cx, |thread, cx| {
             // Remove stale inline parts (iterate in reverse to keep indices stable).
@@ -1920,6 +2303,13 @@ impl AcpChatView {
                 })
                 .collect();
             for ix in stale_indices.into_iter().rev() {
+                if let Some(token) = thread
+                    .pending_context_parts()
+                    .get(ix)
+                    .and_then(part_to_inline_token)
+                {
+                    removed_tokens.push(token);
+                }
                 thread.remove_context_part(ix, cx);
             }
 
@@ -1936,16 +2326,23 @@ impl AcpChatView {
                 }
             }
         });
+
+        let added_tokens: Vec<String> = new_inline_owned_tokens.iter().cloned().collect();
+
         self.inline_owned_context_tokens
             .retain(|token| desired_tokens.contains(token));
         self.inline_owned_context_tokens
-            .extend(new_inline_owned_tokens);
+            .extend(added_tokens.iter().cloned());
 
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_inline_mentions_synced",
             inline_count = parsed.len(),
             canonical_count = desired_tokens.len(),
+            added_count = added_tokens.len(),
+            removed_count = removed_tokens.len(),
+            added_tokens = ?added_tokens,
+            removed_tokens = ?removed_tokens,
             text_len = text.len(),
         );
     }
@@ -2076,8 +2473,7 @@ impl AcpChatView {
         let trigger_width = Self::measure_acp_input_prefix_width(window, trigger_text);
         let (after_trigger_x, after_trigger_y) =
             Self::measure_acp_input_cursor_position(window, &format!("{prefix}{trigger_text}"));
-        let unclamped_left =
-            Self::ACP_INPUT_PADDING_X + (after_trigger_x - trigger_width).max(0.0);
+        let unclamped_left = Self::ACP_INPUT_PADDING_X + (after_trigger_x - trigger_width).max(0.0);
         let left = Self::clamp_mention_picker_left(unclamped_left, picker_width, window_width);
         let top = Self::ACP_INPUT_PADDING_Y
             + after_trigger_y
@@ -2280,13 +2676,9 @@ impl AcpChatView {
         };
 
         let secondary_hint: Option<String> = state.secondary_action.map(|action| match action {
-            super::setup_state::AcpSetupAction::SelectAgent => {
-                "Enter: select agent".to_string()
-            }
+            super::setup_state::AcpSetupAction::SelectAgent => "Enter: select agent".to_string(),
             super::setup_state::AcpSetupAction::Retry => "Tab: retry".to_string(),
-            super::setup_state::AcpSetupAction::OpenCatalog => {
-                "Edit agents.json".to_string()
-            }
+            super::setup_state::AcpSetupAction::OpenCatalog => "Edit agents.json".to_string(),
             _ => String::new(),
         });
 
@@ -2439,17 +2831,48 @@ impl AcpChatView {
         )
     }
 
-    /// Access the mutable setup state, if in setup mode.
-    fn setup_state_mut(&mut self) -> Option<&mut super::setup_state::AcpInlineSetupState> {
-        match &mut self.session {
-            AcpChatSession::Setup(setup) => Some(setup.as_mut()),
-            AcpChatSession::Live(_) => None,
+    /// Whether an active setup card is showing (initial or runtime recovery).
+    fn has_active_setup(&self, cx: &mut Context<Self>) -> bool {
+        match &self.session {
+            AcpChatSession::Setup(_) => true,
+            AcpChatSession::Live(thread) => thread.read(cx).setup_state().is_some(),
         }
     }
 
-    /// Open the agent selection picker overlay in setup mode.
+    /// Read the active setup state from either session mode.
+    fn read_active_setup_state(
+        &self,
+        cx: &mut Context<Self>,
+    ) -> Option<super::setup_state::AcpInlineSetupState> {
+        match &self.session {
+            AcpChatSession::Setup(setup) => Some((**setup).clone()),
+            AcpChatSession::Live(thread) => thread.read(cx).setup_state().cloned(),
+        }
+    }
+
+    /// Replace the active setup state in whichever session mode is current.
+    fn replace_active_setup_state(
+        &mut self,
+        next: super::setup_state::AcpInlineSetupState,
+        cx: &mut Context<Self>,
+    ) {
+        match &mut self.session {
+            AcpChatSession::Setup(setup) => {
+                **setup = next;
+                cx.notify();
+            }
+            AcpChatSession::Live(thread) => {
+                thread.update(cx, |thread, cx| {
+                    thread.replace_setup_state(next, cx);
+                });
+            }
+        }
+    }
+
+    /// Open the agent selection picker overlay (works in both initial setup
+    /// and runtime recovery).
     fn open_setup_agent_picker(&mut self, cx: &mut Context<Self>) {
-        let Some(setup) = self.setup_state_mut() else {
+        let Some(setup) = self.read_active_setup_state(cx) else {
             return;
         };
         if setup.catalog_entries.is_empty() {
@@ -2489,7 +2912,8 @@ impl AcpChatView {
     }
 
     /// Confirm the currently highlighted agent in the setup picker,
-    /// persist it as the preferred agent, and close the picker.
+    /// persist it as the preferred agent, re-resolve the setup card, and
+    /// close the picker.
     fn confirm_setup_agent_picker(&mut self, cx: &mut Context<Self>) {
         let Some(picker) = self.setup_agent_picker.take() else {
             return;
@@ -2497,21 +2921,30 @@ impl AcpChatView {
         let Some(agent) = picker.items.get(picker.selected_index).cloned() else {
             return;
         };
-        let Some(setup) = self.setup_state_mut() else {
+        let Some(current_setup) = self.read_active_setup_state(cx) else {
             return;
         };
-        setup.selected_agent = Some(agent.clone());
+
+        // Persist selection.
         crate::ai::acp::persist_preferred_acp_agent_id(Some(agent.id.to_string()));
+
+        // Re-resolve against the catalog to rebuild card title/body/actions.
+        let resolution = crate::ai::acp::resolve_default_acp_launch(
+            &current_setup.catalog_entries,
+            Some(agent.id.as_ref()),
+        );
+        let next_setup = crate::ai::acp::AcpInlineSetupState::from_resolution(&resolution);
+
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "acp_setup_agent_selected",
+            event = "acp_setup_agent_re_resolved",
             agent_id = %agent.id,
             display_name = %agent.display_name,
-            install_state = ?agent.install_state,
-            auth_state = ?agent.auth_state,
-            config_state = ?agent.config_state,
+            blocker = ?resolution.blocker,
+            catalog_count = current_setup.catalog_entries.len(),
         );
-        cx.notify();
+
+        self.replace_active_setup_state(next_setup, cx);
     }
 
     /// Handle a setup action triggered by the user.
@@ -2567,6 +3000,17 @@ impl AcpChatView {
         // based on best local knowledge. The actual permission state is
         // checked in handle_key_down where cx is available.
         let permission_active = false;
+        let telemetry = crate::protocol::AcpKeyRouteTelemetry {
+            key: key.to_string(),
+            route: route.clone(),
+            picker_open,
+            permission_active,
+            cursor_before,
+            cursor_after,
+            caused_submit,
+            consumed,
+        };
+        let telemetry_json = serde_json::to_string(&telemetry).unwrap_or_default();
         tracing::info!(
             target: "script_kit::acp_telemetry",
             event = "acp_key_routed",
@@ -2578,12 +3022,65 @@ impl AcpChatView {
             cursor_after,
             caused_submit,
             consumed,
+            telemetry_json = %telemetry_json,
+        );
+    }
+
+    /// Emit structured picker-accepted telemetry after a mention/slash item is accepted.
+    fn emit_picker_accepted_telemetry(
+        &self,
+        trigger: &str,
+        item_label: &str,
+        item_id: &str,
+        accepted_via_key: &str,
+        cursor_after: usize,
+        caused_submit: bool,
+    ) {
+        let telemetry = crate::protocol::AcpPickerItemAcceptedTelemetry {
+            trigger: trigger.to_string(),
+            item_label: item_label.to_string(),
+            item_id: item_id.to_string(),
+            accepted_via_key: accepted_via_key.to_string(),
+            cursor_after,
+            caused_submit,
+        };
+        let telemetry_json = serde_json::to_string(&telemetry).unwrap_or_default();
+        tracing::info!(
+            target: "script_kit::acp_telemetry",
+            event = "acp_picker_item_accepted",
+            trigger = %trigger,
+            item_label = %item_label,
+            item_id = %item_id,
+            accepted_via_key = %accepted_via_key,
+            cursor_after,
+            caused_submit,
+            telemetry_json = %telemetry_json,
+        );
+    }
+
+    /// Emit structured input-layout telemetry after a mutation that may shift the visible window.
+    fn emit_input_layout_telemetry(&self, layout: &crate::protocol::AcpInputLayoutMetrics) {
+        let telemetry = crate::protocol::AcpInputLayoutTelemetry {
+            char_count: layout.char_count,
+            visible_start: layout.visible_start,
+            visible_end: layout.visible_end,
+            cursor_in_window: layout.cursor_in_window,
+        };
+        let telemetry_json = serde_json::to_string(&telemetry).unwrap_or_default();
+        tracing::info!(
+            target: "script_kit::acp_telemetry",
+            event = "acp_input_layout",
+            char_count = layout.char_count,
+            visible_start = layout.visible_start,
+            visible_end = layout.visible_end,
+            cursor_in_window = layout.cursor_in_window,
+            telemetry_json = %telemetry_json,
         );
     }
 
     fn handle_key_down(&mut self, event: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
-        // Setup mode: handle agent picker and setup actions.
-        if self.is_setup_mode() {
+        // Setup mode (initial or runtime recovery): handle agent picker and setup actions.
+        if self.has_active_setup(cx) {
             let key = event.keystroke.key.as_str();
 
             // Agent picker is open — intercept navigation keys.
@@ -2627,10 +3124,10 @@ impl AcpChatView {
                 return;
             }
             if crate::ui_foundation::is_key_enter(key) {
-                // Enter triggers the primary action.
-                let action = match &self.session {
-                    AcpChatSession::Setup(state) => state.primary_action,
-                    _ => return,
+                // Enter triggers the primary action (works for both Setup and Live recovery).
+                let action = match self.read_active_setup_state(cx) {
+                    Some(state) => state.primary_action,
+                    None => return,
                 };
                 self.handle_setup_action(action, cx);
                 cx.stop_propagation();
@@ -2644,14 +3141,14 @@ impl AcpChatView {
         // Reset cursor blink on any key press.
         self.cursor_visible = true;
 
-        // ── Permission overlay intercept ─────────────────────────
+        // ── Inline approval intercept ────────────────────────────
         let pending_permission = self.live_thread().read(cx).pending_permission.clone();
         if let Some(ref request) = pending_permission {
             if self.handle_permission_key_down(event, request, cx) {
                 cx.stop_propagation();
                 return;
             }
-            // Block composer typing behind the modal, but still allow
+            // Block composer typing while approval is pending, but still allow
             // platform/control/alt shortcuts to propagate.
             if !event.keystroke.modifiers.platform
                 && !event.keystroke.modifiers.control
@@ -2779,7 +3276,10 @@ impl AcpChatView {
 
         // ── Cmd+. → cancel streaming (standard macOS cancel) ──────
         if modifiers.platform && key == "." {
-            let is_streaming = matches!(self.live_thread().read(cx).status, AcpThreadStatus::Streaming);
+            let is_streaming = matches!(
+                self.live_thread().read(cx).status,
+                AcpThreadStatus::Streaming
+            );
             if is_streaming {
                 self.live_thread()
                     .update(cx, |thread, cx| thread.cancel_streaming(cx));
@@ -3009,6 +3509,24 @@ impl AcpChatView {
                 // Both Enter and Tab autocomplete the focused picker item.
                 // Submitting the ACP message still requires a later Enter after
                 // the picker closes.
+                let accepted_via_key = if crate::ui_foundation::is_key_tab(key) {
+                    "tab"
+                } else {
+                    "enter"
+                };
+                let pre_accept_item = self.mention_session.as_ref().and_then(|s| {
+                    s.items.get(s.selected_index).map(|item| {
+                        let trigger_str = match s.trigger {
+                            crate::ai::window::context_picker::types::ContextPickerTrigger::Mention => "@",
+                            crate::ai::window::context_picker::types::ContextPickerTrigger::Slash => "/",
+                        };
+                        (
+                            trigger_str.to_string(),
+                            item.label.to_string(),
+                            Self::telemetry_item_id(item),
+                        )
+                    })
+                });
                 let cursor_before = self.live_thread().read(cx).input.cursor();
                 self.accept_mention_selection_impl(false, cx);
                 let cursor_after = self.live_thread().read(cx).input.cursor();
@@ -3020,6 +3538,19 @@ impl AcpChatView {
                     false,
                     true,
                 );
+                if let Some((trigger, label, id)) = pre_accept_item {
+                    self.emit_picker_accepted_telemetry(
+                        &trigger,
+                        &label,
+                        &id,
+                        accepted_via_key,
+                        cursor_after,
+                        false,
+                    );
+                }
+                if let Some(ref layout) = self.collect_acp_state_snapshot(cx).input_layout {
+                    self.emit_input_layout_telemetry(layout);
+                }
                 cx.stop_propagation();
                 return;
             }
@@ -3054,7 +3585,9 @@ impl AcpChatView {
         if crate::ui_foundation::is_key_enter(key) && !modifiers.shift {
             let cursor_before = self.live_thread().read(cx).input.cursor();
             self.mention_session = None;
-            let _ = self.live_thread().update(cx, |thread, cx| thread.submit_input(cx));
+            let _ = self
+                .live_thread()
+                .update(cx, |thread, cx| thread.submit_input(cx));
             self.emit_key_route_telemetry(
                 key,
                 crate::protocol::AcpKeyRoute::Composer,
@@ -3123,7 +3656,12 @@ impl Render for AcpChatView {
         let input_text = thread.input.text().to_string();
         let input_cursor = thread.input.cursor();
         let input_selection = thread.input.selection();
-        let cursor_visible = self.cursor_visible;
+        let composer_active = Self::composer_is_active(
+            window.is_window_active(),
+            self.focus_handle.is_focused(window),
+            crate::actions::is_actions_window_open(),
+        );
+        let cursor_visible = self.cursor_visible && composer_active;
         let pending_permission = thread.pending_permission.clone();
         let plan_entries = thread.active_plan_entries().to_vec();
         let attached_parts = thread.pending_context_parts().to_vec();
@@ -3141,6 +3679,15 @@ impl Render for AcpChatView {
             &attached_parts,
             Self::ACP_MENTION_INLINE_GOLD,
         );
+        let pending_permission_has_message_target = pending_permission
+            .as_ref()
+            .and_then(Self::permission_request_tool_call_id)
+            .is_some_and(|tool_call_id| {
+                messages
+                    .iter()
+                    .any(|msg| msg.tool_call_id.as_deref() == Some(tool_call_id))
+            });
+        let view_entity: WeakEntity<AcpChatView> = cx.entity().downgrade();
 
         div()
             .size_full()
@@ -3465,7 +4012,10 @@ impl Render for AcpChatView {
                 let messages_snapshot = messages.clone();
                 let collapsed_ids = self.collapsed_ids.clone();
                 let search_state = self.search_state.clone();
-                let weak_view: WeakEntity<AcpChatView> = cx.entity().downgrade();
+                let weak_view = view_entity.clone();
+                let pending_permission_snap = pending_permission.clone();
+                let permission_index_snap = self.permission_index;
+                let permission_options_open_snap = self.permission_options_open;
                 let colors_snap = colors;
                 let theme_snap = theme::get_cached_theme();
                 let _is_streaming = matches!(status, AcpThreadStatus::Streaming);
@@ -3537,6 +4087,10 @@ impl Render for AcpChatView {
                             } else {
                                 (false, false)
                             };
+                        let inline_permission = pending_permission_snap
+                            .as_ref()
+                            .filter(|request| Self::permission_request_matches_message(msg, request))
+                            .cloned();
 
                         div()
                             .w_full()
@@ -3564,6 +4118,14 @@ impl Render for AcpChatView {
                                 is_collapsed,
                                 on_toggle,
                             ))
+                            .when_some(inline_permission, |d, request| {
+                                d.child(Self::render_permission_inline_card(
+                                    &request,
+                                    permission_index_snap,
+                                    permission_options_open_snap,
+                                    weak_view.clone(),
+                                ))
+                            })
                             .into_any()
                     })
                     .size_full()
@@ -3581,6 +4143,26 @@ impl Render for AcpChatView {
                         .child(Self::render_plan_strip(&plan_entries)),
                 )
             })
+            // ── Pending permission fallback (non-tool-linked) ──────
+            .when_some(
+                pending_permission
+                    .clone()
+                    .filter(|_| !pending_permission_has_message_target),
+                |d, request| {
+                    d.child(
+                        div()
+                            .w_full()
+                            .px(px(8.0))
+                            .pb(px(4.0))
+                            .child(Self::render_permission_inline_card(
+                                &request,
+                                self.permission_index,
+                                self.permission_options_open,
+                                view_entity.clone(),
+                            )),
+                    )
+                },
+            )
             // ── Attach menu popup ──────────────────────────
             .when(self.attach_menu_open, |d| {
                 d.child(self.render_attach_menu(cx))
@@ -3591,14 +4173,6 @@ impl Render for AcpChatView {
             })
             // ── BOTTOM: Hint strip ─────────────────────
             .child(self.render_toolbar(cx))
-            // ── Permission overlay ────────────────────────────
-            .when_some(pending_permission, |d, request| {
-                d.child(Self::render_permission_overlay(
-                    &request,
-                    self.permission_index,
-                    cx,
-                ))
-            })
             .into_any_element()
     }
 }
@@ -3606,6 +4180,10 @@ impl Render for AcpChatView {
 #[cfg(test)]
 mod tests {
     use super::AcpChatView;
+    use crate::ai::acp::permission_broker::{AcpApprovalPreview, AcpApprovalRequest};
+    use crate::ai::acp::thread::{AcpThreadMessage, AcpThreadMessageRole};
+    use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerItemKind};
+    use gpui::SharedString;
 
     #[test]
     fn mention_picker_width_respects_window_gutters() {
@@ -3658,8 +4236,69 @@ mod tests {
 
     #[test]
     fn replace_text_in_char_range_preserves_surrounding_text() {
-        let updated =
-            AcpChatView::replace_text_in_char_range("hello @con", 6..10, "@snapshot ");
+        let updated = AcpChatView::replace_text_in_char_range("hello @con", 6..10, "@snapshot ");
         assert_eq!(updated, "hello @snapshot ");
+    }
+
+    #[test]
+    fn composer_is_active_requires_focus_and_no_actions_window() {
+        assert!(AcpChatView::composer_is_active(true, true, false));
+        assert!(!AcpChatView::composer_is_active(true, false, false));
+        assert!(!AcpChatView::composer_is_active(false, true, false));
+        assert!(!AcpChatView::composer_is_active(true, true, true));
+    }
+
+    #[test]
+    fn permission_request_matches_tool_message_by_tool_call_id() {
+        let (reply_tx, _reply_rx) = async_channel::bounded(1);
+        let request = AcpApprovalRequest {
+            id: 1,
+            title: "ACP permission request".into(),
+            body: String::new(),
+            preview: Some(AcpApprovalPreview::new("write_text_file", "tc-123")),
+            options: vec![],
+            reply_tx,
+        };
+        let msg = AcpThreadMessage {
+            id: 9,
+            role: AcpThreadMessageRole::Tool,
+            body: "Write file\nrunning".into(),
+            tool_call_id: Some("tc-123".to_string()),
+        };
+
+        assert!(AcpChatView::permission_request_matches_message(
+            &msg, &request
+        ));
+    }
+
+    #[test]
+    fn telemetry_item_id_redacts_local_paths() {
+        let file_item = ContextPickerItem {
+            id: SharedString::from("file:/tmp/secrets.txt"),
+            label: SharedString::from("secrets.txt"),
+            meta: SharedString::from("@file:/tmp/secrets.txt"),
+            kind: ContextPickerItemKind::File(std::path::PathBuf::from("/tmp/secrets.txt")),
+            score: 100,
+            label_highlight_indices: Vec::new(),
+            meta_highlight_indices: Vec::new(),
+        };
+        let folder_item = ContextPickerItem {
+            id: SharedString::from("folder:/Users/john/Documents"),
+            label: SharedString::from("Documents"),
+            meta: SharedString::from("@file:/Users/john/Documents"),
+            kind: ContextPickerItemKind::Folder(std::path::PathBuf::from("/Users/john/Documents")),
+            score: 100,
+            label_highlight_indices: Vec::new(),
+            meta_highlight_indices: Vec::new(),
+        };
+
+        assert_eq!(
+            AcpChatView::telemetry_item_id(&file_item),
+            "file:secrets.txt"
+        );
+        assert_eq!(
+            AcpChatView::telemetry_item_id(&folder_item),
+            "folder:Documents"
+        );
     }
 }

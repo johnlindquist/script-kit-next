@@ -130,6 +130,8 @@ pub(crate) struct AcpThreadInit {
     /// The resolved catalog entry for the selected agent (used for runtime
     /// setup recovery — preserves agent context when `SetupRequired` fires).
     pub selected_agent: Option<super::catalog::AcpAgentCatalogEntry>,
+    /// Full agent catalog carried through for runtime recovery picker.
+    pub available_agents: Vec<super::catalog::AcpAgentCatalogEntry>,
 }
 
 /// One-shot context payload consumed by `prepare_turn_blocks()`.
@@ -140,6 +142,15 @@ pub(crate) struct AcpThreadInit {
 struct PendingContextTurn {
     blocks: Vec<ContentBlock>,
     receipt: crate::ai::message_parts::ContextResolutionReceipt,
+}
+
+/// Return value from `prepare_turn_blocks_with_receipt()`.
+///
+/// Carries the content blocks for the turn AND the optional resolution
+/// receipt so callers can surface partial-failure feedback.
+struct PreparedTurnBlocks {
+    blocks: Vec<ContentBlock>,
+    receipt: Option<crate::ai::message_parts::ContextResolutionReceipt>,
 }
 
 /// GPUI entity that owns one ACP conversation thread.
@@ -203,6 +214,9 @@ pub(crate) struct AcpThread {
     /// runtime `SetupRequired` events can build recovery cards with
     /// agent-specific context.
     selected_agent: Option<super::catalog::AcpAgentCatalogEntry>,
+
+    /// Full agent catalog for runtime recovery picker.
+    available_agents: Vec<super::catalog::AcpAgentCatalogEntry>,
 
     /// Inline setup state armed by a runtime `SetupRequired` event.
     /// When `Some`, the view renders the setup recovery card instead of
@@ -271,6 +285,7 @@ impl AcpThread {
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
             selected_agent: init.selected_agent,
+            available_agents: init.available_agents,
             setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,
@@ -469,7 +484,9 @@ impl AcpThread {
             return Ok(());
         }
 
-        let blocks = self.prepare_turn_blocks(trimmed);
+        let prepared = self.prepare_turn_blocks_with_receipt(trimmed);
+        self.set_context_resolution_note(prepared.receipt.as_ref());
+        let blocks = prepared.blocks;
 
         let msg_id = self.alloc_id();
         self.messages.push(AcpThreadMessage::new(
@@ -478,7 +495,6 @@ impl AcpThread {
             trimmed.to_string(),
         ));
         self.input.clear();
-        self.context_bootstrap_note = None;
         self.stream_started_at = Some(std::time::Instant::now());
         self.status = AcpThreadStatus::Streaming;
 
@@ -686,35 +702,93 @@ impl AcpThread {
     /// from the actual user intent.
     #[cfg_attr(test, allow(dead_code))]
     pub(super) fn prepare_turn_blocks(&mut self, input: &str) -> Vec<ContentBlock> {
+        self.prepare_turn_blocks_with_receipt(input).blocks
+    }
+
+    /// Build the content blocks for a turn AND return the resolution receipt
+    /// so callers can surface partial-failure feedback.
+    fn prepare_turn_blocks_with_receipt(&mut self, input: &str) -> PreparedTurnBlocks {
         let mut blocks = Vec::new();
 
         if let Some(turn) = self.take_pending_context_for_turn() {
+            let receipt = turn.receipt;
             blocks.extend(turn.blocks);
 
-            if turn.receipt.attempted > 0 {
+            if receipt.attempted > 0 {
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_submit_resolved_context_parts",
-                    attempted = turn.receipt.attempted,
-                    resolved = turn.receipt.resolved,
-                    failures = turn.receipt.failures.len(),
+                    attempted = receipt.attempted,
+                    resolved = receipt.resolved,
+                    failures = receipt.failures.len(),
                 );
             }
 
-            if !turn.receipt.prompt_prefix.is_empty() {
+            if !receipt.prompt_prefix.is_empty() {
                 blocks.push(ContentBlock::Text(TextContent::new(
-                    turn.receipt.prompt_prefix,
+                    receipt.prompt_prefix.clone(),
                 )));
             }
 
             blocks.push(ContentBlock::Text(TextContent::new(format!(
                 "--- USER REQUEST ---\n{input}"
             ))));
-            return blocks;
+            return PreparedTurnBlocks {
+                blocks,
+                receipt: Some(receipt),
+            };
         }
 
         blocks.push(ContentBlock::Text(TextContent::new(input)));
-        blocks
+        PreparedTurnBlocks {
+            blocks,
+            receipt: None,
+        }
+    }
+
+    /// Update `context_bootstrap_note` with a partial-failure summary when
+    /// some provider-backed mentions failed to resolve.
+    fn set_context_resolution_note(
+        &mut self,
+        receipt: Option<&crate::ai::message_parts::ContextResolutionReceipt>,
+    ) {
+        let Some(receipt) = receipt else {
+            self.context_bootstrap_note = None;
+            return;
+        };
+        if receipt.failures.is_empty() {
+            self.context_bootstrap_note = None;
+            return;
+        }
+
+        let labels: Vec<&str> = receipt
+            .failures
+            .iter()
+            .map(|failure| failure.label.as_str())
+            .collect();
+        let sources: Vec<&str> = receipt
+            .failures
+            .iter()
+            .map(|failure| failure.source.as_str())
+            .collect();
+
+        self.context_bootstrap_note = Some(
+            format!(
+                "{} context attachment{} unavailable \u{00b7} {}",
+                receipt.failures.len(),
+                if receipt.failures.len() == 1 { "" } else { "s" },
+                labels.join(", "),
+            )
+            .into(),
+        );
+
+        tracing::warn!(
+            target: "script_kit::tab_ai",
+            event = "acp_context_resolution_partial_failure",
+            failure_count = receipt.failures.len(),
+            labels = ?labels,
+            sources = ?sources,
+        );
     }
 
     /// Spawn a task that pumps events from the ACP worker into thread state.
@@ -878,17 +952,22 @@ impl AcpThread {
                     });
                 }
             }
-            AcpEvent::SetupRequired { reason, auth_methods } => {
+            AcpEvent::SetupRequired {
+                reason,
+                auth_methods,
+            } => {
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_runtime_setup_session_armed",
                     reason = %reason,
                     auth_method_count = auth_methods.len(),
                     selected_agent_id = self.selected_agent.as_ref().map(|a| a.id.as_ref()),
+                    available_agent_count = self.available_agents.len(),
                 );
                 self.setup_state = Some(
                     super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
                         self.selected_agent.clone(),
+                        self.available_agents.clone(),
                         &reason,
                         &auth_methods,
                     ),
@@ -1099,6 +1178,28 @@ impl AcpThread {
         self.setup_state.as_ref()
     }
 
+    /// Replace the runtime setup state (used by the view after agent re-selection).
+    pub(crate) fn replace_setup_state(
+        &mut self,
+        next: super::setup_state::AcpInlineSetupState,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_thread_setup_state_replaced",
+            title = %next.title,
+            selected_agent_id = next.selected_agent.as_ref().map(|a| a.id.as_ref()),
+            catalog_count = next.catalog_entries.len(),
+        );
+        self.setup_state = Some(next);
+        cx.notify();
+    }
+
+    /// Full agent catalog for runtime recovery.
+    pub(crate) fn available_agents(&self) -> &[super::catalog::AcpAgentCatalogEntry] {
+        &self.available_agents
+    }
+
     /// Current plan entries from the latest `PlanUpdated` event.
     pub(crate) fn active_plan_entries(&self) -> &[String] {
         &self.active_plan_entries
@@ -1306,7 +1407,10 @@ impl AcpThread {
                 .as_deref()
                 .map(Self::ambient_capture_preparing_note);
         } else if !self.pending_ambient_context_enabled
-            && matches!(self.context_bootstrap_state, AcpContextBootstrapState::Preparing)
+            && matches!(
+                self.context_bootstrap_state,
+                AcpContextBootstrapState::Preparing
+            )
         {
             self.context_bootstrap_state = AcpContextBootstrapState::Ready;
             self.context_bootstrap_note = None;
@@ -1410,6 +1514,7 @@ impl AcpThread {
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
             selected_agent: None,
+            available_agents: Vec::new(),
             setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,
@@ -1444,7 +1549,10 @@ impl AcpThread {
                 .ambient_chip_label()
                 .map(Self::ambient_capture_preparing_note);
         } else if !self.pending_ambient_context_enabled
-            && matches!(self.context_bootstrap_state, AcpContextBootstrapState::Preparing)
+            && matches!(
+                self.context_bootstrap_state,
+                AcpContextBootstrapState::Preparing
+            )
         {
             self.context_bootstrap_state = AcpContextBootstrapState::Ready;
             self.context_bootstrap_note = None;
@@ -1551,10 +1659,14 @@ impl AcpThread {
             super::AcpEvent::TurnFinished { .. } => {
                 self.set_status(AcpThreadStatus::Idle);
             }
-            super::AcpEvent::SetupRequired { reason, auth_methods } => {
+            super::AcpEvent::SetupRequired {
+                reason,
+                auth_methods,
+            } => {
                 self.setup_state = Some(
                     super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
                         self.selected_agent.clone(),
+                        self.available_agents.clone(),
                         &reason,
                         &auth_methods,
                     ),
@@ -1608,6 +1720,7 @@ mod tests {
             active_tool_calls: Vec::new(),
             tool_call_lookup: HashMap::new(),
             selected_agent: None,
+            available_agents: Vec::new(),
             setup_state: None,
             usage_tokens: None,
             usage_cost_usd: None,
@@ -2175,8 +2288,7 @@ mod tests {
             "typed context attachments should not leave the composer stuck in Preparing"
         );
         assert_eq!(
-            thread.context_bootstrap_note,
-            None,
+            thread.context_bootstrap_note, None,
             "manual non-ambient attachments should clear the queued bootstrap note"
         );
         assert_eq!(thread.pending_context_parts.len(), 1);
@@ -2193,8 +2305,53 @@ mod tests {
             label: "Current Context".to_string(),
         });
 
-        assert_eq!(thread.context_bootstrap_state, AcpContextBootstrapState::Ready);
+        assert_eq!(
+            thread.context_bootstrap_state,
+            AcpContextBootstrapState::Ready
+        );
         assert_eq!(thread.context_bootstrap_note, None);
         assert!(!thread.pending_ambient_context_enabled);
+    }
+
+    #[test]
+    fn successful_context_resolution_clears_prior_failure_note() {
+        let mut thread = test_thread(Vec::new(), false);
+
+        thread.add_context_part_test(crate::ai::message_parts::AiContextPart::FilePath {
+            path: "/tmp/script-kit-gpui-missing-context.txt".to_string(),
+            label: "Missing Context".to_string(),
+        });
+
+        let failed = thread.prepare_turn_blocks_with_receipt("first");
+        assert!(
+            failed
+                .receipt
+                .as_ref()
+                .is_some_and(|receipt| !receipt.failures.is_empty()),
+            "missing file should surface as a context resolution failure"
+        );
+        thread.set_context_resolution_note(failed.receipt.as_ref());
+        assert_eq!(
+            thread.context_bootstrap_note.as_ref().map(|note| note.as_ref()),
+            Some("1 context attachment unavailable · Missing Context")
+        );
+
+        thread.remove_context_part_test(0);
+        thread.add_context_part_test(focused_target_part("my-script"));
+
+        let successful = thread.prepare_turn_blocks_with_receipt("second");
+        assert!(
+            successful
+                .receipt
+                .as_ref()
+                .is_some_and(|receipt| receipt.failures.is_empty()),
+            "focused target should resolve cleanly"
+        );
+        thread.set_context_resolution_note(successful.receipt.as_ref());
+
+        assert_eq!(
+            thread.context_bootstrap_note, None,
+            "a clean follow-up submit should clear stale failure messaging"
+        );
     }
 }

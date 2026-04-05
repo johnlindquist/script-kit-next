@@ -2,10 +2,12 @@
 # scripts/agentic/session.sh — Reusable named-pipe session management for Script Kit GPUI.
 #
 # Usage:
-#   session.sh start [SESSION_NAME]   — Create or resume a session (default: "default")
-#   session.sh send  SESSION_NAME CMD — Send a JSON command to a running session
-#   session.sh stop  [SESSION_NAME]   — Stop a session and clean up
-#   session.sh status [SESSION_NAME]  — Print session state as JSON
+#   session.sh start  [SESSION_NAME]   — Create or resume a session (default: "default")
+#   session.sh send   SESSION_NAME CMD — Send a JSON command (fire-and-forget)
+#   session.sh rpc    SESSION_NAME CMD [--expect TYPE] [--timeout MS]
+#                                      — Send a JSON command and await the response
+#   session.sh stop   [SESSION_NAME]   — Stop a session and clean up
+#   session.sh status [SESSION_NAME]   — Print session state as JSON
 #
 # All output on stdout is machine-readable JSON. Diagnostics go to stderr.
 # Sessions survive across shells — no fd 3 trick required.
@@ -46,20 +48,22 @@ cmd_start() {
   local name="${1:-default}"
   local sdir
   sdir="$(session_dir "$name")"
+  local input_fifo="${sdir}/input"
+  local log_path="${sdir}/app.log"
+  local responses_path="${sdir}/responses.ndjson"
 
   # Resume if healthy
   if [ -f "${sdir}/pid" ]; then
     local old_pid
     old_pid="$(cat "${sdir}/pid")"
     if kill -0 "$old_pid" 2>/dev/null; then
-      local pipe_path="${sdir}/pipe"
-      local log_path="${sdir}/app.log"
       log "Resuming existing session '${name}' (pid ${old_pid})"
       json_envelope "ok" \
         "session:\"${name}\"" \
         "pid:${old_pid}" \
-        "pipe:\"${pipe_path}\"" \
+        "pipe:\"${input_fifo}\"" \
         "log:\"${log_path}\"" \
+        "responses:\"${responses_path}\"" \
         "resumed:true"
       return 0
     else
@@ -77,7 +81,6 @@ cmd_start() {
   # Create session directory and pipe
   mkdir -p "${sdir}"
   local pipe_path="${sdir}/pipe"
-  local log_path="${sdir}/app.log"
   local pid_path="${sdir}/pid"
 
   rm -f "$pipe_path"
@@ -86,9 +89,11 @@ cmd_start() {
   # Agents send commands by appending to the input FIFO via `session.sh send`.
   # We use a secondary FIFO as an input queue that a background forwarder relays
   # into the app pipe while keeping the write end open across shells.
-  local input_fifo="${sdir}/input"
   rm -f "$input_fifo"
   mkfifo "$input_fifo"
+
+  # Create the responses artifact file
+  : > "$responses_path"
 
   # Background forwarder: reads from input_fifo and writes to pipe.
   # It is started before the app so the app's read-open on the primary FIFO
@@ -139,6 +144,7 @@ cmd_start() {
     "pid:${app_pid}" \
     "pipe:\"${input_fifo}\"" \
     "log:\"${log_path}\"" \
+    "responses:\"${responses_path}\"" \
     "resumed:false"
 }
 
@@ -181,6 +187,98 @@ cmd_send() {
   fi
 }
 
+# --- rpc --------------------------------------------------------------------
+
+cmd_rpc() {
+  local name="${1:-default}"
+  local cmd="${2:-}"
+  shift 2 || true
+
+  if [ -z "$cmd" ]; then
+    json_error "missing_command" "Usage: session.sh rpc SESSION_NAME JSON_COMMAND [--expect TYPE] [--timeout MS]"
+    return 1
+  fi
+
+  # Extract requestId from the command JSON (validate early, before session checks)
+  local request_id
+  request_id="$(
+    printf '%s' "$cmd" \
+      | sed -nE 's/.*"requestId"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p' \
+      | head -1 \
+      || true
+  )"
+  if [ -z "$request_id" ]; then
+    json_error "missing_request_id" "RPC command must contain a requestId field."
+    return 1
+  fi
+
+  local sdir
+  sdir="$(session_dir "$name")"
+  local input_fifo="${sdir}/input"
+  local log_path="${sdir}/app.log"
+  local responses_path="${sdir}/responses.ndjson"
+
+  if [ ! -p "$input_fifo" ]; then
+    json_error "no_session" "Session '${name}' not found or input FIFO missing."
+    return 1
+  fi
+
+  # Verify app is alive
+  if [ -f "${sdir}/pid" ]; then
+    local pid
+    pid="$(cat "${sdir}/pid")"
+    if ! kill -0 "$pid" 2>/dev/null; then
+      json_error "session_dead" "Session '${name}' app process (pid ${pid}) is not running."
+      return 1
+    fi
+  fi
+
+  # Parse optional flags
+  local expect_type=""
+  local timeout_ms="5000"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --expect)  expect_type="${2:-}"; shift 2 ;;
+      --timeout) timeout_ms="${2:-5000}"; shift 2 ;;
+      *)         shift ;;
+    esac
+  done
+
+  local start_offset="0"
+  if [ -f "$log_path" ]; then
+    start_offset="$(wc -c < "$log_path" | tr -d '[:space:]')"
+  fi
+
+  # Send the command (fire-and-forget to the pipe)
+  if ! printf '%s\n' "$cmd" > "$input_fifo" 2>/dev/null; then
+    json_error "send_failed" "Failed to write to session '${name}' input FIFO."
+    return 1
+  fi
+
+  # Await the response using the TypeScript helper
+  local await_args=(
+    --session "$name"
+    --request-id "$request_id"
+    --timeout "$timeout_ms"
+    --start-offset "$start_offset"
+  )
+  if [ -n "$expect_type" ]; then
+    await_args+=(--expect "$expect_type")
+  fi
+
+  local result
+  local exit_code=0
+  result="$(bun "${PROJECT_ROOT}/scripts/agentic/await-response.ts" "${await_args[@]}")" || exit_code=$?
+
+  # Append to responses artifact
+  if [ -n "$result" ]; then
+    printf '%s\n' "$result" >> "$responses_path" 2>/dev/null || true
+  fi
+
+  printf '%s\n' "$result"
+  return $exit_code
+}
+
 # --- status -----------------------------------------------------------------
 
 cmd_status() {
@@ -197,6 +295,7 @@ cmd_status() {
   local alive="false"
   local pipe_path="${sdir}/input"
   local log_path="${sdir}/app.log"
+  local responses_path="${sdir}/responses.ndjson"
   local pipe_writable="false"
 
   if [ -f "${sdir}/pid" ]; then
@@ -216,7 +315,8 @@ cmd_status() {
     "alive:${alive}" \
     "pipe:\"${pipe_path}\"" \
     "pipeWritable:${pipe_writable}" \
-    "log:\"${log_path}\""
+    "log:\"${log_path}\"" \
+    "responses:\"${responses_path}\""
 }
 
 # --- stop -------------------------------------------------------------------
@@ -265,10 +365,11 @@ shift || true
 case "$subcmd" in
   start)  cmd_start "$@" ;;
   send)   cmd_send "$@" ;;
+  rpc)    cmd_rpc "$@" ;;
   stop)   cmd_stop "$@" ;;
   status) cmd_status "$@" ;;
   *)
-    json_error "unknown_command" "Usage: session.sh {start|send|stop|status} [SESSION_NAME] [ARGS]"
+    json_error "unknown_command" "Usage: session.sh {start|send|rpc|stop|status} [SESSION_NAME] [ARGS]"
     exit 1
     ;;
 esac

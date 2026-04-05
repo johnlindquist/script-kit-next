@@ -13,9 +13,9 @@ use crate::theme::get_cached_theme;
 use crate::ui_foundation::{is_key_backspace, is_key_down, is_key_enter, is_key_escape, is_key_up};
 use crate::window_resize::layout::FOOTER_HEIGHT;
 use gpui::{
-    div, prelude::*, px, App, Bounds, Context, DisplayId, Entity, FocusHandle, Focusable, Pixels,
-    Point, Render, Size, Subscription, Window, WindowBounds, WindowHandle, WindowKind,
-    WindowOptions,
+    div, prelude::*, px, AnyWindowHandle, App, Bounds, Context, DisplayId, Entity, FocusHandle,
+    Focusable, Pixels, Point, Render, Size, Subscription, Window, WindowBounds, WindowHandle,
+    WindowKind, WindowOptions,
 };
 // Root intentionally NOT used — its opaque bg blocks NSVisualEffectView vibrancy
 use std::sync::{Mutex, OnceLock};
@@ -107,6 +107,8 @@ static ACTIONS_WINDOW: OnceLock<Mutex<Option<WindowHandle<ActionsWindow>>>> = On
 static ACTIONS_WINDOW_POSITION: OnceLock<Mutex<WindowPosition>> = OnceLock::new();
 
 const ACTIONS_WINDOW_PAGE_JUMP: usize = 8;
+#[cfg(target_os = "macos")]
+const NS_WINDOW_ABOVE: i64 = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ActionsWindowKeyIntent {
@@ -963,24 +965,102 @@ fn log_actions_popup_resize(
     );
 }
 
+#[cfg(target_os = "macos")]
+fn actions_popup_ns_window(window: &mut Window) -> Option<cocoa::base::id> {
+    if let Ok(window_handle) = raw_window_handle::HasWindowHandle::window_handle(window) {
+        if let raw_window_handle::RawWindowHandle::AppKit(appkit) = window_handle.as_raw() {
+            use cocoa::base::nil;
+            use objc::{msg_send, sel, sel_impl};
+
+            let ns_view = appkit.ns_view.as_ptr() as cocoa::base::id;
+            // SAFETY: `ns_view` comes from the live GPUI window on the AppKit main
+            // thread. `-[NSView window]` returns the owning NSWindow or nil.
+            unsafe {
+                let ns_window: cocoa::base::id = msg_send![ns_view, window];
+                if ns_window != nil {
+                    return Some(ns_window);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn attach_actions_popup_to_parent_window(
+    cx: &mut App,
+    parent_window_handle: AnyWindowHandle,
+    child_ns_window: cocoa::base::id,
+) {
+    let attach_result = cx.update_window(parent_window_handle, move |_, parent_window, _cx| {
+        let Some(parent_ns_window) = actions_popup_ns_window(parent_window) else {
+            return false;
+        };
+
+        // SAFETY: both NSWindow pointers come from live GPUI windows on the main
+        // thread. We guard against nil/equal pointers before attaching so AppKit
+        // only receives distinct parent/child windows.
+        unsafe {
+            use cocoa::base::nil;
+            use objc::{msg_send, sel, sel_impl};
+
+            if parent_ns_window == nil
+                || child_ns_window == nil
+                || parent_ns_window == child_ns_window
+            {
+                return false;
+            }
+
+            let _: () =
+                msg_send![parent_ns_window, addChildWindow:child_ns_window ordered:NS_WINDOW_ABOVE];
+            let _: () = msg_send![child_ns_window, orderFrontRegardless];
+        }
+
+        true
+    });
+
+    match attach_result {
+        Ok(true) => {}
+        Ok(false) => {
+            tracing::warn!(
+                target: "script_kit::actions",
+                event = "actions_popup_attach_parent_skipped",
+                "Skipped attaching actions popup as native child window"
+            );
+        }
+        Err(error) => {
+            tracing::warn!(
+                target: "script_kit::actions",
+                event = "actions_popup_attach_parent_failed",
+                error = ?error,
+                "Failed to attach actions popup as native child window"
+            );
+        }
+    }
+}
+
 /// Open the actions window as a separate floating window with vibrancy
 ///
-/// The window is positioned at the top-right of the main window, below the header.
-/// It does NOT take keyboard focus - the main window keeps focus and routes
+/// The window is positioned relative to the parent window and attached as a
+/// native child on macOS so the parent retains Raycast-like active chrome.
+/// It does NOT take keyboard focus - the parent window keeps focus and routes
 /// keyboard events to the shared ActionsDialog entity.
 ///
 /// # Arguments
 /// * `cx` - The application context
-/// * `main_window_bounds` - The bounds of the main window in SCREEN-RELATIVE coordinates
+/// * `parent_window_handle` - The window that owns the popup
+/// * `main_window_bounds` - The bounds of the parent window in SCREEN-RELATIVE coordinates
 ///   (as returned by GPUI's window.bounds() - top-left origin relative to the window's screen)
-/// * `display_id` - The display where the main window is located (actions window will be on same display)
+/// * `display_id` - The display where the parent window is located (actions window will be on same display)
 /// * `dialog_entity` - The shared ActionsDialog entity (created by main app)
-/// * `position` - Where to position the window relative to the main window
+/// * `position` - Where to position the window relative to the parent window
 ///
 /// # Returns
 /// The window handle on success
 pub fn open_actions_window(
     cx: &mut App,
+    parent_window_handle: AnyWindowHandle,
     main_window_bounds: Bounds<Pixels>,
     display_id: Option<DisplayId>,
     dialog_entity: Entity<ActionsDialog>,
@@ -1068,24 +1148,21 @@ pub fn open_actions_window(
     #[cfg(target_os = "macos")]
     {
         let configure_result = handle.update(cx, move |_this, window, cx| {
-            window.defer(cx, move |_window, _cx| {
-                use cocoa::appkit::NSApp;
-                use cocoa::base::nil;
-                use objc::{msg_send, sel, sel_impl};
-
-                // Get the NSWindow from the app's windows array
-                // The popup window should be the most recently created one
-                unsafe {
-                    let app: cocoa::base::id = NSApp();
-                    let windows: cocoa::base::id = msg_send![app, windows];
-                    let count: usize = msg_send![windows, count];
-                    if count > 0 {
-                        // Get the last window (most recently created)
-                        let ns_window: cocoa::base::id = msg_send![windows, lastObject];
-                        if ns_window != nil {
-                            platform::configure_actions_popup_window(ns_window, is_dark_vibrancy);
-                        }
+            window.defer(cx, move |window, cx| {
+                if let Some(ns_window) = actions_popup_ns_window(window) {
+                    // SAFETY: `ns_window` comes from the live GPUI popup window via
+                    // `actions_popup_ns_window`, so it is a valid AppKit NSWindow
+                    // pointer on the main thread when configuration runs.
+                    unsafe {
+                        platform::configure_actions_popup_window(ns_window, is_dark_vibrancy);
                     }
+                    attach_actions_popup_to_parent_window(cx, parent_window_handle, ns_window);
+                } else {
+                    tracing::warn!(
+                        target: "script_kit::actions",
+                        event = "actions_popup_missing_nswindow",
+                        "Could not resolve NSWindow for actions popup configuration"
+                    );
                 }
             });
         });
@@ -1709,6 +1786,30 @@ mod actions_popup_origin_tests {
         assert!(
             fn_body.contains("actions_popup_placement_receipt("),
             "open_actions_window must delegate to actions_popup_placement_receipt helper"
+        );
+    }
+
+    #[test]
+    fn open_actions_window_attaches_popup_as_native_child_window() {
+        let source = std::fs::read_to_string("src/actions/window.rs")
+            .expect("Failed to read src/actions/window.rs");
+
+        let fn_start = source
+            .find("pub fn open_actions_window(")
+            .expect("open_actions_window not found");
+        let fn_body = &source[fn_start..];
+
+        assert!(
+            fn_body.contains("parent_window_handle: AnyWindowHandle"),
+            "open_actions_window should accept the parent window handle"
+        );
+        assert!(
+            fn_body.contains("attach_actions_popup_to_parent_window("),
+            "open_actions_window should attach the popup to its parent window after configuration"
+        );
+        assert!(
+            source.contains("addChildWindow:child_ns_window ordered:NS_WINDOW_ABOVE"),
+            "actions popup child attachment should use AppKit addChildWindow ordering"
         );
     }
 }

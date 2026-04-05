@@ -31,6 +31,8 @@ interface SessionState {
   log: string | null;
   logSizeBytes: number | null;
   logLastLine: string | null;
+  responses: string | null;
+  responsesCount: number | null;
   error?: { code: string; message: string };
 }
 
@@ -74,12 +76,15 @@ function getSessionState(name: string): SessionState {
       log: null,
       logSizeBytes: null,
       logLastLine: null,
+      responses: null,
+      responsesCount: null,
     };
   }
 
   const pidPath = join(sdir, "pid");
   const inputFifo = join(sdir, "input");
   const logPath = join(sdir, "app.log");
+  const responsesPath = join(sdir, "responses.ndjson");
 
   let pid: number | null = null;
   let alive = false;
@@ -111,6 +116,16 @@ function getSessionState(name: string): SessionState {
     }
   }
 
+  let responsesCount: number | null = null;
+  if (existsSync(responsesPath)) {
+    try {
+      const content = readFileSync(responsesPath, "utf-8").trim();
+      responsesCount = content ? content.split("\n").length : 0;
+    } catch {
+      // read error
+    }
+  }
+
   return {
     schemaVersion: SCHEMA_VERSION,
     status: "ok",
@@ -122,6 +137,8 @@ function getSessionState(name: string): SessionState {
     log: existsSync(logPath) ? logPath : null,
     logSizeBytes,
     logLastLine,
+    responses: responsesPath,
+    responsesCount,
   };
 }
 
