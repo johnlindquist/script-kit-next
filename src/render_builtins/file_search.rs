@@ -306,9 +306,14 @@ impl ScriptListApp {
     ) -> AnyElement {
         use crate::file_search::{self, FileType};
 
-        crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::expanded("file_search", true),
-        );
+        let is_mini = matches!(presentation, FileSearchPresentation::Mini);
+        let chrome_audit = if is_mini {
+            crate::components::PromptChromeAudit::minimal_list("file_search", true)
+        } else {
+            crate::components::PromptChromeAudit::expanded("file_search", true)
+        };
+        crate::components::emit_prompt_chrome_audit(&chrome_audit);
+
         // Use design tokens for spacing/visual, theme for colors
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
@@ -1046,8 +1051,6 @@ impl ScriptListApp {
                         .child("Use \u{2191}\u{2193} to inspect results"),
                 )
         };
-
-        let is_mini = matches!(presentation, FileSearchPresentation::Mini);
 
         // Compute mini-mode context for mode-aware chrome
         let is_directory_query = crate::file_search::parse_directory_path(query).is_some();

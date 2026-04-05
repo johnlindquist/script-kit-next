@@ -50,6 +50,7 @@
  *   --skip-probe                Skip ACP test probe query
  *   --target-json JSON           ACP window target for getAcpState/getAcpTestProbe RPCs
  *                               (same AutomationWindowTarget shape as the Rust protocol)
+ *   --capture-window-id N        Exact window ID for screencapture (from automation-window.ts resolve)
  *   --request-id ID             Request ID for getAcpState (default: auto-generated)
  *   --json                      (default) Output JSON receipt
  *   --help                      Show this help
@@ -70,6 +71,11 @@ const PROJECT_ROOT = resolve(import.meta.dir, "../..");
 // Types
 // ---------------------------------------------------------------------------
 
+interface CaptureTarget {
+  requestedWindowId: number | null;
+  actualWindowId: number | null;
+}
+
 interface VerifyReceipt {
   schemaVersion: number;
   status: "pass" | "fail" | "error";
@@ -86,6 +92,7 @@ interface VerifyReceipt {
     windowCaptureMethod: string | null;
     windowId: number | null;
   } | null;
+  captureTarget: CaptureTarget | null;
   visionCrops: VisionCheck[];
   // Detailed receipts (full diagnostics)
   stateReceipt: AcpStateResult | null;
@@ -441,7 +448,8 @@ async function captureScreenshot(
   session: string,
   outPath: string,
   label: string,
-  opts: Record<string, string | boolean>
+  opts: Record<string, string | boolean>,
+  captureWindowId?: number
 ): Promise<ScreenshotResult> {
   let captureMethod: "window.ts" | "captureWindow" | null = null;
   let windowCaptureMethod: "quartz" | "screencapture" | null = null;
@@ -453,18 +461,23 @@ async function captureScreenshot(
 
   // Use the window.ts helper for reliable capture
   const windowScript = join(PROJECT_ROOT, "scripts/agentic/window.ts");
+  const captureArgs = [
+    "bun",
+    windowScript,
+    "capture",
+    outPath,
+    "--activate-first",
+    "--retry",
+    "2",
+    "--settle-ms",
+    "200",
+  ];
+  // Thread exact window ID when provided
+  if (captureWindowId && captureWindowId > 0) {
+    captureArgs.push("--window-id", String(captureWindowId));
+  }
   const proc = Bun.spawn(
-    [
-      "bun",
-      windowScript,
-      "capture",
-      outPath,
-      "--activate-first",
-      "--retry",
-      "2",
-      "--settle-ms",
-      "200",
-    ],
+    captureArgs,
     {
       stdout: "pipe",
       stderr: "pipe",
@@ -1264,6 +1277,7 @@ Options:
   --skip-state                Only capture screenshot, skip state query
   --skip-probe                Skip ACP test probe query
   --target-json JSON          ACP window target for getAcpState/getAcpTestProbe RPCs
+  --capture-window-id N       Exact window ID for screencapture (from automation-window.ts)
   --request-id ID             Request ID for getAcpState (auto-generated)
 
 Verification order (ACP golden path):
@@ -1287,6 +1301,9 @@ const skipScreenshot = opts.skipScreenshot === true;
 const skipState = opts.skipState === true;
 const skipProbe = opts.skipProbe === true;
 const probeTail = Number(opts.probeTail ?? 20);
+const captureWindowId = typeof opts.captureWindowId === "string"
+  ? parseInt(opts.captureWindowId, 10)
+  : undefined;
 
 // Parse --target-json for ACP window targeting
 let targetJson: Record<string, unknown> | undefined;
@@ -1344,7 +1361,7 @@ if (needsProbe) {
 // Step 3: Capture screenshot (unless skipped)
 let screenshotResult: ScreenshotResult | null = null;
 if (!skipScreenshot) {
-  screenshotResult = await captureScreenshot(session, outPath, label, opts);
+  screenshotResult = await captureScreenshot(session, outPath, label, opts, captureWindowId);
 }
 
 // Step 4: Run assertions against state + probe
@@ -1394,6 +1411,12 @@ const receipt: VerifyReceipt = {
         captureMethod: screenshotResult.captureMethod,
         windowCaptureMethod: screenshotResult.windowCaptureMethod,
         windowId: screenshotResult.windowId,
+      }
+    : null,
+  captureTarget: screenshotResult
+    ? {
+        requestedWindowId: captureWindowId ?? null,
+        actualWindowId: screenshotResult.windowId,
       }
     : null,
   visionCrops: visionChecks,

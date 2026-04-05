@@ -280,7 +280,13 @@ bun scripts/agentic/verify-shot.ts --session default \
 
 **Proof bundle fields:** The receipt includes stable top-level fields for machine consumption:
 `state` (ACP snapshot), `probe` (test probe snapshot), `screenshot` (path + capture metadata),
+`captureTarget` (requested vs actual window ID for identity proof),
 `visionCrops` (structured image check entries). These are the canonical fields for automated parsing.
+
+**Capture identity threading:** When verifying a detached ACP window, pass
+`--capture-window-id N` (from `automation-window.ts resolve`) to prove the
+screenshot came from the same window the state/probe RPCs targeted. The receipt
+exposes `captureTarget.requestedWindowId` and `captureTarget.actualWindowId`.
 
 **Exit codes:** 0 = pass, 1 = assertion failure, 2 = infrastructure error.
 
@@ -444,7 +450,14 @@ SURFACE_ID="$(printf '%s' "$RESOLVED" | jq -r '.surfaceId')"
 
 bun scripts/agentic/index.ts acp-accept --session default --key enter \
   --target-json "$TARGET" --surface "$SURFACE_ID" --vision
+WINDOW_ID="$(printf '%s' "$RESOLVED" | jq -r '.automationWindowId')"
+
+bun scripts/agentic/index.ts acp-accept --session default --key enter \
+  --target-json "$TARGET" --surface "$SURFACE_ID" --vision
+bun scripts/agentic/verify-shot.ts --session default --label detached-proof \
+  --target-json "$TARGET" --capture-window-id "$WINDOW_ID"
 # Confirm proofBundle.state.resolvedTarget.windowKind == "acpDetached"
+# Confirm captureTarget.requestedWindowId == captureTarget.actualWindowId
 bash scripts/agentic/session.sh stop default
 ```
 
