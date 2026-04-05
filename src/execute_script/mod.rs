@@ -1688,51 +1688,26 @@ impl ScriptListApp {
                                         continue;
                                     }
 
-                                    // Handle SimulateGpuiEvent - log and respond (stub: real GPUI dispatch requires window context)
-                                    if let Message::SimulateGpuiEvent { request_id, target, event } = &msg {
+                                    // Forward SimulateGpuiEvent to entity for real GPUI dispatch
+                                    if let Message::SimulateGpuiEvent { request_id, target, event } = msg.clone() {
                                         tracing::info!(
                                             target: "script_kit::automation",
                                             request_id = %request_id,
                                             target = ?target,
                                             event = ?event,
-                                            "gpui_event_simulation.request"
+                                            "gpui_event_simulation.forwarding_to_entity"
                                         );
-                                        // Resolve the target to validate it exists
-                                        let result = crate::windows::resolve_automation_window(target.as_ref());
-                                        let response = match result {
-                                            Ok(resolved) => {
-                                                tracing::info!(
-                                                    target: "script_kit::automation",
-                                                    request_id = %request_id,
-                                                    window_id = %resolved.id,
-                                                    kind = ?resolved.kind,
-                                                    "gpui_event_simulation.resolved"
-                                                );
-                                                // First-cut stub: target resolved successfully.
-                                                // Real GPUI event dispatch requires a window handle
-                                                // and cx context, which is not available on this
-                                                // thread. For now, we validate targeting and return
-                                                // success. Full dispatch will be wired once the
-                                                // prompt handler receives SimulateGpuiEvent.
-                                                Message::simulate_gpui_event_result_success(
-                                                    request_id.clone(),
-                                                )
-                                            }
-                                            Err(err) => {
-                                                tracing::warn!(
-                                                    target: "script_kit::automation",
-                                                    request_id = %request_id,
-                                                    error = %err,
-                                                    "gpui_event_simulation.target_failed"
-                                                );
-                                                Message::simulate_gpui_event_result_error(
-                                                    request_id.clone(),
-                                                    err.to_string(),
-                                                )
-                                            }
+                                        let prompt_msg = PromptMessage::SimulateGpuiEvent {
+                                            request_id,
+                                            target,
+                                            event,
                                         };
-                                        if let Err(e) = reader_response_tx.send(response) {
-                                            tracing::error!(error = %e, "Failed to send GPUI event simulation response");
+                                        if tx.send_blocking(prompt_msg).is_err() {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                "Prompt channel closed, reader exiting"
+                                            );
+                                            break;
                                         }
                                         continue;
                                     }
