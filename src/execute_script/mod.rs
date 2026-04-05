@@ -1503,6 +1503,26 @@ impl ScriptListApp {
                                         continue;
                                     }
 
+                                    // Handle GetAcpState - needs ACP view state, forward to UI thread
+                                    if let Message::GetAcpState { request_id } = &msg {
+                                        tracing::info!(
+                                            category = "EXEC",
+                                            request_id = %request_id,
+                                            "GetAcpState request"
+                                        );
+                                        let prompt_msg = PromptMessage::GetAcpState {
+                                            request_id: request_id.clone(),
+                                        };
+                                        if tx.send_blocking(prompt_msg).is_err() {
+                                            tracing::info!(
+                                                category = "EXEC",
+                                                "Prompt channel closed, reader exiting"
+                                            );
+                                            break;
+                                        }
+                                        continue;
+                                    }
+
                                     // Handle GetLayoutInfo - needs UI state, forward to UI thread
                                     if let Message::GetLayoutInfo { request_id } = &msg {
                                         tracing::info!(

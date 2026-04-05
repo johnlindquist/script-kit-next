@@ -327,3 +327,63 @@ fn part_to_inline_token_roundtrips_all_provider_backed() {
         assert_eq!(mentions[0].part, part, "round-trip mismatch for {kind:?}");
     }
 }
+
+// ── Punctuation trimming ──────────────────────────────────────
+
+#[test]
+fn parse_inline_mentions_trims_trailing_comma() {
+    let mentions = parse_inline_context_mentions("Check @browser, please");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@browser");
+    assert_eq!(mentions[0].range, 6..14);
+}
+
+#[test]
+fn parse_inline_mentions_trims_trailing_period() {
+    let mentions = parse_inline_context_mentions("See @git-diff.");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@git-diff");
+}
+
+#[test]
+fn parse_inline_mentions_trims_trailing_semicolon() {
+    let mentions = parse_inline_context_mentions("Use @clipboard;");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@clipboard");
+}
+
+#[test]
+fn parse_inline_mentions_trims_multiple_trailing_punctuation() {
+    let mentions = parse_inline_context_mentions("(@browser).");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@browser");
+}
+
+// ── Canonical token tracking ──────────────────────────────────
+
+#[test]
+fn inline_mention_alias_gets_canonical_token() {
+    let mentions = parse_inline_context_mentions("Use @context please");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@context");
+    assert_eq!(
+        mentions[0].canonical_token, "@snapshot",
+        "alias @context should have canonical token @snapshot"
+    );
+}
+
+#[test]
+fn inline_mention_primary_token_is_its_own_canonical() {
+    let mentions = parse_inline_context_mentions("Use @snapshot please");
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, "@snapshot");
+    assert_eq!(mentions[0].canonical_token, "@snapshot");
+}
+
+#[test]
+fn inline_mention_canonical_token_with_punctuation() {
+    let mentions = parse_inline_context_mentions("Compare @context, @browser.");
+    assert_eq!(mentions.len(), 2);
+    assert_eq!(mentions[0].canonical_token, "@snapshot");
+    assert_eq!(mentions[1].canonical_token, "@browser");
+}

@@ -518,6 +518,7 @@ fn setup_state_from_resolution_covers_all_blockers() {
         let resolution = AcpLaunchResolution {
             selected_agent: None,
             blocker: Some(blocker.clone()),
+            catalog_entries: vec![],
         };
         let state = AcpInlineSetupState::from_resolution(&resolution);
         assert!(

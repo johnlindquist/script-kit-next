@@ -12,6 +12,7 @@
 pub mod actions_dialog_presenter;
 pub mod actions_dialog_variations;
 pub mod adoption;
+pub mod audit_report;
 mod browser;
 mod diagnostics;
 pub mod footer_variations;
@@ -77,6 +78,12 @@ pub use selection::{
     save_story_selections, StorySelectionStore, StorySelectionWriteResult,
 };
 pub use story::{Story, StorySurface, StoryVariant};
+
+pub use audit_report::{
+    build_prompt_chrome_consistency_report, render_prompt_chrome_consistency_markdown,
+    write_prompt_chrome_consistency_report, AuditFinding, AuditReport, AuditSeverity,
+    AuditSurfaceResult,
+};
 
 /// Machine-readable error payload for `--catalog-json` failures.
 #[derive(Debug, serde::Serialize)]

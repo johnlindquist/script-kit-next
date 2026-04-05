@@ -72,15 +72,17 @@ pub use message::{capabilities, Message};
 pub use semantic_id::{generate_semantic_id, generate_semantic_id_named, value_to_slug};
 #[allow(unused_imports)]
 pub use types::{
-    AiChatInfo, AiContextPartInput, AiMessageInfo, BatchCommand, BatchOptions, BatchResultEntry,
-    BoxModelSides, ChatMessagePosition, ChatMessageRole, ChatPromptConfig, ChatPromptMessage,
-    Choice, ClipboardAction, ClipboardEntryType, ClipboardFormat, ClipboardHistoryAction,
-    ClipboardHistoryEntryData, ComputedBoxModel, ComputedFlexStyle, DisplayInfo, ElementInfo,
-    ElementType, ExecOptions, Field, FileSearchResultEntry, GridColorScheme, GridDepthOption,
-    GridOptions, LayoutBounds, LayoutComponentInfo, LayoutComponentType, LayoutInfo,
-    MenuBarItemData, MouseAction, MouseData, ProtocolAction, ScriptErrorData, ScriptletData,
-    ScriptletMetadataData, StateMatchSpec, SubmitValue, SystemWindowInfo, TargetWindowBounds,
-    TilePosition, TransactionCommandTrace, TransactionError, TransactionErrorCode,
-    TransactionTrace, TransactionTraceMode, TransactionTraceStatus, UiStateSnapshot, WaitCondition,
-    WaitDetailedCondition, WaitNamedCondition, WaitPollObservation, WindowActionType,
+    AcpAcceptedItem, AcpInputLayoutMetrics, AcpKeyRoute, AcpKeyRouteTelemetry, AcpPickerState,
+    AcpStateSnapshot, AcpWaitCondition, AiChatInfo, AiContextPartInput, AiMessageInfo,
+    BatchCommand, BatchOptions, BatchResultEntry, BoxModelSides, ChatMessagePosition,
+    ChatMessageRole, ChatPromptConfig, ChatPromptMessage, Choice, ClipboardAction,
+    ClipboardEntryType, ClipboardFormat, ClipboardHistoryAction, ClipboardHistoryEntryData,
+    ComputedBoxModel, ComputedFlexStyle, DisplayInfo, ElementInfo, ElementType, ExecOptions, Field,
+    FileSearchResultEntry, GridColorScheme, GridDepthOption, GridOptions, LayoutBounds,
+    LayoutComponentInfo, LayoutComponentType, LayoutInfo, MenuBarItemData, MouseAction, MouseData,
+    ProtocolAction, ScriptErrorData, ScriptletData, ScriptletMetadataData, StateMatchSpec,
+    SubmitValue, SystemWindowInfo, TargetWindowBounds, TilePosition, TransactionCommandTrace,
+    TransactionError, TransactionErrorCode, TransactionTrace, TransactionTraceMode,
+    TransactionTraceStatus, UiStateSnapshot, WaitCondition, WaitDetailedCondition,
+    WaitNamedCondition, WaitPollObservation, WindowActionType, ACP_STATE_SCHEMA_VERSION,
 };

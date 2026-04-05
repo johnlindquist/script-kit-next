@@ -1485,6 +1485,56 @@ impl ScriptListApp {
                 }
             }
 
+            PromptMessage::GetAcpState { request_id } => {
+                tracing::info!(
+                    category = "ACP_STATE",
+                    request_id = %request_id,
+                    "acp_state.request"
+                );
+
+                let state = self.collect_acp_state(cx);
+
+                tracing::info!(
+                    target: "script_kit::acp_telemetry",
+                    category = "ACP_STATE",
+                    request_id = %request_id,
+                    status = %state.status,
+                    cursor_index = state.cursor_index,
+                    picker_open = state.picker.as_ref().map_or(false, |p| p.open),
+                    message_count = state.message_count,
+                    context_ready = state.context_ready,
+                    "acp_state.result"
+                );
+
+                let response = Message::acp_state_result(request_id.clone(), state);
+
+                if let Some(ref sender) = self.response_sender {
+                    match sender.try_send(response) {
+                        Ok(()) => {}
+                        Err(std::sync::mpsc::TrySendError::Full(_)) => {
+                            tracing::warn!(
+                                category = "ACP_STATE",
+                                request_id = %request_id,
+                                "acp_state.response_channel_full"
+                            );
+                        }
+                        Err(std::sync::mpsc::TrySendError::Disconnected(_)) => {
+                            tracing::info!(
+                                category = "ACP_STATE",
+                                request_id = %request_id,
+                                "acp_state.response_channel_disconnected"
+                            );
+                        }
+                    }
+                } else {
+                    tracing::error!(
+                        category = "ACP_STATE",
+                        request_id = %request_id,
+                        "acp_state.no_response_sender"
+                    );
+                }
+            }
+
             PromptMessage::GetElements { request_id, limit } => {
                 let max_elements = limit.unwrap_or(50).clamp(1, 1000);
 
@@ -3160,6 +3210,39 @@ impl ScriptListApp {
                             .window_visible
                             .is_none_or(|v| v == window_visible)
                 }
+                // ── ACP-specific wait conditions ────────────────────
+                protocol::WaitDetailedCondition::AcpReady => {
+                    let state = self.collect_acp_state(cx);
+                    state.context_ready && state.status == "idle"
+                }
+                protocol::WaitDetailedCondition::AcpPickerOpen => {
+                    let state = self.collect_acp_state(cx);
+                    state.picker.as_ref().is_some_and(|p| p.open)
+                }
+                protocol::WaitDetailedCondition::AcpPickerClosed => {
+                    let state = self.collect_acp_state(cx);
+                    state.picker.is_none() || state.picker.as_ref().is_some_and(|p| !p.open)
+                }
+                protocol::WaitDetailedCondition::AcpItemAccepted => {
+                    let state = self.collect_acp_state(cx);
+                    state.last_accepted_item.is_some()
+                }
+                protocol::WaitDetailedCondition::AcpCursorAt { index } => {
+                    let state = self.collect_acp_state(cx);
+                    state.cursor_index == *index
+                }
+                protocol::WaitDetailedCondition::AcpStatus { status } => {
+                    let state = self.collect_acp_state(cx);
+                    state.status == *status
+                }
+                protocol::WaitDetailedCondition::AcpInputMatch { text } => {
+                    let state = self.collect_acp_state(cx);
+                    state.input_text == *text
+                }
+                protocol::WaitDetailedCondition::AcpInputContains { substring } => {
+                    let state = self.collect_acp_state(cx);
+                    state.input_text.contains(substring.as_str())
+                }
             },
         }
     }
@@ -3204,6 +3287,27 @@ impl ScriptListApp {
             }
             _ => None,
         }
+    }
+
+    /// Collect a machine-readable ACP state snapshot.
+    ///
+    /// Returns a default (idle, empty) snapshot when the current view is not
+    /// `AcpChatView` — callers should check `status == "notAcp"` to detect this.
+    fn collect_acp_state(&self, cx: &Context<Self>) -> protocol::AcpStateSnapshot {
+        let entity = match &self.current_view {
+            AppView::AcpChatView { entity } => entity,
+            _ => {
+                return protocol::AcpStateSnapshot {
+                    status: "notAcp".to_string(),
+                    ..Default::default()
+                };
+            }
+        };
+
+        let view = entity.read(cx);
+
+        // Extract state from the ACP view's public API.
+        view.collect_acp_state_snapshot(cx)
     }
 
     /// Set the input text for the current prompt.

@@ -283,6 +283,20 @@ impl Message {
     }
 
     // ============================================================
+    // Constructor methods for ACP state query
+    // ============================================================
+
+    /// Create a getAcpState request
+    pub fn get_acp_state(request_id: String) -> Self {
+        Message::GetAcpState { request_id }
+    }
+
+    /// Create an ACP state result response
+    pub fn acp_state_result(request_id: String, state: AcpStateSnapshot) -> Self {
+        Message::AcpStateResult { request_id, state }
+    }
+
+    // ============================================================
     // Constructor methods for wait/batch transaction layer
     // ============================================================
 

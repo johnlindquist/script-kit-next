@@ -36,7 +36,31 @@ cargo build 2>&1 | tail -5
 ```
 Must complete with `Finished`. If it fails, fix the build error first.
 
-### 2. Launch via Named Pipe
+### 2. Start a Session (Preferred)
+```bash
+# Start or resume a named session — works from any shell
+eval "$(bash scripts/agentic/session.sh start default 2>/dev/null | jq -r '@sh "APP_PID=\(.pid) PIPE=\(.pipe) LOG=\(.log)"')"
+sleep 3
+```
+The session wrapper manages the named pipe, forwarder process, and PID tracking.
+Sessions are reusable across shells — no `exec 3>` / fd 3 trick required.
+
+**Session commands:**
+```bash
+bash scripts/agentic/session.sh start [NAME]    # Create or resume (default: "default")
+bash scripts/agentic/session.sh send NAME CMD    # Send JSON command
+bash scripts/agentic/session.sh status [NAME]    # Check session state (JSON)
+bash scripts/agentic/session.sh stop [NAME]      # Stop and clean up
+bun scripts/agentic/session-state.ts --session NAME  # Detailed state report
+bun scripts/agentic/session-state.ts --list          # List all sessions
+```
+
+All commands emit stable JSON envelopes on stdout (`schemaVersion`, `status`, payload).
+Diagnostics go to stderr.
+
+**`start` is idempotent** — re-running it resumes an existing healthy session.
+
+**Alternative (legacy, single-shell only):**
 ```bash
 PIPE=$(mktemp -u)
 mkfifo "$PIPE"
@@ -46,48 +70,50 @@ APP_PID=$!
 exec 3>"$PIPE"
 sleep 3
 ```
-The `exec 3>"$PIPE"` keeps the write end open. Without it, the pipe closes after one write and the app exits.
 
 ### 3. Show the Window
 ```bash
-echo '{"type":"show"}' >&3
+# Session-based (any shell)
+bash scripts/agentic/session.sh send default '{"type":"show"}'
 sleep 1.5
 ```
 The app starts hidden. Always send `show` first.
 
 ### 4. Interact
-Send commands via fd 3. Common commands:
+Send commands via the session. Common commands:
 ```bash
+S="bash scripts/agentic/session.sh send default"
+
 # Set filter text
-echo '{"type":"setFilter","text":"search term"}' >&3
+$S '{"type":"setFilter","text":"search term"}'
 
 # Discover visible elements (returns semantic IDs)
-echo '{"type":"getElements","requestId":"e1"}' >&3
+$S '{"type":"getElements","requestId":"e1"}'
 
 # Select element by semantic ID (from getElements response)
-echo '{"type":"batch","requestId":"b1","commands":[{"type":"selectBySemanticId","semanticId":"choice:0:apple","submit":true}]}' >&3
+$S '{"type":"batch","requestId":"b1","commands":[{"type":"selectBySemanticId","semanticId":"choice:0:apple","submit":true}]}'
 
 # Trigger a built-in view
-echo '{"type":"triggerBuiltin","name":"clipboard"}' >&3
-echo '{"type":"triggerBuiltin","name":"tab-ai"}' >&3
-echo '{"type":"triggerBuiltin","name":"emoji"}' >&3
-echo '{"type":"triggerBuiltin","name":"apps"}' >&3
-echo '{"type":"triggerBuiltin","name":"file-search"}' >&3
+$S '{"type":"triggerBuiltin","name":"clipboard"}'
+$S '{"type":"triggerBuiltin","name":"tab-ai"}'
+$S '{"type":"triggerBuiltin","name":"emoji"}'
+$S '{"type":"triggerBuiltin","name":"apps"}'
+$S '{"type":"triggerBuiltin","name":"file-search"}'
 
 # Simulate keys (dispatches to current view)
-echo '{"type":"simulateKey","key":"enter","modifiers":[]}' >&3
-echo '{"type":"simulateKey","key":"escape","modifiers":[]}' >&3
-echo '{"type":"simulateKey","key":"k","modifiers":["cmd"]}' >&3
-echo '{"type":"simulateKey","key":"w","modifiers":["cmd"]}' >&3
+$S '{"type":"simulateKey","key":"enter","modifiers":[]}'
+$S '{"type":"simulateKey","key":"escape","modifiers":[]}'
+$S '{"type":"simulateKey","key":"k","modifiers":["cmd"]}'
+$S '{"type":"simulateKey","key":"w","modifiers":["cmd"]}'
 
 # Type individual characters (for views with text input)
-echo '{"type":"simulateKey","key":"h","modifiers":[]}' >&3
+$S '{"type":"simulateKey","key":"h","modifiers":[]}'
 ```
 
 ### 5. Capture Screenshots
 ```bash
 mkdir -p test-screenshots
-echo '{"type":"captureWindow","title":"","path":"'"$(pwd)"'/test-screenshots/step-01.png"}' >&3
+bash scripts/agentic/session.sh send default '{"type":"captureWindow","title":"","path":"'"$(pwd)"'/test-screenshots/step-01.png"}'
 sleep 1
 ```
 - `title` is substring match. `""` matches any window.
@@ -103,10 +129,14 @@ Log format: `TIMESTAMP|LEVEL|CATEGORY|cid=CORRELATION_ID message`
 
 ### 7. Cleanup
 ```bash
-exec 3>&-
-rm -f "$PIPE"
-kill $APP_PID 2>/dev/null || true
-wait $APP_PID 2>/dev/null || true
+# Session-based (preferred)
+bash scripts/agentic/session.sh stop default
+
+# Legacy fd 3 cleanup (single-shell only)
+# exec 3>&-
+# rm -f "$PIPE"
+# kill $APP_PID 2>/dev/null || true
+# wait $APP_PID 2>/dev/null || true
 ```
 
 ### 8. Report
@@ -126,6 +156,21 @@ wait $APP_PID 2>/dev/null || true
 | `captureWindow` | 1s |
 | ACP context bootstrap | 5-8s |
 | ACP response streaming | 10-20s |
+
+## Session Management
+
+Use `scripts/agentic/session.sh` instead of hand-rolling `mkfifo` + `exec 3>` in ad hoc shells.
+
+**Why:** The `exec 3>"$PIPE"` pattern ties the pipe to a single shell process. When a coding agent
+spawns a new shell (e.g., follow-up verification step), fd 3 does not exist and the session is lost.
+The session wrapper uses a background forwarder process so any shell can send commands via
+`session.sh send`.
+
+**Rules:**
+- Always use `session.sh start` instead of manual `mkfifo` + `exec 3>` for new verification flows
+- Use `session.sh send` for all protocol commands — do not assume fd 3 survives across steps
+- Check session health with `session.sh status` or `session-state.ts` before sending commands
+- Stop sessions with `session.sh stop` when done — do not leave orphan processes
 
 ## Verification Recipes
 

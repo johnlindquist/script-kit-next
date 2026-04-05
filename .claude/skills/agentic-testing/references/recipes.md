@@ -10,11 +10,12 @@ Named patterns agents select based on what they changed.
 
 **Steps:**
 1. Build: `cargo build`
-2. Launch via named pipe, show window
-3. Capture screenshot of main menu
-4. Read PNG — verify: "Script Kit" header, list items, footer shows "Run ⌘K Actions Tab AI"
-5. Set filter: `{"type":"setFilter","text":"clip"}` → capture → verify filtered results
-6. Clear filter: `{"type":"setFilter","text":""}` → verify list restores
+2. Start session: `bash scripts/agentic/session.sh start default`
+3. Show: `bash scripts/agentic/session.sh send default '{"type":"show"}'`
+4. Capture screenshot of main menu
+5. Read PNG — verify: "Script Kit" header, list items, footer shows "Run ⌘K Actions Tab AI"
+6. Set filter: send `{"type":"setFilter","text":"clip"}` → capture → verify filtered results
+7. Clear filter: send `{"type":"setFilter","text":""}` → verify list restores
 
 **Pass:** Main menu renders with correct items, filter narrows list, footer intact.
 **Fail:** Missing items, wrong footer, filter doesn't work. Check render_impl.rs and render_script_list.
@@ -27,8 +28,8 @@ Named patterns agents select based on what they changed.
 
 **Steps:**
 1. Build: `cargo build`
-2. Launch, show window
-3. `{"type":"triggerBuiltin","name":"tab-ai"}` → sleep 3
+2. Start session, show window
+3. Send `{"type":"triggerBuiltin","name":"tab-ai"}` → sleep 3
 4. Capture → verify "Preparing context" or "Ask Claude Code anything"
 5. Sleep 5 more → capture → verify "Context attached" and "Enter to send"
 
@@ -42,13 +43,13 @@ Named patterns agents select based on what they changed.
 **When:** Changes to ACP thread, message rendering, streaming, submit logic.
 
 **Steps:**
-1. Build, launch, show, triggerBuiltin tab-ai, wait 8s for context
+1. Build, start session, show, send triggerBuiltin tab-ai, wait 8s for context
 2. Type "hi": simulateKey h, simulateKey i
 3. Capture → verify text "hi" visible in input area
 4. simulateKey enter → sleep 5
 5. Capture → verify: user message card ("You / hi"), streaming indicator, footer "Streaming"
 6. Sleep 15 → capture → verify assistant response text rendered
-7. Check logs: `grep "acp_initialized\|acp_session_created" /tmp/sk-test.log`
+7. Check logs: `grep "acp_initialized\|acp_session_created" /tmp/sk-agentic-sessions/default/app.log`
 
 **Pass:** Message sent, user card shown, ACP initialized, response streams.
 **Fail:** No ACP logs = wrong agent binary. No response text = event stream not wired. Check config.rs (agent command) and handlers.rs (event dispatch).
@@ -75,7 +76,7 @@ Named patterns agents select based on what they changed.
 **When:** Changes to actions dialog (⌘K), action entries, dialog rendering.
 
 **Steps:**
-1. Build, launch, show
+1. Build, start session, show
 2. simulateKey k with cmd modifier → sleep 1
 3. Capture → verify actions dialog rendered (action list visible)
 4. simulateKey escape → sleep 0.5
@@ -91,7 +92,7 @@ Named patterns agents select based on what they changed.
 **When:** Changes to clipboard history, emoji picker, app launcher, file search, etc.
 
 **Steps:**
-1. Build, launch, show
+1. Build, start session, show
 2. triggerBuiltin with the view name (clipboard, emoji, apps, file-search)
 3. Sleep 2 → capture
 4. Verify the correct view rendered (check header, list content, footer)
@@ -122,7 +123,7 @@ Named patterns agents select based on what they changed.
 **When:** Changes to element introspection, batch commands, or semantic ID generation.
 
 **Steps:**
-1. Build, launch, show
+1. Build, start session, show
 2. Send `getElements` request: `{"type":"getElements","requestId":"e1"}`
 3. Read logs for `elementsResult` — verify semantic IDs returned (e.g., `choice:0:...`, `input:filter`)
 4. Use a returned semantic ID in a batch: `{"type":"batch","requestId":"b1","commands":[{"type":"selectBySemanticId","semanticId":"<id-from-step-3>","submit":false}]}`
@@ -141,8 +142,28 @@ Named patterns agents select based on what they changed.
 **Steps:**
 1. `cargo check && cargo clippy --lib -- -D warnings`
 2. `cargo nextest run --lib` (with 30s timeout)
-3. Build, launch, show, capture main menu
+3. Build, start session, show, capture main menu
 4. Read PNG → verify basic rendering intact
 
 **Pass:** All gates pass, main menu renders.
 **Fail:** Compilation error, clippy warning, test failure, or visual regression.
+
+---
+
+### Recipe: verify-session-management
+
+**When:** Changes to session.sh, session-state.ts, or the agentic testing infrastructure itself.
+
+**Steps:**
+1. Start session: `bash scripts/agentic/session.sh start test-session`
+2. Verify JSON envelope has `status: "ok"`, `resumed: false`, valid `pid`, `pipe`, `log`
+3. Re-run start: `bash scripts/agentic/session.sh start test-session` → verify `resumed: true`
+4. Check status: `bash scripts/agentic/session.sh status test-session` → verify `alive: true`
+5. Send show: `bash scripts/agentic/session.sh send test-session '{"type":"show"}'` → verify `sent: true`
+6. From a fresh shell, send another command → verify it reaches the same app process
+7. Check state: `bun scripts/agentic/session-state.ts --session test-session` → verify all fields
+8. Stop: `bash scripts/agentic/session.sh stop test-session` → verify `wasRunning: true`
+9. Re-check status → verify `alive: false` or `not_found`
+
+**Pass:** Session creates, resumes, sends from multiple shells, reports state, and cleans up.
+**Fail:** Stale PID, broken pipe, forwarder not running. Check session.sh forwarder loop.

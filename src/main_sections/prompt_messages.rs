@@ -251,6 +251,10 @@ enum PromptMessage {
     },
     /// Hide the debug grid overlay
     HideGrid,
+    /// Request machine-readable ACP state snapshot
+    GetAcpState {
+        request_id: String,
+    },
     /// Wait for a UI condition to be satisfied (polling)
     WaitFor {
         request_id: String,
