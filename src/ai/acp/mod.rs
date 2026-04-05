@@ -55,7 +55,8 @@ pub(crate) use permission_broker::{
     AcpApprovalRequest, AcpApprovalRequestInput, AcpPermissionBroker,
 };
 pub(crate) use preflight::{
-    resolve_default_acp_launch, setup_title_for_resolution, AcpLaunchBlocker, AcpLaunchResolution,
+    resolve_acp_launch_with_requirements, resolve_default_acp_launch, setup_title_for_resolution,
+    AcpLaunchBlocker, AcpLaunchRequirements, AcpLaunchResolution,
 };
 pub(crate) use provider::AcpProvider;
 pub(crate) use setup_state::{AcpInlineSetupState, AcpSetupAction};

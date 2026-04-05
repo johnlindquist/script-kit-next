@@ -480,3 +480,69 @@ fn inline_mention_canonical_token_with_punctuation() {
     assert_eq!(mentions[0].canonical_token, "@snapshot");
     assert_eq!(mentions[1].canonical_token, "@browser");
 }
+
+// ── mention_range_at_cursor ──────────────────────────────────
+
+#[test]
+fn mention_range_at_cursor_returns_range_when_inside() {
+    // "Fix @browser and @git-diff"
+    //      ^4      ^12
+    let text = "Fix @browser and @git-diff";
+    let range = mention_range_at_cursor(text, 8);
+    assert_eq!(range, Some(4..12));
+}
+
+#[test]
+fn mention_range_at_cursor_returns_range_at_trailing_edge() {
+    let text = "Fix @browser and @git-diff";
+    let range = mention_range_at_cursor(text, 12);
+    assert_eq!(range, Some(4..12));
+}
+
+#[test]
+fn mention_range_at_cursor_returns_none_outside() {
+    let text = "Fix @browser and @git-diff";
+    // Cursor at 3 is in "Fix" before the @
+    assert_eq!(mention_range_at_cursor(text, 3), None);
+}
+
+#[test]
+fn mention_range_at_cursor_returns_none_at_start_boundary() {
+    let text = "Fix @browser and @git-diff";
+    // Cursor at 4 is at the leading edge (start of @browser), not inside
+    assert_eq!(mention_range_at_cursor(text, 4), None);
+}
+
+#[test]
+fn mention_range_at_cursor_for_quoted_file_token() {
+    let text = r#"Check @file:"/tmp/My File.ts" done"#;
+    // @file:"/tmp/My File.ts" spans chars 6..29
+    let range = mention_range_at_cursor(text, 29);
+    assert!(range.is_some());
+    let r = range.unwrap();
+    assert_eq!(r.start, 6);
+    // The token is @file:"/tmp/My File.ts" which is 23 chars
+    assert_eq!(r.end, 29);
+}
+
+// ── Quoted @file: parse/serialize canonical tests ───────────
+
+#[test]
+fn parse_inline_mentions_supports_quoted_file_paths() {
+    let mentions = parse_inline_context_mentions(r#"Use @file:"/tmp/My File.ts""#);
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].token, r#"@file:"/tmp/My File.ts""#);
+    assert_eq!(mentions[0].canonical_token, r#"@file:"/tmp/My File.ts""#);
+}
+
+#[test]
+fn part_to_inline_token_quotes_paths_with_spaces() {
+    let part = AiContextPart::FilePath {
+        path: "/tmp/My File.ts".to_string(),
+        label: "My File.ts".to_string(),
+    };
+    assert_eq!(
+        part_to_inline_token(&part),
+        Some(r#"@file:"/tmp/My File.ts""#.to_string())
+    );
+}

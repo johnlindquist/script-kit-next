@@ -1123,6 +1123,9 @@ mod tests {
             config_state,
             install_hint: None,
             config_hint: None,
+            supports_embedded_context: None,
+            supports_image: None,
+            last_session_ok: false,
             config: None,
         }
     }

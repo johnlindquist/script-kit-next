@@ -968,6 +968,7 @@ impl AcpThread {
                     super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
                         self.selected_agent.clone(),
                         self.available_agents.clone(),
+                        super::preflight::AcpLaunchRequirements::default(),
                         &reason,
                         &auth_methods,
                     ),
@@ -1667,6 +1668,7 @@ impl AcpThread {
                     super::setup_state::AcpInlineSetupState::from_runtime_setup_required(
                         self.selected_agent.clone(),
                         self.available_agents.clone(),
+                        super::preflight::AcpLaunchRequirements::default(),
                         &reason,
                         &auth_methods,
                     ),

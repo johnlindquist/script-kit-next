@@ -7,7 +7,7 @@
 use gpui::SharedString;
 
 use super::catalog::AcpAgentCatalogEntry;
-use super::preflight::{AcpLaunchBlocker, AcpLaunchResolution};
+use super::preflight::{AcpLaunchBlocker, AcpLaunchRequirements, AcpLaunchResolution};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AcpSetupAction {
@@ -27,6 +27,8 @@ pub(crate) struct AcpInlineSetupState {
     pub selected_agent: Option<AcpAgentCatalogEntry>,
     /// The catalog entries available for agent selection in setup mode.
     pub catalog_entries: Vec<AcpAgentCatalogEntry>,
+    /// Capability requirements derived from the current ACP entry path.
+    pub launch_requirements: AcpLaunchRequirements,
 }
 
 /// Returns `true` if at least one launchable agent exists that is NOT the
@@ -41,6 +43,21 @@ fn has_launchable_alternative(
         .any(|entry| entry.is_launchable() && Some(entry.id.as_ref()) != selected_id)
 }
 
+/// Returns `true` if at least one launchable agent exists that is NOT the
+/// currently selected one and satisfies the active launch requirements.
+fn has_launchable_capable_alternative(
+    selected_agent: Option<&AcpAgentCatalogEntry>,
+    catalog_entries: &[AcpAgentCatalogEntry],
+    requirements: AcpLaunchRequirements,
+) -> bool {
+    let selected_id = selected_agent.map(|agent| agent.id.as_ref());
+    catalog_entries.iter().any(|entry| {
+        entry.is_launchable()
+            && entry.satisfies_requirements(requirements)
+            && Some(entry.id.as_ref()) != selected_id
+    })
+}
+
 impl AcpInlineSetupState {
     /// Build inline setup state from a runtime `SetupRequired` event.
     ///
@@ -50,6 +67,7 @@ impl AcpInlineSetupState {
     pub(crate) fn from_runtime_setup_required(
         selected_agent: Option<AcpAgentCatalogEntry>,
         catalog_entries: Vec<AcpAgentCatalogEntry>,
+        launch_requirements: AcpLaunchRequirements,
         reason: &str,
         auth_methods: &[String],
     ) -> Self {
@@ -70,6 +88,7 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
             "auth_required" => Self {
                 title: "Authentication required".into(),
@@ -86,6 +105,7 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
             _ if can_switch => Self {
                 title: "ACP agent setup required".into(),
@@ -96,6 +116,7 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
             _ => Self {
                 title: "ACP agent setup required".into(),
@@ -104,14 +125,23 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::OpenCatalog),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
         }
     }
 
-    pub(crate) fn from_resolution(resolution: &AcpLaunchResolution) -> Self {
+    pub(crate) fn from_resolution(
+        resolution: &AcpLaunchResolution,
+        launch_requirements: AcpLaunchRequirements,
+    ) -> Self {
         let selected_agent = resolution.selected_agent.clone();
         let catalog_entries = resolution.catalog_entries.clone();
         let can_switch = has_launchable_alternative(selected_agent.as_ref(), &catalog_entries);
+        let can_switch_capable = has_launchable_capable_alternative(
+            selected_agent.as_ref(),
+            &catalog_entries,
+            launch_requirements,
+        );
 
         match resolution.blocker {
             Some(AcpLaunchBlocker::NoAgentsAvailable) => Self {
@@ -121,6 +151,7 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
             Some(AcpLaunchBlocker::AgentNotInstalled) if can_switch => Self {
                 title: "Agent install required".into(),
@@ -129,6 +160,7 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
             Some(AcpLaunchBlocker::AgentNotInstalled) => Self {
                 title: "Agent install required".into(),
@@ -140,6 +172,7 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::SelectAgent),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
             Some(AcpLaunchBlocker::AuthenticationRequired) if can_switch => Self {
                 title: "Authentication required".into(),
@@ -148,6 +181,7 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
             Some(AcpLaunchBlocker::AuthenticationRequired) => Self {
                 title: "Authentication required".into(),
@@ -156,6 +190,7 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::SelectAgent),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
             Some(AcpLaunchBlocker::AgentMisconfigured) if can_switch => Self {
                 title: "Agent configuration required".into(),
@@ -164,6 +199,7 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
             Some(AcpLaunchBlocker::AgentMisconfigured) => Self {
                 title: "Agent configuration required".into(),
@@ -173,6 +209,7 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::SelectAgent),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
             Some(AcpLaunchBlocker::UnsupportedAgent) => Self {
                 title: "Unsupported ACP agent".into(),
@@ -181,6 +218,25 @@ impl AcpInlineSetupState {
                 secondary_action: Some(AcpSetupAction::OpenCatalog),
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
+            },
+            Some(AcpLaunchBlocker::CapabilityMismatch) if can_switch_capable => Self {
+                title: "ACP capability mismatch".into(),
+                body: "The selected ACP agent cannot satisfy this request, but another ready agent is available.".into(),
+                primary_action: AcpSetupAction::SelectAgent,
+                secondary_action: Some(AcpSetupAction::Retry),
+                selected_agent,
+                catalog_entries,
+                launch_requirements,
+            },
+            Some(AcpLaunchBlocker::CapabilityMismatch) => Self {
+                title: "ACP capability mismatch".into(),
+                body: "No available ACP agent supports the capabilities required for this request.".into(),
+                primary_action: AcpSetupAction::Retry,
+                secondary_action: Some(AcpSetupAction::OpenCatalog),
+                selected_agent,
+                catalog_entries,
+                launch_requirements,
             },
             None => Self {
                 title: "ACP ready".into(),
@@ -189,6 +245,7 @@ impl AcpInlineSetupState {
                 secondary_action: None,
                 selected_agent,
                 catalog_entries,
+                launch_requirements,
             },
         }
     }

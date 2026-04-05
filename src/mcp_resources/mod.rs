@@ -1143,25 +1143,45 @@ pub fn has_provider_json_resource(kind: ProviderJsonResourceKind) -> bool {
     }
 }
 
+/// Determine the resolution source for a provider-backed JSON resource.
+fn provider_json_source(slot_value: &Option<String>, env_key: &str) -> &'static str {
+    if slot_value.is_some() {
+        "slot"
+    } else if std::env::var_os(env_key).is_some() {
+        "env"
+    } else {
+        "empty-fallback"
+    }
+}
+
+/// Build an explicit empty-fallback JSON envelope with stable fields.
+fn empty_provider_json(kind: &str, note: &str, next_step: &str, source: &str) -> String {
+    format!(
+        r#"{{"schemaVersion":1,"type":"{kind}","ok":true,"available":false,"source":"{source}","items":[],"note":"{note}","nextStep":"{next_step}"}}"#
+    )
+}
+
 /// Read a JSON resource from an in-process slot, falling back to an environment
-/// variable, then to a static empty envelope.
+/// variable, then to a static empty envelope with explicit `source` tracking.
 fn read_slot_or_env_backed_json_resource(
     uri: &str,
     slot_value: Option<String>,
     env_key: &str,
-    empty_json: &str,
+    kind: &str,
+    note: &str,
+    next_step: &str,
     event_name: &'static str,
 ) -> Result<ResourceContent, String> {
-    let slot_present = slot_value.is_some();
+    let source = provider_json_source(&slot_value, env_key);
     let text = slot_value
         .or_else(|| std::env::var(env_key).ok())
-        .unwrap_or_else(|| empty_json.to_string());
+        .unwrap_or_else(|| empty_provider_json(kind, note, next_step, source));
     tracing::info!(
         target: "ai",
         event = %event_name,
         %uri,
         env_key,
-        slot_present,
+        source,
         bytes = text.len(),
         "mcp_provider_json_resource_read"
     );
@@ -1177,7 +1197,9 @@ fn read_dictation_resource(uri: &str) -> Result<ResourceContent, String> {
         uri,
         DICTATION_JSON_SLOT.lock().clone(),
         "SCRIPT_KIT_DICTATION_JSON",
-        r#"{"schemaVersion":1,"type":"dictation","ok":true,"available":false,"items":[],"note":"No dictation provider configured."}"#,
+        "dictation",
+        "No dictation provider configured.",
+        "Publish dictation JSON or set SCRIPT_KIT_DICTATION_JSON.",
         "mcp_dictation_resource_read",
     )
 }
@@ -1187,7 +1209,9 @@ fn read_calendar_resource(uri: &str) -> Result<ResourceContent, String> {
         uri,
         CALENDAR_JSON_SLOT.lock().clone(),
         "SCRIPT_KIT_CALENDAR_JSON",
-        r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":false,"items":[],"note":"No calendar provider configured."}"#,
+        "calendar",
+        "No calendar provider configured.",
+        "Publish calendar JSON or set SCRIPT_KIT_CALENDAR_JSON.",
         "mcp_calendar_resource_read",
     )
 }
@@ -1197,7 +1221,9 @@ fn read_notifications_resource(uri: &str) -> Result<ResourceContent, String> {
         uri,
         NOTIFICATIONS_JSON_SLOT.lock().clone(),
         "SCRIPT_KIT_NOTIFICATIONS_JSON",
-        r#"{"schemaVersion":1,"type":"notifications","ok":true,"available":false,"items":[],"note":"No notifications provider configured."}"#,
+        "notifications",
+        "No notifications provider configured.",
+        "Publish notifications JSON or set SCRIPT_KIT_NOTIFICATIONS_JSON.",
         "mcp_notifications_resource_read",
     )
 }
@@ -2883,5 +2909,138 @@ mod tests {
         let json = serde_json::to_string(&item).expect("serialize");
         let parsed: FocusedItemInfo = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(item, parsed);
+    }
+
+    // ── Provider-backed JSON resource tests ───────────────────────
+
+    #[test]
+    fn dictation_resource_empty_fallback_has_explicit_envelope() {
+        clear_provider_json_slots();
+        std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+
+        let scripts = Vec::new();
+        let scriptlets = Vec::new();
+        let content =
+            read_resource("kit://dictation", &scripts, &scriptlets, None).expect("should read");
+        let value: serde_json::Value =
+            serde_json::from_str(&content.text).expect("valid JSON");
+
+        assert_eq!(value["schemaVersion"], 1);
+        assert_eq!(value["type"], "dictation");
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["available"], false);
+        assert_eq!(value["source"], "empty-fallback");
+        assert!(value["items"].is_array());
+        assert!(value["note"].is_string());
+        assert!(value["nextStep"].is_string());
+    }
+
+    #[test]
+    fn calendar_resource_empty_fallback_has_explicit_envelope() {
+        clear_provider_json_slots();
+        std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+
+        let scripts = Vec::new();
+        let scriptlets = Vec::new();
+        let content =
+            read_resource("kit://calendar", &scripts, &scriptlets, None).expect("should read");
+        let value: serde_json::Value =
+            serde_json::from_str(&content.text).expect("valid JSON");
+
+        assert_eq!(value["schemaVersion"], 1);
+        assert_eq!(value["type"], "calendar");
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["available"], false);
+        assert_eq!(value["source"], "empty-fallback");
+        assert!(value["items"].is_array());
+        assert!(value["note"].is_string());
+        assert!(value["nextStep"].is_string());
+    }
+
+    #[test]
+    fn notifications_resource_empty_fallback_has_explicit_envelope() {
+        clear_provider_json_slots();
+        std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+
+        let scripts = Vec::new();
+        let scriptlets = Vec::new();
+        let content =
+            read_resource("kit://notifications", &scripts, &scriptlets, None)
+                .expect("should read");
+        let value: serde_json::Value =
+            serde_json::from_str(&content.text).expect("valid JSON");
+
+        assert_eq!(value["schemaVersion"], 1);
+        assert_eq!(value["type"], "notifications");
+        assert_eq!(value["ok"], true);
+        assert_eq!(value["available"], false);
+        assert_eq!(value["source"], "empty-fallback");
+        assert!(value["items"].is_array());
+        assert!(value["note"].is_string());
+        assert!(value["nextStep"].is_string());
+    }
+
+    #[test]
+    fn dictation_resource_prefers_slot_data() {
+        clear_provider_json_slots();
+        publish_dictation_json(
+            r#"{"schemaVersion":1,"type":"dictation","ok":true,"available":true,"source":"slot","items":[{"text":"hello"}]}"#,
+        );
+
+        let scripts = Vec::new();
+        let scriptlets = Vec::new();
+        let content =
+            read_resource("kit://dictation", &scripts, &scriptlets, None).expect("should read");
+        let value: serde_json::Value =
+            serde_json::from_str(&content.text).expect("valid JSON");
+
+        assert_eq!(value["available"], true);
+        assert_eq!(value["source"], "slot");
+        assert_eq!(value["items"].as_array().expect("items array").len(), 1);
+
+        clear_provider_json_slots();
+    }
+
+    #[test]
+    fn calendar_resource_prefers_slot_data() {
+        clear_provider_json_slots();
+        publish_calendar_json(
+            r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":true,"source":"slot","items":[{"title":"Demo"}]}"#,
+        );
+
+        let scripts = Vec::new();
+        let scriptlets = Vec::new();
+        let content =
+            read_resource("kit://calendar", &scripts, &scriptlets, None).expect("should read");
+        let value: serde_json::Value =
+            serde_json::from_str(&content.text).expect("valid JSON");
+
+        assert_eq!(value["available"], true);
+        assert_eq!(value["source"], "slot");
+        assert_eq!(value["items"].as_array().expect("items array").len(), 1);
+
+        clear_provider_json_slots();
+    }
+
+    #[test]
+    fn notifications_resource_prefers_slot_data() {
+        clear_provider_json_slots();
+        publish_notifications_json(
+            r#"{"schemaVersion":1,"type":"notifications","ok":true,"available":true,"source":"slot","items":[{"title":"Build complete"}]}"#,
+        );
+
+        let scripts = Vec::new();
+        let scriptlets = Vec::new();
+        let content =
+            read_resource("kit://notifications", &scripts, &scriptlets, None)
+                .expect("should read");
+        let value: serde_json::Value =
+            serde_json::from_str(&content.text).expect("valid JSON");
+
+        assert_eq!(value["available"], true);
+        assert_eq!(value["source"], "slot");
+        assert_eq!(value["items"].as_array().expect("items array").len(), 1);
+
+        clear_provider_json_slots();
     }
 }

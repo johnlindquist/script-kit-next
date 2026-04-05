@@ -2961,11 +2961,15 @@ impl AcpChatView {
         crate::ai::acp::persist_preferred_acp_agent_id(Some(agent.id.to_string()));
 
         // Re-resolve against the catalog to rebuild card title/body/actions.
-        let resolution = crate::ai::acp::resolve_default_acp_launch(
+        let resolution = crate::ai::acp::resolve_acp_launch_with_requirements(
             &current_setup.catalog_entries,
             Some(agent.id.as_ref()),
+            current_setup.launch_requirements,
         );
-        let next_setup = crate::ai::acp::AcpInlineSetupState::from_resolution(&resolution);
+        let next_setup = crate::ai::acp::AcpInlineSetupState::from_resolution(
+            &resolution,
+            current_setup.launch_requirements,
+        );
 
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -3729,6 +3733,52 @@ impl AcpChatView {
             );
             cx.stop_propagation();
             return;
+        }
+
+        // ── Token-atomic inline mention deletion ──────────────
+        // When backspace/delete lands inside or at the trailing edge of an
+        // inline @mention token, remove the whole token plus one trailing
+        // space (when present) instead of deleting a single character.
+        if crate::ui_foundation::is_key_backspace(key) || key == "delete" {
+            let current_text = self.live_thread().read(cx).input.text().to_string();
+            let cursor = self.live_thread().read(cx).input.cursor();
+
+            if let Some(range) =
+                crate::ai::context_mentions::mention_range_at_cursor(&current_text, cursor)
+            {
+                let chars: Vec<char> = current_text.chars().collect();
+                let mut end_char = range.end;
+                // Consume one trailing space when present.
+                if chars.get(end_char) == Some(&' ') {
+                    end_char += 1;
+                }
+
+                let start_byte = Self::char_to_byte_offset(&current_text, range.start);
+                let end_byte = Self::char_to_byte_offset(&current_text, end_char);
+
+                let mut next_text = String::with_capacity(current_text.len() - (end_byte - start_byte));
+                next_text.push_str(&current_text[..start_byte]);
+                next_text.push_str(&current_text[end_byte..]);
+
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_inline_mention_deleted_atomically",
+                    cursor,
+                    token_range_start = range.start,
+                    token_range_end = range.end,
+                    next_cursor = range.start,
+                );
+
+                self.live_thread().update(cx, |thread, cx| {
+                    thread.input.set_text(next_text);
+                    thread.input.set_cursor(range.start);
+                    cx.notify();
+                });
+                self.sync_inline_mentions(cx);
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
         }
 
         // Delegate all other keys to TextInputState::handle_key().

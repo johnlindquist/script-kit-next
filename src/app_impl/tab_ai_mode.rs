@@ -1017,6 +1017,7 @@ impl ScriptListApp {
                     secondary_action: Some(crate::ai::acp::AcpSetupAction::Retry),
                     selected_agent: None,
                     catalog_entries: Vec::new(),
+                    launch_requirements: crate::ai::acp::AcpLaunchRequirements::default(),
                 };
                 let view_entity =
                     cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
@@ -1036,8 +1037,25 @@ impl ScriptListApp {
         };
 
         let preferred_agent_id = crate::ai::acp::load_preferred_acp_agent_id();
-        let acp_launch_resolution =
-            crate::ai::acp::resolve_default_acp_launch(&catalog, preferred_agent_id.as_deref());
+
+        // Derive capability requirements from the current entry path.
+        let has_context_parts = focused_part.is_some();
+        let requirements = crate::ai::acp::AcpLaunchRequirements {
+            needs_embedded_context: has_context_parts,
+            needs_image: false,
+        };
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_launch_requirements_derived",
+            needs_embedded_context = requirements.needs_embedded_context,
+            needs_image = requirements.needs_image,
+        );
+
+        let acp_launch_resolution = crate::ai::acp::resolve_acp_launch_with_requirements(
+            &catalog,
+            preferred_agent_id.as_deref(),
+            requirements,
+        );
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_launch_resolution",
@@ -1049,8 +1067,10 @@ impl ScriptListApp {
         );
 
         if !acp_launch_resolution.is_ready() {
-            let setup =
-                crate::ai::acp::AcpInlineSetupState::from_resolution(&acp_launch_resolution);
+            let setup = crate::ai::acp::AcpInlineSetupState::from_resolution(
+                &acp_launch_resolution,
+                requirements,
+            );
             let view_entity =
                 cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
             self.tab_ai_harness_return_view = Some(source_view.clone());
