@@ -282,7 +282,8 @@ fn tab_ai_mode_threads_launch_requirements_into_acp_thread_init() {
 #[test]
 fn acp_thread_init_carries_launch_requirements() {
     assert!(
-        ACP_THREAD_SOURCE.contains("pub launch_requirements: super::preflight::AcpLaunchRequirements"),
+        ACP_THREAD_SOURCE
+            .contains("pub launch_requirements: super::preflight::AcpLaunchRequirements"),
         "AcpThreadInit must carry launch_requirements field"
     );
 }

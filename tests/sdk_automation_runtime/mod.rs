@@ -6,10 +6,9 @@ use script_kit_gpui::protocol::transaction_executor::{
     execute_batch, execute_wait_for, TransactionStateProvider,
 };
 use script_kit_gpui::protocol::{
-    AcpInputLayoutTelemetry, AcpPickerItemAcceptedTelemetry, AcpTestProbeSnapshot,
-    BatchCommand, Message, StateMatchSpec, TransactionError, TransactionErrorCode,
-    TransactionTraceMode, UiStateSnapshot, WaitCondition, WaitDetailedCondition,
-    WaitNamedCondition,
+    AcpInputLayoutTelemetry, AcpPickerItemAcceptedTelemetry, AcpTestProbeSnapshot, BatchCommand,
+    Message, StateMatchSpec, TransactionError, TransactionErrorCode, TransactionTraceMode,
+    UiStateSnapshot, WaitCondition, WaitDetailedCondition, WaitNamedCondition,
 };
 
 // ---------------------------------------------------------------------------
@@ -724,9 +723,8 @@ fn acp_accepted_cursor_at_wrong_index_times_out() {
 fn acp_accepted_cursor_at_empty_probe_times_out() {
     let mut provider = MockProvider::default();
 
-    let condition = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt {
-        index: 9,
-    });
+    let condition =
+        WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt { index: 9 });
 
     let output = execute_wait_for(
         &mut provider,

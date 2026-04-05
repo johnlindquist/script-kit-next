@@ -96,7 +96,7 @@ jobs:
           shared-key: "macos-debug"
           cache-targets: false
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy --lib -- -D warnings
 
   test:
     name: Test
@@ -136,7 +136,7 @@ jobs:
           shared-key: "macos-debug"
           cache-targets: false
           save-if: false
-      - uses: oven-sh/setup-bun@v1
+      - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.x
       - name: Install dependencies

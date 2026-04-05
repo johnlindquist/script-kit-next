@@ -3044,10 +3044,7 @@ impl AcpChatView {
     }
 
     /// Record a key-route event into the test probe ring buffer.
-    pub(crate) fn record_key_route(
-        &mut self,
-        event: crate::protocol::AcpKeyRouteTelemetry,
-    ) {
+    pub(crate) fn record_key_route(&mut self, event: crate::protocol::AcpKeyRouteTelemetry) {
         self.test_probe.event_seq += 1;
         if self.test_probe.key_routes.len() >= ACP_TEST_PROBE_MAX_EVENTS {
             self.test_probe.key_routes.pop_front();
@@ -3068,10 +3065,7 @@ impl AcpChatView {
     }
 
     /// Record an input-layout event into the test probe.
-    pub(crate) fn record_input_layout(
-        &mut self,
-        event: crate::protocol::AcpInputLayoutTelemetry,
-    ) {
+    pub(crate) fn record_input_layout(&mut self, event: crate::protocol::AcpInputLayoutTelemetry) {
         self.test_probe.event_seq += 1;
         self.test_probe.input_layout = Some(event);
     }
@@ -3767,7 +3761,8 @@ impl AcpChatView {
                 let start_byte = Self::char_to_byte_offset(&current_text, range.start);
                 let end_byte = Self::char_to_byte_offset(&current_text, end_char);
 
-                let mut next_text = String::with_capacity(current_text.len() - (end_byte - start_byte));
+                let mut next_text =
+                    String::with_capacity(current_text.len() - (end_byte - start_byte));
                 next_text.push_str(&current_text[..start_byte]);
                 next_text.push_str(&current_text[end_byte..]);
 

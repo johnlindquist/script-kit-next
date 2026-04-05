@@ -2922,8 +2922,7 @@ mod tests {
         let scriptlets = Vec::new();
         let content =
             read_resource("kit://dictation", &scripts, &scriptlets, None).expect("should read");
-        let value: serde_json::Value =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
 
         assert_eq!(value["schemaVersion"], 1);
         assert_eq!(value["type"], "dictation");
@@ -2944,8 +2943,7 @@ mod tests {
         let scriptlets = Vec::new();
         let content =
             read_resource("kit://calendar", &scripts, &scriptlets, None).expect("should read");
-        let value: serde_json::Value =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
 
         assert_eq!(value["schemaVersion"], 1);
         assert_eq!(value["type"], "calendar");
@@ -2965,10 +2963,8 @@ mod tests {
         let scripts = Vec::new();
         let scriptlets = Vec::new();
         let content =
-            read_resource("kit://notifications", &scripts, &scriptlets, None)
-                .expect("should read");
-        let value: serde_json::Value =
-            serde_json::from_str(&content.text).expect("valid JSON");
+            read_resource("kit://notifications", &scripts, &scriptlets, None).expect("should read");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
 
         assert_eq!(value["schemaVersion"], 1);
         assert_eq!(value["type"], "notifications");
@@ -2991,8 +2987,7 @@ mod tests {
         let scriptlets = Vec::new();
         let content =
             read_resource("kit://dictation", &scripts, &scriptlets, None).expect("should read");
-        let value: serde_json::Value =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
 
         assert_eq!(value["available"], true);
         assert_eq!(value["source"], "slot");
@@ -3012,8 +3007,7 @@ mod tests {
         let scriptlets = Vec::new();
         let content =
             read_resource("kit://calendar", &scripts, &scriptlets, None).expect("should read");
-        let value: serde_json::Value =
-            serde_json::from_str(&content.text).expect("valid JSON");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
 
         assert_eq!(value["available"], true);
         assert_eq!(value["source"], "slot");
@@ -3032,10 +3026,8 @@ mod tests {
         let scripts = Vec::new();
         let scriptlets = Vec::new();
         let content =
-            read_resource("kit://notifications", &scripts, &scriptlets, None)
-                .expect("should read");
-        let value: serde_json::Value =
-            serde_json::from_str(&content.text).expect("valid JSON");
+            read_resource("kit://notifications", &scripts, &scriptlets, None).expect("should read");
+        let value: serde_json::Value = serde_json::from_str(&content.text).expect("valid JSON");
 
         assert_eq!(value["available"], true);
         assert_eq!(value["source"], "slot");
