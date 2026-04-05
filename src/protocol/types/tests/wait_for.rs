@@ -442,6 +442,7 @@ fn get_acp_state_request_parses() {
 fn acp_state_result_round_trips() {
     let snapshot = crate::protocol::AcpStateSnapshot {
         schema_version: crate::protocol::ACP_STATE_SCHEMA_VERSION,
+        resolved_target: None,
         status: "idle".to_string(),
         input_text: "test".to_string(),
         cursor_index: 4,
@@ -811,11 +812,60 @@ fn reset_acp_test_probe_request_parses() {
         serde_json::from_str(json).expect("parse resetAcpTestProbe");
 
     match msg {
-        crate::protocol::Message::ResetAcpTestProbe { request_id } => {
+        crate::protocol::Message::ResetAcpTestProbe {
+            request_id,
+            target,
+        } => {
             assert_eq!(request_id, "probe-reset-1");
+            assert!(target.is_none(), "legacy request should have no target");
         }
         other => panic!("Expected ResetAcpTestProbe, got: {:?}", other),
     }
+}
+
+#[test]
+fn reset_acp_test_probe_with_target_round_trips() {
+    let json = serde_json::json!({
+        "type": "resetAcpTestProbe",
+        "requestId": "probe-reset-targeted",
+        "target": {
+            "type": "kind",
+            "kind": "acpDetached",
+            "index": 0
+        }
+    });
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse resetAcpTestProbe with target");
+
+    match &msg {
+        crate::protocol::Message::ResetAcpTestProbe {
+            request_id,
+            target,
+        } => {
+            assert_eq!(request_id, "probe-reset-targeted");
+            let t = target.as_ref().expect("should have target");
+            match t {
+                crate::protocol::AutomationWindowTarget::Kind { kind, index } => {
+                    assert_eq!(*kind, crate::protocol::AutomationWindowKind::AcpDetached);
+                    assert_eq!(*index, Some(0));
+                }
+                other => panic!("Expected Kind target, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected ResetAcpTestProbe, got: {:?}", other),
+    }
+
+    // Round-trip
+    let re_serialized = serde_json::to_value(&msg).expect("re-serialize");
+    assert_eq!(re_serialized["type"].as_str(), Some("resetAcpTestProbe"));
+    assert_eq!(
+        re_serialized["requestId"].as_str(),
+        Some("probe-reset-targeted")
+    );
+    assert_eq!(
+        re_serialized["target"]["kind"].as_str(),
+        Some("acpDetached")
+    );
 }
 
 #[test]

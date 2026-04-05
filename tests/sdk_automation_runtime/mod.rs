@@ -103,7 +103,7 @@ fn get_state_request_parses() {
     let json = serde_json::json!({"type": "getState", "requestId": "gs-1"});
     let msg: Message = serde_json::from_value(json).expect("parse getState");
     match msg {
-        Message::GetState { request_id } => assert_eq!(request_id, "gs-1"),
+        Message::GetState { request_id, .. } => assert_eq!(request_id, "gs-1"),
         other => panic!("Expected GetState, got: {other:?}"),
     }
 }
@@ -181,7 +181,7 @@ fn get_elements_request_parses_with_limit() {
     let json = serde_json::json!({"type": "getElements", "requestId": "ge-1", "limit": 10});
     let msg: Message = serde_json::from_value(json).expect("parse getElements");
     match msg {
-        Message::GetElements { request_id, limit } => {
+        Message::GetElements { request_id, limit, .. } => {
             assert_eq!(request_id, "ge-1");
             assert_eq!(limit, Some(10));
         }

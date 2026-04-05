@@ -8,6 +8,7 @@
  *
  * Usage:
  *   bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
+ *     [--target-json '{"type":"kind","kind":"acpDetached","index":0}'] [--surface acp]
  *
  * Recipes:
  *   acp-accept         Full ACP picker accept; choose key with --key enter|tab
@@ -17,6 +18,12 @@
  *   acp-setup-recovery Recovery from ACP setup state; select agent with --select-agent ID
  *   preflight          Check all prerequisites (session, window, permissions)
  *   help               Show this help
+ *
+ * Target threading:
+ *   --target-json JSON   ACP window target for all RPCs (getAcpState, getAcpTestProbe,
+ *                        resetAcpTestProbe, waitFor). Reused consistently across all steps.
+ *   --surface SURFACE    Automation surface for native input focus (main, acp, actions, notes, ai).
+ *                        Must match the --target-json window so focus and proof stay on the same surface.
  *
  * All output is JSON on stdout. Each recipe returns the underlying
  * tool receipts so the agent can inspect proof at every step.
@@ -30,6 +37,17 @@ const PROJECT_ROOT = resolve(import.meta.dir, "../..");
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/**
+ * Wire-compatible ACP window target. Same shape as Rust `AutomationWindowTarget`.
+ * One target object must be reused for every RPC in a single verification run.
+ */
+type AutomationTargetJson =
+  | { type: "focused" }
+  | { type: "main" }
+  | { type: "id"; id: string }
+  | { type: "kind"; kind: string; index?: number }
+  | { type: "titleContains"; text: string };
 
 interface RecipeReceipt {
   schemaVersion: number;
@@ -124,6 +142,53 @@ async function rpc(
 }
 
 /**
+ * Build a JSON command string, injecting `target` when present.
+ */
+function buildCmd(
+  base: Record<string, unknown>,
+  target?: AutomationTargetJson
+): string {
+  if (target) {
+    return JSON.stringify({ ...base, target });
+  }
+  return JSON.stringify(base);
+}
+
+/**
+ * Build native-input args with optional --surface and --ensure-focus.
+ */
+function nativeInputArgs(
+  command: string,
+  value: string,
+  surface?: string
+): string[] {
+  const args = [
+    "bun",
+    "scripts/agentic/macos-input.ts",
+    command,
+    value,
+    "--ensure-focus",
+  ];
+  if (surface) {
+    args.push("--target", surface);
+  }
+  return args;
+}
+
+/**
+ * Build verify-shot args with optional --target-json.
+ */
+function verifyArgs(
+  base: string[],
+  target?: AutomationTargetJson
+): string[] {
+  if (target) {
+    return [...base, "--target-json", JSON.stringify(target)];
+  }
+  return base;
+}
+
+/**
  * Fire-and-forget send via session.sh send.
  */
 async function send(
@@ -134,6 +199,16 @@ async function send(
     ["bash", "scripts/agentic/session.sh", "send", session, jsonCmd],
     "send"
   );
+}
+
+function parseTargetJson(raw: string | undefined): AutomationTargetJson | undefined {
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw) as AutomationTargetJson;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`Invalid --target-json: ${reason}`);
+  }
 }
 
 function parseArgs() {
@@ -154,8 +229,15 @@ function parseArgs() {
     selectAgentIdx >= 0 && args[selectAgentIdx + 1]
       ? args[selectAgentIdx + 1]
       : undefined;
+  const targetJsonIdx = args.indexOf("--target-json");
+  const targetJson = parseTargetJson(
+    targetJsonIdx >= 0 ? args[targetJsonIdx + 1] : undefined
+  );
+  const surfaceIdx = args.indexOf("--surface");
+  const surface =
+    surfaceIdx >= 0 && args[surfaceIdx + 1] ? args[surfaceIdx + 1] : undefined;
   const json = args.includes("--json");
-  return { recipe, session, key, vision, selectAgent, json };
+  return { recipe, session, key, vision, selectAgent, targetJson, surface, json };
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +328,10 @@ async function recipePreflight(session: string): Promise<RecipeReceipt> {
   };
 }
 
-async function recipeAcpOpen(session: string): Promise<RecipeReceipt> {
+async function recipeAcpOpen(
+  session: string,
+  opts: { target?: AutomationTargetJson } = {}
+): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
 
   // 1. Show window
@@ -270,14 +355,17 @@ async function recipeAcpOpen(session: string): Promise<RecipeReceipt> {
     await step("wait-acp-ready", () =>
       rpc(
         session,
-        JSON.stringify({
-          type: "waitFor",
-          requestId: "w-acp-ready",
-          condition: { type: "acpReady" },
-          timeout: 8000,
-          pollInterval: 25,
-          trace: "onFailure",
-        }),
+        buildCmd(
+          {
+            type: "waitFor",
+            requestId: "w-acp-ready",
+            condition: { type: "acpReady" },
+            timeout: 8000,
+            pollInterval: 25,
+            trace: "onFailure",
+          },
+          opts.target
+        ),
         { expect: "waitForResult", timeout: 10000 }
       )
     )
@@ -287,17 +375,20 @@ async function recipeAcpOpen(session: string): Promise<RecipeReceipt> {
   steps.push(
     await step("verify-acp-ready", () =>
       runTool(
-        [
-          "bun",
-          "scripts/agentic/verify-shot.ts",
-          "--session",
-          session,
-          "--label",
-          "acp-open",
-          "--skip-screenshot",
-          "--skip-probe",
-          "--acp-context-ready",
-        ],
+        verifyArgs(
+          [
+            "bun",
+            "scripts/agentic/verify-shot.ts",
+            "--session",
+            session,
+            "--label",
+            "acp-open",
+            "--skip-screenshot",
+            "--skip-probe",
+            "--acp-context-ready",
+          ],
+          opts.target
+        ),
         "verify-ready"
       )
     )
@@ -325,12 +416,12 @@ async function recipeAcpOpen(session: string): Promise<RecipeReceipt> {
 async function recipeAcpPickerAccept(
   session: string,
   acceptKey: "enter" | "tab",
-  opts: { emitVision?: boolean } = {}
+  opts: { emitVision?: boolean; target?: AutomationTargetJson; surface?: string } = {}
 ): Promise<RecipeReceipt> {
   const steps: StepReceipt[] = [];
 
   // 1. Open ACP first
-  const openResult = await recipeAcpOpen(session);
+  const openResult = await recipeAcpOpen(session, { target: opts.target });
   steps.push({
     name: "acp-open",
     status: openResult.status,
@@ -353,10 +444,13 @@ async function recipeAcpPickerAccept(
     await step("reset-probe", () =>
       send(
         session,
-        JSON.stringify({
-          type: "resetAcpTestProbe",
-          requestId: `reset-${acceptKey}-${Date.now()}`,
-        })
+        buildCmd(
+          {
+            type: "resetAcpTestProbe",
+            requestId: `reset-${acceptKey}-${Date.now()}`,
+          },
+          opts.target
+        )
       )
     )
   );
@@ -364,13 +458,7 @@ async function recipeAcpPickerAccept(
   // 3. Type @ to open picker (native input with focus enforcement)
   const typeAtStep = await step("type-at-trigger", () =>
     runTool(
-      [
-        "bun",
-        "scripts/agentic/macos-input.ts",
-        "type",
-        "@",
-        "--ensure-focus",
-      ],
+      nativeInputArgs("type", "@", opts.surface),
       "type-at"
     )
   );
@@ -391,14 +479,17 @@ async function recipeAcpPickerAccept(
     await step("wait-picker-open", () =>
       rpc(
         session,
-        JSON.stringify({
-          type: "waitFor",
-          requestId: `w-picker-open-${acceptKey}`,
-          condition: { type: "acpPickerOpen" },
-          timeout: 3000,
-          pollInterval: 25,
-          trace: "onFailure",
-        }),
+        buildCmd(
+          {
+            type: "waitFor",
+            requestId: `w-picker-open-${acceptKey}`,
+            condition: { type: "acpPickerOpen" },
+            timeout: 3000,
+            pollInterval: 25,
+            trace: "onFailure",
+          },
+          opts.target
+        ),
         { expect: "waitForResult", timeout: 5000 }
       )
     )
@@ -408,17 +499,20 @@ async function recipeAcpPickerAccept(
   steps.push(
     await step("verify-picker-open", () =>
       runTool(
-        [
-          "bun",
-          "scripts/agentic/verify-shot.ts",
-          "--session",
-          session,
-          "--label",
-          "picker-open",
-          "--skip-screenshot",
-          "--skip-probe",
-          "--acp-picker-open",
-        ],
+        verifyArgs(
+          [
+            "bun",
+            "scripts/agentic/verify-shot.ts",
+            "--session",
+            session,
+            "--label",
+            "picker-open",
+            "--skip-screenshot",
+            "--skip-probe",
+            "--acp-picker-open",
+          ],
+          opts.target
+        ),
         "verify-picker"
       )
     )
@@ -427,13 +521,7 @@ async function recipeAcpPickerAccept(
   // 6. Accept with native key (with focus enforcement)
   const nativeKeyStep = await step(`native-${acceptKey}`, () =>
     runTool(
-      [
-        "bun",
-        "scripts/agentic/macos-input.ts",
-        "key",
-        acceptKey,
-        "--ensure-focus",
-      ],
+      nativeInputArgs("key", acceptKey, opts.surface),
       `native-${acceptKey}`
     )
   );
@@ -454,21 +542,24 @@ async function recipeAcpPickerAccept(
     await step("wait-accepted-via-key", () =>
       rpc(
         session,
-        JSON.stringify({
-          type: "waitFor",
-          requestId: `w-accepted-via-${acceptKey}`,
-          condition: { type: "acpAcceptedViaKey", key: acceptKey },
-          timeout: 3000,
-          pollInterval: 25,
-          trace: "onFailure",
-        }),
+        buildCmd(
+          {
+            type: "waitFor",
+            requestId: `w-accepted-via-${acceptKey}`,
+            condition: { type: "acpAcceptedViaKey", key: acceptKey },
+            timeout: 3000,
+            pollInterval: 25,
+            trace: "onFailure",
+          },
+          opts.target
+        ),
         { expect: "waitForResult", timeout: 5000 }
       )
     )
   );
 
   // 8. Final proof: screenshot + probe assertion (the only screenshot in the recipe)
-  const verifyArgs = [
+  const finalVerifyBase = [
     "bun",
     "scripts/agentic/verify-shot.ts",
     "--session",
@@ -483,7 +574,7 @@ async function recipeAcpPickerAccept(
   ];
   steps.push(
     await step("verify-accepted", () =>
-      runTool(verifyArgs, "verify-accepted")
+      runTool(verifyArgs(finalVerifyBase, opts.target), "verify-accepted")
     )
   );
 
@@ -761,7 +852,7 @@ async function recipeAcpSetupRecovery(
 // CLI
 // ---------------------------------------------------------------------------
 
-const { recipe, session, key, vision, selectAgent } = parseArgs();
+const { recipe, session, key, vision, selectAgent, targetJson, surface } = parseArgs();
 
 let result: RecipeReceipt;
 
@@ -771,24 +862,30 @@ switch (recipe) {
     break;
 
   case "acp-open":
-    result = await recipeAcpOpen(session);
+    result = await recipeAcpOpen(session, { target: targetJson });
     break;
 
   case "acp-accept":
     result = await recipeAcpPickerAccept(session, key, {
       emitVision: vision,
+      target: targetJson,
+      surface,
     });
     break;
 
   case "acp-enter-accept":
     result = await recipeAcpPickerAccept(session, "enter", {
       emitVision: vision,
+      target: targetJson,
+      surface,
     });
     break;
 
   case "acp-tab-accept":
     result = await recipeAcpPickerAccept(session, "tab", {
       emitVision: vision,
+      target: targetJson,
+      surface,
     });
     break;
 
@@ -798,7 +895,9 @@ switch (recipe) {
 
   case "help":
   case "--help":
-    console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision] [--select-agent ID]
+    console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
+  [--target-json '{"type":"kind","kind":"acpDetached","index":0}'] [--surface acp]
+  [--select-agent ID]
 
 Recipes:
   preflight          Check prerequisites (session, window, permissions)
@@ -809,9 +908,15 @@ Recipes:
   acp-setup-recovery Recovery from ACP setup; select agent with --select-agent ID
   help               Show this help
 
+Target threading:
+  --target-json JSON   ACP window target for all RPCs (reused across all steps)
+  --surface SURFACE    Automation surface for native input focus (main, acp, etc.)
+
 Examples:
   bun scripts/agentic/index.ts acp-accept --session default --key enter
   bun scripts/agentic/index.ts acp-accept --session default --key tab --vision
+  bun scripts/agentic/index.ts acp-accept --session default --key enter \\
+    --target-json '{"type":"kind","kind":"acpDetached","index":0}' --surface acp --vision
   bun scripts/agentic/index.ts acp-setup-recovery --session default --select-agent opencode --json`);
     process.exit(0);
     break;

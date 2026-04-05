@@ -9,19 +9,76 @@
 //!
 //! All mutations emit structured tracing so agents can observe the
 //! registry lifecycle in machine-parseable logs.
+//!
+//! ## Deterministic ordering
+//!
+//! The registry maintains a cached `kind_index` that groups window IDs
+//! by [`AutomationWindowKind`] and sorts them lexicographically within
+//! each group.  `list_automation_windows()` returns entries sorted by
+//! `kind_rank` then `id`, so identical registry contents always produce
+//! the same snapshot order regardless of insertion order.
 
 use crate::protocol::{AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget};
 use anyhow::{anyhow, Result};
 use parking_lot::Mutex;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------
-// Global singleton
+// Registry state
 // ---------------------------------------------------------------------------
 
-static AUTOMATION_WINDOWS: LazyLock<Mutex<BTreeMap<String, AutomationWindowInfo>>> =
-    LazyLock::new(|| Mutex::new(BTreeMap::new()));
+#[derive(Debug, Default)]
+struct AutomationRegistryState {
+    windows: HashMap<String, AutomationWindowInfo>,
+    focused_id: Option<String>,
+    main_id: Option<String>,
+    kind_index: HashMap<AutomationWindowKind, Vec<String>>,
+}
+
+static AUTOMATION_WINDOWS: LazyLock<Mutex<AutomationRegistryState>> =
+    LazyLock::new(|| Mutex::new(AutomationRegistryState::default()));
+
+// ---------------------------------------------------------------------------
+// Kind ordering
+// ---------------------------------------------------------------------------
+
+fn kind_rank(kind: AutomationWindowKind) -> u8 {
+    match kind {
+        AutomationWindowKind::Main => 0,
+        AutomationWindowKind::Notes => 1,
+        AutomationWindowKind::Ai => 2,
+        AutomationWindowKind::MiniAi => 3,
+        AutomationWindowKind::AcpDetached => 4,
+        AutomationWindowKind::ActionsDialog => 5,
+        AutomationWindowKind::PromptPopup => 6,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Index rebuilding
+// ---------------------------------------------------------------------------
+
+fn rebuild_indexes(state: &mut AutomationRegistryState) {
+    state.focused_id = None;
+    state.main_id = None;
+    state.kind_index.clear();
+
+    // Sort IDs lexicographically so same-kind ordering is deterministic.
+    let mut ids: Vec<String> = state.windows.keys().cloned().collect();
+    ids.sort_unstable();
+
+    for id in ids {
+        let info = &state.windows[&id];
+        if info.focused {
+            state.focused_id = Some(id.clone());
+        }
+        if info.kind == AutomationWindowKind::Main && state.main_id.is_none() {
+            state.main_id = Some(id.clone());
+        }
+        state.kind_index.entry(info.kind).or_default().push(id);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -30,73 +87,99 @@ static AUTOMATION_WINDOWS: LazyLock<Mutex<BTreeMap<String, AutomationWindowInfo>
 /// Register or update an automation window entry.
 ///
 /// If an entry with the same `id` already exists it is replaced.
+/// When the new entry has `focused == true`, all other entries are
+/// unfocused first.
 pub fn upsert_automation_window(info: AutomationWindowInfo) {
-    tracing::info!(
+    let mut state = AUTOMATION_WINDOWS.lock();
+    if info.focused {
+        for existing in state.windows.values_mut() {
+            existing.focused = false;
+        }
+    }
+    let id = info.id.clone();
+    state.windows.insert(id.clone(), info);
+    rebuild_indexes(&mut state);
+    tracing::debug!(
         target: "script_kit::automation",
-        id = %info.id,
-        kind = ?info.kind,
-        focused = info.focused,
-        visible = info.visible,
-        title = ?info.title,
-        "automation_window_registered"
+        id = %id,
+        focused_id = ?state.focused_id,
+        main_id = ?state.main_id,
+        "automation_window_upserted"
     );
-    AUTOMATION_WINDOWS.lock().insert(info.id.clone(), info);
 }
 
 /// Remove an automation window entry by its stable ID.
 ///
 /// Returns the removed entry if it existed.
 pub fn remove_automation_window(id: &str) -> Option<AutomationWindowInfo> {
-    let removed = AUTOMATION_WINDOWS.lock().remove(id);
+    let mut state = AUTOMATION_WINDOWS.lock();
+    let removed = state.windows.remove(id);
     if removed.is_some() {
-        tracing::info!(
+        rebuild_indexes(&mut state);
+        tracing::debug!(
             target: "script_kit::automation",
             id = %id,
-            "automation_window_unregistered"
+            focused_id = ?state.focused_id,
+            main_id = ?state.main_id,
+            "automation_window_removed"
         );
     }
     removed
 }
 
-/// Return a snapshot of all registered automation windows.
+/// Return a snapshot of all registered automation windows in stable order.
+///
+/// Sorted by `kind_rank` (Main first, PromptPopup last) then
+/// lexicographic `id` within each kind.
 pub fn list_automation_windows() -> Vec<AutomationWindowInfo> {
-    AUTOMATION_WINDOWS.lock().values().cloned().collect()
+    let state = AUTOMATION_WINDOWS.lock();
+    let mut windows: Vec<AutomationWindowInfo> = state.windows.values().cloned().collect();
+    windows.sort_by(|a, b| {
+        kind_rank(a.kind)
+            .cmp(&kind_rank(b.kind))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    tracing::info!(
+        target: "script_kit::automation",
+        focused_id = ?state.focused_id,
+        window_count = windows.len(),
+        order = ?windows.iter().map(|w| w.id.clone()).collect::<Vec<_>>(),
+        "automation_window_list_snapshot"
+    );
+    windows
 }
 
 /// Return the stable ID of whichever window is currently marked focused,
 /// or `None` if no window has `focused == true`.
 pub fn focused_automation_window_id() -> Option<String> {
-    AUTOMATION_WINDOWS
-        .lock()
-        .values()
-        .find(|w| w.focused)
-        .map(|w| w.id.clone())
+    AUTOMATION_WINDOWS.lock().focused_id.clone()
 }
 
-/// Update the focused state: set `focused = true` on the window with
-/// `new_focused_id` and `focused = false` on every other entry.
+/// Update focus so exactly one registered window is focused.
 ///
 /// Returns `true` if `new_focused_id` was found in the registry.
 pub fn set_automation_focus(new_focused_id: &str) -> bool {
-    let mut map = AUTOMATION_WINDOWS.lock();
-    let found = map.contains_key(new_focused_id);
-    if found {
-        for (id, info) in map.iter_mut() {
-            info.focused = id.as_str() == new_focused_id;
-        }
-        tracing::info!(
-            target: "script_kit::automation",
-            id = %new_focused_id,
-            "automation_window_focus_changed"
-        );
+    let mut state = AUTOMATION_WINDOWS.lock();
+    if !state.windows.contains_key(new_focused_id) {
+        return false;
     }
-    found
+    for (id, info) in state.windows.iter_mut() {
+        info.focused = id.as_str() == new_focused_id;
+    }
+    rebuild_indexes(&mut state);
+    tracing::info!(
+        target: "script_kit::automation",
+        id = %new_focused_id,
+        focused_id = ?state.focused_id,
+        "automation_window_focus_changed"
+    );
+    true
 }
 
 /// Update the visibility flag for a single window.
 pub fn set_automation_visibility(id: &str, visible: bool) {
-    let mut map = AUTOMATION_WINDOWS.lock();
-    if let Some(info) = map.get_mut(id) {
+    let mut state = AUTOMATION_WINDOWS.lock();
+    if let Some(info) = state.windows.get_mut(id) {
         if info.visible != visible {
             info.visible = visible;
             tracing::info!(
@@ -112,55 +195,90 @@ pub fn set_automation_visibility(id: &str, visible: bool) {
 /// Resolve an [`AutomationWindowTarget`] to a single
 /// [`AutomationWindowInfo`].
 ///
+/// Uses cached indexes for `Focused`, `Main`, and `Kind` resolution so
+/// the cost is O(1) in the common case.  `TitleContains` still scans
+/// all entries but sorts matches before choosing the first.
+///
 /// Returns an error — never silently falls back to the main window —
 /// when no matching entry exists.
 pub fn resolve_automation_window(
     target: Option<&AutomationWindowTarget>,
 ) -> Result<AutomationWindowInfo> {
-    let map = AUTOMATION_WINDOWS.lock();
+    let state = AUTOMATION_WINDOWS.lock();
 
-    let result = match target {
-        None | Some(AutomationWindowTarget::Focused) => map
-            .values()
-            .find(|w| w.focused)
-            .cloned()
-            .ok_or_else(|| anyhow!("No focused automation window")),
+    let (resolution_path, result) = match target {
+        None | Some(AutomationWindowTarget::Focused) => (
+            "focused",
+            state
+                .focused_id
+                .as_ref()
+                .and_then(|id| state.windows.get(id))
+                .cloned()
+                .ok_or_else(|| anyhow!("No focused automation window")),
+        ),
 
-        Some(AutomationWindowTarget::Main) => map
-            .values()
-            .find(|w| w.kind == AutomationWindowKind::Main)
-            .cloned()
-            .ok_or_else(|| anyhow!("Main automation window not registered")),
+        Some(AutomationWindowTarget::Main) => (
+            "main",
+            state
+                .main_id
+                .as_ref()
+                .and_then(|id| state.windows.get(id))
+                .cloned()
+                .ok_or_else(|| anyhow!("Main automation window not registered")),
+        ),
 
-        Some(AutomationWindowTarget::Id { id }) => map
-            .get(id)
-            .cloned()
-            .ok_or_else(|| anyhow!("Unknown automation window id: {id}")),
+        Some(AutomationWindowTarget::Id { id }) => (
+            "id",
+            state
+                .windows
+                .get(id)
+                .cloned()
+                .ok_or_else(|| anyhow!("Unknown automation window id: {id}")),
+        ),
 
         Some(AutomationWindowTarget::Kind { kind, index }) => {
             let idx = index.unwrap_or(0);
-            map.values()
-                .filter(|w| w.kind == *kind)
-                .nth(idx)
+            let result = state
+                .kind_index
+                .get(kind)
+                .and_then(|ids| ids.get(idx))
+                .and_then(|id| state.windows.get(id))
                 .cloned()
-                .ok_or_else(|| anyhow!("No automation window for kind {:?} index {}", kind, idx))
+                .ok_or_else(|| anyhow!("No automation window for kind {:?} index {}", kind, idx));
+            ("kind", result)
         }
 
-        Some(AutomationWindowTarget::TitleContains { text }) => map
-            .values()
-            .find(|w| {
-                w.title
-                    .as_deref()
-                    .is_some_and(|title| title.contains(text.as_str()))
-            })
-            .cloned()
-            .ok_or_else(|| anyhow!("No automation window title contains '{text}'")),
+        Some(AutomationWindowTarget::TitleContains { text }) => {
+            let mut matches: Vec<AutomationWindowInfo> = state
+                .windows
+                .values()
+                .filter(|w| {
+                    w.title
+                        .as_deref()
+                        .is_some_and(|title| title.contains(text.as_str()))
+                })
+                .cloned()
+                .collect();
+            matches.sort_by(|a, b| {
+                kind_rank(a.kind)
+                    .cmp(&kind_rank(b.kind))
+                    .then_with(|| a.id.cmp(&b.id))
+            });
+            (
+                "titleContains",
+                matches
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| anyhow!("No automation window title contains '{text}'")),
+            )
+        }
     };
 
     match &result {
         Ok(info) => {
             tracing::debug!(
                 target: "script_kit::automation",
+                resolution_path = resolution_path,
                 resolved_id = %info.id,
                 kind = ?info.kind,
                 target = ?target,
@@ -170,6 +288,7 @@ pub fn resolve_automation_window(
         Err(err) => {
             tracing::warn!(
                 target: "script_kit::automation",
+                resolution_path = resolution_path,
                 error = %err,
                 target = ?target,
                 "automation_window_resolve_failed"
@@ -629,5 +748,96 @@ mod tests {
 
         remove_automation_window(&format!("{p}:main"));
         remove_automation_window(&format!("{p}:notes"));
+    }
+
+    // -- Deterministic ordering -------------------------------------------
+
+    /// Proves that same-kind windows inserted in reverse order still
+    /// resolve deterministically by lexicographic ID.
+    #[test]
+    fn kind_index_is_deterministic_regardless_of_insertion_order() {
+        let p = test_prefix();
+
+        // Insert b before a — HashMap would be non-deterministic, but
+        // the kind_index must sort lexicographically.
+        upsert_automation_window(AutomationWindowInfo {
+            id: format!("{p}:promptPopup:b"),
+            kind: AutomationWindowKind::PromptPopup,
+            title: Some("Popup B".into()),
+            focused: false,
+            visible: true,
+            semantic_surface: Some("promptPopup".into()),
+            bounds: None,
+        });
+        upsert_automation_window(AutomationWindowInfo {
+            id: format!("{p}:promptPopup:a"),
+            kind: AutomationWindowKind::PromptPopup,
+            title: Some("Popup A".into()),
+            focused: false,
+            visible: true,
+            semantic_surface: Some("promptPopup".into()),
+            bounds: None,
+        });
+
+        // Index 0 must be :a (lexicographically first)
+        let resolved = resolve_automation_window(Some(&AutomationWindowTarget::Kind {
+            kind: AutomationWindowKind::PromptPopup,
+            index: Some(0),
+        }))
+        .expect("must resolve index 0");
+        assert_eq!(resolved.id, format!("{p}:promptPopup:a"));
+
+        // Index 1 must be :b
+        let resolved = resolve_automation_window(Some(&AutomationWindowTarget::Kind {
+            kind: AutomationWindowKind::PromptPopup,
+            index: Some(1),
+        }))
+        .expect("must resolve index 1");
+        assert_eq!(resolved.id, format!("{p}:promptPopup:b"));
+
+        // Repeated calls produce the same result
+        for _ in 0..5 {
+            let r = resolve_automation_window(Some(&AutomationWindowTarget::Kind {
+                kind: AutomationWindowKind::PromptPopup,
+                index: Some(0),
+            }))
+            .expect("stable");
+            assert_eq!(r.id, format!("{p}:promptPopup:a"));
+        }
+
+        remove_automation_window(&format!("{p}:promptPopup:a"));
+        remove_automation_window(&format!("{p}:promptPopup:b"));
+    }
+
+    /// Proves that list_automation_windows returns a stable snapshot
+    /// sorted by kind_rank then id.
+    #[test]
+    fn list_snapshot_is_sorted_by_kind_rank_then_id() {
+        let p = test_prefix();
+
+        // Insert in reverse kind-rank order
+        upsert_automation_window(make_info(&p, "popup", AutomationWindowKind::PromptPopup));
+        upsert_automation_window(make_info(&p, "notes", AutomationWindowKind::Notes));
+        upsert_automation_window(make_info(&p, "main", AutomationWindowKind::Main));
+
+        let list1 = list_automation_windows();
+        let ours1: Vec<_> = list1.iter().filter(|w| w.id.starts_with(&p)).collect();
+
+        // Main (rank 0) < Notes (rank 1) < PromptPopup (rank 6)
+        assert_eq!(ours1[0].kind, AutomationWindowKind::Main);
+        assert_eq!(ours1[1].kind, AutomationWindowKind::Notes);
+        assert_eq!(ours1[2].kind, AutomationWindowKind::PromptPopup);
+
+        // Second call produces identical order
+        let list2 = list_automation_windows();
+        let ours2: Vec<_> = list2.iter().filter(|w| w.id.starts_with(&p)).collect();
+        assert_eq!(
+            ours1.iter().map(|w| &w.id).collect::<Vec<_>>(),
+            ours2.iter().map(|w| &w.id).collect::<Vec<_>>(),
+        );
+
+        remove_automation_window(&format!("{p}:main"));
+        remove_automation_window(&format!("{p}:notes"));
+        remove_automation_window(&format!("{p}:popup"));
     }
 }

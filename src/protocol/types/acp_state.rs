@@ -7,7 +7,23 @@
 use serde::{Deserialize, Serialize};
 
 /// Schema version for the ACP state response envelope.
-pub const ACP_STATE_SCHEMA_VERSION: u32 = 1;
+pub const ACP_STATE_SCHEMA_VERSION: u32 = 2;
+
+/// Resolved automation target echoed back in ACP state/probe responses.
+///
+/// Agents use this to confirm that the response came from the intended
+/// ACP surface (main vs detached), preventing cross-window false proof.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpResolvedTarget {
+    /// Stable automation window ID (e.g. `"main"`, `"acpDetached:thread-1"`).
+    pub window_id: String,
+    /// The kind of window that was resolved.
+    pub window_kind: String,
+    /// Human-readable window title, if available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+}
 
 /// Top-level ACP state snapshot returned by `getAcpState`.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -15,6 +31,11 @@ pub const ACP_STATE_SCHEMA_VERSION: u32 = 1;
 pub struct AcpStateSnapshot {
     /// Schema version for forward compatibility.
     pub schema_version: u32,
+
+    /// Resolved target metadata, echoed back so agents can confirm
+    /// the response came from the intended ACP surface.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resolved_target: Option<AcpResolvedTarget>,
 
     /// Current thread status: "idle", "streaming", "waitingForPermission", "error", "setup".
     pub status: String,
@@ -72,6 +93,7 @@ impl Default for AcpStateSnapshot {
     fn default() -> Self {
         Self {
             schema_version: ACP_STATE_SCHEMA_VERSION,
+            resolved_target: None,
             status: "idle".to_string(),
             input_text: String::new(),
             cursor_index: 0,
@@ -494,6 +516,54 @@ mod tests {
         assert_eq!(back, snap);
     }
 
+    // ── AcpResolvedTarget serde ──────────────────────────────────
+
+    #[test]
+    fn acp_resolved_target_round_trips() {
+        let target = AcpResolvedTarget {
+            window_id: "acpDetached:thread-1".to_string(),
+            window_kind: "acpDetached".to_string(),
+            title: Some("Script Kit AI".to_string()),
+        };
+        let json = serde_json::to_value(&target).expect("serialize");
+        assert_eq!(json["windowId"], "acpDetached:thread-1");
+        assert_eq!(json["windowKind"], "acpDetached");
+        assert_eq!(json["title"], "Script Kit AI");
+
+        let back: AcpResolvedTarget = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back, target);
+    }
+
+    #[test]
+    fn acp_state_snapshot_with_resolved_target_round_trips() {
+        let snap = AcpStateSnapshot {
+            resolved_target: Some(AcpResolvedTarget {
+                window_id: "acpDetached:thread-1".to_string(),
+                window_kind: "acpDetached".to_string(),
+                title: Some("Script Kit AI".to_string()),
+            }),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&snap).expect("serialize");
+        assert_eq!(json["resolvedTarget"]["windowId"], "acpDetached:thread-1");
+        assert_eq!(json["resolvedTarget"]["windowKind"], "acpDetached");
+        assert_eq!(json["schemaVersion"], ACP_STATE_SCHEMA_VERSION);
+
+        let back: AcpStateSnapshot = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back, snap);
+    }
+
+    #[test]
+    fn acp_state_snapshot_without_resolved_target_omits_field() {
+        let snap = AcpStateSnapshot::default();
+        let json = serde_json::to_value(&snap).expect("serialize");
+        assert!(
+            json.get("resolvedTarget").is_none()
+                || json["resolvedTarget"].is_null(),
+            "resolvedTarget should be omitted when None"
+        );
+    }
+
     // ── AcpWaitCondition serde ──────────────────────────────────
 
     #[test]
@@ -654,6 +724,7 @@ mod tests {
     fn acp_state_snapshot_full_json_shape() {
         let snap = AcpStateSnapshot {
             schema_version: ACP_STATE_SCHEMA_VERSION,
+            resolved_target: None,
             status: "streaming".to_string(),
             input_text: "hello @context".to_string(),
             cursor_index: 14,

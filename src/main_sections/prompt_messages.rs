@@ -261,6 +261,7 @@ enum PromptMessage {
     /// Reset the ACP test probe ring buffer
     ResetAcpTestProbe {
         request_id: String,
+        target: Option<protocol::AutomationWindowTarget>,
     },
     /// Request a bounded ACP test probe snapshot
     GetAcpTestProbe {
