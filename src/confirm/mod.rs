@@ -32,6 +32,8 @@ pub(crate) use parent_dialog::{
 };
 
 #[allow(unused_imports)]
+pub(crate) use window::consume_main_window_key_while_confirm_open;
+#[allow(unused_imports)]
 pub(crate) use window::is_confirm_window_open;
 #[allow(unused_imports)]
 pub(crate) use window::route_key_to_confirm_popup;

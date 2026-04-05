@@ -619,6 +619,15 @@ impl ScriptListApp {
 
         // Use uniform_list for virtualized scrolling
         // Skeleton loading: show placeholder rows while loading and no results yet
+        tracing::info!(
+            target: "script_kit::prompt_chrome",
+            surface = "file_search",
+            loading_state = if is_loading && filtered_len == 0 { "skeleton" } else { "content" },
+            empty_state = if !is_loading && filtered_len == 0 {
+                if query.is_empty() { "type_to_search" } else { "no_files_found" }
+            } else { "" },
+            "file_search_state_audit"
+        );
         let list_element = if is_loading && filtered_len == 0 {
             // Loading with no results yet - show static skeleton rows
             let skeleton_bg = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(ui_border, crate::theme::opacity::OPACITY_SUBTLE));

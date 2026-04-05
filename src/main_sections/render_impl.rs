@@ -484,7 +484,11 @@ impl Render for ScriptListApp {
             // view-specific handlers.
             .capture_key_down(cx.listener(|_this, event: &KeyDownEvent, _window, cx| {
                 let key = event.keystroke.key.as_str();
-                if confirm::route_key_to_confirm_popup(key, cx) {
+                if confirm::consume_main_window_key_while_confirm_open(
+                    key,
+                    &event.keystroke.modifiers,
+                    cx,
+                ) {
                     cx.stop_propagation();
                 }
             }))

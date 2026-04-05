@@ -901,6 +901,7 @@ interface DetachedResolved {
   targetJson: AutomationTargetJson;
   surfaceId: string | null;
   automationWindowId: number | null;
+  osWindowId: number | null;
 }
 
 async function recipeAcpDetachedAccept(
@@ -916,13 +917,14 @@ async function recipeAcpDetachedAccept(
   const kind = opts.kind ?? "acpDetached";
   const index = opts.index ?? 0;
 
-  // 1. Resolve the detached ACP target to exact identity
-  const resolveStep = await step("resolve-detached-target", () =>
+  // 1. Inspect the detached ACP target — one call derives targetJson,
+  //    surfaceId, automationWindowId, and osWindowId.
+  const inspectStep = await step("inspect-detached-target", () =>
     runTool(
       [
         "bun",
         "scripts/agentic/automation-window.ts",
-        "resolve",
+        "inspect",
         "--session",
         session,
         "--kind",
@@ -930,25 +932,25 @@ async function recipeAcpDetachedAccept(
         "--index",
         String(index),
       ],
-      "resolve-target"
+      "inspect-target"
     )
   );
-  steps.push(resolveStep);
+  steps.push(inspectStep);
 
-  if (resolveStep.status !== "pass") {
+  if (inspectStep.status !== "pass") {
     return {
       schemaVersion: SCHEMA_VERSION,
       recipe: "acp-detached-accept",
       status: "error",
       steps,
-      summary: "Cannot proceed: target resolution failed",
+      summary: "Cannot proceed: target inspection failed",
     };
   }
 
-  // Extract resolved identity
-  const resolveOutput = resolveStep.output as Record<string, unknown>;
-  const surfaceId = (resolveOutput.surfaceId as string) ?? null;
-  const rawWindowId = resolveOutput.automationWindowId;
+  // Extract identity from the inspect envelope
+  const inspectOutput = inspectStep.output as Record<string, unknown>;
+  const surfaceId = (inspectOutput.surfaceId as string) ?? null;
+  const rawWindowId = inspectOutput.automationWindowId;
   const parsedWindowId =
     typeof rawWindowId === "number"
       ? rawWindowId
@@ -961,7 +963,11 @@ async function recipeAcpDetachedAccept(
     parsedWindowId > 0
       ? parsedWindowId
       : null;
-  const targetJson: AutomationTargetJson = (resolveOutput.targetJson as AutomationTargetJson) ?? {
+  const osWindowId =
+    typeof inspectOutput.osWindowId === "number" && inspectOutput.osWindowId > 0
+      ? inspectOutput.osWindowId
+      : null;
+  const targetJson: AutomationTargetJson = (inspectOutput.targetJson as AutomationTargetJson) ?? {
     type: "kind",
     kind,
     index,
@@ -971,23 +977,27 @@ async function recipeAcpDetachedAccept(
     targetJson,
     surfaceId,
     automationWindowId,
+    osWindowId,
   };
 
-  // 2. Emit structured identity log on stderr before acceptance
+  // 2. Emit structured identity bundle log on stderr
   console.error(
     JSON.stringify({
-      event: "acp_detached_identity_resolved",
-      surfaceId,
+      event: "acp_final_identity_bundle",
       automationWindowId,
+      surfaceId,
+      osWindowId,
     })
   );
 
-  // 3. Delegate to the standard picker-accept recipe with resolved identity threaded through
+  // 3. Delegate to the standard picker-accept recipe with resolved identity threaded through.
+  //    Prefer osWindowId (native CGWindowID from inspect) for strict capture proof.
+  const captureWindowId = osWindowId ?? automationWindowId ?? undefined;
   const acceptResult = await recipeAcpPickerAccept(session, acceptKey, {
     emitVision: opts.emitVision,
     target: targetJson,
     surface: surfaceId ?? undefined,
-    captureWindowId: automationWindowId ?? undefined,
+    captureWindowId: captureWindowId ?? undefined,
   });
 
   // Incorporate accept steps (skip the wrapper — flatten the inner steps for transparency)

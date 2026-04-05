@@ -2156,7 +2156,9 @@ fn test_palette_slash_mention_produce_identical_parts() {
     // so they appear in the picker for this parity test.
     crate::mcp_resources::publish_dictation_json(r#"{"available":true,"items":[{"text":"test"}]}"#);
     crate::mcp_resources::publish_calendar_json(r#"{"available":true,"items":[{"title":"test"}]}"#);
-    crate::mcp_resources::publish_notifications_json(r#"{"available":true,"items":[{"title":"test"}]}"#);
+    crate::mcp_resources::publish_notifications_json(
+        r#"{"available":true,"items":[{"title":"test"}]}"#,
+    );
 
     for spec in context_attachment_specs() {
         // Part from canonical contract

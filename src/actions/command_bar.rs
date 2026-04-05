@@ -1237,8 +1237,7 @@ mod command_bar_config_tests {
 
     #[test]
     fn ai_style_emits_top_headers_contract() {
-        let audit =
-            CommandBarChromeAudit::from_config("ai", &CommandBarConfig::ai_style());
+        let audit = CommandBarChromeAudit::from_config("ai", &CommandBarConfig::ai_style());
         assert_eq!(audit.search_position, "top");
         assert_eq!(audit.section_mode, "headers");
         assert_eq!(audit.anchor, "top");

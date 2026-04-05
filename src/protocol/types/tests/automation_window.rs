@@ -460,6 +460,10 @@ fn automation_inspect_result_round_trip_and_request_id() {
             window_id: "acpDetached:thread-1".into(),
             window_kind: "AcpDetached".into(),
             title: Some("Script Kit AI".into()),
+            resolved_bounds: None,
+            target_bounds_in_screenshot: None,
+            surface_hit_point: None,
+            suggested_hit_points: Vec::new(),
             elements: Vec::new(),
             total_count: 0,
             focused_semantic_id: None,
@@ -474,6 +478,7 @@ fn automation_inspect_result_round_trip_and_request_id() {
                 b: 30,
                 a: 255,
             }],
+            os_window_id: Some(99),
             warnings: vec!["semantic_elements_detached_acp_pending".into()],
         },
     );

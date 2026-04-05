@@ -226,8 +226,11 @@ fn simulate_gpui_event_result_round_trip() {
     let json = serde_json::to_string(&success).expect("serialize");
     assert!(json.contains(r#""success":true"#));
 
-    let error =
-        Message::simulate_gpui_event_result_error("res-2".into(), "target_not_found".into(), "Window not found".into());
+    let error = Message::simulate_gpui_event_result_error(
+        "res-2".into(),
+        "target_not_found".into(),
+        "Window not found".into(),
+    );
     let json = serde_json::to_string(&error).expect("serialize");
     assert!(json.contains(r#""success":false"#));
     assert!(json.contains(r#""errorCode":"target_not_found""#));

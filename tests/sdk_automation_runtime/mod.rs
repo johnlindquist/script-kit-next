@@ -181,7 +181,9 @@ fn get_elements_request_parses_with_limit() {
     let json = serde_json::json!({"type": "getElements", "requestId": "ge-1", "limit": 10});
     let msg: Message = serde_json::from_value(json).expect("parse getElements");
     match msg {
-        Message::GetElements { request_id, limit, .. } => {
+        Message::GetElements {
+            request_id, limit, ..
+        } => {
             assert_eq!(request_id, "ge-1");
             assert_eq!(limit, Some(10));
         }

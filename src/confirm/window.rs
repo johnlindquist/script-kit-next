@@ -169,17 +169,25 @@ fn clear_confirm_window_handle() {
 /// Returns true if the key was handled (confirm popup consumed it).
 /// Called from the main window's key handler chain.
 #[allow(dead_code)]
-pub(crate) fn route_key_to_confirm_popup(key: &str, cx: &mut App) -> bool {
+pub(crate) fn consume_main_window_key_while_confirm_open(
+    key: &str,
+    modifiers: &gpui::Modifiers,
+    cx: &mut App,
+) -> bool {
     if !is_confirm_window_open() {
         return false;
     }
 
-    let intent = confirm_window_key_intent(key, &gpui::Modifiers::default());
+    let intent = confirm_window_key_intent(key, modifiers);
 
     tracing::info!(
         target: "script_kit::confirm",
         event = "route_key_to_confirm_popup",
         key,
+        shift = modifiers.shift,
+        platform = modifiers.platform,
+        alt = modifiers.alt,
+        control = modifiers.control,
         intent = ?intent,
         "Main window routing key to confirm popup"
     );
@@ -223,8 +231,21 @@ pub(crate) fn route_key_to_confirm_popup(key: &str, cx: &mut App) -> bool {
             notify_confirm_window(cx);
             true
         }
-        None => false,
+        None => {
+            tracing::debug!(
+                target: "script_kit::confirm",
+                event = "route_key_confirm_consume_unhandled",
+                key,
+                "Confirm popup is open — consuming unhandled key"
+            );
+            true
+        }
     }
+}
+
+#[allow(dead_code)]
+pub(crate) fn route_key_to_confirm_popup(key: &str, cx: &mut App) -> bool {
+    consume_main_window_key_while_confirm_open(key, &gpui::Modifiers::default(), cx)
 }
 
 fn send_confirm_result(confirmed: bool) {
@@ -843,8 +864,16 @@ impl Render for ConfirmPopupWindow {
                 Some(ConfirmWindowKeyIntent::FocusPrev) => {
                     this.shift_focus(true, cx);
                 }
-                None => {}
+                None => {
+                    tracing::debug!(
+                        target: "script_kit::confirm",
+                        event = "confirm_popup_consume_unhandled_key",
+                        key,
+                        "Confirm popup consumed unhandled key"
+                    );
+                }
             }
+            cx.stop_propagation();
         });
 
         let theme = get_cached_theme();

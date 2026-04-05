@@ -310,7 +310,9 @@ fn acp_test_probe_result_carries_resolved_target() {
 
     // Verify resolvedTarget is nested inside state
     let state = json.get("state").expect("state field");
-    let rt = state.get("resolvedTarget").expect("resolvedTarget in state");
+    let rt = state
+        .get("resolvedTarget")
+        .expect("resolvedTarget in state");
     assert_eq!(rt["windowKind"], "acpDetached");
     assert_eq!(rt["windowId"], "acpDetached:thread-1");
     assert_eq!(rt["title"], "Script Kit AI");

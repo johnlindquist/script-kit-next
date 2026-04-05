@@ -37,9 +37,7 @@ impl AppWatcher {
         Self::with_settings(super::watcher_settings_from_config(app_config))
     }
 
-    fn with_settings(
-        settings: WatcherSettings,
-    ) -> (Self, async_channel::Receiver<AppReloadEvent>) {
+    fn with_settings(settings: WatcherSettings) -> (Self, async_channel::Receiver<AppReloadEvent>) {
         let (tx, rx) = async_channel::bounded(APP_WATCHER_CHANNEL_CAPACITY);
         let spec = AppWatcherSpec::new(
             PathBuf::from("/Applications"),

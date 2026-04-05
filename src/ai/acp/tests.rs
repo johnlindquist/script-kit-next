@@ -775,6 +775,37 @@ fn emit_methods_record_into_probe() {
     );
 }
 
+#[test]
+fn emit_key_route_telemetry_uses_real_permission_state() {
+    const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
+    // The function must accept permission_active as a parameter, not hardcode it.
+    assert!(
+        ACP_VIEW_SOURCE.contains("permission_active: bool,"),
+        "emit_key_route_telemetry must accept permission_active as a parameter"
+    );
+    assert!(
+        !ACP_VIEW_SOURCE.contains("let permission_active = false;"),
+        "emit_key_route_telemetry must not hardcode permission_active to false"
+    );
+}
+
+#[test]
+fn call_sites_pass_real_permission_active() {
+    const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
+    // All call sites should read the real permission state from the thread.
+    let permission_reads = ACP_VIEW_SOURCE
+        .matches("pending_permission.is_some()")
+        .count();
+    let telemetry_calls = ACP_VIEW_SOURCE
+        .matches(".emit_key_route_telemetry(")
+        .count();
+    assert!(
+        permission_reads >= telemetry_calls,
+        "each emit_key_route_telemetry call site ({telemetry_calls}) must read \
+         pending_permission.is_some() ({permission_reads} found)"
+    );
+}
+
 // =========================================================================
 // Mention picker windowing — selected item always visible
 // =========================================================================

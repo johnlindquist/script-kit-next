@@ -154,12 +154,18 @@ impl Message {
 
     /// Create a get layout info request
     pub fn get_layout_info(request_id: String) -> Self {
-        Message::GetLayoutInfo { request_id, target: None }
+        Message::GetLayoutInfo {
+            request_id,
+            target: None,
+        }
     }
 
     /// Create a get layout info request targeting a specific window
     pub fn get_layout_info_targeted(request_id: String, target: AutomationWindowTarget) -> Self {
-        Message::GetLayoutInfo { request_id, target: Some(target) }
+        Message::GetLayoutInfo {
+            request_id,
+            target: Some(target),
+        }
     }
 
     /// Create a layout info result response

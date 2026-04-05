@@ -4588,8 +4588,7 @@ fn non_authoring_harness_submission_omits_guidance_block() {
 // ACP action-surface agent switch preserves retry payload
 // =========================================================================
 
-const ACP_ACTION_HANDLER_SOURCE: &str =
-    include_str!("../src/app_actions/handle_action/mod.rs");
+const ACP_ACTION_HANDLER_SOURCE: &str = include_str!("../src/app_actions/handle_action/mod.rs");
 
 #[test]
 fn acp_action_switch_stages_retry_before_persist() {
@@ -4612,8 +4611,7 @@ fn acp_action_switch_stages_retry_before_persist() {
 #[test]
 fn acp_action_switch_emits_retry_payload_staged_log() {
     assert!(
-        ACP_ACTION_HANDLER_SOURCE
-            .contains("acp_switch_agent_retry_payload_staged_from_action"),
+        ACP_ACTION_HANDLER_SOURCE.contains("acp_switch_agent_retry_payload_staged_from_action"),
         "action handler must emit acp_switch_agent_retry_payload_staged_from_action log event"
     );
 }
