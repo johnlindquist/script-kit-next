@@ -246,6 +246,16 @@ async fn run_acp_event_loop(
         "acp_initialized"
     );
 
+    // Persist initialize-time capabilities so preflight sees them next launch.
+    let initialize_state = super::config::AcpAgentRuntimeState {
+        auth_state: Some(super::catalog::AcpAgentAuthState::Unknown),
+        auth_methods: auth_methods.clone(),
+        supports_embedded_context: Some(supports_embedded_context),
+        supports_image: Some(supports_image),
+        last_session_ok: false,
+    };
+    super::config::persist_acp_agent_runtime_state(agent.id.clone(), initialize_state.clone());
+
     // ── Session cache ───────────────────────────────────────────────
     let mut sessions: HashMap<String, AcpSessionBinding> = HashMap::new();
 
@@ -259,6 +269,8 @@ async fn run_acp_event_loop(
                     &mut sessions,
                     request,
                     event_tx.clone(),
+                    &agent.id,
+                    &initialize_state,
                 )
                 .await;
 
@@ -306,12 +318,15 @@ async fn run_acp_event_loop(
 }
 
 /// Handle a single event-driven prompt turn within the ACP event loop.
+#[allow(clippy::too_many_arguments)]
 async fn handle_prompt_turn(
     connection: &ClientSideConnection,
     event_sinks: &Arc<parking_lot::Mutex<HashMap<String, super::events::AcpEventTx>>>,
     sessions: &mut HashMap<String, AcpSessionBinding>,
     request: AcpPromptTurnRequest,
     event_tx: super::events::AcpEventTx,
+    agent_id: &str,
+    initialize_state: &super::config::AcpAgentRuntimeState,
 ) -> Result<()> {
     // Get or create ACP session
     let acp_session_id = if let Some(binding) = sessions.get(&request.ui_thread_id) {
@@ -326,16 +341,37 @@ async fn handle_prompt_turn(
             Err(error) => {
                 let error_text = error.to_string();
                 if error_text.contains("auth_required") {
+                    // Persist NeedsAuthentication so preflight blocks next time.
+                    super::config::persist_acp_agent_runtime_state(
+                        agent_id.to_string(),
+                        super::config::AcpAgentRuntimeState {
+                            auth_state: Some(
+                                super::catalog::AcpAgentAuthState::NeedsAuthentication,
+                            ),
+                            auth_methods: initialize_state.auth_methods.clone(),
+                            supports_embedded_context: initialize_state.supports_embedded_context,
+                            supports_image: initialize_state.supports_image,
+                            last_session_ok: false,
+                        },
+                    );
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_agent_runtime_state_transition",
+                        agent_id = %agent_id,
+                        auth_state = "needs_authentication",
+                        auth_method_count = initialize_state.auth_methods.len(),
+                    );
                     let _ = event_tx
                         .send(AcpEvent::SetupRequired {
                             reason: "auth_required".to_string(),
-                            auth_methods: Vec::new(),
+                            auth_methods: initialize_state.auth_methods.clone(),
                         })
                         .await;
                     tracing::info!(
                         target: "script_kit::tab_ai",
                         event = "acp_auth_required",
                         ui_thread = %request.ui_thread_id,
+                        agent_id = %agent_id,
                     );
                     return Ok(());
                 }
@@ -344,6 +380,26 @@ async fn handle_prompt_turn(
         };
 
         let acp_sid = session_response.session_id.0.to_string();
+
+        // Persist Authenticated on successful session creation.
+        super::config::persist_acp_agent_runtime_state(
+            agent_id.to_string(),
+            super::config::AcpAgentRuntimeState {
+                auth_state: Some(super::catalog::AcpAgentAuthState::Authenticated),
+                auth_methods: initialize_state.auth_methods.clone(),
+                supports_embedded_context: initialize_state.supports_embedded_context,
+                supports_image: initialize_state.supports_image,
+                last_session_ok: true,
+            },
+        );
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_agent_runtime_state_transition",
+            agent_id = %agent_id,
+            auth_state = "authenticated",
+            auth_method_count = initialize_state.auth_methods.len(),
+        );
+
         tracing::info!(
             ui_thread = %request.ui_thread_id,
             acp_session = %acp_sid,

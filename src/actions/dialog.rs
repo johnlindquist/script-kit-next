@@ -11,6 +11,7 @@ use crate::designs::{get_tokens, DesignColors, DesignVariant};
 use crate::logging;
 use crate::protocol::ProtocolAction;
 use crate::theme;
+use crate::ui_foundation::should_submit_selected_row_click;
 use gpui::{
     div, list, prelude::*, px, rgb, rgba, svg, App, BoxShadow, Context, ElementId, FocusHandle,
     Focusable, ListAlignment, ListState, Render, SharedString, Window,
@@ -1454,18 +1455,6 @@ fn actions_dialog_rgba_with_alpha(hex: u32, alpha: u8) -> gpui::Rgba {
     rgba(hex_with_alpha(hex, alpha))
 }
 
-/// Extract the click count from a `ClickEvent`.
-/// Keyboard-triggered clicks always count as 1.
-fn actions_dialog_click_count(event: &gpui::ClickEvent) -> usize {
-    event.click_count()
-}
-
-/// Determine whether a row click should submit (run the action).
-/// Only a double-click (`click_count == 2`) on an already-selected row submits.
-fn should_submit_actions_dialog_row(was_selected: bool, click_count: usize) -> bool {
-    was_selected && click_count == 2
-}
-
 impl ActionsDialog {
     /// Move selection up, skipping section headers
     ///
@@ -1577,8 +1566,9 @@ impl ActionsDialog {
         cx.notify();
     }
 
-    /// Handle a click on a row: select on first click, submit on double-click of
-    /// an already-selected row. Section headers are ignored.
+    /// Handle a click on a row: first click selects, the next click on the
+    /// selected row submits, and native double-clicks also submit. Section
+    /// headers are ignored.
     pub fn handle_row_click(
         &mut self,
         ix: usize,
@@ -1595,8 +1585,8 @@ impl ActionsDialog {
             self.select_grouped_item(ix, cx);
         }
 
-        let click_count = actions_dialog_click_count(event);
-        let should_submit = should_submit_actions_dialog_row(was_selected, click_count);
+        let click_count = event.click_count();
+        let should_submit = should_submit_selected_row_click(was_selected, click_count);
 
         let action_id = self
             .grouped_items
@@ -3452,19 +3442,20 @@ mod actions_dialog_spec_tests {
 
 #[cfg(test)]
 mod actions_dialog_click_contract_tests {
-    use super::should_submit_actions_dialog_row;
+    use std::fs;
 
     #[test]
-    fn submits_only_on_selected_row_double_click() {
-        // First click on unselected row: select only
-        assert!(!should_submit_actions_dialog_row(false, 1));
-        // Double-click on unselected row: still no submit (first click selects)
-        assert!(!should_submit_actions_dialog_row(false, 2));
-        // Single click on already-selected row: no submit
-        assert!(!should_submit_actions_dialog_row(true, 1));
-        // Double-click on already-selected row: submit
-        assert!(should_submit_actions_dialog_row(true, 2));
-        // Triple-click on selected row: no submit (only click_count==2 qualifies)
-        assert!(!should_submit_actions_dialog_row(true, 3));
+    fn actions_dialog_uses_shared_selected_row_click_helper() {
+        let source = fs::read_to_string("src/actions/dialog.rs")
+            .expect("Failed to read src/actions/dialog.rs");
+
+        assert!(
+            source.contains("use crate::ui_foundation::should_submit_selected_row_click;"),
+            "actions dialog should import the shared selected-row click helper"
+        );
+        assert!(
+            source.contains("should_submit_selected_row_click(was_selected, click_count)"),
+            "actions dialog should delegate row submission clicks to the shared helper"
+        );
     }
 }

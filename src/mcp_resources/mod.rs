@@ -1116,6 +1116,33 @@ pub fn clear_provider_json_slots() {
     *NOTIFICATIONS_JSON_SLOT.lock() = None;
 }
 
+/// Provider-backed resource kinds that may or may not have real data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderJsonResourceKind {
+    Dictation,
+    Calendar,
+    Notifications,
+}
+
+/// Returns `true` when the provider has real data (slot or env var),
+/// as opposed to only the static fallback envelope.
+pub fn has_provider_json_resource(kind: ProviderJsonResourceKind) -> bool {
+    match kind {
+        ProviderJsonResourceKind::Dictation => {
+            DICTATION_JSON_SLOT.lock().is_some()
+                || std::env::var_os("SCRIPT_KIT_DICTATION_JSON").is_some()
+        }
+        ProviderJsonResourceKind::Calendar => {
+            CALENDAR_JSON_SLOT.lock().is_some()
+                || std::env::var_os("SCRIPT_KIT_CALENDAR_JSON").is_some()
+        }
+        ProviderJsonResourceKind::Notifications => {
+            NOTIFICATIONS_JSON_SLOT.lock().is_some()
+                || std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON").is_some()
+        }
+    }
+}
+
 /// Read a JSON resource from an in-process slot, falling back to an environment
 /// variable, then to a static empty envelope.
 fn read_slot_or_env_backed_json_resource(

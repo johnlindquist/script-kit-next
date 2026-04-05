@@ -326,6 +326,101 @@ fn part_to_inline_token_roundtrips_all_provider_backed() {
     }
 }
 
+// ── Quoted @file: token parsing ──────────────────────────────
+
+#[test]
+fn parses_quoted_file_inline_mentions_with_spaces() {
+    let parsed = parse_inline_context_mentions(r#"Please check @file:"/tmp/My File.rs" now"#);
+    assert_eq!(parsed.len(), 1);
+    assert_eq!(
+        parsed[0].part,
+        AiContextPart::FilePath {
+            path: "/tmp/My File.rs".to_string(),
+            label: "My File.rs".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parses_single_quoted_file_inline_mentions() {
+    let parsed = parse_inline_context_mentions("Check @file:'/tmp/My File.rs' please");
+    assert_eq!(parsed.len(), 1);
+    assert_eq!(
+        parsed[0].part,
+        AiContextPart::FilePath {
+            path: "/tmp/My File.rs".to_string(),
+            label: "My File.rs".to_string(),
+        }
+    );
+}
+
+#[test]
+fn parses_quoted_file_with_escaped_quote() {
+    let parsed = parse_inline_context_mentions(r#"See @file:"/tmp/has\"quote.rs" here"#);
+    assert_eq!(parsed.len(), 1);
+    assert_eq!(
+        parsed[0].part,
+        AiContextPart::FilePath {
+            path: "/tmp/has\"quote.rs".to_string(),
+            label: "has\"quote.rs".to_string(),
+        }
+    );
+}
+
+#[test]
+fn formats_file_inline_mentions_with_quotes_when_needed() {
+    let token = part_to_inline_token(&AiContextPart::FilePath {
+        path: "/tmp/My File.rs".to_string(),
+        label: "My File.rs".to_string(),
+    });
+    assert_eq!(token.as_deref(), Some(r#"@file:"/tmp/My File.rs""#));
+}
+
+#[test]
+fn formats_file_inline_mentions_without_quotes_when_no_spaces() {
+    let token = part_to_inline_token(&AiContextPart::FilePath {
+        path: "/tmp/demo.rs".to_string(),
+        label: "demo.rs".to_string(),
+    });
+    assert_eq!(token.as_deref(), Some("@file:/tmp/demo.rs"));
+}
+
+#[test]
+fn quoted_file_token_roundtrips_through_parse_and_format() {
+    let original = AiContextPart::FilePath {
+        path: "/tmp/My File.rs".to_string(),
+        label: "My File.rs".to_string(),
+    };
+    let token = part_to_inline_token(&original).unwrap();
+    assert_eq!(token, r#"@file:"/tmp/My File.rs""#);
+
+    let mentions = parse_inline_context_mentions(&token);
+    assert_eq!(mentions.len(), 1);
+    assert_eq!(mentions[0].part, original);
+}
+
+#[test]
+fn quoted_file_and_builtin_mixed_inline() {
+    let parsed = parse_inline_context_mentions(r#"Compare @file:"/tmp/My File.rs" with @browser"#);
+    assert_eq!(parsed.len(), 2);
+    assert_eq!(
+        parsed[0].part,
+        AiContextPart::FilePath {
+            path: "/tmp/My File.rs".to_string(),
+            label: "My File.rs".to_string(),
+        }
+    );
+    assert_eq!(
+        parsed[1].part,
+        AiContextPart::ResourceUri {
+            uri:
+                "kit://context?selectedText=0&frontmostApp=0&menuBar=0&browserUrl=1&focusedWindow=0"
+                    .to_string(),
+            label: "Browser URL".to_string(),
+        }
+    );
+}
+
 // ── Punctuation trimming ──────────────────────────────────────
 
 #[test]

@@ -98,9 +98,11 @@ pub(crate) struct AcpAgentCatalogEntry {
 }
 
 impl AcpAgentCatalogEntry {
-    /// An entry is launchable when installed and validly configured.
+    /// An entry is launchable when installed, authenticated enough to start,
+    /// and validly configured.
     pub(crate) fn is_launchable(&self) -> bool {
         self.install_state == AcpAgentInstallState::Ready
+            && self.auth_state != AcpAgentAuthState::NeedsAuthentication
             && self.config_state == AcpAgentConfigState::Valid
     }
 }
@@ -166,6 +168,22 @@ mod tests {
             auth_state: AcpAgentAuthState::Unknown,
             config_state: AcpAgentConfigState::Valid,
             install_hint: Some("npm i -g test".into()),
+            config_hint: None,
+            config: None,
+        };
+        assert!(!entry.is_launchable());
+    }
+
+    #[test]
+    fn catalog_entry_not_launchable_when_auth_required() {
+        let entry = AcpAgentCatalogEntry {
+            id: "test".into(),
+            display_name: "Test".into(),
+            source: AcpAgentSource::ScriptKitCatalog,
+            install_state: AcpAgentInstallState::Ready,
+            auth_state: AcpAgentAuthState::NeedsAuthentication,
+            config_state: AcpAgentConfigState::Valid,
+            install_hint: None,
             config_hint: None,
             config: None,
         };

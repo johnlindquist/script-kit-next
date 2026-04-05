@@ -419,30 +419,32 @@ impl ScriptListApp {
                                         },
                                     );
 
-                                    // Create click handler with double-click support
+                                    // Create click handler matching launcher click semantics
                                     let click_handler = cx.listener(
                                         move |this: &mut ScriptListApp,
                                               event: &gpui::ClickEvent,
                                               _window,
                                               cx| {
+                                            let was_selected = this.selected_index == ix;
                                             // Always select the item on any click
-                                            if this.selected_index != ix {
+                                            if !was_selected {
                                                 this.selected_index = ix;
                                                 cx.notify();
                                             }
 
-                                            // Check for double-click (mouse clicks only)
-                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
-                                                if mouse_event.down.click_count == 2 {
-                                                    logging::log(
-                                                        "UI",
-                                                        &format!(
-                                                            "Double-click on item {}, executing",
-                                                            ix
-                                                        ),
-                                                    );
-                                                    this.execute_selected(cx);
-                                                }
+                                            let click_count = event.click_count();
+                                            if crate::ui_foundation::should_submit_selected_row_click(
+                                                was_selected,
+                                                click_count,
+                                            ) {
+                                                logging::log(
+                                                    "UI",
+                                                    &format!(
+                                                        "Launcher row click submitting item {} (click_count={})",
+                                                        ix, click_count
+                                                    ),
+                                                );
+                                                this.execute_selected(cx);
                                             }
                                         },
                                     );
@@ -1408,6 +1410,30 @@ mod render_script_list_footer_tests {
         assert_eq!(
             inline_calc_list_item_selected_overlay_rgba(&theme, color_resolver),
             expected
+        );
+    }
+}
+
+#[cfg(test)]
+mod render_script_list_click_contract_tests {
+    use std::fs;
+
+    #[test]
+    fn launcher_list_uses_shared_selected_row_click_helper() {
+        let source = fs::read_to_string("src/render_script_list/mod.rs")
+            .expect("Failed to read src/render_script_list/mod.rs");
+
+        assert!(
+            source.contains("should_submit_selected_row_click"),
+            "render_script_list should use the shared selected-row click helper"
+        );
+        assert!(
+            source.contains("let was_selected = this.selected_index == ix;"),
+            "render_script_list click handler should capture whether the row was already selected"
+        );
+        assert!(
+            source.contains("this.execute_selected(cx);"),
+            "render_script_list click handler should still execute the selected row"
         );
     }
 }

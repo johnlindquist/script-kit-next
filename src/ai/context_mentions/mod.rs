@@ -71,9 +71,89 @@ fn trim_inline_token_trailing_punctuation(token: &str) -> &str {
     token.trim_end_matches([',', '.', ';', ':', ')', ']', '}'])
 }
 
+/// Scan a single inline token starting at `start` (which must be `@`).
+/// Handles quoted `@file:"..."` / `@file:'...'` tokens that may contain
+/// spaces and escape sequences. Returns `(raw_token, next_index)`.
+fn scan_inline_token(chars: &[char], start: usize) -> (String, usize) {
+    // Check for `@file:` prefix followed by a quote
+    let is_file_prefix = chars.len() > start + 6
+        && chars[start] == '@'
+        && chars[start + 1] == 'f'
+        && chars[start + 2] == 'i'
+        && chars[start + 3] == 'l'
+        && chars[start + 4] == 'e'
+        && chars[start + 5] == ':';
+
+    if is_file_prefix {
+        if let Some(&quote) = chars.get(start + 6) {
+            if quote == '"' || quote == '\'' {
+                let mut i = start + 7;
+                let mut escaped = false;
+                while i < chars.len() {
+                    let ch = chars[i];
+                    if escaped {
+                        escaped = false;
+                        i += 1;
+                        continue;
+                    }
+                    if ch == '\\' {
+                        escaped = true;
+                        i += 1;
+                        continue;
+                    }
+                    if ch == quote {
+                        i += 1; // consume closing quote
+                        break;
+                    }
+                    i += 1;
+                }
+                return (chars[start..i].iter().collect(), i);
+            }
+        }
+    }
+
+    // Default: whitespace-delimited token
+    let mut i = start + 1;
+    while i < chars.len() && !chars[i].is_whitespace() {
+        i += 1;
+    }
+    (chars[start..i].iter().collect(), i)
+}
+
+/// Strip outer quotes and unescape `\\`, `\"`, `\'` inside a quoted path.
+fn unescape_quoted_path(path: &str) -> String {
+    let bytes = path.as_bytes();
+    if bytes.len() >= 2
+        && ((bytes[0] == b'"' && bytes[bytes.len() - 1] == b'"')
+            || (bytes[0] == b'\'' && bytes[bytes.len() - 1] == b'\''))
+    {
+        let inner = &path[1..path.len() - 1];
+        inner
+            .replace("\\\\", "\0ESCAPED_BACKSLASH\0")
+            .replace("\\\"", "\"")
+            .replace("\\'", "'")
+            .replace("\0ESCAPED_BACKSLASH\0", "\\")
+    } else {
+        path.to_string()
+    }
+}
+
+/// Format a file path as a canonical inline `@file:` token, quoting paths
+/// that contain whitespace.
+fn format_inline_file_token(path: &str) -> String {
+    if path.chars().any(char::is_whitespace) {
+        format!(
+            "@file:\"{}\"",
+            path.replace('\\', "\\\\").replace('"', "\\\"")
+        )
+    } else {
+        format!("@file:{path}")
+    }
+}
+
 /// Scan `text` for inline `@mention` tokens and resolve each to an
 /// `AiContextPart`. Supports built-in mentions (`@browser`, `@git-status`,
-/// etc.) and file mentions (`@file:/path`).
+/// etc.) and file mentions (`@file:/path`), including quoted paths with spaces.
 pub(crate) fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMention> {
     let chars: Vec<char> = text.chars().collect();
     let mut out = Vec::new();
@@ -90,11 +170,9 @@ pub(crate) fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMent
         }
 
         let start = i;
-        i += 1; // skip '@'
-        while i < chars.len() && !chars[i].is_whitespace() {
-            i += 1;
-        }
-        let raw_token: String = chars[start..i].iter().collect();
+        let (raw_token, next_i) = scan_inline_token(&chars, start);
+        i = next_i;
+
         let trimmed = trim_inline_token_trailing_punctuation(&raw_token);
         let trimmed_char_len = trimmed.chars().count();
         let end = start + trimmed_char_len;
@@ -142,7 +220,7 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
                 .and_then(|spec| spec.mention)
                 .map(ToString::to_string)
         }
-        AiContextPart::FilePath { path, .. } => Some(format!("@file:{path}")),
+        AiContextPart::FilePath { path, .. } => Some(format_inline_file_token(path)),
         _ => None,
     }
 }
@@ -160,25 +238,28 @@ fn parse_context_mention_line(line: &str) -> Option<AiContextPart> {
 }
 
 fn parse_file_mention(trimmed: &str) -> Option<AiContextPart> {
-    let path = trimmed
+    let raw_path = trimmed
         .strip_prefix("@file:")
         .or_else(|| trimmed.strip_prefix("@file "))
         .or_else(|| trimmed.strip_prefix("@file\t"))?
         .trim();
 
+    if raw_path.is_empty() {
+        return None;
+    }
+
+    let path = unescape_quoted_path(raw_path);
+
     if path.is_empty() {
         return None;
     }
 
-    let label = Path::new(path)
+    let label = Path::new(&path)
         .file_name()
         .map(|name| name.to_string_lossy().to_string())
-        .unwrap_or_else(|| path.to_string());
+        .unwrap_or_else(|| path.clone());
 
-    Some(AiContextPart::FilePath {
-        path: path.to_string(),
-        label,
-    })
+    Some(AiContextPart::FilePath { path, label })
 }
 
 #[cfg(test)]

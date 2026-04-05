@@ -622,6 +622,24 @@ impl AiApp {
     }
 }
 
+/// Map a context attachment kind to its provider resource kind, if any.
+fn provider_json_kind_for_attachment(
+    kind: ContextAttachmentKind,
+) -> Option<crate::mcp_resources::ProviderJsonResourceKind> {
+    match kind {
+        ContextAttachmentKind::Dictation => {
+            Some(crate::mcp_resources::ProviderJsonResourceKind::Dictation)
+        }
+        ContextAttachmentKind::Calendar => {
+            Some(crate::mcp_resources::ProviderJsonResourceKind::Calendar)
+        }
+        ContextAttachmentKind::Notifications => {
+            Some(crate::mcp_resources::ProviderJsonResourceKind::Notifications)
+        }
+        _ => None,
+    }
+}
+
 /// Populate `items` with built-in context attachment entries and optional
 /// file/folder results. Shared by both `build_picker_items` and
 /// `build_slash_picker_items`.
@@ -634,6 +652,19 @@ fn extend_builtin_picker_items(
     for seed in builtin_picker_seeds() {
         if trigger == ContextPickerTrigger::Slash && !seed.has_slash_command {
             continue;
+        }
+
+        // Hide provider-backed items when no real data exists
+        if let Some(provider_kind) = provider_json_kind_for_attachment(seed.kind) {
+            if !crate::mcp_resources::has_provider_json_resource(provider_kind) {
+                tracing::info!(
+                    target: "ai",
+                    event = "ai_context_picker_seed_skipped_provider_unavailable",
+                    kind = ?seed.kind,
+                    trigger = ?trigger,
+                );
+                continue;
+            }
         }
 
         let (score, label_hits, meta_hits) = score_builtin_seed(seed, trigger, query_lower);

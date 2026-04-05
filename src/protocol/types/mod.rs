@@ -23,7 +23,8 @@ mod system;
 pub use acp_state::{
     AcpAcceptedItem, AcpInputLayoutMetrics, AcpInputLayoutTelemetry, AcpKeyRoute,
     AcpKeyRouteTelemetry, AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpStateSnapshot,
-    AcpWaitCondition, ACP_STATE_SCHEMA_VERSION,
+    AcpTestProbeSnapshot, AcpWaitCondition, ACP_STATE_SCHEMA_VERSION,
+    ACP_TEST_PROBE_SCHEMA_VERSION,
 };
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
 pub use batch_wait::{

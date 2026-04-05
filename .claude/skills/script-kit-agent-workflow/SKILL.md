@@ -60,6 +60,7 @@ Mandatory workflow for all code changes. Do NOT ask users to test. Do NOT skip v
 - Capturing screenshot but not reading the PNG
 - Skipping `cargo check` before launch
 - Not using `SCRIPT_KIT_AI_LOG=1` or `RUST_LOG=debug`
+- Leaving a `script-kit-gpui` verification process/session running after testing
 
 ## Success Indicators
 
@@ -70,6 +71,7 @@ Mandatory workflow for all code changes. Do NOT ask users to test. Do NOT skip v
 - Logs confirm the change took effect
 - `cargo test` passes
 - (If visual) Screenshot captured AND read
+- Any local verification session/process explicitly stopped before handoff
 
 ## Session Completion ("Landing the Plane")
 

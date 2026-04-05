@@ -2189,12 +2189,21 @@ impl AcpChatView {
             ),
             ContextPickerItemKind::File(path) | ContextPickerItemKind::Folder(path) => {
                 let path_text = path.to_string_lossy().to_string();
+                let file_part = AiContextPart::FilePath {
+                    path: path_text.clone(),
+                    label: item.label.to_string(),
+                };
+                let inline_text = crate::ai::context_mentions::part_to_inline_token(&file_part)
+                    .unwrap_or_else(|| format!("@file:{path_text}"));
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_inline_file_token_inserted",
+                    path = %path_text,
+                    inline_text = %inline_text,
+                );
                 (
-                    AiContextPart::FilePath {
-                        path: path_text.clone(),
-                        label: item.label.to_string(),
-                    },
-                    format!("@file:{path_text}"),
+                    file_part,
+                    inline_text,
                     session.trigger == ContextPickerTrigger::Mention,
                 )
             }

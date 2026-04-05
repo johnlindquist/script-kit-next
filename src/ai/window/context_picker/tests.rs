@@ -6,16 +6,24 @@ use super::{
 use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
 
 #[test]
-fn context_picker_empty_query_returns_all_builtins() {
+fn context_picker_empty_query_returns_all_non_provider_builtins() {
+    // Clear provider data so provider-backed items are hidden
+    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    crate::mcp_resources::clear_provider_json_slots();
+
     let items = build_picker_items(ContextPickerTrigger::Mention, "");
     let builtin_count = items
         .iter()
         .filter(|i| matches!(i.kind, ContextPickerItemKind::BuiltIn(_)))
         .count();
+    // 3 provider-backed kinds (Dictation, Calendar, Notifications) are hidden
+    let provider_gated_count = 3;
     assert_eq!(
         builtin_count,
-        context_attachment_specs().len(),
-        "Empty query should return all built-in context specs"
+        context_attachment_specs().len() - provider_gated_count,
+        "Empty query should return all non-provider-gated built-in context specs"
     );
 }
 
@@ -58,9 +66,23 @@ fn context_picker_ranking_is_deterministic() {
 
 #[test]
 fn context_picker_builtins_seeded_from_specs() {
+    // Provider-backed kinds are only shown when real data exists
+    let provider_gated = [
+        ContextAttachmentKind::Dictation,
+        ContextAttachmentKind::Calendar,
+        ContextAttachmentKind::Notifications,
+    ];
+    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    crate::mcp_resources::clear_provider_json_slots();
+
     let items = build_picker_items(ContextPickerTrigger::Mention, "");
 
     for spec in context_attachment_specs() {
+        if provider_gated.contains(&spec.kind) {
+            continue;
+        }
         let found = items.iter().any(|item| match &item.kind {
             ContextPickerItemKind::BuiltIn(kind) => *kind == spec.kind,
             _ => false,
@@ -196,15 +218,21 @@ fn context_picker_diagnostics_matches_diag_query() {
 }
 
 #[test]
-fn context_picker_catalog_has_at_least_15_entries() {
+fn context_picker_catalog_has_at_least_12_entries() {
+    // Provider-gated items may be hidden, so the minimum is lower
+    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    crate::mcp_resources::clear_provider_json_slots();
+
     let items = build_picker_items(ContextPickerTrigger::Mention, "");
     let builtin_count = items
         .iter()
         .filter(|i| matches!(i.kind, ContextPickerItemKind::BuiltIn(_)))
         .count();
     assert!(
-        builtin_count >= 15,
-        "Catalog should have at least 15 built-in entries, got {builtin_count}"
+        builtin_count >= 12,
+        "Catalog should have at least 12 built-in entries, got {builtin_count}"
     );
 }
 
@@ -947,6 +975,76 @@ fn fuzzy_nonexistent_query_still_filters() {
     assert_eq!(
         builtin_count, 0,
         "Query with no fuzzy match should still filter out all built-ins"
+    );
+}
+
+// ── Provider-backed item gating ───────────────────────────────────────
+
+#[test]
+fn provider_backed_items_are_hidden_when_unavailable() {
+    // Ensure no provider data exists
+    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    crate::mcp_resources::clear_provider_json_slots();
+
+    let items = build_picker_items(ContextPickerTrigger::Mention, "");
+    assert!(
+        items.iter().all(|item| item.label.as_ref() != "Dictation"),
+        "Dictation must not be advertised when no provider data exists"
+    );
+    assert!(
+        items.iter().all(|item| item.label.as_ref() != "Calendar"),
+        "Calendar must not be advertised when no provider data exists"
+    );
+    assert!(
+        items
+            .iter()
+            .all(|item| item.label.as_ref() != "Notifications"),
+        "Notifications must not be advertised when no provider data exists"
+    );
+}
+
+#[test]
+fn provider_backed_items_appear_when_slot_data_exists() {
+    // Clear first
+    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    crate::mcp_resources::clear_provider_json_slots();
+
+    // Publish dictation data
+    crate::mcp_resources::publish_dictation_json(r#"{"items":["test"]}"#);
+
+    let items = build_picker_items(ContextPickerTrigger::Mention, "di");
+    let has_dictation = items.iter().any(|item| item.label.as_ref() == "Dictation");
+    assert!(
+        has_dictation,
+        "Dictation should appear when provider slot data exists"
+    );
+
+    // Calendar and Notifications should still be hidden
+    let all_items = build_picker_items(ContextPickerTrigger::Mention, "");
+    assert!(
+        all_items
+            .iter()
+            .all(|item| item.label.as_ref() != "Calendar"),
+        "Calendar should still be hidden without provider data"
+    );
+
+    // Clean up
+    crate::mcp_resources::clear_provider_json_slots();
+}
+
+#[test]
+fn provider_backed_items_hidden_in_targeted_query() {
+    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+    crate::mcp_resources::clear_provider_json_slots();
+
+    let items = build_picker_items(ContextPickerTrigger::Mention, "di");
+    assert!(
+        items.iter().all(|item| item.label.as_ref() != "Dictation"),
+        "Dictation must not appear even when query matches, if no provider data"
     );
 }
 

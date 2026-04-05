@@ -254,6 +254,50 @@ pub struct AcpPickerItemAcceptedTelemetry {
     pub caused_submit: bool,
 }
 
+/// Schema version for the ACP test probe response envelope.
+pub const ACP_TEST_PROBE_SCHEMA_VERSION: u32 = 1;
+
+/// Top-level ACP test probe snapshot returned by `getAcpTestProbe`.
+///
+/// Contains a bounded tail of recent key-route, picker-acceptance, and
+/// input-layout telemetry events so agents can verify native ACP
+/// interactions without grepping logs or inferring from screenshots.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpTestProbeSnapshot {
+    /// Schema version for forward compatibility.
+    pub schema_version: u32,
+
+    /// Monotonically increasing event sequence counter.
+    pub event_seq: u64,
+
+    /// Recent key-route telemetry events (bounded ring buffer tail).
+    pub key_routes: Vec<AcpKeyRouteTelemetry>,
+
+    /// Recent picker-acceptance telemetry events (bounded ring buffer tail).
+    pub accepted_items: Vec<AcpPickerItemAcceptedTelemetry>,
+
+    /// Most recent input-layout telemetry snapshot, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_layout: Option<AcpInputLayoutTelemetry>,
+
+    /// Current ACP state snapshot at the time the probe was queried.
+    pub state: AcpStateSnapshot,
+}
+
+impl Default for AcpTestProbeSnapshot {
+    fn default() -> Self {
+        Self {
+            schema_version: ACP_TEST_PROBE_SCHEMA_VERSION,
+            event_seq: 0,
+            key_routes: Vec::new(),
+            accepted_items: Vec::new(),
+            input_layout: None,
+            state: AcpStateSnapshot::default(),
+        }
+    }
+}
+
 /// Structured telemetry event for single-line input layout after mutations.
 ///
 /// Emitted on `script_kit::acp_telemetry` target after acceptance or cursor

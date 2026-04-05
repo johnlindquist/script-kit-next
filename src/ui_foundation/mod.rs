@@ -700,6 +700,15 @@ pub fn printable_char(key_char: Option<&str>) -> Option<char> {
         .and_then(|s| s.chars().next())
         .filter(|ch| !ch.is_control())
 }
+
+/// Shared launcher/list click behavior.
+///
+/// The first click on an unselected row only selects it. Once the row is
+/// selected, the next click submits it. Native double-clicks also submit.
+#[inline]
+pub fn should_submit_selected_row_click(was_selected: bool, click_count: usize) -> bool {
+    was_selected || click_count >= 2
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -795,6 +804,15 @@ mod tests {
         // Opacity < 0.0 should clamp to 0.0
         let under = 0xFFFFFFu32.with_opacity(-0.5);
         assert!(under.a < 0.01, "with_opacity(-0.5) should clamp to 0.0");
+    }
+
+    #[test]
+    fn test_should_submit_selected_row_click_matches_launcher_contract() {
+        assert!(!should_submit_selected_row_click(false, 1));
+        assert!(should_submit_selected_row_click(false, 2));
+        assert!(should_submit_selected_row_click(true, 1));
+        assert!(should_submit_selected_row_click(true, 2));
+        assert!(should_submit_selected_row_click(true, 3));
     }
 
     // ========================================================================
