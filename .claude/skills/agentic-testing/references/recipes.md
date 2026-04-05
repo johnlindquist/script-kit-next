@@ -167,3 +167,116 @@ Named patterns agents select based on what they changed.
 
 **Pass:** Session creates, resumes, sends from multiple shells, reports state, and cleans up.
 **Fail:** Stale PID, broken pipe, forwarder not running. Check session.sh forwarder loop.
+
+---
+
+### Recipe: verify-acp-golden-path
+
+**When:** Changes to ACP picker, context mentions, Enter/Tab acceptance, caret placement, or input layout stability.
+
+**This is the definitive ACP interaction verification recipe.** Use it whenever ACP behavior needs proving. Future agents should default to this recipe for any ACP change.
+
+**Steps:**
+
+```bash
+# 1. Start session
+bash scripts/agentic/session.sh start default
+sleep 3
+
+# 2. Show window
+bash scripts/agentic/session.sh send default '{"type":"show"}'
+sleep 1.5
+
+# 3. Open ACP
+bash scripts/agentic/session.sh send default '{"type":"triggerBuiltin","name":"tab-ai"}'
+sleep 5
+
+# 4. Verify ACP ready (state receipt BEFORE screenshot)
+bun scripts/agentic/verify-shot.ts --session default \
+  --label acp-ready \
+  --acp-context-ready
+
+# 5. Focus window for native input
+bun scripts/agentic/window.ts focus
+sleep 0.3
+
+# 6. Type @ to open picker (NATIVE input, not simulateKey)
+bun scripts/agentic/macos-input.ts type "@"
+sleep 1
+
+# 7. Verify picker opened
+bun scripts/agentic/verify-shot.ts --session default \
+  --label picker-open \
+  --acp-picker-open
+
+# 8. Accept with native Enter (or Tab)
+bun scripts/agentic/macos-input.ts key enter
+sleep 0.5
+
+# 9. Verify accepted: picker closed + item recorded + cursor moved
+bun scripts/agentic/verify-shot.ts --session default \
+  --label item-accepted \
+  --acp-picker-closed \
+  --acp-item-accepted
+
+# 10. Check telemetry logs
+grep -i "acp_picker_item_accepted\|acp_picker_tab_accept\|picker.*accept\|route.*picker" \
+  /tmp/sk-agentic-sessions/default/app.log | tail -5
+
+# 11. Cleanup
+bash scripts/agentic/session.sh stop default
+```
+
+**Or use the orchestrator (after Phase 1 is proven stable):**
+```bash
+bun scripts/agentic/index.ts acp-enter-accept --session default
+```
+
+**Critical invariants:**
+- `getAcpState` **must** be queried before screenshot capture at every verification point
+- The test MUST FAIL if `getAcpState` says picker is still open, even if the screenshot looks correct
+- Native macOS input (`macos-input.ts`) is required for picker acceptance testing — `simulateKey` bypasses native key routing
+- Window focus must be verified before sending native input
+- Telemetry logs must show `acp_picker_item_accepted`, `acp_picker_tab_accept`, or equivalent route confirmation
+
+**Pass:** All verify-shot assertions pass, telemetry confirms picker acceptance, cursor lands after inserted text.
+**Fail:** State receipt contradicts expected outcome. Common causes:
+- Picker still open after Enter → Enter routed to composer submit instead of picker accept
+- No `lastAcceptedItem` → picker was never open when Enter was pressed
+- Cursor at wrong index → text insertion logic off
+- No telemetry → ACP key routing not instrumented
+
+---
+
+### Recipe: verify-acp-picker-tab-vs-enter
+
+**When:** Specifically testing that both Tab and Enter accept picker rows correctly.
+
+**Steps:**
+1. Run `verify-acp-golden-path` with Enter (steps above)
+2. Re-open ACP, re-trigger picker with `@`
+3. Accept with native Tab instead of Enter
+4. Verify same outcome: picker closed, item accepted, cursor correct
+5. Compare cursor positions — both should produce identical caret placement
+
+**Pass:** Both Tab and Enter produce the same accepted state and cursor position.
+**Fail:** One key accepts but the other doesn't. Check ACP key_down handler for picker-open branching.
+
+---
+
+### Recipe: verify-acp-input-stability
+
+**When:** Changes to single-line input rendering, cursor movement, or scroll behavior in ACP.
+
+**Steps:**
+1. Open ACP, wait for ready
+2. Type a long string (30+ characters) via native input
+3. Query `getAcpState` → check `inputLayout` metrics: `charCount`, `visibleStart`, `visibleEnd`, `cursorInWindow`
+4. Capture screenshot
+5. Move cursor with native left-arrow 5 times
+6. Query `getAcpState` again → verify `cursorIndex` decreased by 5, `visibleStart`/`visibleEnd` adjusted if needed
+7. Capture second screenshot
+8. Compare: the input container should not have shifted height or layout
+
+**Pass:** Cursor moves correctly, layout metrics track, no visual jump between captures.
+**Fail:** `cursorInWindow` doesn't match expected position, or `visibleStart` jumps unexpectedly. Check ACP input scroll/viewport logic.

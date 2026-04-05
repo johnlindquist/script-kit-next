@@ -108,6 +108,9 @@ $S '{"type":"simulateKey","key":"w","modifiers":["cmd"]}'
 
 # Type individual characters (for views with text input)
 $S '{"type":"simulateKey","key":"h","modifiers":[]}'
+
+# Query ACP state (returns input, cursor, picker, accepted item, thread status)
+$S '{"type":"getAcpState","requestId":"acp1"}'
 ```
 
 ### 5. Capture Screenshots
@@ -172,6 +175,103 @@ The session wrapper uses a background forwarder process so any shell can send co
 - Check session health with `session.sh status` or `session-state.ts` before sending commands
 - Stop sessions with `session.sh stop` when done — do not leave orphan processes
 
+## Screenshot Assertion (verify-shot.ts)
+
+Use `verify-shot.ts` for automated screenshot + state verification. It enforces
+the correct ACP verification order: **state receipt first, screenshot second**.
+
+```bash
+# Basic: capture screenshot with ACP state assertions
+bun scripts/agentic/verify-shot.ts --session default \
+  --label step-name \
+  --acp-status idle \
+  --acp-picker-closed \
+  --acp-context-ready
+
+# Assert picker is open after typing @
+bun scripts/agentic/verify-shot.ts --session default \
+  --label picker-open \
+  --acp-picker-open
+
+# Assert item was accepted after Enter/Tab
+bun scripts/agentic/verify-shot.ts --session default \
+  --label item-accepted \
+  --acp-picker-closed \
+  --acp-item-accepted
+
+# State-only (skip screenshot)
+bun scripts/agentic/verify-shot.ts --session default \
+  --label quick-check \
+  --skip-screenshot \
+  --acp-input-contains "@context"
+
+# Screenshot-only (skip state query)
+bun scripts/agentic/verify-shot.ts --session default \
+  --label visual-check \
+  --skip-state
+```
+
+**Available assertions:**
+| Flag | Checks |
+|------|--------|
+| `--acp-status STATUS` | ACP status equals value (idle, streaming, etc.) |
+| `--acp-picker-open` | Picker overlay is visible |
+| `--acp-picker-closed` | Picker overlay is closed |
+| `--acp-input-contains STR` | Input text contains substring |
+| `--acp-input-match STR` | Input text matches exactly |
+| `--acp-cursor-at N` | Cursor at character index N |
+| `--acp-item-accepted` | A picker item was accepted |
+| `--acp-context-ready` | Context bootstrap complete |
+
+**Exit codes:** 0 = pass, 1 = assertion failure, 2 = infrastructure error.
+
+**Rule:** The recipe must fail when ACP state contradicts expected picker/caret
+outcome, even if the screenshot capture itself succeeds. State receipt is the
+primary proof; screenshot is secondary visual confirmation.
+
+## Recipe Orchestrator (index.ts)
+
+For common multi-step flows, use the thin wrapper:
+
+```bash
+# Check all prerequisites
+bun scripts/agentic/index.ts preflight --session default
+
+# Open ACP and verify ready state
+bun scripts/agentic/index.ts acp-open --session default
+
+# Full ACP picker accept golden path via Enter
+bun scripts/agentic/index.ts acp-enter-accept --session default
+
+# Full ACP picker accept golden path via Tab
+bun scripts/agentic/index.ts acp-tab-accept --session default
+```
+
+The wrapper returns per-step JSON receipts from the underlying tools. It does
+**not** replace the lower-level commands — use them directly when you need
+finer control or different assertion combinations.
+
+## ACP Golden Path (Critical)
+
+The **mandatory** verification flow for any ACP interaction testing:
+
+```
+1. session start       → session alive
+2. show                → window visible
+3. triggerBuiltin tab-ai → ACP opens
+4. wait / sleep        → context bootstraps
+5. focus window        → frontmost confirmed
+6. native type (macos-input.ts) → open picker
+7. native Enter or Tab → accept picker item
+8. getAcpState         → state receipt (MUST come before screenshot)
+9. captureWindow       → screenshot captured
+10. verify-shot.ts     → assertions pass on state + visual
+11. grep telemetry     → acp_picker_item_accepted / acp_picker_tab_accept in logs
+```
+
+**State receipt before screenshot is non-negotiable.** If the state says the
+picker is still open but the screenshot looks fine, the test must FAIL.
+
 ## Verification Recipes
 
 See [references/recipes.md](references/recipes.md) for named verification patterns.
@@ -183,3 +283,5 @@ See [references/recipes.md](references/recipes.md) for named verification patter
 - The app window auto-hides when focus is lost. If captures fail with "Window not found", the window was dismissed.
 - `captureWindow` filters out windows under 100x100 (tray icons).
 - Always unset API keys if you need the setup card: `unset ANTHROPIC_API_KEY`.
+- For ACP picker testing, use **native macOS input** (`macos-input.ts`) instead of `simulateKey` — synthetic keys bypass GPUI's native key interception and do not faithfully exercise picker selection behavior.
+- Use `getAcpState` to verify picker acceptance, cursor landing, and input content — do not rely solely on screenshots for ACP state verification.
