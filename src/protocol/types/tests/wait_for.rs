@@ -471,3 +471,240 @@ fn acp_state_result_round_trips() {
     assert_eq!(json["contextChipCount"], 1);
     assert!(json["contextReady"].as_bool().unwrap_or(false));
 }
+
+// ============================================================
+// ACP proof wait conditions — serde roundtrip
+// ============================================================
+
+#[test]
+fn wait_acp_accepted_via_key_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+        key: "tab".to_string(),
+    });
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpAcceptedViaKey");
+    assert_eq!(json["key"], "tab");
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+#[test]
+fn wait_acp_accepted_label_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedLabel {
+        label: "Current Context".to_string(),
+    });
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpAcceptedLabel");
+    assert_eq!(json["label"], "Current Context");
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+#[test]
+fn wait_acp_accepted_cursor_at_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedCursorAt { index: 17 });
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpAcceptedCursorAt");
+    assert_eq!(json["index"], 17);
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+#[test]
+fn wait_acp_input_layout_match_round_trips() {
+    let cond = WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+        visible_start: 0,
+        visible_end: 27,
+        cursor_in_window: 17,
+    });
+    let json = serde_json::to_value(&cond).expect("serialize");
+    assert_eq!(json["type"], "acpInputLayoutMatch");
+    assert_eq!(json["visibleStart"], 0);
+    assert_eq!(json["visibleEnd"], 27);
+    assert_eq!(json["cursorInWindow"], 17);
+
+    let back: WaitCondition = serde_json::from_value(json).expect("deserialize");
+    assert_eq!(back, cond);
+}
+
+// ============================================================
+// ACP proof wait conditions — full protocol message roundtrip
+// ============================================================
+
+#[test]
+fn wait_for_request_parses_with_acp_accepted_via_key() {
+    let json = serde_json::json!({
+        "type": "waitFor",
+        "requestId": "wait-tab",
+        "condition": { "type": "acpAcceptedViaKey", "key": "tab" },
+        "timeout": 3000,
+        "pollInterval": 25,
+        "trace": "onFailure"
+    });
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse waitFor acpAcceptedViaKey");
+
+    match msg {
+        crate::protocol::Message::WaitFor {
+            request_id,
+            condition,
+            timeout,
+            ..
+        } => {
+            assert_eq!(request_id, "wait-tab");
+            assert_eq!(
+                condition,
+                WaitCondition::Detailed(WaitDetailedCondition::AcpAcceptedViaKey {
+                    key: "tab".to_string(),
+                })
+            );
+            assert_eq!(timeout, Some(3000));
+        }
+        other => panic!("Expected WaitFor, got: {:?}", other),
+    }
+}
+
+#[test]
+fn wait_for_request_parses_with_acp_input_layout_match() {
+    let json = serde_json::json!({
+        "type": "waitFor",
+        "requestId": "wait-layout",
+        "condition": {
+            "type": "acpInputLayoutMatch",
+            "visibleStart": 0,
+            "visibleEnd": 27,
+            "cursorInWindow": 17
+        },
+        "timeout": 1500,
+    });
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse waitFor acpInputLayoutMatch");
+
+    match msg {
+        crate::protocol::Message::WaitFor { condition, .. } => {
+            assert_eq!(
+                condition,
+                WaitCondition::Detailed(WaitDetailedCondition::AcpInputLayoutMatch {
+                    visible_start: 0,
+                    visible_end: 27,
+                    cursor_in_window: 17,
+                })
+            );
+        }
+        other => panic!("Expected WaitFor, got: {:?}", other),
+    }
+}
+
+// ============================================================
+// resetAcpTestProbe / getAcpTestProbe / acpTestProbeResult
+// ============================================================
+
+#[test]
+fn reset_acp_test_probe_request_parses() {
+    let json = r#"{"type":"resetAcpTestProbe","requestId":"probe-reset-1"}"#;
+    let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse resetAcpTestProbe");
+
+    match msg {
+        crate::protocol::Message::ResetAcpTestProbe { request_id } => {
+            assert_eq!(request_id, "probe-reset-1");
+        }
+        other => panic!("Expected ResetAcpTestProbe, got: {:?}", other),
+    }
+}
+
+#[test]
+fn get_acp_test_probe_request_parses() {
+    let json = serde_json::json!({
+        "type": "getAcpTestProbe",
+        "requestId": "probe-get-1",
+        "tail": 20,
+    });
+    let msg: crate::protocol::Message =
+        serde_json::from_value(json).expect("parse getAcpTestProbe");
+
+    match msg {
+        crate::protocol::Message::GetAcpTestProbe { request_id, tail } => {
+            assert_eq!(request_id, "probe-get-1");
+            assert_eq!(tail, Some(20));
+        }
+        other => panic!("Expected GetAcpTestProbe, got: {:?}", other),
+    }
+}
+
+#[test]
+fn get_acp_test_probe_request_parses_without_tail() {
+    let json = r#"{"type":"getAcpTestProbe","requestId":"probe-get-2"}"#;
+    let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse getAcpTestProbe without tail");
+
+    match msg {
+        crate::protocol::Message::GetAcpTestProbe { request_id, tail } => {
+            assert_eq!(request_id, "probe-get-2");
+            assert_eq!(tail, None);
+        }
+        other => panic!("Expected GetAcpTestProbe, got: {:?}", other),
+    }
+}
+
+#[test]
+fn acp_test_probe_result_round_trips() {
+    let probe = crate::protocol::AcpTestProbeSnapshot {
+        schema_version: crate::protocol::ACP_TEST_PROBE_SCHEMA_VERSION,
+        event_seq: 5,
+        key_routes: vec![crate::protocol::AcpKeyRouteTelemetry {
+            key: "tab".to_string(),
+            route: crate::protocol::AcpKeyRoute::Picker,
+            picker_open: true,
+            permission_active: false,
+            cursor_before: 1,
+            cursor_after: 17,
+            caused_submit: false,
+            consumed: true,
+        }],
+        accepted_items: vec![crate::protocol::AcpPickerItemAcceptedTelemetry {
+            trigger: "@".to_string(),
+            item_label: "Current Context".to_string(),
+            item_id: "built_in:context".to_string(),
+            accepted_via_key: "tab".to_string(),
+            cursor_after: 17,
+            caused_submit: false,
+        }],
+        input_layout: Some(crate::protocol::AcpInputLayoutTelemetry {
+            char_count: 27,
+            visible_start: 0,
+            visible_end: 27,
+            cursor_in_window: 17,
+        }),
+        state: crate::protocol::AcpStateSnapshot {
+            status: "idle".to_string(),
+            cursor_index: 17,
+            ..Default::default()
+        },
+    };
+    let msg = crate::protocol::Message::acp_test_probe_result("probe-rt".to_string(), probe);
+    let json = serde_json::to_value(&msg).expect("serialize acpTestProbeResult");
+
+    assert_eq!(json["type"], "acpTestProbeResult");
+    assert_eq!(json["requestId"], "probe-rt");
+    assert_eq!(json["schemaVersion"], crate::protocol::ACP_TEST_PROBE_SCHEMA_VERSION);
+    assert_eq!(json["eventSeq"], 5);
+    assert_eq!(json["acceptedItems"][0]["acceptedViaKey"], "tab");
+    assert_eq!(json["acceptedItems"][0]["cursorAfter"], 17);
+    assert_eq!(json["keyRoutes"][0]["key"], "tab");
+    assert_eq!(json["inputLayout"]["cursorInWindow"], 17);
+
+    // Round-trip back through deserialization
+    let json_str = serde_json::to_string(&msg).expect("serialize to string");
+    let back: crate::protocol::Message = serde_json::from_str(&json_str).expect("deserialize");
+    match back {
+        crate::protocol::Message::AcpTestProbeResult { request_id, probe } => {
+            assert_eq!(request_id, "probe-rt");
+            assert_eq!(probe.event_seq, 5);
+            assert_eq!(probe.accepted_items.len(), 1);
+            assert_eq!(probe.key_routes.len(), 1);
+        }
+        other => panic!("Expected AcpTestProbeResult, got: {:?}", other),
+    }
+}

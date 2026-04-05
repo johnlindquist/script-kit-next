@@ -5,18 +5,26 @@
  * Native macOS keyboard and mouse automation for Script Kit GPUI agentic testing.
  * Uses cliclick for input delivery and osascript for activation fallback.
  *
- * Usage:
- *   bun scripts/agentic/macos-input.ts key <keyname> [--modifiers cmd,shift,...] [--json]
- *   bun scripts/agentic/macos-input.ts type <text> [--json]
- *   bun scripts/agentic/macos-input.ts click <x> <y> [--json]
- *   bun scripts/agentic/macos-input.ts sequence <json-array> [--json]
+ * Focus enforcement delegates to window.ts — this script does NOT maintain a
+ * separate activation path.
  *
- * All structured output is JSON on stdout. Diagnostics go to stderr.
+ * Usage:
+ *   bun scripts/agentic/macos-input.ts key <keyname> [--modifiers cmd,shift,...] [--ensure-focus] [--focus-title SUBSTR] [--json]
+ *   bun scripts/agentic/macos-input.ts type <text> [--ensure-focus] [--focus-title SUBSTR] [--json]
+ *   bun scripts/agentic/macos-input.ts click <x> <y> [--ensure-focus] [--focus-title SUBSTR] [--json]
+ *   bun scripts/agentic/macos-input.ts sequence <json-array> [--ensure-focus] [--focus-title SUBSTR] [--json]
+ *   bun scripts/agentic/macos-input.ts check [--json]
+ *
+ * All structured output is JSON on stdout. Diagnostics go to stderr as NDJSON.
  */
 
 import { existsSync } from "fs";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+const WINDOW_TS_PATH = new URL("./window.ts", import.meta.url).pathname;
+const DEFAULT_FOCUS_TITLE = "Script Kit";
+const DEFAULT_FOCUS_RETRY = 3;
+const DEFAULT_FOCUS_SETTLE_MS = 200;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -35,18 +43,21 @@ interface KeyResult {
   modifiers: string[];
   delivered: boolean;
   method: "cliclick" | "osascript";
+  focusEnforced: boolean;
 }
 
 interface TypeResult {
   text: string;
   delivered: boolean;
   method: "cliclick" | "osascript";
+  focusEnforced: boolean;
 }
 
 interface ClickResult {
   x: number;
   y: number;
   delivered: boolean;
+  focusEnforced: boolean;
 }
 
 interface SequenceStep {
@@ -62,7 +73,24 @@ interface SequenceStep {
 interface SequenceResult {
   steps: number;
   completed: number;
+  focusEnforced: boolean;
   results: Array<KeyResult | TypeResult | ClickResult | { sleptMs: number }>;
+}
+
+interface CheckResult {
+  cliclick: boolean;
+  cliclickPath: string | null;
+  osascript: boolean;
+  accessibility: boolean | "unknown";
+  windowTsAvailable: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Structured stderr logging
+// ---------------------------------------------------------------------------
+
+function stderrLog(event: string, fields: Record<string, unknown> = {}): void {
+  console.error(JSON.stringify({ event, ts: new Date().toISOString(), ...fields }));
 }
 
 // ---------------------------------------------------------------------------
@@ -135,10 +163,7 @@ const OSASCRIPT_KEY_CODES: Record<string, number> = {
 };
 
 function findCliclick(): string | null {
-  const paths = [
-    "/opt/homebrew/bin/cliclick",
-    "/usr/local/bin/cliclick",
-  ];
+  const paths = ["/opt/homebrew/bin/cliclick", "/usr/local/bin/cliclick"];
   for (const p of paths) {
     if (existsSync(p)) return p;
   }
@@ -159,41 +184,62 @@ async function runProcess(
   return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode };
 }
 
-async function verifyWindowFocused(): Promise<boolean> {
-  try {
-    const { stdout, exitCode } = await runProcess(
-      [
-        "osascript",
-        "-e",
-        'tell application "System Events" to get name of first process whose frontmost is true',
-      ],
-      "check-frontmost"
-    );
-    return exitCode === 0 && stdout.includes("Script Kit");
-  } catch {
-    return false;
-  }
-}
+// ---------------------------------------------------------------------------
+// Focus delegation to window.ts
+// ---------------------------------------------------------------------------
 
-async function focusAppIfNeeded(): Promise<void> {
-  const focused = await verifyWindowFocused();
-  if (!focused) {
-    console.error("[macos-input.ts] Script Kit not frontmost, activating...");
-    await runProcess(
-      [
-        "osascript",
-        "-e",
-        `tell application "System Events"
-  set appProcs to every process whose name contains "Script Kit"
-  if (count of appProcs) > 0 then
-    set frontmost of item 1 of appProcs to true
-  end if
-end tell`,
-      ],
-      "activate"
-    );
-    await Bun.sleep(300);
+/**
+ * Delegate focus enforcement to window.ts. Returns true if the window was
+ * confirmed frontmost, false otherwise. Throws on hard errors.
+ */
+async function ensureFocusViaWindowTs(
+  focusTitle: string,
+  retry: number = DEFAULT_FOCUS_RETRY,
+  settleMs: number = DEFAULT_FOCUS_SETTLE_MS
+): Promise<{ frontmost: boolean; focused: boolean }> {
+  stderrLog("focus_delegate_start", { focusTitle, retry, settleMs });
+
+  const { stdout, stderr, exitCode } = await runProcess(
+    [
+      "bun",
+      WINDOW_TS_PATH,
+      "focus",
+      "--title",
+      focusTitle,
+      "--retry",
+      String(retry),
+      "--settle-ms",
+      String(settleMs),
+    ],
+    "window.ts-focus"
+  );
+
+  // Parse the window.ts JSON envelope
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    stderrLog("focus_delegate_parse_error", { stdout: stdout.slice(0, 200) });
   }
+
+  const frontmost = parsed?.data?.frontmost ?? false;
+  const focused = parsed?.data?.focused ?? false;
+
+  stderrLog("focus_delegate_result", {
+    exitCode,
+    frontmost,
+    focused,
+    windowId: parsed?.data?.windowId ?? 0,
+  });
+
+  if (exitCode !== 0 && !frontmost) {
+    // Non-fatal: we tried but may not be frontmost
+    stderrLog("focus_delegate_warning", {
+      message: "window.ts focus did not confirm frontmost",
+    });
+  }
+
+  return { frontmost, focused };
 }
 
 // ---------------------------------------------------------------------------
@@ -202,47 +248,37 @@ end tell`,
 
 async function sendKey(
   key: string,
-  modifiers: string[]
+  modifiers: string[],
+  focusEnforced: boolean
 ): Promise<KeyResult> {
-  await focusAppIfNeeded();
-
   const cliclick = findCliclick();
   const keyLower = key.toLowerCase();
 
   // Try cliclick first for simple keys
   if (cliclick) {
     const cliclickKey = KEY_MAP[keyLower] ?? key;
-
-    // Build cliclick key press command
-    // cliclick kp:<key> for special keys, t:<char> for characters
     const args: string[] = [];
 
     if (KEY_MAP[keyLower]) {
-      // Special key
       if (modifiers.length > 0) {
         // cliclick doesn't support modifiers with kp, fall through to osascript
       } else {
         args.push(`kp:${cliclickKey}`);
       }
     } else if (key.length === 1 && modifiers.length === 0) {
-      // Single character — use type
       args.push(`t:${key}`);
     }
 
     if (args.length > 0) {
+      stderrLog("input_key_attempt", { key, modifiers, method: "cliclick" });
       const { exitCode, stderr } = await runProcess(
         [cliclick, "-w", "10", ...args],
         "cliclick-key"
       );
       if (exitCode === 0) {
-        return {
-          key,
-          modifiers,
-          delivered: true,
-          method: "cliclick",
-        };
+        return { key, modifiers, delivered: true, method: "cliclick", focusEnforced };
       }
-      console.error(`[macos-input.ts] cliclick failed: ${stderr}`);
+      stderrLog("input_key_cliclick_failed", { key, stderr });
     }
   }
 
@@ -251,7 +287,6 @@ async function sendKey(
   let script: string;
 
   if (keyCode !== undefined) {
-    // Use key code for special keys
     const modParts: string[] = [];
     for (const m of modifiers) {
       switch (m.toLowerCase()) {
@@ -272,11 +307,9 @@ async function sendKey(
           break;
       }
     }
-    const using =
-      modParts.length > 0 ? ` using {${modParts.join(", ")}}` : "";
+    const using = modParts.length > 0 ? ` using {${modParts.join(", ")}}` : "";
     script = `tell application "System Events" to key code ${keyCode}${using}`;
   } else if (key.length === 1) {
-    // Single character keystroke
     const modParts: string[] = [];
     for (const m of modifiers) {
       switch (m.toLowerCase()) {
@@ -297,8 +330,7 @@ async function sendKey(
           break;
       }
     }
-    const using =
-      modParts.length > 0 ? ` using {${modParts.join(", ")}}` : "";
+    const using = modParts.length > 0 ? ` using {${modParts.join(", ")}}` : "";
     script = `tell application "System Events" to keystroke "${key}"${using}`;
   } else {
     throw Object.assign(
@@ -307,6 +339,7 @@ async function sendKey(
     );
   }
 
+  stderrLog("input_key_attempt", { key, modifiers, method: "osascript" });
   const { exitCode, stderr } = await runProcess(
     ["osascript", "-e", script],
     "osascript-key"
@@ -317,42 +350,34 @@ async function sendKey(
       stderr.includes("not allowed assistive access") ||
       stderr.includes("(-1743)")
     ) {
-      throw Object.assign(new Error(stderr), {
-        code: "ACCESSIBILITY_DENIED",
-      });
+      throw Object.assign(new Error(stderr), { code: "ACCESSIBILITY_DENIED" });
     }
     throw Object.assign(new Error(`Key send failed: ${stderr}`), {
       code: "KEY_FAILED",
     });
   }
 
-  return {
-    key,
-    modifiers,
-    delivered: true,
-    method: "osascript",
-  };
+  return { key, modifiers, delivered: true, method: "osascript", focusEnforced };
 }
 
-async function sendType(text: string): Promise<TypeResult> {
-  await focusAppIfNeeded();
-
+async function sendType(text: string, focusEnforced: boolean): Promise<TypeResult> {
   const cliclick = findCliclick();
 
-  // cliclick t: handles arbitrary text well
   if (cliclick) {
+    stderrLog("input_type_attempt", { textLen: text.length, method: "cliclick" });
     const { exitCode, stderr } = await runProcess(
       [cliclick, "-w", "10", `t:${text}`],
       "cliclick-type"
     );
     if (exitCode === 0) {
-      return { text, delivered: true, method: "cliclick" };
+      return { text, delivered: true, method: "cliclick", focusEnforced };
     }
-    console.error(`[macos-input.ts] cliclick type failed: ${stderr}`);
+    stderrLog("input_type_cliclick_failed", { stderr });
   }
 
-  // Fallback: osascript keystroke (escaping for AppleScript)
+  // Fallback: osascript keystroke
   const escaped = text.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  stderrLog("input_type_attempt", { textLen: text.length, method: "osascript" });
   const { exitCode, stderr } = await runProcess(
     [
       "osascript",
@@ -367,35 +392,32 @@ async function sendType(text: string): Promise<TypeResult> {
       stderr.includes("not allowed assistive access") ||
       stderr.includes("(-1743)")
     ) {
-      throw Object.assign(new Error(stderr), {
-        code: "ACCESSIBILITY_DENIED",
-      });
+      throw Object.assign(new Error(stderr), { code: "ACCESSIBILITY_DENIED" });
     }
     throw Object.assign(new Error(`Type failed: ${stderr}`), {
       code: "TYPE_FAILED",
     });
   }
 
-  return { text, delivered: true, method: "osascript" };
+  return { text, delivered: true, method: "osascript", focusEnforced };
 }
 
-async function sendClick(x: number, y: number): Promise<ClickResult> {
-  await focusAppIfNeeded();
-
+async function sendClick(x: number, y: number, focusEnforced: boolean): Promise<ClickResult> {
   const cliclick = findCliclick();
 
   if (cliclick) {
+    stderrLog("input_click_attempt", { x, y, method: "cliclick" });
     const { exitCode, stderr } = await runProcess(
       [cliclick, `c:${x},${y}`],
       "cliclick-click"
     );
     if (exitCode === 0) {
-      return { x, y, delivered: true };
+      return { x, y, delivered: true, focusEnforced };
     }
-    console.error(`[macos-input.ts] cliclick click failed: ${stderr}`);
+    stderrLog("input_click_cliclick_failed", { stderr });
   }
 
-  // Fallback: osascript click
+  stderrLog("input_click_attempt", { x, y, method: "osascript" });
   const { exitCode, stderr } = await runProcess(
     [
       "osascript",
@@ -413,25 +435,28 @@ end tell`,
     });
   }
 
-  return { x, y, delivered: true };
+  return { x, y, delivered: true, focusEnforced };
 }
 
-async function runSequence(steps: SequenceStep[]): Promise<SequenceResult> {
+async function runSequence(
+  steps: SequenceStep[],
+  focusEnforced: boolean
+): Promise<SequenceResult> {
   const results: SequenceResult["results"] = [];
   let completed = 0;
 
   for (const step of steps) {
     switch (step.action) {
       case "key":
-        results.push(await sendKey(step.key ?? "enter", step.modifiers ?? []));
+        results.push(await sendKey(step.key ?? "enter", step.modifiers ?? [], focusEnforced));
         completed++;
         break;
       case "type":
-        results.push(await sendType(step.text ?? ""));
+        results.push(await sendType(step.text ?? "", focusEnforced));
         completed++;
         break;
       case "click":
-        results.push(await sendClick(step.x ?? 0, step.y ?? 0));
+        results.push(await sendClick(step.x ?? 0, step.y ?? 0, focusEnforced));
         completed++;
         break;
       case "sleep":
@@ -442,24 +467,19 @@ async function runSequence(steps: SequenceStep[]): Promise<SequenceResult> {
     }
   }
 
-  return { steps: steps.length, completed, results };
+  return { steps: steps.length, completed, focusEnforced, results };
 }
 
 // ---------------------------------------------------------------------------
 // Preflight checks
 // ---------------------------------------------------------------------------
 
-async function checkPrerequisites(): Promise<{
-  cliclick: boolean;
-  cliclickPath: string | null;
-  osascript: boolean;
-  accessibility: boolean | "unknown";
-}> {
+async function checkPrerequisites(): Promise<CheckResult> {
   const cliclickPath = findCliclick();
   const cliclick = cliclickPath !== null;
   const osascript = existsSync("/usr/bin/osascript");
+  const windowTsAvailable = existsSync(WINDOW_TS_PATH);
 
-  // Test accessibility by trying a no-op osascript
   let accessibility: boolean | "unknown" = "unknown";
   try {
     const { exitCode, stderr } = await runProcess(
@@ -482,7 +502,21 @@ async function checkPrerequisites(): Promise<{
     // unknown
   }
 
-  return { cliclick, cliclickPath, osascript, accessibility };
+  return { cliclick, cliclickPath, osascript, accessibility, windowTsAvailable };
+}
+
+// ---------------------------------------------------------------------------
+// CLI argument parsing
+// ---------------------------------------------------------------------------
+
+function hasFlag(args: string[], flag: string): boolean {
+  return args.includes(flag);
+}
+
+function getStringArg(args: string[], flag: string, fallback: string): string {
+  const idx = args.indexOf(flag);
+  if (idx >= 0 && args[idx + 1]) return args[idx + 1];
+  return fallback;
 }
 
 // ---------------------------------------------------------------------------
@@ -492,8 +526,25 @@ async function checkPrerequisites(): Promise<{
 const args = process.argv.slice(2);
 const command = args[0] ?? "help";
 
+// Global focus flags
+const ensureFocus = hasFlag(args, "--ensure-focus");
+const focusTitle = getStringArg(args, "--focus-title", DEFAULT_FOCUS_TITLE);
+
 function emit(data: Envelope<any>) {
   console.log(JSON.stringify(data, null, 2));
+}
+
+// Run focus enforcement once before any command if requested
+let focusEnforced = false;
+if (ensureFocus && command !== "check" && command !== "help" && command !== "--help") {
+  const focusResult = await ensureFocusViaWindowTs(focusTitle);
+  focusEnforced = true;
+  if (!focusResult.frontmost) {
+    stderrLog("focus_enforcement_warning", {
+      message: "Window may not be frontmost after focus enforcement",
+      focusTitle,
+    });
+  }
 }
 
 try {
@@ -505,7 +556,7 @@ try {
           errorEnvelope(
             "key",
             "MISSING_KEY",
-            "Usage: macos-input.ts key <keyname> [--modifiers cmd,shift]"
+            "Usage: macos-input.ts key <keyname> [--modifiers cmd,shift] [--ensure-focus] [--focus-title SUBSTR]"
           )
         );
         process.exit(1);
@@ -516,7 +567,7 @@ try {
         modIdx >= 0 && args[modIdx + 1]
           ? args[modIdx + 1].split(",").map((m) => m.trim())
           : [];
-      const result = await sendKey(keyName, modifiers);
+      const result = await sendKey(keyName, modifiers, focusEnforced);
       emit(envelope("key", result));
       process.exit(result.delivered ? 0 : 1);
       break;
@@ -529,13 +580,13 @@ try {
           errorEnvelope(
             "type",
             "MISSING_TEXT",
-            "Usage: macos-input.ts type <text>"
+            "Usage: macos-input.ts type <text> [--ensure-focus] [--focus-title SUBSTR]"
           )
         );
         process.exit(1);
         break;
       }
-      const result = await sendType(text);
+      const result = await sendType(text, focusEnforced);
       emit(envelope("type", result));
       process.exit(result.delivered ? 0 : 1);
       break;
@@ -549,13 +600,13 @@ try {
           errorEnvelope(
             "click",
             "MISSING_COORDS",
-            "Usage: macos-input.ts click <x> <y>"
+            "Usage: macos-input.ts click <x> <y> [--ensure-focus] [--focus-title SUBSTR]"
           )
         );
         process.exit(1);
         break;
       }
-      const result = await sendClick(x, y);
+      const result = await sendClick(x, y, focusEnforced);
       emit(envelope("click", result));
       process.exit(result.delivered ? 0 : 1);
       break;
@@ -568,7 +619,7 @@ try {
           errorEnvelope(
             "sequence",
             "MISSING_STEPS",
-            'Usage: macos-input.ts sequence \'[{"action":"key","key":"tab"},{"action":"sleep","ms":200},{"action":"key","key":"enter"}]\''
+            'Usage: macos-input.ts sequence \'[{"action":"key","key":"tab"},{"action":"sleep","ms":200},{"action":"key","key":"enter"}]\' [--ensure-focus]'
           )
         );
         process.exit(1);
@@ -588,7 +639,7 @@ try {
         process.exit(1);
         break;
       }
-      const result = await runSequence(steps);
+      const result = await runSequence(steps, focusEnforced);
       emit(envelope("sequence", result));
       process.exit(result.completed === result.steps ? 0 : 1);
       break;
@@ -598,14 +649,15 @@ try {
       const prereqs = await checkPrerequisites();
       emit(envelope("check", prereqs));
       if (!prereqs.cliclick) {
-        console.error(
-          "[macos-input.ts] cliclick not found. Install: brew install cliclick"
-        );
+        stderrLog("check_warning", { message: "cliclick not found. Install: brew install cliclick" });
       }
       if (prereqs.accessibility === false) {
-        console.error(
-          "[macos-input.ts] Accessibility denied. Fix: System Preferences → Privacy & Security → Accessibility → enable terminal/IDE"
-        );
+        stderrLog("check_warning", {
+          message: "Accessibility denied. Fix: System Preferences → Privacy & Security → Accessibility → enable terminal/IDE",
+        });
+      }
+      if (!prereqs.windowTsAvailable) {
+        stderrLog("check_warning", { message: "window.ts not found — focus delegation unavailable" });
       }
       process.exit(
         prereqs.cliclick && prereqs.accessibility !== false ? 0 : 1
@@ -624,6 +676,10 @@ Commands:
   sequence '<json-array>'                         Run a sequence of actions
   check                                           Verify prerequisites
 
+Focus enforcement:
+  --ensure-focus                 Focus Script Kit window before input (delegates to window.ts)
+  --focus-title SUBSTR           Title substring for focus target (default: "${DEFAULT_FOCUS_TITLE}")
+
 Named keys: enter, tab, escape, space, delete, backspace,
             up, down, left, right, home, end, pageup, pagedown,
             f1-f12
@@ -635,14 +691,19 @@ Sequence JSON format:
    {"action":"key","key":"enter"},
    {"action":"click","x":100,"y":200}]
 
-The target window is auto-focused before input. Uses cliclick when
-available, falls back to osascript.
+Output:
+  Schema version ${SCHEMA_VERSION} JSON envelopes on stdout.
+  Structured NDJSON diagnostics on stderr.
+  Exit 0 = delivered, 1 = failed or missing prerequisites.
+
+Focus delegation:
+  When --ensure-focus is set, focus is enforced via window.ts (retry 3, settle 200ms).
+  This replaces the old inline activation path. The focusEnforced field in the response
+  confirms whether focus was enforced before input delivery.
 
 Permission requirements:
   - Accessibility: System Preferences → Privacy & Security → Accessibility
-  - cliclick: brew install cliclick
-
-Exit 0 = delivered, 1 = failed or missing prerequisites.`);
+  - cliclick: brew install cliclick`);
       process.exit(0);
       break;
     }

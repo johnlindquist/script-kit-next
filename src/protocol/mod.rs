@@ -85,5 +85,6 @@ pub use types::{
     SystemWindowInfo, TargetWindowBounds, TilePosition, TransactionCommandTrace, TransactionError,
     TransactionErrorCode, TransactionTrace, TransactionTraceMode, TransactionTraceStatus,
     UiStateSnapshot, WaitCondition, WaitDetailedCondition, WaitNamedCondition, WaitPollObservation,
-    WindowActionType, ACP_STATE_SCHEMA_VERSION,
+    WindowActionType, AcpTestProbeSnapshot, ACP_STATE_SCHEMA_VERSION,
+    ACP_TEST_PROBE_MAX_EVENTS, ACP_TEST_PROBE_SCHEMA_VERSION,
 };

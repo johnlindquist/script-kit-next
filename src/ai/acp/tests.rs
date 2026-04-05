@@ -484,6 +484,188 @@ fn acp_and_pty_views_coexist_in_app_view() {
 }
 
 // =========================================================================
+// ACP test probe — ring buffer and snapshot
+// =========================================================================
+
+#[test]
+fn acp_test_probe_records_key_routes() {
+    let mut probe = super::view::AcpTestProbe::default();
+    assert_eq!(probe.event_seq, 0);
+    assert!(probe.key_routes.is_empty());
+
+    let event = crate::protocol::AcpKeyRouteTelemetry {
+        key: "tab".to_string(),
+        route: crate::protocol::AcpKeyRoute::Picker,
+        picker_open: true,
+        permission_active: false,
+        cursor_before: 1,
+        cursor_after: 17,
+        caused_submit: false,
+        consumed: true,
+    };
+
+    probe.event_seq += 1;
+    probe.key_routes.push_back(event.clone());
+    assert_eq!(probe.event_seq, 1);
+    assert_eq!(probe.key_routes.len(), 1);
+    assert_eq!(probe.key_routes[0].key, "tab");
+}
+
+#[test]
+fn acp_test_probe_records_picker_accepts() {
+    let mut probe = super::view::AcpTestProbe::default();
+
+    let event = crate::protocol::AcpPickerItemAcceptedTelemetry {
+        trigger: "@".to_string(),
+        item_label: "Current Context".to_string(),
+        item_id: "built_in:context".to_string(),
+        accepted_via_key: "tab".to_string(),
+        cursor_after: 17,
+        caused_submit: false,
+    };
+
+    probe.event_seq += 1;
+    probe.accepted_items.push_back(event.clone());
+    assert_eq!(probe.accepted_items.len(), 1);
+    assert_eq!(probe.accepted_items[0].accepted_via_key, "tab");
+}
+
+#[test]
+fn acp_test_probe_records_input_layout() {
+    let mut probe = super::view::AcpTestProbe::default();
+
+    let event = crate::protocol::AcpInputLayoutTelemetry {
+        char_count: 27,
+        visible_start: 0,
+        visible_end: 27,
+        cursor_in_window: 17,
+    };
+
+    probe.event_seq += 1;
+    probe.input_layout = Some(event.clone());
+    assert!(probe.input_layout.is_some());
+    assert_eq!(probe.input_layout.as_ref().expect("layout").cursor_in_window, 17);
+}
+
+#[test]
+fn acp_test_probe_bounded_at_max_events() {
+    let mut probe = super::view::AcpTestProbe::default();
+    let max = crate::protocol::ACP_TEST_PROBE_MAX_EVENTS;
+
+    for i in 0..(max + 10) {
+        if probe.key_routes.len() >= max {
+            probe.key_routes.pop_front();
+        }
+        probe.key_routes.push_back(crate::protocol::AcpKeyRouteTelemetry {
+            key: format!("key-{i}"),
+            route: crate::protocol::AcpKeyRoute::Composer,
+            picker_open: false,
+            permission_active: false,
+            cursor_before: i,
+            cursor_after: i + 1,
+            caused_submit: false,
+            consumed: true,
+        });
+    }
+
+    assert_eq!(
+        probe.key_routes.len(),
+        max,
+        "ring buffer must be bounded at {max}"
+    );
+    // Oldest event should have been evicted
+    assert_eq!(probe.key_routes[0].key, "key-10");
+}
+
+#[test]
+fn acp_test_probe_reset_clears_all() {
+    let mut probe = super::view::AcpTestProbe::default();
+
+    probe.event_seq = 42;
+    probe.key_routes.push_back(crate::protocol::AcpKeyRouteTelemetry {
+        key: "tab".to_string(),
+        route: crate::protocol::AcpKeyRoute::Picker,
+        picker_open: true,
+        permission_active: false,
+        cursor_before: 1,
+        cursor_after: 9,
+        caused_submit: false,
+        consumed: true,
+    });
+    probe.accepted_items.push_back(crate::protocol::AcpPickerItemAcceptedTelemetry {
+        trigger: "@".to_string(),
+        item_label: "context".to_string(),
+        item_id: "built_in:context".to_string(),
+        accepted_via_key: "tab".to_string(),
+        cursor_after: 9,
+        caused_submit: false,
+    });
+    probe.input_layout = Some(crate::protocol::AcpInputLayoutTelemetry {
+        char_count: 10,
+        visible_start: 0,
+        visible_end: 10,
+        cursor_in_window: 9,
+    });
+
+    // Reset
+    probe.event_seq = 0;
+    probe.key_routes.clear();
+    probe.accepted_items.clear();
+    probe.input_layout = None;
+
+    assert_eq!(probe.event_seq, 0);
+    assert!(probe.key_routes.is_empty());
+    assert!(probe.accepted_items.is_empty());
+    assert!(probe.input_layout.is_none());
+}
+
+// =========================================================================
+// ACP test probe — source code contracts
+// =========================================================================
+
+#[test]
+fn acp_view_has_test_probe_methods() {
+    const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn reset_test_probe("),
+        "AcpChatView must have reset_test_probe method"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn record_key_route("),
+        "AcpChatView must have record_key_route method"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn record_picker_accept("),
+        "AcpChatView must have record_picker_accept method"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn record_input_layout("),
+        "AcpChatView must have record_input_layout method"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn test_probe_snapshot("),
+        "AcpChatView must have test_probe_snapshot method"
+    );
+}
+
+#[test]
+fn emit_methods_record_into_probe() {
+    const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
+    assert!(
+        ACP_VIEW_SOURCE.contains("self.record_key_route(telemetry.clone())"),
+        "emit_key_route_telemetry must record into probe"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("self.record_picker_accept(telemetry.clone())"),
+        "emit_picker_accepted_telemetry must record into probe"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("self.record_input_layout(telemetry.clone())"),
+        "emit_input_layout_telemetry must record into probe"
+    );
+}
+
+// =========================================================================
 // Mention picker windowing — selected item always visible
 // =========================================================================
 
