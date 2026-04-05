@@ -43,7 +43,8 @@
  *   --acp-setup-selected-agent ID Assert setup.selectedAgentId equals ID
  *   --acp-setup-agent-picker-open Assert setup.agentPickerOpen is true
  *   --probe-tail N              Number of probe events to request (default: 20)
- *   --emit-vision-crops         Emit vision check entries with crop regions for external readers
+ *   --vision                    Emit vision checks with mustReview prompts and requiresVisionReview
+ *   --emit-vision-crops         Alias for --vision
  *   --skip-screenshot           Only run state assertions, skip capture
  *   --skip-state                Only capture screenshot, skip ACP state query
  *   --skip-probe                Skip ACP test probe query
@@ -75,6 +76,7 @@ interface VerifyReceipt {
   label: string;
   timestamp: string;
   durationMs: number;
+  requiresVisionReview: boolean;
   // Stable proof bundle fields (canonical names for machine consumption)
   state: Record<string, unknown> | null;
   probe: Record<string, unknown> | null;
@@ -125,6 +127,9 @@ interface VisionCheck {
   path: string;
   question: string;
   crop: { x: number; y: number; width: number; height: number } | null;
+  expectedAnswer?: string | null;
+  mustReview: boolean;
+  failureMessage: string;
 }
 
 interface AssertionResult {
@@ -170,7 +175,7 @@ function parseArgs() {
       opts.acpSetupVisible = true;
     } else if (arg === "--acp-setup-agent-picker-open") {
       opts.acpSetupAgentPickerOpen = true;
-    } else if (arg === "--emit-vision-crops") {
+    } else if (arg === "--emit-vision-crops" || arg === "--vision") {
       opts.emitVisionCrops = true;
     } else if (arg === "--skip-probe") {
       opts.skipProbe = true;
@@ -1126,20 +1131,30 @@ function buildVisionChecks(
   // Composer line check — bottom region of the window where input lives
   const composerHeight = 56;
   const composerY = Math.max(0, imgHeight - composerHeight - 40);
-  checks.push({
-    name: "composer-line",
-    path: screenshotResult.path,
-    question:
-      "Is the caret immediately after the inserted token with no picker still visible?",
-    crop: {
-      x: 0,
-      y: composerY,
-      width: imgWidth,
-      height: composerHeight,
-    },
-  });
 
-  // Picker visibility check — middle area where picker dropdown appears
+  // Caret placement after insertion — mustReview because state alone
+  // cannot prove the caret is *visually* positioned correctly
+  if (hasOpt(opts, "acpAcceptedVia") || opts.acpItemAccepted) {
+    checks.push({
+      name: "composer-caret",
+      path: screenshotResult.path,
+      question:
+        "Is the caret (blinking cursor) immediately after the accepted picker text with no gap or misalignment?",
+      crop: {
+        x: 0,
+        y: composerY,
+        width: imgWidth,
+        height: composerHeight,
+      },
+      expectedAnswer: "yes",
+      mustReview: true,
+      failureMessage:
+        "Caret is not visually aligned after ACP insertion. The cursor may have jumped or the inserted text may be clipped.",
+    });
+  }
+
+  // Picker dismissal check — mustReview because a stale picker overlay
+  // can linger visually even when state reports it closed
   if (opts.acpPickerClosed || hasOpt(opts, "acpAcceptedVia")) {
     checks.push({
       name: "picker-dismissed",
@@ -1152,9 +1167,35 @@ function buildVisionChecks(
         width: imgWidth,
         height: 200,
       },
+      expectedAnswer: "yes",
+      mustReview: true,
+      failureMessage:
+        "Picker overlay is still visually present despite state reporting it closed. Possible render stale frame.",
     });
   }
 
+  // Single-line composer stability — mustReview because layout metrics
+  // can report correct values while the visual input jumps or clips
+  if (hasOpt(opts, "acpAcceptedVia") || opts.acpItemAccepted) {
+    checks.push({
+      name: "single-line-stability",
+      path: screenshotResult.path,
+      question:
+        "Does the single-line composer remain visually stable — no clipped leading text, no vertical shift, no layout jump?",
+      crop: {
+        x: 0,
+        y: composerY,
+        width: imgWidth,
+        height: composerHeight + 20,
+      },
+      expectedAnswer: "yes",
+      mustReview: true,
+      failureMessage:
+        "Single-line composer shifted, clipped, or jumped after picker acceptance or cursor movement.",
+    });
+  }
+
+  // Picker visibility check (for picker-open assertions)
   if (opts.acpPickerOpen) {
     checks.push({
       name: "picker-visible",
@@ -1167,6 +1208,10 @@ function buildVisionChecks(
         width: imgWidth,
         height: 200,
       },
+      expectedAnswer: "yes",
+      mustReview: true,
+      failureMessage:
+        "Picker dropdown is not visible despite state reporting it open.",
     });
   }
 
@@ -1213,7 +1258,8 @@ Options:
   --acp-setup-selected-agent ID Assert setup.selectedAgentId equals ID
   --acp-setup-agent-picker-open Assert setup.agentPickerOpen is true
   --probe-tail N              Number of probe events to request (default: 20)
-  --emit-vision-crops         Emit vision check entries with crop regions
+  --vision                    Emit vision checks with mustReview prompts and requiresVisionReview
+  --emit-vision-crops         Alias for --vision
   --skip-screenshot           Only run state assertions, skip capture
   --skip-state                Only capture screenshot, skip state query
   --skip-probe                Skip ACP test probe query
@@ -1330,12 +1376,15 @@ const hasInfraError =
   (probeResult?.error && needsProbe) ||
   (screenshotResult && !screenshotResult.captured && !skipScreenshot);
 
+const hasMustReviewItems = visionChecks.some((v) => v.mustReview);
+
 const receipt: VerifyReceipt = {
   schemaVersion: SCHEMA_VERSION,
   status: hasInfraError ? "error" : allPassed ? "pass" : "fail",
   label,
   timestamp: new Date().toISOString(),
   durationMs: Date.now() - startTime,
+  requiresVisionReview: hasMustReviewItems,
   // Stable proof bundle fields
   state: stateResult?.snapshot ?? null,
   probe: probeResult?.snapshot ?? null,

@@ -188,6 +188,21 @@ bun scripts/agentic/index.ts acp-accept --session default --key enter --vision
 bash scripts/agentic/session.sh stop default
 ```
 
+**With target threading (detached/popup ACP):**
+```bash
+bash scripts/agentic/session.sh start default
+TARGET='{"type":"kind","kind":"acpDetached","index":0}'
+bun scripts/agentic/index.ts acp-accept --session default --key enter \
+  --target-json "$TARGET" --surface acp --vision
+# Confirm proofBundle.state.resolvedTarget.windowKind == "acpDetached"
+# and no target warnings in proofBundle.state.warnings
+bash scripts/agentic/session.sh stop default
+```
+
+**Target threading rule:** Resolve one target JSON object once and reuse it for
+every RPC in the run. Never mix focused-window ACP RPCs with surface-targeted
+native input — this causes cross-window false proof.
+
 The `acp-accept --vision` command encodes the full golden path:
 - Resets ACP test probe before native interaction
 - Uses `macos-input.ts --ensure-focus` for native typing and acceptance

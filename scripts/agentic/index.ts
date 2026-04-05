@@ -570,7 +570,7 @@ async function recipeAcpPickerAccept(
     "--acp-item-accepted",
     "--acp-accepted-via",
     acceptKey,
-    ...(opts.emitVision ? ["--emit-vision-crops"] : []),
+    ...(opts.emitVision ? ["--vision"] : []),
   ];
   steps.push(
     await step("verify-accepted", () =>

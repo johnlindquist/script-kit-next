@@ -17,6 +17,12 @@ set -e
 # Default to compact AI log mode unless explicitly overridden
 export SCRIPT_KIT_AI_LOG="${SCRIPT_KIT_AI_LOG:-1}"
 
+# Dev startup profile: optimize for time-to-usable-session during cargo-watch loops.
+# Deferred services still start shortly after readiness, so behavior stays intact.
+export SCRIPT_KIT_STARTUP_PROFILE="${SCRIPT_KIT_STARTUP_PROFILE:-dev-fast}"
+export SCRIPT_KIT_DEFER_SCHEDULER_STARTUP="${SCRIPT_KIT_DEFER_SCHEDULER_STARTUP:-1}"
+export SCRIPT_KIT_STARTUP_READY_LOG="${SCRIPT_KIT_STARTUP_READY_LOG:-1}"
+
 # Check if cargo-watch is installed
 if ! command -v cargo-watch &> /dev/null; then
     echo "cargo-watch is not installed"
@@ -34,6 +40,7 @@ if [ "$SCRIPT_KIT_AI_LOG" = "1" ]; then
 else
     echo "   Log mode: standard verbose"
 fi
+echo "   Startup profile: ${SCRIPT_KIT_STARTUP_PROFILE}"
 echo "   Session log: ~/.scriptkit/logs/latest-session.jsonl"
 echo "   Copy for AI: cat ~/.scriptkit/logs/latest-session.jsonl | pbcopy"
 echo "   Press Ctrl+C to stop"
