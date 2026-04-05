@@ -118,14 +118,21 @@ impl Render for PathPrompt {
             .px(gpui::px(8.0))
             .child(list);
 
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list("prompts::path", true),
+        );
+
         let hints = crate::components::universal_prompt_hints();
         crate::components::emit_prompt_hint_audit("prompts::path", &hints);
 
         tracing::info!(
+            target: "script_kit::prompt_chrome",
             surface = "prompts::path",
+            layout_mode = "mini",
             filtered_count,
-            footer_mode = "universal",
-            "prompt_surface_rendered"
+            has_actions = true,
+            footer_mode = "hint_strip",
+            "path_prompt_chrome_checkpoint"
         );
 
         let container =

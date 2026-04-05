@@ -80,8 +80,10 @@ pub use selection::{
 pub use story::{Story, StorySurface, StoryVariant};
 
 pub use audit_report::{
-    build_prompt_chrome_consistency_report, render_prompt_chrome_consistency_markdown,
-    write_prompt_chrome_consistency_report, AuditFinding, AuditReport, AuditSeverity,
+    build_prompt_chrome_consistency_report, build_workflow_affordance_consistency_report,
+    render_prompt_chrome_consistency_markdown, render_workflow_affordance_consistency_markdown,
+    write_prompt_chrome_consistency_report, write_standard_audit_reports,
+    write_workflow_affordance_consistency_report, AuditFinding, AuditReport, AuditSeverity,
     AuditSurfaceResult,
 };
 

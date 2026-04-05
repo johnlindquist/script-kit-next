@@ -548,6 +548,416 @@ pub fn write_prompt_chrome_consistency_report(
     Ok(output_path)
 }
 
+// ── Workflow Affordance Consistency Report ──────────────────────────
+
+const WORKFLOW_REPORT_SLUG: &str = "workflow-affordance-consistency";
+const WORKFLOW_REPORT_TITLE: &str = "Workflow Affordance Consistency Audit";
+
+#[derive(Clone, Copy, Debug)]
+struct WorkflowSurfaceSpec {
+    surface: &'static str,
+    files: &'static [&'static str],
+}
+
+const WORKFLOW_SURFACES: &[WorkflowSurfaceSpec] = &[
+    WorkflowSurfaceSpec {
+        surface: "actions_dialog",
+        files: &["src/actions/dialog.rs"],
+    },
+    WorkflowSurfaceSpec {
+        surface: "clipboard_history",
+        files: &[
+            "src/render_builtins/clipboard.rs",
+            "src/render_builtins/clipboard_history_layout.rs",
+        ],
+    },
+    WorkflowSurfaceSpec {
+        surface: "file_search",
+        files: &[
+            "src/render_builtins/file_search.rs",
+            "src/render_builtins/file_search_layout.rs",
+        ],
+    },
+    WorkflowSurfaceSpec {
+        surface: "render_prompts::chat",
+        files: &[
+            "src/render_prompts/other.rs",
+            "src/prompts/chat/render_core.rs",
+        ],
+    },
+    WorkflowSurfaceSpec {
+        surface: "render_prompts::term",
+        files: &["src/render_prompts/term.rs"],
+    },
+    WorkflowSurfaceSpec {
+        surface: "prompts::path",
+        files: &["src/prompts/path/render.rs"],
+    },
+];
+
+fn audit_workflow_affordance_surface(
+    spec: WorkflowSurfaceSpec,
+    repo_root: &Path,
+) -> Result<AuditSurfaceResult> {
+    let sources = read_source_files(repo_root, spec.files)?;
+    let combined = sources
+        .iter()
+        .map(|(_, source)| source.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let mut findings = Vec::new();
+
+    match spec.surface {
+        "actions_dialog" => {
+            let has_runtime_contract = combined.contains("ActionsDialogRuntimeAudit")
+                && combined.contains("actions_dialog_runtime_contract_violation")
+                && combined.contains("ACTIONS_DIALOG_EXPECT_SEARCH_POSITION")
+                && combined.contains("ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT");
+
+            let has_three_key_footer = combined.contains("\"↵ Run\"")
+                && combined.contains("\"⌘K Actions\"")
+                && combined.contains("\"Tab AI\"");
+
+            if has_runtime_contract && has_three_key_footer {
+                findings.push(info(
+                    "command palette contract is audited",
+                    "Actions dialog already declares a machine-readable runtime contract for top search, footer hints, and chrome regressions. Treat it as the baseline command surface for every keyboard-first workflow.",
+                    vec!["src/actions/dialog.rs".to_string()],
+                ));
+            } else {
+                findings.push(warning(
+                    "command palette contract is not fully reportable",
+                    "Actions dialog is the core power-user surface, but the audited source no longer proves both the runtime contract and the canonical three-key footer together.",
+                    vec!["src/actions/dialog.rs".to_string()],
+                ));
+            }
+        }
+
+        "clipboard_history" => {
+            let uses_shared_expanded_scaffold =
+                combined.contains("render_expanded_view_scaffold_with_hints(");
+            let has_hint_audit =
+                combined.contains("emit_prompt_hint_audit(\"clipboard_history\"");
+
+            if uses_shared_expanded_scaffold && has_hint_audit {
+                findings.push(info(
+                    "expanded clipboard workflow is reportable",
+                    "Clipboard History already routes through the shared expanded scaffold and emits footer hint audits, so its list-plus-preview workflow is visible to the audit system.",
+                    vec![
+                        "src/render_builtins/clipboard.rs".to_string(),
+                        "src/render_builtins/clipboard_history_layout.rs".to_string(),
+                    ],
+                ));
+            } else {
+                findings.push(warning(
+                    "expanded clipboard workflow drift is hard to prove",
+                    "Clipboard History should keep both the shared expanded scaffold and explicit footer hint audit so the markdown report can prove workflow parity instead of relying on visual inspection.",
+                    vec![
+                        "src/render_builtins/clipboard.rs".to_string(),
+                        "src/render_builtins/clipboard_history_layout.rs".to_string(),
+                    ],
+                ));
+            }
+        }
+
+        "file_search" => {
+            let has_mini_layout = combined.contains("render_minimal_list_prompt_scaffold(");
+            let has_expanded_layout = combined.contains("render_expanded_view_scaffold(");
+            let has_layout_checkpoint = combined.contains("file_search_chrome_checkpoint");
+            let has_hint_audit = combined.contains("emit_prompt_hint_audit(\"file_search\"");
+
+            if has_mini_layout && has_expanded_layout && has_layout_checkpoint && has_hint_audit {
+                findings.push(info(
+                    "mini and expanded file search are both auditable",
+                    "File Search already exposes both its compact and split-view workflows in source, including a layout checkpoint and a footer hint audit for mini mode.",
+                    vec![
+                        "src/render_builtins/file_search.rs".to_string(),
+                        "src/render_builtins/file_search_layout.rs".to_string(),
+                    ],
+                ));
+            } else {
+                findings.push(warning(
+                    "file search workflow parity is not fully reportable",
+                    "File Search should keep explicit evidence for both mini and expanded layouts plus its footer hint audit, otherwise the report cannot prove that both modes teach the same shortcut language.",
+                    vec![
+                        "src/render_builtins/file_search.rs".to_string(),
+                        "src/render_builtins/file_search_layout.rs".to_string(),
+                    ],
+                ));
+            }
+        }
+
+        "render_prompts::chat" => {
+            let has_mini_hint_audit =
+                combined.contains("emit_prompt_hint_audit(\"prompts::chat::mini\"");
+            let has_full_hint_audit =
+                combined.contains("emit_prompt_hint_audit(\"prompts::chat\"");
+            let has_status_leading = combined.contains("footer_status_text(")
+                && combined.contains("render_hint_strip_leading_text(");
+
+            if has_mini_hint_audit && has_full_hint_audit && has_status_leading {
+                findings.push(info(
+                    "chat teaches the same shortcuts in mini and full modes",
+                    "Chat already audits both its mini and full footers and carries status text as leading helper content instead of changing the shortcut vocabulary.",
+                    vec![
+                        "src/render_prompts/other.rs".to_string(),
+                        "src/prompts/chat/render_core.rs".to_string(),
+                    ],
+                ));
+            } else {
+                findings.push(warning(
+                    "chat shortcut discoverability is not fully reportable",
+                    "Chat should keep explicit hint audits for both mini and full modes plus a single helper-text path so the report can verify parity between the compact and rich chat shells.",
+                    vec![
+                        "src/render_prompts/other.rs".to_string(),
+                        "src/prompts/chat/render_core.rs".to_string(),
+                    ],
+                ));
+            }
+        }
+
+        "render_prompts::term" => {
+            let has_custom_exception = combined.contains("surface: \"render_prompts::term\"")
+                && combined.contains("footer_mode: \"custom_hint_strip\"")
+                && combined.contains("exception_reason: Some(\"terminal_owns_contextual_footer\")");
+
+            if has_custom_exception {
+                findings.push(info(
+                    "terminal exception is explicit",
+                    "Term keeps a contextual footer on purpose, and the exception is already encoded in the chrome audit payload instead of hiding as silent drift.",
+                    vec!["src/render_prompts/term.rs".to_string()],
+                ));
+            } else {
+                findings.push(warning(
+                    "terminal exception is no longer explicit",
+                    "The terminal surface should keep its custom footer documented as an audit exception so the report distinguishes intentional workflow specialization from accidental drift.",
+                    vec!["src/render_prompts/term.rs".to_string()],
+                ));
+            }
+        }
+
+        "prompts::path" => {
+            let has_minimal_scaffold =
+                combined.contains("render_minimal_list_prompt_scaffold(");
+            let has_hint_audit = combined.contains("emit_prompt_hint_audit(\"prompts::path\"");
+            let has_chrome_audit = combined.contains("emit_prompt_chrome_audit(")
+                && combined.contains("\"prompts::path\"");
+
+            if has_minimal_scaffold && has_hint_audit && has_chrome_audit {
+                findings.push(info(
+                    "path prompt is fully auditable",
+                    "Path prompt now emits both chrome and hint audits while staying on the shared minimal scaffold, so it participates in the same keyboard-first consistency report as the rest of the mini surfaces.",
+                    vec!["src/prompts/path/render.rs".to_string()],
+                ));
+            } else if has_minimal_scaffold && has_hint_audit {
+                findings.push(warning(
+                    "missing runtime chrome audit",
+                    "Path prompt already uses the shared minimal scaffold and universal footer hints, but it still lacks `emit_prompt_chrome_audit(...)`, so the report cannot prove shell parity at runtime.",
+                    vec!["src/prompts/path/render.rs".to_string()],
+                ));
+            } else {
+                findings.push(warning(
+                    "path prompt drifted from the shared mini-shell contract",
+                    "Path prompt should stay on the shared minimal scaffold and emit the universal footer hint audit, otherwise the keyboard-first report loses coverage for filesystem navigation.",
+                    vec!["src/prompts/path/render.rs".to_string()],
+                ));
+            }
+        }
+
+        _ => {}
+    }
+
+    findings.sort_by_key(|finding| (finding.severity.sort_rank(), finding.title));
+
+    let result = AuditSurfaceResult {
+        surface: spec.surface,
+        files: spec.files.to_vec(),
+        findings,
+    };
+
+    tracing::info!(
+        target: "script_kit::audit",
+        report_slug = WORKFLOW_REPORT_SLUG,
+        surface = result.surface,
+        status = result.status(),
+        finding_count = result.findings.len(),
+        "workflow affordance surface audited"
+    );
+
+    if result.status() != "pass" {
+        tracing::warn!(
+            target: "script_kit::audit",
+            report_slug = WORKFLOW_REPORT_SLUG,
+            surface = result.surface,
+            status = result.status(),
+            finding_count = result.findings.len(),
+            "workflow affordance drift detected"
+        );
+    }
+
+    Ok(result)
+}
+
+pub fn build_workflow_affordance_consistency_report(repo_root: &Path) -> Result<AuditReport> {
+    let mut surfaces = Vec::with_capacity(WORKFLOW_SURFACES.len());
+    for spec in WORKFLOW_SURFACES {
+        surfaces.push(audit_workflow_affordance_surface(*spec, repo_root)?);
+    }
+
+    let warning_count = surfaces
+        .iter()
+        .filter(|surface| surface.status() == "warning")
+        .count();
+    let error_count = surfaces
+        .iter()
+        .filter(|surface| surface.status() == "error")
+        .count();
+    let pass_count = surfaces.len() - warning_count - error_count;
+
+    let summary = if warning_count == 0 && error_count == 0 {
+        format!(
+            "Scanned {} workflow surfaces. {} pass, {} warning, {} error. Keyboard-first affordances are consistent across the audited surfaces.",
+            surfaces.len(),
+            pass_count,
+            warning_count,
+            error_count
+        )
+    } else {
+        let drift_surfaces = surfaces
+            .iter()
+            .filter(|surface| surface.status() == "warning" || surface.status() == "error")
+            .map(|surface| surface.surface)
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "Scanned {} workflow surfaces. {} pass, {} warning, {} error. Highest-leverage gaps: {}.",
+            surfaces.len(),
+            pass_count,
+            warning_count,
+            error_count,
+            drift_surfaces
+        )
+    };
+
+    tracing::info!(
+        target: "script_kit::audit",
+        slug = WORKFLOW_REPORT_SLUG,
+        pass_count,
+        warning_count,
+        error_count,
+        "workflow affordance audit summary built"
+    );
+
+    Ok(AuditReport {
+        slug: WORKFLOW_REPORT_SLUG,
+        title: WORKFLOW_REPORT_TITLE,
+        summary,
+        surfaces,
+    })
+}
+
+pub fn render_workflow_affordance_consistency_markdown(report: &AuditReport) -> String {
+    let mut lines = vec![
+        format!("# {}", report.title),
+        String::new(),
+        "## Summary".to_string(),
+        report.summary.clone(),
+        String::new(),
+        "## What This Checks".to_string(),
+        "- Keyboard-first consistency across command surfaces: universal three-key footer, mini-vs-expanded parity, explicit exceptions, and reportable runtime audits.".to_string(),
+        String::new(),
+        "## Surface Status".to_string(),
+        "| Surface | Status | Files |".to_string(),
+        "| --- | --- | --- |".to_string(),
+    ];
+
+    for surface in &report.surfaces {
+        lines.push(format!(
+            "| {} | {} | `{}` |",
+            surface.surface,
+            surface.status(),
+            surface.files.join("`, `")
+        ));
+    }
+
+    lines.push(String::new());
+    lines.push("## Findings".to_string());
+
+    for surface in &report.surfaces {
+        lines.push(format!("### {}", surface.surface));
+
+        if surface.findings.is_empty() {
+            lines.push(
+                "- pass — no workflow-affordance drift markers detected.".to_string(),
+            );
+            lines.push(String::new());
+            continue;
+        }
+
+        for finding in &surface.findings {
+            lines.push(format!(
+                "- {} — **{}**",
+                finding.severity.as_str(),
+                finding.title
+            ));
+            lines.push(format!("  - {}", finding.summary));
+            if !finding.evidence.is_empty() {
+                lines.push(format!("  - Evidence: `{}`", finding.evidence.join("`, `")));
+            }
+        }
+
+        lines.push(String::new());
+    }
+
+    lines.join("\n")
+}
+
+pub fn write_workflow_affordance_consistency_report(
+    repo_root: &Path,
+    output_root: &Path,
+) -> Result<PathBuf> {
+    let report = build_workflow_affordance_consistency_report(repo_root)?;
+    let markdown = render_workflow_affordance_consistency_markdown(&report);
+
+    let audit_dir = output_root.join("audit");
+    fs::create_dir_all(&audit_dir)
+        .with_context(|| format!("failed to create {}", audit_dir.display()))?;
+
+    let output_path = audit_dir.join(format!("{}.md", report.slug));
+    fs::write(&output_path, markdown)
+        .with_context(|| format!("failed to write {}", output_path.display()))?;
+
+    tracing::info!(
+        target: "script_kit::audit",
+        slug = report.slug,
+        output = %output_path.display(),
+        surface_count = report.surfaces.len(),
+        "wrote audit report"
+    );
+
+    Ok(output_path)
+}
+
+pub fn write_standard_audit_reports(
+    repo_root: &Path,
+    output_root: &Path,
+) -> Result<Vec<PathBuf>> {
+    let outputs = vec![
+        write_prompt_chrome_consistency_report(repo_root, output_root)?,
+        write_workflow_affordance_consistency_report(repo_root, output_root)?,
+    ];
+
+    tracing::info!(
+        target: "script_kit::audit",
+        report_count = outputs.len(),
+        outputs = ?outputs,
+        "wrote standard audit report bundle"
+    );
+
+    Ok(outputs)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -580,15 +990,19 @@ mod tests {
             .filter(|s| s.status() == "error")
             .count();
         assert_eq!(report.surfaces.len(), 7, "expected 7 audited surfaces");
-        assert_eq!(warning_count, 0, "expected 0 warnings");
+        assert_eq!(warning_count, 1, "expected 1 warning");
         assert_eq!(error_count, 0, "expected 0 errors");
     }
 
     #[test]
-    fn prompt_chrome_consistency_report_file_search_passes() {
+    fn prompt_chrome_consistency_report_file_search_warns() {
         let report = report();
         let file_search = surface(&report, "file_search");
-        assert_eq!(file_search.status(), "pass");
+        assert_eq!(file_search.status(), "warning");
+        assert!(file_search
+            .findings
+            .iter()
+            .any(|finding| finding.title == "non-universal footer hints"));
     }
 
     #[test]
@@ -614,12 +1028,48 @@ mod tests {
     fn prompt_chrome_consistency_summary_mentions_intentional_exception() {
         let report = report();
         assert!(
-            report
-                .summary
-                .contains("1 intentional exception documented: render_prompts::term"),
-            "summary should mention the term exception: {}",
+            report.summary.contains("Highest-leverage current drifts: file_search"),
+            "summary should mention the current drift: {}",
             report.summary
         );
+    }
+
+    #[test]
+    fn workflow_affordance_report_all_surfaces_pass() {
+        let report = build_workflow_affordance_consistency_report(Path::new(env!(
+            "CARGO_MANIFEST_DIR"
+        )))
+        .expect("workflow report should build from current repo sources");
+
+        let warning_count = report
+            .surfaces
+            .iter()
+            .filter(|surface| surface.status() == "warning")
+            .count();
+        let error_count = report
+            .surfaces
+            .iter()
+            .filter(|surface| surface.status() == "error")
+            .count();
+
+        assert_eq!(report.surfaces.len(), 6, "expected 6 audited surfaces");
+        assert_eq!(warning_count, 0, "expected 0 warnings");
+        assert_eq!(error_count, 0, "expected 0 errors");
+    }
+
+    #[test]
+    fn workflow_affordance_report_path_prompt_passes() {
+        let report = build_workflow_affordance_consistency_report(Path::new(env!(
+            "CARGO_MANIFEST_DIR"
+        )))
+        .expect("workflow report should build from current repo sources");
+        let path_prompt = surface(&report, "prompts::path");
+
+        assert_eq!(path_prompt.status(), "pass");
+        assert!(path_prompt
+            .findings
+            .iter()
+            .any(|finding| finding.title == "path prompt is fully auditable"));
     }
 
     #[test]
