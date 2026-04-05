@@ -11,15 +11,9 @@ use script_kit_gpui::ai::{
 
 /// Seed provider JSON slots so provider-backed builtins appear in the picker.
 fn seed_provider_slots() {
-    script_kit_gpui::mcp_resources::publish_dictation_json(
-        r#"{"transcription":"test"}"#,
-    );
-    script_kit_gpui::mcp_resources::publish_calendar_json(
-        r#"{"events":[]}"#,
-    );
-    script_kit_gpui::mcp_resources::publish_notifications_json(
-        r#"{"notifications":[]}"#,
-    );
+    script_kit_gpui::mcp_resources::publish_dictation_json(r#"{"transcription":"test"}"#);
+    script_kit_gpui::mcp_resources::publish_calendar_json(r#"{"events":[]}"#);
+    script_kit_gpui::mcp_resources::publish_notifications_json(r#"{"notifications":[]}"#);
 }
 
 // ---------- Deterministic picker ranking ----------

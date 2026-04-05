@@ -10,9 +10,7 @@
 //! All mutations emit structured tracing so agents can observe the
 //! registry lifecycle in machine-parseable logs.
 
-use crate::protocol::{
-    AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,
-};
+use crate::protocol::{AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget};
 use anyhow::{anyhow, Result};
 use parking_lot::Mutex;
 use std::collections::BTreeMap;
@@ -145,9 +143,7 @@ pub fn resolve_automation_window(
                 .filter(|w| w.kind == *kind)
                 .nth(idx)
                 .cloned()
-                .ok_or_else(|| {
-                    anyhow!("No automation window for kind {:?} index {}", kind, idx)
-                })
+                .ok_or_else(|| anyhow!("No automation window for kind {:?} index {}", kind, idx))
         }
 
         Some(AutomationWindowTarget::TitleContains { text }) => map
@@ -192,8 +188,7 @@ pub fn resolve_automation_window(
 mod tests {
     use super::*;
     use crate::protocol::{
-        AutomationWindowBounds, AutomationWindowInfo, AutomationWindowKind,
-        AutomationWindowTarget,
+        AutomationWindowBounds, AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,
     };
     use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -234,21 +229,19 @@ mod tests {
 
         // Resolve Main target
         let target_main = AutomationWindowTarget::Main;
-        let resolved = resolve_automation_window(Some(&target_main))
-            .expect("should resolve main");
+        let resolved = resolve_automation_window(Some(&target_main)).expect("should resolve main");
         assert_eq!(resolved.id, format!("{p}:main"));
         assert_eq!(resolved.kind, AutomationWindowKind::Main);
 
         // Resolve Focused target (should be main since it has focused=true)
         let target_focused = AutomationWindowTarget::Focused;
-        let resolved = resolve_automation_window(Some(&target_focused))
-            .expect("should resolve focused");
+        let resolved =
+            resolve_automation_window(Some(&target_focused)).expect("should resolve focused");
         assert_eq!(resolved.id, format!("{p}:main"));
         assert!(resolved.focused);
 
         // None target behaves like Focused
-        let resolved = resolve_automation_window(None)
-            .expect("should resolve None as focused");
+        let resolved = resolve_automation_window(None).expect("should resolve None as focused");
         assert_eq!(resolved.id, format!("{p}:main"));
 
         // Cleanup
@@ -273,8 +266,8 @@ mod tests {
             kind: AutomationWindowKind::AcpDetached,
             index: None,
         };
-        let resolved = resolve_automation_window(Some(&target))
-            .expect("should resolve kind index 0");
+        let resolved =
+            resolve_automation_window(Some(&target)).expect("should resolve kind index 0");
         assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
 
         // Kind with index 1 → second
@@ -282,8 +275,8 @@ mod tests {
             kind: AutomationWindowKind::AcpDetached,
             index: Some(1),
         };
-        let resolved = resolve_automation_window(Some(&target))
-            .expect("should resolve kind index 1");
+        let resolved =
+            resolve_automation_window(Some(&target)).expect("should resolve kind index 1");
         assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
         // The two should have different IDs
         assert_ne!(
@@ -324,7 +317,10 @@ mod tests {
         // Unregister
         let removed = remove_automation_window(&format!("{p}:notes"));
         assert!(removed.is_some());
-        assert_eq!(removed.as_ref().expect("removed").kind, AutomationWindowKind::Notes);
+        assert_eq!(
+            removed.as_ref().expect("removed").kind,
+            AutomationWindowKind::Notes
+        );
 
         // Now resolution fails
         assert!(resolve_automation_window(Some(&target)).is_err());
@@ -415,8 +411,8 @@ mod tests {
         let target = AutomationWindowTarget::TitleContains {
             text: format!("{p} Script Kit AI"),
         };
-        let resolved = resolve_automation_window(Some(&target))
-            .expect("should match title substring");
+        let resolved =
+            resolve_automation_window(Some(&target)).expect("should match title substring");
         assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
 
         // Non-matching title
@@ -524,15 +520,18 @@ mod tests {
             kind: AutomationWindowKind::Notes,
             index: None,
         };
-        let resolved = resolve_automation_window(Some(&target))
-            .expect("should resolve Notes window");
+        let resolved =
+            resolve_automation_window(Some(&target)).expect("should resolve Notes window");
         assert_eq!(resolved.kind, AutomationWindowKind::Notes);
         assert_eq!(resolved.semantic_surface.as_deref(), Some("notes"));
-        assert_ne!(resolved.id, format!("{p}:main"), "must not fall back to main");
+        assert_ne!(
+            resolved.id,
+            format!("{p}:main"),
+            "must not fall back to main"
+        );
 
         // No target (None) → should resolve to focused (main)
-        let focused = resolve_automation_window(None)
-            .expect("should resolve focused");
+        let focused = resolve_automation_window(None).expect("should resolve focused");
         assert_eq!(focused.kind, AutomationWindowKind::Main);
         assert_eq!(focused.semantic_surface.as_deref(), Some("scriptList"));
 
@@ -562,8 +561,8 @@ mod tests {
             kind: AutomationWindowKind::AcpDetached,
             index: Some(0),
         };
-        let resolved = resolve_automation_window(Some(&target))
-            .expect("should resolve detached ACP");
+        let resolved =
+            resolve_automation_window(Some(&target)).expect("should resolve detached ACP");
         assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
         assert_eq!(resolved.title.as_deref(), Some("Script Kit AI"));
         // The screenshot function would use this title to find the OS window
@@ -577,8 +576,8 @@ mod tests {
         let target_id = AutomationWindowTarget::Id {
             id: format!("{p}:acp-thread-1"),
         };
-        let resolved_by_id = resolve_automation_window(Some(&target_id))
-            .expect("should resolve by ID");
+        let resolved_by_id =
+            resolve_automation_window(Some(&target_id)).expect("should resolve by ID");
         assert_eq!(resolved_by_id.kind, AutomationWindowKind::AcpDetached);
 
         remove_automation_window(&format!("{p}:main"));
@@ -608,12 +607,10 @@ mod tests {
         };
 
         // Standalone resolution
-        let standalone = resolve_automation_window(Some(&target))
-            .expect("standalone resolve");
+        let standalone = resolve_automation_window(Some(&target)).expect("standalone resolve");
 
         // Same call — proves the code path is shared
-        let batch_path = resolve_automation_window(Some(&target))
-            .expect("batch-path resolve");
+        let batch_path = resolve_automation_window(Some(&target)).expect("batch-path resolve");
 
         assert_eq!(standalone.id, batch_path.id);
         assert_eq!(standalone.kind, batch_path.kind);
@@ -625,7 +622,10 @@ mod tests {
             index: None,
         };
         let err = resolve_automation_window(Some(&missing));
-        assert!(err.is_err(), "missing target must return error, not fallback");
+        assert!(
+            err.is_err(),
+            "missing target must return error, not fallback"
+        );
 
         remove_automation_window(&format!("{p}:main"));
         remove_automation_window(&format!("{p}:notes"));
