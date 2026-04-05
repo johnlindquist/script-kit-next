@@ -184,6 +184,9 @@ mod keyword_manager;
 // Script scheduling with cron expressions and natural language
 mod scheduler;
 
+// Startup profile for dev-fast mode and deferred service bootstrap
+mod startup_profile;
+
 // HUD manager - system-level overlay notifications (separate floating windows)
 mod hud_manager;
 

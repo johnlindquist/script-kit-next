@@ -60,7 +60,18 @@ impl ScriptListApp {
             },
         );
 
-        let theme = std::sync::Arc::new(theme::load_theme());
+        // Theme cache was initialized earlier in app startup before window creation.
+        // Reuse it here so ScriptListApp construction does not re-read theme files
+        // or re-run system appearance detection.
+        let theme_load_started = std::time::Instant::now();
+        let theme = std::sync::Arc::new(theme::get_cached_theme());
+        logging::log(
+            "PERF",
+            &format!(
+                "Startup theme reuse: source=cached elapsed_ms={:.2}",
+                theme_load_started.elapsed().as_secs_f64() * 1000.0
+            ),
+        );
         // Config is now passed in from main() to avoid duplicate load (~100-300ms savings)
 
         // Load frecency data for suggested section tracking

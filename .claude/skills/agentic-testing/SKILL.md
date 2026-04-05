@@ -321,7 +321,34 @@ checkpoint strategy so agents do not need to reconstruct these from scratch.
 # Full ACP picker accept — choose key with --key enter|tab
 bun scripts/agentic/index.ts acp-accept --session default --key enter
 bun scripts/agentic/index.ts acp-accept --session default --key tab --vision
+
+# Target a specific ACP window (detached/popup)
+TARGET='{"type":"kind","kind":"acpDetached","index":0}'
+bun scripts/agentic/index.ts acp-accept --session default --key enter \
+  --target-json "$TARGET" --surface acp --vision
 ```
+
+### Target threading (non-negotiable for multi-window ACP)
+
+When verifying a detached or popup ACP window, resolve **one target** once and
+reuse it for every RPC and native input step in the entire run.
+
+**Canonical rule:**
+1. Discover the surface (e.g., `bun scripts/agentic/window.ts list`).
+2. Pick one `--target-json` object (e.g., `{"type":"kind","kind":"acpDetached","index":0}`).
+3. Pass that same target to every ACP RPC: `getAcpState`, `getAcpTestProbe`,
+   `resetAcpTestProbe`, `waitFor`, and `batch`.
+4. Pass the matching `--surface` value to native input so focus and proof stay
+   on the same window.
+5. **Never mix focused-window ACP RPCs with surface-targeted native input in the
+   same verification run.** This causes cross-window false proof where you drive
+   one ACP surface and verify another.
+
+The `--target-json` flag threads through `index.ts` → `verify-shot.ts` → every
+RPC command, and the `--surface` flag threads through `index.ts` → `macos-input.ts`
+→ `window.ts` for focus enforcement.
+
+When `--target-json` is omitted, RPCs default to the main ACP view (existing behavior).
 
 What `acp-accept` guarantees:
 - Resets ACP test probe before native interaction (no stale accepted items)
@@ -396,6 +423,17 @@ bun scripts/agentic/index.ts acp-accept --session default --key enter --vision
 # The recipe returns a machine-readable JSON receipt with proofBundle.
 # Parse proofBundle.state, proofBundle.probe, proofBundle.screenshot, proofBundle.visionCrops
 # to verify ACP behavior programmatically. No manual PNG reading required.
+bash scripts/agentic/session.sh stop default
+```
+
+### Canonical with target threading (detached/popup ACP)
+
+```bash
+bash scripts/agentic/session.sh start default
+TARGET='{"type":"kind","kind":"acpDetached","index":0}'
+bun scripts/agentic/index.ts acp-accept --session default --key enter \
+  --target-json "$TARGET" --surface acp --vision
+# Confirm proofBundle.state.resolvedTarget.windowKind == "acpDetached"
 bash scripts/agentic/session.sh stop default
 ```
 

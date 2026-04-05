@@ -83,6 +83,13 @@
         }
     }
 
+    let startup_boot_started = std::time::Instant::now();
+    let startup_profile = crate::startup_profile::StartupProfile::from_env();
+    logging::log(
+        "STARTUP",
+        &format!("Startup profile selected: {}", startup_profile.label()),
+    );
+
     // Load config early so we can use it for hotkey registration AND clipboard history settings
     // This avoids duplicate config::load_config() calls (~100-300ms startup savings)
     let loaded_config = config::load_config();
@@ -218,24 +225,34 @@
         }
     };
 
-    // Initialize script scheduler
-    // Creates the scheduler and scans for scripts with // Cron: or // Schedule: metadata
+    // Initialize script scheduler. In the dev-fast startup profile we move the
+    // initial scan/start until after the UI is already usable.
     let (mut scheduler, scheduler_rx) = scheduler::Scheduler::new();
-    let scheduled_count = scripts::register_scheduled_scripts(&scheduler);
-    logging::log(
-        "APP",
-        &format!("Registered {} scheduled scripts", scheduled_count),
-    );
 
-    // Start the scheduler background thread (checks every 30 seconds for due scripts)
-    if scheduled_count > 0 {
-        if let Err(e) = scheduler.start() {
-            logging::log("APP", &format!("Failed to start scheduler: {}", e));
+    if !startup_profile.should_defer_scheduler() {
+        let scheduled_count = scripts::register_scheduled_scripts(&scheduler);
+        logging::log(
+            "APP",
+            &format!("Registered {} scheduled scripts", scheduled_count),
+        );
+
+        if scheduled_count > 0 {
+            if let Err(e) = scheduler.start() {
+                logging::log("APP", &format!("Failed to start scheduler: {}", e));
+            } else {
+                logging::log("APP", "Scheduler started successfully");
+            }
         } else {
-            logging::log("APP", "Scheduler started successfully");
+            logging::log("APP", "No scheduled scripts found, scheduler not started");
         }
     } else {
-        logging::log("APP", "No scheduled scripts found, scheduler not started");
+        logging::log(
+            "STARTUP",
+            &format!(
+                "Deferring scheduler bootstrap until after core readiness (profile={})",
+                startup_profile.label()
+            ),
+        );
     }
 
     // Wrap scheduler in Arc<Mutex<>> for thread-safe access (needed for re-scanning on file changes)
@@ -478,6 +495,53 @@ app.run(move |cx: &mut App| {
                 ),
             );
             return;
+        }
+
+        // Emit STARTUP_READY marker — autonomous agents can begin interacting now.
+        if startup_profile.ready_log_enabled() {
+            logging::log(
+                "STARTUP",
+                &format!(
+                    "STARTUP_READY profile={} core_boot_ms={:.2}",
+                    startup_profile.label(),
+                    startup_boot_started.elapsed().as_secs_f64() * 1000.0
+                ),
+            );
+        }
+
+        // Deferred scheduler bootstrap — runs after core readiness so agents
+        // don't have to wait for the full script-tree scan before interacting.
+        if startup_profile.should_defer_scheduler() {
+            let scheduler_for_startup = scheduler.clone();
+            let startup_boot_started_for_scheduler = startup_boot_started;
+            cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+                let delay = startup_profile.deferred_scheduler_delay();
+                cx.background_executor().timer(delay).await;
+
+                if let Ok(mut scheduler_guard) = scheduler_for_startup.lock() {
+                    let count = scripts::register_scheduled_scripts(&scheduler_guard);
+                    logging::log("APP", &format!("Registered {} scheduled scripts", count));
+                    if count > 0 {
+                        if let Err(e) = scheduler_guard.start() {
+                            logging::log("APP", &format!("Failed to start scheduler: {}", e));
+                        } else {
+                            logging::log("APP", "Scheduler started successfully");
+                        }
+                    } else {
+                        logging::log("APP", "No scheduled scripts found, scheduler not started");
+                    }
+                }
+
+                logging::log(
+                    "STARTUP",
+                    &format!(
+                        "STARTUP_DEFERRED_SCHEDULER profile={} elapsed_ms={:.2}",
+                        startup_profile.label(),
+                        startup_boot_started_for_scheduler.elapsed().as_secs_f64() * 1000.0
+                    ),
+                );
+            })
+            .detach();
         }
 
         // Register the main window with WindowManager before tray init
