@@ -23,6 +23,10 @@ export SCRIPT_KIT_STARTUP_PROFILE="${SCRIPT_KIT_STARTUP_PROFILE:-dev-fast}"
 export SCRIPT_KIT_DEFER_SCHEDULER_STARTUP="${SCRIPT_KIT_DEFER_SCHEDULER_STARTUP:-1}"
 export SCRIPT_KIT_STARTUP_READY_LOG="${SCRIPT_KIT_STARTUP_READY_LOG:-1}"
 
+# Agentic session name: dev.sh now launches through the reusable session contract
+# so autonomous agents can attach immediately after a rebuild.
+export SCRIPT_KIT_DEV_SESSION_NAME="${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}"
+
 # Check if cargo-watch is installed
 if ! command -v cargo-watch &> /dev/null; then
     echo "cargo-watch is not installed"
@@ -40,6 +44,7 @@ if [ "$SCRIPT_KIT_AI_LOG" = "1" ]; then
 else
     echo "   Log mode: standard verbose"
 fi
+echo "   Agentic session: ${SCRIPT_KIT_DEV_SESSION_NAME}"
 echo "   Startup profile: ${SCRIPT_KIT_STARTUP_PROFILE}"
 echo "   Cargo dev profile: debug=0 incremental=true codegen-units=256"
 echo "   Session log: ~/.scriptkit/logs/latest-session.jsonl"
@@ -55,15 +60,10 @@ fi
 
 # IMPORTANT:
 # Launch speed for autonomous agents is dominated by "time to usable session",
-# not just Rust startup time. Keep watch scope narrow and avoid adding extra
-# pre-run shell work here unless it directly improves readiness or rebuild time.
-#
-# Run cargo watch with auto-rebuild
-# -x run: Execute 'cargo run' on file changes
-# -c: Clear screen between runs for cleaner output
-# -w: Only watch specific directories (disables auto-discovery)
-# -i: Ignore patterns that shouldn't trigger rebuilds
-cargo watch "${cargo_watch_args[@]}" -x run \
+# not just Rust startup time. Build first, then relaunch the reusable agentic
+# session only when the build succeeds.
+cargo watch "${cargo_watch_args[@]}" \
+    -s "cargo build --quiet && bash scripts/agentic/dev-relaunch.sh" \
     -w src/ \
     -w scripts/kit-sdk.ts \
     -w Cargo.toml \
