@@ -640,6 +640,36 @@ macro_rules! protocol_message_variants_query_ops {
         error: Option<String>,
     },
 
+    // ============================================================
+    // EXACT-WINDOW INSPECTION
+    // ============================================================
+    /// Inspect one exact automation window: resolved identity, screenshot
+    /// dimensions, optional pixel probes, and semantic elements when available.
+    #[serde(rename = "inspectAutomationWindow")]
+    InspectAutomationWindow {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// Window target to inspect (defaults to focused window).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target: Option<AutomationWindowTarget>,
+        /// If true, capture at full retina resolution (2x). Default: false (1x).
+        #[serde(rename = "hiDpi", default, skip_serializing_if = "Option::is_none")]
+        hi_dpi: Option<bool>,
+        /// Pixel coordinates to sample from the captured screenshot.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        probes: Vec<super::types::automation_inspect::PixelProbe>,
+    },
+
+    /// Result of an `inspectAutomationWindow` request.
+    #[serde(rename = "automationInspectResult")]
+    AutomationInspectResult {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        /// The inspection snapshot.
+        #[serde(flatten)]
+        snapshot: super::types::automation_inspect::AutomationInspectSnapshot,
+    },
+
         }
     };
 }

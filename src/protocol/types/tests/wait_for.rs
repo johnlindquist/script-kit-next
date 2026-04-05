@@ -935,6 +935,7 @@ fn acp_test_probe_result_round_trips() {
             visible_end: 27,
             cursor_in_window: 17,
         }),
+        last_interaction_trace: None,
         state: crate::protocol::AcpStateSnapshot {
             status: "idle".to_string(),
             cursor_index: 17,

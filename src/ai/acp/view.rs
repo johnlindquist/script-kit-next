@@ -174,6 +174,8 @@ pub(crate) struct AcpTestProbe {
         std::collections::VecDeque<crate::protocol::AcpPickerItemAcceptedTelemetry>,
     /// Most recent input-layout telemetry.
     pub(crate) input_layout: Option<crate::protocol::AcpInputLayoutTelemetry>,
+    /// Most recent synthesised interaction trace (key-route + optional accept).
+    pub(crate) last_interaction_trace: Option<crate::protocol::AcpLastInteractionTrace>,
 }
 
 use crate::protocol::ACP_TEST_PROBE_MAX_EVENTS;
@@ -3402,6 +3404,7 @@ impl AcpChatView {
         self.test_probe.key_routes.clear();
         self.test_probe.accepted_items.clear();
         self.test_probe.input_layout = None;
+        self.test_probe.last_interaction_trace = None;
         tracing::info!(
             target: "script_kit::acp_telemetry",
             event = "acp_test_probe_reset",
@@ -3475,6 +3478,7 @@ impl AcpChatView {
             key_routes,
             accepted_items,
             input_layout: self.test_probe.input_layout.clone(),
+            last_interaction_trace: self.test_probe.last_interaction_trace.clone(),
             state: self.collect_acp_state_snapshot(cx),
             warnings: Vec::new(),
         }
@@ -3510,6 +3514,19 @@ impl AcpChatView {
             caused_submit,
             consumed,
         };
+        // Build the interaction trace (no accept info yet — augmented by picker accept if it follows).
+        let trace = crate::protocol::AcpLastInteractionTrace {
+            key: key.to_string(),
+            route: format!("{:?}", route).to_lowercase(),
+            picker_open_before: picker_open,
+            accepted_via_key: None,
+            accepted_label: None,
+            cursor_before,
+            cursor_after,
+            caused_submit,
+        };
+        self.test_probe.last_interaction_trace = Some(trace);
+
         // Record into test probe ring buffer.
         self.record_key_route(telemetry.clone());
         let telemetry_json = serde_json::to_string(&telemetry).unwrap_or_default();
@@ -3546,6 +3563,14 @@ impl AcpChatView {
             cursor_after,
             caused_submit,
         };
+        // Augment the last interaction trace with acceptance info.
+        if let Some(ref mut trace) = self.test_probe.last_interaction_trace {
+            trace.accepted_via_key = Some(accepted_via_key.to_string());
+            trace.accepted_label = Some(item_label.to_string());
+            trace.cursor_after = cursor_after;
+            trace.caused_submit = caused_submit;
+        }
+
         // Record into test probe ring buffer.
         self.record_picker_accept(telemetry.clone());
         let telemetry_json = serde_json::to_string(&telemetry).unwrap_or_default();
@@ -3560,6 +3585,22 @@ impl AcpChatView {
             caused_submit,
             telemetry_json = %telemetry_json,
         );
+
+        // Emit a single consolidated interaction trace log event.
+        if let Some(ref trace) = self.test_probe.last_interaction_trace {
+            tracing::info!(
+                target: "script_kit::acp_telemetry",
+                event = "acp_interaction_trace",
+                trace.key = %trace.key,
+                trace.route = %trace.route,
+                trace.picker_open_before = trace.picker_open_before,
+                trace.accepted_via_key = ?trace.accepted_via_key,
+                trace.accepted_label = ?trace.accepted_label,
+                trace.cursor_before = trace.cursor_before,
+                trace.cursor_after = trace.cursor_after,
+                trace.caused_submit = trace.caused_submit,
+            );
+        }
     }
 
     /// Emit structured input-layout telemetry after a mutation that may shift the visible window.

@@ -105,7 +105,7 @@ impl AiApp {
         );
 
         let mut chips: Vec<gpui::AnyElement> = Vec::new();
-        for hint in hints {
+        for hint in hints.iter() {
             let hint_display = SharedString::from(hint.display);
             let hint_display_for_click = hint_display.clone();
             let hint_insertion = hint.insertion.to_string();

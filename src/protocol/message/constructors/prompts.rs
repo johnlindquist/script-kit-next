@@ -165,6 +165,9 @@ impl Message {
             // Layout info
             | Message::GetLayoutInfo { request_id, .. }
             | Message::LayoutInfoResult { request_id, .. }
+            // Exact-window inspection
+            | Message::InspectAutomationWindow { request_id, .. }
+            | Message::AutomationInspectResult { request_id, .. }
             // Scriptlet operations
             | Message::RunScriptlet { request_id, .. }
             | Message::GetScriptlets { request_id, .. }

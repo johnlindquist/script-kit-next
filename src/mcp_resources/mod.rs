@@ -1124,23 +1124,72 @@ pub enum ProviderJsonResourceKind {
     Notifications,
 }
 
-/// Returns `true` when the provider has real data (slot or env var),
-/// as opposed to only the static fallback envelope.
-pub fn has_provider_json_resource(kind: ProviderJsonResourceKind) -> bool {
+/// Returns `true` when the raw JSON text represents a provider payload
+/// with real data, not just a placeholder envelope.
+fn provider_json_text_has_real_data(text: &str) -> bool {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return false;
+    }
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(trimmed) else {
+        return false;
+    };
+    let Some(object) = value.as_object() else {
+        return false;
+    };
+    if object.get("available").and_then(|v| v.as_bool()) == Some(false) {
+        return false;
+    }
+    if let Some(items) = object.get("items").and_then(|v| v.as_array()) {
+        return !items.is_empty();
+    }
+    object.get("available").and_then(|v| v.as_bool()) == Some(true)
+}
+
+/// Resolve the raw JSON candidate text and its source label for a provider kind.
+fn provider_json_candidate(kind: ProviderJsonResourceKind) -> (Option<String>, &'static str) {
     match kind {
         ProviderJsonResourceKind::Dictation => {
-            DICTATION_JSON_SLOT.lock().is_some()
-                || std::env::var_os("SCRIPT_KIT_DICTATION_JSON").is_some()
+            if let Some(text) = DICTATION_JSON_SLOT.lock().clone() {
+                (Some(text), "slot")
+            } else {
+                (std::env::var("SCRIPT_KIT_DICTATION_JSON").ok(), "env")
+            }
         }
         ProviderJsonResourceKind::Calendar => {
-            CALENDAR_JSON_SLOT.lock().is_some()
-                || std::env::var_os("SCRIPT_KIT_CALENDAR_JSON").is_some()
+            if let Some(text) = CALENDAR_JSON_SLOT.lock().clone() {
+                (Some(text), "slot")
+            } else {
+                (std::env::var("SCRIPT_KIT_CALENDAR_JSON").ok(), "env")
+            }
         }
         ProviderJsonResourceKind::Notifications => {
-            NOTIFICATIONS_JSON_SLOT.lock().is_some()
-                || std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON").is_some()
+            if let Some(text) = NOTIFICATIONS_JSON_SLOT.lock().clone() {
+                (Some(text), "slot")
+            } else {
+                (std::env::var("SCRIPT_KIT_NOTIFICATIONS_JSON").ok(), "env")
+            }
         }
     }
+}
+
+/// Returns `true` when the provider has real data (parsed payload truth),
+/// as opposed to only a placeholder or empty envelope.
+pub fn has_provider_json_resource(kind: ProviderJsonResourceKind) -> bool {
+    let (candidate, source) = provider_json_candidate(kind);
+    let has_real_data = candidate
+        .as_deref()
+        .map(provider_json_text_has_real_data)
+        .unwrap_or(false);
+    tracing::info!(
+        target: "ai",
+        event = "mcp_provider_json_availability_checked",
+        kind = ?kind,
+        source,
+        has_candidate = candidate.is_some(),
+        has_real_data,
+    );
+    has_real_data
 }
 
 /// Determine the resolution source for a provider-backed JSON resource.
@@ -1173,9 +1222,22 @@ fn read_slot_or_env_backed_json_resource(
     event_name: &'static str,
 ) -> Result<ResourceContent, String> {
     let source = provider_json_source(&slot_value, env_key);
-    let text = slot_value
-        .or_else(|| std::env::var(env_key).ok())
-        .unwrap_or_else(|| empty_provider_json(kind, note, next_step, source));
+    let raw = slot_value.or_else(|| std::env::var(env_key).ok());
+    let text = match raw {
+        Some(text) if provider_json_text_has_real_data(&text) => text,
+        Some(text) => {
+            tracing::info!(
+                target: "ai",
+                event = "mcp_provider_json_placeholder_normalized",
+                %uri,
+                env_key,
+                source,
+                bytes = text.len(),
+            );
+            empty_provider_json(kind, note, next_step, source)
+        }
+        None => empty_provider_json(kind, note, next_step, source),
+    };
     tracing::info!(
         target: "ai",
         event = %event_name,

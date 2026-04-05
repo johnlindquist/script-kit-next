@@ -325,7 +325,7 @@ impl AcpMentionPopupWindow {
         let is_slash = self.snapshot.trigger == ContextPickerTrigger::Slash;
 
         let mut chips: Vec<gpui::AnyElement> = Vec::new();
-        for hint in empty_state_hints(self.snapshot.trigger) {
+        for hint in empty_state_hints(self.snapshot.trigger).iter() {
             let hint_display = SharedString::from(hint.display);
             let hint_insertion = hint.insertion.to_string();
             let close_after_apply = !hint.insertion.ends_with(':');

@@ -73,9 +73,9 @@ pub use semantic_id::{generate_semantic_id, generate_semantic_id_named, value_to
 #[allow(unused_imports)]
 pub use types::{
     AcpAcceptedItem, AcpInputLayoutMetrics, AcpInputLayoutTelemetry, AcpKeyRoute,
-    AcpKeyRouteTelemetry, AcpPickerItemAcceptedTelemetry, AcpPickerState, AcpResolvedTarget,
-    AcpSetupActionKind, AcpSetupSnapshot, AcpStateSnapshot, AcpTestProbeSnapshot,
-    AcpWaitCondition, AiChatInfo,
+    AcpKeyRouteTelemetry, AcpLastInteractionTrace, AcpPickerItemAcceptedTelemetry,
+    AcpPickerState, AcpResolvedTarget, AcpSetupActionKind, AcpSetupSnapshot, AcpStateSnapshot,
+    AcpTestProbeSnapshot, AcpWaitCondition, AiChatInfo,
     AiContextPartInput, AiMessageInfo, AutomationSurfaceSnapshot, AutomationWindowBounds,
     AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget, BatchCommand, BatchOptions,
     BatchResultEntry, BoxModelSides, ChatMessagePosition, ChatMessageRole, ChatPromptConfig,
@@ -89,6 +89,8 @@ pub use types::{
     TransactionError, TransactionErrorCode, TransactionTrace, TransactionTraceMode,
     TransactionTraceStatus, UiStateSnapshot, WaitCondition, WaitDetailedCondition,
     WaitNamedCondition, WaitPollObservation, WindowActionType, ACP_STATE_SCHEMA_VERSION,
-    ACP_TEST_PROBE_MAX_EVENTS, ACP_TEST_PROBE_SCHEMA_VERSION, AUTOMATION_SURFACE_SCHEMA_VERSION,
+    ACP_TEST_PROBE_MAX_EVENTS, ACP_TEST_PROBE_SCHEMA_VERSION,
+    AutomationInspectSnapshot, PixelProbe, PixelProbeResult, AUTOMATION_INSPECT_SCHEMA_VERSION,
+    AUTOMATION_SURFACE_SCHEMA_VERSION,
     AUTOMATION_WINDOW_SCHEMA_VERSION,
 };

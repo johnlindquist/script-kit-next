@@ -418,6 +418,83 @@ fn capture_screenshot_with_target_parses() {
     }
 }
 
+#[test]
+fn inspect_automation_window_request_round_trip_and_request_id() {
+    let json = r#"{
+        "type":"inspectAutomationWindow",
+        "requestId":"inspect-1",
+        "target":{"type":"kind","kind":"acpDetached","index":0},
+        "hiDpi":true,
+        "probes":[{"x":24,"y":24},{"x":320,"y":180}]
+    }"#;
+    let msg: crate::protocol::Message = serde_json::from_str(json).expect("parse");
+    assert_eq!(msg.request_id(), Some("inspect-1"));
+    match msg {
+        crate::protocol::Message::InspectAutomationWindow {
+            request_id,
+            target,
+            hi_dpi,
+            probes,
+        } => {
+            assert_eq!(request_id, "inspect-1");
+            assert_eq!(hi_dpi, Some(true));
+            assert_eq!(probes.len(), 2);
+            match target.expect("target should be present") {
+                AutomationWindowTarget::Kind { kind, index } => {
+                    assert_eq!(kind, AutomationWindowKind::AcpDetached);
+                    assert_eq!(index, Some(0));
+                }
+                other => panic!("Expected Kind target, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected InspectAutomationWindow, got: {:?}", other),
+    }
+}
+
+#[test]
+fn automation_inspect_result_round_trip_and_request_id() {
+    let msg = crate::protocol::Message::automation_inspect_result(
+        "inspect-1".into(),
+        crate::protocol::AutomationInspectSnapshot {
+            schema_version: crate::protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
+            window_id: "acpDetached:thread-1".into(),
+            window_kind: "AcpDetached".into(),
+            title: Some("Script Kit AI".into()),
+            elements: Vec::new(),
+            total_count: 0,
+            focused_semantic_id: None,
+            selected_semantic_id: None,
+            screenshot_width: Some(1440),
+            screenshot_height: Some(900),
+            pixel_probes: vec![crate::protocol::PixelProbeResult {
+                x: 24,
+                y: 24,
+                r: 28,
+                g: 28,
+                b: 30,
+                a: 255,
+            }],
+            warnings: vec!["semantic_elements_detached_acp_pending".into()],
+        },
+    );
+    assert_eq!(msg.request_id(), Some("inspect-1"));
+    let json = serde_json::to_string(&msg).expect("serialize");
+    assert!(json.contains("automationInspectResult"));
+    let back: crate::protocol::Message = serde_json::from_str(&json).expect("deserialize");
+    match back {
+        crate::protocol::Message::AutomationInspectResult {
+            request_id,
+            snapshot,
+        } => {
+            assert_eq!(request_id, "inspect-1");
+            assert_eq!(snapshot.window_id, "acpDetached:thread-1");
+            assert_eq!(snapshot.screenshot_width, Some(1440));
+            assert_eq!(snapshot.pixel_probes.len(), 1);
+        }
+        other => panic!("Expected AutomationInspectResult, got: {:?}", other),
+    }
+}
+
 // ============================================================
 // Constructor tests
 // ============================================================

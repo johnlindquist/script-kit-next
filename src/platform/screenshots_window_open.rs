@@ -353,3 +353,75 @@ pub fn capture_targeted_screenshot(
 
     capture_resolved_window(&resolved, hi_dpi)
 }
+
+/// Capture a raw RGBA image of the OS window matching the resolved automation target.
+///
+/// Returns the raw `image::RgbaImage` (not PNG-encoded) so callers can
+/// extract dimensions and sample individual pixels without a decode step.
+/// Used by `inspectAutomationWindow` for lightweight pixel probes.
+pub fn capture_targeted_rgba_image(
+    target: Option<&crate::protocol::AutomationWindowTarget>,
+    hi_dpi: bool,
+) -> Result<image::RgbaImage, Box<dyn std::error::Error + Send + Sync>> {
+    const DOWNSCALE_DIVISOR: u32 = 2;
+
+    let resolved = crate::windows::resolve_automation_window(target)
+        .map_err(|err| err.to_string())?;
+
+    let candidates = list_script_kit_candidates()?;
+
+    let mut ranked: Vec<(i32, &Candidate)> = candidates
+        .iter()
+        .map(|candidate| (score_candidate(&resolved, candidate), candidate))
+        .collect();
+
+    ranked.sort_by(|(left_score, left), (right_score, right)| {
+        right_score
+            .cmp(left_score)
+            .then_with(|| right.focused.cmp(&left.focused))
+            .then_with(|| right.title.cmp(&left.title))
+    });
+
+    let Some((best_score, best)) = ranked.first().copied() else {
+        return Err(
+            "No visible Script Kit windows available for screenshot capture"
+                .to_string()
+                .into(),
+        );
+    };
+
+    if best_score <= 0 {
+        return Err(format!(
+            "No OS window matched automation target {} ({:?}) \
+             strongly enough for deterministic capture",
+            resolved.id, resolved.kind
+        )
+        .into());
+    }
+
+    if let Some((second_score, second)) = ranked.get(1).copied() {
+        if second_score == best_score {
+            return Err(format!(
+                "Ambiguous OS window match for automation target {} ({:?}); \
+                 '{}' and '{}' tied at score {}",
+                resolved.id, resolved.kind, best.title, second.title, best_score
+            )
+            .into());
+        }
+    }
+
+    let rgba_image = best.window.capture_image()?;
+
+    if hi_dpi {
+        Ok(rgba_image)
+    } else {
+        let new_width = (rgba_image.width() / DOWNSCALE_DIVISOR).max(1);
+        let new_height = (rgba_image.height() / DOWNSCALE_DIVISOR).max(1);
+        Ok(image::imageops::resize(
+            &rgba_image,
+            new_width,
+            new_height,
+            image::imageops::FilterType::Lanczos3,
+        ))
+    }
+}
