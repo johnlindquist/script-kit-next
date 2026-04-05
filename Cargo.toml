@@ -24,6 +24,12 @@ path = "src/bin/storybook.rs"
 test = false
 required-features = ["storybook"]
 
+[[bin]]
+name = "audit_reports"
+path = "src/bin/audit_reports.rs"
+test = false
+required-features = ["storybook"]
+
 [dependencies]
 gpui = { path = "vendor/gpui" }
 gpui_platform = { path = "vendor/gpui_platform", features = ["font-kit"] }

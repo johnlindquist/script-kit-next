@@ -1,7 +1,7 @@
 # Prompt Chrome Consistency Audit
 
 ## Summary
-Scanned 7 prompt/builtin surfaces. 7 pass, 0 warning, 0 error. 1 intentional exception documented: render_prompts::term.
+Scanned 7 prompt/builtin surfaces. 6 pass, 1 warning, 0 error. Highest-leverage current drifts: file_search.
 
 ## Scope Notes
 - Scope: prompt and builtin chrome surfaces only. Excluded this pass: ACP compact-chat popup surfaces (for example src/ai/acp/model_selector_popup.rs).
@@ -17,7 +17,7 @@ Scanned 7 prompt/builtin surfaces. 7 pass, 0 warning, 0 error. 1 intentional exc
 | render_prompts::chat | pass | `src/render_prompts/other.rs`, `src/prompts/chat/render_core.rs` |
 | render_prompts::term | pass | `src/render_prompts/term.rs` |
 | clipboard_history | pass | `src/render_builtins/clipboard.rs`, `src/render_builtins/clipboard_history_layout.rs` |
-| file_search | pass | `src/render_builtins/file_search.rs`, `src/render_builtins/file_search_layout.rs` |
+| file_search | warning | `src/render_builtins/file_search.rs`, `src/render_builtins/file_search_layout.rs` |
 
 ## Findings
 ### render_prompts::select
@@ -41,4 +41,6 @@ Scanned 7 prompt/builtin surfaces. 7 pass, 0 warning, 0 error. 1 intentional exc
 - pass — no drift markers detected in the audited source files.
 
 ### file_search
-- pass — no drift markers detected in the audited source files.
+- warning — **non-universal footer hints**
+  - File Search mini mode still advertises `↵ Open`, `⌘↵ Ask AI`, and `⇥ Navigate` instead of the canonical `↵ Run`, `⌘K Actions`, `Tab AI` trio.
+  - Evidence: `src/render_builtins/file_search_layout.rs`
