@@ -17,6 +17,7 @@
  *   acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
  *   acp-open               Open ACP and verify it reaches ready state
  *   acp-setup-recovery     Recovery from ACP setup state; select agent with --select-agent ID
+ *   scenario               Run a replayable scenario with proof bundle (--scenario NAME --index N)
  *   vision-loop            Materialize visionCrops from a receipt into crop files + manifest
  *   preflight              Check all prerequisites (session, window, permissions)
  *   help                   Show this help
@@ -32,6 +33,7 @@
  */
 
 import { resolve } from "path";
+import { runDetachedAcpExactIdScenario } from "./scenario";
 
 const SCHEMA_VERSION = 1;
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
@@ -1096,6 +1098,34 @@ switch (recipe) {
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
 
+  case "scenario": {
+    const scenarioName = kind ?? "";
+    // Also accept --scenario as an alias for --kind
+    const scenarioArg = process.argv.indexOf("--scenario");
+    const resolvedScenario =
+      scenarioArg >= 0 && process.argv[scenarioArg + 1]
+        ? process.argv[scenarioArg + 1]
+        : scenarioName;
+
+    if (resolvedScenario === "detached-acp-exact-id") {
+      const bundle = await runDetachedAcpExactIdScenario(
+        session,
+        index ?? 0
+      );
+      console.log(JSON.stringify(bundle, null, 2));
+      process.exit(bundle.warnings.length > 0 ? 1 : 0);
+    } else {
+      result = {
+        schemaVersion: SCHEMA_VERSION,
+        recipe: "scenario",
+        status: "error",
+        steps: [],
+        summary: `Unknown scenario: ${resolvedScenario}. Available: detached-acp-exact-id`,
+      };
+    }
+    break;
+  }
+
   case "vision-loop": {
     // Delegate to the standalone vision-loop.ts script.
     // Expects --receipt and --out-dir to be passed after the recipe name.
@@ -1117,7 +1147,7 @@ switch (recipe) {
   case "--help":
     console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
   [--target-json '{"type":"kind","kind":"acpDetached","index":0}'] [--surface acp]
-  [--kind KIND] [--index N] [--select-agent ID]
+  [--kind KIND] [--index N] [--select-agent ID] [--scenario NAME]
 
 Recipes:
   preflight              Check prerequisites (session, window, permissions)
@@ -1127,6 +1157,7 @@ Recipes:
   acp-tab-accept         Compatibility alias for --key tab
   acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
+  scenario               Run a replayable scenario with proof bundle output
   vision-loop            Materialize visionCrops from receipt (pass --receipt, --out-dir)
   help                   Show this help
 
@@ -1135,6 +1166,10 @@ Target threading:
   --surface SURFACE    Automation surface for native input focus (main, acp, etc.)
   --kind KIND          Target kind for acp-detached-accept (default: acpDetached)
   --index N            Target kind index for acp-detached-accept (default: 0)
+  --scenario NAME      Scenario name for the scenario recipe
+
+Available scenarios:
+  detached-acp-exact-id  Resolve exact detached ACP target, inspect, GPUI event, inspect again
 
 Examples:
   bun scripts/agentic/index.ts acp-accept --session default --key enter
@@ -1142,6 +1177,7 @@ Examples:
   bun scripts/agentic/index.ts acp-accept --session default --key enter \\
     --target-json '{"type":"kind","kind":"acpDetached","index":0}' --surface acp --vision
   bun scripts/agentic/index.ts acp-detached-accept --session default --kind acpDetached --index 0 --key enter --vision
+  bun scripts/agentic/index.ts scenario --session default --scenario detached-acp-exact-id --index 0
   bun scripts/agentic/index.ts acp-setup-recovery --session default --select-agent opencode --json`);
     process.exit(0);
     break;

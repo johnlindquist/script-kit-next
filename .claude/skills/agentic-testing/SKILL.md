@@ -434,11 +434,31 @@ bun scripts/agentic/index.ts acp-accept --session default --key enter --vision
 bash scripts/agentic/session.sh stop default
 ```
 
+### Exact detached ACP proof (preferred)
+
+The `scenario` recipe resolves one exact detached ACP target once, reuses
+the exact `targetJson` for every subsequent step, and emits a structured
+proof bundle recording `windowId`, `surfaceId`, and ordered step receipts.
+
+```bash
+bash scripts/agentic/session.sh start default
+bun scripts/agentic/index.ts scenario \
+  --session default \
+  --scenario detached-acp-exact-id \
+  --index 0
+bash scripts/agentic/session.sh stop default
+```
+
+The proof bundle is the regression substrate — every step records the exact
+`target` used, the full request/response pair, and a timestamp. Exit code 0
+means all steps succeeded; exit code 1 means some steps produced warnings.
+
 ### Canonical with target threading (detached/popup ACP)
 
-Resolve one exact ACP target once and reuse both the target and surfaceId for
-the full run. **Do not use loose family-level `--surface acp`** — use the
-exact surfaceId from the resolver.
+For finer-grained control (e.g., picker acceptance flows), resolve one exact
+ACP target once and reuse both the target and surfaceId for the full run.
+**Do not use loose family-level `--surface acp`** — use the exact surfaceId
+from the resolver.
 
 ```bash
 bash scripts/agentic/session.sh start default
@@ -490,6 +510,7 @@ primary verification mechanism.
 | `window.ts` | Window discovery, focus, activation, quartz capture |
 | `verify-shot.ts` | State + probe + screenshot bundle with strict capture |
 | `automation-window.ts` | Exact ACP target-to-surface resolver |
+| `scenario.ts` | Replayable proof-bundle scenarios for cross-window regression |
 | `index.ts` | Orchestrator that composes all of the above correctly |
 
 **waitFor replaces fixed sleeps.** Each `waitFor` polls at 25ms intervals
