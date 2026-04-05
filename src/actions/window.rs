@@ -1145,7 +1145,7 @@ pub fn open_actions_window(
     #[cfg(target_os = "macos")]
     {
         let configure_result = handle.update(cx, move |_this, window, cx| {
-            window.defer(cx, move |window, _cx| {
+            window.defer(cx, move |window, cx| {
                 if let Some(ns_window) = actions_popup_ns_window(window) {
                     // SAFETY: `ns_window` comes from the live GPUI popup window via
                     // `actions_popup_ns_window`, so it is a valid AppKit NSWindow
