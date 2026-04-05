@@ -210,10 +210,7 @@ impl ConfigWatcher {
     /// Start watching the config file for changes using an already-loaded config.
     ///
     /// This avoids an extra config.ts evaluation on startup.
-    pub(crate) fn start_with_config(
-        &mut self,
-        app_config: &config::Config,
-    ) -> NotifyResult<()> {
+    pub(crate) fn start_with_config(&mut self, app_config: &config::Config) -> NotifyResult<()> {
         self.start_with_settings(
             watcher_settings_from_config(app_config),
             "startup_preloaded_config",
@@ -274,10 +271,7 @@ impl ThemeWatcher {
 
     /// Start watching the theme file for changes using an already-loaded config.
     #[allow(dead_code)]
-    pub(crate) fn start_with_config(
-        &mut self,
-        app_config: &config::Config,
-    ) -> NotifyResult<()> {
+    pub(crate) fn start_with_config(&mut self, app_config: &config::Config) -> NotifyResult<()> {
         self.start_with_settings(
             watcher_settings_from_config(app_config),
             "startup_preloaded_config",

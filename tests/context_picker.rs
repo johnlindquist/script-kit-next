@@ -447,7 +447,9 @@ fn provider_backed_items_absent_when_no_provider_data() {
     ];
 
     for kind in &provider_kinds {
-        let found = items.iter().any(|i| matches!(&i.kind, ContextPickerItemKind::BuiltIn(k) if k == kind));
+        let found = items
+            .iter()
+            .any(|i| matches!(&i.kind, ContextPickerItemKind::BuiltIn(k) if k == kind));
         assert!(
             !found,
             "{kind:?} should NOT appear in picker when no provider data exists"
@@ -468,7 +470,9 @@ fn provider_backed_items_appear_when_provider_data_seeded() {
     ];
 
     for kind in &provider_kinds {
-        let found = items.iter().any(|i| matches!(&i.kind, ContextPickerItemKind::BuiltIn(k) if k == kind));
+        let found = items
+            .iter()
+            .any(|i| matches!(&i.kind, ContextPickerItemKind::BuiltIn(k) if k == kind));
         assert!(
             found,
             "{kind:?} should appear in picker when provider data is seeded"
@@ -516,7 +520,11 @@ fn mention_range_at_cursor_backspace_trailing_edge() {
     // @browser spans chars 4..12
     // Backspace at trailing edge (cursor=12) should match
     let range = mention_range_at_cursor(text, 12);
-    assert_eq!(range, Some(4..12), "Backspace at trailing edge should match");
+    assert_eq!(
+        range,
+        Some(4..12),
+        "Backspace at trailing edge should match"
+    );
 }
 
 #[test]
@@ -537,7 +545,10 @@ fn mention_range_at_cursor_does_not_match_leading_edge() {
     // cursor=4 is the leading edge (on the @); mention_range_at_cursor
     // requires cursor > start, so this should NOT match
     let range = mention_range_at_cursor(text, 4);
-    assert!(range.is_none(), "mention_range_at_cursor should not match at leading edge (cursor == start)");
+    assert!(
+        range.is_none(),
+        "mention_range_at_cursor should not match at leading edge (cursor == start)"
+    );
 }
 
 #[test]
@@ -548,5 +559,9 @@ fn mention_range_at_cursor_leading_edge_delete_via_shift() {
     // For leading-edge delete, the view helper shifts cursor+1 and checks
     // start match. We verify that cursor+1=5 lands inside the token.
     let range = mention_range_at_cursor(text, 5);
-    assert_eq!(range, Some(4..12), "cursor+1 should land inside @browser token");
+    assert_eq!(
+        range,
+        Some(4..12),
+        "cursor+1 should land inside @browser token"
+    );
 }

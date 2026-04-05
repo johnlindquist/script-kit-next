@@ -128,8 +128,14 @@ fn different_kinds_are_not_ambiguous_with_each_other() {
     let acp_count = visible_count(&p, AutomationWindowKind::AcpDetached);
     let notes_count = visible_count(&p, AutomationWindowKind::Notes);
 
-    assert_eq!(acp_count, 1, "AcpDetached should have 1 visible window under prefix {p}");
-    assert_eq!(notes_count, 1, "Notes should have 1 visible window under prefix {p}");
+    assert_eq!(
+        acp_count, 1,
+        "AcpDetached should have 1 visible window under prefix {p}"
+    );
+    assert_eq!(
+        notes_count, 1,
+        "Notes should have 1 visible window under prefix {p}"
+    );
 
     cleanup(&p, &["acp-0", "notes-0"]);
 }

@@ -7,9 +7,8 @@ use anyhow::{Context, Result};
 
 const REPORT_SLUG: &str = "prompt-chrome-consistency";
 const REPORT_TITLE: &str = "Prompt Chrome Consistency Audit";
-const REPORT_SCOPE_EXCLUSIONS: &[&str] = &[
-    "ACP compact-chat popup surfaces (for example src/ai/acp/model_selector_popup.rs)",
-];
+const REPORT_SCOPE_EXCLUSIONS: &[&str] =
+    &["ACP compact-chat popup surfaces (for example src/ai/acp/model_selector_popup.rs)"];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AuditSeverity {
@@ -498,8 +497,7 @@ pub fn render_prompt_chrome_consistency_markdown(report: &AuditReport) -> String
 
         if surface.findings.is_empty() {
             lines.push(
-                "- pass — no drift markers detected in the audited source files."
-                    .to_string(),
+                "- pass — no drift markers detected in the audited source files.".to_string(),
             );
             lines.push(String::new());
             continue;

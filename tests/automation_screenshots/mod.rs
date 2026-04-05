@@ -136,8 +136,12 @@ fn size_score_no_bounds_returns_zero() {
 
 #[test]
 fn exact_size_dominates_title() {
-    let resolved =
-        make_info(AutomationWindowKind::Main, Some("Other"), true, Some((800.0, 600.0)));
+    let resolved = make_info(
+        AutomationWindowKind::Main,
+        Some("Other"),
+        true,
+        Some((800.0, 600.0)),
+    );
 
     let size_match = score(&resolved, "Script Kit", true, 800, 600);
     let title_match = score(&resolved, "Other", true, 400, 300);
@@ -174,8 +178,12 @@ fn main_target_penalizes_secondary_windows() {
 
 #[test]
 fn identical_candidates_tie() {
-    let resolved =
-        make_info(AutomationWindowKind::AcpDetached, None, false, Some((600.0, 400.0)));
+    let resolved = make_info(
+        AutomationWindowKind::AcpDetached,
+        None,
+        false,
+        Some((600.0, 400.0)),
+    );
 
     let a = score(&resolved, "Script Kit AI", false, 600, 400);
     let b = score(&resolved, "Script Kit AI", false, 600, 400);
@@ -185,8 +193,12 @@ fn identical_candidates_tie() {
 
 #[test]
 fn size_difference_breaks_tie() {
-    let resolved =
-        make_info(AutomationWindowKind::AcpDetached, None, false, Some((600.0, 400.0)));
+    let resolved = make_info(
+        AutomationWindowKind::AcpDetached,
+        None,
+        false,
+        Some((600.0, 400.0)),
+    );
 
     let exact = score(&resolved, "Script Kit AI", false, 600, 400);
     let close = score(&resolved, "Script Kit AI", false, 603, 401);
@@ -199,8 +211,12 @@ fn size_difference_breaks_tie() {
 
 #[test]
 fn focus_difference_breaks_tie_when_sizes_equal() {
-    let resolved =
-        make_info(AutomationWindowKind::AcpDetached, None, true, Some((600.0, 400.0)));
+    let resolved = make_info(
+        AutomationWindowKind::AcpDetached,
+        None,
+        true,
+        Some((600.0, 400.0)),
+    );
 
     let focused = score(&resolved, "Script Kit AI", true, 600, 400);
     let unfocused = score(&resolved, "Script Kit AI", false, 600, 400);

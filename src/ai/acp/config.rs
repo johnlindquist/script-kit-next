@@ -458,9 +458,7 @@ pub(crate) fn load_preferred_acp_agent_id() -> Option<String> {
 ///
 /// Returns `Ok(())` when the write succeeds, so callers can gate retry
 /// logic on a truthful persistence outcome instead of racing an async write.
-pub(crate) fn persist_preferred_acp_agent_id_sync(
-    agent_id: Option<String>,
-) -> anyhow::Result<()> {
+pub(crate) fn persist_preferred_acp_agent_id_sync(agent_id: Option<String>) -> anyhow::Result<()> {
     let mut prefs = crate::config::load_user_preferences();
     prefs.ai.selected_acp_agent_id = agent_id.clone();
     crate::config::save_user_preferences(&prefs)?;

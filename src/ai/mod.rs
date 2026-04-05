@@ -134,6 +134,9 @@ pub use self::window::{
 pub use self::context_contract::{
     context_attachment_specs, ContextAttachmentKind, ContextAttachmentSpec,
 };
+pub use self::context_mentions::{
+    mention_range_at_cursor, parse_inline_context_mentions, InlineContextMention,
+};
 pub use self::window::context_picker::types::ContextPickerTrigger;
 pub use self::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerItemSnapshot, ContextPickerSection,
@@ -145,7 +148,4 @@ pub use self::window::context_picker::{
 pub use self::window::context_preflight::{
     estimate_tokens_from_text, preflight_state_from_receipt, status_from_decision,
     ContextPreflightSnapshot, ContextPreflightState, ContextPreflightStatus,
-};
-pub use self::context_mentions::{
-    mention_range_at_cursor, parse_inline_context_mentions, InlineContextMention,
 };

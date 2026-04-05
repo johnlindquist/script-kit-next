@@ -98,9 +98,7 @@ pub(crate) struct AcpRetryRequest {
 }
 
 impl AcpRetryRequest {
-    pub(crate) fn from_setup_state(
-        setup: &super::setup_state::AcpInlineSetupState,
-    ) -> Self {
+    pub(crate) fn from_setup_state(setup: &super::setup_state::AcpInlineSetupState) -> Self {
         Self {
             preferred_agent_id: setup
                 .selected_agent
@@ -434,10 +432,7 @@ impl AcpChatView {
     }
 
     /// Build a protocol-layer setup snapshot from the current session state.
-    fn build_setup_protocol_snapshot(
-        &self,
-        cx: &App,
-    ) -> Option<crate::protocol::AcpSetupSnapshot> {
+    fn build_setup_protocol_snapshot(&self, cx: &App) -> Option<crate::protocol::AcpSetupSnapshot> {
         let (agent_picker_open, agent_picker_selected_id) =
             if let Some(ref picker) = self.setup_agent_picker {
                 let selected_id = picker
@@ -455,9 +450,8 @@ impl AcpChatView {
             }
             AcpChatSession::Live(thread) => {
                 let t = thread.read(cx);
-                t.setup_state().map(|s| {
-                    s.to_protocol_snapshot(agent_picker_open, agent_picker_selected_id)
-                })
+                t.setup_state()
+                    .map(|s| s.to_protocol_snapshot(agent_picker_open, agent_picker_selected_id))
             }
         }
     }
@@ -3155,9 +3149,8 @@ impl AcpChatView {
 
         // Persist selection synchronously so any subsequent reopen reads the
         // correct preference immediately — no race with a background writer.
-        let persist_result = crate::ai::acp::persist_preferred_acp_agent_id_sync(
-            Some(agent.id.to_string()),
-        );
+        let persist_result =
+            crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(agent.id.to_string()));
 
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -3288,9 +3281,8 @@ impl AcpChatView {
                 Ok(())
             }
             AcpSetupActionKind::SelectAgent => {
-                let target_id = agent_id.ok_or_else(|| {
-                    "selectAgent requires an agentId field".to_string()
-                })?;
+                let target_id =
+                    agent_id.ok_or_else(|| "selectAgent requires an agentId field".to_string())?;
                 if !self.has_active_setup(cx) {
                     return Err("no active setup card".to_string());
                 }
@@ -4059,9 +4051,7 @@ impl AcpChatView {
         // the leading edge of an inline @mention token, remove the whole
         // token plus one trailing space (when present) instead of deleting
         // a single character.
-        if crate::ui_foundation::is_key_backspace(key)
-            || crate::ui_foundation::is_key_delete(key)
-        {
+        if crate::ui_foundation::is_key_backspace(key) || crate::ui_foundation::is_key_delete(key) {
             let current_text = self.live_thread().read(cx).input.text().to_string();
             let cursor = self.live_thread().read(cx).input.cursor();
 

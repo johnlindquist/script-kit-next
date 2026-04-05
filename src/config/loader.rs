@@ -26,8 +26,7 @@ fn settings_json_path() -> PathBuf {
 ///
 /// Uses `pathToFileURL` so paths with special characters are handled safely.
 fn build_bun_extract_command(module_path: &Path) -> Result<Command, serde_json::Error> {
-    let module_path_json =
-        serde_json::to_string(&module_path.to_string_lossy().into_owned())?;
+    let module_path_json = serde_json::to_string(&module_path.to_string_lossy().into_owned())?;
     let script = format!(
         r#"const {{ pathToFileURL }} = await import("node:url");
 const moduleUrl = pathToFileURL({module_path_json}).href;

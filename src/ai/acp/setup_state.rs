@@ -42,8 +42,9 @@ impl AcpSetupAction {
             // Automation-only variants map to SelectAgent as the closest
             // internal equivalent; the picker open/close is handled at the
             // view layer via `perform_setup_automation_action`.
-            AcpSetupActionKind::OpenAgentPicker
-            | AcpSetupActionKind::CloseAgentPicker => Self::SelectAgent,
+            AcpSetupActionKind::OpenAgentPicker | AcpSetupActionKind::CloseAgentPicker => {
+                Self::SelectAgent
+            }
         }
     }
 }
