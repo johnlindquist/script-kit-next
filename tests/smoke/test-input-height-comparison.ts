@@ -1,5 +1,6 @@
-// Visual test to capture BOTH main menu and file search views for comparison
+// Visual test to capture BOTH the mini main window and file search views
 import '../../scripts/kit-sdk';
+import { expectMiniMainWindow } from './helpers/mini_main_window';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
@@ -15,20 +16,24 @@ async function captureAndSave(name: string) {
   return path;
 }
 
-// Step 1: Capture main menu (default state)
-console.error('[TEST] Step 1: Main menu view');
-await captureAndSave('main-menu');
+const mainMenuLayout = await expectMiniMainWindow(
+  'test-input-height-comparison',
+  0
+);
 
-// Step 2: Get layout info for main menu
-console.error('[TEST] Getting layout info for main menu...');
-const mainMenuLayout = await getLayoutInfo();
-console.error('[LAYOUT] Main menu:', JSON.stringify(mainMenuLayout, null, 2));
+// Step 1: Capture mini main window
+console.error('[TEST] Step 1: Mini main window view');
+await captureAndSave('mini-main-window');
+
+// Step 2: Use captured layout info for the mini main window
+console.error('[TEST] Using layout info for mini main window...');
+console.error('[LAYOUT] Mini main window:', JSON.stringify(mainMenuLayout, null, 2));
 
 // Step 3: Open file search (we need to simulate selecting the builtin)
-// Note: This test just captures the main menu for now since we need
+// Note: This test just captures the mini main window for now since we need
 // user interaction to open file search
 
-console.error('[TEST] Done - check test-screenshots/ for main menu capture');
+console.error('[TEST] Done - check test-screenshots/ for mini main window capture');
 console.error('[TEST] To see file search, manually select "Search Files" builtin');
 
 process.exit(0);

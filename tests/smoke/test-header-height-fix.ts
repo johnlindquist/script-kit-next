@@ -1,6 +1,7 @@
-// Test to verify header heights match between main menu and file search
+// Test to verify header heights match between the mini main window and file search
 // This captures layouts and placeholders to verify the fixes
 import '../../scripts/kit-sdk';
+import { expectMiniMainWindow } from './helpers/mini_main_window';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
@@ -16,13 +17,13 @@ async function captureAndSave(name: string): Promise<string> {
   return path;
 }
 
-// Test 1: Capture main menu layout
-console.error('[TEST] Capturing main menu...');
-const mainMenuPath = await captureAndSave('header-fix-main-menu');
+const mainLayout = await expectMiniMainWindow('test-header-height-fix', 0);
 
-// Get layout info
-const mainLayout = await getLayoutInfo();
-console.error('[LAYOUT] Main menu layout:', JSON.stringify({
+// Test 1: Capture mini main window layout
+console.error('[TEST] Capturing mini main window...');
+const mainMenuPath = await captureAndSave('header-fix-mini-main-window');
+
+console.error('[LAYOUT] Mini main window layout:', JSON.stringify({
   windowHeight: mainLayout.windowHeight,
   windowWidth: mainLayout.windowWidth,
   promptType: mainLayout.promptType,

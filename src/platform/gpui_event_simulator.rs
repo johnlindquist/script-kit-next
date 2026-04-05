@@ -11,6 +11,107 @@
 //! not from the library crate directly, so they appear unused to `--lib`.
 #![allow(dead_code)]
 
+/// Returns `true` when the given kind represents a surface that is visually
+/// attached to a parent window and dispatches mouse events through that parent.
+///
+/// Attached surfaces need coordinate rebasing: popup-local (x, y) must be
+/// translated into the parent window's GPUI dispatch space.
+fn is_attached_surface(kind: crate::protocol::AutomationWindowKind) -> bool {
+    matches!(
+        kind,
+        crate::protocol::AutomationWindowKind::ActionsDialog
+            | crate::protocol::AutomationWindowKind::PromptPopup
+    )
+}
+
+/// Translate mouse coordinates from target-local space into the main
+/// window's GPUI dispatch space for attached surfaces.
+///
+/// Detached windows and key events pass through unchanged.
+/// Returns `Err` with a deterministic message when bounds are unavailable.
+fn rebase_mouse_event_to_dispatch_space(
+    resolved: &crate::protocol::AutomationWindowInfo,
+    event: &crate::protocol::SimulatedGpuiEvent,
+) -> Result<crate::protocol::SimulatedGpuiEvent, String> {
+    use crate::protocol::SimulatedGpuiEvent;
+
+    if !is_attached_surface(resolved.kind) {
+        return Ok(event.clone());
+    }
+
+    // Key events don't have coordinates — pass through.
+    if matches!(event, SimulatedGpuiEvent::KeyDown { .. }) {
+        return Ok(event.clone());
+    }
+
+    let target_bounds = resolved.bounds.as_ref().ok_or_else(|| {
+        format!(
+            "Resolved target {} ({:?}) has no bounds; cannot translate attached-surface coordinates",
+            resolved.id, resolved.kind
+        )
+    })?;
+
+    let main = crate::windows::resolve_automation_window(Some(
+        &crate::protocol::AutomationWindowTarget::Main,
+    ))
+    .map_err(|err| {
+        format!(
+            "Failed to resolve main automation window for attached-surface dispatch: {err}"
+        )
+    })?;
+
+    let main_bounds = main.bounds.as_ref().ok_or_else(|| {
+        format!(
+            "Main automation window {} has no bounds; cannot translate attached-surface coordinates",
+            main.id
+        )
+    })?;
+
+    let offset_x = target_bounds.x - main_bounds.x;
+    let offset_y = target_bounds.y - main_bounds.y;
+
+    // Log the rebased coordinates for observability.
+    match event {
+        SimulatedGpuiEvent::MouseMove { x, y }
+        | SimulatedGpuiEvent::MouseDown { x, y, .. }
+        | SimulatedGpuiEvent::MouseUp { x, y, .. } => {
+            tracing::info!(
+                target: "script_kit::automation",
+                window_id = %resolved.id,
+                kind = ?resolved.kind,
+                local_x = x,
+                local_y = y,
+                offset_x = offset_x,
+                offset_y = offset_y,
+                rebased_x = x + offset_x,
+                rebased_y = y + offset_y,
+                "gpui_event_simulation.rebased_coordinates"
+            );
+        }
+        SimulatedGpuiEvent::KeyDown { .. } => {}
+    }
+
+    let translated = match event {
+        SimulatedGpuiEvent::MouseMove { x, y } => SimulatedGpuiEvent::MouseMove {
+            x: x + offset_x,
+            y: y + offset_y,
+        },
+        SimulatedGpuiEvent::MouseDown { x, y, button } => SimulatedGpuiEvent::MouseDown {
+            x: x + offset_x,
+            y: y + offset_y,
+            button: button.clone(),
+        },
+        SimulatedGpuiEvent::MouseUp { x, y, button } => SimulatedGpuiEvent::MouseUp {
+            x: x + offset_x,
+            y: y + offset_y,
+            button: button.clone(),
+        },
+        SimulatedGpuiEvent::KeyDown { .. } => event.clone(),
+    };
+
+    Ok(translated)
+}
+
 /// Returns `true` when GPUI dispatch still collapses all windows of this kind
 /// to a single `WindowRole`, meaning it cannot distinguish between multiple
 /// visible windows of the same kind.
@@ -225,7 +326,28 @@ pub(crate) fn dispatch_gpui_event(
         }
     };
 
-    let event_type = match event {
+    // Rebase mouse coordinates for attached surfaces (ActionsDialog, PromptPopup)
+    // before GPUI dispatch so clicks land inside the popup, not at the same
+    // (x, y) in the parent window.
+    let event = match rebase_mouse_event_to_dispatch_space(&resolved, event) {
+        Ok(rebased) => rebased,
+        Err(msg) => {
+            tracing::warn!(
+                target: "script_kit::automation",
+                request_id = %request_id,
+                window_id = %resolved.id,
+                error = %msg,
+                "gpui_event_simulation.coordinate_translation_failed"
+            );
+            return GpuiEventDispatchResult {
+                success: false,
+                error_code: Some("coordinate_translation_failed".to_string()),
+                error: Some(msg),
+            };
+        }
+    };
+
+    let event_type = match &event {
         SimulatedGpuiEvent::KeyDown { .. } => "keyDown",
         SimulatedGpuiEvent::MouseMove { .. } => "mouseMove",
         SimulatedGpuiEvent::MouseDown { .. } => "mouseDown",

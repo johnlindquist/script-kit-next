@@ -1,7 +1,8 @@
 // Visual verification test for file search input alignment fix
-// Captures both main menu and file search to compare
+// Captures both the mini main window and file search to compare
 // @ts-nocheck
 import '../../scripts/kit-sdk';
+import { expectMiniMainWindow } from './helpers/mini_main_window';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -18,10 +19,12 @@ async function capture(name: string): Promise<string> {
   return path;
 }
 
-// Capture main menu first
-console.error('[TEST] Capturing main menu with placeholder...');
-await capture('01-main-menu');
+await expectMiniMainWindow('test-verify-alignment-fix', 0);
+
+// Capture mini main window first
+console.error('[TEST] Capturing mini main window...');
+await capture('01-mini-main-window');
 
 // Exit and let coordinator run separate test for file search
-console.error('[TEST] Done - main menu captured');
+console.error('[TEST] Done - mini main window captured');
 process.exit(0);

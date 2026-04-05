@@ -1,7 +1,8 @@
-// Visual test: Verify file search input matches main menu alignment
+// Visual test: Verify file search input matches the mini main window alignment
 // Tests the fix for cramped input styling when typing paths like ~/dev/
 // @ts-nocheck
 import '../../scripts/kit-sdk';
+import { expectMiniMainWindow } from './helpers/mini_main_window';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -21,11 +22,13 @@ async function capture(name: string): Promise<string> {
 // Test: Capture both views to visually compare input alignment
 console.error('[TEST] Starting input alignment visual test...');
 
-// First, capture the main menu
-console.error('[TEST] 1. Capturing main menu...');
-await capture('main-menu');
+await expectMiniMainWindow('test-search-input-alignment', 0);
 
-// Exit - this test just captures the main menu state
+// First, capture the mini main window
+console.error('[TEST] 1. Capturing mini main window...');
+await capture('mini-main-window');
+
+// Exit - this test just captures the mini main window state
 // The coordinator should run the file search separately via stdin commands
 console.error('[TEST] Done - check test-screenshots/alignment-*.png files');
 process.exit(0);

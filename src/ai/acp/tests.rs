@@ -328,6 +328,7 @@ const RENDER_IMPL_SOURCE: &str = include_str!("../../main_sections/render_impl.r
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../../main_sections/app_view_state.rs");
 const APP_RUN_SETUP_SOURCE: &str = include_str!("../../main_entry/app_run_setup.rs");
 const ACP_MOD_SOURCE: &str = include_str!("mod.rs");
+const ACP_MODEL_SELECTOR_POPUP_SOURCE: &str = include_str!("model_selector_popup.rs");
 const ACP_PICKER_POPUP_SOURCE: &str = include_str!("picker_popup.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
 
@@ -496,6 +497,14 @@ fn acp_picker_popup_module_is_registered() {
 }
 
 #[test]
+fn acp_model_selector_popup_module_is_registered() {
+    assert!(
+        ACP_MOD_SOURCE.contains("pub(crate) mod model_selector_popup;"),
+        "ACP module should register the detached model selector popup module"
+    );
+}
+
+#[test]
 fn acp_picker_migration_uses_popup_window_instead_of_inline_layer() {
     assert!(
         !ACP_VIEW_SOURCE.contains("acp-mention-picker-layer"),
@@ -505,6 +514,19 @@ fn acp_picker_migration_uses_popup_window_instead_of_inline_layer() {
         ACP_PICKER_POPUP_SOURCE.contains("WindowKind::PopUp")
             && ACP_PICKER_POPUP_SOURCE.contains("AcpMentionPopupWindow"),
         "ACP picker migration should render through a popup window entity"
+    );
+}
+
+#[test]
+fn acp_model_selector_migration_uses_popup_window_instead_of_inline_layer() {
+    assert!(
+        !ACP_VIEW_SOURCE.contains("fn render_model_selector"),
+        "ACP chat view should no longer render the model selector inline"
+    );
+    assert!(
+        ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("WindowKind::PopUp")
+            && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("AcpModelSelectorPopupWindow"),
+        "ACP model selector should render through a popup window entity"
     );
 }
 
@@ -535,10 +557,23 @@ fn acp_picker_refresh_and_navigation_sync_popup_window() {
 }
 
 #[test]
+fn acp_model_selector_button_and_selection_sync_popup_window() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("this.cache_popup_parent_window(window, cx);")
+            && ACP_VIEW_SOURCE
+                .contains("this.sync_model_selector_popup_window_from_cached_parent(cx);")
+            && ACP_VIEW_SOURCE.contains("pub(crate) fn select_model_from_popup"),
+        "model selector interactions should open and close through the detached popup window"
+    );
+}
+
+#[test]
 fn acp_view_exposes_escape_popup_dismiss_helper() {
     assert!(
         ACP_VIEW_SOURCE.contains("pub(crate) fn dismiss_escape_popup")
             && ACP_VIEW_SOURCE.contains("self.model_selector_open = false;")
+            && ACP_VIEW_SOURCE
+                .contains("self.sync_model_selector_popup_window_from_cached_parent(cx);")
             && ACP_VIEW_SOURCE.contains("self.mention_session = None;")
             && ACP_VIEW_SOURCE.contains("self.sync_mention_popup_window_from_cached_parent(cx);"),
         "ACP view should expose a helper that dismisses the detached ACP popups on Escape"

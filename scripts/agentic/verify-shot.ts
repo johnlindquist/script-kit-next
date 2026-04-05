@@ -76,6 +76,15 @@ interface CaptureTarget {
   actualWindowId: number | null;
 }
 
+interface InspectionReceipt {
+  automationWindowId: string;
+  windowKind: string;
+  screenshotWidth?: number | null;
+  screenshotHeight?: number | null;
+  pixelProbes: Array<{ x: number; y: number; r: number; g: number; b: number; a: number }>;
+  warnings: string[];
+}
+
 interface VerifyReceipt {
   schemaVersion: number;
   status: "pass" | "fail" | "error";
@@ -93,6 +102,7 @@ interface VerifyReceipt {
     windowId: number | null;
   } | null;
   captureTarget: CaptureTarget | null;
+  inspection: InspectionReceipt | null;
   visionCrops: VisionCheck[];
   // Detailed receipts (full diagnostics)
   stateReceipt: AcpStateResult | null;
@@ -382,6 +392,67 @@ async function queryAcpTestProbe(
     queried: true,
     snapshot: response as Record<string, unknown>,
     error: null,
+  };
+}
+
+async function queryInspection(
+  session: string,
+  requestId: string,
+  target?: Record<string, unknown>
+): Promise<InspectionReceipt | null> {
+  const sessionScript = join(PROJECT_ROOT, "scripts/agentic/session.sh");
+  const payload: Record<string, unknown> = {
+    type: "inspectAutomationWindow",
+    requestId,
+  };
+  if (target) {
+    payload.target = target;
+  }
+  const cmd = JSON.stringify(payload);
+
+  const proc = Bun.spawn(
+    [
+      "bash",
+      sessionScript,
+      "rpc",
+      session,
+      cmd,
+      "--expect",
+      "automationInspectResult",
+      "--timeout",
+      "5000",
+    ],
+    {
+      stdout: "pipe",
+      stderr: "pipe",
+    }
+  );
+  const stdout = await new Response(proc.stdout).text();
+  const code = await proc.exited;
+
+  if (code !== 0) {
+    return null;
+  }
+
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    parsed = JSON.parse(stdout) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  const response = (parsed?.response ?? parsed) as Record<string, unknown> | null;
+  if (!response) {
+    return null;
+  }
+
+  return {
+    automationWindowId: String(response.windowId ?? ""),
+    windowKind: String(response.windowKind ?? ""),
+    screenshotWidth: (response.screenshotWidth as number) ?? null,
+    screenshotHeight: (response.screenshotHeight as number) ?? null,
+    pixelProbes: (response.pixelProbes as InspectionReceipt["pixelProbes"]) ?? [],
+    warnings: (response.warnings as string[]) ?? [],
   };
 }
 
@@ -1358,6 +1429,20 @@ if (needsProbe) {
   });
 }
 
+// Step 2b: Query inspection when --target-json or --vision is present
+let inspection: InspectionReceipt | null = null;
+if (targetJson || opts.emitVisionCrops) {
+  const inspectRequestId = `${requestId}-inspect`;
+  inspection = await queryInspection(session, inspectRequestId, targetJson);
+  diag("verify_shot_inspection_loaded", {
+    label,
+    automationWindowId: inspection?.automationWindowId ?? null,
+    windowKind: inspection?.windowKind ?? null,
+    probeCount: inspection?.pixelProbes.length ?? 0,
+    warningCount: inspection?.warnings.length ?? 0,
+  });
+}
+
 // Step 3: Capture screenshot (unless skipped)
 let screenshotResult: ScreenshotResult | null = null;
 if (!skipScreenshot) {
@@ -1419,6 +1504,7 @@ const receipt: VerifyReceipt = {
         actualWindowId: screenshotResult.windowId,
       }
     : null,
+  inspection,
   visionCrops: visionChecks,
   // Detailed receipts
   stateReceipt: stateResult,

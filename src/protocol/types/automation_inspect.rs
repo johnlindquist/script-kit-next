@@ -78,6 +78,13 @@ pub struct AutomationInspectSnapshot {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pixel_probes: Vec<PixelProbeResult>,
 
+    /// Native OS window ID (CGWindowID on macOS) for strict screenshot capture.
+    ///
+    /// Present when the inspect handler successfully matched an OS window.
+    /// Agents use this for `--capture-window-id` in verify-shot flows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub os_window_id: Option<u32>,
+
     /// Machine-readable warnings (e.g. `"semantic_elements_non_main_pending"`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
@@ -102,6 +109,7 @@ mod tests {
             screenshot_width: None,
             screenshot_height: None,
             pixel_probes: Vec::new(),
+            os_window_id: None,
             warnings: Vec::new(),
         };
 
@@ -146,6 +154,7 @@ mod tests {
                     a: 255,
                 },
             ],
+            os_window_id: Some(12345),
             warnings: vec!["semantic_elements_non_main_pending".to_string()],
         };
 
@@ -153,6 +162,7 @@ mod tests {
         let parsed: AutomationInspectSnapshot =
             serde_json::from_str(&json).expect("deserialize");
         assert_eq!(parsed, snapshot);
+        assert!(json.contains("\"osWindowId\":12345"));
     }
 
     #[test]
@@ -193,6 +203,7 @@ mod tests {
             screenshot_width: None,
             screenshot_height: None,
             pixel_probes: Vec::new(),
+            os_window_id: None,
             warnings: Vec::new(),
         };
         let json = serde_json::to_string(&snapshot).expect("serialize");
@@ -202,5 +213,6 @@ mod tests {
         // None options should not appear
         assert!(!json.contains("title"));
         assert!(!json.contains("screenshotWidth"));
+        assert!(!json.contains("osWindowId"));
     }
 }

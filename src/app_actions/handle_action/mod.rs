@@ -649,26 +649,17 @@ impl ScriptListApp {
                 agent_display_name = %agent_display_name,
             );
 
-            // Preserve the current session's capability requirements
-            // (screenshot/context needs, runtime recovery context, etc.)
-            // so the reopen path consumes a truthful retry payload.
-            entity.update(cx, |view, cx| {
-                view.stage_agent_switch_retry(agent_id.to_string(), cx);
-            });
+            let next_agent_id = agent_id.to_string();
 
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_switch_agent_retry_payload_staged_from_action",
-                agent_id,
-            );
-
+            // Persist the explicit preference synchronously before staging
+            // the retry payload — only explicit switches persist a new preference.
             let persist_result =
-                crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(agent_id.to_string()));
+                crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(next_agent_id.clone()));
 
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "acp_switch_agent_persist_result",
-                agent_id,
+                agent_id = %next_agent_id,
                 persisted = persist_result.is_ok(),
             );
 
@@ -680,6 +671,19 @@ impl ScriptListApp {
                     ),
                 );
             }
+
+            // Preserve the current session's capability requirements
+            // (screenshot/context needs, runtime recovery context, etc.)
+            // so the reopen path consumes a truthful retry payload.
+            entity.update(cx, |view, cx| {
+                view.stage_agent_switch_retry(next_agent_id.clone(), cx);
+            });
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_switch_agent_relaunch_requested",
+                agent_id = %next_agent_id,
+            );
 
             self.close_tab_ai_harness_terminal(cx);
             self.open_tab_ai_chat(cx);
