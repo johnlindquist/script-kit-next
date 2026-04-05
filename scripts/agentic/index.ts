@@ -1096,6 +1096,23 @@ switch (recipe) {
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
 
+  case "vision-loop": {
+    // Delegate to the standalone vision-loop.ts script.
+    // Expects --receipt and --out-dir to be passed after the recipe name.
+    const vlArgs = process.argv.slice(3); // everything after "vision-loop"
+    const proc = Bun.spawn(
+      ["bun", "scripts/agentic/vision-loop.ts", ...vlArgs],
+      { stdout: "pipe", stderr: "pipe", cwd: PROJECT_ROOT }
+    );
+    const vlStdout = await new Response(proc.stdout).text();
+    const vlStderr = await new Response(proc.stderr).text();
+    const vlExit = await proc.exited;
+    if (vlStderr) process.stderr.write(vlStderr);
+    process.stdout.write(vlStdout);
+    process.exit(vlExit);
+    break;
+  }
+
   case "help":
   case "--help":
     console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
@@ -1110,6 +1127,7 @@ Recipes:
   acp-tab-accept         Compatibility alias for --key tab
   acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
+  vision-loop            Materialize visionCrops from receipt (pass --receipt, --out-dir)
   help                   Show this help
 
 Target threading:
