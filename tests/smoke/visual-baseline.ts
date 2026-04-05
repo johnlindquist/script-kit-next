@@ -2,6 +2,7 @@
 // Description: Captures baseline screenshots of all major views for regression testing
 
 import '../../scripts/kit-sdk';
+import { expectMiniMainWindow } from './helpers/mini_main_window';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 
@@ -31,14 +32,13 @@ async function capture(name: string, waitMs: number = 500): Promise<string> {
 const capturedScreenshots: string[] = [];
 
 // =============================================================================
-// 1. Main Menu (default view on launch)
+// 1. Mini Main Window
 // =============================================================================
 
-console.error('[BASELINE] 1/9: Main Menu');
-// The main menu is already showing when app launches
-// Just capture it directly
-await capture('main-menu', 800);
-capturedScreenshots.push('baseline-main-menu.png');
+console.error('[BASELINE] 1/9: Mini Main Window');
+await expectMiniMainWindow('visual-baseline: mini-main-window', 800);
+await capture('mini-main-window', 0);
+capturedScreenshots.push('baseline-mini-main-window.png');
 
 // =============================================================================
 // 2. Arg Prompt with Choices
@@ -219,7 +219,7 @@ div(md(`
 
 ## Captured Views
 
-1. \`baseline-main-menu.png\` - Main menu on launch
+1. \`baseline-mini-main-window.png\` - Mini Main Window
 2. \`baseline-arg-prompt.png\` - Arg with choices
 3. \`baseline-div-prompt.png\` - Div with HTML
 4. \`baseline-editor-prompt.png\` - Code editor

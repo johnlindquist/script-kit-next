@@ -1,11 +1,11 @@
-// Test: Verify first item is always selected when main menu opens
+// Test: Verify first item is always selected when the mini main window opens
 import '../../scripts/kit-sdk';
+import { expectMiniMainWindow } from './helpers/mini_main_window';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
 async function main() {
-  // Give the main menu a moment to render
-  await new Promise(r => setTimeout(r, 500));
+  const layout = await expectMiniMainWindow('test-first-item-selected', 500);
 
   // Capture screenshot to verify first item is selected
   const screenshot = await captureScreenshot();
@@ -13,12 +13,10 @@ async function main() {
   mkdirSync(dir, { recursive: true });
   
   const timestamp = Date.now();
-  const path = join(dir, `first-item-selected-${timestamp}.png`);
+  const path = join(dir, `mini-first-item-selected-${timestamp}.png`);
   writeFileSync(path, Buffer.from(screenshot.data, 'base64'));
   console.error(`[SCREENSHOT] ${path}`);
 
-  // Also get layout info to verify selected state
-  const layout = await getLayoutInfo();
   console.error(`[LAYOUT] windowWidth=${layout.windowWidth} windowHeight=${layout.windowHeight}`);
   console.error(`[LAYOUT] promptType=${layout.promptType}`);
   console.error(`[LAYOUT] components=${layout.components.length}`);

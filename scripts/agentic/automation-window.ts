@@ -167,6 +167,129 @@ async function resolveTarget(
   };
 }
 
+// ---------------------------------------------------------------------------
+// Inspect types
+// ---------------------------------------------------------------------------
+
+interface InspectAutomationWindowResult {
+  type: "automationInspectResult";
+  requestId: string;
+  schemaVersion: number;
+  windowId: string;
+  windowKind: string;
+  title?: string | null;
+  elements: Array<Record<string, unknown>>;
+  totalCount: number;
+  focusedSemanticId?: string | null;
+  selectedSemanticId?: string | null;
+  screenshotWidth?: number | null;
+  screenshotHeight?: number | null;
+  pixelProbes: Array<{ x: number; y: number; r: number; g: number; b: number; a: number }>;
+  warnings: string[];
+}
+
+interface AutomationWindowInspectEnvelope {
+  schemaVersion: number;
+  status: "ok" | "error";
+  targetJson?: AutomationTargetJson;
+  surfaceId?: string | null;
+  automationWindowId?: string | null;
+  inspect?: InspectAutomationWindowResult;
+  error?: { code: string; message: string };
+}
+
+async function inspectTarget(
+  session: string,
+  targetJson: AutomationTargetJson,
+  probes: Array<{ x: number; y: number }>
+): Promise<AutomationWindowInspectEnvelope> {
+  stderrLog("inspect_start", { session, targetJson, probeCount: probes.length });
+
+  const requestId = `inspect-${Date.now()}`;
+  const payload: Record<string, unknown> = {
+    type: "inspectAutomationWindow",
+    requestId,
+    target: targetJson,
+  };
+  if (probes.length > 0) {
+    payload.probes = probes;
+  }
+
+  let response: Record<string, unknown>;
+  try {
+    const rpcResult = await rpc(session, payload, "automationInspectResult", 5000);
+    response = (rpcResult as { response?: Record<string, unknown> }).response ?? rpcResult;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    stderrLog("inspect_rpc_failed", { error: message });
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      status: "error",
+      targetJson,
+      error: { code: "rpc_failed", message },
+    };
+  }
+
+  const inspect = response as unknown as InspectAutomationWindowResult;
+  const automationWindowId = inspect.windowId || null;
+  const windowKind = inspect.windowKind || null;
+
+  // Also resolve surface ID for native input threading
+  let surfaceId: string | null = null;
+  try {
+    const surfaceEnvelope = await listSurfaces();
+    const surfaces =
+      (surfaceEnvelope as { data?: { surfaces?: Array<Record<string, unknown>> } }).data?.surfaces ??
+      [];
+
+    if (inspect.title) {
+      const titleMatch = surfaces.find(
+        (surface) => typeof surface.title === "string" && surface.title === inspect.title
+      );
+      if (titleMatch) {
+        surfaceId = (titleMatch.surfaceId as string) ?? null;
+      }
+    }
+
+    if (!surfaceId && automationWindowId) {
+      const windowIdMatch = surfaces.find(
+        (surface) => String(surface.windowId) === String(automationWindowId)
+      );
+      if (windowIdMatch) {
+        surfaceId = (windowIdMatch.surfaceId as string) ?? null;
+      }
+    }
+
+    stderrLog("inspect_surface_match", { surfaceId, surfaceCount: surfaces.length });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    stderrLog("inspect_surface_list_failed", { error: message });
+  }
+
+  stderrLog("inspect_complete", {
+    automationWindowId,
+    windowKind,
+    surfaceId,
+    screenshotWidth: inspect.screenshotWidth ?? null,
+    screenshotHeight: inspect.screenshotHeight ?? null,
+    probeCount: inspect.pixelProbes?.length ?? 0,
+    warningCount: inspect.warnings?.length ?? 0,
+  });
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    status: "ok",
+    targetJson,
+    surfaceId,
+    automationWindowId,
+    inspect,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Arg parsing
+// ---------------------------------------------------------------------------
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const subcmd = args[0] ?? "help";
@@ -186,27 +309,52 @@ function parseArgs() {
   const titleIdx = args.indexOf("--title");
   const titleText = titleIdx >= 0 && args[titleIdx + 1] ? args[titleIdx + 1] : undefined;
 
-  return { subcmd, session, kind, index, id, titleText };
+  // Collect --probe x,y pairs
+  const probes: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--probe" && args[i + 1]) {
+      const parts = args[i + 1].split(",");
+      if (parts.length === 2) {
+        const x = parseInt(parts[0], 10);
+        const y = parseInt(parts[1], 10);
+        if (!isNaN(x) && !isNaN(y)) {
+          probes.push({ x, y });
+        }
+      }
+    }
+  }
+
+  return { subcmd, session, kind, index, id, titleText, probes };
 }
 
-const { subcmd, session, kind, index, id, titleText } = parseArgs();
+const { subcmd, session, kind, index, id, titleText, probes } = parseArgs();
+
+function buildTargetJson(): AutomationTargetJson {
+  if (id) {
+    return { type: "id", id };
+  } else if (titleText) {
+    return { type: "titleContains", text: titleText };
+  } else if (kind === "main") {
+    return { type: "main" };
+  } else if (kind === "focused") {
+    return { type: "focused" };
+  } else {
+    return { type: "kind", kind, index };
+  }
+}
 
 switch (subcmd) {
   case "resolve": {
-    let targetJson: AutomationTargetJson;
-    if (id) {
-      targetJson = { type: "id", id };
-    } else if (titleText) {
-      targetJson = { type: "titleContains", text: titleText };
-    } else if (kind === "main") {
-      targetJson = { type: "main" };
-    } else if (kind === "focused") {
-      targetJson = { type: "focused" };
-    } else {
-      targetJson = { type: "kind", kind, index };
-    }
-
+    const targetJson = buildTargetJson();
     const result = await resolveTarget(session, targetJson);
+    console.log(JSON.stringify(result, null, 2));
+    process.exit(result.status === "ok" ? 0 : 1);
+    break;
+  }
+
+  case "inspect": {
+    const targetJson = buildTargetJson();
+    const result = await inspectTarget(session, targetJson, probes);
     console.log(JSON.stringify(result, null, 2));
     process.exit(result.status === "ok" ? 0 : 1);
     break;
@@ -218,6 +366,7 @@ switch (subcmd) {
 
 Commands:
   resolve    Resolve an automation target to an exact surface identity
+  inspect    Inspect an automation window (screenshot dims, pixel probes, elements)
   help       Show this help
 
 Options:
@@ -226,6 +375,7 @@ Options:
   --index N         Kind index (default: 0)
   --id WINDOW_ID    Resolve by exact automation window ID
   --title TEXT      Resolve by titleContains target
+  --probe X,Y       Pixel probe coordinate (repeatable, inspect only)
 `);
     process.exit(0);
   }

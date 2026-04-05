@@ -213,14 +213,6 @@ impl AcpChatView {
         }
     }
 
-    fn cache_mention_popup_parent_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.mention_popup_parent_window = Some(AcpMentionPopupParentWindow {
-            handle: window.window_handle(),
-            bounds: window.bounds(),
-            display_id: window.display(cx).map(|display| display.id()),
-        });
-    }
-
     fn cache_popup_parent_window(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let parent = AcpMentionPopupParentWindow {
             handle: window.window_handle(),
@@ -282,9 +274,82 @@ impl AcpChatView {
         }
     }
 
+    fn model_selector_popup_snapshot(
+        &self,
+        cx: &App,
+    ) -> Option<crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot> {
+        if !self.model_selector_open {
+            return None;
+        }
+
+        let thread = self.live_thread().read(cx);
+        let selected_id = thread.selected_model_id().map(str::to_string);
+        let entries = thread
+            .available_models()
+            .iter()
+            .map(|model| {
+                let display = model
+                    .display_name
+                    .clone()
+                    .unwrap_or_else(|| model.id.clone());
+                crate::ai::acp::model_selector_popup::AcpModelSelectorPopupEntry {
+                    id: model.id.clone(),
+                    display: SharedString::from(display),
+                    is_selected: selected_id.as_deref() == Some(model.id.as_str()),
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if entries.is_empty() {
+            return None;
+        }
+
+        Some(crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot { entries })
+    }
+
+    pub(super) fn sync_model_selector_popup_window_from_cached_parent(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(parent) = self.mention_popup_parent_window else {
+            crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
+            return;
+        };
+
+        let source_view = cx.entity().downgrade();
+        if let Some(snapshot) = self.model_selector_popup_snapshot(cx) {
+            if let Err(error) =
+                crate::ai::acp::model_selector_popup::sync_model_selector_popup_window(
+                    cx,
+                    crate::ai::acp::model_selector_popup::AcpModelSelectorPopupRequest {
+                        parent_window_handle: parent.handle,
+                        parent_bounds: parent.bounds,
+                        display_id: parent.display_id,
+                        source_view,
+                        snapshot,
+                    },
+                )
+            {
+                tracing::error!(error = %error, "acp_model_selector_popup_sync_failed");
+            }
+        } else {
+            crate::ai::acp::model_selector_popup::close_model_selector_popup_window(cx);
+        }
+    }
+
+    pub(crate) fn select_model_from_popup(&mut self, model_id: &str, cx: &mut Context<Self>) {
+        self.live_thread().update(cx, |thread, cx| {
+            thread.select_model(model_id, cx);
+        });
+        self.model_selector_open = false;
+        self.sync_model_selector_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
     pub(crate) fn dismiss_escape_popup(&mut self, cx: &mut Context<Self>) -> bool {
         if self.model_selector_open {
             self.model_selector_open = false;
+            self.sync_model_selector_popup_window_from_cached_parent(cx);
             cx.notify();
             return true;
         }
@@ -2007,6 +2072,7 @@ impl AcpChatView {
                                 this.mention_session = None;
                                 this.history_menu = None;
                                 this.sync_mention_popup_window_from_cached_parent(cx);
+                                this.sync_model_selector_popup_window_from_cached_parent(cx);
                                 cx.notify();
                             }))
                             .child(model_display)
@@ -2435,6 +2501,15 @@ impl AcpChatView {
 
         let current_text = self.live_thread().read(cx).input.text().to_string();
 
+        // Decide ownership *before* mutating the thread — the check reads
+        // the current pending_context_parts to see if the part was already
+        // attached from a non-inline source (slash, chip, setup).
+        let should_claim_inline_ownership = if allow_inline_sync {
+            self.should_claim_inline_mention_ownership(&part, cx)
+        } else {
+            false
+        };
+
         // For @-mention triggers: replace trigger+query with the inline
         // mention text and run inline sync.
         // Slash mode is command-only, so built-in context items should not
@@ -2465,7 +2540,24 @@ impl AcpChatView {
 
         if allow_inline_sync {
             if let Some(token) = part_to_inline_token(&part) {
-                self.inline_owned_context_tokens.insert(token);
+                if should_claim_inline_ownership {
+                    self.inline_owned_context_tokens.insert(token.clone());
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_inline_mention_ownership_claimed",
+                        token = %token,
+                        item_id = %item.id,
+                        item_label = %item.label,
+                    );
+                } else {
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_inline_mention_ownership_preserved_existing_attachment",
+                        token = %token,
+                        item_id = %item.id,
+                        item_label = %item.label,
+                    );
+                }
             }
             self.sync_inline_mentions(cx);
         } else {
@@ -2479,6 +2571,38 @@ impl AcpChatView {
             cx.notify();
         }
         self.sync_mention_popup_window_from_cached_parent(cx);
+    }
+
+    /// Check whether accepting a picker item should claim inline ownership
+    /// of the resulting token.  Returns `false` when the part is already
+    /// attached (e.g. from a slash command or chip action) — this prevents
+    /// a duplicate `@` pick from stealing ownership so that later deletion
+    /// of the inline token does not remove the pre-existing attachment.
+    fn should_claim_inline_mention_ownership(
+        &self,
+        part: &crate::ai::message_parts::AiContextPart,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        use crate::ai::context_mentions::part_to_inline_token;
+
+        let Some(token) = part_to_inline_token(part) else {
+            return false;
+        };
+
+        // Already owned by a previous inline pick — keep ownership.
+        if self.inline_owned_context_tokens.contains(&token) {
+            return true;
+        }
+
+        // If the part is already attached (from slash/chip/setup), do NOT
+        // claim ownership — deleting the inline token later must not remove
+        // the pre-existing attachment.
+        !self
+            .live_thread()
+            .read(cx)
+            .pending_context_parts()
+            .iter()
+            .any(|existing| existing == part)
     }
 
     /// Return highlight ranges for inline `@mentions` that are **actually
@@ -3717,6 +3841,7 @@ impl AcpChatView {
         // Close model selector on any non-modifier key
         if self.model_selector_open {
             self.model_selector_open = false;
+            self.sync_model_selector_popup_window_from_cached_parent(cx);
             cx.notify();
         }
 

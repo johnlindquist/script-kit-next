@@ -1,4 +1,5 @@
 import '../../scripts/kit-sdk';
+import { expectMiniMainWindow } from './helpers/mini_main_window';
 import { mkdirSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
@@ -8,7 +9,7 @@ import { join } from 'path';
  * This test captures screenshots to visually verify window state.
  * Screenshots are saved to .test-screenshots/ for inspection.
  *
- * Expected: After hide() + exit(), main menu should be visible again.
+ * Expected: After hide() + exit(), the mini main window should be visible again.
  */
 
 const test = 'window-visibility-visual';
@@ -32,7 +33,9 @@ log('running');
 const start = Date.now();
 
 try {
-  // Step 1: Capture initial state (main menu visible)
+  await expectMiniMainWindow('test-window-visibility-visual', 0);
+
+  // Step 1: Capture initial state (mini main window visible)
   log('capturing_initial_state');
   const initialShot = await captureScreenshot();
   const initialPath = join(screenshotDir, `visibility-1-initial-${Date.now()}.png`);
@@ -68,7 +71,7 @@ try {
     result: 'Visual test completed - check screenshots and logs',
     initial_screenshot: initialPath,
     duration_ms: Date.now() - start,
-    note: 'After this script exits, main menu should be visible. Check VISIBILITY logs.'
+    note: 'After this script exits, the mini main window should be visible. Check VISIBILITY logs.'
   });
 
 } catch (e: any) {
