@@ -306,7 +306,8 @@ fn parse_file_mention(trimmed: &str) -> Option<AiContextPart> {
 mod sync;
 pub(crate) use sync::{
     build_inline_mention_sync_plan, caret_after_replacement, remove_inline_mention_at_cursor,
-    replace_text_in_char_range, visible_context_chip_indices, InlineMentionSyncPlan,
+    replace_text_in_char_range, should_claim_inline_mention_ownership,
+    visible_context_chip_indices, InlineMentionSyncPlan,
 };
 
 #[cfg(test)]
