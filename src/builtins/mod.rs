@@ -304,8 +304,14 @@ pub enum BuiltInFeature {
     Dictation,
     /// Voice dictation that always targets the AI harness
     DictationToAiHarness,
+    /// Voice dictation that always targets the frontmost external app
+    DictationToFrontmostApp,
+    /// Voice dictation that always targets the notes editor
+    DictationToNotes,
     /// Settings hub for viewing configuration panels
     Settings,
+    /// ACP conversation history browser
+    AcpHistory,
 }
 /// A built-in feature entry that appears in the main search
 #[derive(Debug, Clone)]
@@ -488,6 +494,16 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "bot",
         ));
         debug!("Added AI Harness built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/acp-history",
+            "Conversation History",
+            "Browse and manage past AI conversations",
+            vec!["history", "conversations", "chat", "ai", "past", "previous"],
+            BuiltInFeature::AcpHistory,
+            "history",
+        ));
+        debug!("Added ACP History built-in entry");
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/favorites",
@@ -1627,6 +1643,36 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "speak to ai",
             ],
             BuiltInFeature::DictationToAiHarness,
+            "mic",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/dictation-to-app",
+            "Dictate to App",
+            "Voice dictation — force paste into the frontmost app",
+            vec![
+                "dictate app",
+                "voice app",
+                "frontmost app",
+                "external app",
+                "paste app",
+            ],
+            BuiltInFeature::DictationToFrontmostApp,
+            "mic",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/dictation-to-notes",
+            "Dictate to Notes",
+            "Voice dictation — force insert into the notes editor",
+            vec![
+                "dictate notes",
+                "voice notes",
+                "notes dictation",
+                "speak to notes",
+                "insert notes",
+            ],
+            BuiltInFeature::DictationToNotes,
             "mic",
         ));
     }

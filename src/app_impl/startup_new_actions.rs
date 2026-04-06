@@ -251,21 +251,10 @@
                             // Route modal actions keys for all views that support actions dialogs.
                             // This ensures enter, escape, backspace, and character keys are
                             // routed to the actions dialog when it's open, regardless of view type.
-                            let host = match &this.current_view {
-                                AppView::ScriptList => Some(ActionsDialogHost::MainList),
-                                AppView::ClipboardHistoryView { .. } => Some(ActionsDialogHost::ClipboardHistory),
-                                AppView::ChatPrompt { .. } => Some(ActionsDialogHost::ChatPrompt),
-                                AppView::ArgPrompt { .. } => Some(ActionsDialogHost::ArgPrompt),
-                                AppView::DivPrompt { .. } => Some(ActionsDialogHost::DivPrompt),
-                                AppView::EditorPrompt { .. } => Some(ActionsDialogHost::EditorPrompt),
-                                AppView::TermPrompt { .. } => Some(ActionsDialogHost::TermPrompt),
-                                AppView::FormPrompt { .. } => Some(ActionsDialogHost::FormPrompt),
-                                AppView::WebcamView { .. } => Some(ActionsDialogHost::WebcamPrompt),
-                                AppView::AcpChatView { .. } => Some(ActionsDialogHost::AcpChat),
-                                _ => None,
-                            };
-
-                            if let Some(host) = host {
+                            // Uses the canonical resolver so host decisions live in one place.
+                            if let crate::app_impl::actions_dialog::ActionsSupport::SharedDialog(host)
+                                = this.actions_support_for_view()
+                            {
                                 match this.route_key_to_actions_dialog(
                                     key,
                                     key_char,

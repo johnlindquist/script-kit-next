@@ -247,6 +247,7 @@ fn build_tab_ai_user_prompt_mentions_clipboard_and_prior_automations() {
 
 /// The overlay source included once for all source-level assertions.
 const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 
 #[test]
 fn tab_ai_overlay_uses_canonical_three_key_footer_contract() {
@@ -284,16 +285,17 @@ fn tab_ai_overlay_preserves_memory_hint_rendering() {
 #[test]
 fn tab_ai_overlay_idle_placeholder_matches_expected_copy() {
     assert!(
-        TAB_AI_SOURCE.contains("Ask AI about the current context"),
-        "idle placeholder must contain 'Ask AI about the current context'"
+        ACP_VIEW_SOURCE.contains("Ask anything\u{2026}")
+            || ACP_VIEW_SOURCE.contains("Ask anything…"),
+        "idle placeholder must contain 'Ask anything…'"
     );
 }
 
 #[test]
 fn tab_ai_overlay_running_placeholder_matches_expected_copy() {
     assert!(
-        TAB_AI_SOURCE.contains("Generating"),
-        "running placeholder must contain 'Generating'"
+        ACP_VIEW_SOURCE.contains("Follow up\u{2026}") || ACP_VIEW_SOURCE.contains("Follow up…"),
+        "running placeholder must contain 'Follow up…'"
     );
 }
 

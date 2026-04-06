@@ -10,6 +10,8 @@ const NO_MAIN_WINDOW_BUILTINS: &[&str] = &[
     "builtin/new-conversation",
     "builtin/dictation",
     "builtin/dictation-to-ai",
+    "builtin/dictation-to-app",
+    "builtin/dictation-to-notes",
 ];
 
 fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {

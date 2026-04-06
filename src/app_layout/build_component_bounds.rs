@@ -66,6 +66,7 @@ impl ScriptListApp {
             AppView::CreateAiPresetView { .. } => "CreateAiPreset",
             AppView::SettingsView { .. } => "Settings",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowse",
+            AppView::AcpHistoryView { .. } => "AcpHistory",
             AppView::AcpChatView { .. } => "AcpChat",
         };
 

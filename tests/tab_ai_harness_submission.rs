@@ -699,8 +699,8 @@ fn submission_quick_submit_no_hints_blob_but_intent_preserved() {
         "submission must include User intent section"
     );
     assert!(
-        submission.contains("Command:\ngit status"),
-        "synthesized intent must include the original command"
+        submission.contains("User intent:\ngit status"),
+        "fallback quick submit must preserve the original command as the user intent"
     );
 }
 
@@ -770,7 +770,7 @@ fn submit_with_scriptlet_authoring_intent_includes_artifact_authoring_guidance()
 
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
     assert!(submission.contains("~/.scriptkit/kit/main/extensions/<name>.md"));
-    assert!(submission.contains("~/.scriptkit/skills/scriptlets/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"));
     assert!(submission.contains("~/.scriptkit/examples/extensions/"));
     assert!(submission.contains("User intent:\nCreate a scriptlet bundle that copies today's date"));
 }
@@ -789,9 +789,8 @@ fn submit_with_agent_authoring_intent_includes_agent_destination() {
     .expect("submission should build");
 
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
-    assert!(submission.contains("~/.scriptkit/kit/main/agents/<name>.<backend>.md"));
-    assert!(submission.contains("~/.scriptkit/skills/agents/SKILL.md"));
-    assert!(submission.contains("~/.scriptkit/examples/agents/"));
+    assert!(submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"));
+    assert!(submission.contains("User intent:\nCreate an mdflow agent that reviews staged changes"));
 }
 
 #[test]

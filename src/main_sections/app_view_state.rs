@@ -217,6 +217,11 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Browsing ACP conversation history with search and preview
+    AcpHistoryView {
+        filter: String,
+        selected_index: usize,
+    },
     /// Showing the ACP-backed Tab AI chat surface for the default Tab path.
     ///
     /// Verification-bearing script-authoring requests deliberately route to
@@ -321,6 +326,8 @@ enum ActionsDialogHost {
     WebcamPrompt,
     /// Actions in ACP chat (restore focus to ACP chat input)
     AcpChat,
+    /// Actions in ACP history browser (restore focus to history search input)
+    AcpHistory,
 }
 
 /// Input mode for list navigation - tracks whether user is using keyboard or mouse.

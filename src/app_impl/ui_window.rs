@@ -248,6 +248,22 @@ impl ScriptListApp {
             }
             AppView::SettingsView { .. } => Some((ViewType::ScriptList, 0)),
             AppView::FavoritesBrowseView { .. } => Some((ViewType::ScriptList, 0)),
+            AppView::AcpHistoryView { filter, .. } => {
+                let entries = crate::ai::acp::history::load_history();
+                let filtered_count = if filter.is_empty() {
+                    entries.len()
+                } else {
+                    let filter_lower = filter.to_lowercase();
+                    entries
+                        .iter()
+                        .filter(|entry| {
+                            entry.first_message.to_lowercase().contains(&filter_lower)
+                                || entry.timestamp.to_lowercase().contains(&filter_lower)
+                        })
+                        .count()
+                };
+                Some((ViewType::ScriptList, filtered_count))
+            }
             AppView::AcpChatView { .. } => Some((ViewType::DivPrompt, 0)),
         }
     }

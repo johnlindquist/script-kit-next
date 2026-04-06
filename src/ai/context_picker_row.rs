@@ -1,17 +1,18 @@
 //! Shared dense-monoline picker row for both ACP @-mention and AI window
 //! context picker surfaces.
 //!
-//! Both surfaces render 20px rows with a 2px gold accent bar on selection,
-//! left-aligned label text with fuzzy-match highlights, and right-aligned
-//! monospace meta text.
+//! Both surfaces render footer-aligned rows with a 2px gold accent bar on
+//! selection, left-aligned label text with fuzzy-match highlights, and
+//! right-aligned monospace meta text.
 
 use gpui::{
-    div, prelude::FluentBuilder, px, AnyElement, Hsla, InteractiveElement, IntoElement,
+    div, prelude::FluentBuilder, px, AnyElement, FontWeight, Hsla, InteractiveElement, IntoElement,
     ParentElement, SharedString, StatefulInteractiveElement, Styled,
 };
 use std::collections::HashSet;
 
 use crate::list_item::FONT_MONO;
+use crate::ui::chrome::HINT_STRIP_HEIGHT;
 
 /// Gold accent (#fbbf24) — the one warm signature touch.
 pub(crate) const GOLD: Hsla = Hsla {
@@ -29,11 +30,14 @@ pub(crate) const MUTED_OP: f32 = 0.65;
 /// V05 right-side command opacity.
 pub(crate) const COMMAND_OPACITY: f32 = 0.30;
 
+/// Picker rows should align with the footer hint strip they sit above.
+pub(crate) const CONTEXT_PICKER_ROW_HEIGHT: f32 = HINT_STRIP_HEIGHT;
+
 /// Render a single dense-monoline picker row.
 ///
 /// Used by both the AI window context picker and the ACP @-mention picker
-/// to ensure identical row chrome: 20px height, 2px gold bar, fuzzy
-/// highlights in both label and meta text.
+/// to ensure identical row chrome: footer-aligned height, 2px gold bar,
+/// and fuzzy highlights in both label and meta text.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn render_dense_monoline_picker_row(
     id: SharedString,
@@ -50,7 +54,7 @@ pub(crate) fn render_dense_monoline_picker_row(
 
     div()
         .id(id)
-        .h(px(20.0))
+        .h(px(CONTEXT_PICKER_ROW_HEIGHT))
         .flex()
         .items_center()
         .justify_between()
@@ -109,6 +113,7 @@ pub(crate) fn render_highlighted_text(
     if hits.is_empty() {
         return div()
             .text_xs()
+            .font_weight(FontWeight::SEMIBOLD)
             .text_color(base)
             .text_ellipsis()
             .child(SharedString::from(text.to_string()))
@@ -125,6 +130,7 @@ pub(crate) fn render_highlighted_text(
             spans.push(
                 div()
                     .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
                     .text_color(if current_highlighted { accent } else { base })
                     .child(SharedString::from(std::mem::take(&mut current)))
                     .into_any_element(),
@@ -137,6 +143,7 @@ pub(crate) fn render_highlighted_text(
         spans.push(
             div()
                 .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
                 .text_color(if current_highlighted { accent } else { base })
                 .child(SharedString::from(current))
                 .into_any_element(),
@@ -161,6 +168,7 @@ pub(crate) fn render_highlighted_meta(
     if hits.is_empty() {
         return div()
             .text_xs()
+            .font_weight(FontWeight::SEMIBOLD)
             .font_family(FONT_MONO)
             .text_color(base)
             .text_ellipsis()
@@ -178,6 +186,7 @@ pub(crate) fn render_highlighted_meta(
             spans.push(
                 div()
                     .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
                     .font_family(FONT_MONO)
                     .text_color(if current_highlighted { accent } else { base })
                     .child(SharedString::from(std::mem::take(&mut current)))
@@ -191,6 +200,7 @@ pub(crate) fn render_highlighted_meta(
         spans.push(
             div()
                 .text_xs()
+                .font_weight(FontWeight::SEMIBOLD)
                 .font_family(FONT_MONO)
                 .text_color(if current_highlighted { accent } else { base })
                 .child(SharedString::from(current))

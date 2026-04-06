@@ -67,4 +67,4 @@ pub(crate) use thread::{
     AcpContextBootstrapState, AcpThread, AcpThreadInit, AcpThreadMessage, AcpThreadStatus,
     AcpToolCallState,
 };
-pub(crate) use view::{AcpChatSession, AcpChatView, AcpRetryRequest};
+pub(crate) use view::{AcpChatSession, AcpChatView, AcpHistoryResumeRequest, AcpRetryRequest};

@@ -2601,6 +2601,7 @@ fn overlay_state_transitions_recording_to_transcribing_to_finished() {
         elapsed: Duration::from_secs(2),
         bars: [0.1, 0.2, 0.5, 0.8, 1.0, 0.8, 0.5, 0.2, 0.1],
         transcript: "".into(),
+        ..Default::default()
     };
     assert_eq!(recording.phase, DictationSessionPhase::Recording);
     assert!(recording.transcript.is_empty());
@@ -2610,6 +2611,7 @@ fn overlay_state_transitions_recording_to_transcribing_to_finished() {
         elapsed: recording.elapsed,
         bars: [0.0; 9],
         transcript: "".into(),
+        ..Default::default()
     };
     assert_eq!(transcribing.phase, DictationSessionPhase::Transcribing);
     assert!(transcribing.transcript.is_empty());
@@ -2619,6 +2621,7 @@ fn overlay_state_transitions_recording_to_transcribing_to_finished() {
         elapsed: recording.elapsed,
         bars: [0.0; 9],
         transcript: "hello world".into(),
+        ..Default::default()
     };
     assert_eq!(finished.phase, DictationSessionPhase::Finished);
     assert_eq!(finished.transcript.as_ref(), "hello world");
@@ -2635,6 +2638,7 @@ fn overlay_state_transitions_recording_to_transcribing_to_failed() {
         elapsed: Duration::from_secs(1),
         bars: [0.5; 9],
         transcript: "".into(),
+        ..Default::default()
     };
     assert_eq!(recording.phase, DictationSessionPhase::Recording);
 
@@ -2669,6 +2673,7 @@ fn overlay_state_silent_recording_skips_finished_and_failed() {
         elapsed: Duration::from_millis(500),
         bars: [0.0; 9],
         transcript: "".into(),
+        ..Default::default()
     };
     assert_eq!(recording.phase, DictationSessionPhase::Recording);
     assert!(!crate::dictation::window::has_sound(&recording.bars));
@@ -2687,6 +2692,7 @@ fn overlay_finished_state_carries_transcript_for_delivery() {
         elapsed: Duration::from_secs(3),
         bars: [0.0; 9],
         transcript: transcript_text.into(),
+        ..Default::default()
     };
 
     assert_eq!(finished.phase, DictationSessionPhase::Finished);

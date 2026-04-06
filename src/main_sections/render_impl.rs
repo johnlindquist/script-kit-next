@@ -202,6 +202,7 @@ impl Render for ScriptListApp {
                 | AppView::ProcessManagerView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
+                | AppView::AcpHistoryView { .. }
                 | AppView::MiniPrompt { .. }
                 | AppView::ArgPrompt { .. }
         ) {
@@ -385,6 +386,12 @@ impl Render for ScriptListApp {
                 selected_index,
             } => self
                 .render_favorites_browse(filter, selected_index, cx)
+                .into_any_element(),
+            AppView::AcpHistoryView {
+                filter,
+                selected_index,
+            } => self
+                .render_acp_history(filter, selected_index, cx)
                 .into_any_element(),
             AppView::AcpChatView { entity } => entity.into_any_element(),
         };

@@ -24,6 +24,8 @@ pub(crate) const OVERLAY_CONTENT_GAP_PX: f32 = 12.0;
 pub(crate) const STATUS_TEXT_SIZE_PX: f32 = 11.5;
 /// Right-side spacer width to balance the timer column.
 pub(crate) const TIMER_SPACER_WIDTH_PX: f32 = 32.0;
+/// Width of the right-hand target badge slot (replaces spacer when target is shown).
+pub(crate) const TARGET_BADGE_SLOT_WIDTH_PX: f32 = 72.0;
 
 /// Number of waveform bars (matches vercel-voice 9-bar visualizer).
 pub(crate) const WAVEFORM_BAR_COUNT: usize = 9;
@@ -92,6 +94,22 @@ pub(crate) fn has_sound(bars: &[f32; WAVEFORM_BAR_COUNT]) -> bool {
     bars.iter().any(|&bar| bar > SOUND_THRESHOLD)
 }
 
+/// Render a compact mono destination badge for the overlay's right-hand slot.
+fn render_target_badge(target: crate::dictation::DictationTarget) -> impl IntoElement {
+    let theme = get_cached_theme();
+    div()
+        .px(px(8.))
+        .py(px(2.))
+        .rounded(px(999.))
+        .bg(theme.colors.background.main.with_opacity(OPACITY_SUBTLE))
+        .border_1()
+        .border_color(theme.colors.ui.border.with_opacity(OPACITY_SUBTLE))
+        .text_size(px(STATUS_TEXT_SIZE_PX - 1.0))
+        .font_family(FONT_MONO)
+        .text_color(theme.colors.text.muted.with_opacity(OPACITY_SELECTED))
+        .child(target.overlay_label())
+}
+
 /// Pulse cycle duration in seconds (matches vercel-voice 1.4s).
 pub(crate) const TRANSCRIBING_PULSE_PERIOD_SECS: f64 = 1.4;
 /// Stagger between consecutive dots in seconds (matches vercel-voice 0.2s).
@@ -132,6 +150,7 @@ pub struct DictationOverlayState {
     pub elapsed: Duration,
     pub bars: [f32; WAVEFORM_BAR_COUNT],
     pub transcript: SharedString,
+    pub target: crate::dictation::DictationTarget,
 }
 
 impl Default for DictationOverlayState {
@@ -141,6 +160,7 @@ impl Default for DictationOverlayState {
             elapsed: Duration::ZERO,
             bars: silent_bars(),
             transcript: SharedString::default(),
+            target: crate::dictation::DictationTarget::ExternalApp,
         }
     }
 }
@@ -794,8 +814,16 @@ impl Render for DictationOverlay {
                             .justify_center()
                             .child(render_waveform_bars(bars, active)),
                     )
-                    // Right: spacer to balance the timer width
-                    .child(div().w(px(TIMER_SPACER_WIDTH_PX)))
+                    // Right: destination badge
+                    .child(
+                        div()
+                            .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_end()
+                            .child(render_target_badge(self.state.target)),
+                    )
             }
             DictationSessionPhase::Confirming => {
                 // Same 3-column horizontal layout as recording — content swaps
@@ -870,8 +898,16 @@ impl Render for DictationOverlay {
                                     .child(CONFIRM_CONTINUE_LABEL),
                             ),
                     )
-                    // Right: spacer to balance the timer width
-                    .child(div().w(px(TIMER_SPACER_WIDTH_PX)))
+                    // Right: destination badge
+                    .child(
+                        div()
+                            .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_end()
+                            .child(render_target_badge(self.state.target)),
+                    )
             }
             DictationSessionPhase::Transcribing => {
                 // 3 green dots matching vercel-voice .transcribing-dots

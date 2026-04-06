@@ -1144,39 +1144,19 @@ impl ScriptListApp {
                 }
             }
             "acp_show_history" => {
-                let entries = crate::ai::acp::history::load_history();
-                if entries.is_empty() {
-                    let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some("No conversation history yet".to_string());
-                    outcome
-                } else {
-                    // Format as markdown and copy to clipboard
-                    let mut text = String::from("# Recent AI Conversations\n\n");
-                    for (i, entry) in entries.iter().take(20).enumerate() {
-                        let date = entry
-                            .timestamp
-                            .split('T')
-                            .next()
-                            .unwrap_or(&entry.timestamp);
-                        text.push_str(&format!(
-                            "{}. **{}** — {} messages, {}\n",
-                            i + 1,
-                            entry.first_message,
-                            entry.message_count,
-                            date,
-                        ));
-                    }
-                    text.push_str(&format!(
-                        "\n_Conversations saved in ~/.scriptkit/acp-conversations/_"
-                    ));
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
-                    let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some(format!(
-                        "{} conversations copied to clipboard",
-                        entries.len().min(20)
-                    ));
-                    outcome
-                }
+                // Open the dedicated ACP History builtin view
+                tracing::info!(event = "acp_history_action_invoked", action = "openHistoryCommand");
+                self.open_builtin_filterable_view(
+                    AppView::AcpHistoryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search conversation history...",
+                    cx,
+                );
+                let mut outcome = DispatchOutcome::success();
+                outcome.user_message = Some("Opened conversation history".to_string());
+                outcome
             }
             "acp_clear_history" => {
                 // Delete history index and conversations directory
