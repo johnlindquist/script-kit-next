@@ -3,12 +3,105 @@ use super::*;
 static SCRIPT_REFRESH_REQUEST_ID: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ScriptHotkeyRefreshAction {
+    Update {
+        path: String,
+        old_shortcut: Option<String>,
+        new_shortcut: Option<String>,
+    },
+}
+
 struct AsyncScriptRefreshLoadResult {
     scripts: Vec<std::sync::Arc<scripts::Script>>,
     scriptlets: Vec<std::sync::Arc<scripts::Scriptlet>>,
     scripts_elapsed: std::time::Duration,
     scriptlets_elapsed: std::time::Duration,
     total_elapsed: std::time::Duration,
+}
+
+fn canonical_script_shortcut(shortcut: Option<&str>) -> Option<String> {
+    shortcut
+        .map(str::trim)
+        .filter(|shortcut| !shortcut.is_empty())
+        .map(|shortcut| shortcut.to_lowercase())
+}
+
+fn plan_script_hotkey_refresh(
+    old_scripts: &[std::sync::Arc<scripts::Script>],
+    new_scripts: &[std::sync::Arc<scripts::Script>],
+) -> Vec<ScriptHotkeyRefreshAction> {
+    let old_by_path = old_scripts
+        .iter()
+        .map(|script| {
+            (
+                script.path.to_string_lossy().to_string(),
+                script.shortcut.clone(),
+            )
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+    let new_by_path = new_scripts
+        .iter()
+        .map(|script| {
+            (
+                script.path.to_string_lossy().to_string(),
+                script.shortcut.clone(),
+            )
+        })
+        .collect::<std::collections::HashMap<_, _>>();
+
+    let mut paths = old_by_path
+        .keys()
+        .chain(new_by_path.keys())
+        .cloned()
+        .collect::<Vec<_>>();
+    paths.sort();
+    paths.dedup();
+
+    paths.into_iter()
+        .filter_map(|path| {
+            let old_shortcut = old_by_path.get(&path).cloned().flatten();
+            let new_shortcut = new_by_path.get(&path).cloned().flatten();
+
+            if canonical_script_shortcut(old_shortcut.as_deref())
+                == canonical_script_shortcut(new_shortcut.as_deref())
+            {
+                return None;
+            }
+
+            if old_shortcut.is_none() && new_shortcut.is_none() {
+                return None;
+            }
+
+            Some(ScriptHotkeyRefreshAction::Update {
+                path,
+                old_shortcut,
+                new_shortcut,
+            })
+        })
+        .collect()
+}
+
+fn apply_script_hotkey_refresh(actions: &[ScriptHotkeyRefreshAction]) {
+    for action in actions {
+        let ScriptHotkeyRefreshAction::Update {
+            path,
+            old_shortcut,
+            new_shortcut,
+        } = action;
+
+        if let Err(error) =
+            hotkeys::update_script_hotkey(path, old_shortcut.as_deref(), new_shortcut.as_deref())
+        {
+            logging::log(
+                "HOTKEY",
+                &format!(
+                    "Failed to refresh script hotkey for {}: {} (old={:?}, new={:?})",
+                    path, error, old_shortcut, new_shortcut
+                ),
+            );
+        }
+    }
 }
 
 fn spawn_async_script_refresh_load(
@@ -155,6 +248,9 @@ impl ScriptListApp {
         loaded_scriptlets: Vec<std::sync::Arc<scripts::Scriptlet>>,
         cx: &mut Context<Self>,
     ) {
+        let hotkey_refresh_actions = plan_script_hotkey_refresh(&self.scripts, &loaded_scripts);
+        apply_script_hotkey_refresh(&hotkey_refresh_actions);
+
         self.scripts = loaded_scripts;
         // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
         self.scriptlets = loaded_scriptlets;
@@ -436,6 +532,8 @@ impl ScriptListApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::scripts::Script;
+    use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
@@ -485,5 +583,60 @@ mod tests {
 
         assert_ne!(scripts_worker_thread, main_thread_id);
         assert_ne!(scriptlets_worker_thread, main_thread_id);
+    }
+
+    fn test_script(path: &str, shortcut: Option<&str>) -> Arc<Script> {
+        Arc::new(Script {
+            path: PathBuf::from(path),
+            shortcut: shortcut.map(ToString::to_string),
+            ..Default::default()
+        })
+    }
+
+    #[test]
+    fn test_plan_script_hotkey_refresh_detects_add_remove_and_change() {
+        let old_scripts = vec![
+            test_script("/tmp/keep.ts", Some("cmd+1")),
+            test_script("/tmp/remove.ts", Some("cmd+2")),
+            test_script("/tmp/change.ts", Some("cmd+3")),
+        ];
+        let new_scripts = vec![
+            test_script("/tmp/keep.ts", Some("cmd+1")),
+            test_script("/tmp/change.ts", Some("cmd+4")),
+            test_script("/tmp/add.ts", Some("cmd+5")),
+        ];
+
+        let actions = plan_script_hotkey_refresh(&old_scripts, &new_scripts);
+
+        assert_eq!(
+            actions,
+            vec![
+                ScriptHotkeyRefreshAction::Update {
+                    path: "/tmp/add.ts".to_string(),
+                    old_shortcut: None,
+                    new_shortcut: Some("cmd+5".to_string()),
+                },
+                ScriptHotkeyRefreshAction::Update {
+                    path: "/tmp/change.ts".to_string(),
+                    old_shortcut: Some("cmd+3".to_string()),
+                    new_shortcut: Some("cmd+4".to_string()),
+                },
+                ScriptHotkeyRefreshAction::Update {
+                    path: "/tmp/remove.ts".to_string(),
+                    old_shortcut: Some("cmd+2".to_string()),
+                    new_shortcut: None,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_plan_script_hotkey_refresh_ignores_case_only_shortcut_changes() {
+        let old_scripts = vec![test_script("/tmp/case.ts", Some("CMD+4"))];
+        let new_scripts = vec![test_script("/tmp/case.ts", Some("cmd+4"))];
+
+        let actions = plan_script_hotkey_refresh(&old_scripts, &new_scripts);
+
+        assert!(actions.is_empty());
     }
 }
