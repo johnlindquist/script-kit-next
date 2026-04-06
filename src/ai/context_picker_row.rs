@@ -49,10 +49,35 @@ pub(crate) fn render_dense_monoline_picker_row(
     foreground: Hsla,
     muted_foreground: Hsla,
 ) -> gpui::Stateful<gpui::Div> {
+    render_dense_monoline_picker_row_with_accessory(
+        id,
+        label,
+        meta,
+        label_highlight_indices,
+        meta_highlight_indices,
+        is_selected,
+        foreground,
+        muted_foreground,
+        None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn render_dense_monoline_picker_row_with_accessory(
+    id: SharedString,
+    label: SharedString,
+    meta: SharedString,
+    label_highlight_indices: &[usize],
+    meta_highlight_indices: &[usize],
+    is_selected: bool,
+    foreground: Hsla,
+    muted_foreground: Hsla,
+    accessory: Option<AnyElement>,
+) -> gpui::Stateful<gpui::Div> {
     let label_hits: HashSet<usize> = label_highlight_indices.iter().copied().collect();
     let meta_hits: HashSet<usize> = meta_highlight_indices.iter().copied().collect();
 
-    div()
+    let mut row = div()
         .id(id)
         .h(px(CONTEXT_PICKER_ROW_HEIGHT))
         .flex()
@@ -93,14 +118,20 @@ pub(crate) fn render_dense_monoline_picker_row(
                     GOLD,
                 )),
         )
-        .when(!meta.is_empty(), |d| {
+        .when(accessory.is_none() && !meta.is_empty(), |d| {
             d.child(render_highlighted_meta(
                 &meta,
                 &meta_hits,
                 muted_foreground.opacity(COMMAND_OPACITY),
                 GOLD.opacity(HINT),
             ))
-        })
+        });
+
+    if let Some(accessory) = accessory {
+        row = row.child(accessory);
+    }
+
+    row
 }
 
 /// Render label text with gold highlights on matched characters (text_xs).

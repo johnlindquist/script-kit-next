@@ -1,6 +1,7 @@
 use gpui::{
-    px, AnyWindowHandle, App, AppContext, Bounds, DisplayId, Pixels, Window, WindowBounds,
-    WindowHandle, WindowKind, WindowOptions,
+    div, px, AnyWindowHandle, App, AppContext, Bounds, DisplayId, InteractiveElement, Pixels,
+    SharedString, StatefulInteractiveElement, Styled, Window, WindowBounds, WindowHandle,
+    WindowKind, WindowOptions,
 };
 
 use crate::ai::context_picker_row::CONTEXT_PICKER_ROW_HEIGHT;
@@ -12,9 +13,12 @@ pub(crate) const DENSE_PICKER_MAX_VISIBLE_ROWS: usize = 8;
 pub(crate) const DENSE_PICKER_VERTICAL_PADDING: f32 = 4.0;
 pub(crate) const DENSE_PICKER_EMPTY_HEIGHT: f32 = 56.0;
 pub(crate) const DENSE_PICKER_DEFAULT_WIDTH: f32 = 320.0;
-pub(crate) const DENSE_PICKER_MIN_WIDTH: f32 = 200.0;
+pub(crate) const DENSE_PICKER_MIN_WIDTH: f32 = 168.0;
 pub(crate) const DENSE_PICKER_EDGE_GUTTER: f32 = 12.0;
 pub(crate) const DENSE_PICKER_LEFT_MARGIN: f32 = 8.0;
+const DENSE_PICKER_LABEL_CHAR_WIDTH: f32 = 8.0;
+const DENSE_PICKER_WIDTH_PADDING: f32 = 76.0;
+const DENSE_PICKER_ACCESSORY_WIDTH: f32 = 18.0;
 
 #[cfg(target_os = "macos")]
 const NS_WINDOW_ABOVE: i64 = 1;
@@ -34,9 +38,50 @@ pub(crate) fn dense_picker_width_for_window(window_width: f32) -> f32 {
     max_width.max(DENSE_PICKER_MIN_WIDTH)
 }
 
+pub(crate) fn dense_picker_width_for_labels<'a, I>(
+    window_width: f32,
+    labels: I,
+    has_accessory: bool,
+) -> f32
+where
+    I: IntoIterator<Item = &'a str>,
+{
+    let longest_label_chars = labels
+        .into_iter()
+        .map(|label| label.chars().count())
+        .max()
+        .unwrap_or(0) as f32;
+    let accessory_width = if has_accessory {
+        DENSE_PICKER_ACCESSORY_WIDTH
+    } else {
+        0.0
+    };
+    let measured_width = (longest_label_chars * DENSE_PICKER_LABEL_CHAR_WIDTH)
+        + DENSE_PICKER_WIDTH_PADDING
+        + accessory_width;
+
+    measured_width.clamp(
+        DENSE_PICKER_MIN_WIDTH,
+        dense_picker_width_for_window(window_width),
+    )
+}
+
 pub(crate) fn footer_anchored_popup_top(parent_height: f32, popup_height: f32) -> f32 {
     let bottom_offset = crate::window_resize::mini_layout::HINT_STRIP_HEIGHT + 4.0;
     (parent_height - bottom_offset - popup_height).max(0.0)
+}
+
+pub(crate) fn dense_picker_popup_surface(id: SharedString) -> gpui::Stateful<gpui::Div> {
+    let theme = crate::theme::get_cached_theme();
+    let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+
+    div()
+        .id(id)
+        .rounded(px(8.0))
+        .overflow_hidden()
+        .bg(gpui::rgba(chrome.dialog_surface_rgba))
+        .border_1()
+        .border_color(gpui::rgba(chrome.border_rgba))
 }
 
 pub(crate) fn popup_bounds(
@@ -215,8 +260,9 @@ fn attach_popup_to_parent_window(
 #[cfg(test)]
 mod tests {
     use super::{
-        dense_picker_height, dense_picker_width_for_window, footer_anchored_popup_top,
-        popup_bounds, DENSE_PICKER_DEFAULT_WIDTH, DENSE_PICKER_MIN_WIDTH,
+        dense_picker_height, dense_picker_width_for_labels, dense_picker_width_for_window,
+        footer_anchored_popup_top, popup_bounds, DENSE_PICKER_DEFAULT_WIDTH,
+        DENSE_PICKER_MIN_WIDTH,
     };
 
     #[test]
@@ -233,6 +279,19 @@ mod tests {
             DENSE_PICKER_DEFAULT_WIDTH
         );
         assert_eq!(dense_picker_width_for_window(180.0), DENSE_PICKER_MIN_WIDTH);
+    }
+
+    #[test]
+    fn dense_picker_label_width_tracks_content_length() {
+        let compact_width = dense_picker_width_for_labels(480.0, ["Sonnet 4.6", "Haiku 4.5"], true);
+        let expanded_width = dense_picker_width_for_labels(
+            480.0,
+            ["A very long model name that should widen the popup"],
+            true,
+        );
+
+        assert!(compact_width < DENSE_PICKER_DEFAULT_WIDTH);
+        assert!(expanded_width > compact_width);
     }
 
     #[test]

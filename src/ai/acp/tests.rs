@@ -548,10 +548,13 @@ fn acp_model_selector_migration_uses_popup_window_instead_of_inline_layer() {
         "ACP model selector should render through a popup window entity"
     );
     assert!(
-        ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("render_dense_monoline_picker_row(")
+        ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("render_dense_monoline_picker_row_with_accessory(")
+            && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("IconName::Check")
             && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("super::popup_window::dense_picker_height")
             && ACP_MODEL_SELECTOR_POPUP_SOURCE
-                .contains("super::popup_window::dense_picker_width_for_window"),
+                .contains("super::popup_window::dense_picker_popup_surface")
+            && ACP_MODEL_SELECTOR_POPUP_SOURCE
+                .contains("super::popup_window::dense_picker_width_for_labels"),
         "ACP model selector popup must share the dense picker row and sizing contract with slash/@ pickers"
     );
 }
