@@ -20,9 +20,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::builders::{
-    format_shortcut_hint as format_shortcut_hint_shared, get_chat_context_actions,
-    get_clipboard_history_context_actions, get_emoji_context_actions, get_file_context_actions,
-    get_global_actions, get_path_context_actions, get_script_context_actions,
+    format_shortcut_hint as format_shortcut_hint_shared, get_clipboard_history_context_actions,
+    get_emoji_context_actions, get_file_context_actions, get_global_actions,
+    get_path_context_actions, get_script_context_actions,
     get_scriptlet_context_actions_with_custom, ChatPromptInfo, ClipboardEntryInfo, EmojiActionInfo,
 };
 use super::constants::{
@@ -826,42 +826,49 @@ impl ActionsDialog {
         }
     }
 
-    /// Create ActionsDialog for a chat prompt with chat-specific actions
-    /// Actions: Model selection, Continue in Chat, Copy Response, Clear Conversation
+    /// Create ActionsDialog for a chat prompt with chat-specific actions.
+    ///
+    /// Initializes a root route whose first-level actions contain
+    /// `chat:change_model` (a drill-down trigger) instead of flat model rows.
+    /// Selecting Change Model transitions to a second-level model picker.
+    /// Escape pops back to the root route, then dismisses the dialog.
     pub fn with_chat(
         focus_handle: FocusHandle,
         on_select: ActionCallback,
         chat_info: &ChatPromptInfo,
         theme: Arc<theme::Theme>,
     ) -> Self {
-        let actions = get_chat_context_actions(chat_info);
+        let root_route = super::builders::get_chat_root_route(chat_info);
         let config = ActionsDialogConfig::default();
-
-        let context_title = chat_info
-            .current_model
-            .clone()
-            .unwrap_or_else(|| "Chat".to_string());
 
         logging::log(
             "ACTIONS",
             &format!(
-                "ActionsDialog created for chat prompt: model={:?} with {} actions",
+                "ActionsDialog created for chat prompt: model={:?}, root_actions={}",
                 chat_info.current_model,
-                actions.len()
+                root_route.actions.len(),
             ),
         );
 
-        Self::from_actions_with_context(
+        let mut dialog = Self::from_actions_with_context(
             focus_handle,
             on_select,
-            actions,
+            root_route.actions.clone(),
             None,
             None,
             theme,
             DesignVariant::Default,
-            Some(context_title),
+            root_route.context_title.clone(),
             config,
-        )
+        );
+
+        dialog.set_root_route(root_route);
+        dialog.register_drill_down_route(
+            super::builders::CHAT_CHANGE_MODEL_ACTION_ID,
+            super::builders::get_chat_model_picker_route(chat_info),
+        );
+
+        dialog
     }
 
     pub fn with_script_and_design(

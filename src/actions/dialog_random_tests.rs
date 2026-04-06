@@ -5,11 +5,12 @@
 //! dialog helpers, window utilities, and configuration presets.
 
 use super::builders::{
-    get_ai_command_bar_actions, get_chat_context_actions, get_clipboard_history_context_actions,
-    get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
-    get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
-    get_scriptlet_context_actions_with_custom, to_deeplink_name, ChatModelInfo, ChatPromptInfo,
-    ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+    get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
+    get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
+    get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
+    get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
+    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
+    NoteSwitcherNoteInfo, NotesInfo,
 };
 use super::command_bar::CommandBarConfig;
 use super::dialog::{
@@ -759,9 +760,11 @@ fn chat_zero_models() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    // Should have only "continue_in_chat" + capture_screen_area (no copy_response, no clear)
-    assert_eq!(actions.len(), 2);
-    assert_eq!(actions[0].id, "chat:continue_in_chat");
+    // Root actions: change_model + continue_in_chat + capture_screen_area (no copy_response, no clear)
+    assert!(actions.iter().any(|a| a.id == "chat:change_model"));
+    assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
+    // No flat model rows in root — models live in the drill-down picker
+    assert!(!actions.iter().any(|a| a.id.starts_with("chat:select_model_")));
 }
 
 #[test]
@@ -783,10 +786,11 @@ fn chat_current_model_checkmark() {
         has_messages: false,
         has_response: false,
     };
-    let actions = get_chat_context_actions(&info);
-    let claude = find_action(&actions, "chat:select_model_claude-3").unwrap();
+    // Model rows live in the drill-down picker, not the root context actions
+    let picker = get_chat_model_picker_actions(&info);
+    let claude = find_action(&picker, "chat:select_model_claude-3").unwrap();
     assert!(claude.title.contains('✓'));
-    let gpt = find_action(&actions, "chat:select_model_gpt-4").unwrap();
+    let gpt = find_action(&picker, "chat:select_model_gpt-4").unwrap();
     assert!(!gpt.title.contains('✓'));
 }
 
@@ -830,8 +834,9 @@ fn chat_model_description_has_provider() {
         has_messages: false,
         has_response: false,
     };
-    let actions = get_chat_context_actions(&info);
-    let model_action = find_action(&actions, "chat:select_model_claude-3").unwrap();
+    // Model rows live in the drill-down picker
+    let picker = get_chat_model_picker_actions(&info);
+    let model_action = find_action(&picker, "chat:select_model_claude-3").unwrap();
     assert_eq!(model_action.description, Some("Uses Anthropic".to_string()));
 }
 

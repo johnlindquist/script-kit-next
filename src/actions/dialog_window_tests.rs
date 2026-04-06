@@ -14,11 +14,12 @@
 //! - ScriptInfo constructor invariant checks
 
 use super::builders::{
-    get_chat_context_actions, get_clipboard_history_context_actions, get_file_context_actions,
-    get_new_chat_actions, get_note_switcher_actions, get_notes_command_bar_actions,
-    get_path_context_actions, get_script_context_actions,
-    get_scriptlet_context_actions_with_custom, to_deeplink_name, ChatModelInfo, ChatPromptInfo,
-    ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+    get_chat_context_actions, get_chat_model_picker_actions,
+    get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
+    get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
+    get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
+    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
+    NoteSwitcherNoteInfo, NotesInfo,
 };
 use super::command_bar::CommandBarConfig;
 use super::dialog::ActionsDialog;
@@ -215,10 +216,12 @@ fn chat_no_messages_no_response_has_only_continue() {
     };
     let actions = get_chat_context_actions(&info);
     let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
+    assert!(ids.contains(&"chat:change_model"));
     assert!(ids.contains(&"chat:continue_in_chat"));
     assert!(!ids.contains(&"chat:copy_response"));
     assert!(!ids.contains(&"chat:clear_conversation"));
-    assert_eq!(actions.len(), 2);
+    // change_model + continue_in_chat + capture_screen_area
+    assert_eq!(actions.len(), 3);
 }
 
 #[test]
@@ -285,17 +288,18 @@ fn chat_model_checkmark_exact_format() {
         has_response: false,
         has_messages: false,
     };
-    let actions = get_chat_context_actions(&info);
+    // Model rows live in the drill-down picker
+    let picker = get_chat_model_picker_actions(&info);
 
     // Current model should have checkmark in title
-    let sonnet = actions
+    let sonnet = picker
         .iter()
         .find(|a| a.id == "chat:select_model_sonnet")
         .unwrap();
     assert_eq!(sonnet.title, "Claude Sonnet \u{2713}"); // "Claude Sonnet ✓"
 
     // Other model should NOT have checkmark
-    let gpt4 = actions
+    let gpt4 = picker
         .iter()
         .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
@@ -315,8 +319,9 @@ fn chat_model_description_shows_provider() {
         has_response: false,
         has_messages: false,
     };
-    let actions = get_chat_context_actions(&info);
-    let haiku = actions
+    // Model rows live in the drill-down picker
+    let picker = get_chat_model_picker_actions(&info);
+    let haiku = picker
         .iter()
         .find(|a| a.id == "chat:select_model_haiku")
         .unwrap();

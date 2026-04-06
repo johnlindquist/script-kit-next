@@ -34,7 +34,13 @@ pub(crate) use shared::format_shortcut_hint;
 
 #[allow(unused_imports)]
 pub use chat::get_chat_model_picker_actions;
+#[allow(unused_imports)]
 pub use chat::{get_ai_command_bar_actions, get_chat_context_actions};
+#[allow(unused_imports)]
+pub use chat::{
+    get_chat_model_picker_route, get_chat_root_route, CHAT_CHANGE_MODEL_ACTION_ID,
+    CHAT_MODEL_PICKER_ROUTE_ID, CHAT_ROOT_ROUTE_ID,
+};
 pub use clipboard::get_clipboard_history_context_actions;
 pub(crate) use file_path::resolve_file_search_secondary_action_id;
 pub use file_path::{

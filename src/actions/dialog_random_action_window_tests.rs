@@ -6,11 +6,12 @@
 //! Each test picks a specific scenario and validates expected behavior.
 
 use super::builders::{
-    get_ai_command_bar_actions, get_chat_context_actions, get_clipboard_history_context_actions,
-    get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
-    get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
-    get_scriptlet_context_actions_with_custom, to_deeplink_name, ChatModelInfo, ChatPromptInfo,
-    ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+    get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
+    get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
+    get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
+    get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
+    ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
+    NoteSwitcherNoteInfo, NotesInfo,
 };
 use super::command_bar::CommandBarConfig;
 use super::dialog::{
@@ -438,8 +439,9 @@ fn chat_single_model_current_checkmark() {
         has_messages: false,
         has_response: false,
     };
-    let actions = get_chat_context_actions(&info);
-    let model = find_action(&actions, "chat:select_model_tm").unwrap();
+    // Model rows live in the drill-down picker
+    let picker = get_chat_model_picker_actions(&info);
+    let model = find_action(&picker, "chat:select_model_tm").unwrap();
     assert!(model.title.contains('✓'));
     assert_eq!(model.description.as_deref(), Some("Uses TestCo"));
 }
@@ -461,10 +463,11 @@ fn chat_many_models_only_one_checkmark() {
         has_messages: true,
         has_response: true,
     };
-    let actions = get_chat_context_actions(&info);
-    let checkmark_count = actions.iter().filter(|a| a.title.contains('✓')).count();
+    // Model rows live in the drill-down picker
+    let picker = get_chat_model_picker_actions(&info);
+    let checkmark_count = picker.iter().filter(|a| a.title.contains('✓')).count();
     assert_eq!(checkmark_count, 1, "Only one model should have checkmark");
-    let checked = actions.iter().find(|a| a.title.contains('✓')).unwrap();
+    let checked = picker.iter().find(|a| a.title.contains('✓')).unwrap();
     assert_eq!(checked.id, "chat:select_model_m2");
 }
 
