@@ -557,6 +557,8 @@ impl ScriptListApp {
             tab_ai_harness_return_focus_target: None,
             tab_ai_harness_script_list_trigger: None,
             tab_ai_harness_apply_back_route: None,
+            attachment_portal_return_view: None,
+            attachment_portal_return_focus_target: None,
             // Input history for shell-like up/down navigation
             input_history: {
                 let mut history = input_history::InputHistory::new();

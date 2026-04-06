@@ -565,9 +565,9 @@ impl AiApp {
                     path: path.to_string_lossy().to_string(),
                     label: item.label.to_string(),
                 },
-                ContextPickerItemKind::SlashCommand(_) => {
-                    // SlashCommand items are ACP-only; the window picker
-                    // should never encounter them, but handle gracefully.
+                ContextPickerItemKind::SlashCommand(_) | ContextPickerItemKind::Portal(_) => {
+                    // SlashCommand and Portal items are ACP-only; the window
+                    // picker should never encounter them, but handle gracefully.
                     return;
                 }
             };
@@ -797,6 +797,89 @@ fn extend_builtin_picker_items(
             query = %query,
             "ai_context_picker_file_scan_skipped"
         );
+    }
+
+    // Portal items — "Browse Files..." / "Browse Clipboard..." for rich browsing.
+    // Only in mention mode; slash mode is command-only.
+    if trigger == ContextPickerTrigger::Mention {
+        inject_portal_items(query_lower, items);
+    }
+}
+
+/// Inject "Browse Files..." and "Browse Clipboard..." portal items for rich
+/// browsing. These open the full built-in view as a temporary portal that
+/// returns the selection to the ACP chat.
+fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
+    use types::PortalKind;
+
+    struct PortalDef {
+        kind: PortalKind,
+        id: &'static str,
+        label: &'static str,
+        description: &'static str,
+        meta: &'static str,
+        match_terms: &'static [&'static str],
+    }
+
+    let portals: &[PortalDef] = &[
+        PortalDef {
+            kind: PortalKind::FileSearch,
+            id: "portal:file_search",
+            label: "Browse Files\u{2026}",
+            description: "Search files with Spotlight and browse folders",
+            meta: "@file",
+            match_terms: &["file", "files", "browse", "search"],
+        },
+        PortalDef {
+            kind: PortalKind::ClipboardHistory,
+            id: "portal:clipboard_history",
+            label: "Browse Clipboard\u{2026}",
+            description: "Browse clipboard history with previews",
+            meta: "@clipboard",
+            match_terms: &["clipboard", "clip", "history", "paste"],
+        },
+    ];
+
+    for def in portals {
+        let PortalDef {
+            kind,
+            id,
+            label,
+            description,
+            meta,
+            match_terms,
+        } = def;
+        let (score, label_hits) = if query_lower.is_empty() {
+            // Higher than built-in default (100) to appear at top of the list.
+            (200u32, Vec::new())
+        } else if match_terms.iter().any(|t| t.starts_with(query_lower)) {
+            (
+                80,
+                match_query_chars(query_lower, &label.to_lowercase()).unwrap_or_default(),
+            )
+        } else if match_terms.iter().any(|t| t.contains(query_lower)) {
+            (
+                40,
+                match_query_chars(query_lower, &label.to_lowercase()).unwrap_or_default(),
+            )
+        } else if let Some(hits) = match_query_chars(query_lower, &label.to_lowercase()) {
+            (20, hits)
+        } else {
+            continue;
+        };
+
+        let meta_hits = match_query_chars_in_display_meta(query_lower, meta).unwrap_or_default();
+
+        items.push(ContextPickerItem {
+            id: SharedString::from(*id),
+            label: SharedString::from(*label),
+            description: SharedString::from(*description),
+            meta: SharedString::from(*meta),
+            kind: ContextPickerItemKind::Portal(*kind),
+            score,
+            label_highlight_indices: label_hits,
+            meta_highlight_indices: meta_hits,
+        });
     }
 }
 
@@ -1087,5 +1170,6 @@ fn section_priority(kind: &ContextPickerItemKind) -> u8 {
         ContextPickerItemKind::SlashCommand(_) => 1,
         ContextPickerItemKind::File(_) => 2,
         ContextPickerItemKind::Folder(_) => 3,
+        ContextPickerItemKind::Portal(_) => 0,
     }
 }

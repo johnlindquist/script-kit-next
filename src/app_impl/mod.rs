@@ -44,6 +44,8 @@ mod prompt_ai;
 mod naming_dialog;
 #[path = "tab_ai_mode.rs"]
 mod tab_ai_mode;
+#[path = "attachment_portal.rs"]
+mod attachment_portal;
 #[allow(dead_code)]
 #[path = "window_orchestrator_bridge.rs"]
 mod window_orchestrator_bridge;

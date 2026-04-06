@@ -79,6 +79,13 @@ impl ScriptListApp {
                     app.close_tab_ai_harness_terminal_with_window(window, cx);
                 });
             });
+
+            let portal_app = app_entity.clone();
+            view.set_on_open_portal(move |kind, cx| {
+                portal_app.update(cx, |app, cx| {
+                    app.open_attachment_portal(kind, cx);
+                });
+            });
         });
     }
 

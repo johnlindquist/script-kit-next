@@ -8,6 +8,15 @@ pub enum ContextPickerTrigger {
     Slash,
 }
 
+/// Which full built-in view a portal item opens for rich browsing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PortalKind {
+    /// Open the Spotlight-powered file search view.
+    FileSearch,
+    /// Open the visual clipboard history browser.
+    ClipboardHistory,
+}
+
 /// The kind of item in the context picker.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContextPickerItemKind {
@@ -20,6 +29,9 @@ pub enum ContextPickerItemKind {
     /// A Claude Code agent slash command (e.g. `/compact`, `/clear`).
     /// Acceptance inserts the command text and optionally submits.
     SlashCommand(String),
+    /// Opens a full built-in view as a portal for rich browsing.
+    /// Selection in the portal attaches the result back to the ACP chat.
+    Portal(PortalKind),
 }
 
 /// A single row in the context picker.
@@ -92,6 +104,7 @@ impl ContextPickerState {
                         ContextPickerItemKind::File(_) => "file",
                         ContextPickerItemKind::Folder(_) => "folder",
                         ContextPickerItemKind::SlashCommand(_) => "slash_command",
+                        ContextPickerItemKind::Portal(_) => "portal",
                     },
                     score: item.score,
                 })

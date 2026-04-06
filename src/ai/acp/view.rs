@@ -61,6 +61,14 @@ type ToggleHandler = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'sta
 /// invoked without holding the AcpChatView borrow — toggle_actions needs to read the
 /// entity, which panics if called from inside its own update.
 type AcpFooterActionHandler = std::sync::Arc<dyn Fn(&mut Window, &mut App) + 'static>;
+/// Portal open callback — receives the portal kind so the host can open the
+/// appropriate built-in view (file search, clipboard history, etc.).
+/// Takes `&mut App` (not `&mut Window`) because the handler opens a new view
+/// via entity update, and this callback is invoked from contexts where
+/// `Window` is not available (e.g. `accept_mention_selection_impl`).
+type AcpPortalHandler = std::sync::Arc<
+    dyn Fn(crate::ai::window::context_picker::types::PortalKind, &mut App) + 'static,
+>;
 
 /// Parse the `description` field from YAML frontmatter in a SKILL.md file.
 fn parse_skill_description(content: &str) -> Option<String> {
@@ -183,6 +191,8 @@ pub(crate) struct AcpChatView {
     on_close_requested: Option<AcpFooterActionHandler>,
     /// Host-owned callback for opening the dedicated history command surface.
     on_open_history_command: Option<AcpFooterActionHandler>,
+    /// Host-owned callback for opening a full built-in view as an attachment portal.
+    on_open_portal: Option<AcpPortalHandler>,
 }
 
 /// Bounded ring buffer for ACP test probe events.
@@ -246,6 +256,7 @@ impl AcpChatView {
             }
             ContextPickerItemKind::File(_) => format!("file:{}", item.label),
             ContextPickerItemKind::Folder(_) => format!("folder:{}", item.label),
+            ContextPickerItemKind::Portal(_) => item.id.to_string(),
         }
     }
 
@@ -326,9 +337,19 @@ impl AcpChatView {
         self.on_close_requested = Some(std::sync::Arc::new(callback));
     }
 
-    /// Invoke a footer callback outside the AcpChatView borrow by spawning an
-    /// immediate async task. The host callbacks (toggle_actions, close, etc.)
-    /// may need to entity.read() this view, which panics if we're inside update.
+    pub(crate) fn set_on_open_portal(
+        &mut self,
+        callback: impl Fn(crate::ai::window::context_picker::types::PortalKind, &mut App) + 'static,
+    ) {
+        self.on_open_portal = Some(std::sync::Arc::new(callback));
+    }
+
+    /// Register an inline mention token as portal-owned so mention sync
+    /// treats it the same as picker-accepted tokens.
+    pub(crate) fn register_inline_owned_token(&mut self, token: &str) {
+        self.inline_owned_context_tokens.insert(token.to_string());
+    }
+
     /// Invoke a footer callback outside the AcpChatView borrow by spawning an
     /// immediate async task. The host callbacks (toggle_actions, close, etc.)
     /// may need to entity.read() this view, which panics if we're inside update.
@@ -930,6 +951,7 @@ impl AcpChatView {
             on_toggle_actions: None,
             on_close_requested: None,
             on_open_history_command: None,
+            on_open_portal: None,
         }
     }
 
@@ -975,6 +997,7 @@ impl AcpChatView {
             on_toggle_actions: None,
             on_close_requested: None,
             on_open_history_command: None,
+            on_open_portal: None,
         }
     }
 
@@ -2900,6 +2923,19 @@ impl AcpChatView {
                 )
             }
             ContextPickerItemKind::SlashCommand(_) => return,
+            ContextPickerItemKind::Portal(portal_kind) => {
+                // Dismiss the mention popup and invoke the host portal callback.
+                // Deferred via App::defer to release the AcpChatView entity borrow.
+                self.sync_mention_popup_window_from_cached_parent(cx);
+                if let Some(callback) = self.on_open_portal.clone() {
+                    let kind = *portal_kind;
+                    cx.defer(move |cx| {
+                        callback(kind, cx);
+                    });
+                }
+                cx.notify();
+                return;
+            }
         };
 
         let current_text = self.live_thread().read(cx).input.text().to_string();

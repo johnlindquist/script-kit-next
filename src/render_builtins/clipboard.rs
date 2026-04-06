@@ -103,8 +103,13 @@ impl ScriptListApp {
                     }
                 }
 
-                // ESC: Clear filter first if present, otherwise go back/close
+                // ESC: In portal mode, cancel and return to ACP chat.
+                // Otherwise, clear filter first; if empty, go back/close.
                 if is_key_escape(key) && !this.show_actions_popup {
+                    if this.is_in_attachment_portal() {
+                        this.close_attachment_portal_cancel(cx);
+                        return;
+                    }
                     if !this.clear_builtin_view_filter(cx) {
                         this.go_back_or_close(window, cx);
                     }
@@ -119,6 +124,8 @@ impl ScriptListApp {
                 }
 
                 logging::log("KEY", &format!("ClipboardHistory key: '{}'", key));
+
+                let in_portal = this.is_in_attachment_portal();
 
                 // P0 FIX: View state only - data comes from this.cached_clipboard_entries
                 if let AppView::ClipboardHistoryView {
@@ -228,6 +235,24 @@ impl ScriptListApp {
                             }
                         }
                         _ if is_key_enter(key) => {
+                            // Portal mode: attach the selected entry's content to ACP chat.
+                            if in_portal {
+                                if let Some((_, entry)) = filtered_entries.get(*selected_index) {
+                                    let label = if entry.text_preview.len() > 40 {
+                                        format!("Clipboard: {}…", &entry.text_preview[..40])
+                                    } else {
+                                        format!("Clipboard: {}", entry.text_preview)
+                                    };
+                                    let part = crate::ai::message_parts::AiContextPart::ResourceUri {
+                                        uri: format!("kit://clipboard-history?id={}", entry.id),
+                                        label,
+                                    };
+                                    this.close_attachment_portal_with_part(part, cx);
+                                }
+                                cx.stop_propagation();
+                                return;
+                            }
+
                             // Copy selected entry to clipboard, hide window, then paste
                             if let Some((_, entry)) = filtered_entries.get(*selected_index) {
                                 logging::log(
@@ -509,7 +534,15 @@ impl ScriptListApp {
             .child(list_element)
             .child(list_scrollbar);
 
-        let hints = crate::components::universal_prompt_hints();
+        let hints = if self.is_in_attachment_portal() {
+            vec![
+                "\u{21b5} Attach".into(),
+                "Esc Cancel".into(),
+                "Attaching to AI Chat".into(),
+            ]
+        } else {
+            crate::components::universal_prompt_hints()
+        };
         crate::components::emit_prompt_hint_audit("clipboard_history", &hints);
 
         tracing::info!(
