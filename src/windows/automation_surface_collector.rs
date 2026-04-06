@@ -50,18 +50,22 @@ pub fn collect_surface_snapshot(
         AutomationWindowKind::Notes => collect_notes_snapshot(resolved, cx)?,
         AutomationWindowKind::AcpDetached => collect_acp_detached_snapshot(resolved, cx)?,
         AutomationWindowKind::ActionsDialog => {
-            collect_actions_dialog_snapshot(cx).unwrap_or_else(|| panel_only_fallback(
-                "panel:actions-dialog",
-                resolved.title.clone(),
-                "panel_only_actions_dialog",
-            ))
+            collect_actions_dialog_snapshot(cx).unwrap_or_else(|| {
+                panel_only_fallback(
+                    "panel:actions-dialog",
+                    resolved.title.clone(),
+                    "panel_only_actions_dialog",
+                )
+            })
         }
         AutomationWindowKind::PromptPopup => {
-            collect_prompt_popup_snapshot(cx).unwrap_or_else(|| panel_only_fallback(
-                "panel:prompt-popup",
-                resolved.title.clone(),
-                "panel_only_prompt_popup",
-            ))
+            collect_prompt_popup_snapshot(cx).unwrap_or_else(|| {
+                panel_only_fallback(
+                    "panel:prompt-popup",
+                    resolved.title.clone(),
+                    "panel_only_prompt_popup",
+                )
+            })
         }
         _ => return None,
     };
@@ -385,8 +389,7 @@ fn collect_mention_picker_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnaps
 }
 
 fn collect_model_selector_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapshot> {
-    let snap =
-        crate::ai::acp::model_selector_popup::get_model_selector_popup_snapshot(cx)?;
+    let snap = crate::ai::acp::model_selector_popup::get_model_selector_popup_snapshot(cx)?;
 
     let mut elements = vec![element(
         "panel:model-selector",
