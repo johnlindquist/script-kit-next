@@ -425,7 +425,7 @@ impl ScriptListApp {
     }
 
     /// Open the quick terminal
-    fn open_quick_terminal(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn open_quick_terminal(&mut self, cx: &mut Context<Self>) {
         tracing::info!(message = %"Opening Quick Terminal");
 
         // Create submit callback that just closes on exit/escape

@@ -265,6 +265,46 @@ pub fn get_detached_acp_view_entity() -> Option<Entity<AcpChatView>> {
         .and_then(|weak| weak.upgrade())
 }
 
+fn open_picker_in_detached_chat_window(
+    cx: &mut App,
+    open_picker: impl FnOnce(&mut AcpChatView, &mut gpui::Window, &mut gpui::Context<AcpChatView>),
+) -> bool {
+    let (handle, entity) = {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        let guard = match slot.lock() {
+            Ok(guard) => guard,
+            Err(error) => error.into_inner(),
+        };
+        let Some(state) = guard.as_ref() else {
+            return false;
+        };
+        let Some(entity) = state.view_entity.as_ref().and_then(|weak| weak.upgrade()) else {
+            return false;
+        };
+        (state.handle, entity)
+    };
+
+    handle
+        .update(cx, |_root, window, cx| {
+            entity.update(cx, |view, cx| {
+                open_picker(view, window, cx);
+            });
+        })
+        .is_ok()
+}
+
+pub fn open_detached_slash_picker(cx: &mut App) -> bool {
+    open_picker_in_detached_chat_window(cx, |view, window, cx| {
+        view.open_slash_picker_in_window(window, cx);
+    })
+}
+
+pub fn open_detached_mention_picker(cx: &mut App) -> bool {
+    open_picker_in_detached_chat_window(cx, |view, window, cx| {
+        view.open_mention_picker_in_window(window, cx);
+    })
+}
+
 /// Close the detached AI chat window.
 #[allow(dead_code)]
 pub fn close_chat_window(cx: &mut App) {
