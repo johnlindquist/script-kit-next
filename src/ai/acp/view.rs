@@ -31,7 +31,9 @@ use crate::ai::message_parts::AiContextPart;
 use crate::ai::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger,
 };
-use crate::ai::window::context_picker::{build_picker_items, build_slash_picker_items};
+use crate::ai::window::context_picker::{
+    build_picker_items, build_slash_picker_items, build_slash_picker_items_with_descriptions,
+};
 
 /// Active @-mention session state for the ACP inline context picker.
 #[derive(Debug, Clone)]
@@ -147,6 +149,8 @@ pub(crate) struct AcpChatView {
     attach_menu_open: bool,
     /// Whether the model selector dropdown is open.
     model_selector_open: bool,
+    /// Focused row within the model selector popup.
+    model_selector_selected_index: usize,
     /// Cmd+F search: (query, current_match_index). None = search hidden.
     pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands (name, description) discovered at creation.
@@ -252,6 +256,33 @@ impl AcpChatView {
             display_id: window.display(cx).map(|display| display.id()),
         };
         self.mention_popup_parent_window = Some(parent);
+    }
+
+    fn sync_acp_popup_windows_from_cached_parent(&mut self, cx: &mut Context<Self>) {
+        self.sync_mention_popup_window_from_cached_parent(cx);
+        self.sync_model_selector_popup_window_from_cached_parent(cx);
+        self.sync_history_popup_window_from_cached_parent(cx);
+    }
+
+    fn selected_model_popup_index(&self, cx: &App) -> usize {
+        let thread = self.live_thread().read(cx);
+        let model_count = thread.available_models().len();
+        if model_count == 0 {
+            return 0;
+        }
+
+        self.model_selector_selected_index
+            .min(model_count.saturating_sub(1))
+    }
+
+    fn reset_model_selector_selection(&mut self, cx: &App) {
+        let thread = self.live_thread().read(cx);
+        let selected_id = thread.selected_model_id();
+        self.model_selector_selected_index = thread
+            .available_models()
+            .iter()
+            .position(|model| Some(model.id.as_str()) == selected_id)
+            .unwrap_or(0);
     }
 
     fn mention_popup_snapshot(
@@ -452,6 +483,9 @@ impl AcpChatView {
 
         let thread = self.live_thread().read(cx);
         let selected_id = thread.selected_model_id().map(str::to_string);
+        let selected_index = self
+            .model_selector_selected_index
+            .min(thread.available_models().len().saturating_sub(1));
         let entries = thread
             .available_models()
             .iter()
@@ -463,7 +497,7 @@ impl AcpChatView {
                 crate::ai::acp::model_selector_popup::AcpModelSelectorPopupEntry {
                     id: model.id.clone(),
                     display: SharedString::from(display),
-                    is_selected: selected_id.as_deref() == Some(model.id.as_str()),
+                    is_active: selected_id.as_deref() == Some(model.id.as_str()),
                 }
             })
             .collect::<Vec<_>>();
@@ -472,7 +506,12 @@ impl AcpChatView {
             return None;
         }
 
-        Some(crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot { entries })
+        Some(
+            crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot {
+                selected_index,
+                entries,
+            },
+        )
     }
 
     pub(super) fn sync_model_selector_popup_window_from_cached_parent(
@@ -509,9 +548,56 @@ impl AcpChatView {
         self.live_thread().update(cx, |thread, cx| {
             thread.select_model(model_id, cx);
         });
+        self.reset_model_selector_selection(cx);
         self.model_selector_open = false;
         self.sync_model_selector_popup_window_from_cached_parent(cx);
         cx.notify();
+    }
+
+    pub(crate) fn dismiss_model_selector_popup(&mut self, cx: &mut Context<Self>) {
+        if !self.model_selector_open {
+            return;
+        }
+
+        self.model_selector_open = false;
+        self.sync_model_selector_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn move_model_selector_selection(&mut self, direction: i32, cx: &mut Context<Self>) {
+        let model_count = self.live_thread().read(cx).available_models().len();
+        if model_count == 0 {
+            return;
+        }
+
+        let selected_index = self.selected_model_popup_index(cx);
+        self.model_selector_selected_index = if direction < 0 {
+            if selected_index == 0 {
+                model_count - 1
+            } else {
+                selected_index - 1
+            }
+        } else {
+            (selected_index + 1) % model_count
+        };
+        self.sync_model_selector_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn confirm_model_selector_selection(&mut self, cx: &mut Context<Self>) {
+        let selected_index = self.selected_model_popup_index(cx);
+        let model_id = self
+            .live_thread()
+            .read(cx)
+            .available_models()
+            .get(selected_index)
+            .map(|model| model.id.clone());
+
+        if let Some(model_id) = model_id {
+            self.select_model_from_popup(&model_id, cx);
+        } else {
+            self.dismiss_model_selector_popup(cx);
+        }
     }
 
     pub(crate) fn select_history_from_popup(
@@ -547,9 +633,7 @@ impl AcpChatView {
                 self.history_menu = Some((0, String::new(), entries));
             }
         }
-        self.sync_mention_popup_window_from_cached_parent(cx);
-        self.sync_model_selector_popup_window_from_cached_parent(cx);
-        self.sync_history_popup_window_from_cached_parent(cx);
+        self.sync_acp_popup_windows_from_cached_parent(cx);
         cx.notify();
     }
 
@@ -560,15 +644,20 @@ impl AcpChatView {
 
     pub(crate) fn dismiss_escape_popup(&mut self, cx: &mut Context<Self>) -> bool {
         if self.model_selector_open {
-            self.model_selector_open = false;
-            self.sync_model_selector_popup_window_from_cached_parent(cx);
-            cx.notify();
+            self.dismiss_model_selector_popup(cx);
             return true;
         }
 
         if self.mention_session.is_some() {
             self.mention_session = None;
             self.sync_mention_popup_window_from_cached_parent(cx);
+            cx.notify();
+            return true;
+        }
+
+        if self.history_menu.is_some() {
+            self.history_menu = None;
+            self.sync_history_popup_window_from_cached_parent(cx);
             cx.notify();
             return true;
         }
@@ -825,6 +914,7 @@ impl AcpChatView {
             history_menu: None,
             attach_menu_open: false,
             model_selector_open: false,
+            model_selector_selected_index: 0,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
@@ -869,6 +959,7 @@ impl AcpChatView {
             history_menu: None,
             attach_menu_open: false,
             model_selector_open: false,
+            model_selector_selected_index: 0,
             search_state: None,
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
@@ -931,6 +1022,32 @@ impl AcpChatView {
         }
 
         commands
+    }
+
+    fn resolved_slash_commands(&self, available_commands: &[String]) -> Vec<(String, String)> {
+        if available_commands.is_empty() {
+            return self.cached_slash_commands.clone();
+        }
+
+        let cached: std::collections::HashMap<&str, &str> = self
+            .cached_slash_commands
+            .iter()
+            .map(|(name, description)| (name.as_str(), description.as_str()))
+            .collect();
+
+        available_commands
+            .iter()
+            .map(|name| {
+                (
+                    name.clone(),
+                    cached
+                        .get(name.as_str())
+                        .copied()
+                        .unwrap_or_default()
+                        .to_string(),
+                )
+            })
+            .collect()
     }
 
     /// Consume Tab / Shift+Tab. When a permission card is active,
@@ -1281,6 +1398,40 @@ impl AcpChatView {
     pub(crate) fn set_input(&mut self, value: String, cx: &mut Context<Self>) {
         self.live_thread()
             .update(cx, |thread, cx| thread.set_input(value, cx));
+    }
+
+    fn open_picker_trigger(&mut self, trigger: &str, cx: &mut Context<Self>) {
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+        self.history_menu = None;
+        self.set_input(trigger.to_string(), cx);
+        self.refresh_mention_session(cx);
+    }
+
+    pub(crate) fn open_slash_picker(&mut self, cx: &mut Context<Self>) {
+        self.open_picker_trigger("/", cx);
+    }
+
+    pub(crate) fn open_mention_picker(&mut self, cx: &mut Context<Self>) {
+        self.open_picker_trigger("@", cx);
+    }
+
+    pub(crate) fn open_slash_picker_in_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cache_popup_parent_window(window, cx);
+        self.open_slash_picker(cx);
+    }
+
+    pub(crate) fn open_mention_picker_in_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cache_popup_parent_window(window, cx);
+        self.open_mention_picker(cx);
     }
 
     // ── Rendering helpers ─────────────────────────────────────────
@@ -2294,11 +2445,14 @@ impl AcpChatView {
                             .hover(|d| d.text_color(rgb(theme.colors.text.primary)))
                             .on_click(cx.listener(|this, _event, window, cx| {
                                 this.cache_popup_parent_window(window, cx);
-                                this.model_selector_open = !this.model_selector_open;
-                                // Close other menus
+                                let next_open = !this.model_selector_open;
                                 this.attach_menu_open = false;
                                 this.mention_session = None;
                                 this.history_menu = None;
+                                this.model_selector_open = next_open;
+                                if next_open {
+                                    this.reset_model_selector_selection(cx);
+                                }
                                 this.sync_mention_popup_window_from_cached_parent(cx);
                                 this.sync_history_popup_window_from_cached_parent(cx);
                                 this.sync_model_selector_popup_window_from_cached_parent(cx);
@@ -2434,16 +2588,21 @@ impl AcpChatView {
                     ContextPickerTrigger::Mention => build_picker_items(trigger, &query),
                     ContextPickerTrigger::Slash => {
                         if available_commands.is_empty() {
-                            build_slash_picker_items(
+                            build_slash_picker_items_with_descriptions(
                                 &query,
                                 self.cached_slash_commands
                                     .iter()
-                                    .map(|(name, _)| name.as_str()),
+                                    .map(|(name, description)| {
+                                        (name.as_str(), description.as_str())
+                                    }),
                             )
                         } else {
-                            build_slash_picker_items(
+                            let resolved = self.resolved_slash_commands(&available_commands);
+                            build_slash_picker_items_with_descriptions(
                                 &query,
-                                available_commands.iter().map(String::as_str),
+                                resolved.iter().map(|(name, description)| {
+                                    (name.as_str(), description.as_str())
+                                }),
                             )
                         }
                     }
@@ -2480,11 +2639,14 @@ impl AcpChatView {
 
         if next_session.is_some() {
             self.last_accepted_item = None;
+            self.attach_menu_open = false;
+            self.model_selector_open = false;
+            self.history_menu = None;
         }
 
         self.mention_session = next_session;
         self.log_mention_visible_range("refresh");
-        self.sync_mention_popup_window_from_cached_parent(cx);
+        self.sync_acp_popup_windows_from_cached_parent(cx);
         cx.notify();
     }
 
@@ -4123,6 +4285,26 @@ impl AcpChatView {
         let key = event.keystroke.key.as_str();
         let modifiers = &event.keystroke.modifiers;
 
+        if self.model_selector_open {
+            if crate::ui_foundation::is_key_up(key) {
+                self.move_model_selector_selection(-1, cx);
+                cx.stop_propagation();
+                return;
+            }
+
+            if crate::ui_foundation::is_key_down(key) {
+                self.move_model_selector_selection(1, cx);
+                cx.stop_propagation();
+                return;
+            }
+
+            if crate::ui_foundation::is_key_enter(key) || crate::ui_foundation::is_key_tab(key) {
+                self.confirm_model_selector_selection(cx);
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         // ── Model selector dismiss on Escape ───────────────────
         if crate::ui_foundation::is_key_escape(key) && self.dismiss_escape_popup(cx) {
             cx.stop_propagation();
@@ -4130,9 +4312,7 @@ impl AcpChatView {
         }
         // Close model selector on any non-modifier key
         if self.model_selector_open {
-            self.model_selector_open = false;
-            self.sync_model_selector_popup_window_from_cached_parent(cx);
-            cx.notify();
+            self.dismiss_model_selector_popup(cx);
         }
 
         // ── Attach menu dismiss on Escape ───────────────────────
@@ -5120,6 +5300,7 @@ mod tests {
         let file_item = ContextPickerItem {
             id: SharedString::from("file:/tmp/secrets.txt"),
             label: SharedString::from("secrets.txt"),
+            description: SharedString::from("/tmp/secrets.txt"),
             meta: SharedString::from("@file:/tmp/secrets.txt"),
             kind: ContextPickerItemKind::File(std::path::PathBuf::from("/tmp/secrets.txt")),
             score: 100,
@@ -5129,6 +5310,7 @@ mod tests {
         let folder_item = ContextPickerItem {
             id: SharedString::from("folder:/Users/john/Documents"),
             label: SharedString::from("Documents"),
+            description: SharedString::from("/Users/john/Documents"),
             meta: SharedString::from("@file:/Users/john/Documents"),
             kind: ContextPickerItemKind::Folder(std::path::PathBuf::from("/Users/john/Documents")),
             score: 100,
