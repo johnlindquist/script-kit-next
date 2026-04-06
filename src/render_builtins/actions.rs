@@ -108,6 +108,7 @@ impl ScriptListApp {
                 ..crate::actions::ActionsDialogConfig::default()
             });
 
+            dialog.set_match_main_window_background(true);
             dialog
         });
 
