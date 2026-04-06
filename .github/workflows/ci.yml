@@ -184,10 +184,10 @@ jobs:
         run: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy
 
       - name: Build release
-        run: cargo build --release
+        run: cargo build --release --bin script-kit-gpui
 
       - name: Create bundle
-        run: cargo bundle --release
+        run: cargo bundle --release --bin script-kit-gpui
 
       - name: Ad-hoc sign for artifact
         run: codesign --force --deep --sign - "target/release/bundle/osx/Script Kit.app"

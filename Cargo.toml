@@ -227,3 +227,6 @@ osx_url_schemes = ["scriptkit"]
 resources = ["assets/*"]
 # LSUIElement makes app an "agent app" - no menu bar, no Dock icon (like Raycast)
 osx_info_plist_exts = ["assets/Info.plist.ext"]
+
+[package.metadata.bundle.bin.script-kit-gpui]
+name = "Script Kit"
