@@ -2473,7 +2473,7 @@ mod cleanup_contract_audits {
     fn close_tab_ai_harness_terminal_clears_session_and_rewarms() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let start = source
-            .find("pub(crate) fn close_tab_ai_harness_terminal")
+            .find("pub(crate) fn close_tab_ai_harness_terminal(")
             .expect("close_tab_ai_harness_terminal should exist");
         let rest = &source[start..];
         // Scope to the next function definition so we only audit the close fn.
@@ -2682,7 +2682,7 @@ mod cleanup_contract_audits {
         // The close fn delegates PTY teardown to the extracted helper.
         let close_body = compact(&extract_fn_body(
             source,
-            "pub(crate) fn close_tab_ai_harness_terminal",
+            "pub(crate) fn close_tab_ai_harness_terminal(",
         ));
         assert!(
             close_body.contains("terminate_tab_ai_harness_session"),
@@ -2863,9 +2863,8 @@ mod cleanup_contract_audits {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let body = compact(&extract_fn_body(
             source,
-            "pub(crate) fn close_tab_ai_harness_terminal",
+            "pub(crate) fn close_tab_ai_harness_terminal(",
         ));
-        // PTY teardown is now delegated; close only calls the helper conditionally.
         assert!(
             body.contains("terminate_tab_ai_harness_session"),
             "close path must delegate PTY session teardown"

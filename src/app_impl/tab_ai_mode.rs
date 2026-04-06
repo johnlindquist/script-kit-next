@@ -74,9 +74,9 @@ impl ScriptListApp {
             });
 
             let close_app = app_entity.clone();
-            view.set_on_close_requested(move |_window, cx| {
+            view.set_on_close_requested(move |window, cx| {
                 close_app.update(cx, |app, cx| {
-                    app.close_tab_ai_harness_terminal(cx);
+                    app.close_tab_ai_harness_terminal_with_window(window, cx);
                 });
             });
         });
@@ -2118,6 +2118,43 @@ impl ScriptListApp {
     /// **Lifecycle contract:**
     /// - For `QuickTerminalView`: tears down PTY, clears harness, schedules prewarm.
     /// - For `AcpChatView`: restores view/focus without touching PTY lifecycle.
+    fn clear_transient_script_list_trigger_on_return(
+        &mut self,
+        window: Option<&mut Window>,
+        cx: &mut Context<Self>,
+    ) {
+        if !matches!(self.current_view, AppView::ScriptList)
+            || !Self::is_transient_script_list_trigger(self.filter_text.as_str())
+        {
+            return;
+        }
+
+        if let Some(window) = window {
+            self.clear_filter(window, cx);
+        } else {
+            self.reset_script_list_filter_and_selection_state(cx);
+        }
+    }
+
+    pub(crate) fn close_tab_ai_harness_terminal_with_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let return_is_script_list = self
+            .tab_ai_harness_return_view
+            .as_ref()
+            .map_or(true, |v| matches!(v, AppView::ScriptList));
+        let should_clear_transient_trigger = return_is_script_list
+            && Self::is_transient_script_list_trigger(self.filter_text.as_str());
+
+        self.close_tab_ai_harness_terminal(cx);
+
+        if should_clear_transient_trigger && matches!(self.current_view, AppView::ScriptList) {
+            self.clear_filter(window, cx);
+        }
+    }
+
     pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
         let closing_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
         let closing_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
@@ -2162,11 +2199,7 @@ impl ScriptListApp {
             _ => FocusedInput::None,
         };
 
-        if matches!(self.current_view, AppView::ScriptList)
-            && Self::is_transient_script_list_trigger(self.filter_text.as_str())
-        {
-            self.reset_script_list_filter_and_selection_state(cx);
-        }
+        self.clear_transient_script_list_trigger_on_return(None, cx);
 
         // Keep prewarm only for the actual PTY-backed quick terminal path.
         if closing_quick_terminal {
@@ -4670,9 +4703,9 @@ mod tests {
 
         assert!(
             body.contains(&tab_ai_contract_compact(
-                "let session = self.tab_ai_harness.take();"
+                "self.terminate_tab_ai_harness_session(cx);"
             )),
-            "close path must clear the current PTY session"
+            "close path must delegate PTY session teardown"
         );
         assert!(
             body.contains(&tab_ai_contract_compact(
@@ -4682,9 +4715,7 @@ mod tests {
         );
         assert!(
             body.contains(&tab_ai_contract_compact(
-                "Self::is_transient_script_list_trigger(self.filter_text.as_str())"
-            )) && body.contains(&tab_ai_contract_compact(
-                "self.reset_script_list_filter_and_selection_state(cx);"
+                "self.clear_transient_script_list_trigger_on_return(None, cx);"
             )),
             "close path must clear transient ScriptList trigger filters when returning to the main menu"
         );
