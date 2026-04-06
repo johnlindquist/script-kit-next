@@ -37,3 +37,9 @@ Append-only history of wiki ingest runs.
 - Raw sources processed: 18
 - Pages written: 7
 - Page slugs: `project-overview`, `architecture`, `protocol-and-introspection`, `ai-context-and-mcp`, `tab-ai-harness`, `design-principles`, `verification-and-testing`
+
+## 2026-04-06T18:08:02.732Z — snapshot fa760732
+
+- Raw sources processed: 20
+- Pages written: 7
+- Page slugs: `project-overview`, `architecture`, `protocol-and-introspection`, `ai-context-and-mcp`, `tab-ai-harness`, `design-principles`, `verification-and-testing`

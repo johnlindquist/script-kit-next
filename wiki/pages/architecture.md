@@ -1,18 +1,18 @@
 ---
 title: "Architecture"
 slug: "architecture"
-sourceSnapshot: "c9fbc3ca"
+sourceSnapshot: "fa760732"
 sourceDocuments:
-  - "raw/c9fbc3ca/CLAUDE.md"
-  - "raw/c9fbc3ca/README.md"
-  - "raw/c9fbc3ca/GPUI.md"
+  - "raw/fa760732/CLAUDE.md"
+  - "raw/fa760732/README.md"
+  - "raw/fa760732/GPUI.md"
 relatedPages:
   - "project-overview"
   - "protocol-and-introspection"
   - "ai-context-and-mcp"
   - "design-principles"
 generatedBy: "scripts/wiki/ingest.ts"
-generatedAt: "2026-04-04T19:40:47.586Z"
+generatedAt: "2026-04-06T18:08:02.732Z"
 ---
 
 # Architecture
@@ -31,9 +31,9 @@ How the application is split across Rust modules, include!()-driven main section
 - `GPUI.md` — GPUI event dispatch architecture. Keyboard dispatch order, action propagation, raw key events, and common event pitfalls.
 
 ## Source Documents
-- [raw/c9fbc3ca/CLAUDE.md](../raw/c9fbc3ca/CLAUDE.md)
-- [raw/c9fbc3ca/README.md](../raw/c9fbc3ca/README.md)
-- [raw/c9fbc3ca/GPUI.md](../raw/c9fbc3ca/GPUI.md)
+- [raw/fa760732/CLAUDE.md](../raw/fa760732/CLAUDE.md)
+- [raw/fa760732/README.md](../raw/fa760732/README.md)
+- [raw/fa760732/GPUI.md](../raw/fa760732/GPUI.md)
 
 ## Related Pages
 - [project-overview](./project-overview.md)
