@@ -15,11 +15,12 @@
 //! - Path context action count consistency
 
 use super::builders::{
-    get_ai_command_bar_actions, get_chat_context_actions, get_clipboard_history_context_actions,
-    get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
-    get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
-    get_scriptlet_context_actions_with_custom, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo,
-    NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+    get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
+    get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
+    get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
+    get_script_context_actions, get_scriptlet_context_actions_with_custom, ChatModelInfo,
+    ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
+    NoteSwitcherNoteInfo, NotesInfo,
 };
 use super::constants::{
     ACTION_ITEM_HEIGHT, ACTION_ROW_INSET, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH,
@@ -1025,9 +1026,9 @@ fn test_chat_no_models_no_messages() {
     };
 
     let actions = get_chat_context_actions(&info);
-    // Should only have continue_in_chat + capture_screen_area
-    assert_eq!(actions.len(), 2);
-    assert_eq!(actions[0].id, "chat:continue_in_chat");
+    // change_model + continue_in_chat + capture_screen_area
+    assert_eq!(actions.len(), 3);
+    assert_eq!(actions[0].id, "chat:change_model");
 }
 
 #[test]
@@ -1051,18 +1052,20 @@ fn test_chat_with_models_and_response() {
     };
 
     let actions = get_chat_context_actions(&info);
-    // 2 models + continue_in_chat + copy_response + clear_conversation + capture_screen_area = 6
-    assert_eq!(actions.len(), 6);
+    // change_model + continue_in_chat + copy_response + clear_conversation + capture_screen_area = 5
+    assert_eq!(actions.len(), 5);
+    // No flat model rows in root — models live in the drill-down picker
+    assert!(!actions.iter().any(|a| a.id.starts_with("chat:select_model_")));
 
-    // Current model should have checkmark
-    let current = actions
+    // Model checkmarks are in the picker
+    let picker = get_chat_model_picker_actions(&info);
+    let current = picker
         .iter()
         .find(|a| a.id == "chat:select_model_claude-3-5-sonnet")
         .unwrap();
     assert!(current.title.contains("✓"));
 
-    // Other model should not
-    let other = actions
+    let other = picker
         .iter()
         .find(|a| a.id == "chat:select_model_gpt-4")
         .unwrap();

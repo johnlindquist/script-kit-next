@@ -13136,6 +13136,8 @@ mod from_dialog_builtin_action_validation_tests_41 {
         // --- merged from tests_part_04.rs ---
         #[test]
         fn chat_models_come_before_continue_in_chat() {
+            // After drill-down refactor: model picker only has model rows,
+            // continue_in_chat lives in the root context actions.
             let info = ChatPromptInfo {
                 current_model: None,
                 available_models: vec![
@@ -13154,20 +13156,13 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 has_response: false,
             };
             let picker = get_chat_model_picker_actions(&info);
-            let continue_idx = picker
-                .iter()
-                .position(|a| a.id == "chat:continue_in_chat")
-                .unwrap();
-            let model_a_idx = picker
-                .iter()
-                .position(|a| a.id == "chat:select_model_a")
-                .unwrap();
-            let model_b_idx = picker
-                .iter()
-                .position(|a| a.id == "chat:select_model_b")
-                .unwrap();
-            assert!(model_a_idx < continue_idx);
-            assert!(model_b_idx < continue_idx);
+            // Picker only has model rows
+            assert!(picker.iter().all(|a| a.id.starts_with("chat:select_model_")));
+            assert!(picker.iter().any(|a| a.id == "chat:select_model_a"));
+            assert!(picker.iter().any(|a| a.id == "chat:select_model_b"));
+            // continue_in_chat is in the root context, not the picker
+            let root = get_chat_context_actions(&info);
+            assert!(root.iter().any(|a| a.id == "chat:continue_in_chat"));
         }
     
         #[test]
@@ -14450,7 +14445,8 @@ mod from_dialog_builtin_action_validation_tests_44 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        // change_model + continue_in_chat + clear_conversation + capture_screen_area = 4
+        assert_eq!(actions.len(), 4);
     }
 
     #[test]
@@ -14461,8 +14457,9 @@ mod from_dialog_builtin_action_validation_tests_44 {
             has_messages: false,
             has_response: true,
         };
-        let picker = get_chat_model_picker_actions(&info);
-        assert_eq!(picker.len(), 3);
+        let actions = get_chat_context_actions(&info);
+        // change_model + continue_in_chat + copy_response + capture_screen_area = 4
+        assert_eq!(actions.len(), 4);
     }
 
     // =========== 23. Chat context: model IDs use select_model_{model.id} ===========
@@ -16027,6 +16024,7 @@ mod from_dialog_builtin_action_validation_tests_45 {
     
     #[test]
     fn chat_continue_after_models() {
+        // After drill-down refactor: root has change_model first, then continue_in_chat
         let info = ChatPromptInfo {
             current_model: None,
             available_models: vec![
@@ -16045,7 +16043,8 @@ mod from_dialog_builtin_action_validation_tests_45 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions[2].id, "chat:continue_in_chat");
+        assert_eq!(actions[0].id, "chat:change_model");
+        assert_eq!(actions[1].id, "chat:continue_in_chat");
     }
     
     #[test]

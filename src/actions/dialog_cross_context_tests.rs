@@ -102,7 +102,7 @@ fn primary_action_is_always_first_in_clipboard_context() {
 
 #[test]
 fn primary_action_is_always_first_in_chat_context() {
-    // Chat with no models has continue_in_chat as first
+    // Chat root actions now start with Change Model drill-down trigger
     let info = ChatPromptInfo {
         current_model: None,
         available_models: vec![],
@@ -110,7 +110,7 @@ fn primary_action_is_always_first_in_chat_context() {
         has_response: false,
     };
     let actions = get_chat_context_actions(&info);
-    assert_eq!(actions[0].id, "chat:continue_in_chat");
+    assert_eq!(actions[0].id, "chat:change_model");
 }
 
 // ============================================================================
@@ -842,23 +842,24 @@ fn chat_context_with_multiple_models_marks_only_current() {
         has_messages: true,
         has_response: true,
     };
-    let actions = get_chat_context_actions(&info);
+    // Model rows live in the drill-down picker
+    let picker = get_chat_model_picker_actions(&info);
 
     // Only GPT-4 should have checkmark
-    let gpt4 = actions
+    let gpt4 = picker
         .iter()
         .find(|a| a.id == "chat:select_model_gpt4")
         .unwrap();
     assert_eq!(gpt4.title, "GPT-4 ✓");
 
-    let claude = actions
+    let claude = picker
         .iter()
         .find(|a| a.id == "chat:select_model_claude")
         .unwrap();
     assert_eq!(claude.title, "Claude");
     assert!(!claude.title.contains('✓'));
 
-    let gemini = actions
+    let gemini = picker
         .iter()
         .find(|a| a.id == "chat:select_model_gemini")
         .unwrap();
@@ -878,8 +879,9 @@ fn chat_context_model_description_shows_provider() {
         has_messages: false,
         has_response: false,
     };
-    let actions = get_chat_context_actions(&info);
-    let model = actions
+    // Model rows live in the drill-down picker
+    let picker = get_chat_model_picker_actions(&info);
+    let model = picker
         .iter()
         .find(|a| a.id == "chat:select_model_model1")
         .unwrap();

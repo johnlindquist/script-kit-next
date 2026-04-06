@@ -64,10 +64,49 @@ fn is_chat_prompt_info_valid(info: &ChatPromptInfo) -> bool {
     true
 }
 
+// ── Chat route constants ─────────────────────────────────────────────
+
+pub const CHAT_CHANGE_MODEL_ACTION_ID: &str = "chat:change_model";
+pub const CHAT_ROOT_ROUTE_ID: &str = "chat:root";
+pub const CHAT_MODEL_PICKER_ROUTE_ID: &str = "chat:model_picker";
+
+/// Build the root route for a chat prompt's actions dialog.
+pub fn get_chat_root_route(info: &ChatPromptInfo) -> crate::actions::ActionsDialogRoute {
+    let context_title = info
+        .current_model
+        .clone()
+        .unwrap_or_else(|| "Chat".to_string());
+
+    crate::actions::ActionsDialogRoute {
+        id: CHAT_ROOT_ROUTE_ID.to_string(),
+        actions: get_chat_context_actions(info),
+        context_title: Some(context_title),
+        search_placeholder: Some("Search chat actions...".to_string()),
+        initial_selected_action_id: Some(CHAT_CHANGE_MODEL_ACTION_ID.to_string()),
+    }
+}
+
+/// Build the model-picker route (second-level drill-down) for a chat prompt.
+pub fn get_chat_model_picker_route(info: &ChatPromptInfo) -> crate::actions::ActionsDialogRoute {
+    let initial_selected = info.current_model.as_ref().and_then(|current| {
+        info.available_models
+            .iter()
+            .find(|m| &m.display_name == current)
+            .map(|m| format!("chat:select_model_{}", m.id))
+    });
+
+    crate::actions::ActionsDialogRoute {
+        id: CHAT_MODEL_PICKER_ROUTE_ID.to_string(),
+        actions: get_chat_model_picker_actions(info),
+        context_title: Some("Change Model".to_string()),
+        search_placeholder: Some("Search models...".to_string()),
+        initial_selected_action_id: initial_selected,
+    }
+}
+
 /// Build the model-picker actions (second-level drill-down).
 ///
 /// Returns flat `chat:select_model_*` rows with checkmark on the current model.
-#[allow(dead_code)] // Will be wired into the chat route drill-down in a follow-up cycle.
 pub fn get_chat_model_picker_actions(info: &ChatPromptInfo) -> Vec<Action> {
     if !is_chat_prompt_info_valid(info) {
         return Vec::new();

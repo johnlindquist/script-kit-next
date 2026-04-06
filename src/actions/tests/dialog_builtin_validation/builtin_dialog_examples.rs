@@ -475,6 +475,8 @@ mod from_dialog_builtin_action_validation_tests_21 {
     
     #[test]
     fn batch21_chat_continue_after_models() {
+        // After drill-down refactor: picker only has model rows,
+        // continue_in_chat lives in root context actions.
         let info = ChatPromptInfo {
             current_model: Some("gpt-4".into()),
             available_models: vec![
@@ -493,15 +495,11 @@ mod from_dialog_builtin_action_validation_tests_21 {
             has_response: false,
         };
         let picker = get_chat_model_picker_actions(&info);
-        let model_last_pos = picker
-            .iter()
-            .rposition(|a| a.id.starts_with("chat:select_model_"))
-            .unwrap();
-        let continue_pos = picker
-            .iter()
-            .position(|a| a.id == "chat:continue_in_chat")
-            .unwrap();
-        assert!(continue_pos > model_last_pos);
+        // Picker only has model rows
+        assert!(picker.iter().all(|a| a.id.starts_with("chat:select_model_")));
+        // continue_in_chat is in root context, not picker
+        let root = get_chat_context_actions(&info);
+        assert!(root.iter().any(|a| a.id == "chat:continue_in_chat"));
     }
     
     #[test]
@@ -3749,8 +3747,9 @@ mod from_dialog_builtin_action_validation_tests_23 {
             has_messages: false,
             has_response: false,
         };
-        let actions = get_chat_context_actions(&info);
-        assert_eq!(actions[0].description.as_ref().unwrap(), "Uses Anthropic");
+        // Model rows live in the drill-down picker
+        let picker = get_chat_model_picker_actions(&info);
+        assert_eq!(picker[0].description.as_ref().unwrap(), "Uses Anthropic");
     }
     
     #[test]
@@ -3772,9 +3771,12 @@ mod from_dialog_builtin_action_validation_tests_23 {
             has_messages: false,
             has_response: false,
         };
-        let actions = get_chat_context_actions(&info);
-        assert!(actions[0].title.contains("✓"));
-        assert!(!actions[1].title.contains("✓"));
+        // Model rows live in the drill-down picker
+        let picker = get_chat_model_picker_actions(&info);
+        let gpt = picker.iter().find(|a| a.id == "chat:select_model_gpt-4").unwrap();
+        assert!(gpt.title.contains("✓"));
+        let claude = picker.iter().find(|a| a.id == "chat:select_model_claude-3").unwrap();
+        assert!(!claude.title.contains("✓"));
     }
     
     // ============================================================
@@ -3808,6 +3810,8 @@ mod from_dialog_builtin_action_validation_tests_23 {
     
     #[test]
     fn batch23_chat_continue_after_models() {
+        // After drill-down refactor: picker only has model rows,
+        // continue_in_chat lives in root context actions.
         let info = ChatPromptInfo {
             current_model: None,
             available_models: vec![ChatModelInfo {
@@ -3819,15 +3823,9 @@ mod from_dialog_builtin_action_validation_tests_23 {
             has_response: false,
         };
         let picker = get_chat_model_picker_actions(&info);
-        let model_idx = picker
-            .iter()
-            .position(|a| a.id.starts_with("chat:select_model_"))
-            .unwrap();
-        let continue_idx = picker
-            .iter()
-            .position(|a| a.id == "chat:continue_in_chat")
-            .unwrap();
-        assert!(continue_idx > model_idx);
+        assert!(picker.iter().all(|a| a.id.starts_with("chat:select_model_")));
+        let root = get_chat_context_actions(&info);
+        assert!(root.iter().any(|a| a.id == "chat:continue_in_chat"));
     }
     
     // ============================================================
@@ -4925,7 +4923,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        // change_model + continue_in_chat + copy_response + capture_screen_area = 4
+        assert_eq!(actions.len(), 4);
         assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
@@ -4939,7 +4938,8 @@ mod from_dialog_builtin_action_validation_tests_24 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 3);
+        // change_model + continue_in_chat + clear_conversation + capture_screen_area = 4
+        assert_eq!(actions.len(), 4);
         assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
         assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
     }
@@ -8072,8 +8072,8 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        // 3 models + continue + capture = 5
-        assert_eq!(actions.len(), 5);
+        // change_model + continue + capture = 3 (models in drill-down picker)
+        assert_eq!(actions.len(), 3);
     }
     
     #[test]
@@ -8085,8 +8085,8 @@ mod from_dialog_builtin_action_validation_tests_27 {
             has_response: true,
         };
         let actions = get_chat_context_actions(&info);
-        // continue + copy_response + capture = 3
-        assert_eq!(actions.len(), 3);
+        // change_model + continue + copy_response + capture = 4
+        assert_eq!(actions.len(), 4);
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         assert!(ids.contains(&"chat:copy_response"));
         assert!(!ids.contains(&"chat:clear_conversation"));
@@ -11272,9 +11272,10 @@ mod from_dialog_builtin_action_validation_tests_29 {
             has_messages: false,
             has_response: true,
         };
-        let picker = get_chat_model_picker_actions(&info);
+        // copy_response is in root context actions, not the model picker
+        let actions = get_chat_context_actions(&info);
         let ai_cr = ai_actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
-        let chat_cr = picker
+        let chat_cr = actions
             .iter()
             .find(|a| a.id == "chat:copy_response")
             .unwrap();

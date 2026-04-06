@@ -4288,9 +4288,10 @@ mod from_dialog_builtin_action_validation_tests_13 {
         #[test]
         fn cat07_model_description_is_via_provider() {
             let info = make_chat_info(None, &[("m1", "Claude", "Anthropic")], false, false);
-            let actions = get_chat_context_actions(&info);
-            let desc = actions[0].description.as_ref().unwrap();
-            assert_eq!(desc, "Uses Anthropic");
+            // Model rows live in the drill-down picker
+            let picker = get_chat_model_picker_actions(&info);
+            let model = picker.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
+            assert_eq!(model.description.as_deref(), Some("Uses Anthropic"));
         }
     
         #[test]
@@ -8139,13 +8140,16 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
+            // Model rows live in the drill-down picker
+            let picker = get_chat_model_picker_actions(&info);
+            let claude = picker.iter().find(|a| a.id == "chat:select_model_claude-35").unwrap();
             assert!(
-                actions[0].title.contains("✓"),
+                claude.title.contains("✓"),
                 "Current model gets checkmark"
             );
+            let gpt = picker.iter().find(|a| a.id == "chat:select_model_gpt-4").unwrap();
             assert!(
-                !actions[1].title.contains("✓"),
+                !gpt.title.contains("✓"),
                 "Non-current model no checkmark"
             );
         }
@@ -8175,8 +8179,10 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            assert_eq!(actions[0].description.as_deref(), Some("Uses Acme Corp"));
+            // Model rows live in the drill-down picker
+            let picker = get_chat_model_picker_actions(&info);
+            let model = picker.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
+            assert_eq!(model.description.as_deref(), Some("Uses Acme Corp"));
         }
     
         // =========================================================================
@@ -13831,11 +13837,12 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 3);
+            // change_model + continue_in_chat + copy_response + capture_screen_area = 4
+            assert_eq!(actions.len(), 4);
             assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
             assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
         }
-    
+
         #[test]
         fn cat05_has_messages_only_adds_clear() {
             let info = ChatPromptInfo {
@@ -13845,7 +13852,8 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 3);
+            // change_model + continue_in_chat + clear_conversation + capture_screen_area = 4
+            assert_eq!(actions.len(), 4);
             assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
             assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
         }
