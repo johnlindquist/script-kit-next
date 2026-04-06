@@ -692,6 +692,7 @@ fn extend_builtin_picker_items(
         items.push(ContextPickerItem {
             id: SharedString::from(format!("builtin:{:?}", seed.kind).to_lowercase()),
             label: SharedString::from(seed.label),
+            description: SharedString::from(""),
             meta: SharedString::from(meta),
             kind: ContextPickerItemKind::BuiltIn(seed.kind),
             score: if query_lower.is_empty() { 100 } else { score },
@@ -753,6 +754,7 @@ fn extend_agent_slash_command_items<'a, I>(
         items.push(ContextPickerItem {
             id: SharedString::from(format!("slash-cmd:{name}")),
             label: SharedString::from(name.to_string()),
+            description: SharedString::from(""),
             meta: SharedString::from(meta_str),
             kind: ContextPickerItemKind::SlashCommand(name.to_string()),
             score,
@@ -838,6 +840,24 @@ where
     items
 }
 
+/// Build slash picker items while accepting optional per-command descriptions.
+///
+/// The current picker row model is still monoline, so descriptions are
+/// intentionally ignored here. This compatibility wrapper keeps ACP call
+/// sites compiling while sharing the existing slash-command ranking path.
+pub fn build_slash_picker_items_with_descriptions<'a, I>(
+    query: &str,
+    agent_commands: I,
+) -> Vec<ContextPickerItem>
+where
+    I: IntoIterator<Item = (&'a str, &'a str)>,
+{
+    build_slash_picker_items(
+        query,
+        agent_commands.into_iter().map(|(name, _description)| name),
+    )
+}
+
 /// Score a built-in spec against the user query (mention mode).
 pub fn score_builtin(
     spec: &crate::ai::context_contract::ContextAttachmentSpec,
@@ -917,6 +937,7 @@ fn collect_file_items(dir: &std::path::Path, raw_query: &str, items: &mut Vec<Co
                 path.display()
             )),
             label: SharedString::from(name.clone()),
+            description: SharedString::from(path.display().to_string()),
             meta: SharedString::from(meta.clone()),
             kind: if is_dir {
                 ContextPickerItemKind::Folder(path.clone())
