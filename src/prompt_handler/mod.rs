@@ -13,6 +13,13 @@ fn prompt_coming_soon_warning(prompt_name: &str) -> String {
     format!("{prompt_name} prompt coming soon.")
 }
 
+fn should_restore_main_window_after_script_exit(
+    script_hid_window: bool,
+    keep_tab_ai_save_offer_open: bool,
+) -> bool {
+    script_hid_window && keep_tab_ai_save_offer_open
+}
+
 /// Resolve an automation window target and reject non-main windows.
 ///
 /// Main-window-only executors (getElements, waitFor, batch) call this
@@ -992,7 +999,10 @@ impl ScriptListApp {
                         "Tab AI active after script exit - preserving view"
                     );
 
-                    if script_hid_window {
+                    if should_restore_main_window_after_script_exit(
+                        script_hid_window,
+                        keep_tab_ai_save_offer_open,
+                    ) {
                         tracing::info!(
                             category = "VISIBILITY",
                             "Script had hidden window - requesting show for Tab AI"
@@ -1010,15 +1020,7 @@ impl ScriptListApp {
                 self.reset_to_script_list(cx);
                 tracing::info!(category = "VISIBILITY", "reset_to_script_list() called");
 
-                // If the script had hidden the window (e.g., for getSelectedText),
-                // request showing the main window so the menu comes back
-                if script_hid_window {
-                    tracing::info!(
-                        category = "VISIBILITY",
-                        "Script had hidden window - requesting show main window"
-                    );
-                    script_kit_gpui::request_show_main_window();
-                } else {
+                if !script_hid_window {
                     // Script didn't hide window, so it was user-initiated hide or already visible
                     // Restore window height to main menu size in case a prompt (like EnvPrompt)
                     // had shrunk the window
@@ -6312,7 +6314,8 @@ fn batch_command_name(cmd: &protocol::BatchCommand) -> String {
 mod prompt_handler_message_tests {
     use super::{
         classify_prompt_message_route, escape_windows_cmd_open_target,
-        prompt_coming_soon_warning, resolve_ai_start_chat_provider, unhandled_message_warning,
+        prompt_coming_soon_warning, resolve_ai_start_chat_provider,
+        should_restore_main_window_after_script_exit, unhandled_message_warning,
         PromptMessageRoute,
     };
     use crate::ai::providers::OpenAiProvider;
@@ -6376,6 +6379,13 @@ mod prompt_handler_message_tests {
     fn test_escape_windows_cmd_open_target_escapes_shell_metacharacters() {
         let escaped = escape_windows_cmd_open_target(r#"https://example.com/?x=1&y=2|3"#);
         assert_eq!(escaped, r#"https://example.com/?x=1^&y=2^|3"#);
+    }
+
+    #[test]
+    fn test_script_exit_restores_hidden_window_only_for_active_follow_up_ui() {
+        assert!(should_restore_main_window_after_script_exit(true, true));
+        assert!(!should_restore_main_window_after_script_exit(true, false));
+        assert!(!should_restore_main_window_after_script_exit(false, true));
     }
 
     #[test]

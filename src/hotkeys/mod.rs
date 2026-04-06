@@ -632,26 +632,54 @@ pub fn init_script_hotkey_manager(manager: GlobalHotKeyManager) -> anyhow::Resul
 /// Register a script hotkey dynamically.
 /// Returns the hotkey ID on success.
 pub fn register_script_hotkey(path: &str, shortcut: &str) -> anyhow::Result<u32> {
-    let manager = SCRIPT_HOTKEY_MANAGER
-        .get()
-        .ok_or_else(|| anyhow::anyhow!("ScriptHotkeyManager not initialized"))?;
+    update_script_hotkey(path, None, Some(shortcut))?;
 
-    let mut guard = manager
-        .lock()
-        .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
-    guard.register(path, shortcut)
+    routes()
+        .read()
+        .get_script_id(path)
+        .ok_or_else(|| anyhow::anyhow!("No script hotkey registered for {}", path))
+}
+
+fn unregister_script_hotkey_with_manager(
+    manager: &GlobalHotKeyManager,
+    path: &str,
+) -> anyhow::Result<()> {
+    let old_entry = {
+        let mut routes_guard = routes().write();
+        let old_id = routes_guard.get_script_id(path);
+        old_id.and_then(|id| routes_guard.remove_route(id))
+    };
+
+    if let Some(old) = old_entry {
+        if let Err(error) = manager.unregister(old.hotkey) {
+            logging::log(
+                "HOTKEY",
+                &format!(
+                    "Warning: failed to unregister old {} hotkey: {}",
+                    old.display, error
+                ),
+            );
+        }
+
+        logging::log(
+            "HOTKEY",
+            &format!("Unregistered script shortcut for {}", path),
+        );
+    }
+
+    Ok(())
 }
 /// Unregister a script hotkey by path.
 /// Returns Ok(()) even if the path wasn't registered (no-op).
 pub fn unregister_script_hotkey(path: &str) -> anyhow::Result<()> {
-    let manager = SCRIPT_HOTKEY_MANAGER
+    let manager = MAIN_MANAGER
         .get()
-        .ok_or_else(|| anyhow::anyhow!("ScriptHotkeyManager not initialized"))?;
+        .ok_or_else(|| anyhow::anyhow!("Hotkey manager not initialized"))?;
 
-    let mut guard = manager
+    let guard = manager
         .lock()
         .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
-    guard.unregister(path)
+    unregister_script_hotkey_with_manager(&guard, path)
 }
 /// Update a script's hotkey.
 /// Handles add (old=None, new=Some), remove (old=Some, new=None), and change (both Some).
@@ -660,30 +688,64 @@ pub fn update_script_hotkey(
     old_shortcut: Option<&str>,
     new_shortcut: Option<&str>,
 ) -> anyhow::Result<()> {
-    let manager = SCRIPT_HOTKEY_MANAGER
+    let manager = MAIN_MANAGER
         .get()
-        .ok_or_else(|| anyhow::anyhow!("ScriptHotkeyManager not initialized"))?;
+        .ok_or_else(|| anyhow::anyhow!("Hotkey manager not initialized"))?;
 
-    let mut guard = manager
+    let guard = manager
         .lock()
         .map_err(|e| anyhow::anyhow!("Lock poisoned: {}", e))?;
-    guard.update(path, old_shortcut, new_shortcut)
+
+    match (old_shortcut, new_shortcut) {
+        (None, None) => Ok(()),
+        (Some(_old), None) => unregister_script_hotkey_with_manager(&guard, path),
+        (old, Some(new)) => {
+            let (mods, code) = shortcuts::parse_shortcut(new)
+                .ok_or_else(|| anyhow::anyhow!("Failed to parse shortcut: {}", new))?;
+            if rebind_hotkey_transactional(
+                &guard,
+                HotkeyAction::Script(path.to_string()),
+                mods,
+                code,
+                new,
+            ) {
+                let verb = if old.is_some() {
+                    "Updated"
+                } else {
+                    "Registered"
+                };
+                logging::log(
+                    "HOTKEY",
+                    &format!("{} script shortcut '{}' for {}", verb, new, path),
+                );
+                Ok(())
+            } else {
+                Err(anyhow::anyhow!("Failed to register hotkey '{}'", new))
+            }
+        }
+    }
 }
 /// Get the script path for a given hotkey ID.
 #[allow(dead_code)]
 pub fn get_script_for_hotkey(hotkey_id: u32) -> Option<String> {
-    let manager = SCRIPT_HOTKEY_MANAGER.get()?;
-    let guard = manager.lock().ok()?;
-    guard.get_script_path(hotkey_id).cloned()
+    let guard = routes().read();
+    guard
+        .routes
+        .get(&hotkey_id)
+        .and_then(|entry| match &entry.action {
+            HotkeyAction::Script(path) => Some(path.clone()),
+            _ => None,
+        })
 }
 /// Get all registered script hotkeys.
 #[allow(dead_code)]
 pub fn get_registered_hotkeys() -> Vec<(String, u32)> {
-    SCRIPT_HOTKEY_MANAGER
-        .get()
-        .and_then(|m| m.lock().ok())
-        .map(|guard| guard.get_registered_hotkeys())
-        .unwrap_or_default()
+    let guard = routes().read();
+    guard
+        .script_paths
+        .iter()
+        .map(|(path, id)| (path.clone(), *id))
+        .collect()
 }
 // =============================================================================
 // Dynamic shortcut registration (for shortcuts.json overrides)
