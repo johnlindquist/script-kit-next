@@ -362,6 +362,19 @@ fn file_search_actions_use_context_builder_not_file_only_builder() {
     );
 }
 
+#[test]
+fn file_search_actions_match_main_window_background() {
+    let file_search_fn = ACTIONS_SOURCE
+        .split("fn toggle_file_search_actions(")
+        .nth(1)
+        .expect("missing toggle_file_search_actions");
+
+    assert!(
+        file_search_fn.contains("dialog.set_match_main_window_background(true);"),
+        "file search actions should match the main window background like other detached actions dialogs"
+    );
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Current-directory action IDs exist
 // ──────────────────────────────────────────────────────────────────────

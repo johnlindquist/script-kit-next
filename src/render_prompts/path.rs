@@ -155,6 +155,7 @@ impl ScriptListApp {
                 ActionsDialog::with_path(focus_handle, noop_callback, &path_info, theme_arc);
             // Hide search in the dialog - we show it in the header instead
             dialog.set_hide_search(true);
+            dialog.set_match_main_window_background(true);
             dialog
         });
 
@@ -460,6 +461,21 @@ mod path_prompt_shared_state_tests {
         assert!(
             PATH_RENDER_SOURCE.contains("crate::ui_foundation::is_key_escape(key)"),
             "path prompt key routing should use shared escape-key helper"
+        );
+    }
+
+    #[test]
+    fn test_path_prompt_actions_match_main_window_background() {
+        const PATH_RENDER_SOURCE: &str = include_str!("path.rs");
+
+        let show_actions_block = PATH_RENDER_SOURCE
+            .split("fn handle_show_path_actions(&mut self, path_info: PathInfo, cx: &mut Context<Self>) {")
+            .nth(1)
+            .expect("handle_show_path_actions should exist");
+
+        assert!(
+            show_actions_block.contains("dialog.set_match_main_window_background(true);"),
+            "path prompt actions dialog should match the main window background for consistency"
         );
     }
 }
