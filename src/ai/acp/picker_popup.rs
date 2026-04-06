@@ -1,24 +1,17 @@
+use anyhow::Context as _;
 use std::sync::{Mutex, OnceLock};
 
 use gpui::{
     div, px, AnyWindowHandle, App, AppContext, Bounds, Context, DisplayId, FocusHandle, Focusable,
     InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString,
-    StatefulInteractiveElement, Styled, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind,
-    WindowOptions,
+    StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
 };
 
-use crate::ai::context_picker_row::{render_dense_monoline_picker_row, CONTEXT_PICKER_ROW_HEIGHT};
+use crate::ai::context_picker_row::render_dense_monoline_picker_row;
 use crate::ai::window::context_picker::empty_state_hints;
 use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerTrigger};
 
 use super::view::AcpChatView;
-
-#[cfg(target_os = "macos")]
-use objc::{msg_send, sel, sel_impl};
-
-const ACP_PICKER_VISIBLE_ROWS: usize = 8;
-const ACP_PICKER_VERTICAL_PADDING: f32 = 4.0;
-const ACP_PICKER_EMPTY_HEIGHT: f32 = 56.0;
 
 #[derive(Clone)]
 pub(crate) struct AcpMentionPopupSnapshot {
@@ -72,12 +65,7 @@ pub(crate) fn is_mention_popup_window_open() -> bool {
 }
 
 fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
-    if snapshot.items.is_empty() {
-        return ACP_PICKER_EMPTY_HEIGHT;
-    }
-
-    let visible_rows = snapshot.items.len().min(ACP_PICKER_VISIBLE_ROWS) as f32;
-    (visible_rows * CONTEXT_PICKER_ROW_HEIGHT) + (ACP_PICKER_VERTICAL_PADDING * 2.0)
+    super::popup_window::dense_picker_height(snapshot.items.len())
 }
 
 pub(crate) fn popup_bounds(
@@ -87,13 +75,7 @@ pub(crate) fn popup_bounds(
     width: f32,
     height: f32,
 ) -> Bounds<Pixels> {
-    Bounds {
-        origin: gpui::point(
-            parent_bounds.origin.x + px(left),
-            parent_bounds.origin.y + px(top),
-        ),
-        size: gpui::size(px(width), px(height)),
-    }
+    super::popup_window::popup_bounds(parent_bounds, left, top, width, height)
 }
 
 pub(crate) fn sync_mention_popup_window(
@@ -124,7 +106,7 @@ pub(crate) fn sync_mention_popup_window(
             if slot.parent_window_handle == parent_window_handle {
                 let update_result = slot.handle.update(cx, |popup, window, cx| {
                     popup.set_snapshot(snapshot.clone());
-                    set_popup_window_bounds(window, bounds, cx);
+                    super::popup_window::set_popup_window_bounds(window, bounds, cx);
                     cx.notify();
                 });
 
@@ -142,55 +124,19 @@ pub(crate) fn sync_mention_popup_window(
         }
     }
 
-    let theme = crate::theme::get_cached_theme();
-    let window_background = if theme.is_vibrancy_enabled() {
-        gpui::WindowBackgroundAppearance::Blurred
-    } else {
-        gpui::WindowBackgroundAppearance::Opaque
-    };
-    let is_dark_vibrancy = theme.should_use_dark_vibrancy();
-
-    let window_options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(bounds)),
-        titlebar: None,
-        window_background,
-        focus: false,
-        show: true,
-        kind: WindowKind::PopUp,
-        display_id,
-        ..Default::default()
-    };
+    let window_options = super::popup_window::popup_window_options(bounds, display_id);
 
     let handle = cx.open_window(window_options, |_window, cx| {
         cx.new(|cx| AcpMentionPopupWindow::new(snapshot.clone(), source_view.clone(), cx))
     })?;
 
-    #[cfg(target_os = "macos")]
+    if let Err(error) =
+        super::popup_window::configure_popup_window(&handle, cx, parent_window_handle)
     {
-        let configure_result = handle.update(cx, move |_popup, window, cx| {
-            window.defer(cx, move |window, cx| {
-                if let Some(ns_window) = popup_ns_window(window) {
-                    // SAFETY: `ns_window` comes from the live GPUI popup window on the
-                    // main thread and is nil-checked before configuration.
-                    unsafe {
-                        crate::platform::configure_actions_popup_window(
-                            ns_window,
-                            is_dark_vibrancy,
-                        );
-                    }
-                    attach_popup_to_parent_window(cx, parent_window_handle, ns_window);
-                }
-            });
+        let _ = handle.update(cx, |_popup, window, _cx| {
+            window.remove_window();
         });
-
-        if configure_result.is_err() {
-            let _ = handle.update(cx, |_popup, window, _cx| {
-                window.remove_window();
-            });
-            return Err(anyhow::anyhow!(
-                "failed to configure ACP mention popup window"
-            ));
-        }
+        return Err(error.context("failed to configure ACP mention popup window"));
     }
 
     if let Ok(mut guard) = storage.lock() {
@@ -228,17 +174,18 @@ impl AcpMentionPopupWindow {
 
     fn visible_range(&self) -> std::ops::Range<usize> {
         let item_count = self.snapshot.items.len();
-        if item_count <= ACP_PICKER_VISIBLE_ROWS {
+        if item_count <= super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS {
             return 0..item_count;
         }
 
-        let half = ACP_PICKER_VISIBLE_ROWS / 2;
+        let half = super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS / 2;
         let mut start = self.snapshot.selected_index.saturating_sub(half);
-        let max_start = item_count.saturating_sub(ACP_PICKER_VISIBLE_ROWS);
+        let max_start =
+            item_count.saturating_sub(super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS);
         if start > max_start {
             start = max_start;
         }
-        start..(start + ACP_PICKER_VISIBLE_ROWS).min(item_count)
+        start..(start + super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS).min(item_count)
     }
 
     fn activate_item(&self, index: usize, cx: &mut App) {
@@ -279,7 +226,7 @@ impl AcpMentionPopupWindow {
             .id("acp-mention-popup")
             .w(px(self.snapshot.width))
             .bg(fg.opacity(0.02))
-            .py(px(2.0))
+            .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING / 2.0))
             .children(
                 self.snapshot
                     .items
@@ -359,7 +306,7 @@ impl AcpMentionPopupWindow {
             .id("acp-mention-popup-empty-state")
             .w(px(self.snapshot.width))
             .bg(fg.opacity(0.02))
-            .py(px(4.0))
+            .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING))
             .px(px(6.0))
             .flex()
             .flex_col()
@@ -397,117 +344,30 @@ impl Render for AcpMentionPopupWindow {
     }
 }
 
-#[cfg(target_os = "macos")]
-fn flipped_ns_window_y(bounds: Bounds<Pixels>, primary_height: f64) -> f64 {
-    primary_height - f32::from(bounds.origin.y) as f64 - f32::from(bounds.size.height) as f64
-}
-
-#[cfg(target_os = "macos")]
-fn set_popup_window_bounds(window: &mut Window, bounds: Bounds<Pixels>, cx: &mut App) {
-    if let Some(ns_window) = popup_ns_window(window) {
-        // SAFETY: `ns_window` comes from a live GPUI popup window on the AppKit
-        // main thread. Coordinates are converted from GPUI's screen-relative
-        // top-left origin into the bottom-left origin NSWindow expects.
-        unsafe {
-            use cocoa::appkit::NSScreen;
-            use cocoa::base::nil;
-
-            let screens: cocoa::base::id = NSScreen::screens(nil);
-            let primary_screen: cocoa::base::id = msg_send![screens, objectAtIndex: 0u64];
-            let primary_frame: cocoa::foundation::NSRect = msg_send![primary_screen, frame];
-            let primary_height = primary_frame.size.height;
-            let target_frame = cocoa::foundation::NSRect::new(
-                cocoa::foundation::NSPoint::new(
-                    f32::from(bounds.origin.x) as f64,
-                    flipped_ns_window_y(bounds, primary_height),
-                ),
-                cocoa::foundation::NSSize::new(
-                    f32::from(bounds.size.width) as f64,
-                    f32::from(bounds.size.height) as f64,
-                ),
-            );
-            let _: () = msg_send![
-                ns_window,
-                setFrame: target_frame
-                display: true
-                animate: false
-            ];
-        }
-    }
-
-    window.resize(bounds.size);
-    window.bounds_changed(cx);
-}
-
-#[cfg(not(target_os = "macos"))]
-fn set_popup_window_bounds(window: &mut Window, bounds: Bounds<Pixels>, cx: &mut App) {
-    let _ = cx;
-    window.resize(bounds.size);
-}
-
-#[cfg(target_os = "macos")]
-fn popup_ns_window(window: &mut Window) -> Option<cocoa::base::id> {
-    if let Ok(window_handle) = raw_window_handle::HasWindowHandle::window_handle(window) {
-        if let raw_window_handle::RawWindowHandle::AppKit(appkit) = window_handle.as_raw() {
-            use cocoa::base::nil;
-
-            let ns_view = appkit.ns_view.as_ptr() as cocoa::base::id;
-            // SAFETY: `ns_view` comes from the live GPUI window on the main thread.
-            unsafe {
-                let ns_window: cocoa::base::id = msg_send![ns_view, window];
-                if ns_window != nil {
-                    return Some(ns_window);
-                }
-            }
-        }
-    }
-
-    None
-}
-
-#[cfg(target_os = "macos")]
-fn attach_popup_to_parent_window(
-    cx: &mut App,
-    parent_window_handle: AnyWindowHandle,
-    child_ns_window: cocoa::base::id,
-) {
-    let _ = cx.update_window(parent_window_handle, move |_, parent_window, _cx| {
-        let Some(parent_ns_window) = popup_ns_window(parent_window) else {
-            return;
-        };
-
-        // SAFETY: both NSWindow pointers come from live GPUI windows on the main
-        // thread, and nil/equality are guarded before AppKit receives them.
-        unsafe {
-            use cocoa::base::nil;
-            if parent_ns_window == nil
-                || child_ns_window == nil
-                || parent_ns_window == child_ns_window
-            {
-                return;
-            }
-
-            let _: () = msg_send![
-                parent_ns_window,
-                addChildWindow: child_ns_window
-                ordered: NS_WINDOW_ABOVE
-            ];
-            let _: () = msg_send![child_ns_window, orderFrontRegardless];
-        }
-    });
-}
-
 #[cfg(test)]
 mod tests {
     use super::{popup_bounds, popup_height, AcpMentionPopupSnapshot};
     use crate::ai::window::context_picker::types::ContextPickerTrigger;
+    use gpui::SharedString;
 
     #[test]
     fn popup_height_clamps_to_visible_rows() {
         let snapshot = AcpMentionPopupSnapshot {
             trigger: ContextPickerTrigger::Mention,
             selected_index: 0,
-            items: Vec::with_capacity(16),
+            items: (0..16)
+                .map(|ix| crate::ai::window::context_picker::types::ContextPickerItem {
+                    id: SharedString::from(format!("item-{ix}")),
+                    label: SharedString::from(format!("Item {ix}")),
+                    meta: SharedString::from(""),
+                    kind: crate::ai::window::context_picker::types::ContextPickerItemKind::SlashCommand(
+                        format!("cmd-{ix}"),
+                    ),
+                    score: 0,
+                    label_highlight_indices: Vec::new(),
+                    meta_highlight_indices: Vec::new(),
+                })
+                .collect(),
             width: 320.0,
         };
         assert!(popup_height(&snapshot) > 0.0);
@@ -534,7 +394,7 @@ mod tests {
             size: gpui::size(gpui::px(320.0), gpui::px(84.0)),
         };
 
-        let flipped_y = super::flipped_ns_window_y(bounds, 982.0);
+        let flipped_y = crate::ai::acp::popup_window::flipped_ns_window_y(bounds, 982.0);
         assert_eq!(flipped_y, 798.0);
     }
 }

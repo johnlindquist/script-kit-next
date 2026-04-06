@@ -26,6 +26,7 @@ pub(crate) mod history_popup;
 pub(crate) mod model_selector_popup;
 pub(crate) mod permission_broker;
 pub(crate) mod picker_popup;
+pub(crate) mod popup_window;
 pub(crate) mod preflight;
 pub(crate) mod provider;
 pub(crate) mod setup_state;
