@@ -2473,13 +2473,13 @@ mod cleanup_contract_audits {
     fn close_tab_ai_harness_terminal_clears_session_and_rewarms() {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let start = source
-            .find("pub(crate) fn close_tab_ai_harness_terminal(")
-            .expect("close_tab_ai_harness_terminal should exist");
+            .find("fn close_tab_ai_harness_terminal_impl(")
+            .expect("close_tab_ai_harness_terminal_impl should exist");
         let rest = &source[start..];
         // Scope to the next function definition so we only audit the close fn.
         let end = rest
-            .find("fn schedule_tab_ai_harness_prewarm")
-            .expect("schedule_tab_ai_harness_prewarm should follow close fn");
+            .find("pub(crate) fn close_tab_ai_harness_terminal_with_window(")
+            .expect("close wrappers should follow close impl");
         let body = compact(&rest[..end]);
 
         // Close must still invalidate capture + clear apply-back for both paths.
@@ -2682,7 +2682,7 @@ mod cleanup_contract_audits {
         // The close fn delegates PTY teardown to the extracted helper.
         let close_body = compact(&extract_fn_body(
             source,
-            "pub(crate) fn close_tab_ai_harness_terminal(",
+            "fn close_tab_ai_harness_terminal_impl(",
         ));
         assert!(
             close_body.contains("terminate_tab_ai_harness_session"),
@@ -2863,7 +2863,7 @@ mod cleanup_contract_audits {
         let source = include_str!("../../app_impl/tab_ai_mode.rs");
         let body = compact(&extract_fn_body(
             source,
-            "pub(crate) fn close_tab_ai_harness_terminal(",
+            "fn close_tab_ai_harness_terminal_impl(",
         ));
         assert!(
             body.contains("terminate_tab_ai_harness_session"),

@@ -291,6 +291,8 @@ struct ScriptListApp {
     pub(crate) tab_ai_harness_return_view: Option<AppView>,
     /// Previous focus target to restore when leaving Tab AI quick terminal.
     pub(crate) tab_ai_harness_return_focus_target: Option<FocusTarget>,
+    /// Main-menu trigger that launched the current ACP session, if any.
+    pub(crate) tab_ai_harness_script_list_trigger: Option<char>,
     /// Pending explicit apply-back route for the active Tab AI harness session.
     pub(crate) tab_ai_harness_apply_back_route: Option<crate::ai::TabAiApplyBackRoute>,
     /// Input history for shell-like up/down navigation through previous inputs

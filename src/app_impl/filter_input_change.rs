@@ -368,6 +368,20 @@ impl ScriptListApp {
 
         // ── First-character ScriptList entry routes ──────────────────
         if let Some(entry) = Self::special_entry_from_script_list_filter(&new_text) {
+            let entry_kind = match &entry {
+                ScriptListSpecialEntry::FileSearchMini { .. } => "file_search_mini",
+                ScriptListSpecialEntry::AcpSlashPicker => "acp_slash_picker",
+                ScriptListSpecialEntry::AcpMentionPicker => "acp_mention_picker",
+                ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
+                ScriptListSpecialEntry::ActionsHelp => "actions_help",
+            };
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "script_list_special_entry_routed",
+                filter_text = %new_text,
+                entry_kind,
+                current_view = ?self.current_view,
+            );
             match entry {
                 ScriptListSpecialEntry::FileSearchMini { .. } => {
                     let query = Self::normalize_mini_file_search_query(&new_text);
