@@ -395,6 +395,30 @@ These remain for non-primary flows and historical data. Do not describe them as 
 - `tests/tab_ai_prompt.rs` — user prompt construction
 - `tests/tab_ai_input_coverage.rs` — input edge cases
 
+### Screenshot Capture (Resolver-Driven)
+
+All runtime screenshot paths use the automation window target resolver for deterministic capture. Title-based capture from stdin `captureWindow` commands is translated to resolver targets before capture.
+
+**Key files:**
+- `src/platform/screenshots_window_open.rs` — `capture_targeted_screenshot()`, `capture_window_by_title_via_resolver()`, `capture_resolved_window()`, scoring/ambiguity rejection
+- `src/execute_script/mod.rs` — protocol `CaptureScreenshot` handler (already resolver-driven)
+- `src/main_entry/runtime_stdin.rs`, `runtime_stdin_match_tail.rs`, `app_run_setup.rs` — stdin `captureWindow` handlers (use `capture_window_by_title_via_resolver`)
+
+**Resolution paths:**
+- Protocol `captureScreenshot` → `capture_targeted_screenshot(target)` → resolve → score → capture
+- Stdin `captureWindow { title }` → `capture_window_by_title_via_resolver(title)` → translate title to `AutomationWindowTarget::TitleContains` (or `Main` for empty) → `capture_targeted_screenshot` → resolve → score → capture
+
+**Structured log sequence (all paths emit these):**
+- `automation.capture_screenshot.title_compatibility` — title translated to automation target (stdin path only)
+- `automation.capture_screenshot.targeted` — resolver produced a target, capture starting
+- `automation.capture_screenshot.candidate_selected` — OS window matched and captured (includes window ID, kind, score)
+- `automation.capture_screenshot.ambiguous_candidate` — top two candidates tied, capture rejected (fail-closed)
+- `automation.capture_screenshot.target_failed` — resolver could not find the target
+
+**Ambiguity policy:** When two OS windows score equally, capture fails closed and does not write a screenshot. This prevents agents from silently verifying against the wrong window.
+
+**Compatibility:** `capture_window_by_title()` still exists as a direct title-matching function but is not called from any runtime path. All agent-facing capture goes through the resolver.
+
 ## Consistency Rules (Non-Negotiable)
 
 These rules exist because mixed patterns break both human navigation and AI agent effectiveness.

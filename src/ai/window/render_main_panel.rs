@@ -1233,11 +1233,23 @@ impl AiApp {
         let muted_fg = cx.theme().muted_foreground;
         let preview_idx = self.context_preview_index;
 
-        let chips: Vec<_> = self
-            .pending_context_parts
-            .iter()
-            .enumerate()
-            .map(|(idx, part)| {
+        // Hide chips for parts already represented by an inline @token in the
+        // composer text. Real part indices are preserved so preview/remove
+        // actions target the correct pending_context_parts entry.
+        let input_text = self.input_state.read(cx).value().to_string();
+        let chip_indices = crate::ai::context_mentions::visible_context_chip_indices(
+            &input_text,
+            &self.pending_context_parts,
+        );
+
+        if chip_indices.is_empty() {
+            return div().id("pending-context-chips-empty").into_any_element();
+        }
+
+        let chips: Vec<_> = chip_indices
+            .into_iter()
+            .filter_map(|idx| {
+                let part = self.pending_context_parts.get(idx)?;
                 let label: SharedString = part.label().to_string().into();
                 let is_resource = matches!(
                     part,
@@ -1258,7 +1270,7 @@ impl AiApp {
                 };
 
                 let mut chip = div()
-                    .id(SharedString::from(format!("ctx-part-{}", idx)))
+                    .id(SharedString::from(format!("ctx-part-{idx}")))
                     .flex()
                     .items_center()
                     .gap(S1)
@@ -1293,7 +1305,7 @@ impl AiApp {
                     };
                     chip = chip.child(
                         div()
-                            .id(SharedString::from(format!("ctx-preview-{}", idx)))
+                            .id(SharedString::from(format!("ctx-preview-{idx}")))
                             .cursor_pointer()
                             .hover(|el| el.text_color(accent))
                             .on_click(cx.listener(move |this, _, _, cx| {
@@ -1311,11 +1323,10 @@ impl AiApp {
                 // Close button
                 chip = chip.child(
                     div()
-                        .id(SharedString::from(format!("ctx-remove-{}", idx)))
+                        .id(SharedString::from(format!("ctx-remove-{idx}")))
                         .cursor_pointer()
                         .hover(|el| el.text_color(cx.theme().danger))
                         .on_click(cx.listener(move |this, _, _, cx| {
-                            // Centralize preview index maintenance in remove_context_part().
                             this.remove_context_part(idx, cx);
                         }))
                         .child(
@@ -1326,7 +1337,7 @@ impl AiApp {
                         ),
                 );
 
-                chip
+                Some(chip)
             })
             .collect();
 
@@ -1342,7 +1353,7 @@ impl AiApp {
             container = container.child(self.render_context_preview_panel(&preview, cx));
         }
 
-        container
+        container.into_any_element()
     }
 
     /// Render the inline preview panel for an expanded context chip.

@@ -1446,7 +1446,7 @@ impl AcpChatView {
     /// Accent left-bar design: a 2px gold bar on the left edge with
     /// a ghost-opacity chip containing the label and a × dismiss button.
     fn render_pending_context_chips(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        use crate::ai::context_mentions::{parse_inline_context_mentions, part_to_inline_token};
+        use crate::ai::context_mentions::visible_context_chip_indices;
 
         let (parts, input_text) = {
             let thread = self.live_thread().read(cx);
@@ -1462,20 +1462,10 @@ impl AcpChatView {
                 .into_any_element();
         }
 
-        // Tokens present inline — suppress chips for these.
-        let inline_tokens: HashSet<String> = parse_inline_context_mentions(&input_text)
+        let chip_indices = visible_context_chip_indices(&input_text, &parts);
+        let chip_parts: Vec<(usize, &AiContextPart)> = chip_indices
             .into_iter()
-            .map(|m| m.token)
-            .collect();
-
-        // Filter to parts that have no inline token representation.
-        let chip_parts: Vec<(usize, &AiContextPart)> = parts
-            .iter()
-            .enumerate()
-            .filter(|(_, part)| match part_to_inline_token(part) {
-                Some(token) => !inline_tokens.contains(&token),
-                None => true,
-            })
+            .filter_map(|ix| parts.get(ix).map(|part| (ix, part)))
             .collect();
 
         if chip_parts.is_empty() {
@@ -3047,123 +3037,36 @@ impl AcpChatView {
     /// tokens. Removes stale parts whose token was deleted from the input
     /// and adds new parts for freshly typed tokens.
     fn sync_inline_mentions(&mut self, cx: &mut Context<Self>) {
-        use crate::ai::context_mentions::{parse_inline_context_mentions, part_to_inline_token};
-
         let text = self.live_thread().read(cx).input.text().to_string();
+        let attached_parts = self.live_thread().read(cx).pending_context_parts().to_vec();
 
-        // ── Fast path: no `@` in text ────────────────────────────
-        // When the composer has no `@` at all, skip the full parse.
-        // If we still own inline tokens, remove the corresponding stale
-        // context parts exactly once, then clear ownership.
-        if !text.contains('@') {
-            if self.inline_owned_context_tokens.is_empty() {
-                return;
-            }
-            let mut removed_tokens = Vec::new();
-            self.live_thread().update(cx, |thread, cx| {
-                let stale_indices: Vec<usize> = thread
-                    .pending_context_parts()
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(ix, part)| {
-                        let token = part_to_inline_token(part)?;
-                        self.inline_owned_context_tokens
-                            .contains(&token)
-                            .then_some((ix, token))
-                    })
-                    .map(|(ix, token)| {
-                        removed_tokens.push(token);
-                        ix
-                    })
-                    .collect();
-                for ix in stale_indices.into_iter().rev() {
-                    thread.remove_context_part(ix, cx);
-                }
-            });
-            self.inline_owned_context_tokens.clear();
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_inline_mentions_cleared",
-                removed_count = removed_tokens.len(),
-                removed_tokens = ?removed_tokens,
-                text_len = text.len(),
-            );
-            return;
-        }
-
-        let parsed = parse_inline_context_mentions(&text);
-
-        // Use canonical tokens for dedup and ownership tracking.
-        let desired_tokens: HashSet<String> =
-            parsed.iter().map(|m| m.canonical_token.clone()).collect();
-        let mut new_inline_owned_tokens = HashSet::new();
-        let mut removed_tokens = Vec::new();
-        let mut duplicate_tokens_skipped = Vec::new();
+        let plan = crate::ai::context_mentions::build_inline_mention_sync_plan(
+            &text,
+            &attached_parts,
+            &self.inline_owned_context_tokens,
+        );
 
         self.live_thread().update(cx, |thread, cx| {
-            // Remove stale inline parts (iterate in reverse to keep indices stable).
-            let stale_indices: Vec<usize> = thread
-                .pending_context_parts()
-                .iter()
-                .enumerate()
-                .filter_map(|(ix, part)| {
-                    let token = part_to_inline_token(part)?;
-                    (self.inline_owned_context_tokens.contains(&token)
-                        && !desired_tokens.contains(&token))
-                    .then_some(ix)
-                })
-                .collect();
-            for ix in stale_indices.into_iter().rev() {
-                if let Some(token) = thread
-                    .pending_context_parts()
-                    .get(ix)
-                    .and_then(part_to_inline_token)
-                {
-                    removed_tokens.push(token);
-                }
+            for ix in plan.stale_indices.iter().rev().copied() {
                 thread.remove_context_part(ix, cx);
             }
-
-            // Add new parts that aren't already attached. Use a mutable
-            // set so duplicate canonical tokens within the same parse pass
-            // (e.g. @context and @snapshot both mapping to the same canonical)
-            // are attached at most once.
-            let mut existing_tokens: HashSet<String> = thread
-                .pending_context_parts()
-                .iter()
-                .filter_map(part_to_inline_token)
-                .collect();
-            for mention in &parsed {
-                if existing_tokens.insert(mention.canonical_token.clone()) {
-                    thread.add_context_part(mention.part.clone(), cx);
-                    new_inline_owned_tokens.insert(mention.canonical_token.clone());
-                } else {
-                    duplicate_tokens_skipped.push(mention.canonical_token.clone());
-                }
+            for part in &plan.added_parts {
+                thread.add_context_part(part.clone(), cx);
             }
         });
 
-        let added_tokens: Vec<String> = new_inline_owned_tokens.iter().cloned().collect();
-        duplicate_tokens_skipped.sort();
-        duplicate_tokens_skipped.dedup();
-
         self.inline_owned_context_tokens
-            .retain(|token| desired_tokens.contains(token));
+            .retain(|token| plan.desired_tokens.contains(token));
         self.inline_owned_context_tokens
-            .extend(added_tokens.iter().cloned());
+            .extend(plan.added_tokens.iter().cloned());
 
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_inline_mentions_synced",
-            inline_count = parsed.len(),
-            canonical_count = desired_tokens.len(),
-            added_count = added_tokens.len(),
-            removed_count = removed_tokens.len(),
-            duplicate_count = duplicate_tokens_skipped.len(),
-            added_tokens = ?added_tokens,
-            removed_tokens = ?removed_tokens,
-            duplicate_tokens_skipped = ?duplicate_tokens_skipped,
-            text_len = text.len(),
+            desired_count = plan.desired_parts.len(),
+            added_count = plan.added_parts.len(),
+            removed_count = plan.stale_indices.len(),
+            token_count = self.inline_owned_context_tokens.len(),
         );
     }
 
@@ -4682,48 +4585,24 @@ impl AcpChatView {
             let current_text = self.live_thread().read(cx).input.text().to_string();
             let cursor = self.live_thread().read(cx).input.cursor();
 
-            if let Some(range) = crate::ai::context_mentions::mention_range_for_atomic_delete(
-                &current_text,
-                cursor,
-                crate::ui_foundation::is_key_delete(key),
-            ) {
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_inline_mention_atomic_delete",
-                    key,
-                    range_start = range.start,
-                    range_end = range.end,
-                );
-                let chars: Vec<char> = current_text.chars().collect();
-                let mut end_char = range.end;
-                // Consume one trailing space when present.
-                if chars.get(end_char) == Some(&' ') {
-                    end_char += 1;
-                }
-
-                let start_byte = Self::char_to_byte_offset(&current_text, range.start);
-                let end_byte = Self::char_to_byte_offset(&current_text, end_char);
-
-                let mut next_text =
-                    String::with_capacity(current_text.len() - (end_byte - start_byte));
-                next_text.push_str(&current_text[..start_byte]);
-                next_text.push_str(&current_text[end_byte..]);
-
-                let delete_forward = crate::ui_foundation::is_key_delete(key);
+            if let Some((next_text, next_cursor)) =
+                crate::ai::context_mentions::remove_inline_mention_at_cursor(
+                    &current_text,
+                    cursor,
+                    crate::ui_foundation::is_key_delete(key),
+                )
+            {
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_inline_mention_deleted_atomically",
                     key = %key,
                     cursor,
-                    delete_forward,
-                    token_range_start = range.start,
-                    token_range_end = range.end,
-                    next_cursor = range.start,
+                    next_cursor,
                 );
 
                 self.live_thread().update(cx, |thread, cx| {
                     thread.input.set_text(next_text);
-                    thread.input.set_cursor(range.start);
+                    thread.input.set_cursor(next_cursor);
                     cx.notify();
                 });
                 self.refresh_mention_session(cx);

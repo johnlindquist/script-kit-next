@@ -228,6 +228,7 @@ impl AiApp {
 
         self.context_preview_index = None;
         self.pending_context_parts.clear();
+        self.inline_owned_context_tokens.clear();
         tracing::info!(
             target: "ai",
             cleared_count,
