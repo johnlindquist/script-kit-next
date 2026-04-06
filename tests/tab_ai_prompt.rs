@@ -285,7 +285,7 @@ fn tab_ai_overlay_preserves_memory_hint_rendering() {
 #[test]
 fn tab_ai_overlay_idle_placeholder_matches_expected_copy() {
     assert!(
-        ACP_VIEW_SOURCE.contains("Ask anything\u{2026}")
+        ACP_VIEW_SOURCE.contains(r#"Ask anything\u{2026}"#)
             || ACP_VIEW_SOURCE.contains("Ask anything…"),
         "idle placeholder must contain 'Ask anything…'"
     );
@@ -294,7 +294,7 @@ fn tab_ai_overlay_idle_placeholder_matches_expected_copy() {
 #[test]
 fn tab_ai_overlay_running_placeholder_matches_expected_copy() {
     assert!(
-        ACP_VIEW_SOURCE.contains("Follow up\u{2026}") || ACP_VIEW_SOURCE.contains("Follow up…"),
+        ACP_VIEW_SOURCE.contains(r#"Follow up\u{2026}"#) || ACP_VIEW_SOURCE.contains("Follow up…"),
         "running placeholder must contain 'Follow up…'"
     );
 }
