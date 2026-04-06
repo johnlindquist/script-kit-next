@@ -79,7 +79,7 @@ pub(crate) fn dense_picker_popup_surface(id: SharedString) -> gpui::Stateful<gpu
         .id(id)
         .rounded(px(8.0))
         .overflow_hidden()
-        .bg(gpui::rgba(chrome.dialog_surface_rgba))
+        .bg(gpui::rgba(chrome.popup_surface_rgba))
         .border_1()
         .border_color(gpui::rgba(chrome.border_rgba))
 }

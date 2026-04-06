@@ -254,7 +254,7 @@ impl Render for AcpHistoryPopupWindow {
         let hover_bg = gpui::rgba(chrome.hover_rgba);
         let selected_bg = gpui::rgba(chrome.selection_rgba);
         let selected_bar = gpui::rgba((theme.colors.accent.selected << 8) | 0xFF);
-        let container_bg = gpui::rgba(chrome.dialog_surface_rgba);
+        let container_bg = gpui::rgba(chrome.popup_surface_rgba);
         let container_border = gpui::rgba(chrome.border_rgba);
 
         div()

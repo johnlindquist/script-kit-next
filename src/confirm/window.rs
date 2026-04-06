@@ -956,7 +956,7 @@ impl Render for ConfirmPopupWindow {
         let body_color = theme.colors.text.secondary.to_rgb();
         let muted_color = theme.colors.text.dimmed.to_rgb();
         let surface_bg = gpui::transparent_black();
-        let panel_bg = gpui::rgba(chrome.dialog_surface_rgba);
+        let panel_bg = gpui::rgba(chrome.popup_surface_rgba);
         let is_danger = matches!(self.confirm_variant, ButtonVariant::Danger);
 
         // Border color: red-tinted for danger, subtle for normal

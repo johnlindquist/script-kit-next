@@ -31,6 +31,10 @@ pub(crate) struct AppChromeColors {
     pub preview_surface_rgba: u32,
     pub panel_surface_rgba: u32,
     pub dialog_surface_rgba: u32,
+    /// Dialog surface with vibrancy-aware opacity floor — use for all popup
+    /// windows (actions dialog, slash picker, mention picker) so they share
+    /// the same apparent background density.
+    pub popup_surface_rgba: u32,
     pub log_panel_surface_rgba: u32,
     pub input_active_rgba: u32,
     pub divider_rgba: u32,
@@ -112,6 +116,17 @@ impl AppChromeColors {
                 opacity.panel,
             ),
             dialog_surface_rgba: hex_to_rgba_with_opacity(colors.background.main, opacity.dialog),
+            popup_surface_rgba: {
+                // Match the actions dialog: use vibrancy_background (default 0.85)
+                // so all popup windows share the same apparent density.
+                // Opaque mode: near-full floor for readability.
+                let popup_opacity = if theme.is_vibrancy_enabled() {
+                    opacity.vibrancy_background.unwrap_or(0.85).clamp(0.0, 1.0)
+                } else {
+                    opacity.dialog.max(0.95)
+                };
+                hex_to_rgba_with_opacity(colors.background.main, popup_opacity)
+            },
             log_panel_surface_rgba: hex_to_rgba_with_opacity(
                 colors.background.log_panel,
                 opacity.log_panel,

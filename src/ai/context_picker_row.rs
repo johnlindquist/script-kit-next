@@ -32,7 +32,7 @@ pub(crate) const COMMAND_OPACITY: f32 = 0.30;
 
 /// Picker rows should align with the footer hint strip they sit above.
 pub(crate) const CONTEXT_PICKER_ROW_HEIGHT: f32 = HINT_STRIP_HEIGHT;
-pub(crate) const CONTEXT_PICKER_SYNOPSIS_HEIGHT: f32 = 32.0;
+pub(crate) const CONTEXT_PICKER_SYNOPSIS_HEIGHT: f32 = 64.0;
 
 /// Render a single dense-monoline picker row.
 ///
@@ -288,7 +288,6 @@ pub(crate) fn render_compact_synopsis_strip(
             div()
                 .text_xs()
                 .text_color(foreground.opacity(MUTED_OP))
-                .text_ellipsis()
                 .child(description),
         )
         .into_any_element()
