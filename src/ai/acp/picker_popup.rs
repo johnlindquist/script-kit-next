@@ -359,6 +359,7 @@ mod tests {
                 .map(|ix| crate::ai::window::context_picker::types::ContextPickerItem {
                     id: SharedString::from(format!("item-{ix}")),
                     label: SharedString::from(format!("Item {ix}")),
+                    description: SharedString::from(""),
                     meta: SharedString::from(""),
                     kind: crate::ai::window::context_picker::types::ContextPickerItemKind::SlashCommand(
                         format!("cmd-{ix}"),
