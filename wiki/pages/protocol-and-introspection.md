@@ -1,20 +1,20 @@
 ---
 title: "Protocol and Introspection"
 slug: "protocol-and-introspection"
-sourceSnapshot: "c9fbc3ca"
+sourceSnapshot: "fa760732"
 sourceDocuments:
-  - "raw/c9fbc3ca/docs/PROTOCOL.md"
-  - "raw/c9fbc3ca/docs/ROADMAP.md"
-  - "raw/c9fbc3ca/src/protocol/message/variants/query_ops.rs"
-  - "raw/c9fbc3ca/src/protocol/types/elements_actions_scriptlets.rs"
-  - "raw/c9fbc3ca/src/app_layout/collect_elements.rs"
-  - "raw/c9fbc3ca/src/prompt_handler/mod.rs"
+  - "raw/fa760732/docs/PROTOCOL.md"
+  - "raw/fa760732/docs/ROADMAP.md"
+  - "raw/fa760732/src/protocol/message/variants/query_ops.rs"
+  - "raw/fa760732/src/protocol/types/elements_actions_scriptlets.rs"
+  - "raw/fa760732/src/app_layout/collect_elements.rs"
+  - "raw/fa760732/src/prompt_handler/mod.rs"
 relatedPages:
   - "architecture"
   - "ai-context-and-mcp"
   - "tab-ai-harness"
 generatedBy: "scripts/wiki/ingest.ts"
-generatedAt: "2026-04-04T19:40:47.586Z"
+generatedAt: "2026-04-06T18:08:02.732Z"
 ---
 
 # Protocol and Introspection
@@ -36,12 +36,12 @@ The current automation-facing protocol, visible-element introspection, and deter
 - `src/prompt_handler/mod.rs` — Automation request handler. Runtime execution and logging for element queries, waitFor polling, and batch transactions.
 
 ## Source Documents
-- [raw/c9fbc3ca/docs/PROTOCOL.md](../raw/c9fbc3ca/docs/PROTOCOL.md)
-- [raw/c9fbc3ca/docs/ROADMAP.md](../raw/c9fbc3ca/docs/ROADMAP.md)
-- [raw/c9fbc3ca/src/protocol/message/variants/query_ops.rs](../raw/c9fbc3ca/src/protocol/message/variants/query_ops.rs)
-- [raw/c9fbc3ca/src/protocol/types/elements_actions_scriptlets.rs](../raw/c9fbc3ca/src/protocol/types/elements_actions_scriptlets.rs)
-- [raw/c9fbc3ca/src/app_layout/collect_elements.rs](../raw/c9fbc3ca/src/app_layout/collect_elements.rs)
-- [raw/c9fbc3ca/src/prompt_handler/mod.rs](../raw/c9fbc3ca/src/prompt_handler/mod.rs)
+- [raw/fa760732/docs/PROTOCOL.md](../raw/fa760732/docs/PROTOCOL.md)
+- [raw/fa760732/docs/ROADMAP.md](../raw/fa760732/docs/ROADMAP.md)
+- [raw/fa760732/src/protocol/message/variants/query_ops.rs](../raw/fa760732/src/protocol/message/variants/query_ops.rs)
+- [raw/fa760732/src/protocol/types/elements_actions_scriptlets.rs](../raw/fa760732/src/protocol/types/elements_actions_scriptlets.rs)
+- [raw/fa760732/src/app_layout/collect_elements.rs](../raw/fa760732/src/app_layout/collect_elements.rs)
+- [raw/fa760732/src/prompt_handler/mod.rs](../raw/fa760732/src/prompt_handler/mod.rs)
 
 ## Related Pages
 - [architecture](./architecture.md)

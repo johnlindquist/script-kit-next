@@ -1,18 +1,20 @@
 ---
-title: "Tab AI Harness"
+title: "ACP Chat"
 slug: "tab-ai-harness"
-sourceSnapshot: "c9fbc3ca"
+sourceSnapshot: "fa760732"
 sourceDocuments:
-  - "raw/c9fbc3ca/README.md"
-  - "raw/c9fbc3ca/src/ai/harness/mod.rs"
-  - "raw/c9fbc3ca/src/ai/tab_context.rs"
-  - "raw/c9fbc3ca/tests/tab_ai_context.rs"
+  - "raw/fa760732/README.md"
+  - "raw/fa760732/src/ai/acp/view.rs"
+  - "raw/fa760732/src/ai/acp/chat_window.rs"
+  - "raw/fa760732/src/ai/harness/mod.rs"
+  - "raw/fa760732/src/ai/tab_context.rs"
+  - "raw/fa760732/tests/tab_ai_context.rs"
 relatedPages:
   - "project-overview"
   - "ai-context-and-mcp"
   - "verification-and-testing"
 generatedBy: "scripts/wiki/ingest.ts"
-generatedAt: "2026-04-04T19:40:47.586Z"
+generatedAt: "2026-04-06T18:08:02.732Z"
 ---
 
 # ACP Chat
@@ -27,15 +29,19 @@ The primary and only AI chat surface, the ACP chat runtime, and the compatibilit
 
 ## Key Files
 - `README.md` — Project overview. High-level product positioning, setup, prompt APIs, configuration, and built-in capabilities.
-- `src/ai/harness/mod.rs` — Tab AI harness. Harness configuration and context formatting for the external CLI flow.
-- `src/ai/tab_context.rs` — Tab AI context types. Tab AI context blob, target audit, UI snapshot, and clipboard context types.
-- `tests/tab_ai_context.rs` — Tab AI context tests. Integration tests for the Tab AI context blob schema and serialization.
+- `src/ai/acp/view.rs` — ACP chat view. Primary ACP Chat view, composer, picker integration, and threaded conversation rendering.
+- `src/ai/acp/chat_window.rs` — Detached ACP chat window. Detached ACP Chat window lifecycle, focus, and automation registration.
+- `src/ai/harness/mod.rs` — ACP chat compatibility harness. Compatibility-layer harness configuration and context formatting still used by ACP Chat plumbing.
+- `src/ai/tab_context.rs` — ACP chat context types. Compatibility-named `tab_ai_*` context blob, target audit, UI snapshot, and clipboard context types that back ACP Chat.
+- `tests/tab_ai_context.rs` — ACP chat context tests. Integration tests for the compatibility-named ACP Chat context blob schema and serialization.
 
 ## Source Documents
-- [raw/c9fbc3ca/README.md](../raw/c9fbc3ca/README.md)
-- [raw/c9fbc3ca/src/ai/harness/mod.rs](../raw/c9fbc3ca/src/ai/harness/mod.rs)
-- [raw/c9fbc3ca/src/ai/tab_context.rs](../raw/c9fbc3ca/src/ai/tab_context.rs)
-- [raw/c9fbc3ca/tests/tab_ai_context.rs](../raw/c9fbc3ca/tests/tab_ai_context.rs)
+- [raw/fa760732/README.md](../raw/fa760732/README.md)
+- [raw/fa760732/src/ai/acp/view.rs](../raw/fa760732/src/ai/acp/view.rs)
+- [raw/fa760732/src/ai/acp/chat_window.rs](../raw/fa760732/src/ai/acp/chat_window.rs)
+- [raw/fa760732/src/ai/harness/mod.rs](../raw/fa760732/src/ai/harness/mod.rs)
+- [raw/fa760732/src/ai/tab_context.rs](../raw/fa760732/src/ai/tab_context.rs)
+- [raw/fa760732/tests/tab_ai_context.rs](../raw/fa760732/tests/tab_ai_context.rs)
 
 ## Related Pages
 - [project-overview](./project-overview.md)
