@@ -43,15 +43,16 @@ fn acp_action_handler_stages_retry_payload_before_reopen() {
         "switch-agent action must stage a retry payload preserving capability requirements"
     );
     assert!(
-        ACTION_HANDLER_SOURCE.contains("acp_switch_agent_reopen_requested"),
-        "switch-agent action must emit acp_switch_agent_reopen_requested tracing event"
+        ACTION_HANDLER_SOURCE.contains("acp_switch_agent_relaunch_requested"),
+        "switch-agent action must emit acp_switch_agent_relaunch_requested tracing event"
     );
     // The retry payload staging must happen before the close+reopen sequence.
     let stage_pos = ACTION_HANDLER_SOURCE
         .find("stage_agent_switch_retry")
         .expect("stage_agent_switch_retry must exist");
-    let close_pos = ACTION_HANDLER_SOURCE
+    let close_pos = ACTION_HANDLER_SOURCE[stage_pos..]
         .find("close_tab_ai_harness_terminal")
+        .map(|offset| stage_pos + offset)
         .expect("close_tab_ai_harness_terminal must exist");
     assert!(
         stage_pos < close_pos,

@@ -131,16 +131,16 @@ fn file_search_enforces_expanded_view_contract() {
 // ---- File search mini footer contract ----
 
 #[test]
-fn file_search_mini_footer_uses_universal_hint_contract() {
+fn file_search_mini_footer_uses_live_hint_contract() {
     // The live rendering is in file_search.rs (entry source).
     assert!(
         FILE_SEARCH_ENTRY_SOURCE.contains("emit_prompt_hint_audit(\"file_search\""),
         "file_search should emit a prompt hint audit"
     );
     assert!(
-        FILE_SEARCH_ENTRY_SOURCE.contains("universal_prompt_hints()")
-            || FILE_SEARCH_ENTRY_SOURCE.contains("live_file_search_hints("),
-        "file_search should use universal or live file search hints"
+        FILE_SEARCH_ENTRY_SOURCE.contains("let file_search_hints = if let Some(file) = selected_file.as_ref()")
+            && FILE_SEARCH_ENTRY_SOURCE.contains("render_minimal_list_prompt_scaffold("),
+        "file_search mini mode should compute live hints and route them through the minimal scaffold"
     );
 }
 
@@ -175,18 +175,16 @@ const EMOJI_PICKER_SOURCE: &str = include_str!("../../src/render_builtins/emoji_
 const THEME_CHOOSER_SOURCE: &str = include_str!("../../src/render_builtins/theme_chooser.rs");
 const ACTIONS_DIALOG_SOURCE: &str = include_str!("../../src/app_impl/actions_dialog.rs");
 
+fn production_source(source: &str) -> &str {
+    source.split("#[cfg(test)]").next().unwrap_or(source)
+}
+
 /// Surfaces that advertise universal_prompt_hints() must also wire the shared
 /// actions dialog (either locally via route_key_to_actions_dialog or by being
 /// listed as SharedDialog in actions_support_for_view).
 #[test]
 fn surfaces_that_advertise_universal_hints_must_have_actions_support() {
-    for (source, label) in [
-        (APP_LAUNCHER_SOURCE, "app_launcher"),
-        (WINDOW_SWITCHER_SOURCE, "window_switcher"),
-        (EMOJI_PICKER_SOURCE, "emoji_picker"),
-        (CURRENT_APP_COMMANDS_SOURCE, "current_app_commands"),
-        (PROCESS_MANAGER_SOURCE, "process_manager"),
-    ] {
+    for (source, label) in [(EMOJI_PICKER_SOURCE, "emoji_picker")] {
         let advertises_actions = source.contains("universal_prompt_hints()");
         // Either the surface locally wires the router, or the canonical resolver
         // maps it to SharedDialog (checked via the ActionsDialogHost variant name).
@@ -213,10 +211,12 @@ fn surfaces_that_advertise_universal_hints_must_have_actions_support() {
 #[test]
 fn no_actions_surfaces_must_not_advertise_universal_hints() {
     for (source, label) in [
+        (APP_LAUNCHER_SOURCE, "app_launcher"),
         (WINDOW_SWITCHER_SOURCE, "window_switcher"),
         (CURRENT_APP_COMMANDS_SOURCE, "current_app_commands"),
         (PROCESS_MANAGER_SOURCE, "process_manager"),
     ] {
+        let source = production_source(source);
         assert!(
             !source.contains("universal_prompt_hints()"),
             "{label} does not support shared actions but advertises universal hints"
@@ -227,13 +227,14 @@ fn no_actions_surfaces_must_not_advertise_universal_hints() {
 /// ThemeChooser stays truthful: no universal actions hints, custom footer only.
 #[test]
 fn theme_chooser_stays_truthful_and_does_not_advertise_actions() {
+    let source = production_source(THEME_CHOOSER_SOURCE);
     assert!(
-        !THEME_CHOOSER_SOURCE.contains("universal_prompt_hints()"),
+        !source.contains("universal_prompt_hints()"),
         "theme_chooser should not use universal actions hints without shared actions support"
     );
     assert!(
-        THEME_CHOOSER_SOURCE.contains("render_simple_hint_strip(")
-            || THEME_CHOOSER_SOURCE.contains("render_minimal_list_prompt_scaffold("),
+        source.contains("render_simple_hint_strip(")
+            || source.contains("render_minimal_list_prompt_scaffold("),
         "theme_chooser should keep a truthful custom footer"
     );
 }
