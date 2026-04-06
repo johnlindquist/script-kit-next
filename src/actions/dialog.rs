@@ -363,6 +363,10 @@ pub struct ActionsDialog {
     pub config: ActionsDialogConfig,
     /// When true, skip track_focus in render (parent handles focus, e.g., ActionsWindow)
     pub skip_track_focus: bool,
+    /// When true, reuse the main window vibrancy alpha for the dialog container.
+    /// This is for detached popup-window actions surfaces that should read like the
+    /// same background/material stack as their parent window.
+    pub match_main_window_background: bool,
     /// Callback for when the dialog is closed (escape pressed, window dismissed)
     /// Used to notify the main app to restore focus
     pub on_close: Option<CloseCallback>,
@@ -547,6 +551,7 @@ impl ActionsDialog {
             context_title,
             config,
             skip_track_focus: false,
+            match_main_window_background: false,
             on_close: None,
         }
     }
@@ -873,6 +878,11 @@ impl ActionsDialog {
     /// Set skip_track_focus to let parent handle focus (used by ActionsWindow)
     pub fn set_skip_track_focus(&mut self, skip: bool) {
         self.skip_track_focus = skip;
+    }
+
+    /// Align the dialog background alpha with the main window vibrancy tint.
+    pub fn set_match_main_window_background(&mut self, match_main_window_background: bool) {
+        self.match_main_window_background = match_main_window_background;
     }
 
     /// Set the callback for when the dialog is closed (escape pressed, window dismissed)
@@ -1507,6 +1517,21 @@ fn actions_dialog_rgba_with_alpha(hex: u32, alpha: u8) -> gpui::Rgba {
     rgba(hex_with_alpha(hex, alpha))
 }
 
+fn actions_dialog_main_window_background_alpha(theme: &theme::Theme) -> u8 {
+    let opacity = theme.get_opacity();
+    let resolved_opacity = if theme.has_dark_colors() {
+        opacity.vibrancy_background.unwrap_or(0.85)
+    } else {
+        opacity
+            .vibrancy_background
+            .map(|value| value.max(0.85))
+            .unwrap_or(0.85)
+    }
+    .clamp(0.0, 1.0);
+
+    actions_dialog_alpha_u8(resolved_opacity)
+}
+
 impl ActionsDialog {
     /// Move selection up, skipping section headers
     ///
@@ -1720,9 +1745,13 @@ impl ActionsDialog {
     ) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba) {
         let opacity = self.theme.get_opacity();
         let use_vibrancy = self.theme.is_vibrancy_enabled();
-        // In vibrancy mode this uses theme dialog opacity directly so blur can show through.
-        // In opaque mode it keeps a high readability floor.
-        let dialog_alpha = actions_dialog_container_background_alpha(opacity.dialog, use_vibrancy);
+        let dialog_alpha = if use_vibrancy && self.match_main_window_background {
+            actions_dialog_main_window_background_alpha(self.theme.as_ref())
+        } else {
+            // In vibrancy mode this uses theme dialog opacity directly so blur can show through.
+            // In opaque mode it keeps a high readability floor.
+            actions_dialog_container_background_alpha(opacity.dialog, use_vibrancy)
+        };
         let border_alpha = actions_dialog_container_border_alpha(opacity.border_inactive);
         let (main_background, container_border, container_text) =
             if self.design_variant == DesignVariant::Default {
@@ -1747,8 +1776,8 @@ impl ActionsDialog {
 mod actions_dialog_opacity_consistency_tests {
     use super::{
         actions_dialog_container_background_alpha, actions_dialog_container_border_alpha,
-        actions_dialog_rgba_with_alpha, actions_dialog_search_border_alpha,
-        ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA,
+        actions_dialog_main_window_background_alpha, actions_dialog_rgba_with_alpha,
+        actions_dialog_search_border_alpha, ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA,
     };
     use crate::theme::Theme;
     use gpui::rgba;
@@ -1787,6 +1816,22 @@ mod actions_dialog_opacity_consistency_tests {
     fn test_actions_dialog_container_background_alpha_uses_higher_theme_value_above_floor() {
         // 0.90 is above the 0.25 floor → passes through → 229
         assert_eq!(actions_dialog_container_background_alpha(0.90, true), 229);
+    }
+
+    #[test]
+    fn test_actions_dialog_main_window_background_alpha_matches_dark_window_default() {
+        let theme = Theme::dark_default();
+        assert_eq!(actions_dialog_main_window_background_alpha(&theme), 216);
+    }
+
+    #[test]
+    fn test_actions_dialog_main_window_background_alpha_uses_light_window_floor() {
+        let mut theme = Theme::light_default();
+        let mut opacity = theme.get_opacity();
+        opacity.vibrancy_background = Some(0.40);
+        theme.opacity = Some(opacity);
+
+        assert_eq!(actions_dialog_main_window_background_alpha(&theme), 216);
     }
 
     #[test]

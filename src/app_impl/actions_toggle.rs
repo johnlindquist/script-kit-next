@@ -368,6 +368,7 @@ impl ScriptListApp {
                 // Skip track_focus so the parent window keeps keyboard routing
                 // (matches command_bar.rs pattern)
                 dialog.set_skip_track_focus(true);
+                dialog.set_match_main_window_background(true);
                 dialog
             });
 
@@ -534,6 +535,7 @@ impl ScriptListApp {
                     ActionsDialogConfig::default(),
                 );
                 dialog.set_context_title(Some("Webcam".to_string()));
+                dialog.set_match_main_window_background(true);
                 dialog
             });
 
@@ -599,13 +601,15 @@ impl ScriptListApp {
 
             let dialog = cx.new(move |cx| {
                 let focus_handle = cx.focus_handle();
-                ActionsDialog::with_config(
+                let mut dialog = ActionsDialog::with_config(
                     focus_handle,
                     std::sync::Arc::new(|_action_id| {}),
                     actions,
                     theme_arc,
                     config,
-                )
+                );
+                dialog.set_match_main_window_background(true);
+                dialog
             });
             dialog.update(cx, |d, _cx| {
                 d.set_context_title(Some("Terminal".to_string()));
@@ -730,6 +734,7 @@ impl ScriptListApp {
                     });
                 }
 
+                dialog.set_match_main_window_background(true);
                 dialog
             });
 

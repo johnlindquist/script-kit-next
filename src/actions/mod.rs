@@ -49,13 +49,13 @@ pub use types::{
 };
 
 // Window functions for separate vibrancy window
+pub(crate) use window::get_actions_dialog_entity;
 pub use window::{
     close_actions_window, is_actions_window, is_actions_window_open, notify_actions_window,
     open_actions_window, resize_actions_window, WindowPosition,
 };
 #[allow(unused_imports)] // Used from include!()-ed code in app_impl/
 pub(crate) use window::{emit_actions_popup_event, ActionsPopupEvent};
-pub(crate) use window::get_actions_dialog_entity;
 // get_actions_window_handle available but not re-exported (use window:: directly if needed)
 
 pub mod prelude;

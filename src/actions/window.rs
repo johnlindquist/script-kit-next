@@ -1281,7 +1281,9 @@ pub fn get_actions_window_handle() -> Option<WindowHandle<ActionsWindow>> {
 /// needing `&mut App`.
 pub fn get_actions_dialog_entity(cx: &gpui::App) -> Option<Entity<ActionsDialog>> {
     let handle = get_actions_window_handle()?;
-    handle.read_with(cx, |window, _cx| window.dialog.clone()).ok()
+    handle
+        .read_with(cx, |window, _cx| window.dialog.clone())
+        .ok()
 }
 
 /// Get the current actions window position mode
