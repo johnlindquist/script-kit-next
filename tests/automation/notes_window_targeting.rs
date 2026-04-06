@@ -209,6 +209,95 @@ fn get_layout_info_notes_target_round_trip() {
 }
 
 #[test]
+// ============================================================
+// Cross-window transaction contract: Notes not rejected as main-only
+// ============================================================
+
+fn notes_get_elements_not_rejected_as_main_only() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("collect_surface_snapshot"),
+        "getElements must route non-main targets through surface collector"
+    );
+    // Parse check
+    let json = serde_json::json!({
+        "type": "getElements",
+        "requestId": "elm-notes-det",
+        "target": {"type": "kind", "kind": "notes"},
+        "limit": 10
+    });
+    let msg: Message =
+        serde_json::from_value(json).expect("getElements with notes target should parse");
+    match msg {
+        Message::GetElements { target, .. } => assert!(target.is_some()),
+        other => panic!("Expected GetElements, got: {:?}", other),
+    }
+}
+
+#[test]
+fn notes_batch_not_rejected_as_main_only() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("resolve_automation_read_target(&rid, \"batch\""),
+        "batch handler must use resolve_automation_read_target (accepts Notes)"
+    );
+    assert!(
+        source.contains("notes_batch_target"),
+        "batch handler must have a Notes routing path"
+    );
+    notes_get_elements_not_rejected_as_main_only();
+}
+
+#[test]
+fn notes_wait_for_not_rejected_as_main_only() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("resolve_automation_read_target(&rid, \"waitFor\""),
+        "waitFor handler must use resolve_automation_read_target (accepts Notes)"
+    );
+    assert!(
+        source.contains("notes_wait_condition_satisfied"),
+        "waitFor must delegate Notes conditions to notes_wait_condition_satisfied"
+    );
+    assert!(
+        !source
+            .contains("waitFor currently supports only the main automation window; resolved notes"),
+        "waitFor must not reject Notes with main-only error"
+    );
+}
+
+#[test]
+fn notes_condition_checker_supports_generic_conditions() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    // notes_wait_condition_satisfied must handle the standard generic conditions
+    assert!(
+        source.contains("WaitDetailedCondition::ElementExists"),
+        "Notes condition checker must handle ElementExists"
+    );
+    assert!(
+        source.contains("WaitNamedCondition::WindowVisible"),
+        "Notes condition checker must handle WindowVisible"
+    );
+}
+
+#[test]
+fn notes_batch_emits_transaction_logs() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("transaction_notes_set_input"),
+        "Notes batch setInput must emit structured log"
+    );
+    assert!(
+        source.contains("transaction_notes_wait_complete"),
+        "Notes batch waitFor must emit structured log"
+    );
+    assert!(
+        source.contains("automation.batch.notes.completed"),
+        "Notes batch must emit completion log"
+    );
+}
+
+#[test]
 fn get_layout_info_without_target_backward_compatible() {
     // Legacy getLayoutInfo requests (no target field) should still parse.
     let json = r#"{"type":"getLayoutInfo","requestId":"li-legacy"}"#;

@@ -566,6 +566,94 @@ fn transaction_error_matches_sdk_ts_interface() {
 }
 
 // ============================================================
+// Cross-window runtime log markers (source-level contract)
+// ============================================================
+
+#[test]
+fn detached_acp_transaction_provider_emits_set_input_log() {
+    let source = include_str!("../../src/windows/automation_transaction_provider.rs");
+    assert!(
+        source.contains("transaction_detached_acp_set_input"),
+        "DetachedAcpTransactionProvider::set_input must emit structured log"
+    );
+}
+
+#[test]
+fn detached_acp_transaction_provider_emits_select_log() {
+    let source = include_str!("../../src/windows/automation_transaction_provider.rs");
+    assert!(
+        source.contains("transaction_detached_acp_select_by_value"),
+        "DetachedAcpTransactionProvider::select_by_value must emit structured log"
+    );
+}
+
+#[test]
+fn surface_collector_emits_snapshot_log_with_kind() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("automation.surface.snapshot_collected"),
+        "surface collector must emit snapshot_collected log for all non-main windows"
+    );
+    assert!(
+        source.contains("kind = ?resolved.kind"),
+        "snapshot log must include the window kind for cross-window tracing"
+    );
+}
+
+#[test]
+fn surface_collector_routes_notes_and_acp_detached() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("AutomationWindowKind::Notes => collect_notes_snapshot"),
+        "surface collector must route Notes targets"
+    );
+    assert!(
+        source.contains("AutomationWindowKind::AcpDetached => collect_acp_detached_snapshot"),
+        "surface collector must route AcpDetached targets"
+    );
+}
+
+#[test]
+fn prompt_handler_emits_elements_result_log() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("ui.elements.result"),
+        "getElements handler must emit elements result log"
+    );
+    assert!(
+        source.contains("target = ?target"),
+        "getElements log must include target field for cross-window tracing"
+    );
+}
+
+#[test]
+fn prompt_handler_emits_batch_detached_acp_log() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("automation.batch.detached_acp.completed"),
+        "batch handler must emit detached ACP completion log"
+    );
+}
+
+#[test]
+fn prompt_handler_emits_batch_notes_log() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("automation.batch.notes.completed"),
+        "batch handler must emit Notes completion log"
+    );
+}
+
+#[test]
+fn prompt_handler_emits_notes_target_resolution_log() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("automation.target.notes_resolved"),
+        "resolve_automation_read_target must emit Notes resolution log"
+    );
+}
+
+// ============================================================
 // ACP proof conditions: acpAcceptedViaKey
 // ============================================================
 

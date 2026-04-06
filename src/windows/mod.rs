@@ -13,6 +13,7 @@
 pub mod automation_registry;
 pub mod automation_runtime_handles;
 pub mod automation_surface_collector;
+pub(crate) mod automation_transaction_provider;
 mod registry;
 pub mod types;
 

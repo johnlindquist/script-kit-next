@@ -211,7 +211,7 @@ pub struct NotesApp {
     selected_note_id: Option<NoteId>,
 
     /// Editor input state (using gpui-component's Input)
-    editor_state: Entity<InputState>,
+    pub(crate) editor_state: Entity<InputState>,
 
     /// Search input state (for future browse panel)
     search_state: Entity<InputState>,
@@ -371,8 +371,9 @@ mod vibrancy;
 mod window_ops;
 
 pub use window_ops::{
-    close_notes_window, get_notes_editor_text, inject_text_into_notes, is_notes_window,
-    is_notes_window_open, open_notes_window, quick_capture, save_note_with_content,
+    close_notes_window, get_notes_app_entity_and_handle, get_notes_editor_text,
+    inject_text_into_notes, is_notes_window, is_notes_window_open, open_notes_window,
+    quick_capture, save_note_with_content,
 };
 
 #[cfg(test)]

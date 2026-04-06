@@ -597,3 +597,20 @@ pub fn get_notes_editor_text(cx: &gpui::App) -> Option<String> {
     };
     Some(entity.read(cx).editor_state.read(cx).value().to_string())
 }
+
+/// Return the live `NotesApp` entity and its window handle, if the Notes
+/// window is open.
+///
+/// Used by the automation transaction provider to read and mutate Notes
+/// editor state without routing through the main window.
+pub fn get_notes_app_entity_and_handle() -> Option<(Entity<NotesApp>, gpui::WindowHandle<Root>)> {
+    let entity = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok()?.clone()?
+    };
+    let handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok()?.as_ref().copied()?
+    };
+    Some((entity, handle))
+}
