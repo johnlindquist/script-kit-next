@@ -278,3 +278,147 @@ fn semantic_ids_are_unique_across_different_prompts() {
         "semantic IDs from different prompts must not collide"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Actions dialog semantic IDs (source contract)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn actions_dialog_collector_exposes_search_input_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"input:actions-search\""),
+        "Actions dialog collector must expose input:actions-search"
+    );
+}
+
+#[test]
+fn actions_dialog_collector_exposes_list_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"list:actions\""),
+        "Actions dialog collector must expose list:actions"
+    );
+}
+
+#[test]
+fn actions_dialog_collector_uses_choice_format_for_actions() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("format!(\"choice:{}:{}\", filter_pos, action.id)"),
+        "Actions dialog collector must use choice:N:id format for individual actions"
+    );
+}
+
+#[test]
+fn actions_dialog_falls_back_to_panel_only_when_entity_unavailable() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    // When the dialog entity is not accessible, it must fall back to panel_only
+    assert!(
+        source.contains("\"panel_only_actions_dialog\""),
+        "Actions dialog must emit panel_only_actions_dialog when entity is unavailable"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Mention picker semantic IDs (source contract)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn mention_picker_collector_exposes_panel_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"panel:mention-picker\""),
+        "Mention picker collector must expose panel:mention-picker"
+    );
+}
+
+#[test]
+fn mention_picker_collector_exposes_list_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"list:mention-items\""),
+        "Mention picker collector must expose list:mention-items"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Model selector semantic IDs (source contract)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn model_selector_collector_exposes_panel_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"panel:model-selector\""),
+        "Model selector collector must expose panel:model-selector"
+    );
+}
+
+#[test]
+fn model_selector_collector_exposes_list_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"list:model-entries\""),
+        "Model selector collector must expose list:model-entries"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Confirm dialog semantic IDs (source contract)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn confirm_dialog_collector_exposes_panel_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"panel:confirm-dialog\""),
+        "Confirm dialog collector must expose panel:confirm-dialog"
+    );
+}
+
+#[test]
+fn confirm_dialog_collector_exposes_button_semantic_ids() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"button:0:confirm\""),
+        "Confirm dialog must expose button:0:confirm"
+    );
+    assert!(
+        source.contains("\"button:1:cancel\""),
+        "Confirm dialog must expose button:1:cancel"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Cross-surface uniqueness for popup types
+// ---------------------------------------------------------------------------
+
+#[test]
+fn popup_surface_semantic_ids_do_not_collide() {
+    let actions_ids = ["input:actions-search", "list:actions"];
+    let mention_ids = ["panel:mention-picker", "list:mention-items"];
+    let model_ids = ["panel:model-selector", "list:model-entries"];
+    let confirm_ids = [
+        "panel:confirm-dialog",
+        "button:0:confirm",
+        "button:1:cancel",
+    ];
+
+    let all_sets: &[&[&str]] = &[&actions_ids, &mention_ids, &model_ids, &confirm_ids];
+    for (i, set_a) in all_sets.iter().enumerate() {
+        for (j, set_b) in all_sets.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+            for id_a in *set_a {
+                for id_b in *set_b {
+                    assert_ne!(
+                        id_a, id_b,
+                        "Popup surface semantic IDs must not collide across types"
+                    );
+                }
+            }
+        }
+    }
+}

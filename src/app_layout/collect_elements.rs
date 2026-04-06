@@ -286,14 +286,55 @@ impl ScriptListApp {
             }
 
             AppView::ActionsDialog => {
-                let total_count = 1;
-                let elements: Vec<protocol::ElementInfo> =
-                    vec![protocol::ElementInfo::panel("actions-dialog")]
-                        .into_iter()
-                        .take(limit)
-                        .collect();
-                ElementCollectionOutcome::new(elements, total_count)
-                    .with_warning("panel_only_actions_dialog")
+                if let Some(ref dialog_entity) = self.actions_dialog {
+                    let dialog = dialog_entity.read(cx);
+                    let mut elements: Vec<protocol::ElementInfo> = Vec::new();
+
+                    elements.push(protocol::ElementInfo::input(
+                        "actions-search",
+                        Some(&dialog.search_text),
+                        !dialog.hide_search,
+                    ));
+
+                    let action_count = dialog.filtered_actions.len();
+                    elements.push(protocol::ElementInfo::list(
+                        "actions",
+                        action_count,
+                    ));
+
+                    let selected_action_idx = dialog
+                        .get_selected_filtered_index()
+                        .and_then(|fi| dialog.filtered_actions.get(fi).copied());
+
+                    for (filter_pos, &action_idx) in
+                        dialog.filtered_actions.iter().enumerate()
+                    {
+                        if let Some(action) = dialog.actions.get(action_idx) {
+                            let is_selected = selected_action_idx == Some(action_idx);
+                            elements.push(protocol::ElementInfo::choice(
+                                filter_pos,
+                                &action.title,
+                                &action.id,
+                                is_selected,
+                            ));
+                        }
+                    }
+
+                    let total_count = elements.len();
+                    if elements.len() > limit {
+                        elements.truncate(limit);
+                    }
+                    ElementCollectionOutcome::new(elements, total_count)
+                } else {
+                    let total_count = 1;
+                    let elements: Vec<protocol::ElementInfo> =
+                        vec![protocol::ElementInfo::panel("actions-dialog")]
+                            .into_iter()
+                            .take(limit)
+                            .collect();
+                    ElementCollectionOutcome::new(elements, total_count)
+                        .with_warning("panel_only_actions_dialog")
+                }
             }
 
             AppView::DivPrompt { .. } => {

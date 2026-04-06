@@ -692,7 +692,7 @@ fn extend_builtin_picker_items(
         items.push(ContextPickerItem {
             id: SharedString::from(format!("builtin:{:?}", seed.kind).to_lowercase()),
             label: SharedString::from(seed.label),
-            description: SharedString::from(""),
+            description: SharedString::from(seed.kind.spec().action_title),
             meta: SharedString::from(meta),
             kind: ContextPickerItemKind::BuiltIn(seed.kind),
             score: if query_lower.is_empty() { 100 } else { score },
@@ -720,12 +720,12 @@ fn extend_builtin_picker_items(
 /// `/clear`). Shared by ACP and any future slash-command surface.
 fn extend_agent_slash_command_items<'a, I>(
     query_lower: &str,
-    names: I,
+    commands: I,
     items: &mut Vec<ContextPickerItem>,
 ) where
-    I: IntoIterator<Item = &'a str>,
+    I: IntoIterator<Item = (&'a str, &'a str)>,
 {
-    for name in names {
+    for (name, description) in commands {
         let name_lower = name.to_lowercase();
         let score = if query_lower.is_empty() {
             50
@@ -754,13 +754,36 @@ fn extend_agent_slash_command_items<'a, I>(
         items.push(ContextPickerItem {
             id: SharedString::from(format!("slash-cmd:{name}")),
             label: SharedString::from(name.to_string()),
-            description: SharedString::from(""),
+            description: SharedString::from(slash_command_description(name, description)),
             meta: SharedString::from(meta_str),
             kind: ContextPickerItemKind::SlashCommand(name.to_string()),
             score,
             label_highlight_indices: label_hits,
             meta_highlight_indices: meta_hits,
         });
+    }
+}
+
+fn slash_command_description(name: &str, discovered_description: &str) -> String {
+    let trimmed = discovered_description.trim();
+    if !trimmed.is_empty() {
+        return trimmed.to_string();
+    }
+
+    match name {
+        "compact" => "Compact the conversation to reduce context usage.".to_string(),
+        "clear" => "Clear the current conversation from the composer.".to_string(),
+        "bug" => "Report a problem with the current session.".to_string(),
+        "help" => "Show slash command help and usage guidance.".to_string(),
+        "init" => "Initialize the current workspace for the agent.".to_string(),
+        "login" => "Authenticate the current agent session.".to_string(),
+        "logout" => "Sign out of the current agent session.".to_string(),
+        "status" => "Show the current session and account status.".to_string(),
+        "cost" => "Show current usage and cost details.".to_string(),
+        "doctor" => "Run diagnostics for the current agent setup.".to_string(),
+        "review" => "Ask the agent to review the current work.".to_string(),
+        "memory" => "Inspect or manage the agent memory store.".to_string(),
+        _ => format!("Run /{name}."),
     }
 }
 
@@ -820,12 +843,25 @@ pub fn build_slash_picker_items<'a, I>(query: &str, agent_commands: I) -> Vec<Co
 where
     I: IntoIterator<Item = &'a str>,
 {
+    build_slash_picker_items_with_descriptions(
+        query,
+        agent_commands.into_iter().map(|name| (name, "")),
+    )
+}
+
+pub fn build_slash_picker_items_with_descriptions<'a, I>(
+    query: &str,
+    agent_commands: I,
+) -> Vec<ContextPickerItem>
+where
+    I: IntoIterator<Item = (&'a str, &'a str)>,
+{
     let query_lower = query.to_lowercase();
-    let command_names: Vec<&str> = agent_commands.into_iter().collect();
-    let command_count = command_names.len();
+    let commands: Vec<(&str, &str)> = agent_commands.into_iter().collect();
+    let command_count = commands.len();
     let mut items = Vec::with_capacity(command_count);
 
-    extend_agent_slash_command_items(&query_lower, command_names, &mut items);
+    extend_agent_slash_command_items(&query_lower, commands, &mut items);
     sort_picker_items(&mut items);
 
     tracing::info!(
@@ -838,24 +874,6 @@ where
     log_top_ranked_items(&items);
 
     items
-}
-
-/// Build slash picker items while accepting optional per-command descriptions.
-///
-/// The current picker row model is still monoline, so descriptions are
-/// intentionally ignored here. This compatibility wrapper keeps ACP call
-/// sites compiling while sharing the existing slash-command ranking path.
-pub fn build_slash_picker_items_with_descriptions<'a, I>(
-    query: &str,
-    agent_commands: I,
-) -> Vec<ContextPickerItem>
-where
-    I: IntoIterator<Item = (&'a str, &'a str)>,
-{
-    build_slash_picker_items(
-        query,
-        agent_commands.into_iter().map(|(name, _description)| name),
-    )
 }
 
 /// Score a built-in spec against the user query (mention mode).

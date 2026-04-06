@@ -21,9 +21,9 @@ verify: check lint test
 run:
 	echo '{"type":"show"}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1
 
-# Release bundle
+# Release bundle (explicit binary target — matches CI)
 bundle:
-	cargo bundle --release
+	cargo bundle --release --bin script-kit-gpui
 
 # All tests including ignored system tests
 test-all:

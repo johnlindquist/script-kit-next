@@ -44,13 +44,9 @@ unsafe fn configure_window_vibrancy_common(
     let content_view: id = msg_send![window, contentView];
     if !content_view.is_null() {
         let mut count = 0;
-        let material = if is_dark {
-            crate::theme::VibrancyMaterial::Hud
-        } else {
-            crate::theme::VibrancyMaterial::Popover
-        };
+        let material = current_window_material();
         configure_visual_effect_views_recursive(content_view, &mut count, is_dark, material);
-        let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
+        let material_name = current_window_material_name(material);
         logging::log(
             log_target,
             &format!(
@@ -65,7 +61,7 @@ unsafe fn configure_window_vibrancy_common(
     } else {
         "VibrantLight"
     };
-    let material_name = if is_dark { "HUD_WINDOW" } else { "POPOVER" };
+    let material_name = current_window_material_name(current_window_material());
     logging::log(
         log_target,
         &format!(
@@ -73,6 +69,22 @@ unsafe fn configure_window_vibrancy_common(
             window_name, appearance_name, material_name
         ),
     );
+}
+
+#[cfg(target_os = "macos")]
+fn current_window_material() -> crate::theme::VibrancyMaterial {
+    crate::theme::get_cached_theme().get_vibrancy().material
+}
+
+#[cfg(target_os = "macos")]
+fn current_window_material_name(material: crate::theme::VibrancyMaterial) -> &'static str {
+    match material {
+        crate::theme::VibrancyMaterial::Hud => "HUD_WINDOW",
+        crate::theme::VibrancyMaterial::Popover => "POPOVER",
+        crate::theme::VibrancyMaterial::Menu => "MENU",
+        crate::theme::VibrancyMaterial::Sidebar => "SIDEBAR",
+        crate::theme::VibrancyMaterial::Content => "CONTENT_BACKGROUND",
+    }
 }
 
 /// Configure the actions popup window as a non-movable child window with vibrancy.
@@ -166,6 +178,24 @@ pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void, _is_dark: 
 #[cfg(target_os = "macos")]
 pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
     configure_actions_popup_window(window, is_dark);
+
+    // SAFETY: `window` is a valid NSWindow. The confirm dialog sits flush
+    // at the bottom of the parent window, so rounded corners look wrong.
+    // Remove them by setting the contentView's layer cornerRadius to 0.
+    let content_view: id = msg_send![window, contentView];
+    if content_view != nil {
+        let layer: id = msg_send![content_view, layer];
+        if layer != nil {
+            let _: () = msg_send![layer, setCornerRadius: 0.0_f64];
+        }
+        let _: () = msg_send![content_view, setWantsLayer: true];
+        let layer: id = msg_send![content_view, layer];
+        if layer != nil {
+            let _: () = msg_send![layer, setCornerRadius: 0.0_f64];
+        }
+    }
+    // Also disable the window shadow since it's flush with parent
+    let _: () = msg_send![window, setHasShadow: false];
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -297,11 +327,7 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                 let content_view: id = msg_send![window, contentView];
                 if content_view != nil {
                     let mut vev_count = 0;
-                    let material = if is_dark {
-                        crate::theme::VibrancyMaterial::Hud
-                    } else {
-                        crate::theme::VibrancyMaterial::Popover
-                    };
+                    let material = current_window_material();
                     configure_visual_effect_views_recursive(
                         content_view,
                         &mut vev_count,
@@ -311,10 +337,11 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                     logging::log(
                         "APPEARANCE",
                         &format!(
-                            "Updated window '{}': cleared window appearance, configured {} NSVisualEffectView(s) for {}",
+                            "Updated window '{}': cleared window appearance, configured {} NSVisualEffectView(s) for {} using {}",
                             title_string,
                             vev_count,
-                            if is_dark { "dark" } else { "light" }
+                            if is_dark { "dark" } else { "light" },
+                            current_window_material_name(material),
                         ),
                     );
                 }

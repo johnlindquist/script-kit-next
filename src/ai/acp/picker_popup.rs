@@ -7,7 +7,9 @@ use gpui::{
     StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
 };
 
-use crate::ai::context_picker_row::render_dense_monoline_picker_row;
+use crate::ai::context_picker_row::{
+    render_compact_synopsis_strip, render_dense_monoline_picker_row, CONTEXT_PICKER_SYNOPSIS_HEIGHT,
+};
 use crate::ai::window::context_picker::empty_state_hints;
 use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerTrigger};
 
@@ -64,8 +66,25 @@ pub(crate) fn is_mention_popup_window_open() -> bool {
     false
 }
 
+/// Read the mention popup snapshot if the popup window is open.
+///
+/// Used by the automation surface collector to extract semantic elements
+/// from the live popup state without needing `&mut App`.
+pub(crate) fn get_mention_popup_snapshot(cx: &gpui::App) -> Option<AcpMentionPopupSnapshot> {
+    let storage = ACP_MENTION_POPUP_WINDOW.get()?;
+    let guard = storage.lock().ok()?;
+    let slot = (*guard)?;
+    slot.handle
+        .read_with(cx, |popup, _cx| popup.snapshot.clone())
+        .ok()
+}
+
 fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
-    super::popup_window::dense_picker_height(snapshot.items.len())
+    if snapshot.items.is_empty() {
+        return super::popup_window::dense_picker_height(0);
+    }
+
+    super::popup_window::dense_picker_height(snapshot.items.len()) + CONTEXT_PICKER_SYNOPSIS_HEIGHT
 }
 
 pub(crate) fn popup_bounds(
@@ -221,44 +240,64 @@ impl AcpMentionPopupWindow {
         let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
         let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
         let visible = self.visible_range();
+        let selected_item = self
+            .snapshot
+            .items
+            .get(self.snapshot.selected_index)
+            .cloned();
 
-        div()
-            .id("acp-mention-popup")
-            .w(px(self.snapshot.width))
-            .bg(fg.opacity(0.02))
-            .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING / 2.0))
-            .children(
-                self.snapshot
-                    .items
-                    .iter()
-                    .enumerate()
-                    .skip(visible.start)
-                    .take(visible.len())
-                    .map(|(idx, item)| {
-                        let is_selected = idx == self.snapshot.selected_index;
-                        let source_view = self.source_view.clone();
-                        render_dense_monoline_picker_row(
-                            SharedString::from(format!("acp-mention-popup-row-{idx}")),
-                            item.label.clone(),
-                            item.meta.clone(),
-                            &item.label_highlight_indices,
-                            &item.meta_highlight_indices,
-                            is_selected,
-                            fg,
-                            muted_fg,
-                        )
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, _event, _window, cx| {
-                            if source_view.upgrade().is_none() {
-                                close_mention_popup_window(cx);
-                                return;
-                            }
-                            this.activate_item(idx, cx);
-                        }))
-                        .into_any_element()
-                    }),
-            )
-            .into_any_element()
+        let mut popup = super::popup_window::dense_picker_popup_surface(SharedString::from(
+            "acp-mention-popup",
+        ))
+        .w(px(self.snapshot.width))
+        .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING / 2.0))
+        .flex()
+        .flex_col()
+        .children(
+            self.snapshot
+                .items
+                .iter()
+                .enumerate()
+                .skip(visible.start)
+                .take(visible.len())
+                .map(|(idx, item)| {
+                    let is_selected = idx == self.snapshot.selected_index;
+                    let source_view = self.source_view.clone();
+                    render_dense_monoline_picker_row(
+                        SharedString::from(format!("acp-mention-popup-row-{idx}")),
+                        item.label.clone(),
+                        item.meta.clone(),
+                        &item.label_highlight_indices,
+                        &item.meta_highlight_indices,
+                        is_selected,
+                        fg,
+                        muted_fg,
+                    )
+                    .cursor_pointer()
+                    .on_click(cx.listener(move |this, _event, _window, cx| {
+                        if source_view.upgrade().is_none() {
+                            close_mention_popup_window(cx);
+                            return;
+                        }
+                        this.activate_item(idx, cx);
+                    }))
+                    .into_any_element()
+                }),
+        );
+
+        if let Some(item) = selected_item.filter(|item| !item.description.is_empty()) {
+            popup = popup.child(div().h(px(1.0)).bg(fg.opacity(0.06))).child(
+                render_compact_synopsis_strip(
+                    item.label.clone(),
+                    item.meta.clone(),
+                    item.description.clone(),
+                    fg,
+                    muted_fg,
+                ),
+            );
+        }
+
+        popup.into_any_element()
     }
 
     fn render_empty_state(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
@@ -302,27 +341,27 @@ impl AcpMentionPopupWindow {
             );
         }
 
-        div()
-            .id("acp-mention-popup-empty-state")
-            .w(px(self.snapshot.width))
-            .bg(fg.opacity(0.02))
-            .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING))
-            .px(px(6.0))
-            .flex()
-            .flex_col()
-            .gap(px(4.0))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(muted_fg.opacity(MUTED_OP))
-                    .child(if is_slash {
-                        "No matching commands"
-                    } else {
-                        "No matching context"
-                    }),
-            )
-            .child(div().flex().items_center().gap(px(4.0)).children(chips))
-            .into_any_element()
+        super::popup_window::dense_picker_popup_surface(SharedString::from(
+            "acp-mention-popup-empty-state",
+        ))
+        .w(px(self.snapshot.width))
+        .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING))
+        .px(px(6.0))
+        .flex()
+        .flex_col()
+        .gap(px(4.0))
+        .child(
+            div()
+                .text_xs()
+                .text_color(muted_fg.opacity(MUTED_OP))
+                .child(if is_slash {
+                    "No matching commands"
+                } else {
+                    "No matching context"
+                }),
+        )
+        .child(div().flex().items_center().gap(px(4.0)).children(chips))
+        .into_any_element()
     }
 }
 
@@ -359,7 +398,7 @@ mod tests {
                 .map(|ix| crate::ai::window::context_picker::types::ContextPickerItem {
                     id: SharedString::from(format!("item-{ix}")),
                     label: SharedString::from(format!("Item {ix}")),
-                    description: SharedString::from(""),
+                    description: SharedString::from(format!("Description {ix}")),
                     meta: SharedString::from(""),
                     kind: crate::ai::window::context_picker::types::ContextPickerItemKind::SlashCommand(
                         format!("cmd-{ix}"),

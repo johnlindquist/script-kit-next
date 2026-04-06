@@ -328,7 +328,7 @@ cargo build --release
 
 # macOS app bundle
 cargo install cargo-bundle
-cargo bundle --release
+cargo bundle --release --bin script-kit-gpui
 ```
 
 ## Features
