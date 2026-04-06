@@ -459,6 +459,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
         }));
     });
 
+    let parent_automation_id = crate::windows::focused_automation_window_id();
     let actions_handle = match actions::open_actions_window(
         cx,
         parent_window_handle,
@@ -466,6 +467,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
         display_id,
         dialog,
         WindowPosition::TopRight,
+        parent_automation_id.as_deref(),
     ) {
         Ok(handle) => handle,
         Err(e) => {

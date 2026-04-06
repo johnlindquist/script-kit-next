@@ -335,6 +335,12 @@ impl ScriptListApp {
     /// Returns `true` when the current view accepted the text (i.e. there is an
     /// active prompt with an input field), `false` otherwise.  Used by dictation
     /// to decide whether to fall back to paste-to-frontmost-app.
+    /// Returns `true` when the launcher/main-menu filter is active and can
+    /// accept dictated text (i.e. `AppView::ScriptList`).
+    pub(crate) fn can_accept_dictation_into_main_filter(&self) -> bool {
+        matches!(self.current_view, AppView::ScriptList)
+    }
+
     /// Returns `true` when the current view can accept dictated text directly.
     pub(crate) fn can_accept_dictation_into_prompt(&self) -> bool {
         matches!(
@@ -446,6 +452,37 @@ impl ScriptListApp {
         input_state.update(cx, |state, cx| {
             state.focus(window, cx);
         });
+    }
+
+    /// Apply a dictated transcript to the launcher's shared main-filter input.
+    ///
+    /// Returns `true` when the launcher was active and the text was applied,
+    /// `false` otherwise (caller should fall back to frontmost-app paste).
+    pub(crate) fn try_set_main_window_filter_from_dictation(
+        &mut self,
+        text: String,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !self.can_accept_dictation_into_main_filter() {
+            return false;
+        }
+
+        tracing::info!(
+            category = "DICTATION",
+            event = "dictation_set_main_window_filter",
+            text_len = text.len(),
+            "Applying dictated transcript to launcher filter"
+        );
+
+        self.filter_text = text.clone();
+        self.pending_filter_sync = true;
+        self.pending_focus = Some(FocusTarget::MainFilter);
+        self.focused_input = FocusedInput::MainFilter;
+        self.hovered_index = None;
+        self.selected_index = 0;
+        self.queue_filter_compute(text, cx);
+        cx.notify();
+        true
     }
 
     /// Clear the cached preflight receipt so it is rebuilt on the next

@@ -73,4 +73,10 @@ pub struct AutomationWindowInfo {
     /// Window bounds in screen coordinates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bounds: Option<AutomationWindowBounds>,
+    /// For attached popups: the automation ID of the parent window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_window_id: Option<String>,
+    /// For attached popups: the kind of the parent window.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_kind: Option<AutomationWindowKind>,
 }

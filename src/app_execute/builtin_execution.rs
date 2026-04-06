@@ -4371,6 +4371,9 @@ impl ScriptListApp {
                 // Route delivery based on the target that was captured at
                 // session start, not the current UI state.
                 let delivered_internally = match target {
+                    crate::dictation::DictationTarget::MainWindowFilter => {
+                        self.try_set_main_window_filter_from_dictation(transcript.clone(), cx)
+                    }
                     crate::dictation::DictationTarget::MainWindowPrompt => {
                         self.try_set_prompt_input(transcript.clone(), cx)
                     }
@@ -4420,6 +4423,9 @@ impl ScriptListApp {
 
                 if delivered_internally {
                     let destination = match target {
+                        crate::dictation::DictationTarget::MainWindowFilter => {
+                            crate::dictation::DictationDestination::MainWindowFilter
+                        }
                         crate::dictation::DictationTarget::MainWindowPrompt => {
                             crate::dictation::DictationDestination::ActivePrompt
                         }
@@ -4443,19 +4449,7 @@ impl ScriptListApp {
                         "Transcript delivered"
                     );
 
-                    let _ = crate::dictation::update_dictation_overlay(
-                        crate::dictation::DictationOverlayState {
-                            phase: crate::dictation::DictationSessionPhase::Finished,
-                            elapsed: audio_duration,
-                            transcript: transcript.into(),
-                            ..Default::default()
-                        },
-                        cx,
-                    );
-                    self.schedule_dictation_overlay_close(
-                        cx,
-                        std::time::Duration::from_millis(400),
-                    );
+                    let _ = crate::dictation::close_dictation_overlay(cx);
                     self.schedule_dictation_transcriber_cleanup(
                         cx,
                         std::time::Duration::from_secs(300),
@@ -4532,24 +4526,7 @@ impl ScriptListApp {
                         "Preparing frontmost-app dictation paste"
                     );
 
-                    // Show a brief done state before closing and pasting to
-                    // the frontmost app, matching the prompt-first path UX.
-                    let _ = crate::dictation::update_dictation_overlay(
-                        crate::dictation::DictationOverlayState {
-                            phase: crate::dictation::DictationSessionPhase::Finished,
-                            elapsed: audio_duration,
-                            transcript: transcript.clone().into(),
-                            ..Default::default()
-                        },
-                        cx,
-                    );
-
                     cx.spawn(async move |this, cx| {
-                        // Brief pause so the user sees the done state.
-                        cx.background_executor()
-                            .timer(Self::dictation_done_state_duration())
-                            .await;
-
                         // Close overlay, hide Script Kit, and explicitly
                         // activate the tracked target app so macOS moves
                         // keyboard focus there before the CGEvent paste.
@@ -4713,12 +4690,7 @@ impl ScriptListApp {
         }
     }
 
-    const DICTATION_DONE_STATE_MS: u64 = 75;
     const DICTATION_FOCUS_SETTLE_MS: u64 = 120;
-
-    fn dictation_done_state_duration() -> std::time::Duration {
-        std::time::Duration::from_millis(Self::DICTATION_DONE_STATE_MS)
-    }
 
     fn dictation_focus_settle_duration() -> std::time::Duration {
         std::time::Duration::from_millis(Self::DICTATION_FOCUS_SETTLE_MS)
@@ -5260,10 +5232,13 @@ impl ScriptListApp {
     /// Ensure a new dictation session has somewhere valid to send text.
     ///
     /// Allowed start conditions:
+    /// - the launcher/main filter is active, or
     /// - a Script Kit prompt is active and can accept dictated text, or
     /// - the frontmost-app tracker already has a previously tracked external target.
     fn ensure_dictation_delivery_target_available(&self) -> anyhow::Result<()> {
-        if self.can_accept_dictation_into_prompt() {
+        if self.can_accept_dictation_into_main_filter()
+            || self.can_accept_dictation_into_prompt()
+        {
             return Ok(());
         }
         Self::ensure_dictation_frontmost_target_available()
@@ -5290,7 +5265,8 @@ impl ScriptListApp {
             crate::dictation::DictationTarget::ExternalApp => {
                 Self::ensure_dictation_frontmost_target_available()
             }
-            crate::dictation::DictationTarget::MainWindowPrompt
+            crate::dictation::DictationTarget::MainWindowFilter
+            | crate::dictation::DictationTarget::MainWindowPrompt
             | crate::dictation::DictationTarget::NotesEditor
             | crate::dictation::DictationTarget::AiChatComposer
             | crate::dictation::DictationTarget::TabAiHarness => Ok(()),
@@ -5314,7 +5290,8 @@ impl ScriptListApp {
     /// Determine the delivery target for a new dictation session based on
     /// which Script Kit surface is currently active.
     ///
-    /// Priority: notes editor > AI chat composer > active prompt > external app.
+    /// Priority: notes editor > AI chat composer > launcher main filter >
+    /// active prompt > external app.
     fn resolve_dictation_target(&self) -> crate::dictation::DictationTarget {
         if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
             return crate::dictation::DictationTarget::TabAiHarness;
@@ -5324,6 +5301,14 @@ impl ScriptListApp {
         }
         if ai::is_ai_window_open() {
             return crate::dictation::DictationTarget::AiChatComposer;
+        }
+        if self.can_accept_dictation_into_main_filter() {
+            tracing::info!(
+                category = "DICTATION",
+                resolved_target = ?crate::dictation::DictationTarget::MainWindowFilter,
+                "Resolved dictation target to main window filter"
+            );
+            return crate::dictation::DictationTarget::MainWindowFilter;
         }
         if self.can_accept_dictation_into_prompt() {
             return crate::dictation::DictationTarget::MainWindowPrompt;

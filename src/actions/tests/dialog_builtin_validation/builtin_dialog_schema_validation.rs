@@ -13,11 +13,12 @@ mod from_dialog_builtin_action_validation_tests {
     //! cross-context guarantees.
     
     use super::builders::{
-        get_ai_command_bar_actions, get_chat_context_actions, get_clipboard_history_context_actions,
-        get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
-        get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
-        get_scriptlet_context_actions_with_custom, to_deeplink_name, ChatModelInfo, ChatPromptInfo,
-        ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+        get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
+        get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
+        get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
+        get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
+        ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
+        NoteSwitcherNoteInfo, NotesInfo,
     };
     use super::command_bar::CommandBarConfig;
     use super::dialog::{
@@ -499,13 +500,13 @@ mod from_dialog_builtin_action_validation_tests {
             has_messages: true,
             has_response: true,
         };
-        let actions = get_chat_context_actions(&info);
-        let checked = actions.iter().filter(|a| a.title.contains('✓')).count();
+        let picker = get_chat_model_picker_actions(&info);
+        let checked = picker.iter().filter(|a| a.title.contains('✓')).count();
         assert_eq!(checked, 1);
-        let checked_action = actions.iter().find(|a| a.title.contains('✓')).unwrap();
+        let checked_action = picker.iter().find(|a| a.title.contains('✓')).unwrap();
         assert_eq!(checked_action.id, "chat:select_model_model-5");
     }
-    
+
     #[test]
     fn chat_current_model_not_in_available_models_means_no_checkmark() {
         let models = vec![ChatModelInfo {
@@ -519,14 +520,14 @@ mod from_dialog_builtin_action_validation_tests {
             has_messages: false,
             has_response: false,
         };
-        let actions = get_chat_context_actions(&info);
-        let checked = actions.iter().filter(|a| a.title.contains('✓')).count();
+        let picker = get_chat_model_picker_actions(&info);
+        let checked = picker.iter().filter(|a| a.title.contains('✓')).count();
         assert_eq!(
             checked, 0,
             "No model should be checked when current doesn't match any"
         );
     }
-    
+
     #[test]
     fn chat_model_actions_all_have_provider_description() {
         let models = vec![
@@ -547,12 +548,8 @@ mod from_dialog_builtin_action_validation_tests {
             has_messages: false,
             has_response: false,
         };
-        let actions = get_chat_context_actions(&info);
-        let model_actions: Vec<&Action> = actions
-            .iter()
-            .filter(|a| a.id.starts_with("chat:select_model_"))
-            .collect();
-        for action in &model_actions {
+        let picker = get_chat_model_picker_actions(&info);
+        for action in &picker {
             assert!(
                 action.description.as_ref().unwrap().starts_with("Uses "),
                 "Model action '{}' description should start with 'via '",
@@ -1445,11 +1442,12 @@ mod from_dialog_builtin_action_validation_tests_2 {
     //! - Grouped items with SectionStyle::None
     
     use super::builders::{
-        get_ai_command_bar_actions, get_chat_context_actions, get_clipboard_history_context_actions,
-        get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
-        get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
-        get_scriptlet_context_actions_with_custom, to_deeplink_name, ChatModelInfo, ChatPromptInfo,
-        ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+        get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
+        get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
+        get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
+        get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
+        ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
+        NoteSwitcherNoteInfo, NotesInfo,
     };
     use super::command_bar::CommandBarConfig;
     use super::dialog::{
@@ -2035,10 +2033,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions = get_chat_context_actions(&info);
         assert_eq!(
             actions.len(),
-            2,
-            "Empty chat should have continue_in_chat and capture_screen_area"
+            3,
+            "Empty chat should have change_model, continue_in_chat and capture_screen_area"
         );
-        assert_eq!(actions[0].id, "chat:continue_in_chat");
+        assert_eq!(actions[0].id, "chat:change_model");
+        assert_eq!(actions[1].id, "chat:continue_in_chat");
     }
     
     #[test]
@@ -2055,7 +2054,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         };
         let actions_tmp = get_chat_context_actions(&info);
         let ids = action_ids(&actions_tmp);
-        assert!(ids.contains(&"chat:select_model_gpt4"));
+        assert!(ids.contains(&"chat:change_model"));
         assert!(ids.contains(&"chat:continue_in_chat"));
         assert!(ids.contains(&"chat:copy_response"));
         assert!(ids.contains(&"chat:clear_conversation"));
@@ -3417,11 +3416,12 @@ mod from_dialog_builtin_action_validation_tests_3 {
     //! - CommandBarConfig notes_style specifics
     
     use super::builders::{
-        get_ai_command_bar_actions, get_chat_context_actions, get_clipboard_history_context_actions,
-        get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
-        get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
-        get_scriptlet_context_actions_with_custom, to_deeplink_name, ChatModelInfo, ChatPromptInfo,
-        ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+        get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
+        get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
+        get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
+        get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
+        ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
+        NoteSwitcherNoteInfo, NotesInfo,
     };
     use super::command_bar::CommandBarConfig;
     use super::dialog::{
@@ -4632,29 +4632,29 @@ mod from_dialog_builtin_action_validation_tests_3 {
             has_messages: false,
             has_response: false,
         };
-        let actions = get_chat_context_actions(&info);
-    
+        let picker = get_chat_model_picker_actions(&info);
+
         // Claude 3 should have checkmark
-        let claude = find_action(&actions, "chat:select_model_claude-3").unwrap();
+        let claude = find_action(&picker, "chat:select_model_claude-3").unwrap();
         assert!(
             claude.title.contains('✓'),
             "Current model should have checkmark"
         );
-    
+
         // Others should not
-        let gpt = find_action(&actions, "chat:select_model_gpt-4").unwrap();
+        let gpt = find_action(&picker, "chat:select_model_gpt-4").unwrap();
         assert!(
             !gpt.title.contains('✓'),
             "Non-current model should not have checkmark"
         );
-    
-        let gemini = find_action(&actions, "chat:select_model_gemini").unwrap();
+
+        let gemini = find_action(&picker, "chat:select_model_gemini").unwrap();
         assert!(
             !gemini.title.contains('✓'),
             "Non-current model should not have checkmark"
         );
     }
-    
+
     #[test]
     fn chat_no_current_model_no_checkmarks() {
         let info = ChatPromptInfo {
@@ -4674,14 +4674,12 @@ mod from_dialog_builtin_action_validation_tests_3 {
             has_messages: false,
             has_response: false,
         };
-        let actions = get_chat_context_actions(&info);
-        for a in &actions {
-            if a.id.starts_with("chat:select_model_") {
-                assert!(
-                    !a.title.contains('✓'),
-                    "No model should have checkmark when current_model is None"
-                );
-            }
+        let picker = get_chat_model_picker_actions(&info);
+        for a in &picker {
+            assert!(
+                !a.title.contains('✓'),
+                "No model should have checkmark when current_model is None"
+            );
         }
     }
     
@@ -5688,11 +5686,12 @@ mod from_dialog_builtin_action_validation_tests_4 {
     //! - Action constructor lowercase caching with unicode titles
     
     use super::builders::{
-        get_ai_command_bar_actions, get_chat_context_actions, get_clipboard_history_context_actions,
-        get_file_context_actions, get_new_chat_actions, get_note_switcher_actions,
-        get_notes_command_bar_actions, get_path_context_actions, get_script_context_actions,
-        get_scriptlet_context_actions_with_custom, to_deeplink_name, ChatModelInfo, ChatPromptInfo,
-        ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
+        get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
+        get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
+        get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
+        get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
+        ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
+        NoteSwitcherNoteInfo, NotesInfo,
     };
     use super::command_bar::CommandBarConfig;
     use super::dialog::{
@@ -7063,7 +7062,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(ids.contains(&"chat:continue_in_chat"));
         assert!(!ids.contains(&"chat:copy_response"));
         assert!(!ids.contains(&"chat:clear_conversation"));
-        assert_eq!(actions.len(), 2);
+        assert_eq!(actions.len(), 3);
     }
 
     #[test]
@@ -7110,13 +7109,12 @@ mod from_dialog_builtin_action_validation_tests_4 {
         };
         let actions = get_chat_context_actions(&info);
         let ids = action_ids(&actions);
+        assert!(ids.contains(&"chat:change_model"));
         assert!(ids.contains(&"chat:continue_in_chat"));
         assert!(ids.contains(&"chat:copy_response"));
         assert!(ids.contains(&"chat:clear_conversation"));
-        // Plus model selection action
-        assert!(ids.iter().any(|id| id.starts_with("chat:select_model_")));
     }
-    
+
     #[test]
     fn chat_model_checkmark_on_current() {
         let info = ChatPromptInfo {
@@ -7136,9 +7134,9 @@ mod from_dialog_builtin_action_validation_tests_4 {
             has_messages: false,
             has_response: false,
         };
-        let actions = get_chat_context_actions(&info);
-        let claude = find_action(&actions, "chat:select_model_claude-3.5").unwrap();
-        let gpt = find_action(&actions, "chat:select_model_gpt-4").unwrap();
+        let picker = get_chat_model_picker_actions(&info);
+        let claude = find_action(&picker, "chat:select_model_claude-3.5").unwrap();
+        let gpt = find_action(&picker, "chat:select_model_gpt-4").unwrap();
         assert!(
             claude.title.contains('✓'),
             "Current model should have checkmark"
@@ -9341,8 +9339,8 @@ mod from_dialog_builtin_action_validation_tests_5 {
             };
             let actions = get_chat_context_actions(&info);
             // continue + capture (no models, no copy, no clear)
-            assert_eq!(actions.len(), 2);
-            assert_eq!(actions[0].id, "chat:continue_in_chat");
+            assert_eq!(actions.len(), 3);
+            assert_eq!(actions[0].id, "chat:change_model");
         }
 
         #[test]
@@ -9366,7 +9364,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             };
             let actions = get_chat_context_actions(&info);
             // 2 models + continue + copy_response + clear + capture = 6
-            assert_eq!(actions.len(), 6);
+            assert_eq!(actions.len(), 5);
         }
     
         #[test]
@@ -9388,14 +9386,14 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let claude = actions
+            let picker = get_chat_model_picker_actions(&info);
+            let claude = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude")
                 .unwrap();
             assert!(claude.title.contains("✓"), "Current model should have ✓");
     
-            let gpt4 = actions
+            let gpt4 = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_gpt4")
                 .unwrap();
@@ -9419,8 +9417,8 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let claude = actions
+            let picker = get_chat_model_picker_actions(&info);
+            let claude = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude")
                 .unwrap();
@@ -10538,10 +10536,9 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            // 20 models + continue + capture = 22
-            assert_eq!(actions.len(), 22);
-            for action in actions.iter().take(20) {
+            let picker = get_chat_model_picker_actions(&info);
+            assert_eq!(picker.len(), 20);
+            for action in &picker {
                 assert!(
                     action.id.starts_with("chat:select_model_"),
                     "Model action ID should start with select_model_: {}",
@@ -10569,10 +10566,9 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            // Both should have "Uses OpenAI" description
-            assert_eq!(actions[0].description.as_ref().unwrap(), "Uses OpenAI");
-            assert_eq!(actions[1].description.as_ref().unwrap(), "Uses OpenAI");
+            let picker = get_chat_model_picker_actions(&info);
+            assert_eq!(picker[0].description.as_deref(), Some("Uses OpenAI"));
+            assert_eq!(picker[1].description.as_deref(), Some("Uses OpenAI"));
         }
     
         #[test]
@@ -10594,7 +10590,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
+            let actions = get_chat_model_picker_actions(&info);
             assert!(
                 actions[0].title.contains("✓"),
                 "Current model should have checkmark"
@@ -10614,8 +10610,8 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 2);
-            assert_eq!(actions[0].id, "chat:continue_in_chat");
+            assert_eq!(actions.len(), 3);
+            assert_eq!(actions[0].id, "chat:change_model");
         }
 
         #[test]
@@ -12686,7 +12682,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
     mod tests {
         // --- merged from tests_part_01.rs ---
         use crate::actions::builders::{
-            get_ai_command_bar_actions, get_chat_context_actions,
+            get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
             get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
             get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
             get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
@@ -13118,10 +13114,10 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
+            let picker = get_chat_model_picker_actions(&info);
             // Model actions should have select_model_{id} format
-            assert!(actions.iter().any(|a| a.id == "chat:select_model_gpt-4"));
-            assert!(actions.iter().any(|a| a.id == "chat:select_model_claude-3"));
+            assert!(picker.iter().any(|a| a.id == "chat:select_model_gpt-4"));
+            assert!(picker.iter().any(|a| a.id == "chat:select_model_claude-3"));
         }
     
     
@@ -13145,10 +13141,10 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let gpt = find_action(&actions, "chat:select_model_gpt-4").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let gpt = find_action(&picker, "chat:select_model_gpt-4").unwrap();
             assert!(gpt.title.contains('✓'), "Current model should have ✓");
-            let claude = find_action(&actions, "chat:select_model_claude-3").unwrap();
+            let claude = find_action(&picker, "chat:select_model_claude-3").unwrap();
             assert!(
                 !claude.title.contains('✓'),
                 "Non-current model should not have ✓"
@@ -14221,8 +14217,8 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let model_action = find_action(&actions, "chat:select_model_model-x").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let model_action = find_action(&picker, "chat:select_model_model-x").unwrap();
             assert_eq!(model_action.title, "Model X Ultra");
         }
     
@@ -14238,8 +14234,8 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let model_action = find_action(&actions, "chat:select_model_m").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let model_action = find_action(&picker, "chat:select_model_m").unwrap();
             assert_eq!(model_action.description, Some("Uses Acme Corp".to_string()));
         }
     
@@ -15162,7 +15158,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
     mod tests {
         // --- merged from tests_part_01.rs ---
         use crate::actions::builders::{
-            get_ai_command_bar_actions, get_chat_context_actions,
+            get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
             get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
             get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
             get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
@@ -15716,8 +15712,9 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
             assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
             assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
+            let picker = get_chat_model_picker_actions(&info);
             // Model should have checkmark
-            let model_action = actions
+            let model_action = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude-3")
                 .unwrap();
@@ -15743,9 +15740,9 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let claude3 = find_action(&actions, "chat:select_model_claude-3").unwrap();
-            let claude35 = find_action(&actions, "chat:select_model_claude-35").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let claude3 = find_action(&picker, "chat:select_model_claude-3").unwrap();
+            let claude35 = find_action(&picker, "chat:select_model_claude-35").unwrap();
     
             assert!(
                 !claude3.title.contains('✓'),
@@ -15769,8 +15766,8 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let model = find_action(&actions, "chat:select_model_gpt4").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let model = find_action(&picker, "chat:select_model_gpt4").unwrap();
             assert!(
                 model.description.as_ref().unwrap().contains("OpenAI"),
                 "Model description should contain provider"
@@ -16992,9 +16989,9 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let gpt4o = find_action(&actions, "chat:select_model_gpt4o").unwrap();
-            let gpt4 = find_action(&actions, "chat:select_model_gpt4").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let gpt4o = find_action(&picker, "chat:select_model_gpt4o").unwrap();
+            let gpt4 = find_action(&picker, "chat:select_model_gpt4").unwrap();
             assert!(
                 !gpt4o.title.contains('✓'),
                 "GPT-4o should not have checkmark"
@@ -19502,7 +19499,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
     mod tests {
         // --- merged from tests_part_01.rs ---
         use crate::actions::builders::{
-            get_ai_command_bar_actions, get_chat_context_actions,
+            get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
             get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
             get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
             get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
@@ -20285,9 +20282,9 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            assert!(actions[0].id.starts_with("chat:select_model_"));
-            assert_eq!(actions[0].id, "chat:select_model_gpt-4");
+            let picker = get_chat_model_picker_actions(&info);
+            assert!(picker[0].id.starts_with("chat:select_model_"));
+            assert_eq!(picker[0].id, "chat:select_model_gpt-4");
         }
     
         #[test]
@@ -20303,8 +20300,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert!(actions[0].title.contains("✓"));
-            assert_eq!(actions[0].title, "GPT-4 ✓");
+            assert_eq!(actions[0].id, "chat:change_model");
+            assert_eq!(actions[0].description.as_deref(), Some("Current: GPT-4"));
+            let picker = get_chat_model_picker_actions(&info);
+            assert!(picker[0].title.contains("✓"));
+            assert_eq!(picker[0].title, "GPT-4 ✓");
         }
     
         #[test]
@@ -20320,8 +20320,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert!(!actions[0].title.contains("✓"));
-            assert_eq!(actions[0].title, "GPT-4");
+            assert_eq!(actions[0].id, "chat:change_model");
+            assert_eq!(actions[0].description.as_deref(), Some("Current: Claude"));
+            let picker = get_chat_model_picker_actions(&info);
+            assert!(!picker[0].title.contains("✓"));
+            assert_eq!(picker[0].title, "GPT-4");
         }
     
         #[test]
@@ -20337,7 +20340,10 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic"));
+            assert_eq!(actions[0].id, "chat:change_model");
+            assert_eq!(actions[0].description.as_deref(), Some("Select a model"));
+            let picker = get_chat_model_picker_actions(&info);
+            assert_eq!(picker[0].description.as_deref(), Some("Uses Anthropic"));
         }
     
         #[test]
@@ -20349,8 +20355,8 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 2);
-            assert_eq!(actions[0].id, "chat:continue_in_chat");
+            assert_eq!(actions.len(), 3);
+            assert_eq!(actions[0].id, "chat:change_model");
         }
 
         #[test]
@@ -20366,8 +20372,9 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            // "GPT" != "GPT-4", so no checkmark
-            assert!(!actions[0].title.contains("✓"));
+            assert_eq!(actions[0].description.as_deref(), Some("Current: GPT"));
+            let picker = get_chat_model_picker_actions(&info);
+            assert!(!picker[0].title.contains("✓"));
         }
     
         // ========================================

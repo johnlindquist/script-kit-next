@@ -797,6 +797,98 @@ pub(crate) fn get_acp_chat_actions_with_agents(
     actions
 }
 
+// ── ACP route builders ───────────────────────────────────────────────────────
+
+/// Action ID for the root-level "Change Agent" entry that pushes the agent picker.
+pub const ACP_CHANGE_AGENT_ACTION_ID: &str = "acp:change_agent";
+/// Route ID for the ACP root actions menu.
+pub const ACP_ROOT_ROUTE_ID: &str = "acp:root";
+/// Route ID for the agent picker sub-route.
+pub const ACP_AGENT_PICKER_ROUTE_ID: &str = "acp:agent_picker";
+
+/// Build the root-level ACP actions list. Includes a single "Change Agent"
+/// entry (which triggers drill-down) plus the standard ACP chat actions.
+pub(crate) fn get_acp_chat_root_actions(
+    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
+    selected_agent_id: Option<&str>,
+) -> Vec<Action> {
+    let selected_agent =
+        selected_agent_id.and_then(|id| catalog_entries.iter().find(|e| e.id.as_ref() == id));
+
+    let mut actions = vec![Action::new(
+        ACP_CHANGE_AGENT_ACTION_ID,
+        "Change Agent",
+        Some(
+            selected_agent
+                .map(|e| format!("Current: {}", e.display_name))
+                .unwrap_or_else(|| "Choose the ACP agent for this chat".to_string()),
+        ),
+        ActionCategory::ScriptContext,
+    )
+    .with_icon(IconName::Terminal)
+    .with_section("Agent")];
+
+    actions.extend(get_acp_chat_actions());
+    actions
+}
+
+/// Build the second-level agent picker actions. Preserves the existing
+/// `acp_switch_agent:<id>` action IDs so `handle_acp_chat_action` keeps working.
+pub(crate) fn get_acp_agent_picker_actions(
+    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
+    selected_agent_id: Option<&str>,
+) -> Vec<Action> {
+    let selected_agent_id = selected_agent_id.filter(|id| !id.is_empty());
+    catalog_entries
+        .iter()
+        .map(|entry| {
+            let is_selected = selected_agent_id == Some(entry.id.as_ref());
+            Action::new(
+                acp_switch_agent_action_id(entry.id.as_ref()),
+                if is_selected {
+                    format!("{} \u{2713}", entry.display_name)
+                } else {
+                    entry.display_name.to_string()
+                },
+                Some(acp_agent_switch_description(entry, is_selected)),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Terminal)
+        })
+        .collect()
+}
+
+/// Build an `ActionsDialogRoute` for the ACP root menu.
+pub(crate) fn get_acp_chat_root_route(
+    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
+    selected_agent_id: Option<&str>,
+) -> crate::actions::ActionsDialogRoute {
+    let context_title = selected_agent_id
+        .and_then(|id| catalog_entries.iter().find(|e| e.id.as_ref() == id))
+        .map(|e| e.display_name.to_string())
+        .or_else(|| Some("AI Chat".to_string()));
+
+    crate::actions::ActionsDialogRoute {
+        id: ACP_ROOT_ROUTE_ID.to_string(),
+        actions: get_acp_chat_root_actions(catalog_entries, selected_agent_id),
+        context_title,
+        search_placeholder: Some("Search ACP actions...".to_string()),
+    }
+}
+
+/// Build an `ActionsDialogRoute` for the agent picker sub-route.
+pub(crate) fn get_acp_agent_picker_route(
+    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
+    selected_agent_id: Option<&str>,
+) -> crate::actions::ActionsDialogRoute {
+    crate::actions::ActionsDialogRoute {
+        id: ACP_AGENT_PICKER_ROUTE_ID.to_string(),
+        actions: get_acp_agent_picker_actions(catalog_entries, selected_agent_id),
+        context_title: Some("Change Agent".to_string()),
+        search_placeholder: Some("Search agents...".to_string()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

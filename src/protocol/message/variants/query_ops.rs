@@ -638,6 +638,20 @@ macro_rules! protocol_message_variants_query_ops {
         /// Human-readable error message if dispatch failed.
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
+        /// The dispatch path used: `"exact_handle"` or `"window_role_fallback"`.
+        #[serde(
+            rename = "dispatchPath",
+            skip_serializing_if = "Option::is_none",
+            default
+        )]
+        dispatch_path: Option<String>,
+        /// The resolved automation window ID, when available.
+        #[serde(
+            rename = "resolvedWindowId",
+            skip_serializing_if = "Option::is_none",
+            default
+        )]
+        resolved_window_id: Option<String>,
     },
 
     // ============================================================

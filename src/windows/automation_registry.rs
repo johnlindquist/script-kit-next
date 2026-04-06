@@ -18,7 +18,9 @@
 //! `kind_rank` then `id`, so identical registry contents always produce
 //! the same snapshot order regardless of insertion order.
 
-use crate::protocol::{AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget};
+use crate::protocol::{
+    AutomationWindowBounds, AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,
+};
 use anyhow::{anyhow, Result};
 use parking_lot::Mutex;
 use std::collections::HashMap;
@@ -106,6 +108,85 @@ pub fn upsert_automation_window(info: AutomationWindowInfo) {
         main_id = ?state.main_id,
         "automation_window_upserted"
     );
+}
+
+/// Register an attached popup window with its parent identity.
+///
+/// This is the canonical entry point for popup registration. It records the
+/// popup in the registry with its real parent window ID and kind, then emits
+/// the `automation.attached_popup_parent_resolved` structured log.
+///
+/// **Fail-closed:** Returns `Err` when `parent_id` is `None` (missing parent
+/// automation identity) or when the provided parent ID is not found in the
+/// registry. No attached popup entry is created unless parent identity is
+/// fully resolved.
+pub fn register_attached_popup(
+    popup_id: String,
+    popup_kind: AutomationWindowKind,
+    title: Option<String>,
+    semantic_surface: Option<String>,
+    bounds: Option<AutomationWindowBounds>,
+    parent_id: Option<&str>,
+) -> Result<()> {
+    let pid = parent_id.ok_or_else(|| {
+        tracing::warn!(
+            target: "script_kit::automation",
+            event = "automation.attached_popup_parent_missing",
+            popup_window_id = %popup_id,
+            popup_kind = ?popup_kind,
+            "Attached popup registration rejected: no parent automation identity provided"
+        );
+        anyhow!(
+            "Cannot register attached popup '{}': parent automation identity is required but was not provided",
+            popup_id
+        )
+    })?;
+
+    let (parent_window_id, parent_kind) = {
+        let state = AUTOMATION_WINDOWS.lock();
+        let parent_info = state.windows.get(pid).ok_or_else(|| {
+            tracing::warn!(
+                target: "script_kit::automation",
+                event = "automation.attached_popup_parent_missing",
+                popup_window_id = %popup_id,
+                popup_kind = ?popup_kind,
+                attempted_parent_id = %pid,
+                "Attached popup registration rejected: parent not found in automation registry"
+            );
+            anyhow!(
+                "Cannot register attached popup '{}': parent '{}' not found in automation registry",
+                popup_id,
+                pid
+            )
+        })?;
+        (parent_info.id.clone(), parent_info.kind)
+    };
+
+    let info = AutomationWindowInfo {
+        id: popup_id.clone(),
+        kind: popup_kind,
+        title,
+        focused: false,
+        visible: true,
+        semantic_surface,
+        bounds,
+        parent_window_id: Some(parent_window_id.clone()),
+        parent_kind: Some(parent_kind),
+    };
+
+    upsert_automation_window(info);
+
+    tracing::info!(
+        target: "script_kit::automation",
+        event = "automation.attached_popup_parent_resolved",
+        popup_window_id = %popup_id,
+        popup_kind = ?popup_kind,
+        parent_window_id = %parent_window_id,
+        parent_kind = ?parent_kind,
+        "Attached popup parent identity established"
+    );
+
+    Ok(())
 }
 
 /// Remove an automation window entry by its stable ID.
@@ -329,6 +410,8 @@ mod tests {
             visible: true,
             semantic_surface: None,
             bounds: None,
+            parent_window_id: None,
+            parent_kind: None,
         }
     }
 
@@ -562,6 +645,8 @@ mod tests {
                 width: 800.0,
                 height: 600.0,
             }),
+            parent_window_id: None,
+            parent_kind: None,
         };
         upsert_automation_window(info.clone());
 
@@ -768,6 +853,8 @@ mod tests {
             visible: true,
             semantic_surface: Some("promptPopup".into()),
             bounds: None,
+            parent_window_id: None,
+            parent_kind: None,
         });
         upsert_automation_window(AutomationWindowInfo {
             id: format!("{p}:promptPopup:a"),
@@ -777,6 +864,8 @@ mod tests {
             visible: true,
             semantic_surface: Some("promptPopup".into()),
             bounds: None,
+            parent_window_id: None,
+            parent_kind: None,
         });
 
         // Index 0 must be :a (lexicographically first)
@@ -839,5 +928,164 @@ mod tests {
         remove_automation_window(&format!("{p}:main"));
         remove_automation_window(&format!("{p}:notes"));
         remove_automation_window(&format!("{p}:popup"));
+    }
+
+    // -- Parent identity (register_attached_popup) ---------------------------
+
+    #[test]
+    fn register_attached_popup_records_parent_identity() {
+        let p = test_prefix();
+
+        let mut main = make_info(&p, "main", AutomationWindowKind::Main);
+        main.focused = true;
+        upsert_automation_window(main);
+
+        let popup_id = format!("{p}:actions");
+        register_attached_popup(
+            popup_id.clone(),
+            AutomationWindowKind::ActionsDialog,
+            Some("Actions".into()),
+            Some("actionsDialog".into()),
+            None,
+            Some(&format!("{p}:main")),
+        )
+        .expect("should register with known parent");
+
+        let resolved = resolve_automation_window(Some(&AutomationWindowTarget::Id {
+            id: popup_id.clone(),
+        }))
+        .expect("should resolve popup");
+        assert_eq!(resolved.kind, AutomationWindowKind::ActionsDialog);
+        assert_eq!(
+            resolved.parent_window_id.as_deref(),
+            Some(format!("{p}:main").as_str())
+        );
+        assert_eq!(resolved.parent_kind, Some(AutomationWindowKind::Main));
+
+        remove_automation_window(&popup_id);
+        remove_automation_window(&format!("{p}:main"));
+    }
+
+    #[test]
+    fn register_attached_popup_fails_closed_on_unknown_parent() {
+        let p = test_prefix();
+
+        let popup_id = format!("{p}:orphan-popup");
+        let result = register_attached_popup(
+            popup_id.clone(),
+            AutomationWindowKind::PromptPopup,
+            Some("Confirm".into()),
+            None,
+            None,
+            Some("nonexistent-parent"),
+        );
+
+        assert!(
+            result.is_err(),
+            "must fail closed when parent is not in registry"
+        );
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("nonexistent-parent"));
+
+        assert!(
+            resolve_automation_window(Some(&AutomationWindowTarget::Id { id: popup_id })).is_err()
+        );
+    }
+
+    #[test]
+    fn register_attached_popup_without_parent_fails_closed() {
+        let p = test_prefix();
+
+        let popup_id = format!("{p}:no-parent-popup");
+        let result = register_attached_popup(
+            popup_id.clone(),
+            AutomationWindowKind::ActionsDialog,
+            Some("Actions".into()),
+            None,
+            None,
+            None,
+        );
+
+        assert!(result.is_err(), "must fail closed when parent_id is None");
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("parent automation identity is required"),
+            "error should mention missing parent identity, got: {err_msg}"
+        );
+
+        // Must not have registered the popup
+        assert!(
+            resolve_automation_window(Some(&AutomationWindowTarget::Id { id: popup_id })).is_err(),
+            "popup must not be in registry after failed registration"
+        );
+    }
+
+    #[test]
+    fn register_attached_popup_resolves_non_main_parent() {
+        let p = test_prefix();
+
+        let mut acp = make_info(&p, "acp-1", AutomationWindowKind::AcpDetached);
+        acp.focused = true;
+        upsert_automation_window(acp);
+
+        let popup_id = format!("{p}:acp-actions");
+        register_attached_popup(
+            popup_id.clone(),
+            AutomationWindowKind::ActionsDialog,
+            Some("Actions".into()),
+            Some("actionsDialog".into()),
+            None,
+            Some(&format!("{p}:acp-1")),
+        )
+        .expect("should register with ACP parent");
+
+        let resolved = resolve_automation_window(Some(&AutomationWindowTarget::Id {
+            id: popup_id.clone(),
+        }))
+        .expect("should resolve");
+        assert_eq!(
+            resolved.parent_window_id.as_deref(),
+            Some(format!("{p}:acp-1").as_str())
+        );
+        assert_eq!(
+            resolved.parent_kind,
+            Some(AutomationWindowKind::AcpDetached)
+        );
+
+        remove_automation_window(&popup_id);
+        remove_automation_window(&format!("{p}:acp-1"));
+    }
+
+    #[test]
+    fn parent_identity_serializes_in_list_snapshot() {
+        let p = test_prefix();
+
+        let mut main = make_info(&p, "main", AutomationWindowKind::Main);
+        main.focused = true;
+        upsert_automation_window(main);
+
+        register_attached_popup(
+            format!("{p}:popup-with-parent"),
+            AutomationWindowKind::PromptPopup,
+            Some("Confirm".into()),
+            None,
+            None,
+            Some(&format!("{p}:main")),
+        )
+        .expect("should register");
+
+        let all = list_automation_windows();
+        let popup = all
+            .iter()
+            .find(|w| w.id == format!("{p}:popup-with-parent"))
+            .expect("popup should be in list");
+        assert_eq!(
+            popup.parent_window_id.as_deref(),
+            Some(format!("{p}:main").as_str())
+        );
+        assert_eq!(popup.parent_kind, Some(AutomationWindowKind::Main));
+
+        remove_automation_window(&format!("{p}:popup-with-parent"));
+        remove_automation_window(&format!("{p}:main"));
     }
 }

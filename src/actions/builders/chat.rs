@@ -28,8 +28,8 @@ fn has_missing_chat_model_fields(model: &ChatModelInfo) -> bool {
         || model.provider.trim().is_empty()
 }
 
-/// Get actions specific to a chat prompt.
-pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
+/// Validate chat prompt info. Returns true if valid.
+fn is_chat_prompt_info_valid(info: &ChatPromptInfo) -> bool {
     let has_blank_current_model = info
         .current_model
         .as_ref()
@@ -43,9 +43,8 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
             has_response = info.has_response,
             "Invalid chat prompt info: current model name is blank; returning no actions"
         );
-        return Vec::new();
+        return false;
     }
-
     let invalid_model_count = info
         .available_models
         .iter()
@@ -60,11 +59,21 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
             has_response = info.has_response,
             "Invalid chat prompt info: model metadata missing required fields; returning no actions"
         );
+        return false;
+    }
+    true
+}
+
+/// Build the model-picker actions (second-level drill-down).
+///
+/// Returns flat `chat:select_model_*` rows with checkmark on the current model.
+#[allow(dead_code)] // Will be wired into the chat route drill-down in a follow-up cycle.
+pub fn get_chat_model_picker_actions(info: &ChatPromptInfo) -> Vec<Action> {
+    if !is_chat_prompt_info_valid(info) {
         return Vec::new();
     }
 
     let mut actions = Vec::new();
-
     for model in &info.available_models {
         let is_current = info
             .current_model
@@ -85,6 +94,31 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
         .with_icon(IconName::Settings);
         actions.push(action);
     }
+    actions
+}
+
+/// Get actions specific to a chat prompt.
+///
+/// Returns root-level actions with a `chat:change_model` drill-down instead
+/// of flat model rows. Use [`get_chat_model_picker_actions`] for model-level
+/// actions.
+pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
+    if !is_chat_prompt_info_valid(info) {
+        return Vec::new();
+    }
+
+    let mut actions = vec![Action::new(
+        "chat:change_model",
+        "Change Model",
+        Some(
+            info.current_model
+                .as_ref()
+                .map(|model| format!("Current: {model}"))
+                .unwrap_or_else(|| "Select a model".to_string()),
+        ),
+        ActionCategory::ScriptContext,
+    )
+    .with_icon(IconName::Settings)];
 
     // Compatibility-only: these actions are retained for non-primary legacy
     // chat flows. The default AI surface is the harness terminal (Tab).
@@ -472,10 +506,10 @@ mod tests {
     fn test_get_chat_context_actions_assigns_consistent_primary_icons() {
         let actions = get_chat_context_actions(&sample_prompt_info());
 
-        let select_model = actions
+        let change_model = actions
             .iter()
-            .find(|action| action.id == "chat:select_model_gpt-5")
-            .expect("missing select_model action");
+            .find(|action| action.id == "chat:change_model")
+            .expect("missing change_model action");
         let continue_in_chat = actions
             .iter()
             .find(|action| action.id == "chat:continue_in_chat")
@@ -489,7 +523,7 @@ mod tests {
             .find(|action| action.id == "chat:clear_conversation")
             .expect("missing clear_conversation action");
 
-        assert_eq!(select_model.icon, Some(IconName::Settings));
+        assert_eq!(change_model.icon, Some(IconName::Settings));
         assert_eq!(continue_in_chat.icon, Some(IconName::MessageCircle));
         assert_eq!(copy_response.icon, Some(IconName::Copy));
         assert_eq!(clear_conversation.icon, Some(IconName::Trash));

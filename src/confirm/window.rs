@@ -381,6 +381,9 @@ pub(crate) fn is_confirm_window_open() -> bool {
 }
 
 pub(crate) fn close_confirm_window(cx: &mut App) {
+    // Unregister from automation registry before destroying the window
+    crate::windows::remove_automation_window("confirm-popup");
+
     tracing::info!(
         target: "script_kit::confirm",
         event = "close_confirm_window_called",
@@ -418,7 +421,19 @@ pub(crate) fn open_confirm_popup_window(
     options: ConfirmWindowOptions,
     keep_open_while: Rc<dyn Fn() -> bool>,
     result_tx: async_channel::Sender<bool>,
+    parent_automation_id: Option<&str>,
 ) -> anyhow::Result<WindowHandle<ConfirmPopupWindow>> {
+    // Fail-closed: abort before opening if parent identity is missing.
+    if parent_automation_id.is_none() {
+        tracing::warn!(
+            target: "script_kit::confirm",
+            event = "confirm_popup_open_blocked_missing_parent",
+            title = %options.title,
+            "Confirm popup open blocked: no parent automation identity"
+        );
+        anyhow::bail!("Cannot open confirm popup: parent automation identity is required");
+    }
+
     tracing::info!(
         target: "script_kit::confirm",
         event = "open_confirm_popup_window",
@@ -675,6 +690,26 @@ pub(crate) fn open_confirm_popup_window(
     let btn_storage = CONFIRM_FOCUSED_BUTTON.get_or_init(|| Mutex::new(FocusedButton::Confirm));
     if let Ok(mut guard) = btn_storage.lock() {
         *guard = FocusedButton::Confirm;
+    }
+
+    // Register in the automation window registry with parent identity.
+    // Fail-closed: if registration fails, close the popup and propagate the error.
+    if let Err(e) = crate::windows::register_attached_popup(
+        "confirm-popup".to_string(),
+        crate::protocol::AutomationWindowKind::PromptPopup,
+        Some(options.title.to_string()),
+        Some("confirmDialog".to_string()),
+        None,
+        parent_automation_id,
+    ) {
+        tracing::warn!(
+            target: "script_kit::confirm",
+            event = "confirm_popup_registry_failed",
+            error = %e,
+            "Failed to register confirm popup in automation registry — closing popup"
+        );
+        close_confirm_window(cx);
+        return Err(e);
     }
 
     tracing::info!(

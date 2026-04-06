@@ -171,29 +171,73 @@ impl ScriptListApp {
         }
 
         if is_key_enter(key) {
-            let action_id = dialog.read(cx).get_selected_action_id();
-            let should_close = dialog.read(cx).selected_action_should_close();
-
-            if let Some(action_id) = action_id {
-                logging::log(
-                    "ACTIONS",
-                    &format!(
-                        "Actions dialog executing action: {} (close={}, host={:?})",
-                        action_id, should_close, host
-                    ),
-                );
-
-                if should_close {
-                    self.close_actions_popup(host, window, cx);
+            match dialog.update(cx, |d, cx| d.activate_selected(cx)) {
+                crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+                    crate::actions::notify_actions_window(cx);
+                    crate::actions::resize_actions_window(cx, dialog);
+                    let (route_id, search_placeholder) = {
+                        let dialog_ref = dialog.read(cx);
+                        (
+                            dialog_ref.current_route_id().map(str::to_string),
+                            dialog_ref.current_search_placeholder().map(str::to_string),
+                        )
+                    };
+                    tracing::info!(
+                        target: "script_kit::actions",
+                        host = ?host,
+                        route_id = ?route_id,
+                        search_placeholder = ?search_placeholder,
+                        "actions_dialog_route_visible"
+                    );
+                    return ActionsRoute::Handled;
                 }
-
-                return ActionsRoute::Execute { action_id };
+                crate::actions::ActionsDialogActivation::Executed {
+                    action_id,
+                    should_close,
+                } => {
+                    logging::log(
+                        "ACTIONS",
+                        &format!(
+                            "Actions dialog executing action: {} (close={}, host={:?})",
+                            action_id, should_close, host
+                        ),
+                    );
+                    if should_close {
+                        self.close_actions_popup(host, window, cx);
+                    }
+                    return ActionsRoute::Execute { action_id };
+                }
+                crate::actions::ActionsDialogActivation::NoSelection => {
+                    return ActionsRoute::Handled;
+                }
             }
-            return ActionsRoute::Handled;
         }
 
         if is_key_escape(key) {
-            self.close_actions_popup(host, window, cx);
+            let outcome = dialog.update(cx, |d, cx| d.handle_escape(cx));
+            match outcome {
+                crate::actions::ActionsDialogEscapeOutcome::PoppedRoute => {
+                    crate::actions::notify_actions_window(cx);
+                    crate::actions::resize_actions_window(cx, dialog);
+                    let (route_id, search_placeholder) = {
+                        let dialog_ref = dialog.read(cx);
+                        (
+                            dialog_ref.current_route_id().map(str::to_string),
+                            dialog_ref.current_search_placeholder().map(str::to_string),
+                        )
+                    };
+                    tracing::info!(
+                        target: "script_kit::actions",
+                        host = ?host,
+                        route_id = ?route_id,
+                        search_placeholder = ?search_placeholder,
+                        "actions_dialog_route_visible"
+                    );
+                }
+                crate::actions::ActionsDialogEscapeOutcome::CloseDialog => {
+                    self.close_actions_popup(host, window, cx);
+                }
+            }
             return ActionsRoute::Handled;
         }
 

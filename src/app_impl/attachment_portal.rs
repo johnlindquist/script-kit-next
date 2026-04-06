@@ -87,34 +87,17 @@ impl ScriptListApp {
             _ => FocusedInput::None,
         };
 
-        // Stage the context part and insert inline mention text on the ACP thread.
+        // Stage the context part as a chip-only attachment (no inline text).
+        // The chip renders above the composer input from pending_context_parts.
+        // We intentionally do NOT insert inline @mention text because:
+        // - Full file paths are too long and ugly as inline text
+        // - Chips are the correct visual for portal-attached context
         if let AppView::AcpChatView { entity } = &return_view {
             let entity = entity.clone();
             entity.update(cx, |view, cx| {
-                // Build the inline mention token (e.g. @file:"/path" or @clipboard).
-                let inline_token = crate::ai::context_mentions::part_to_inline_token(&part)
-                    .unwrap_or_else(|| format!("@{}", part.label()));
-
-                // Append the inline token to the current input text.
-                let current_text = view.live_thread().read(cx).input.text().to_string();
-                let separator = if current_text.is_empty() || current_text.ends_with(' ') {
-                    ""
-                } else {
-                    " "
-                };
-                let new_text = format!("{current_text}{separator}{inline_token} ");
-                let new_cursor = new_text.len();
-
                 view.live_thread().update(cx, |thread, cx| {
-                    thread.input.set_text(new_text);
-                    thread.input.set_cursor(new_cursor);
                     thread.add_context_part(part, cx);
-                    cx.notify();
                 });
-
-                // Register inline ownership so the mention sync knows this
-                // token was inserted by the portal (not typed by hand).
-                view.register_inline_owned_token(&inline_token);
                 cx.notify();
             });
         }

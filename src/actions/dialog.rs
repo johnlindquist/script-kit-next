@@ -16,7 +16,7 @@ use gpui::{
     div, list, prelude::*, px, rgb, rgba, svg, App, BoxShadow, Context, ElementId, FocusHandle,
     Focusable, ListAlignment, ListState, Render, SharedString, Window,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use super::builders::{
@@ -319,6 +319,62 @@ pub(super) fn actions_dialog_empty_state_message(search_text: &str) -> &'static 
     }
 }
 
+// ── Route / back-stack contract ──────────────────────────────────────────────
+// Reusable drill-down navigation for the shared ActionsDialog.
+
+/// A route represents a named set of actions that can be displayed in the dialog.
+/// Routes are pushed onto a stack to support drill-down navigation (e.g.,
+/// root actions -> agent picker) with back-stack semantics on Escape.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ActionsDialogRoute {
+    pub id: String,
+    pub actions: Vec<Action>,
+    pub context_title: Option<String>,
+    pub search_placeholder: Option<String>,
+}
+
+/// Snapshot of per-route UI state (search text, selected item) so that
+/// popping back to a parent route restores the user's position.
+#[derive(Clone, Debug)]
+struct ActionsDialogRouteState {
+    route: ActionsDialogRoute,
+    search_text: String,
+    selected_action_id: Option<String>,
+}
+
+impl ActionsDialogRouteState {
+    fn new(route: ActionsDialogRoute) -> Self {
+        Self {
+            route,
+            search_text: String::new(),
+            selected_action_id: None,
+        }
+    }
+}
+
+/// The result of pressing Enter (or clicking) on the selected action.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ActionsDialogActivation {
+    /// A drill-down route was pushed onto the stack.
+    DrillDownPushed { action_id: String, route_id: String },
+    /// The action was executed via the on_select callback.
+    Executed {
+        action_id: String,
+        should_close: bool,
+    },
+    /// Nothing was selected.
+    NoSelection,
+}
+
+/// The result of pressing Escape in the dialog.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActionsDialogEscapeOutcome {
+    /// A child route was popped; the parent route is now visible.
+    PoppedRoute,
+    /// The stack is at root; the dialog should be closed.
+    CloseDialog,
+}
+
 /// ActionsDialog - Compact overlay popup for quick actions
 /// Implements Raycast-style design with individual keycap shortcuts
 ///
@@ -370,6 +426,13 @@ pub struct ActionsDialog {
     /// Callback for when the dialog is closed (escape pressed, window dismissed)
     /// Used to notify the main app to restore focus
     pub on_close: Option<CloseCallback>,
+    // ── Route / back-stack state ─────────────────────────────────────────────
+    /// Stack of route states (empty = no route-based navigation active).
+    route_stack: Vec<ActionsDialogRouteState>,
+    /// Registered drill-down routes keyed by the action ID that triggers them.
+    drill_down_routes: HashMap<String, ActionsDialogRoute>,
+    /// Original search placeholder to restore when no route overrides it.
+    default_search_placeholder: Option<String>,
 }
 
 #[cfg(test)]
@@ -549,10 +612,13 @@ impl ActionsDialog {
             sdk_actions: None,
             sdk_action_indices: Vec::new(),
             context_title,
+            default_search_placeholder: config.search_placeholder.clone(),
             config,
             skip_track_focus: false,
             match_main_window_background: false,
             on_close: None,
+            route_stack: Vec::new(),
+            drill_down_routes: HashMap::new(),
         }
     }
 
@@ -900,6 +966,256 @@ impl ActionsDialog {
         } else {
             false
         }
+    }
+
+    // ── Route / back-stack methods ─────────────────────────────────────────
+
+    /// Replace the route stack with a single root route.
+    pub fn set_root_route(&mut self, route: ActionsDialogRoute) {
+        self.route_stack.clear();
+        self.route_stack
+            .push(ActionsDialogRouteState::new(route.clone()));
+        self.apply_route_state_from_route(&route);
+    }
+
+    /// The ID of the topmost route on the stack, if any.
+    pub fn current_route_id(&self) -> Option<&str> {
+        self.route_stack.last().map(|s| s.route.id.as_str())
+    }
+
+    /// The search placeholder currently active (route override or default).
+    pub fn current_search_placeholder(&self) -> Option<&str> {
+        self.config.search_placeholder.as_deref()
+    }
+
+    /// Number of routes on the stack (0 = no route navigation).
+    pub fn route_depth(&self) -> usize {
+        self.route_stack.len()
+    }
+
+    /// Whether a pop would return to a parent route (vs. closing).
+    pub fn can_pop_route(&self) -> bool {
+        self.route_stack.len() > 1
+    }
+
+    /// Register a drill-down route that is pushed when the given action ID
+    /// is selected via `activate_selected`.
+    pub fn register_drill_down_route(
+        &mut self,
+        action_id: impl Into<String>,
+        route: ActionsDialogRoute,
+    ) {
+        self.drill_down_routes.insert(action_id.into(), route);
+    }
+
+    /// Snapshot current search text and selection into the topmost route state.
+    fn snapshot_current_route_state(&mut self) {
+        let selected_action_id = self.get_selected_action_id();
+        if let Some(state) = self.route_stack.last_mut() {
+            state.search_text = self.search_text.clone();
+            state.selected_action_id = selected_action_id;
+        }
+    }
+
+    /// Push a child route onto the stack, preserving the parent's UI state.
+    pub fn push_route(&mut self, route: ActionsDialogRoute, cx: &mut Context<Self>) {
+        self.snapshot_current_route_state();
+        let route_id = route.id.clone();
+        self.route_stack
+            .push(ActionsDialogRouteState::new(route.clone()));
+        self.apply_route_state_from_route(&route);
+        tracing::info!(
+            target: "script_kit::actions",
+            route_id = %route_id,
+            depth = self.route_stack.len(),
+            "actions_dialog_route_push"
+        );
+        cx.notify();
+    }
+
+    /// Pop the topmost route, restoring the parent route's UI state.
+    /// Returns `false` if already at root (nothing to pop).
+    pub fn pop_route(&mut self, cx: &mut Context<Self>) -> bool {
+        if self.route_stack.len() <= 1 {
+            return false;
+        }
+        self.snapshot_current_route_state();
+        self.route_stack.pop();
+        let Some(state) = self.route_stack.last().cloned() else {
+            return false;
+        };
+        let route_id = state.route.id.clone();
+        self.apply_route_state(&state, cx);
+        tracing::info!(
+            target: "script_kit::actions",
+            route_id = %route_id,
+            depth = self.route_stack.len(),
+            "actions_dialog_route_pop"
+        );
+        cx.notify();
+        true
+    }
+
+    /// Handle Escape with back-stack semantics: pop a child route, or signal close.
+    pub fn handle_escape(&mut self, cx: &mut Context<Self>) -> ActionsDialogEscapeOutcome {
+        let outcome = if self.pop_route(cx) {
+            ActionsDialogEscapeOutcome::PoppedRoute
+        } else {
+            ActionsDialogEscapeOutcome::CloseDialog
+        };
+        tracing::info!(
+            target: "script_kit::actions",
+            ?outcome,
+            depth = self.route_stack.len(),
+            "actions_dialog_escape"
+        );
+        outcome
+    }
+
+    /// Handle Enter / row-click: drill down if the selected action has a
+    /// registered route, otherwise execute it via `on_select`.
+    pub fn activate_selected(&mut self, cx: &mut Context<Self>) -> ActionsDialogActivation {
+        let Some(action_id) = self.get_selected_action_id() else {
+            tracing::info!(
+                target: "script_kit::actions",
+                outcome = "no_selection",
+                depth = self.route_stack.len(),
+                "actions_dialog_activation"
+            );
+            return ActionsDialogActivation::NoSelection;
+        };
+
+        // Check for a registered drill-down route
+        if let Some(route) = self.drill_down_routes.get(&action_id).cloned() {
+            let route_id = route.id.clone();
+            self.push_route(route, cx);
+            tracing::info!(
+                target: "script_kit::actions",
+                action_id = %action_id,
+                route_id = %route_id,
+                outcome = "drill_down",
+                depth = self.route_stack.len(),
+                "actions_dialog_activation"
+            );
+            return ActionsDialogActivation::DrillDownPushed {
+                action_id,
+                route_id,
+            };
+        }
+
+        let should_close = self.selected_action_should_close();
+        (self.on_select)(action_id.clone());
+        tracing::info!(
+            target: "script_kit::actions",
+            action_id = %action_id,
+            should_close,
+            outcome = "executed",
+            depth = self.route_stack.len(),
+            "actions_dialog_activation"
+        );
+        ActionsDialogActivation::Executed {
+            action_id,
+            should_close,
+        }
+    }
+
+    /// Apply a route's actions/title/placeholder to the live dialog (no state restore).
+    fn apply_route_state_from_route(&mut self, route: &ActionsDialogRoute) {
+        self.actions = route.actions.clone();
+        self.filtered_actions = (0..self.actions.len()).collect();
+        self.search_text.clear();
+        self.context_title = route.context_title.clone();
+        self.config.search_placeholder = route
+            .search_placeholder
+            .clone()
+            .or_else(|| self.default_search_placeholder.clone());
+        self.sdk_actions = None;
+        self.sdk_action_indices.clear();
+        self.rebuild_grouped_items();
+        self.selected_index = initial_selection_index(&self.grouped_items);
+        if !self.grouped_items.is_empty() {
+            self.list_state.scroll_to_reveal_item(self.selected_index);
+        }
+    }
+
+    /// Restore a full route state snapshot (search text + selection).
+    fn apply_route_state(&mut self, state: &ActionsDialogRouteState, cx: &mut Context<Self>) {
+        self.actions = state.route.actions.clone();
+        self.filtered_actions = (0..self.actions.len()).collect();
+        self.search_text = state.search_text.clone();
+        self.context_title = state.route.context_title.clone();
+        self.config.search_placeholder = state
+            .route
+            .search_placeholder
+            .clone()
+            .or_else(|| self.default_search_placeholder.clone());
+        self.sdk_actions = None;
+        self.sdk_action_indices.clear();
+        self.refilter();
+        if let Some(action_id) = state.selected_action_id.as_deref() {
+            let _ = self.select_action_by_id(action_id, cx);
+        } else {
+            self.selected_index = initial_selection_index(&self.grouped_items);
+        }
+        if !self.grouped_items.is_empty() {
+            self.list_state.scroll_to_reveal_item(self.selected_index);
+        }
+    }
+
+    /// Hint label for the footer: "Esc Back" when a parent route exists,
+    /// otherwise "Esc Close".
+    pub fn route_hint_label(&self) -> &'static str {
+        if self.can_pop_route() {
+            "Esc Back"
+        } else {
+            "Esc Close"
+        }
+    }
+
+    // ── ACP chat constructor ─────────────────────────────────────────────
+
+    /// Create an ActionsDialog pre-configured for ACP Chat with a root route
+    /// containing a "Change Agent" drill-down entry and an agent picker sub-route.
+    pub(crate) fn with_acp_chat(
+        focus_handle: FocusHandle,
+        on_select: ActionCallback,
+        catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
+        selected_agent_id: Option<&str>,
+        theme: Arc<theme::Theme>,
+    ) -> Self {
+        let root_route =
+            super::builders::get_acp_chat_root_route(catalog_entries, selected_agent_id);
+        let config = ActionsDialogConfig::default();
+
+        logging::log(
+            "ACTIONS",
+            &format!(
+                "ActionsDialog created for ACP chat: selected_agent={:?}, catalog_count={}, root_actions={}",
+                selected_agent_id,
+                catalog_entries.len(),
+                root_route.actions.len(),
+            ),
+        );
+
+        let mut dialog = Self::from_actions_with_context(
+            focus_handle,
+            on_select,
+            root_route.actions.clone(),
+            None,
+            None,
+            theme,
+            DesignVariant::Default,
+            root_route.context_title.clone(),
+            config,
+        );
+
+        dialog.set_root_route(root_route);
+        dialog.register_drill_down_route(
+            super::builders::ACP_CHANGE_AGENT_ACTION_ID,
+            super::builders::get_acp_agent_picker_route(catalog_entries, selected_agent_id),
+        );
+
+        dialog
     }
 
     /// Create ActionsDialog with custom configuration and actions
@@ -1686,7 +2002,7 @@ impl ActionsDialog {
         );
 
         if should_submit {
-            self.submit_selected();
+            let _ = self.activate_selected(cx);
         }
     }
 

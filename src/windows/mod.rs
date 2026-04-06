@@ -18,9 +18,9 @@ mod registry;
 pub mod types;
 
 pub use automation_registry::{
-    focused_automation_window_id, list_automation_windows, remove_automation_window,
-    resolve_automation_window, set_automation_focus, set_automation_visibility,
-    upsert_automation_window,
+    focused_automation_window_id, list_automation_windows, register_attached_popup,
+    remove_automation_window, resolve_automation_window, set_automation_focus,
+    set_automation_visibility, upsert_automation_window,
 };
 pub use automation_runtime_handles::{
     get_runtime_window_handle, get_valid_runtime_window_handle, remove_runtime_window_handle,

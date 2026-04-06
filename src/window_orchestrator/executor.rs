@@ -195,6 +195,9 @@ pub(crate) fn to_orchestrator_target(
     target: &crate::dictation::DictationTarget,
 ) -> super::DictationTarget {
     match target {
+        crate::dictation::DictationTarget::MainWindowFilter => {
+            super::DictationTarget::MainWindowFilter
+        }
         crate::dictation::DictationTarget::MainWindowPrompt => {
             super::DictationTarget::MainWindowPrompt
         }

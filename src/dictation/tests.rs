@@ -1464,34 +1464,12 @@ fn dictation_hotkey_channel_not_dead_code() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn finished_label_formats_short_and_long_transcripts() {
-    let short: gpui::SharedString = "hello world".into();
-    assert_eq!(
-        super::window::finished_label(&short).to_string(),
-        "Done · hello world"
-    );
-
-    let long: gpui::SharedString = "abcdefghijklmnopqrstuvwxyz0123456789".into();
-    assert_eq!(
-        super::window::finished_label(&long).to_string(),
-        "Done · abcdefghijklmnopqrstuvwxyz01…"
-    );
+fn finished_label_always_returns_done() {
+    assert_eq!(super::window::finished_label().to_string(), "Done");
 }
 
 #[test]
-fn finished_label_returns_done_for_empty_transcript() {
-    let empty: gpui::SharedString = "".into();
-    assert_eq!(super::window::finished_label(&empty).to_string(), "Done");
-
-    let whitespace: gpui::SharedString = "   ".into();
-    assert_eq!(
-        super::window::finished_label(&whitespace).to_string(),
-        "Done"
-    );
-}
-
-#[test]
-fn frontmost_app_delivery_shows_done_state_before_close_and_paste() {
+fn frontmost_app_delivery_closes_overlay_before_paste() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -1500,30 +1478,17 @@ fn frontmost_app_delivery_shows_done_state_before_close_and_paste() {
         .expect("handler must exist");
     let handler_src = &src[handler_start..];
 
-    // Both delivery paths (prompt + frontmost-app) must show Finished.
-    let finished_count = handler_src
-        .match_indices("DictationSessionPhase::Finished")
-        .count();
     assert!(
-        finished_count >= 2,
-        "handle_dictation_transcript must use Finished for both prompt and frontmost-app delivery paths"
+        !handler_src.contains("DictationSessionPhase::Finished"),
+        "successful dictation delivery should not render a Finished overlay anymore"
     );
 
-    // Scope to the frontmost-app else branch: starts at the named done-state
-    // timer (unique to that branch) and extends through paste_text.
-    let done_pause_pos = handler_src
-        .find("dictation_done_state_duration")
-        .expect("frontmost-app delivery must wait briefly so the done state is visible");
-
-    // Search forward from the done-pause for yield-focus (which closes the
-    // overlay internally) and paste, in order.
-    let after_pause = &handler_src[done_pause_pos..];
-    let yield_offset = after_pause.find("yield_focus_for_dictation_paste").expect(
-        "frontmost-app delivery must yield focus (close overlay) after the done-state pause",
-    );
-    let paste_offset = after_pause
+    let yield_offset = handler_src
+        .find("yield_focus_for_dictation_paste")
+        .expect("frontmost-app delivery must yield focus (close overlay) before paste");
+    let paste_offset = handler_src
         .find("paste_text")
-        .expect("frontmost-app delivery must paste after the done-state pause");
+        .expect("frontmost-app delivery must paste after yielding focus");
 
     assert!(
         yield_offset < paste_offset,
@@ -1547,7 +1512,7 @@ fn frontmost_dictation_delivery_branch(handler_src: &str) -> &str {
 }
 
 #[test]
-fn delivery_frontmost_app_shows_finished_before_close_and_paste() {
+fn delivery_frontmost_app_yields_focus_before_paste() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
     let handler_start = src
@@ -1557,9 +1522,6 @@ fn delivery_frontmost_app_shows_finished_before_close_and_paste() {
 
     let frontmost_src = frontmost_dictation_delivery_branch(handler_src);
 
-    let finished_pos = frontmost_src
-        .find("DictationSessionPhase::Finished")
-        .expect("frontmost-app branch must render Finished");
     let yield_pos = frontmost_src
         .find("yield_focus_for_dictation_paste")
         .expect("frontmost-app branch must yield focus (close overlay + hide)");
@@ -1568,17 +1530,13 @@ fn delivery_frontmost_app_shows_finished_before_close_and_paste() {
         .expect("frontmost-app branch must paste transcript");
 
     assert!(
-        finished_pos < yield_pos,
-        "Finished phase (byte {finished_pos}) must appear before yield_focus_for_dictation_paste (byte {yield_pos})"
-    );
-    assert!(
         yield_pos < paste_pos,
         "yield_focus_for_dictation_paste (byte {yield_pos}) must appear before paste_text (byte {paste_pos})"
     );
 }
 
 #[test]
-fn delivery_frontmost_app_waits_before_closing_and_pasting() {
+fn delivery_frontmost_app_waits_for_focus_before_pasting() {
     let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
     let handler_start = src
@@ -1588,9 +1546,6 @@ fn delivery_frontmost_app_waits_before_closing_and_pasting() {
 
     let frontmost_src = frontmost_dictation_delivery_branch(handler_src);
 
-    let done_timer_pos = frontmost_src
-        .find("dictation_done_state_duration")
-        .expect("frontmost-app branch must wait briefly on Finished state");
     let yield_pos = frontmost_src
         .find("yield_focus_for_dictation_paste")
         .expect("frontmost-app branch must yield focus (close overlay + hide)");
@@ -1601,10 +1556,6 @@ fn delivery_frontmost_app_waits_before_closing_and_pasting() {
         .find("paste_text")
         .expect("frontmost-app branch must paste transcript");
 
-    assert!(
-        done_timer_pos < yield_pos,
-        "Finished-state timer (byte {done_timer_pos}) must appear before yield_focus_for_dictation_paste (byte {yield_pos})"
-    );
     assert!(
         yield_pos < focus_timer_pos,
         "yield_focus_for_dictation_paste (byte {yield_pos}) must appear before focus-settle timer (byte {focus_timer_pos})"
@@ -1801,10 +1752,10 @@ fn overlay_has_sound_detects_active_audio() {
     );
 
     let mut loud = [0.0_f32; super::window::WAVEFORM_BAR_COUNT];
-    loud[4] = 0.5;
+    loud[4] = 0.11;
     assert!(
         super::window::has_sound(&loud),
-        "bar above threshold must count as sound"
+        "bar just above the lowered threshold must count as sound"
     );
 }
 
@@ -2728,15 +2679,10 @@ fn builtin_dictation_overlay_transitions_are_ordered_correctly() {
         "Recording (byte {recording_pos}) must appear before Transcribing (byte {transcribing_pos}) in the dictation branch"
     );
 
-    // After transcription: overlay shows Finished.
     let handler_src = dictation_handler_source(&src);
-    let finished_positions: Vec<_> = handler_src
-        .match_indices("DictationSessionPhase::Finished")
-        .collect();
     assert!(
-        finished_positions.len() >= 2,
-        "handler must show Finished for both prompt and frontmost-app paths, found {} occurrences",
-        finished_positions.len()
+        !handler_src.contains("DictationSessionPhase::Finished"),
+        "handler must close the dictation overlay on success instead of rendering a Finished phase"
     );
 
     // Transcription error: overlay shows Failed.
@@ -3432,7 +3378,7 @@ fn missing_model_error_detects_parakeet_string_and_logs_model_path() {
 // ---------------------------------------------------------------------------
 
 /// Verify the full frontmost-app delivery chain ordering in one test:
-/// Finished → done_state_duration → yield_focus → focus_settle → paste_text.
+/// yield_focus → focus_settle → paste_text.
 /// This catches regressions if any step is reordered or removed.
 #[test]
 fn frontmost_app_delivery_full_ordering_chain() {
@@ -3442,11 +3388,6 @@ fn frontmost_app_delivery_full_ordering_chain() {
     let frontmost_src = dictation_frontmost_paste_source(&src);
 
     let steps: Vec<(&str, usize)> = [
-        ("DictationSessionPhase::Finished", "show Finished overlay"),
-        (
-            "dictation_done_state_duration",
-            "wait for done-state visibility",
-        ),
         (
             "yield_focus_for_dictation_paste",
             "yield focus to target app",
@@ -4349,6 +4290,7 @@ fn dictation_target_enum_covers_all_surfaces() {
 
     // Exhaustive match proves all variants exist and are reachable.
     let targets = [
+        DictationTarget::MainWindowFilter,
         DictationTarget::MainWindowPrompt,
         DictationTarget::NotesEditor,
         DictationTarget::AiChatComposer,
@@ -4357,6 +4299,7 @@ fn dictation_target_enum_covers_all_surfaces() {
     ];
     for target in &targets {
         match target {
+            DictationTarget::MainWindowFilter => {}
             DictationTarget::MainWindowPrompt => {}
             DictationTarget::NotesEditor => {}
             DictationTarget::AiChatComposer => {}
@@ -4372,13 +4315,14 @@ fn dictation_destination_includes_internal_surfaces() {
 
     // NotesEditor, AiChatComposer, and TabAiHarness must exist alongside the original variants.
     let destinations = [
+        DictationDestination::MainWindowFilter,
         DictationDestination::ActivePrompt,
         DictationDestination::FrontmostApp,
         DictationDestination::NotesEditor,
         DictationDestination::AiChatComposer,
         DictationDestination::TabAiHarness,
     ];
-    assert_eq!(destinations.len(), 5);
+    assert_eq!(destinations.len(), 6);
 }
 
 #[test]
@@ -4396,7 +4340,7 @@ fn resolve_dictation_target_exists_in_builtin_execution() {
     let resolver_start = src
         .find("fn resolve_dictation_target(&self) ->")
         .expect("resolver must exist");
-    let resolver_src = &src[resolver_start..resolver_start + 800.min(src.len() - resolver_start)];
+    let resolver_src = &src[resolver_start..resolver_start + 1400.min(src.len() - resolver_start)];
 
     assert!(
         resolver_src.contains("notes::is_notes_window_open()"),
@@ -4425,7 +4369,7 @@ fn resolve_dictation_target_checks_notes_before_ai() {
     let resolver_start = src
         .find("fn resolve_dictation_target(&self) ->")
         .expect("resolver must exist");
-    let resolver_src = &src[resolver_start..resolver_start + 800.min(src.len() - resolver_start)];
+    let resolver_src = &src[resolver_start..resolver_start + 1400.min(src.len() - resolver_start)];
 
     let notes_pos = resolver_src
         .find("notes::is_notes_window_open()")
@@ -4706,3 +4650,101 @@ fn download_failure_uses_classified_error() {
 }
 
 // duplicate removed — see line 4053 for the canonical test
+
+// ───────────────────────────────────────────────────────────────────
+// Main-window-filter dictation routing
+// ───────────────────────────────────────────────────────────────────
+
+#[test]
+fn dictation_target_enum_includes_main_window_filter_variant() {
+    use crate::dictation::types::DictationTarget;
+
+    // Exhaustive match proves MainWindowFilter is a first-class variant.
+    let target = DictationTarget::MainWindowFilter;
+    match target {
+        DictationTarget::MainWindowFilter => {}
+        DictationTarget::MainWindowPrompt => {}
+        DictationTarget::NotesEditor => {}
+        DictationTarget::AiChatComposer => {}
+        DictationTarget::TabAiHarness => {}
+        DictationTarget::ExternalApp => {}
+    }
+    assert_eq!(target.overlay_label(), "Main");
+}
+
+#[test]
+fn dictation_destination_includes_main_window_filter_variant() {
+    use crate::dictation::types::DictationDestination;
+
+    // Verify MainWindowFilter is present among all destination variants.
+    let destinations = [
+        DictationDestination::MainWindowFilter,
+        DictationDestination::ActivePrompt,
+        DictationDestination::FrontmostApp,
+        DictationDestination::NotesEditor,
+        DictationDestination::AiChatComposer,
+        DictationDestination::TabAiHarness,
+    ];
+    assert_eq!(destinations.len(), 6);
+}
+
+#[test]
+fn resolve_dictation_target_routes_script_list_to_main_window_filter() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let resolver_start = src
+        .find("fn resolve_dictation_target(&self) ->")
+        .expect("resolver must exist");
+    let resolver_src = &src[resolver_start..resolver_start + 1400.min(src.len() - resolver_start)];
+
+    assert!(
+        resolver_src.contains("can_accept_dictation_into_main_filter()"),
+        "resolver must check launcher/main filter dictation eligibility"
+    );
+    assert!(
+        resolver_src.contains("DictationTarget::MainWindowFilter"),
+        "resolver must route ScriptList to MainWindowFilter"
+    );
+}
+
+#[test]
+fn delivery_routes_main_window_filter_before_external_paste() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    // MainWindowFilter delivery must appear before the external-app paste
+    // fallback in the overall file, proving it is checked first.
+    let main_filter_pos = src
+        .find("DictationTarget::MainWindowFilter =>")
+        .expect("handler must match MainWindowFilter target");
+    let paste_pos = src
+        .find("paste_text")
+        .expect("handler must still contain external-app fallback");
+
+    assert!(
+        main_filter_pos < paste_pos,
+        "MainWindowFilter delivery must happen before external-app paste fallback"
+    );
+    assert!(
+        src.contains("DictationDestination::MainWindowFilter"),
+        "handler must map MainWindowFilter target to MainWindowFilter destination"
+    );
+}
+
+#[test]
+fn preflight_accepts_launcher_without_tracked_frontmost_app() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let preflight_start = src
+        .find("fn ensure_dictation_delivery_target_available(&self)")
+        .expect("preflight must exist");
+    let preflight_src =
+        &src[preflight_start..preflight_start + 400.min(src.len() - preflight_start)];
+
+    assert!(
+        preflight_src.contains("can_accept_dictation_into_main_filter()"),
+        "preflight must accept launcher as a valid dictation destination"
+    );
+}

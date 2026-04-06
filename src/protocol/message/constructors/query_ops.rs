@@ -555,13 +555,19 @@ impl Message {
         }
     }
 
-    /// Create a simulateGpuiEvent success result
-    pub fn simulate_gpui_event_result_success(request_id: String) -> Self {
+    /// Create a simulateGpuiEvent success result with dispatch metadata.
+    pub fn simulate_gpui_event_result_success(
+        request_id: String,
+        dispatch_path: Option<String>,
+        resolved_window_id: Option<String>,
+    ) -> Self {
         Message::SimulateGpuiEventResult {
             request_id,
             success: true,
             error_code: None,
             error: None,
+            dispatch_path,
+            resolved_window_id,
         }
     }
 
@@ -572,12 +578,16 @@ impl Message {
         request_id: String,
         error_code: String,
         error: String,
+        dispatch_path: Option<String>,
+        resolved_window_id: Option<String>,
     ) -> Self {
         Message::SimulateGpuiEventResult {
             request_id,
             success: false,
             error_code: Some(error_code),
             error: Some(error),
+            dispatch_path,
+            resolved_window_id,
         }
     }
 

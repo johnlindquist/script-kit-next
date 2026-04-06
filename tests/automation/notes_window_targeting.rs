@@ -34,6 +34,8 @@ fn notes_window_targeting_flow() {
         visible: true,
         semantic_surface: Some("scriptList".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(main);
 
@@ -46,6 +48,8 @@ fn notes_window_targeting_flow() {
         visible: true,
         semantic_surface: Some("notes".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(notes);
 
@@ -104,6 +108,8 @@ fn notes_window_info_serde_round_trip() {
         visible: true,
         semantic_surface: Some("notes".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     let json = serde_json::to_string(&info).expect("serialize");
     let back: AutomationWindowInfo = serde_json::from_str(&json).expect("deserialize");
@@ -123,6 +129,8 @@ fn notes_focus_transfer_from_main() {
         visible: true,
         semantic_surface: Some("scriptList".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(main);
 
@@ -134,6 +142,8 @@ fn notes_focus_transfer_from_main() {
         visible: true,
         semantic_surface: Some("notes".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(notes);
 

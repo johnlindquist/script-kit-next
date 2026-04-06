@@ -108,6 +108,8 @@ fn automation_window_info_round_trip() {
         visible: true,
         semantic_surface: Some("notes".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     let json = serde_json::to_string(&info).expect("serialize");
     let back: AutomationWindowInfo = serde_json::from_str(&json).expect("deserialize");
@@ -142,6 +144,8 @@ fn automation_window_info_with_bounds() {
             width: 800.0,
             height: 600.0,
         }),
+        parent_window_id: None,
+        parent_kind: None,
     };
     let json = serde_json::to_string(&info).expect("serialize");
     assert!(json.contains("\"bounds\""));
@@ -246,6 +250,8 @@ fn automation_window_list_result_round_trip() {
                 visible: true,
                 semantic_surface: Some("scriptList".into()),
                 bounds: None,
+                parent_window_id: None,
+                parent_kind: None,
             },
             AutomationWindowInfo {
                 id: "acpDetached:thread-1".into(),
@@ -255,6 +261,8 @@ fn automation_window_list_result_round_trip() {
                 visible: true,
                 semantic_surface: Some("acpChat".into()),
                 bounds: None,
+                parent_window_id: None,
+                parent_kind: None,
             },
         ],
         Some("acpDetached:thread-1".into()),
@@ -530,9 +538,25 @@ fn simulate_gpui_event_constructor() {
 
 #[test]
 fn simulate_gpui_event_result_success_constructor() {
-    let msg = crate::protocol::Message::simulate_gpui_event_result_success("evt-1".into());
+    let msg = crate::protocol::Message::simulate_gpui_event_result_success(
+        "evt-1".into(),
+        Some("exact_handle".into()),
+        Some("win-42".into()),
+    );
     let json = serde_json::to_string(&msg).expect("serialize");
     assert!(json.contains(r#""success":true"#));
+    assert!(json.contains(r#""dispatchPath":"exact_handle""#));
+    assert!(json.contains(r#""resolvedWindowId":"win-42""#));
+}
+
+#[test]
+fn simulate_gpui_event_result_success_omits_none_fields() {
+    let msg =
+        crate::protocol::Message::simulate_gpui_event_result_success("evt-2".into(), None, None);
+    let json = serde_json::to_string(&msg).expect("serialize");
+    assert!(json.contains(r#""success":true"#));
+    assert!(!json.contains("dispatchPath"));
+    assert!(!json.contains("resolvedWindowId"));
 }
 
 #[test]
@@ -541,6 +565,8 @@ fn simulate_gpui_event_result_error_constructor() {
         "evt-1".into(),
         "target_not_found".into(),
         "Window not found".into(),
+        None,
+        None,
     );
     let json = serde_json::to_string(&msg).expect("serialize");
     assert!(json.contains(r#""success":false"#));

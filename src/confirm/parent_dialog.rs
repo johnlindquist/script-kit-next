@@ -180,6 +180,7 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
         width: options.width,
     };
 
+    let parent_automation_id = crate::windows::focused_automation_window_id();
     match open_confirm_popup_window(
         cx,
         parent_bounds,
@@ -187,6 +188,7 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
         popup_options,
         keep_open_while,
         result_tx,
+        parent_automation_id.as_deref(),
     ) {
         Ok(_handle) => {
             tracing::info!(
