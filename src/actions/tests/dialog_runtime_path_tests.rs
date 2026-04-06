@@ -205,3 +205,33 @@ fn test_search_handlers_do_update_results_when_typing_and_backspacing() {
         });
     });
 }
+
+#[test]
+#[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
+fn test_actions_dialog_defaults_to_matching_main_window_background() {
+    run_headless_dialog_test(|cx| {
+        let dialog = build_dialog_entity(
+            cx,
+            vec![sample_action("action_alpha", "Alpha", None)],
+            ActionsDialogConfig::default(),
+            Arc::new(Mutex::new(Vec::new())),
+        );
+
+        cx.update_entity(&dialog, |dialog, _| {
+            assert!(
+                dialog.match_main_window_background,
+                "ActionsDialog should default to matching the main window background"
+            );
+        });
+    });
+}
+
+#[test]
+fn test_actions_dialog_source_defaults_to_matching_main_window_background() {
+    let source = include_str!("../dialog.rs");
+
+    assert!(
+        source.contains("match_main_window_background: true,"),
+        "ActionsDialog constructor should default to matching the main window background"
+    );
+}

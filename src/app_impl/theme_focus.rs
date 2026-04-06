@@ -2,6 +2,16 @@ use super::*;
 use tracing::{debug, info};
 
 impl ScriptListApp {
+    pub(crate) fn sync_open_actions_dialog_theme(&mut self, cx: &mut Context<Self>) {
+        if let Some(ref dialog) = self.actions_dialog {
+            let theme_arc = std::sync::Arc::clone(&self.theme);
+            dialog.update(cx, |d, _| {
+                d.update_theme(theme_arc);
+            });
+            debug!(target: "APP", "Theme propagated to ActionsDialog");
+        }
+    }
+
     pub(crate) fn cycle_design(&mut self, cx: &mut Context<Self>) {
         let old_design = self.current_design;
         let new_design = old_design.next();
@@ -58,13 +68,7 @@ impl ScriptListApp {
         info!(target: "APP", "Theme reloaded based on system appearance");
 
         // Propagate theme to open ActionsDialog (if any) for hot-reload support
-        if let Some(ref dialog) = self.actions_dialog {
-            let theme_arc = std::sync::Arc::clone(&self.theme);
-            dialog.update(cx, |d, _| {
-                d.update_theme(theme_arc);
-            });
-            debug!(target: "APP", "Theme propagated to ActionsDialog");
-        }
+        self.sync_open_actions_dialog_theme(cx);
 
         cx.notify();
     }
