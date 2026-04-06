@@ -176,6 +176,10 @@ function findGitInvocation(tokens: string[]): string[] | null {
 }
 
 function shouldBlockGitStash(gitArgs: string[]): boolean {
+  if (gitArgs.includes("--autostash")) {
+    return true;
+  }
+
   let index = 0;
 
   while (index < gitArgs.length) {
