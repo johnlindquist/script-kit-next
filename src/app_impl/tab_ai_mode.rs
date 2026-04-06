@@ -146,13 +146,34 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_open_from_script_list_trigger",
+            trigger = "/",
+            current_view = ?self.current_view,
+        );
         self.open_tab_ai_acp_with_entry_intent(None, cx);
+        if matches!(self.current_view, AppView::AcpChatView { .. }) {
+            self.tab_ai_harness_script_list_trigger = Some('/');
+        }
 
-        if crate::ai::acp::chat_window::open_detached_slash_picker(cx) {
+        let detached_opened = crate::ai::acp::chat_window::open_detached_slash_picker(cx);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_trigger_picker_open_attempt",
+            trigger = "/",
+            detached_opened,
+        );
+        if detached_opened {
             return;
         }
 
         if let AppView::AcpChatView { entity } = &self.current_view {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_trigger_picker_open_embedded",
+                trigger = "/",
+            );
             entity.update(cx, |view, cx| view.open_slash_picker_in_window(window, cx));
         }
     }
@@ -162,13 +183,34 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_open_from_script_list_trigger",
+            trigger = "@",
+            current_view = ?self.current_view,
+        );
         self.open_tab_ai_acp_with_entry_intent(None, cx);
+        if matches!(self.current_view, AppView::AcpChatView { .. }) {
+            self.tab_ai_harness_script_list_trigger = Some('@');
+        }
 
-        if crate::ai::acp::chat_window::open_detached_mention_picker(cx) {
+        let detached_opened = crate::ai::acp::chat_window::open_detached_mention_picker(cx);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_trigger_picker_open_attempt",
+            trigger = "@",
+            detached_opened,
+        );
+        if detached_opened {
             return;
         }
 
         if let AppView::AcpChatView { entity } = &self.current_view {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_trigger_picker_open_embedded",
+                trigger = "@",
+            );
             entity.update(cx, |view, cx| view.open_mention_picker_in_window(window, cx));
         }
     }
@@ -2123,11 +2165,21 @@ impl ScriptListApp {
         window: Option<&mut Window>,
         cx: &mut Context<Self>,
     ) {
-        if !matches!(self.current_view, AppView::ScriptList)
-            || !Self::is_transient_script_list_trigger(self.filter_text.as_str())
-        {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            self.tab_ai_harness_script_list_trigger = None;
             return;
         }
+
+        let Some(trigger) = self.tab_ai_harness_script_list_trigger.take() else {
+            return;
+        };
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "script_list_transient_trigger_cleared",
+            trigger = %trigger,
+            via_window = window.is_some(),
+        );
 
         if let Some(window) = window {
             self.clear_filter(window, cx);
@@ -2136,26 +2188,22 @@ impl ScriptListApp {
         }
     }
 
-    pub(crate) fn close_tab_ai_harness_terminal_with_window(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn close_tab_ai_harness_terminal_impl(&mut self, window: Option<&mut Window>, cx: &mut Context<Self>) {
         let return_is_script_list = self
             .tab_ai_harness_return_view
             .as_ref()
             .map_or(true, |v| matches!(v, AppView::ScriptList));
-        let should_clear_transient_trigger = return_is_script_list
-            && Self::is_transient_script_list_trigger(self.filter_text.as_str());
+        let pending_script_list_trigger = self.tab_ai_harness_script_list_trigger;
 
-        self.close_tab_ai_harness_terminal(cx);
-
-        if should_clear_transient_trigger && matches!(self.current_view, AppView::ScriptList) {
-            self.clear_filter(window, cx);
-        }
-    }
-
-    pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_close_with_window_decision",
+            return_is_script_list,
+            has_pending_script_list_trigger = pending_script_list_trigger.is_some(),
+            pending_script_list_trigger = ?pending_script_list_trigger,
+            filter_text = %self.filter_text,
+            current_view = ?self.current_view,
+        );
         let closing_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
         let closing_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
 
@@ -2199,13 +2247,29 @@ impl ScriptListApp {
             _ => FocusedInput::None,
         };
 
-        self.clear_transient_script_list_trigger_on_return(None, cx);
+        if return_is_script_list {
+            self.clear_transient_script_list_trigger_on_return(window, cx);
+        } else {
+            self.tab_ai_harness_script_list_trigger = None;
+        }
 
         // Keep prewarm only for the actual PTY-backed quick terminal path.
         if closing_quick_terminal {
             self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);
         }
         cx.notify();
+    }
+
+    pub(crate) fn close_tab_ai_harness_terminal_with_window(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.close_tab_ai_harness_terminal_impl(Some(window), cx);
+    }
+
+    pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
+        self.close_tab_ai_harness_terminal_impl(None, cx);
     }
 
     /// Close ACP chat and force the main panel back to ScriptList.
@@ -2248,6 +2312,7 @@ impl ScriptListApp {
         } else {
             FocusedInput::None
         };
+        self.clear_transient_script_list_trigger_on_return(None, cx);
 
         tracing::info!(
             event = "acp_chat_restored_to_script_list",
@@ -4698,7 +4763,7 @@ mod tests {
         let source = include_str!("tab_ai_mode.rs");
         let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
             source,
-            "pub(crate) fn close_tab_ai_harness_terminal(",
+            "fn close_tab_ai_harness_terminal_impl(",
         ));
 
         assert!(
@@ -4715,7 +4780,7 @@ mod tests {
         );
         assert!(
             body.contains(&tab_ai_contract_compact(
-                "self.clear_transient_script_list_trigger_on_return(None, cx);"
+                "self.clear_transient_script_list_trigger_on_return(window, cx);"
             )),
             "close path must clear transient ScriptList trigger filters when returning to the main menu"
         );
