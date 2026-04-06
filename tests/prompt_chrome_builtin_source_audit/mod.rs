@@ -165,3 +165,142 @@ fn current_app_commands_uses_minimal_prompt_chrome() {
 fn process_manager_uses_minimal_prompt_chrome() {
     assert_minimal_builtin_surface("process_manager", PROCESS_MANAGER_SOURCE);
 }
+
+// ---- Actions parity contract tests ----
+// Ensures footer hints are truthful: surfaces that advertise ⌘K Actions must
+// actually wire the shared ActionsDialog, and surfaces without actions must not
+// advertise them.
+
+const EMOJI_PICKER_SOURCE: &str = include_str!("../../src/render_builtins/emoji_picker.rs");
+const THEME_CHOOSER_SOURCE: &str = include_str!("../../src/render_builtins/theme_chooser.rs");
+const ACTIONS_DIALOG_SOURCE: &str = include_str!("../../src/app_impl/actions_dialog.rs");
+
+/// Surfaces that advertise universal_prompt_hints() must also wire the shared
+/// actions dialog (either locally via route_key_to_actions_dialog or by being
+/// listed as SharedDialog in actions_support_for_view).
+#[test]
+fn surfaces_that_advertise_universal_hints_must_have_actions_support() {
+    for (source, label) in [
+        (APP_LAUNCHER_SOURCE, "app_launcher"),
+        (WINDOW_SWITCHER_SOURCE, "window_switcher"),
+        (EMOJI_PICKER_SOURCE, "emoji_picker"),
+        (CURRENT_APP_COMMANDS_SOURCE, "current_app_commands"),
+        (PROCESS_MANAGER_SOURCE, "process_manager"),
+    ] {
+        let advertises_actions = source.contains("universal_prompt_hints()");
+        // Either the surface locally wires the router, or the canonical resolver
+        // maps it to SharedDialog (checked via the ActionsDialogHost variant name).
+        let has_local_router = source.contains("route_key_to_actions_dialog(");
+        let variant_name = match label {
+            "app_launcher" => "AppLauncher",
+            "window_switcher" => "WindowSwitcher",
+            "emoji_picker" => "EmojiPicker",
+            "current_app_commands" => "CurrentAppCommands",
+            "process_manager" => "ProcessManager",
+            _ => "",
+        };
+        let in_canonical_resolver =
+            ACTIONS_DIALOG_SOURCE.contains(&format!("ActionsDialogHost::{variant_name}"));
+
+        assert!(
+            !advertises_actions || has_local_router || in_canonical_resolver,
+            "{label} advertises universal hints but has no shared actions routing"
+        );
+    }
+}
+
+/// Surfaces explicitly excluded from shared actions must not use universal hints.
+#[test]
+fn no_actions_surfaces_must_not_advertise_universal_hints() {
+    for (source, label) in [
+        (WINDOW_SWITCHER_SOURCE, "window_switcher"),
+        (CURRENT_APP_COMMANDS_SOURCE, "current_app_commands"),
+        (PROCESS_MANAGER_SOURCE, "process_manager"),
+    ] {
+        assert!(
+            !source.contains("universal_prompt_hints()"),
+            "{label} does not support shared actions but advertises universal hints"
+        );
+    }
+}
+
+/// ThemeChooser stays truthful: no universal actions hints, custom footer only.
+#[test]
+fn theme_chooser_stays_truthful_and_does_not_advertise_actions() {
+    assert!(
+        !THEME_CHOOSER_SOURCE.contains("universal_prompt_hints()"),
+        "theme_chooser should not use universal actions hints without shared actions support"
+    );
+    assert!(
+        THEME_CHOOSER_SOURCE.contains("render_simple_hint_strip(")
+            || THEME_CHOOSER_SOURCE.contains("render_minimal_list_prompt_scaffold("),
+        "theme_chooser should keep a truthful custom footer"
+    );
+}
+
+/// AppLauncher must NOT be in the SharedDialog path — it has no Cmd+K interceptor arm.
+#[test]
+fn app_launcher_excluded_from_shared_actions_resolver() {
+    let resolver_start = ACTIONS_DIALOG_SOURCE
+        .find("fn actions_support_for_view")
+        .expect("canonical resolver not found");
+    let resolver_fn = &ACTIONS_DIALOG_SOURCE[resolver_start..];
+
+    assert!(
+        !resolver_fn.contains("ActionsSupport::SharedDialog(ActionsDialogHost::AppLauncher)"),
+        "app_launcher should not be mapped to SharedDialog (no Cmd+K toggle exists)"
+    );
+}
+
+/// ThemeChooser must NOT be in the SharedDialog path.
+#[test]
+fn theme_chooser_excluded_from_shared_actions_resolver() {
+    let resolver_start = ACTIONS_DIALOG_SOURCE
+        .find("fn actions_support_for_view")
+        .expect("canonical resolver not found");
+    let resolver_fn = &ACTIONS_DIALOG_SOURCE[resolver_start..];
+
+    assert!(
+        !resolver_fn.contains("ActionsSupport::SharedDialog(ActionsDialogHost::ThemeChooser)"),
+        "theme_chooser should not be mapped to SharedDialog"
+    );
+}
+
+/// Emoji picker must have both: universal hints AND actual actions wiring.
+#[test]
+fn emoji_picker_advertises_and_wires_shared_actions() {
+    assert!(
+        EMOJI_PICKER_SOURCE.contains("universal_prompt_hints()"),
+        "emoji_picker should use universal hints (it supports shared actions)"
+    );
+    assert!(
+        EMOJI_PICKER_SOURCE.contains("route_key_to_actions_dialog("),
+        "emoji_picker must locally wire the shared actions router"
+    );
+}
+
+/// The canonical resolver must list all ActionsDialogHost variants that have
+/// focus-restore mappings, ensuring the two stay in sync.
+#[test]
+fn canonical_resolver_covers_all_focus_restore_hosts() {
+    let resolver_start = ACTIONS_DIALOG_SOURCE
+        .find("fn actions_support_for_view")
+        .expect("canonical resolver not found");
+    let resolver_fn = &ACTIONS_DIALOG_SOURCE[resolver_start..];
+
+    for host in [
+        "ActionsDialogHost::MainList",
+        "ActionsDialogHost::ClipboardHistory",
+        "ActionsDialogHost::EmojiPicker",
+        "ActionsDialogHost::FileSearch",
+        "ActionsDialogHost::ChatPrompt",
+        "ActionsDialogHost::ArgPrompt",
+        "ActionsDialogHost::WebcamPrompt",
+        "ActionsDialogHost::AcpChat",
+    ] {
+        assert!(
+            resolver_fn.contains(host),
+            "canonical actions resolver should map {host}"
+        );
+    }
+}

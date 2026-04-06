@@ -233,19 +233,18 @@ impl Focusable for AcpModelSelectorPopupWindow {
 impl Render for AcpModelSelectorPopupWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
         let accent = theme.colors.accent.selected;
-        let text_primary = theme.colors.text.primary;
 
         div()
             .track_focus(&self.focus_handle)
             .id("acp-model-selector-popup")
             .w(px(MODEL_SELECTOR_WIDTH))
             .rounded(px(8.0))
-            .bg(gpui::rgb(theme.colors.background.main))
+            .bg(gpui::rgba(chrome.dialog_surface_rgba))
             .border_1()
-            .border_color(gpui::rgba((theme.colors.ui.border << 8) | 0x40))
+            .border_color(gpui::rgba(chrome.border_rgba))
             .py(px(4.0))
-            .shadow_md()
             .children(
                 self.snapshot
                     .entries
@@ -264,8 +263,8 @@ impl Render for AcpModelSelectorPopupWindow {
                             .cursor_pointer()
                             .rounded(px(4.0))
                             .mx(px(4.0))
-                            .hover(|d| d.bg(gpui::rgba((text_primary << 8) | 0x0C)))
-                            .when(is_selected, |d| d.bg(gpui::rgba((accent << 8) | 0x10)))
+                            .hover(|d| d.bg(gpui::rgba(chrome.hover_rgba)))
+                            .when(is_selected, |d| d.bg(gpui::rgba(chrome.selection_rgba)))
                             .on_click(cx.listener(move |this, _event, _window, cx| {
                                 this.select_model(&model_id, cx);
                             }))

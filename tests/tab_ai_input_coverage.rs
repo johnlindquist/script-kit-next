@@ -1273,28 +1273,19 @@ fn tab_ai_context_schema_version_is_stable() {
 // Stale-selection clamping in file search
 // ---------------------------------------------------------------------------
 
-const FILE_SEARCH_RENDER_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
+const FILE_SEARCH_RENDER_SOURCE: &str = include_str!("../src/app_execute/utility_views.rs");
 const UTILITY_VIEWS_SOURCE: &str = include_str!("../src/app_execute/utility_views.rs");
 
 #[test]
 fn file_search_render_clamps_selected_index() {
-    // render_file_search must clamp selected_index via clamp_file_search_display_index
-    // before computing selected_file, so a stale index from a shrinking result set
-    // still resolves to a valid row.
-    let render_fn_start = FILE_SEARCH_RENDER_SOURCE
-        .find("fn render_file_search(")
-        .expect("render_file_search must exist");
-    let render_fn_body = &FILE_SEARCH_RENDER_SOURCE[render_fn_start..];
-    // Look within the first ~2000 chars for the clamping call
-    let early_body = &render_fn_body[..2000.min(render_fn_body.len())];
-
     assert!(
-        early_body.contains("clamp_file_search_display_index"),
-        "render_file_search must clamp selected_index before computing selected_file"
+        FILE_SEARCH_RENDER_SOURCE.contains("fn selected_file_search_result("),
+        "utility_views.rs must expose selected_file_search_result"
     );
     assert!(
-        early_body.contains("clamped_selected_index"),
-        "render_file_search must use a clamped variable name for clarity"
+        FILE_SEARCH_RENDER_SOURCE
+            .contains("let display_index = self.clamp_file_search_display_index(selected_index)?;"),
+        "selected_file_search_result must clamp selected_index before resolving the file result"
     );
 }
 

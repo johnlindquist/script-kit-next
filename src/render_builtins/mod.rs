@@ -16,3 +16,4 @@ include!("current_app_commands.rs");
 include!("ai_presets.rs");
 include!("settings.rs");
 include!("favorites.rs");
+include!("acp_history.rs");

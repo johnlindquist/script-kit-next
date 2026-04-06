@@ -118,6 +118,19 @@ pub enum DictationTarget {
     ExternalApp,
 }
 
+impl DictationTarget {
+    /// Short, stable label for the overlay destination badge.
+    pub fn overlay_label(self) -> &'static str {
+        match self {
+            Self::MainWindowPrompt => "Prompt",
+            Self::NotesEditor => "Notes",
+            Self::AiChatComposer => "AI",
+            Self::TabAiHarness => "Tab AI",
+            Self::ExternalApp => "App",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DictationSessionPhase {
     Idle,

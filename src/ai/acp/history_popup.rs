@@ -3,7 +3,7 @@ use std::sync::{Mutex, OnceLock};
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
     div, px, AnyWindowHandle, App, AppContext, Bounds, Context, DisplayId, FocusHandle, Focusable,
-    InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString,
+    FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString,
     StatefulInteractiveElement, Styled, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind,
     WindowOptions,
 };
@@ -15,14 +15,14 @@ use super::view::AcpChatView;
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
 
-const HISTORY_POPUP_MIN_WIDTH: f32 = 320.0;
+const HISTORY_POPUP_MIN_WIDTH: f32 = crate::actions::constants::POPUP_WIDTH;
 const HISTORY_POPUP_MAX_WIDTH: f32 = 420.0;
 const HISTORY_POPUP_SIDE_MARGIN: f32 = 8.0;
 const HISTORY_POPUP_TOP_INSET: f32 = 56.0;
 const HISTORY_POPUP_BOTTOM_INSET: f32 = 12.0;
-const HISTORY_POPUP_HEADER_HEIGHT: f32 = 28.0;
-const HISTORY_POPUP_FOOTER_HEIGHT: f32 = 30.0;
-const HISTORY_POPUP_ROW_HEIGHT: f32 = 40.0;
+const HISTORY_POPUP_HEADER_HEIGHT: f32 = crate::actions::constants::HEADER_HEIGHT;
+const HISTORY_POPUP_FOOTER_HEIGHT: f32 = crate::window_resize::mini_layout::HINT_STRIP_HEIGHT;
+const HISTORY_POPUP_ROW_HEIGHT: f32 = crate::actions::constants::ACTION_ITEM_HEIGHT;
 const HISTORY_POPUP_EMPTY_HEIGHT: f32 = 72.0;
 const HISTORY_POPUP_VISIBLE_ROWS: usize = 6;
 const HISTORY_POPUP_VERTICAL_PADDING: f32 = 4.0;
@@ -247,6 +247,15 @@ impl Focusable for AcpHistoryPopupWindow {
 impl Render for AcpHistoryPopupWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+        let title_color = gpui::rgb(theme.colors.text.primary);
+        let dimmed_text = gpui::rgb(theme.colors.text.dimmed);
+        let secondary_text = gpui::rgb(theme.colors.text.secondary);
+        let hover_bg = gpui::rgba(chrome.hover_rgba);
+        let selected_bg = gpui::rgba(chrome.selection_rgba);
+        let selected_bar = gpui::rgba((theme.colors.accent.selected << 8) | 0xFF);
+        let container_bg = gpui::rgba(chrome.dialog_surface_rgba);
+        let container_border = gpui::rgba(chrome.border_rgba);
 
         div()
             .track_focus(&self.focus_handle)
@@ -259,27 +268,38 @@ impl Render for AcpHistoryPopupWindow {
                 div()
                     .w_full()
                     .h_full()
-                    .rounded(px(8.0))
-                    .bg(gpui::rgb(theme.colors.background.search_box))
+                    .bg(container_bg)
                     .border_1()
-                    .border_color(gpui::rgba((theme.colors.ui.border << 8) | 0x40))
+                    .border_color(container_border)
                     .overflow_hidden()
                     .child(
                         div()
-                            .px(px(10.0))
-                            .py(px(6.0))
-                            .text_xs()
-                            .opacity(0.45)
-                            .child(self.snapshot.title.clone()),
+                            .w_full()
+                            .h(px(HISTORY_POPUP_HEADER_HEIGHT))
+                            .px(px(crate::actions::constants::ACTION_PADDING_X))
+                            .pt(px(crate::actions::constants::ACTION_PADDING_TOP))
+                            .pb(px(4.0))
+                            .flex()
+                            .flex_col()
+                            .justify_center()
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(dimmed_text)
+                                    .child(self.snapshot.title.clone()),
+                            ),
                     )
                     .child(div().w_full().flex_1().overflow_y_scrollbar().children(
                         if self.snapshot.entries.is_empty() {
                             vec![div()
                                 .w_full()
-                                .px(px(10.0))
-                                .py(px(14.0))
+                                .h(px(HISTORY_POPUP_EMPTY_HEIGHT))
+                                .px(px(crate::actions::constants::ACTION_PADDING_X))
+                                .flex()
+                                .items_center()
                                 .text_sm()
-                                .opacity(0.45)
+                                .text_color(dimmed_text)
                                 .child("No matching conversations")
                                 .into_any_element()]
                         } else {
@@ -301,63 +321,79 @@ impl Render for AcpHistoryPopupWindow {
                                         .id(SharedString::from(format!(
                                             "acp-history-popup-row-{idx}"
                                         )))
+                                        .h(px(HISTORY_POPUP_ROW_HEIGHT))
                                         .w_full()
-                                        .px(px(10.0))
-                                        .py(px(6.0))
+                                        .px(px(crate::actions::constants::ACTION_ROW_INSET))
+                                        .py(px(2.0))
+                                        .flex()
+                                        .flex_col()
+                                        .justify_center()
+                                        .border_l(px(crate::actions::constants::ACCENT_BAR_WIDTH))
+                                        .border_color(if is_selected {
+                                            selected_bar
+                                        } else {
+                                            gpui::rgba(0x0000_0000)
+                                        })
                                         .cursor_pointer()
-                                        .when(is_selected, |d| {
-                                            d.bg(gpui::rgba(
-                                                (theme.colors.accent.selected << 8) | 0x14,
-                                            ))
-                                            .border_l_2()
-                                            .border_color(gpui::rgb(theme.colors.accent.selected))
-                                        })
-                                        .when(!is_selected, |d| {
-                                            d.hover(|d| {
-                                                d.bg(gpui::rgba(
-                                                    (theme.colors.text.primary << 8) | 0x0C,
-                                                ))
-                                            })
-                                            .border_l_2()
-                                            .border_color(gpui::transparent_black())
-                                        })
+                                        .when(is_selected, |d| d.bg(selected_bg))
+                                        .when(!is_selected, |d| d.hover(|d| d.bg(hover_bg)))
                                         .on_click(cx.listener(move |this, _event, _window, cx| {
                                             this.select_entry(&entry_clone, cx);
                                         }))
                                         .child(
                                             div()
+                                                .w_full()
                                                 .flex()
-                                                .flex_col()
-                                                .gap(px(2.0))
+                                                .flex_row()
+                                                .items_center()
+                                                .justify_between()
+                                                .min_w(px(0.0))
+                                                .overflow_hidden()
+                                                .px(px(crate::actions::constants::ACTION_PADDING_X
+                                                    - crate::actions::constants::ACTION_ROW_INSET))
                                                 .child(
                                                     div()
+                                                        .flex_1()
+                                                        .min_w(px(0.0))
                                                         .text_sm()
+                                                        .font_weight(if is_selected {
+                                                            FontWeight::MEDIUM
+                                                        } else {
+                                                            FontWeight::NORMAL
+                                                        })
+                                                        .text_color(title_color)
+                                                        .overflow_hidden()
+                                                        .text_ellipsis()
+                                                        .whitespace_nowrap()
                                                         .child(entry.first_message.clone()),
                                                 )
-                                                .child(div().text_xs().opacity(0.40).child(
-                                                    format!(
-                                                        "{} messages · {}",
-                                                        entry.message_count, date
-                                                    ),
-                                                )),
+                                                .child(
+                                                    div()
+                                                        .flex_shrink_0()
+                                                        .ml(px(8.0))
+                                                        .text_xs()
+                                                        .text_color(if is_selected {
+                                                            secondary_text
+                                                        } else {
+                                                            dimmed_text
+                                                        })
+                                                        .whitespace_nowrap()
+                                                        .child(format!(
+                                                            "{} msgs · {}",
+                                                            entry.message_count, date
+                                                        )),
+                                                ),
                                         )
                                         .into_any_element()
                                 })
                                 .collect::<Vec<_>>()
                         },
                     ))
-                    .child(
-                        div()
-                            .w_full()
-                            .px(px(10.0))
-                            .pt(px(6.0))
-                            .pb(px(4.0))
-                            .border_t_1()
-                            .border_color(gpui::rgba((theme.colors.ui.border << 8) | 0x15))
-                            .text_xs()
-                            .opacity(0.35)
-                            .child("↑↓ navigate · Enter load · Esc close · type to search"),
-                    ),
+                    .child(div().w_full().child(crate::components::HintStrip::new(vec![
+                        "↑↓ Navigate".into(),
+                        "↵ Load".into(),
+                        "Esc Close".into(),
+                    ]))),
             )
     }
 }

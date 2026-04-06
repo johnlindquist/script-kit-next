@@ -35,15 +35,15 @@ use crate::ai::window::context_picker::{build_picker_items, build_slash_picker_i
 
 /// Active @-mention session state for the ACP inline context picker.
 #[derive(Debug, Clone)]
-struct AcpMentionSession {
+pub(crate) struct AcpMentionSession {
     /// Which trigger character opened this session (`@` or `/`).
     trigger: ContextPickerTrigger,
     /// Character range of the trigger+query in the input text.
     trigger_range: std::ops::Range<usize>,
     /// Currently highlighted row index.
-    selected_index: usize,
+    pub(crate) selected_index: usize,
     /// Ranked picker items for the current query.
-    items: Vec<ContextPickerItem>,
+    pub(crate) items: Vec<ContextPickerItem>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -55,6 +55,10 @@ struct AcpMentionPopupParentWindow {
 
 /// Click handler type for collapsible block toggle.
 type ToggleHandler = Box<dyn Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static>;
+/// Footer action callbacks use `&mut App` (not `Context<AcpChatView>`) so they can be
+/// invoked without holding the AcpChatView borrow — toggle_actions needs to read the
+/// entity, which panics if called from inside its own update.
+type AcpFooterActionHandler = std::sync::Arc<dyn Fn(&mut Window, &mut App) + 'static>;
 
 /// Parse the `description` field from YAML frontmatter in a SKILL.md file.
 fn parse_skill_description(content: &str) -> Option<String> {
@@ -109,6 +113,15 @@ impl AcpRetryRequest {
     }
 }
 
+/// Explicit resume payload queued when a history item is selected for
+/// re-opening. The ACP open path can consume this to load a saved
+/// conversation by `session_id` instead of using clipboard text or
+/// markdown export.
+#[derive(Debug, Clone)]
+pub(crate) struct AcpHistoryResumeRequest {
+    pub session_id: String,
+}
+
 /// GPUI view entity wrapping an `AcpThread` for the Tab AI surface.
 pub(crate) struct AcpChatView {
     /// The ACP session — either a live thread or inline setup state.
@@ -141,7 +154,7 @@ pub(crate) struct AcpChatView {
     /// Handle to the deferred slash command discovery task.
     _slash_discovery_task: Task<()>,
     /// Active @-mention picker session (None = picker hidden).
-    mention_session: Option<AcpMentionSession>,
+    pub(crate) mention_session: Option<AcpMentionSession>,
     /// Cached parent window metadata for the detached picker popup.
     mention_popup_parent_window: Option<AcpMentionPopupParentWindow>,
     /// Canonical inline tokens that currently own their attached context part.
@@ -157,6 +170,15 @@ pub(crate) struct AcpChatView {
     test_probe: AcpTestProbe,
     /// Queued retry payload from setup card — consumed by the ACP open path.
     pending_retry_request: Option<AcpRetryRequest>,
+    /// Queued history resume request — consumed by the ACP open path
+    /// to load a saved conversation by session_id.
+    pending_history_resume: Option<AcpHistoryResumeRequest>,
+    /// Host-owned footer callback for toggling the actions popup.
+    on_toggle_actions: Option<AcpFooterActionHandler>,
+    /// Host-owned footer callback for closing the ACP surface.
+    on_close_requested: Option<AcpFooterActionHandler>,
+    /// Host-owned callback for opening the dedicated history command surface.
+    on_open_history_command: Option<AcpFooterActionHandler>,
 }
 
 /// Bounded ring buffer for ACP test probe events.
@@ -257,6 +279,86 @@ impl AcpChatView {
             left,
             top,
         ))
+    }
+
+    pub(crate) fn set_on_toggle_actions(
+        &mut self,
+        callback: impl Fn(&mut Window, &mut App) + 'static,
+    ) {
+        self.on_toggle_actions = Some(std::sync::Arc::new(callback));
+    }
+
+    pub(crate) fn set_on_close_requested(
+        &mut self,
+        callback: impl Fn(&mut Window, &mut App) + 'static,
+    ) {
+        self.on_close_requested = Some(std::sync::Arc::new(callback));
+    }
+
+    /// Invoke a footer callback outside the AcpChatView borrow by spawning an
+    /// immediate async task. The host callbacks (toggle_actions, close, etc.)
+    /// may need to entity.read() this view, which panics if we're inside update.
+    /// Invoke a footer callback outside the AcpChatView borrow by spawning an
+    /// immediate async task. The host callbacks (toggle_actions, close, etc.)
+    /// may need to entity.read() this view, which panics if we're inside update.
+    fn spawn_footer_callback(
+        callback: AcpFooterActionHandler,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let window_handle = window.window_handle();
+        cx.spawn(async move |_this, cx| {
+            let _ = window_handle.update(cx, |_root, window, cx| {
+                callback(window, cx);
+            });
+        })
+        .detach();
+    }
+
+    fn trigger_toggle_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(callback) = self.on_toggle_actions.clone() {
+            // toggle_actions needs entity.read(cx) on AcpChatView, which panics
+            // if called from within AcpChatView's own update. Spawn an immediate
+            // async task to fully release the entity borrow first.
+            Self::spawn_footer_callback(callback, window, cx);
+        } else {
+            tracing::warn!(
+                target: "script_kit::acp",
+                event = "acp_footer_toggle_actions_no_callback",
+                "ACP footer actions click dropped because no host callback was installed"
+            );
+        }
+    }
+
+    fn trigger_close_requested(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(callback) = self.on_close_requested.clone() {
+            Self::spawn_footer_callback(callback, window, cx);
+        } else {
+            tracing::warn!(
+                target: "script_kit::acp",
+                event = "acp_footer_close_no_callback",
+                "ACP footer close click dropped because no host callback was installed"
+            );
+        }
+    }
+
+    pub(crate) fn set_on_open_history_command(
+        &mut self,
+        callback: impl Fn(&mut Window, &mut App) + 'static,
+    ) {
+        self.on_open_history_command = Some(std::sync::Arc::new(callback));
+    }
+
+    fn trigger_open_history_command(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(callback) = self.on_open_history_command.clone() {
+            Self::spawn_footer_callback(callback, window, cx);
+        } else {
+            tracing::info!(
+                target: "script_kit::acp",
+                event = "acp_history_command_no_callback",
+                "Cmd+P history command request dropped — no host callback installed"
+            );
+        }
     }
 
     pub(super) fn sync_mention_popup_window_from_cached_parent(&mut self, cx: &mut Context<Self>) {
@@ -733,6 +835,10 @@ impl AcpChatView {
             last_accepted_item: None,
             test_probe: AcpTestProbe::default(),
             pending_retry_request: None,
+            pending_history_resume: None,
+            on_toggle_actions: None,
+            on_close_requested: None,
+            on_open_history_command: None,
         }
     }
 
@@ -773,6 +879,10 @@ impl AcpChatView {
             last_accepted_item: None,
             test_probe: AcpTestProbe::default(),
             pending_retry_request: None,
+            pending_history_resume: None,
+            on_toggle_actions: None,
+            on_close_requested: None,
+            on_open_history_command: None,
         }
     }
 
@@ -2198,9 +2308,30 @@ impl AcpChatView {
                             .child(chevron)
                     }),
             )
-            // ── Right: hint strip (matches main menu format) ─────
-            .child(crate::components::render_hint_icons(
-                &["↩ Send", "⌘K Actions", "⌘W Close"],
+            // ── Right: clickable hint strip (matches main menu behavior) ──
+            .child(crate::components::render_hint_icons_clickable(
+                vec![
+                    crate::components::ClickableHint::new(
+                        "↩ Send",
+                        cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+                            let _ = this
+                                .live_thread()
+                                .update(cx, |thread, cx| thread.submit_input(cx));
+                        }),
+                    ),
+                    crate::components::ClickableHint::new(
+                        "⌘K Actions",
+                        cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                            this.trigger_toggle_actions(window, cx);
+                        }),
+                    ),
+                    crate::components::ClickableHint::new(
+                        "⌘W Close",
+                        cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+                            this.trigger_close_requested(_window, cx);
+                        }),
+                    ),
+                ],
                 hint_text_rgba,
             ))
     }
@@ -2439,11 +2570,11 @@ impl AcpChatView {
     /// Both Enter and Tab autocomplete the focused picker row. Literal slash
     /// commands are inserted into the composer; slash-picked context items
     /// attach a pending context part and remove the typed `/query` token.
-    pub(super) fn accept_mention_selection(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn accept_mention_selection(&mut self, cx: &mut Context<Self>) {
         self.accept_mention_selection_impl(false, cx);
     }
 
-    pub(super) fn select_mention_index(&mut self, index: usize) {
+    pub(crate) fn select_mention_index(&mut self, index: usize) {
         if let Some(session) = self.mention_session.as_mut() {
             if !session.items.is_empty() {
                 session.selected_index = index.min(session.items.len().saturating_sub(1));
@@ -3288,6 +3419,53 @@ impl AcpChatView {
         self.pending_retry_request.take()
     }
 
+    /// Stage a history resume request so the next ACP open path loads
+    /// the saved conversation instead of starting fresh.
+    pub(crate) fn stage_history_resume(&mut self, session_id: String, cx: &mut Context<Self>) {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_history_resume_staged",
+            session_id = %session_id,
+        );
+        self.pending_history_resume = Some(AcpHistoryResumeRequest { session_id });
+        cx.notify();
+    }
+
+    /// Take the pending history resume request, if any. Used by the ACP
+    /// open path to load a saved conversation by session_id.
+    pub(crate) fn take_history_resume(&mut self) -> Option<AcpHistoryResumeRequest> {
+        self.pending_history_resume.take()
+    }
+
+    /// Resume a conversation from history by session_id.
+    ///
+    /// Loads the saved conversation messages into the live thread.
+    /// Returns `true` if the conversation was loaded, `false` if the
+    /// saved file was not found (falls back to setting input text).
+    pub(crate) fn resume_from_history(&mut self, session_id: &str, cx: &mut Context<Self>) -> bool {
+        if let Some(conv) = super::history::load_conversation(session_id) {
+            self.live_thread().update(cx, |thread, cx| {
+                thread.load_saved_messages(&conv.messages, cx);
+            });
+            self.collapsed_ids.clear();
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_history_item_resumed",
+                session_id = %session_id,
+                message_count = conv.messages.len(),
+            );
+            cx.notify();
+            true
+        } else {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "acp_history_resume_fallback",
+                session_id = %session_id,
+            );
+            false
+        }
+    }
+
     /// Derive current launch requirements from whichever session mode is active.
     fn current_retry_launch_requirements(
         &self,
@@ -3856,7 +4034,12 @@ impl AcpChatView {
         );
     }
 
-    fn handle_key_down(&mut self, event: &gpui::KeyDownEvent, cx: &mut Context<Self>) {
+    fn handle_key_down(
+        &mut self,
+        event: &gpui::KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Setup mode (initial or runtime recovery): handle agent picker and setup actions.
         if self.has_active_setup(cx) {
             let key = event.keystroke.key.as_str();
@@ -4153,77 +4336,12 @@ impl AcpChatView {
             return;
         }
 
-        // ── Cmd+P → toggle conversation history picker ──────────
+        // ── Cmd+P → open dedicated history command surface ──────────
         if modifiers.platform && key.eq_ignore_ascii_case("p") {
-            self.toggle_history_popup_from_cached_parent(cx);
+            tracing::info!(event = "acp_history_shortcut_routed_to_command");
+            self.trigger_open_history_command(window, cx);
             cx.stop_propagation();
             return;
-        }
-
-        // ── History picker intercept ─────────────────────────────
-        if let Some((ref mut idx, ref mut filter, ref entries)) = self.history_menu {
-            // Filter entries by search text
-            let filtered: Vec<_> = if filter.is_empty() {
-                entries.iter().collect()
-            } else {
-                let q = filter.to_lowercase();
-                entries
-                    .iter()
-                    .filter(|e| e.first_message.to_lowercase().contains(&q))
-                    .collect()
-            };
-            let count = filtered.len();
-
-            if crate::ui_foundation::is_key_up(key) {
-                *idx = idx.saturating_sub(1);
-                self.sync_history_popup_window_from_cached_parent(cx);
-                cx.notify();
-                cx.stop_propagation();
-                return;
-            }
-            if crate::ui_foundation::is_key_down(key) {
-                *idx = (*idx + 1).min(count.saturating_sub(1));
-                self.sync_history_popup_window_from_cached_parent(cx);
-                cx.notify();
-                cx.stop_propagation();
-                return;
-            }
-            if crate::ui_foundation::is_key_enter(key) {
-                let selected = filtered.get(*idx).cloned().cloned();
-                if let Some(entry) = selected {
-                    self.select_history_from_popup(&entry, cx);
-                } else {
-                    self.sync_history_popup_window_from_cached_parent(cx);
-                }
-                cx.stop_propagation();
-                return;
-            }
-            if crate::ui_foundation::is_key_escape(key) {
-                self.history_menu = None;
-                self.sync_history_popup_window_from_cached_parent(cx);
-                cx.notify();
-                cx.stop_propagation();
-                return;
-            }
-            if crate::ui_foundation::is_key_backspace(key) {
-                filter.pop();
-                *idx = 0;
-                self.sync_history_popup_window_from_cached_parent(cx);
-                cx.notify();
-                cx.stop_propagation();
-                return;
-            }
-            // Typed characters filter the list
-            if let Some(ch) = event.keystroke.key_char.as_deref() {
-                if !ch.is_empty() && !modifiers.platform && !modifiers.control {
-                    filter.push_str(ch);
-                    *idx = 0;
-                    self.sync_history_popup_window_from_cached_parent(cx);
-                    cx.notify();
-                    cx.stop_propagation();
-                    return;
-                }
-            }
         }
 
         // ── Unified picker intercept (@ mentions + / commands) ────
@@ -4553,7 +4671,7 @@ impl Render for AcpChatView {
                         return;
                     }
 
-                    this.handle_key_down(event, cx);
+                    this.handle_key_down(event, window, cx);
                 }),
             )
             // ── TOP: Input (exact match with main menu mini layout) ────

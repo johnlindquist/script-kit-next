@@ -59,6 +59,29 @@ impl ScriptListApp {
     /// Give the ACP chat one frame to paint before deferred context staging runs.
     const ACP_CONTEXT_FIRST_PAINT_DELAY_MS: u64 = 16;
 
+    fn wire_embedded_acp_footer_callbacks(
+        &mut self,
+        view_entity: &Entity<crate::ai::acp::AcpChatView>,
+        cx: &mut Context<Self>,
+    ) {
+        let app_entity = cx.entity().clone();
+        view_entity.update(cx, |view, _cx| {
+            let actions_app = app_entity.clone();
+            view.set_on_toggle_actions(move |window, cx| {
+                actions_app.update(cx, |app, cx| {
+                    app.toggle_actions(cx, window);
+                });
+            });
+
+            let close_app = app_entity.clone();
+            view.set_on_close_requested(move |_window, cx| {
+                close_app.update(cx, |app, cx| {
+                    app.close_tab_ai_harness_terminal(cx);
+                });
+            });
+        });
+    }
+
     /// Open the Tab AI surface (zero-intent).
     ///
     /// Routes to the harness terminal (`QuickTerminalView`), which connects
@@ -1036,6 +1059,7 @@ impl ScriptListApp {
                 };
                 let view_entity =
                     cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
+                self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
                 self.tab_ai_harness_return_view = Some(source_view.clone());
                 self.tab_ai_harness_return_focus_target =
                     Some(self.tab_ai_return_focus_target());
@@ -1106,6 +1130,7 @@ impl ScriptListApp {
             );
             let view_entity =
                 cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
+            self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
             self.tab_ai_harness_return_view = Some(source_view.clone());
             self.tab_ai_harness_return_focus_target =
                 Some(self.tab_ai_return_focus_target());
@@ -1248,6 +1273,7 @@ impl ScriptListApp {
 
         let stage_started_at = std::time::Instant::now();
         let view_entity = cx.new(|cx| crate::ai::acp::AcpChatView::new(thread.clone(), cx));
+        self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_open_stage",
@@ -2270,6 +2296,7 @@ impl ScriptListApp {
             | AppView::CreateAiPresetView { .. }
             | AppView::SettingsView { .. }
             | AppView::FavoritesBrowseView { .. }
+            | AppView::AcpHistoryView { .. }
             | AppView::CurrentAppCommandsView { .. }
             | AppView::DesignGalleryView { .. }
             | AppView::CreationFeedback { .. }
@@ -3388,6 +3415,7 @@ impl ScriptListApp {
             AppView::SettingsView { .. } => "Settings".to_string(),
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowse".to_string(),
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommands".to_string(),
+            AppView::AcpHistoryView { .. } => "AcpHistoryView".to_string(),
             AppView::AcpChatView { .. } => "AcpChatView".to_string(),
         }
     }
@@ -3419,7 +3447,8 @@ impl ScriptListApp {
             | AppView::SearchAiPresetsView { filter, .. }
             | AppView::FavoritesBrowseView { filter, .. }
             | AppView::CurrentAppCommandsView { filter, .. }
-            | AppView::DesignGalleryView { filter, .. } => non_empty(filter.clone()),
+            | AppView::DesignGalleryView { filter, .. }
+            | AppView::AcpHistoryView { filter, .. } => non_empty(filter.clone()),
 
             AppView::FileSearchView { query, .. } => non_empty(query.clone()),
 

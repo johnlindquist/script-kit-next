@@ -2231,10 +2231,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             logging::log("STDIN", "SimulateKey: Cmd+K - open actions in ACP chat");
                                             view.toggle_actions(ctx, window);
                                         } else if has_cmd && key_lower == "p" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+P - toggle history");
-                                            entity_clone.update(ctx, |chat, cx| {
-                                                chat.toggle_history_popup(window, cx);
-                                            });
+                                            logging::log("STDIN", "SimulateKey: Cmd+P - open history command from ACP chat");
+                                            view.handle_action("acp_show_history".into(), window, ctx);
                                         } else if view.show_actions_popup && key_lower == "escape" {
                                             logging::log("STDIN", "SimulateKey: Escape - close ACP actions dialog");
                                             view.close_actions_popup(ActionsDialogHost::AcpChat, window, ctx);

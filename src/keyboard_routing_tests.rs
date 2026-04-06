@@ -382,6 +382,35 @@ mod tests {
         );
     }
 
+    /// The startup interceptor must delegate to the canonical actions_support_for_view()
+    /// resolver instead of maintaining its own match on AppView.
+    #[test]
+    fn startup_interceptor_uses_canonical_actions_support_resolver() {
+        let content = read_app_impl_sources();
+        assert!(
+            content.contains("actions_support_for_view()"),
+            "startup actions routing should delegate to the canonical actions support resolver"
+        );
+    }
+
+    /// Focus restore host mappings must cover the same surfaces the canonical
+    /// resolver maps to SharedDialog.
+    #[test]
+    fn focus_restore_hosts_match_shared_actions_surfaces() {
+        let content = read_app_impl_sources();
+        for host in [
+            "ActionsDialogHost::MainList",
+            "ActionsDialogHost::ClipboardHistory",
+            "ActionsDialogHost::EmojiPicker",
+            "ActionsDialogHost::FileSearch",
+        ] {
+            assert!(
+                content.contains(host),
+                "shared actions focus restore should still cover {host}"
+            );
+        }
+    }
+
     /// All global keystroke interceptors must guard against the actions popup window.
     ///
     /// The actions window (ActionsWindow) handles its own Escape, Enter, arrows, etc.

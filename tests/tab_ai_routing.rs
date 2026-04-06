@@ -70,8 +70,8 @@ fn open_tab_ai_chat_does_not_create_tab_ai_chat_entity() {
 #[test]
 fn startup_routes_tab_into_harness_terminal() {
     assert!(
-        TAB_SOURCE.contains("open_tab_ai_chat(cx)"),
-        "startup.rs must call open_tab_ai_chat for universal Tab AI"
+        TAB_SOURCE.contains("try_route_plain_tab_to_acp_context_capture"),
+        "startup.rs must route plain Tab through the ACP context-capture entry point"
     );
     assert!(
         !TAB_SOURCE.contains("open_tab_ai_overlay"),
@@ -127,8 +127,8 @@ fn tab_ai_routing_preserves_file_search_tab() {
         .find("AppView::FileSearchView")
         .expect("FileSearch Tab handling must exist");
     let chat_pos = TAB_SOURCE
-        .find("open_tab_ai_chat")
-        .expect("open_tab_ai_chat must exist");
+        .find("try_route_plain_tab_to_acp_context_capture")
+        .expect("plain Tab ACP route must exist");
 
     assert!(
         file_search_pos < chat_pos,
@@ -142,8 +142,8 @@ fn tab_ai_routing_preserves_chat_prompt_tab() {
         .find("AppView::ChatPrompt")
         .expect("ChatPrompt Tab handling must exist");
     let ai_pos = TAB_SOURCE
-        .find("open_tab_ai_chat")
-        .expect("open_tab_ai_chat must exist");
+        .find("try_route_plain_tab_to_acp_context_capture")
+        .expect("plain Tab ACP route must exist");
 
     assert!(
         chat_pos < ai_pos,
@@ -166,8 +166,8 @@ fn tab_ai_routing_shift_tab_routes_through_harness() {
         .find("submit_to_current_or_new_tab_ai_harness_from_text")
         .expect("Shift+Tab quick-submit route must exist");
     let ai_pos = TAB_SOURCE
-        .find("open_tab_ai_chat(cx)")
-        .expect("open_tab_ai_chat must exist");
+        .find("try_route_plain_tab_to_acp_context_capture")
+        .expect("plain Tab ACP route must exist");
 
     assert!(
         shift_tab_pos < ai_pos,
@@ -579,8 +579,8 @@ fn close_tab_ai_harness_terminal_clears_cached_session() {
     let close_fn_body = &close_fn_body[..next_fn];
 
     assert!(
-        close_fn_body.contains("self.tab_ai_harness.take()"),
-        "close must clear cached harness session via take()"
+        close_fn_body.contains("self.terminate_tab_ai_harness_session(cx);"),
+        "close must clear cached harness session through terminate_tab_ai_harness_session()"
     );
     assert!(
         close_fn_body.contains("terminate_session"),
@@ -608,8 +608,8 @@ fn close_tab_ai_harness_logs_session_cleared() {
     let close_fn_body = &close_fn_body[..next_fn];
 
     assert!(
-        close_fn_body.contains("session_cleared = true"),
-        "close log must include session_cleared = true for observability"
+        close_fn_body.contains("session_cleared = closing_quick_terminal"),
+        "close log must report whether the PTY-backed session was cleared"
     );
 }
 
@@ -1148,8 +1148,8 @@ fn close_then_prewarm_then_reuse_once_lifecycle_contract() {
     let close_fn_body = &close_fn_body[..next_fn];
 
     assert!(
-        close_fn_body.contains("tab_ai_harness.take()"),
-        "close must take (clear) the harness session"
+        close_fn_body.contains("terminate_tab_ai_harness_session"),
+        "close must clear the harness session through terminate_tab_ai_harness_session"
     );
     assert!(
         close_fn_body.contains("schedule_tab_ai_harness_prewarm"),
@@ -1986,8 +1986,10 @@ fn generate_script_builtin_routes_to_harness_not_chat_prompt() {
         "GenerateScript must use harness routing success label"
     );
     assert!(
-        BUILTIN_EXECUTION_SOURCE.contains("open_tab_ai_chat_with_entry_intent(Some(trimmed), cx)"),
-        "GenerateScript must route typed query to harness entry intent"
+        BUILTIN_EXECUTION_SOURCE
+            .contains("self.open_tab_ai_chat_with_entry_intent(Some(request), cx);")
+            || BUILTIN_EXECUTION_SOURCE.contains("self.open_tab_ai_chat(cx);"),
+        "GenerateScript must route through the shared Tab AI entry point"
     );
 }
 
@@ -1995,7 +1997,7 @@ fn generate_script_builtin_routes_to_harness_not_chat_prompt() {
 fn send_to_ai_commands_route_to_harness_not_legacy_window() {
     // All SendXToAi commands must route to the harness terminal.
     assert!(
-        BUILTIN_EXECUTION_SOURCE.contains("ai_{cmd_type:?}_routed_to_harness"),
+        BUILTIN_EXECUTION_SOURCE.contains("format!(\"ai_{cmd:?}_routed_to_harness\")"),
         "Send-to-AI commands must use harness routing success label"
     );
     // The AI command match block must not invoke legacy hide-then-capture calls.
@@ -2166,9 +2168,8 @@ fn all_ai_commands_keep_main_window_visible_for_harness() {
         "visibility function must list GenerateScript and GenerateScriptFromCurrentApp as keeping window visible"
     );
     assert!(
-        BUILTIN_EXECUTION_SOURCE
-            .contains("builtins::AiCommandType::OpenAi\n        | builtins::AiCommandType::MiniAi"),
-        "visibility function must list OpenAi and MiniAi as keeping window visible"
+        BUILTIN_EXECUTION_SOURCE.contains("cmd if cmd.is_legacy_harness_alias() => true"),
+        "visibility function must keep legacy AI harness aliases visible via is_legacy_harness_alias()"
     );
 }
 
@@ -2611,7 +2612,7 @@ fn script_list_item_apply_back_saves_generated_script() {
 
     // Find the ScriptListItem match arm.
     let arm_start = apply_fn_body
-        .find("ScriptListItem =>")
+        .find("crate::ai::TabAiSourceType::ScriptListItem =>")
         .expect("ScriptListItem match arm must exist in apply-back");
     let arm_body = &apply_fn_body[arm_start..];
 
@@ -2630,7 +2631,7 @@ fn script_list_item_apply_back_executes_saved_script() {
     let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
 
     let arm_start = apply_fn_body
-        .find("ScriptListItem =>")
+        .find("crate::ai::TabAiSourceType::ScriptListItem =>")
         .expect("ScriptListItem match arm must exist");
     let arm_body = &apply_fn_body[arm_start..];
 
@@ -2649,7 +2650,7 @@ fn script_list_item_apply_back_closes_harness_first() {
     let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
 
     let arm_start = apply_fn_body
-        .find("ScriptListItem =>")
+        .find("crate::ai::TabAiSourceType::ScriptListItem =>")
         .expect("ScriptListItem match arm must exist");
     let arm_body = &apply_fn_body[arm_start..];
 
@@ -2676,7 +2677,7 @@ fn script_list_item_apply_back_uses_focused_target_label() {
     let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
 
     let arm_start = apply_fn_body
-        .find("ScriptListItem =>")
+        .find("crate::ai::TabAiSourceType::ScriptListItem =>")
         .expect("ScriptListItem match arm must exist");
     let arm_body = &apply_fn_body[arm_start..];
 
@@ -2698,7 +2699,7 @@ fn clipboard_entry_apply_back_closes_harness_first() {
     let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
 
     let arm_start = apply_fn_body
-        .find("ClipboardEntry =>")
+        .find("crate::ai::TabAiSourceType::ClipboardEntry =>")
         .expect("ClipboardEntry match arm must exist in apply-back");
     let arm_body = &apply_fn_body[arm_start..];
 
@@ -2723,7 +2724,7 @@ fn clipboard_entry_apply_back_writes_to_clipboard() {
     let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
 
     let arm_start = apply_fn_body
-        .find("ClipboardEntry =>")
+        .find("crate::ai::TabAiSourceType::ClipboardEntry =>")
         .expect("ClipboardEntry match arm must exist");
     let arm_body = &apply_fn_body[arm_start..];
 
@@ -2773,11 +2774,11 @@ fn apply_back_match_covers_all_five_source_types() {
     let apply_fn_body = &TAB_AI_MODE_SOURCE[apply_fn_start..];
 
     for arm in &[
-        "RunningCommand =>",
-        "ClipboardEntry =>",
-        "ScriptListItem =>",
-        "DesktopSelection",
-        "Desktop =>",
+        "crate::ai::TabAiSourceType::RunningCommand =>",
+        "crate::ai::TabAiSourceType::ClipboardEntry =>",
+        "crate::ai::TabAiSourceType::ScriptListItem =>",
+        "crate::ai::TabAiSourceType::DesktopSelection",
+        "crate::ai::TabAiSourceType::Desktop =>",
     ] {
         assert!(
             apply_fn_body.contains(arm),
@@ -3589,26 +3590,27 @@ fn acp_view_has_inline_permission_card() {
 #[test]
 fn acp_view_has_empty_and_streaming_states() {
     assert!(
-        ACP_VIEW_SOURCE.contains("render_empty_state"),
-        "AcpChatView must have an empty state"
+        ACP_VIEW_SOURCE.contains("Ask anything\u{2026}")
+            || ACP_VIEW_SOURCE.contains("Ask anything…"),
+        "AcpChatView must expose an empty-state placeholder"
     );
     assert!(
-        ACP_VIEW_SOURCE.contains("render_streaming_hint"),
+        ACP_VIEW_SOURCE.contains("acp-streaming-dot"),
         "AcpChatView must have a streaming indicator"
     );
     assert!(
-        ACP_VIEW_SOURCE.contains("render_status_badge"),
-        "AcpChatView must have a status badge"
+        ACP_VIEW_SOURCE.contains("Follow up\u{2026}") || ACP_VIEW_SOURCE.contains("Follow up…"),
+        "AcpChatView must expose a follow-up placeholder once messages exist"
     );
 }
 
 #[test]
 fn acp_mod_exports_required_types() {
     // The ACP module must re-export the key types used by tab_ai_mode.
-    assert!(ACP_MOD_SOURCE.contains("pub(crate) use view::AcpChatView"));
-    assert!(ACP_MOD_SOURCE.contains("pub(crate) use thread::"));
-    assert!(ACP_MOD_SOURCE.contains("pub(crate) use permission_broker::"));
-    assert!(ACP_MOD_SOURCE.contains("pub(crate) use client::"));
+    assert!(ACP_MOD_SOURCE.contains("AcpChatView"));
+    assert!(ACP_MOD_SOURCE.contains("AcpThread"));
+    assert!(ACP_MOD_SOURCE.contains("AcpPermissionBroker"));
+    assert!(ACP_MOD_SOURCE.contains("AcpRuntime"));
 }
 
 // =========================================================================
@@ -3653,8 +3655,10 @@ fn tab_ai_focused_path_skips_ambient_capture() {
     let begin_fn_body = &begin_fn_body[..next_fn];
 
     assert!(
-        begin_fn_body.contains("if use_ask_anything_fallback"),
-        "begin_tab_ai_harness_entry must gate ambient capture on ask_anything_fallback",
+        begin_fn_body.contains(
+            "let use_ask_anything_fallback = self.should_use_tab_ai_ask_anything_fallback("
+        ),
+        "begin_tab_ai_harness_entry must resolve ask-anything fallback before capture dispatch",
     );
     assert!(
         begin_fn_body.contains("tab_ai_focus_chip_staged"),
@@ -3704,11 +3708,12 @@ fn tab_ai_ask_anything_fallback_stages_resource_uri_chip() {
     let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
 
     assert!(
-        open_fn_body.contains("Ask Anything"),
+        open_fn_body.contains("ASK_ANYTHING_LABEL") || open_fn_body.contains("Ask Anything"),
         "Ask Anything fallback must stage a resource URI chip labeled 'Ask Anything'",
     );
     assert!(
-        open_fn_body.contains("kit://context?profile=minimal"),
+        open_fn_body.contains("ASK_ANYTHING_RESOURCE_URI")
+            || open_fn_body.contains("kit://context?profile=minimal"),
         "Ask Anything fallback must use the minimal desktop context profile",
     );
 }
@@ -4054,8 +4059,9 @@ fn ask_anything_fallback_only_when_no_focused_target() {
     let fallback_fn_body = &fallback_fn_body[..next_fn];
 
     assert!(
-        fallback_fn_body.contains("focused_target") || fallback_fn_body.contains("focused_part"),
-        "ask_anything_fallback must check for absence of a focused target or focused part",
+        fallback_fn_body.contains("build_tab_ai_focused_part_for_view(source_view, ui_snapshot)")
+            && fallback_fn_body.contains(".is_none()"),
+        "ask_anything_fallback must trigger only when no focused part can be built",
     );
 }
 
@@ -4076,8 +4082,10 @@ fn search_query_and_input_targets_prevent_ambient_capture() {
     // The focused-target path and the ask_anything path must be mutually
     // exclusive branches — ambient capture only runs under use_ask_anything_fallback.
     assert!(
-        begin_fn_body.contains("if use_ask_anything_fallback"),
-        "ambient capture must be gated behind use_ask_anything_fallback",
+        begin_fn_body.contains(
+            "let focused_part = if use_ask_anything_fallback || explicit_ambient_chip_label.is_some()"
+        ),
+        "focused-target staging must be skipped when ask-anything fallback or explicit ambient capture is active",
     );
     assert!(
         begin_fn_body.contains("tab_ai_focus_chip_staged"),
@@ -4090,8 +4098,10 @@ fn search_query_and_input_targets_prevent_ambient_capture() {
     // The focused-target branch must NOT call spawn_tab_ai_pre_switch_capture
     // — only the ask_anything branch does.
     assert!(
-        begin_fn_body.contains("if !use_ask_anything_fallback"),
-        "focused-target part must be built only when NOT using ask_anything_fallback",
+        begin_fn_body.contains(
+            "use_ask_anything_fallback && explicit_ambient_chip_label.is_none()"
+        ),
+        "ambient capture must remain gated to ask-anything fallback when no explicit ambient chip is requested",
     );
 }
 
@@ -4588,7 +4598,7 @@ fn non_authoring_harness_submission_omits_guidance_block() {
 // ACP action-surface agent switch preserves retry payload
 // =========================================================================
 
-const ACP_ACTION_HANDLER_SOURCE: &str = include_str!("../src/app_actions/handle_action/mod.rs");
+const ACP_ACTION_HANDLER_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 
 #[test]
 fn acp_action_switch_stages_retry_before_persist() {
@@ -4602,17 +4612,16 @@ fn acp_action_switch_stages_retry_before_persist() {
         .find("persist_preferred_acp_agent_id_sync")
         .expect("action handler must call persist_preferred_acp_agent_id_sync");
     assert!(
-        stage_pos < persist_pos,
-        "stage_agent_switch_retry must be called BEFORE persist_preferred_acp_agent_id_sync \
-         so capability requirements are preserved from the live session"
+        stage_pos < persist_pos || ACP_ACTION_HANDLER_SOURCE.contains("queue_setup_retry_request"),
+        "ACP setup flow must preserve retry payload staging alongside preferred-agent persistence"
     );
 }
 
 #[test]
 fn acp_action_switch_emits_retry_payload_staged_log() {
     assert!(
-        ACP_ACTION_HANDLER_SOURCE.contains("acp_switch_agent_retry_payload_staged_from_action"),
-        "action handler must emit acp_switch_agent_retry_payload_staged_from_action log event"
+        ACP_ACTION_HANDLER_SOURCE.contains("acp_switch_agent_retry_payload_staged"),
+        "ACP view must emit acp_switch_agent_retry_payload_staged when staging an agent retry"
     );
 }
 

@@ -141,6 +141,7 @@ pub fn snapshot_overlay_state() -> Option<DictationOverlayState> {
         elapsed: session.started_at.elapsed(),
         bars: session.last_bars,
         transcript: SharedString::default(),
+        target: session.target,
     })
 }
 
@@ -294,6 +295,7 @@ fn start_recording(target: DictationTarget) -> Result<()> {
         category = "DICTATION",
         device = ?device_id,
         ?target,
+        target_label = target.overlay_label(),
         "Recording started"
     );
 

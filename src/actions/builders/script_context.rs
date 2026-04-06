@@ -686,7 +686,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         Action::new(
             "acp_show_history",
             "Conversation History",
-            Some("Browse past conversations".to_string()),
+            Some("Browse and manage past conversations".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("\u{2318}P")

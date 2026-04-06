@@ -113,12 +113,12 @@ fn lifecycle_resets_restore_full_main_window_mode_on_close_and_go_back() {
         .expect("Expected go_back_or_close helper");
     let go_back_body = &lifecycle[go_back_start..lifecycle.len().min(go_back_start + 1200)];
     assert!(
-        go_back_body.contains("self.current_view = AppView::ScriptList;"),
+        go_back_body.contains("self.reset_to_script_list(cx);"),
         "go_back_or_close must return to ScriptList in the opened_from_main_menu branch"
     );
     assert!(
-        go_back_body.contains("self.main_window_mode = MainWindowMode::Full;"),
-        "go_back_or_close must restore MainWindowMode::Full when returning to ScriptList"
+        go_back_body.contains("self.opened_from_main_menu = false;"),
+        "go_back_or_close must clear opened_from_main_menu when returning to ScriptList"
     );
 }
 

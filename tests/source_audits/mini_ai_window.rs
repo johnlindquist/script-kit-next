@@ -9,9 +9,8 @@ use super::read_source as read;
 fn mini_shell_exposes_machine_addressable_ids() {
     let root = read("src/ai/window/render_root.rs");
     for id in [
-        "ai-titlebar-mini",
         "ai-mini-expand",
-        "ai-mini-streaming-dot",
+        "ai-mini-streaming-spinner",
         "ai-mini-recent",
         "ai-mini-new",
         "ai-mini-actions",
@@ -26,8 +25,8 @@ fn mini_shell_exposes_machine_addressable_ids() {
 
     let input = read("src/ai/window/render_input.rs");
     assert!(
-        input.contains("ai-mini-model-chip") || input.contains("ai-mini-model-setup"),
-        "render_input.rs must expose the mini model chip or setup fallback ID"
+        input.contains("ai-mini-model-text"),
+        "render_input.rs must expose the mini model text ID"
     );
 }
 
@@ -53,7 +52,7 @@ fn mini_keydown_closes_overlay_before_window_close() {
     let source = read("src/ai/window/render_keydown.rs");
     // The mini history overlay key guard intercepts Up/Down/Enter/Esc before other handlers
     let overlay_guard = "if self.window_mode.is_mini() && self.showing_mini_history_overlay";
-    let final_close = "if is_key_escape(key) && self.window_mode.is_mini() {";
+    let final_close = "if is_key_escape(key) {";
     assert!(
         source.contains(overlay_guard),
         "render_keydown.rs missing overlay key routing guard"
@@ -170,22 +169,22 @@ fn mini_ui_logs_use_telemetry_helpers() {
 
 #[test]
 fn mini_layout_uses_named_constants() {
-    let root = read("src/ai/window/render_root.rs");
+    let root = read("src/ai/window/types.rs");
     assert!(
         root.contains("MINI_TITLEBAR_H"),
-        "render_root.rs must use MINI_TITLEBAR_H constant"
+        "types.rs must define MINI_TITLEBAR_H constant"
     );
     assert!(
         root.contains("MINI_HISTORY_OVERLAY_W"),
-        "render_root.rs must use MINI_HISTORY_OVERLAY_W constant"
+        "types.rs must define MINI_HISTORY_OVERLAY_W constant"
     );
     assert!(
         root.contains("MINI_HISTORY_OVERLAY_MAX_H"),
-        "render_root.rs must use MINI_HISTORY_OVERLAY_MAX_H constant"
+        "types.rs must define MINI_HISTORY_OVERLAY_MAX_H constant"
     );
     assert!(
         root.contains("MINI_HISTORY_OVERLAY_TOP"),
-        "render_root.rs must use MINI_HISTORY_OVERLAY_TOP constant"
+        "types.rs must define MINI_HISTORY_OVERLAY_TOP constant"
     );
 
     let panel = read("src/ai/window/render_main_panel.rs");
@@ -207,8 +206,8 @@ fn builtin_execution_routes_mini_ai_to_deferred_handoff() {
         "builtin_execution.rs must handle AiCommandType::MiniAi"
     );
     assert!(
-        source.contains("open_mini_ai_window"),
-        "builtin_execution.rs must call open_mini_ai_window"
+        source.contains("cmd.is_legacy_harness_alias()") && source.contains("self.open_tab_ai_chat(cx);"),
+        "builtin_execution.rs must route MiniAi through the shared legacy harness-alias entry point"
     );
 }
 
@@ -442,8 +441,8 @@ fn both_close_paths_log_lifecycle_telemetry() {
 
     // Esc-mini handler must log lifecycle
     let esc_close_start = keydown
-        .find("// Mini mode: final Esc closes the window")
-        .expect("final mini Esc close comment must exist");
+        .find("// Final Esc: close AI window and return to main menu")
+        .expect("final Esc close comment must exist");
     let esc_section = &keydown[esc_close_start..(esc_close_start + 600).min(keydown.len())];
     assert!(
         esc_section.contains("log_ai_lifecycle("),
@@ -566,8 +565,8 @@ fn builtin_handoff_uses_source_traced_entry_point() {
 
     let execution = read("src/app_execute/builtin_execution.rs");
     assert!(
-        execution.contains("open_mini_ai_window_from(\"builtin_mini_ai\""),
-        "builtin execution must call open_mini_ai_window_from with 'builtin_mini_ai' source"
+        !execution.contains("open_mini_ai_window_from(\"builtin_mini_ai\""),
+        "builtin execution no longer opens the mini AI window directly; legacy aliases route through Tab AI"
     );
 }
 
@@ -710,8 +709,8 @@ fn escape_chain_guards_every_intermediate_state_before_final_close() {
     // the source than the final close to prevent skipping states.
     let keydown = read("src/ai/window/render_keydown.rs");
     let final_close = keydown
-        .find("// Mini mode: final Esc closes the window")
-        .expect("final mini Esc close must exist");
+        .find("// Final Esc: close AI window and return to main menu")
+        .expect("final Esc close must exist");
 
     let guards = [
         ("showing_mini_history_overlay", "mini history overlay"),
@@ -932,10 +931,10 @@ fn mini_header_has_expand_button_and_streaming_indicator() {
         root.contains("toggle_window_mode(window, cx)"),
         "Expand button must call toggle_window_mode"
     );
-    // Streaming dot indicator
+    // Streaming indicator
     assert!(
-        root.contains("ai-mini-streaming-dot"),
-        "Mini header must show a streaming indicator dot"
+        root.contains("ai-mini-streaming-spinner"),
+        "Mini header must show a streaming indicator"
     );
     // History overlay anchored to the right
     assert!(
@@ -1103,7 +1102,7 @@ fn esc_chain_emits_log_ai_state_at_each_dismissal() {
         "esc_stop_streaming",
         "esc_dismiss_api_key_input",
         "esc_dismiss_dropdown",
-        "esc_close_mini_window",
+        "esc_return_to_main",
     ] {
         assert!(
             keydown.contains(event_name),
@@ -1231,7 +1230,7 @@ fn esc_chain_layers_emit_state_snapshots() {
         "esc_cancel_rename",
         "esc_stop_streaming",
         "esc_dismiss_api_key_input",
-        "esc_close_mini_window",
+        "esc_return_to_main",
     ];
     for event in expected_events {
         assert!(

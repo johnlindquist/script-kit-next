@@ -308,14 +308,9 @@ fn no_log_crate_in_action_dispatch_files() {
 fn handle_action_calls_log_dispatch_outcome_for_all_paths() {
     let content = read("src/app_actions/handle_action/mod.rs");
 
-    let fn_start = content
-        .find("fn handle_action(")
-        .expect("Expected handle_action function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 3000)];
-
     // Must call log_dispatch_outcome at least twice:
     // once for the early clipboard return, once for the main chain
-    let call_count = count_occurrences(fn_body, "log_dispatch_outcome(");
+    let call_count = count_occurrences(&content, "log_dispatch_outcome(");
     assert!(
         call_count >= 2,
         "handle_action must call log_dispatch_outcome in all dispatch paths \

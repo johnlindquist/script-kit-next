@@ -245,68 +245,44 @@ fn builtin_execution_content() -> String {
 #[test]
 fn ai_open_and_new_conversation_use_deferred_helper() {
     let content = builtin_execution_content();
-
-    let ai_command_section_start = content
-        .find("AiCommandType::OpenAi | AiCommandType::NewConversation")
-        .expect("Expected OpenAi/NewConversation match arm");
-    let block = &content[ai_command_section_start..ai_command_section_start + 800];
-
     assert!(
-        block.contains("open_ai_window_after_already_hidden("),
-        "Expected OpenAi/NewConversation to use deferred AI window helper"
+        content.contains("cmd.is_legacy_harness_alias()"),
+        "Expected legacy AI window aliases to be centralized via is_legacy_harness_alias"
     );
     assert!(
-        block.contains("DeferredAiWindowAction::OpenOnly"),
-        "Expected OpenAi/NewConversation to use OpenOnly deferred action"
+        content.contains("self.open_tab_ai_chat(cx);"),
+        "Expected legacy AI window aliases to route to the shared Tab AI entry point"
     );
 }
 
 #[test]
 fn ai_clear_conversation_uses_deferred_helper() {
     let content = builtin_execution_content();
-
-    let clear_section_start = content
-        .find("AiCommandType::ClearConversation")
-        .expect("Expected ClearConversation match arm");
-    let block = &content[clear_section_start..clear_section_start + 1200];
-
     assert!(
-        block.contains("open_ai_window_after_already_hidden("),
-        "Expected ClearConversation to use deferred AI window helper after clearing"
+        content.contains("cmd.is_legacy_harness_alias()"),
+        "Expected ClearConversation to be classified as a legacy harness alias"
     );
     assert!(
-        block.contains("close_ai_window(cx)"),
-        "Expected ClearConversation to close AI window before deferred reopen"
+        content.contains("format!(\"ai_{cmd:?}_routed_to_harness\")"),
+        "Expected legacy AI aliases to report a routed_to_harness success outcome"
     );
 }
 
 #[test]
 fn ai_clear_conversation_shows_hud_on_success() {
     let content = builtin_execution_content();
-
-    let clear_section_start = content
-        .find("AiCommandType::ClearConversation")
-        .expect("Expected ClearConversation match arm");
-    let block = &content[clear_section_start..clear_section_start + 1200];
-
     assert!(
-        block.contains("Cleared AI conversations"),
-        "Expected ClearConversation success to show HUD with confirmation message"
+        content.contains("format!(\"ai_{cmd:?}_routed_to_harness\")"),
+        "Expected ClearConversation success to be reported through the routed_to_harness outcome"
     );
 }
 
 #[test]
 fn ai_clear_conversation_shows_toast_when_clear_fails() {
     let content = builtin_execution_content();
-
-    let clear_section_start = content
-        .find("AiCommandType::ClearConversation")
-        .expect("Expected ClearConversation match arm");
-    let block = &content[clear_section_start..clear_section_start + 1500];
-
     assert!(
-        block.contains("Failed to clear AI conversations"),
-        "Expected ClearConversation failure to show descriptive toast"
+        !content.contains("Failed to clear AI conversations"),
+        "ClearConversation no longer uses the legacy clear-all-chats failure path"
     );
 }
 

@@ -669,10 +669,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 cx.notify();
                                             });
                                         } else if has_cmd && key_lower == "p" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+P - toggle history in ACP chat");
-                                            entity_clone.update(ctx, |chat, cx| {
-                                                chat.toggle_history_popup(window, cx);
-                                            });
+                                            logging::log("STDIN", "SimulateKey: Cmd+P - open history command from ACP chat");
+                                            view.handle_action("acp_show_history".into(), window, ctx);
                                         } else if has_cmd && key_lower == "n" {
                                             logging::log("STDIN", "SimulateKey: Cmd+N - new conversation in ACP chat");
                                             entity_clone.update(ctx, |chat, cx| {

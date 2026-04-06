@@ -123,6 +123,44 @@ pub(crate) fn load_conversation(session_id: &str) -> Option<SavedConversation> {
     serde_json::from_str(&content).ok()
 }
 
+/// Delete a single conversation by session ID.
+///
+/// Removes the saved conversation file and rewrites `acp-history.jsonl`
+/// without the deleted `session_id`. Returns `Ok(())` even if the
+/// session was not found (idempotent).
+pub(crate) fn delete_conversation(session_id: &str) -> anyhow::Result<()> {
+    use anyhow::Context;
+
+    // Remove the conversation JSON file if it exists.
+    let conversation_path = conversations_dir().join(format!("{session_id}.json"));
+    if conversation_path.exists() {
+        std::fs::remove_file(&conversation_path).with_context(|| {
+            format!("remove saved conversation {}", conversation_path.display())
+        })?;
+    }
+
+    // Rewrite the history index without the deleted session.
+    let hp = history_path();
+    if hp.exists() {
+        let entries: Vec<AcpHistoryEntry> = load_history()
+            .into_iter()
+            .filter(|entry| entry.session_id != session_id)
+            .collect();
+
+        let mut out = String::new();
+        for entry in &entries {
+            if let Ok(json) = serde_json::to_string(entry) {
+                out.push_str(&json);
+                out.push('\n');
+            }
+        }
+        std::fs::write(&hp, out).with_context(|| format!("rewrite {}", hp.display()))?;
+    }
+
+    tracing::info!(event = "acp_history_item_deleted", session_id = %session_id);
+    Ok(())
+}
+
 /// Remove oldest conversation files beyond the keep limit.
 fn cleanup_old_conversations(keep: usize) {
     let dir = conversations_dir();

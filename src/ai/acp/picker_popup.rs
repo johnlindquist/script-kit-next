@@ -7,7 +7,7 @@ use gpui::{
     WindowOptions,
 };
 
-use crate::ai::context_picker_row::render_dense_monoline_picker_row;
+use crate::ai::context_picker_row::{render_dense_monoline_picker_row, CONTEXT_PICKER_ROW_HEIGHT};
 use crate::ai::window::context_picker::empty_state_hints;
 use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerTrigger};
 
@@ -16,7 +16,6 @@ use super::view::AcpChatView;
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
 
-const ACP_PICKER_ROW_HEIGHT: f32 = 20.0;
 const ACP_PICKER_VISIBLE_ROWS: usize = 8;
 const ACP_PICKER_VERTICAL_PADDING: f32 = 4.0;
 const ACP_PICKER_EMPTY_HEIGHT: f32 = 56.0;
@@ -78,7 +77,7 @@ fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
     }
 
     let visible_rows = snapshot.items.len().min(ACP_PICKER_VISIBLE_ROWS) as f32;
-    (visible_rows * ACP_PICKER_ROW_HEIGHT) + (ACP_PICKER_VERTICAL_PADDING * 2.0)
+    (visible_rows * CONTEXT_PICKER_ROW_HEIGHT) + (ACP_PICKER_VERTICAL_PADDING * 2.0)
 }
 
 pub(crate) fn popup_bounds(

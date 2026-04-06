@@ -451,8 +451,10 @@ fn clipboard_attach_to_ai_uses_deferred_ai_window_action() {
         "clipboard_attach_to_ai should use open_ai_window_after_main_hide"
     );
     assert!(
-        block.contains("Attached to AI"),
-        "clipboard_attach_to_ai should show 'Attached to AI' on success"
+        block.contains("DeferredAiWindowAction::SetInput")
+            || block.contains("DeferredAiWindowAction::AddAttachment")
+            || block.contains("DeferredAiWindowAction::SetInputWithImage"),
+        "clipboard_attach_to_ai should route clipboard content through a deferred AI handoff action"
     );
 }
 

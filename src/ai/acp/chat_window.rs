@@ -201,6 +201,14 @@ pub fn open_chat_window_with_thread(
         });
 
         let view = cx.new(|cx| AcpChatView::new(thread, cx));
+        view.update(cx, |view, _cx| {
+            view.set_on_toggle_actions(move |_window, cx| {
+                toggle_detached_actions(cx);
+            });
+            view.set_on_close_requested(move |_window, cx| {
+                close_chat_window(cx);
+            });
+        });
         // Capture weak reference to the view entity for action dispatch.
         if let Ok(mut slot) = view_entity_slot_inner.lock() {
             *slot = Some(view.downgrade());
@@ -297,7 +305,6 @@ const DETACHED_SUPPORTED_ACTIONS: &[&str] = &[
     "acp_copy_last_response",
     "acp_retry_last",
     "acp_export_markdown",
-    "acp_show_history",
     "acp_scroll_to_top",
     "acp_scroll_to_bottom",
     "acp_expand_all",
@@ -576,28 +583,11 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
             }
         }
         "acp_show_history" => {
-            let entries = crate::ai::acp::history::load_history();
-            let mut text = String::from("# Recent AI Conversations\n\n");
-            for (i, entry) in entries.iter().take(20).enumerate() {
-                let date = entry
-                    .timestamp
-                    .split('T')
-                    .next()
-                    .unwrap_or(&entry.timestamp);
-                text.push_str(&format!(
-                    "{}. **{}** \u{2014} {} messages, {}\n",
-                    i + 1,
-                    entry.first_message,
-                    entry.message_count,
-                    date,
-                ));
-            }
-            text.push_str("\n_Conversations saved in ~/.scriptkit/acp-conversations/_");
-            cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
-            tracing::info!(
-                event = "detached_action_show_history",
-                copied_count = entries.len().min(20),
-            );
+            // Removed: clipboard-export behavior. History browsing now uses
+            // the dedicated AcpHistory builtin in the main panel. This action
+            // is filtered out of DETACHED_SUPPORTED_ACTIONS, so this arm only
+            // fires if dispatched programmatically.
+            tracing::info!(event = "detached_action_show_history_noop");
         }
         "acp_clear_history" => {
             let kit = crate::setup::get_kit_path();

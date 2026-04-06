@@ -141,14 +141,7 @@ fn shortcut_remove_builds_command_id_for_all_supported_types() {
     let actions = super::read_all_handle_action_sources();
 
     // The remove_shortcut block should build command_id for script, scriptlet, builtin, app, agent, fallback
-    for prefix in &[
-        "script/",
-        "scriptlet/",
-        "builtin/",
-        "app/",
-        "agent/",
-        "fallback/",
-    ] {
+    for prefix in &["script/", "scriptlet/", "app/", "agent/", "fallback/"] {
         assert!(
             actions.contains(&format!("format!(\"{}\"", prefix))
                 || actions.contains("format!(\"{}\", ")
@@ -156,6 +149,10 @@ fn shortcut_remove_builds_command_id_for_all_supported_types() {
             "Expected remove_shortcut to build command_id with prefix '{prefix}'"
         );
     }
+    assert!(
+        actions.contains("Some(m.entry.id.clone())"),
+        "Expected remove_shortcut to use builtin entry ids directly for builtins"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -304,7 +301,6 @@ fn shortcut_and_alias_use_consistent_command_id_formats() {
     for prefix in &[
         "\"script/{}\"",
         "\"scriptlet/{}\"",
-        "\"builtin/{}\"",
         "\"app/{}\"",
         "\"agent/{}\"",
         "\"fallback/{}\"",
@@ -315,6 +311,11 @@ fn shortcut_and_alias_use_consistent_command_id_formats() {
             "Expected command_id format '{prefix}' to appear in both shortcut and alias handlers (found {count})"
         );
     }
+    let builtin_id_count = count_occurrences(&actions, "m.entry.id.clone()");
+    assert!(
+        builtin_id_count >= 4,
+        "Expected builtins to use entry.id.clone() consistently in shortcut and alias handlers (found {builtin_id_count})"
+    );
 }
 
 #[test]
@@ -437,8 +438,10 @@ fn file_search_open_file_hides_main_window() {
 fn file_search_actions_clear_path_after_completion() {
     let actions = super::read_all_handle_action_sources();
 
-    // file_search_actions_path should be cleared after both success and error
-    let clear_count = count_occurrences(&actions, "self.file_search_actions_path = None");
+    // file_search_actions_path is now consumed through take() and also explicitly
+    // cleared on mutation error paths.
+    let clear_count = count_occurrences(&actions, "self.file_search_actions_path = None")
+        + count_occurrences(&actions, "self.file_search_actions_path.take()");
     assert!(
         clear_count >= 2,
         "Expected file_search_actions_path to be cleared on both success and error paths (found {clear_count})"
@@ -470,8 +473,8 @@ fn copy_filename_shows_error_when_no_filename() {
     let actions = super::read_all_handle_action_sources();
 
     assert!(
-        actions.contains("\"No filename found for selected path\""),
-        "Expected copy_filename to show error toast when path has no filename"
+        actions.contains("\"No file selected\""),
+        "Expected copy_filename to report that no file target was resolved"
     );
 }
 

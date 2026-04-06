@@ -220,6 +220,9 @@ impl ScriptListApp {
             AppView::FavoritesBrowseView { filter, .. } if !filter.is_empty() => {
                 Some("FavoritesBrowse filter")
             }
+            AppView::AcpHistoryView { filter, .. } if !filter.is_empty() => {
+                Some("AcpHistory filter")
+            }
             AppView::DesignGalleryView { filter, .. } if !filter.is_empty() => {
                 Some("DesignGallery filter")
             }
@@ -298,6 +301,12 @@ impl ScriptListApp {
                 Self::clear_builtin_query_state(filter, selected_index);
             }
             AppView::FavoritesBrowseView {
+                filter,
+                selected_index,
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+            }
+            AppView::AcpHistoryView {
                 filter,
                 selected_index,
             } => {

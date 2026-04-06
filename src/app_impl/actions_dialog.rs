@@ -1,6 +1,83 @@
 use super::*;
 
+/// Whether a view supports the shared ActionsDialog, and if so, which host
+/// identity to use for focus-restore and key routing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ActionsSupport {
+    /// View participates in the shared ActionsDialog with the given host.
+    SharedDialog(ActionsDialogHost),
+    /// View does not support the shared ActionsDialog.
+    None,
+}
+
 impl ScriptListApp {
+    /// Canonical resolver: map the current view to its shared-actions support.
+    ///
+    /// Every call site that needs to know "does this view use the shared
+    /// ActionsDialog, and with which host?" should call this instead of
+    /// maintaining its own `match` on `AppView`.
+    pub(crate) fn actions_support_for_view(&self) -> ActionsSupport {
+        match &self.current_view {
+            AppView::ScriptList => ActionsSupport::SharedDialog(ActionsDialogHost::MainList),
+            AppView::ClipboardHistoryView { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::ClipboardHistory)
+            }
+            AppView::EmojiPickerView { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::EmojiPicker)
+            }
+            AppView::FileSearchView { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::FileSearch)
+            }
+            AppView::ChatPrompt { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::ChatPrompt)
+            }
+            AppView::ArgPrompt { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::ArgPrompt)
+            }
+            AppView::DivPrompt { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::DivPrompt)
+            }
+            AppView::EditorPrompt { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::EditorPrompt)
+            }
+            AppView::TermPrompt { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::TermPrompt)
+            }
+            AppView::FormPrompt { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::FormPrompt)
+            }
+            AppView::WebcamView { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::WebcamPrompt)
+            }
+            AppView::AcpChatView { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::AcpChat)
+            }
+            AppView::AcpHistoryView { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::AcpHistory)
+            }
+            // These surfaces do not currently wire the shared actions dialog.
+            // Verify before enabling — some intentionally omit ⌘K (e.g. ThemeChooser).
+            // AppLauncherView does not toggle ⌘K actions (no Cmd+K interceptor arm),
+            // so it must not claim SharedDialog support.
+            AppView::AppLauncherView { .. }
+            | AppView::WindowSwitcherView { .. }
+            | AppView::CurrentAppCommandsView { .. }
+            | AppView::ProcessManagerView { .. }
+            | AppView::ThemeChooserView { .. }
+            | AppView::SearchAiPresetsView { .. }
+            | AppView::CreateAiPresetView { .. } => ActionsSupport::None,
+            _ => ActionsSupport::None,
+        }
+    }
+
+    /// Convenience: does the current view participate in the shared actions dialog?
+    pub(crate) fn current_view_supports_shared_actions(&self) -> bool {
+        matches!(
+            self.actions_support_for_view(),
+            ActionsSupport::SharedDialog(_)
+        )
+    }
+
     pub(crate) fn route_key_to_actions_dialog(
         &mut self,
         key: &str,
@@ -228,7 +305,8 @@ impl ScriptListApp {
             | ActionsDialogHost::FileSearch
             | ActionsDialogHost::ClipboardHistory
             | ActionsDialogHost::EmojiPicker
-            | ActionsDialogHost::AppLauncher => FocusRequest::main_filter(),
+            | ActionsDialogHost::AppLauncher
+            | ActionsDialogHost::AcpHistory => FocusRequest::main_filter(),
         };
 
         self.focus_coordinator.request(request);

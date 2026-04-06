@@ -3985,6 +3985,225 @@ impl ScriptListApp {
                 }
                 Self::builtin_success(dctx, "dictation_to_ai_toggle")
             }
+            builtins::BuiltInFeature::DictationToFrontmostApp => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Dictation to Frontmost App"
+                );
+
+                if !crate::dictation::is_dictation_recording() {
+                    if !crate::dictation::is_parakeet_model_available() {
+                        if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
+                            .load(std::sync::atomic::Ordering::Acquire)
+                        {
+                            self.open_dictation_model_prompt(cx);
+                            return Self::builtin_success(
+                                dctx,
+                                "dictation_model_download_in_progress",
+                            );
+                        }
+                        self.open_dictation_model_prompt(cx);
+                        return Self::builtin_success(
+                            dctx,
+                            "dictation_model_prompt_opened",
+                        );
+                    }
+
+                    let target = crate::dictation::DictationTarget::ExternalApp;
+                    if let Err(error) =
+                        self.ensure_dictation_delivery_target_available_for(target)
+                    {
+                        let error_text = error.to_string();
+                        tracing::error!(
+                            category = "DICTATION",
+                            error = %error_text,
+                            ?target,
+                            "Dictation-to-app start preflight failed"
+                        );
+                        self.show_error_toast(
+                            format!("Dictation unavailable: {error_text}"),
+                            cx,
+                        );
+                        return Self::builtin_success(dctx, "dictation_preflight_failed");
+                    }
+                }
+
+                let dictation_target = if !crate::dictation::is_dictation_recording() {
+                    crate::dictation::DictationTarget::ExternalApp
+                } else {
+                    crate::dictation::get_dictation_target()
+                        .unwrap_or(crate::dictation::DictationTarget::ExternalApp)
+                };
+
+                match crate::dictation::toggle_dictation(dictation_target) {
+                    Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        tracing::info!(
+                            category = "DICTATION",
+                            ?dictation_target,
+                            target_label = dictation_target.overlay_label(),
+                            "Starting forced-route dictation"
+                        );
+                        platform::conceal_main_window();
+                        self.start_dictation_overlay_session(cx);
+
+                        let orch_target =
+                            crate::window_orchestrator::executor::to_orchestrator_target(
+                                &dictation_target,
+                            );
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::StartDictation {
+                                target: orch_target,
+                            },
+                            cx,
+                        );
+                    }
+                    Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
+                        self.begin_dictation_transcription(capture, dictation_target, cx);
+                    }
+                    Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
+                        let _ = crate::dictation::close_dictation_overlay(cx);
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::AbortDictation,
+                            cx,
+                        );
+                    }
+                    Err(error) => {
+                        tracing::error!(
+                            category = "DICTATION",
+                            error = %error,
+                            "Failed to toggle dictation to frontmost app"
+                        );
+                        let _ = crate::dictation::update_dictation_overlay(
+                            crate::dictation::DictationOverlayState {
+                                phase: crate::dictation::DictationSessionPhase::Failed(
+                                    error.to_string(),
+                                ),
+                                ..Default::default()
+                            },
+                            cx,
+                        );
+                        self.schedule_dictation_overlay_close(
+                            cx,
+                            std::time::Duration::from_millis(800),
+                        );
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::AbortDictation,
+                            cx,
+                        );
+                    }
+                }
+                Self::builtin_success(dctx, "dictation_to_frontmost_app_toggle")
+            }
+            builtins::BuiltInFeature::DictationToNotes => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Dictation to Notes"
+                );
+
+                if !crate::dictation::is_dictation_recording() {
+                    if !crate::dictation::is_parakeet_model_available() {
+                        if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
+                            .load(std::sync::atomic::Ordering::Acquire)
+                        {
+                            self.open_dictation_model_prompt(cx);
+                            return Self::builtin_success(
+                                dctx,
+                                "dictation_model_download_in_progress",
+                            );
+                        }
+                        self.open_dictation_model_prompt(cx);
+                        return Self::builtin_success(
+                            dctx,
+                            "dictation_model_prompt_opened",
+                        );
+                    }
+
+                    let target = crate::dictation::DictationTarget::NotesEditor;
+                    if let Err(error) =
+                        self.ensure_dictation_delivery_target_available_for(target)
+                    {
+                        let error_text = error.to_string();
+                        tracing::error!(
+                            category = "DICTATION",
+                            error = %error_text,
+                            ?target,
+                            "Dictation-to-notes start preflight failed"
+                        );
+                        self.show_error_toast(
+                            format!("Dictation unavailable: {error_text}"),
+                            cx,
+                        );
+                        return Self::builtin_success(dctx, "dictation_preflight_failed");
+                    }
+                }
+
+                let dictation_target = if !crate::dictation::is_dictation_recording() {
+                    crate::dictation::DictationTarget::NotesEditor
+                } else {
+                    crate::dictation::get_dictation_target()
+                        .unwrap_or(crate::dictation::DictationTarget::NotesEditor)
+                };
+
+                match crate::dictation::toggle_dictation(dictation_target) {
+                    Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        tracing::info!(
+                            category = "DICTATION",
+                            ?dictation_target,
+                            target_label = dictation_target.overlay_label(),
+                            "Starting forced-route dictation"
+                        );
+                        self.start_dictation_overlay_session(cx);
+
+                        let orch_target =
+                            crate::window_orchestrator::executor::to_orchestrator_target(
+                                &dictation_target,
+                            );
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::StartDictation {
+                                target: orch_target,
+                            },
+                            cx,
+                        );
+                    }
+                    Ok(crate::dictation::DictationToggleOutcome::Stopped(Some(capture))) => {
+                        self.begin_dictation_transcription(capture, dictation_target, cx);
+                    }
+                    Ok(crate::dictation::DictationToggleOutcome::Stopped(None)) => {
+                        let _ = crate::dictation::close_dictation_overlay(cx);
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::AbortDictation,
+                            cx,
+                        );
+                    }
+                    Err(error) => {
+                        tracing::error!(
+                            category = "DICTATION",
+                            error = %error,
+                            "Failed to toggle dictation to notes"
+                        );
+                        let _ = crate::dictation::update_dictation_overlay(
+                            crate::dictation::DictationOverlayState {
+                                phase: crate::dictation::DictationSessionPhase::Failed(
+                                    error.to_string(),
+                                ),
+                                ..Default::default()
+                            },
+                            cx,
+                        );
+                        self.schedule_dictation_overlay_close(
+                            cx,
+                            std::time::Duration::from_millis(800),
+                        );
+                        self.dispatch_window_event(
+                            crate::window_orchestrator::WindowEvent::AbortDictation,
+                            cx,
+                        );
+                    }
+                }
+                Self::builtin_success(dctx, "dictation_to_notes_toggle")
+            }
             builtins::BuiltInFeature::FileSearch => {
                 tracing::info!(
                     category = "BUILTIN",
@@ -4011,6 +4230,27 @@ impl ScriptListApp {
                 self.pending_focus = Some(FocusTarget::AppRoot);
                 cx.notify();
                 Self::builtin_success(dctx, "open_settings")
+            }
+            // =========================================================================
+            // ACP Conversation History
+            // =========================================================================
+            builtins::BuiltInFeature::AcpHistory => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening ACP History"
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::AcpHistoryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search conversation history...",
+                    cx,
+                );
+
+                Self::builtin_success(dctx, "open_acp_history")
             }
         }
     }
