@@ -1273,19 +1273,18 @@ fn tab_ai_context_schema_version_is_stable() {
 // Stale-selection clamping in file search
 // ---------------------------------------------------------------------------
 
-const FILE_SEARCH_RENDER_SOURCE: &str = include_str!("../src/app_execute/utility_views.rs");
+const FILE_SEARCH_RENDER_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
 const UTILITY_VIEWS_SOURCE: &str = include_str!("../src/app_execute/utility_views.rs");
 
 #[test]
 fn file_search_render_clamps_selected_index() {
     assert!(
-        FILE_SEARCH_RENDER_SOURCE.contains("fn selected_file_search_result("),
-        "utility_views.rs must expose selected_file_search_result"
+        FILE_SEARCH_RENDER_SOURCE.contains("clamp_file_search_display_index"),
+        "render_file_search must clamp the selected index before resolving the selected file"
     );
     assert!(
-        FILE_SEARCH_RENDER_SOURCE
-            .contains("let display_index = self.clamp_file_search_display_index(selected_index)?;"),
-        "selected_file_search_result must clamp selected_index before resolving the file result"
+        FILE_SEARCH_RENDER_SOURCE.contains("clamped_selected_index"),
+        "render_file_search must use a clamped selected-index variable"
     );
 }
 
