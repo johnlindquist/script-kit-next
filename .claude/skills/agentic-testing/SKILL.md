@@ -529,7 +529,7 @@ See [references/recipes.md](references/recipes.md) for named verification patter
 
 ## Key Gotchas
 
-- `simulateKey` does NOT go through GPUI's `intercept_keystrokes()`. Use `triggerBuiltin` for Tab AI, not `simulateKey` Tab.
+- `simulateKey` does NOT go through GPUI's `intercept_keystrokes()`. Use `triggerBuiltin` for ACP Chat entry, not `simulateKey` Tab.
 - `AcpChatView` accepts single-char `simulateKey` for typing, `enter` for submit, `w`+cmd for close.
 - The app window auto-hides when focus is lost. If captures fail with "Window not found", the window was dismissed.
 - `captureWindow` filters out windows under 100x100 (tray icons).

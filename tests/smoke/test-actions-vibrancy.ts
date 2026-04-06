@@ -11,7 +11,7 @@ console.error('[TEST] Starting actions window vibrancy test');
 const result = await arg({
   placeholder: "Select an item to test actions",
   choices: [
-    { name: "AI Chat", description: "Test vibrancy with actions", value: "ai" },
+    { name: "ACP Chat", description: "Test vibrancy with actions", value: "acp-chat" },
     { name: "System Settings", description: "Open settings", value: "settings" },
     { name: "Test Script", description: "A test", value: "test" },
   ],

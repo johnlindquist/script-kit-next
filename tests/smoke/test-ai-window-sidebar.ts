@@ -1,4 +1,4 @@
-// Test AI window sidebar styling and scrolling
+// Test ACP Chat sidebar styling and scrolling
 // Verifies: no white box in chat list, proper search input styling, scrolling works
 
 import '../../scripts/kit-sdk';
@@ -6,15 +6,15 @@ import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
 async function main() {
-  console.error('[TEST] Starting AI window sidebar test');
+  console.error('[TEST] Starting ACP Chat sidebar test');
 
-  // Open the AI window
+  // Open ACP Chat via the legacy helper
   await openAi();
   
   // Wait for window to render
   await new Promise(r => setTimeout(r, 800));
   
-  console.error('[TEST] AI window opened, capturing screenshot');
+  console.error('[TEST] ACP Chat opened, capturing screenshot');
   
   // Capture screenshot to verify styling
   try {

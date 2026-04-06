@@ -27,7 +27,7 @@ console.error('[TEST] Displaying main menu for actions test');
 
 // For now, just capture the main window state
 const choices = [
-  { name: 'AI Chat', value: 'ai-chat', description: 'Chat with AI assistants (Claude, GPT)' },
+  { name: 'ACP Chat', value: 'acp-chat', description: 'Open the primary ACP Chat surface' },
   { name: 'Bluetooth Settings', value: 'bluetooth', description: 'Open Bluetooth settings' },
   { name: 'Check Permissions', value: 'permissions', description: 'Check all required macOS permissions' },
   { name: 'Clear Suggested', value: 'clear', description: 'Clear all suggested/recently used items' },

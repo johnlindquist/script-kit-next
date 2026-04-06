@@ -172,7 +172,7 @@ ls -la "$SCREENSHOT_DIR"/[prefix]-*.png 2>/dev/null || echo "  (none)"
 ## Gotchas
 
 - **App starts hidden.** Always send `{"type":"show"}` first.
-- **`setFilter` + Tab triggers inline AI chat.** The filter must be non-empty for Tab to transition from ScriptList to ChatPrompt.
+- **`setFilter` + Tab triggers ACP Chat.** The filter must be non-empty for Tab to transition from ScriptList into the ACP Chat setup/chat surface.
 - **SimulateKey does NOT go through GPUI's event system.** It dispatches directly via `handle_setup_key` / view update logic in `main.rs`. If a new key isn't handled, check the `SimulateKey` dispatch in `main.rs`.
 - **captureWindow matches by window title substring.** An empty `""` matches any window. Windows under 100x100 are automatically filtered.
 - **Log output goes to file, not terminal.** Check `/tmp/sk-test-stdout.log` if the app fails silently.

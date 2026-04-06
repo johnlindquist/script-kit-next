@@ -1,5 +1,5 @@
-// Name: AI Window Visual Test Suite
-// Description: Captures comprehensive screenshots of the AI window for visual regression testing
+// Name: ACP Chat Visual Test Suite
+// Description: Captures comprehensive screenshots of ACP Chat for visual regression testing
 
 import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
@@ -30,14 +30,14 @@ async function captureAndSave(name: string, description: string): Promise<void> 
 }
 
 async function runVisualTests(): Promise<void> {
-  console.error('[AI-SUITE] Starting AI Window Visual Test Suite');
+  console.error('[AI-SUITE] Starting ACP Chat Visual Test Suite');
   console.error('[AI-SUITE] Screenshots will be saved to:', SCREENSHOT_DIR);
   
-  // The AI window should already be open with mock data via openAiWithMockData command
+  // ACP Chat should already be open with mock data via the legacy openAiWithMockData command
   // We'll capture various states
   
   // 1. Initial state with chat list and messages
-  await captureAndSave('01-initial-state', 'AI window with mock data loaded');
+  await captureAndSave('01-initial-state', 'ACP Chat with mock data loaded');
   
   // 2. After a short delay to ensure all rendering is complete
   await new Promise(resolve => setTimeout(resolve, 500));

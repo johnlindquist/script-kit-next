@@ -20,7 +20,7 @@ Overview of the Script Kit GPUI codebase structure.
 - `components/` — reusable UI components: text_input, alias_input, shortcut_recorder (proper module)
 - `protocol/` — stdin/stdout JSON protocol, message types (proper module)
 - `theme/` — theme system, colors, opacity constants, HexColorExt (proper module)
-- `ai/` — AI chat window, providers, streaming (proper module)
+- `ai/` — ACP Chat runtime, providers, streaming (proper module)
 - `notes/` — Notes window module (proper module)
 - `platform/` — macOS ObjC interop, panel config, cursor, visibility (proper module with include!())
 - `scripts/` — script loading, execution (proper module)
@@ -80,6 +80,6 @@ Font sizing:
 
 - [System Diagrams](references/diagrams.md) - Architecture, state machine, execution flow diagrams
 - [Notes Window](references/notes-window.md) - Notes module details
-- [AI Window](references/ai-window.md) - AI chat module details
+- [ACP Chat](references/ai-window.md) - ACP chat module details
 - [Gotchas](references/gotchas.md) - Common issues and fixes
 - [Vibrancy](references/vibrancy.md) - macOS vibrancy/blur patterns

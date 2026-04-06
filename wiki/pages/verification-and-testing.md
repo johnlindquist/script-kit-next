@@ -23,7 +23,7 @@ The repository's required verification gate and the existing contract tests arou
 - Every code change must pass cargo check, cargo clippy --lib -- -D warnings, and cargo nextest run --lib before success is reported.
 - Logic changes require log inspection with SCRIPT_KIT_AI_LOG=1.
 - UI changes require a screenshot and reading the PNG to verify visual behavior.
-- The AI/context subsystems already have integration tests that encode the expected wire contracts.
+- The ACP Chat/context subsystems already have integration tests that encode the expected wire contracts.
 
 ## Key Files
 - `CLAUDE.md` — Repository operating contract. Scope rules, verification gate, architecture quick ref, AI context, and design principles.

@@ -15,15 +15,15 @@ generatedBy: "scripts/wiki/ingest.ts"
 generatedAt: "2026-04-04T19:40:47.586Z"
 ---
 
-# Tab AI Harness
+# ACP Chat
 
-The current QuickTerminal-based Tab AI flow, context assembly, and harness submission model.
+The primary and only AI chat surface, the ACP chat runtime, and the compatibility-named context plumbing that still backs it.
 
 ## Key Facts
-- The primary Tab AI surface is QuickTerminalView rendered via TermPrompt, not the legacy inline chat path.
-- Plain Tab stages context using PasteOnly, while Shift+Tab from ScriptList can submit the current filter text as user intent.
-- Each Tab press writes ~/.scriptkit/context/latest.md and spawns a fresh claude process with context and intent.
-- TabAiContextBlob, TabAiTargetAudit, and related tests define the current schema contract for the harness path.
+- ACP Chat is the primary and only AI chat surface exposed by Script Kit GPUI.
+- `Tab` and `Shift+Tab` route into `AppView::AcpChatView`, while detached ACP windows reuse the same thread and automation contracts.
+- Compatibility-named helpers and types such as `tab_ai_mode.rs`, `CaptureContextOptions::tab_ai_submit()`, and `TabAiContextBlob` still back ACP Chat context capture.
+- The detached ACP window and ACP view modules define the live chat surface, while the compatibility-named context tests continue to lock the schema contract.
 
 ## Key Files
 - `README.md` — Project overview. High-level product positioning, setup, prompt APIs, configuration, and built-in capabilities.

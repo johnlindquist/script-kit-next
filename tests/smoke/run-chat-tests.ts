@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Test Runner: Runs all chat smoke tests
+// Test Runner: Runs ACP Chat and chat-API smoke tests
 // Usage: bun run tests/smoke/run-chat-tests.ts
 
 import { spawn } from 'child_process';
@@ -59,7 +59,7 @@ const testCases: TestCase[] = [
   { file: 'test-chat-edge-cases.ts', name: 'complexMarkdown', args: ['5'] },
 
   // Original test
-  { file: 'test-chat-prompt.ts', name: 'originalChatPrompt', args: [] },
+  { file: 'test-chat-prompt.ts', name: 'legacyChatPromptSdk', args: [] },
 ];
 
 interface TestResult {
@@ -123,7 +123,7 @@ async function runTest(test: TestCase): Promise<TestResult> {
 
 async function main() {
   console.log('╔════════════════════════════════════════════════════════════╗');
-  console.log('║           Chat Feature Smoke Test Suite                     ║');
+  console.log('║        ACP Chat + Chat API Smoke Test Suite                ║');
   console.log('╚════════════════════════════════════════════════════════════╝\n');
 
   const results: TestResult[] = [];

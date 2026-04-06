@@ -5,7 +5,7 @@ import '../../scripts/kit-sdk';
 await arg({
   placeholder: "Press Cmd+K to test actions dialog...",
   choices: [
-    { name: "AI Chat", description: "Chat with AI assistants", value: "ai-chat" },
+    { name: "ACP Chat", description: "Open the primary ACP Chat surface", value: "acp-chat" },
     { name: "Script Runner", description: "Run your scripts", value: "runner" },
     { name: "Settings", description: "Configure Script Kit", value: "settings" },
   ],

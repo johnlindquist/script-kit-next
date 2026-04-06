@@ -1,5 +1,5 @@
-// Name: AI Titlebar Visual Debug
-// Description: Captures AI window titlebar screenshots for open/collapsed states
+// Name: ACP Chat Titlebar Visual Debug
+// Description: Captures ACP Chat titlebar screenshots for open/collapsed states
 
 import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';
@@ -17,7 +17,7 @@ if (process.stdin && typeof (process.stdin as any).ref === 'function') {
 }
 
 async function capture(): Promise<void> {
-  console.error(`[TEST] Capturing AI titlebar (${state})...`);
+  console.error(`[TEST] Capturing ACP Chat titlebar (${state})...`);
   await new Promise((resolve) => setTimeout(resolve, 800));
 
   const screenshot = await captureScreenshot();

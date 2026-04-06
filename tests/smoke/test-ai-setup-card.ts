@@ -1,5 +1,5 @@
-// Test: AI Setup Card when no API keys are configured
-// This test verifies the setup UX when opening AI chat without any API keys
+// Test: ACP Chat setup card when no API keys are configured
+// This test verifies the setup UX when opening ACP Chat without any API keys
 
 import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';

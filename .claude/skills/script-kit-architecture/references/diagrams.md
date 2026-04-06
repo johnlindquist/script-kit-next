@@ -13,7 +13,7 @@ flowchart TD
         UV2["Clipboard History"]
         UV3["App Launcher"]
         UV4["Notes"]
-        UV5["AI Chat"]
+        UV5["ACP Chat"]
         UV6["Text Expansion"]
         UV7["File Search"]
         UV8["Window Control"]

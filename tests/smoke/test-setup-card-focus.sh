@@ -1,5 +1,5 @@
 #!/bin/bash
-# Visual test: AI Setup Card focus indicators and Tab navigation
+# Visual test: ACP Chat setup card focus indicators and Tab navigation
 # Tests that Tab cycles between buttons with visible focus rings
 #
 # Usage: ./tests/smoke/test-setup-card-focus.sh
@@ -17,7 +17,7 @@ rm -f "$SCREENSHOT_DIR"/setup-focus-*.png
 echo "[TEST] Building app..."
 cargo build 2>&1 | tail -3
 
-echo "[TEST] Starting AI setup card focus test..."
+echo "[TEST] Starting ACP Chat setup card focus test..."
 
 # Create a pipe for sending commands
 PIPE=$(mktemp -u)
@@ -44,12 +44,12 @@ echo "[TEST] Showing window..."
 echo '{"type":"show"}' >&3
 sleep 1
 
-# Step 1: Set filter text (needed for Tab to trigger inline AI chat)
+# Step 1: Set filter text (needed for Tab to trigger ACP Chat)
 echo "[TEST] Step 1: Setting filter text..."
 echo '{"type":"setFilter","text":"test query"}' >&3
 sleep 1
 
-# Step 2: Tab to open inline AI chat -> shows setup card (no providers configured)
+# Step 2: Tab to open ACP Chat -> shows setup card (no providers configured)
 echo "[TEST] Step 2: Tab to open AI setup card..."
 echo '{"type":"simulateKey","key":"tab","modifiers":[]}' >&3
 sleep 1.5

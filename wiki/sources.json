@@ -81,14 +81,26 @@
     {
       "id": "tab-context",
       "path": "src/ai/tab_context.rs",
-      "title": "Tab AI context types",
-      "description": "Tab AI context blob, target audit, UI snapshot, and clipboard context types."
+      "title": "ACP chat context types",
+      "description": "Compatibility-named `tab_ai_*` context blob, target audit, UI snapshot, and clipboard context types that back ACP Chat."
     },
     {
       "id": "harness",
       "path": "src/ai/harness/mod.rs",
-      "title": "Tab AI harness",
-      "description": "Harness configuration and context formatting for the external CLI flow."
+      "title": "ACP chat compatibility harness",
+      "description": "Compatibility-layer harness configuration and context formatting still used by ACP Chat plumbing."
+    },
+    {
+      "id": "acp-view",
+      "path": "src/ai/acp/view.rs",
+      "title": "ACP chat view",
+      "description": "Primary ACP Chat view, composer, picker integration, and threaded conversation rendering."
+    },
+    {
+      "id": "acp-chat-window",
+      "path": "src/ai/acp/chat_window.rs",
+      "title": "Detached ACP chat window",
+      "description": "Detached ACP Chat window lifecycle, focus, and automation registration."
     },
     {
       "id": "context-snapshot-tests",
@@ -105,8 +117,8 @@
     {
       "id": "tab-ai-context-tests",
       "path": "tests/tab_ai_context.rs",
-      "title": "Tab AI context tests",
-      "description": "Integration tests for the Tab AI context blob schema and serialization."
+      "title": "ACP chat context tests",
+      "description": "Integration tests for the compatibility-named ACP Chat context blob schema and serialization."
     }
   ],
   "pages": [
@@ -118,7 +130,7 @@
       "facts": [
         "Script Kit GPUI combines a Rust GPUI shell with a Bun-powered TypeScript script runner and SDK.",
         "The rewrite is intentionally not a drop-in replacement for legacy Script Kit; the SDK is prompt-centric and expects users to bring their own libraries.",
-        "The product is optimized for keyboard-first launcher workflows and includes built-ins such as clipboard history, app launcher, window switcher, notes, and Tab AI.",
+        "The product is optimized for keyboard-first launcher workflows and includes built-ins such as clipboard history, app launcher, window switcher, notes, and ACP Chat.",
         "CLAUDE.md is the canonical repository operating contract for contributors and agents."
       ],
       "related": ["architecture", "design-principles", "verification-and-testing", "tab-ai-harness"]
@@ -178,14 +190,14 @@
     },
     {
       "slug": "tab-ai-harness",
-      "title": "Tab AI Harness",
-      "summary": "The current QuickTerminal-based Tab AI flow, context assembly, and harness submission model.",
-      "sourceIds": ["readme", "harness", "tab-context", "tab-ai-context-tests"],
+      "title": "ACP Chat",
+      "summary": "The primary and only AI chat surface, its ACP view/window runtime, and the compatibility-named context plumbing that still backs it.",
+      "sourceIds": ["readme", "acp-view", "acp-chat-window", "harness", "tab-context", "tab-ai-context-tests"],
       "facts": [
-        "The primary Tab AI surface is QuickTerminalView rendered via TermPrompt, not the legacy inline chat path.",
-        "Plain Tab stages context using PasteOnly, while Shift+Tab from ScriptList can submit the current filter text as user intent.",
-        "Each Tab press writes ~/.scriptkit/context/latest.md and spawns a fresh claude process with context and intent.",
-        "TabAiContextBlob, TabAiTargetAudit, and related tests define the current schema contract for the harness path."
+        "ACP Chat is the primary and only AI chat surface exposed by Script Kit GPUI.",
+        "Tab and Shift+Tab route into AppView::AcpChatView, while detached ACP windows reuse the same thread and automation contracts.",
+        "Compatibility-named helpers and types such as tab_ai_mode.rs, CaptureContextOptions::tab_ai_submit(), and TabAiContextBlob still back ACP Chat context capture.",
+        "The detached ACP window and ACP view modules define the live chat surface, while compatibility-named context tests continue to lock the schema contract."
       ],
       "related": ["project-overview", "ai-context-and-mcp", "verification-and-testing"]
     },
@@ -211,7 +223,7 @@
         "Every code change must pass cargo check, cargo clippy --lib -- -D warnings, and cargo nextest run --lib before success is reported.",
         "Logic changes require log inspection with SCRIPT_KIT_AI_LOG=1.",
         "UI changes require a screenshot and reading the PNG to verify visual behavior.",
-        "The AI/context subsystems already have integration tests that encode the expected wire contracts."
+        "The ACP Chat/context subsystems already have integration tests that encode the expected wire contracts."
       ],
       "related": ["project-overview", "ai-context-and-mcp", "tab-ai-harness"]
     }

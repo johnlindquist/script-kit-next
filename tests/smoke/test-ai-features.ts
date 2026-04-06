@@ -1,16 +1,16 @@
-// Name: Test AI Window Features
-// Description: Test that AI window features are accessible
+// Name: Test ACP Chat Features
+// Description: Test that ACP Chat features are accessible
 
 import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
 async function main() {
-  console.error('[TEST] ai-features - Testing AI window features implementation');
+  console.error('[TEST] ai-features - Testing ACP Chat features implementation');
   
   // This test verifies that the main app window works correctly
-  // The AI window is a separate window that can be tested manually with:
-  // - Cmd+Shift+Space to open AI window
+  // Detached ACP Chat is a separate window that can be tested manually with:
+  // - Cmd+Shift+Space to open ACP Chat
   // - Cmd+K to open command bar
   // - Cmd+M to open model picker
   // - Cmd+Shift+N to open presets dropdown
@@ -33,7 +33,7 @@ async function main() {
   }
   
   // List the AI features that were implemented:
-  console.error('[INFO] AI Window Features Implemented:');
+  console.error('[INFO] ACP Chat Features Implemented:');
   console.error('[INFO] 1. API Key Setup Flow - Vercel AI Gateway button (Cmd+Shift+Space -> see setup card)');
   console.error('[INFO] 2. Command Bar - Cmd+K to access actions (copy, new chat, delete, etc.)');
   console.error('[INFO] 3. Model Picker - Cmd+M or click model button to select AI model');

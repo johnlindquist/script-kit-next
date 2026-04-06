@@ -1,6 +1,6 @@
 // Test: chat() onInit callback pattern
 // Verifies: The pattern used by AI text tools where onInit starts an async stream
-// This is CRITICAL for the inline chat AI workflow
+// This still matters for ACP Chat-adjacent SDK flows and compatibility surfaces
 
 import '../../scripts/kit-sdk';
 import { mkdirSync, writeFileSync } from 'fs';
