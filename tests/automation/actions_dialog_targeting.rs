@@ -5,7 +5,8 @@
 //! that the protocol correctly handles the attached-popup pattern.
 
 use script_kit_gpui::protocol::{
-    AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget, Message, SimulatedGpuiEvent,
+    AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget, BatchCommand, Message,
+    SimulatedGpuiEvent,
 };
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -492,7 +493,8 @@ fn prompt_popup_batch_target_fails_closed() {
     // This proves it does NOT silently fall back to raw key injection.
     let source = include_str!("../../src/prompt_handler/mod.rs");
     assert!(
-        source.contains("supports Main, AcpDetached, Notes, and ActionsDialog targets"),
-        "unsupported kind error message must list all supported targets including ActionsDialog"
+        source
+            .contains("supports Main, AcpDetached, Notes, ActionsDialog, and PromptPopup targets"),
+        "unsupported kind error message must list all supported targets including PromptPopup"
     );
 }

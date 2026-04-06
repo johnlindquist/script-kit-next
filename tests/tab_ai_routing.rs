@@ -2901,8 +2901,8 @@ fn close_tab_ai_harness_terminal_clears_session_and_schedules_fresh_prewarm() {
         "close must clear apply-back routing state",
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("let session = self.tab_ai_harness.take();"),
-        "close must clear app state by taking tab_ai_harness",
+        TAB_AI_MODE_SOURCE.contains("self.terminate_tab_ai_harness_session(cx);"),
+        "close must clear app state through terminate_tab_ai_harness_session()",
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("term.terminate_session().map_err(|e| e.to_string())"),
