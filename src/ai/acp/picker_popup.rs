@@ -286,7 +286,7 @@ impl AcpMentionPopupWindow {
         let mut popup = super::popup_window::dense_picker_popup_surface(SharedString::from(
             "acp-mention-popup",
         ))
-        .w(px(self.snapshot.width))
+        .size_full()
         .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING / 2.0))
         .flex()
         .flex_col()
@@ -381,7 +381,7 @@ impl AcpMentionPopupWindow {
         super::popup_window::dense_picker_popup_surface(SharedString::from(
             "acp-mention-popup-empty-state",
         ))
-        .w(px(self.snapshot.width))
+        .size_full()
         .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING))
         .px(px(6.0))
         .flex()
@@ -411,6 +411,7 @@ impl Focusable for AcpMentionPopupWindow {
 impl Render for AcpMentionPopupWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
+            .size_full()
             .track_focus(&self.focus_handle)
             .child(if self.snapshot.items.is_empty() {
                 self.render_empty_state(cx)
