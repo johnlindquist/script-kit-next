@@ -35,7 +35,13 @@ The repo wiki in `wiki/` is part of the agent workflow for this project. Future 
 Every code change must pass before reporting success:
 
 ```bash
-cargo check && cargo clippy --lib -- -D warnings && cargo nextest run --lib
+make verify
+```
+
+If the change affects the distributable macOS app, run the ship path too:
+
+```bash
+make ship-check
 ```
 
 After the gate passes, verify the change actually works:
@@ -50,12 +56,13 @@ After the gate passes, verify the change actually works:
 | Check | `cargo check` |
 | Format check | `cargo fmt --check` |
 | Lint | `cargo clippy --lib -- -D warnings` |
-| Test | `cargo nextest run --lib` |
-| Test (CI) | `cargo nextest run --profile ci` |
+| Test | `cargo nextest run --no-fail-fast` |
+| Verify | `make verify` |
+| Ship check | `make ship-check` |
 | Test (system) | `cargo test --features system-tests` |
 | Test (slow) | `cargo test --features slow-tests` |
 | Run | `echo '{"type":"show"}' \| SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1` |
-| Bundle | `cargo bundle --release` |
+| Bundle | `cargo bundle --release --bin script-kit-gpui` |
 
 ## Coding Conventions
 

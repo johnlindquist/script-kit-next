@@ -193,20 +193,7 @@ jobs:
         run: cargo bundle --release --bin script-kit-gpui
 
       - name: Verify bundled macOS app contents
-        run: |
-          set -euo pipefail
-          APP_PATH="target/release/bundle/osx/Script Kit.app"
-          MACOS_DIR="$APP_PATH/Contents/MacOS"
-          test -d "$APP_PATH"
-          test -x "$MACOS_DIR/script-kit-gpui"
-          echo "bundle_verify macos_dir_listing"
-          find "$MACOS_DIR" -maxdepth 1 -type f -print | sort
-          UNEXPECTED="$(find "$MACOS_DIR" -maxdepth 1 -type f ! -name 'script-kit-gpui' -print || true)"
-          if [ -n "$UNEXPECTED" ]; then
-            echo "::error::Unexpected files in app bundle: $UNEXPECTED"
-            exit 1
-          fi
-          echo "bundle_verify ok"
+        run: bash scripts/verify-macos-bundle.sh
 
       - name: Ad-hoc sign for artifact
         run: codesign --force --deep --sign - "target/release/bundle/osx/Script Kit.app"

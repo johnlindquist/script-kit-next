@@ -3,6 +3,7 @@ name = "script-kit-gpui"
 version = "0.1.0"
 edition = "2021"
 default-run = "script-kit-gpui"
+autobins = false
 
 [lib]
 name = "script_kit_gpui"
@@ -29,6 +30,10 @@ name = "audit_reports"
 path = "src/bin/audit_reports.rs"
 test = false
 required-features = ["storybook"]
+
+[[bin]]
+name = "vibrancy-poc"
+path = "src/bin/vibrancy-poc.rs"
 
 [dependencies]
 gpui = { path = "vendor/gpui" }

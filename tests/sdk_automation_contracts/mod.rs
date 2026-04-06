@@ -960,3 +960,52 @@ fn inspect_suggested_hit_semantic_ids_per_kind() {
         );
     }
 }
+
+// ============================================================
+// ActionsDialog batch mutation — structured log markers
+// ============================================================
+
+#[test]
+fn prompt_handler_emits_batch_actions_dialog_log() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("automation.batch.actions_dialog.completed"),
+        "batch handler must emit ActionsDialog completion log"
+    );
+}
+
+#[test]
+fn prompt_handler_emits_actions_dialog_target_resolution_log() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("automation.target.actions_dialog_resolved"),
+        "resolve_automation_read_target must emit ActionsDialog resolution log"
+    );
+}
+
+#[test]
+fn actions_dialog_transaction_provider_emits_set_input_log() {
+    let source = include_str!("../../src/windows/automation_transaction_provider.rs");
+    assert!(
+        source.contains("transaction_actions_dialog_set_input"),
+        "ActionsDialogTransactionProvider::set_input must emit structured log"
+    );
+}
+
+#[test]
+fn actions_dialog_transaction_provider_emits_select_log() {
+    let source = include_str!("../../src/windows/automation_transaction_provider.rs");
+    assert!(
+        source.contains("transaction_actions_dialog_select_by_value"),
+        "ActionsDialogTransactionProvider::select_by_value must emit structured log"
+    );
+}
+
+#[test]
+fn surface_collector_routes_actions_dialog() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("AutomationWindowKind::ActionsDialog => {"),
+        "surface collector must route ActionsDialog targets"
+    );
+}

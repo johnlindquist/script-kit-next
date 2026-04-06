@@ -387,3 +387,112 @@ fn model_selector_collector_uses_entry_id_in_semantic_ids() {
         "Model selector must use entry.id in choice semantic IDs"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Actions dialog batch mutation contract tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn batch_with_actions_dialog_target_parses_correctly() {
+    let json = serde_json::json!({
+        "type": "batch",
+        "requestId": "batch-ad-1",
+        "target": {"type": "kind", "kind": "actionsDialog"},
+        "commands": [
+            {"type": "setInput", "text": "edit"},
+            {"type": "selectByValue", "value": "edit-script", "submit": false}
+        ],
+        "options": {"stopOnError": true}
+    });
+    let msg: Message = serde_json::from_value(json).expect("parse");
+    match msg {
+        Message::Batch {
+            request_id,
+            commands,
+            target,
+            ..
+        } => {
+            assert_eq!(request_id, "batch-ad-1");
+            assert_eq!(commands.len(), 2);
+            let target = target.expect("target should be present");
+            match target {
+                AutomationWindowTarget::Kind { kind, .. } => {
+                    assert_eq!(kind, AutomationWindowKind::ActionsDialog);
+                }
+                other => panic!("Expected Kind target, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected Batch, got: {:?}", other),
+    }
+}
+
+#[test]
+fn batch_actions_dialog_select_by_semantic_id_parses() {
+    let json = serde_json::json!({
+        "type": "batch",
+        "requestId": "batch-ad-sem",
+        "target": {"type": "kind", "kind": "actionsDialog"},
+        "commands": [
+            {"type": "selectBySemanticId", "semanticId": "choice:0:edit-script", "submit": true}
+        ]
+    });
+    let msg: Message = serde_json::from_value(json).expect("parse");
+    match msg {
+        Message::Batch { commands, .. } => {
+            assert_eq!(commands.len(), 1);
+            match &commands[0] {
+                BatchCommand::SelectBySemanticId {
+                    semantic_id,
+                    submit,
+                } => {
+                    assert_eq!(semantic_id, "choice:0:edit-script");
+                    assert!(*submit);
+                }
+                other => panic!("Expected SelectBySemanticId, got: {:?}", other),
+            }
+        }
+        other => panic!("Expected Batch, got: {:?}", other),
+    }
+}
+
+#[test]
+fn actions_dialog_batch_handler_has_direct_mutation_path() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    // Must have direct entity mutation, not raw key injection
+    assert!(
+        source.contains("dialog.set_search_text("),
+        "ActionsDialog batch must use direct set_search_text mutation, not key injection"
+    );
+    assert!(
+        source.contains("dialog.select_action_by_id("),
+        "ActionsDialog batch must use direct select_action_by_id mutation"
+    );
+    assert!(
+        source.contains("dialog.select_action_by_semantic_id("),
+        "ActionsDialog batch must use direct select_action_by_semantic_id mutation"
+    );
+}
+
+#[test]
+fn actions_dialog_batch_unsupported_commands_fail_closed_with_structured_error() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("UnsupportedCommand"),
+        "ActionsDialog batch must use UnsupportedCommand error code for rejected commands"
+    );
+    assert!(
+        source.contains("ActionsDialog batch supports:"),
+        "ActionsDialog batch error must list supported commands"
+    );
+}
+
+#[test]
+fn prompt_popup_batch_target_fails_closed() {
+    // PromptPopup should fail at resolve_automation_read_target (unsupported kind).
+    // This proves it does NOT silently fall back to raw key injection.
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("supports Main, AcpDetached, Notes, and ActionsDialog targets"),
+        "unsupported kind error message must list all supported targets including ActionsDialog"
+    );
+}

@@ -74,6 +74,12 @@ Before your first release, ensure these GitHub secrets are configured:
 | `APPLE_APP_PASSWORD` | App-specific password | [appleid.apple.com](https://appleid.apple.com) → App-Specific Passwords |
 | `APPLE_TEAM_ID` | 10-character Team ID | [developer.apple.com/account](https://developer.apple.com/account) → Membership |
 
+### Local Pre-Tag Check
+
+```bash
+make ship-check
+```
+
 ### Creating a Release
 
 ```bash
@@ -89,7 +95,10 @@ git add Cargo.toml Cargo.lock
 git commit -m "chore: bump version to 1.0.0"
 git push origin main
 
-# 4. Create and push tag
+# 4. Run the full ship gate before tagging
+make ship-check
+
+# 5. Create and push tag
 git tag v1.0.0
 git push origin v1.0.0
 ```
@@ -172,9 +181,13 @@ xcrun stapler validate "/Applications/Script Kit.app"
 If CI is broken, you can build and sign locally:
 
 ```bash
-# Build
-cargo build --release
-cargo bundle --release
+# Validate the exact ship path first
+make ship-check
+
+# Build/bundle explicitly for the app target
+cargo build --release --bin script-kit-gpui
+cargo bundle --release --bin script-kit-gpui
+bash scripts/verify-macos-bundle.sh
 
 # Sign (replace IDENTITY with your certificate name)
 IDENTITY="Developer ID Application: Your Name (TEAM_ID)"

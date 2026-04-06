@@ -355,16 +355,17 @@ fn attached_actions_dialog_bounds_are_offset_in_screenshot() {
 fn attached_prompt_popup_bounds_are_offset_in_screenshot() {
     let p = shot_prefix();
 
+    let main_bounds_val = AutomationWindowBounds {
+        x: 100.0,
+        y: 50.0,
+        width: 1000.0,
+        height: 700.0,
+    };
     make_registered(
         &p,
         "main",
         AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 100.0,
-            y: 50.0,
-            width: 1000.0,
-            height: 700.0,
-        }),
+        Some(main_bounds_val.clone()),
     );
     make_registered(
         &p,
@@ -384,8 +385,11 @@ fn attached_prompt_popup_bounds_are_offset_in_screenshot() {
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
-    let bounds =
-        script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved).expect("must compute");
+    let bounds = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
+        &resolved,
+        Some(&main_bounds_val),
+    )
+    .expect("must compute");
 
     assert!(
         (bounds.x - 250.0).abs() < f64::EPSILON,
@@ -460,23 +464,24 @@ fn detached_window_bounds_at_origin_in_screenshot() {
 }
 
 /// Target bounds must be contained within the parent screenshot dimensions
-/// when both are available.
+/// when both are available. Uses `_with_main` variant for test isolation.
 #[test]
 fn attached_surface_bounds_contained_in_parent_dimensions() {
     let p = shot_prefix();
 
     let main_w = 1280.0;
     let main_h = 820.0;
+    let main_bounds_val = AutomationWindowBounds {
+        x: 240.0,
+        y: 124.0,
+        width: main_w,
+        height: main_h,
+    };
     make_registered(
         &p,
         "main",
         AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 240.0,
-            y: 124.0,
-            width: main_w,
-            height: main_h,
-        }),
+        Some(main_bounds_val.clone()),
     );
     make_registered(
         &p,
@@ -496,8 +501,11 @@ fn attached_surface_bounds_contained_in_parent_dimensions() {
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
-    let bounds =
-        script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved).expect("must compute");
+    let bounds = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
+        &resolved,
+        Some(&main_bounds_val),
+    )
+    .expect("must compute");
 
     // The target rect must fit within the parent window dimensions
     assert!(bounds.x >= 0.0, "Target x must be non-negative");
@@ -520,6 +528,7 @@ fn attached_surface_bounds_contained_in_parent_dimensions() {
 
 /// When the attached surface has bounds but main does not, the geometry
 /// must fail closed (return None) rather than guess.
+/// Uses `_with_main(None)` for test isolation.
 #[test]
 fn attached_surface_no_main_bounds_fails_closed() {
     let p = shot_prefix();
@@ -543,7 +552,9 @@ fn attached_surface_no_main_bounds_fails_closed() {
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
-    let result = script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved);
+    // Explicit None main bounds for test isolation
+    let result =
+        script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(&resolved, None);
     assert!(
         result.is_none(),
         "Must fail closed when main has no bounds, not silently produce (0, 0)"
@@ -553,20 +564,22 @@ fn attached_surface_no_main_bounds_fails_closed() {
 }
 
 /// When the attached surface itself has no bounds, geometry must return None.
+/// Uses `_with_main` variant for test isolation.
 #[test]
 fn attached_surface_no_own_bounds_fails_closed() {
     let p = shot_prefix();
 
+    let main_bounds_val = AutomationWindowBounds {
+        x: 100.0,
+        y: 50.0,
+        width: 800.0,
+        height: 600.0,
+    };
     make_registered(
         &p,
         "main",
         AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 100.0,
-            y: 50.0,
-            width: 800.0,
-            height: 600.0,
-        }),
+        Some(main_bounds_val.clone()),
     );
     make_registered(&p, "actions", AutomationWindowKind::ActionsDialog, None);
 
@@ -576,7 +589,10 @@ fn attached_surface_no_own_bounds_fails_closed() {
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
-    let result = script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved);
+    let result = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
+        &resolved,
+        Some(&main_bounds_val),
+    );
     assert!(
         result.is_none(),
         "Must fail closed when target has no bounds"
@@ -587,21 +603,22 @@ fn attached_surface_no_own_bounds_fails_closed() {
 
 /// Default hit point computed from target_bounds_in_screenshot must be
 /// at the center of the offset rectangle, not at the center of the
-/// full screenshot.
+/// full screenshot. Uses `_with_main` variant for test isolation.
 #[test]
 fn hit_point_is_center_of_offset_bounds_not_full_image() {
     let p = shot_prefix();
 
+    let main_bounds_val = AutomationWindowBounds {
+        x: 0.0,
+        y: 0.0,
+        width: 1920.0,
+        height: 1080.0,
+    };
     make_registered(
         &p,
         "main",
         AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 0.0,
-            y: 0.0,
-            width: 1920.0,
-            height: 1080.0,
-        }),
+        Some(main_bounds_val.clone()),
     );
     make_registered(
         &p,
@@ -621,8 +638,11 @@ fn hit_point_is_center_of_offset_bounds_not_full_image() {
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
-    let bounds =
-        script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved).expect("must compute");
+    let bounds = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
+        &resolved,
+        Some(&main_bounds_val),
+    )
+    .expect("must compute");
     let hit = script_kit_gpui::protocol::default_surface_hit_point(&bounds);
 
     // bounds = (700, 300, 520, 384) → center = (700 + 260, 300 + 192) = (960, 492)

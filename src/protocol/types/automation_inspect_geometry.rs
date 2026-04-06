@@ -14,17 +14,38 @@ use super::automation_window::{
 /// For attached surfaces (ActionsDialog, PromptPopup), this is offset
 /// from the parent (main) window's origin. For detached windows, the
 /// origin is `(0, 0)`.
+///
+/// Uses the global automation registry to resolve the main window.
+/// For test isolation, prefer [`target_bounds_in_screenshot_with_main`].
 pub fn target_bounds_in_screenshot(
     resolved: &AutomationWindowInfo,
+) -> Option<InspectBoundsInScreenshot> {
+    let main_bounds = match resolved.kind {
+        AutomationWindowKind::ActionsDialog | AutomationWindowKind::PromptPopup => {
+            let main =
+                crate::windows::resolve_automation_window(Some(&AutomationWindowTarget::Main))
+                    .ok()?;
+            main.bounds
+        }
+        _ => None,
+    };
+    target_bounds_in_screenshot_with_main(resolved, main_bounds.as_ref())
+}
+
+/// Like [`target_bounds_in_screenshot`] but accepts explicit main-window
+/// bounds instead of resolving from the global registry.
+///
+/// Useful for deterministic tests and for callers that already hold the
+/// main window metadata.
+pub fn target_bounds_in_screenshot_with_main(
+    resolved: &AutomationWindowInfo,
+    main_bounds: Option<&super::automation_window::AutomationWindowBounds>,
 ) -> Option<InspectBoundsInScreenshot> {
     let bounds = resolved.bounds.as_ref()?;
 
     match resolved.kind {
         AutomationWindowKind::ActionsDialog | AutomationWindowKind::PromptPopup => {
-            let main =
-                crate::windows::resolve_automation_window(Some(&AutomationWindowTarget::Main))
-                    .ok()?;
-            let main_bounds = main.bounds.as_ref()?;
+            let main_bounds = main_bounds?;
             Some(InspectBoundsInScreenshot {
                 x: bounds.x - main_bounds.x,
                 y: bounds.y - main_bounds.y,

@@ -310,11 +310,11 @@ script-kit-gpui/
 ### Running Tests
 
 ```bash
-# Rust unit tests
-cargo test
+# Validation gate used for release tags
+make verify
 
-# Full verification (run before commits)
-cargo check && cargo clippy --all-targets -- -D warnings && cargo test
+# Full local ship check (includes macOS bundle build + sanity check)
+make ship-check
 
 # SDK tests via stdin protocol
 echo '{"type":"run","path":"'$(pwd)'/tests/smoke/hello-world.ts"}' | ./target/debug/script-kit-gpui
@@ -324,11 +324,14 @@ echo '{"type":"run","path":"'$(pwd)'/tests/smoke/hello-world.ts"}' | ./target/de
 
 ```bash
 # Optimized binary
-cargo build --release
+cargo build --release --bin script-kit-gpui
 
 # macOS app bundle
 cargo install cargo-bundle
 cargo bundle --release --bin script-kit-gpui
+
+# Verify bundle contents
+bash scripts/verify-macos-bundle.sh
 ```
 
 ## Features
@@ -521,7 +524,7 @@ Available wait conditions: `choicesRendered`, `inputEmpty`, `windowVisible`, `wi
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run `cargo check && cargo clippy && cargo test`
+4. Run `make verify`
 5. Submit a pull request
 
 See `AGENTS.md` for detailed development guidelines.

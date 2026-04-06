@@ -189,6 +189,21 @@ interface InspectAutomationWindowResult {
   warnings: string[];
 }
 
+/**
+ * Popup semantics assessment: did the surface return real semantic elements
+ * or only the panel-only fallback?
+ */
+interface PopupSemantics {
+  /** True if the surface returned real input/list/choice elements. */
+  hasRealElements: boolean;
+  /** True if panel_only_* warning was present (fallback mode). */
+  panelOnly: boolean;
+  /** Specific warning codes from the surface collector. */
+  warnings: string[];
+  /** Whether batch mutation (setInput/selectByValue) is expected to work. */
+  batchMutationAvailable: boolean;
+}
+
 interface AutomationWindowInspectEnvelope {
   schemaVersion: number;
   status: "ok" | "error";
@@ -197,6 +212,8 @@ interface AutomationWindowInspectEnvelope {
   automationWindowId?: string | null;
   osWindowId?: number | null;
   inspect?: InspectAutomationWindowResult;
+  /** Popup semantics assessment for the inspected surface. */
+  popupSemantics?: PopupSemantics;
   error?: { code: string; message: string };
 }
 
@@ -280,6 +297,26 @@ async function inspectTarget(
     warningCount: inspect.warnings?.length ?? 0,
   });
 
+  // Compute popup semantics from the inspect result
+  const inspectWarnings: string[] = (inspect.warnings ?? []).map(String);
+  const panelOnly = inspectWarnings.some((w) => w.startsWith("panel_only_"));
+  const hasRealElements = (inspect.elements ?? []).some(
+    (el: Record<string, unknown>) =>
+      el.elementType === "Input" || el.elementType === "List" || el.elementType === "Choice"
+  );
+  const popupKinds = ["actionsDialog", "promptPopup"];
+  const isPopupTarget =
+    (targetJson.type === "kind" && popupKinds.includes(targetJson.kind)) ||
+    (windowKind != null && popupKinds.includes(windowKind));
+  const batchMutationAvailable = isPopupTarget && hasRealElements && !panelOnly;
+
+  const popupSemantics: PopupSemantics = {
+    hasRealElements,
+    panelOnly,
+    warnings: inspectWarnings,
+    batchMutationAvailable,
+  };
+
   return {
     schemaVersion: SCHEMA_VERSION,
     status: "ok",
@@ -288,6 +325,7 @@ async function inspectTarget(
     automationWindowId,
     osWindowId,
     inspect,
+    popupSemantics,
   };
 }
 
@@ -376,7 +414,7 @@ Commands:
 
 Options:
   --session NAME    Session name (default: "default")
-  --kind KIND       Target kind: acpDetached | main | focused
+  --kind KIND       Target kind: acpDetached | actionsDialog | promptPopup | notes | main | focused
   --index N         Kind index (default: 0)
   --id WINDOW_ID    Resolve by exact automation window ID
   --title TEXT      Resolve by titleContains target

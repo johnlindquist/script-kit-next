@@ -242,6 +242,19 @@ pub(crate) fn collect_acp_detached_elements(
 /// read, causing the caller to fall back to `panel_only_actions_dialog`.
 fn collect_actions_dialog_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapshot> {
     let dialog_entity = crate::actions::get_actions_dialog_entity(cx)?;
+    Some(collect_actions_dialog_elements(&dialog_entity, 1000, cx))
+}
+
+/// Collect semantic elements from a live ActionsDialog entity.
+///
+/// Shared by the surface snapshot path (`getElements`) and the
+/// [`ActionsDialogTransactionProvider`](super::automation_transaction_provider::ActionsDialogTransactionProvider)
+/// so both see the same semantic model.
+pub(crate) fn collect_actions_dialog_elements(
+    dialog_entity: &gpui::Entity<crate::actions::ActionsDialog>,
+    limit: usize,
+    cx: &gpui::App,
+) -> SurfaceElementSnapshot {
     let dialog = dialog_entity.read(cx);
 
     let mut elements = Vec::new();
@@ -304,13 +317,17 @@ fn collect_actions_dialog_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnaps
         selected_semantic_id.clone()
     };
 
-    Some(SurfaceElementSnapshot {
+    if elements.len() > limit {
+        elements.truncate(limit);
+    }
+
+    SurfaceElementSnapshot {
         total_count: elements.len(),
         elements,
         focused_semantic_id,
         selected_semantic_id,
         warnings: Vec::new(),
-    })
+    }
 }
 
 // ---------------------------------------------------------------------------
