@@ -112,6 +112,17 @@ pub unsafe fn configure_actions_popup_window(window: id, is_dark: bool) {
     let _: () = msg_send![window, setMovable: false];
     let _: () = msg_send![window, setMovableByWindowBackground: false];
 
+    // Regression guard:
+    // Detached child popups can still take mouse focus even when GPUI opens them
+    // with `focus: false`. If AppKit promotes the child to the key panel on click,
+    // the parent panel visually drops its active shadow even though our close/focus
+    // policy keeps it open. `setBecomesKeyOnlyIfNeeded:true` keeps these popup
+    // windows in the "clickable child" role instead of eagerly stealing key status.
+    //
+    // Keep this for Actions-style child popups unless we intentionally rework the
+    // parent/child focus model and verify the shadow behavior again.
+    let _: () = msg_send![window, setBecomesKeyOnlyIfNeeded: true];
+
     // Keep the level GPUI assigned (WindowKind::PopUp → NSPopUpMenuWindowLevel = 101).
     // Do NOT call setLevel here — any override downgrades the popup below the
     // main window which is also at 101. See CLAUDE.md "Window Level Rules".
@@ -206,6 +217,18 @@ pub fn configure_secondary_window_vibrancy(
     _is_dark: bool,
 ) {
     // No-op on non-macOS platforms
+}
+
+#[cfg(test)]
+mod secondary_window_config_tests {
+    #[test]
+    fn actions_popup_focus_shadow_contract_uses_becomes_key_only_if_needed() {
+        let source = include_str!("secondary_window_config.rs");
+        assert!(
+            source.contains("setBecomesKeyOnlyIfNeeded: true"),
+            "actions-style child popups must keep becomesKeyOnlyIfNeeded enabled so clicking them does not visually demote the parent window"
+        );
+    }
 }
 
 /// Update appearance for all secondary windows (Notes, AI, Actions) when system appearance changes.

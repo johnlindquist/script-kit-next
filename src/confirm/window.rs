@@ -22,18 +22,17 @@ use crate::{
     ui_foundation::{is_key_enter, is_key_escape, is_key_left, is_key_tab, HexColorExt},
 };
 
-const CONFIRM_PADDING_X: f32 = 20.0;
-const CONFIRM_PADDING_Y: f32 = 18.0;
-const CONFIRM_SECTION_GAP: f32 = 14.0;
-const CONFIRM_BUTTON_GAP: f32 = 10.0;
-const CONFIRM_BUTTON_HEIGHT: f32 = 38.0;
-const CONFIRM_TITLE_LINE_HEIGHT: f32 = 24.0;
-const CONFIRM_BODY_LINE_HEIGHT: f32 = 18.0;
-const CONFIRM_MIN_HEIGHT: f32 = 156.0;
-const CONFIRM_MAX_HEIGHT: f32 = 360.0;
-const CONFIRM_BODY_MAX_LINES: usize = 10;
+const CONFIRM_PADDING_X: f32 = 10.0;
+const CONFIRM_PADDING_Y: f32 = 8.0;
+const CONFIRM_SECTION_GAP: f32 = 4.0;
+const CONFIRM_BUTTON_GAP: f32 = 12.0;
+const CONFIRM_BUTTON_HEIGHT: f32 = 20.0;
+const CONFIRM_TITLE_LINE_HEIGHT: f32 = 16.0;
+const CONFIRM_BODY_LINE_HEIGHT: f32 = 16.0;
+const CONFIRM_MIN_HEIGHT: f32 = 60.0;
+const CONFIRM_MAX_HEIGHT: f32 = 110.0;
+const CONFIRM_BODY_MAX_LINES: usize = 3;
 const CONFIRM_LIFECYCLE_POLL_MS: u64 = 120;
-const CONFIRM_RADIUS: f32 = 14.0;
 /// NSWindowOrderingMode::NSWindowAbove — place child above parent.
 const NS_WINDOW_ABOVE: i64 = 1;
 
@@ -142,12 +141,17 @@ fn confirm_window_bounds(
 ) -> Bounds<Pixels> {
     let height = px(confirm_window_dynamic_height(width, title, body));
 
-    let x = parent_bounds.origin.x + (parent_bounds.size.width - width) / 2.0;
-    let y = parent_bounds.origin.y + (parent_bounds.size.height - height) / 2.0;
+    // Match parent width and bottom-align flush with parent bottom edge
+    let actual_width = parent_bounds.size.width;
+    let x = parent_bounds.origin.x;
+    let y = parent_bounds.origin.y + parent_bounds.size.height - height;
 
     Bounds {
         origin: Point { x, y },
-        size: Size { width, height },
+        size: Size {
+            width: actual_width,
+            height,
+        },
     }
 }
 
@@ -877,148 +881,139 @@ impl Render for ConfirmPopupWindow {
         });
 
         let theme = get_cached_theme();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
         let title_color = theme.colors.text.primary.to_rgb();
         let body_color = theme.colors.text.secondary.to_rgb();
         let muted_color = theme.colors.text.dimmed.to_rgb();
-        let border_color = theme.colors.ui.border.with_opacity(0.42);
-        let divider_color = theme.colors.ui.border.with_opacity(0.28);
         let surface_bg = gpui::transparent_black();
-
-        // Read focused button from shared state (main window may have toggled it via key routing)
-        let current_focused = get_confirm_focused_button();
-        let cancel_focused = current_focused == FocusedButton::Cancel;
-        let cancel_bg = if cancel_focused {
-            theme.colors.accent.selected_subtle.with_opacity(0.62)
-        } else {
-            theme.colors.background.main.with_opacity(0.18)
-        };
-        let cancel_border = if cancel_focused {
-            theme.colors.accent.selected.with_opacity(0.90)
-        } else {
-            divider_color
-        };
-        let cancel_text_color = if cancel_focused {
-            title_color
-        } else {
-            body_color
-        };
-        let cancel_shortcut_bg = theme.colors.ui.border.with_opacity(0.18);
-        let cancel_shortcut_text_color = muted_color;
-
-        let confirm_focused = current_focused == FocusedButton::Confirm;
+        let panel_bg = gpui::rgba(chrome.dialog_surface_rgba);
         let is_danger = matches!(self.confirm_variant, ButtonVariant::Danger);
 
-        let (
-            confirm_bg,
-            confirm_border,
-            confirm_text_color,
-            confirm_shortcut_bg,
-            confirm_shortcut_text_color,
-        ) = if is_danger {
-            let base = theme.colors.ui.error;
-            (
-                base.with_opacity(if confirm_focused { 0.24 } else { 0.14 }),
-                base.with_opacity(if confirm_focused { 0.92 } else { 0.58 }),
-                base.to_rgb(),
-                base.with_opacity(0.14),
-                base.to_rgb(),
-            )
+        // Border color: red-tinted for danger, subtle for normal
+        let top_border_color = if is_danger {
+            theme.colors.ui.error.with_opacity(0.15)
         } else {
-            let base = theme.colors.accent.selected;
-            let subtle = theme.colors.accent.selected_subtle;
-            (
-                if confirm_focused {
-                    base.with_opacity(0.22)
-                } else {
-                    subtle.with_opacity(0.52)
-                },
-                base.with_opacity(if confirm_focused { 0.92 } else { 0.58 }),
-                title_color,
-                base.with_opacity(0.14),
-                base.to_rgb(),
-            )
+            theme.colors.ui.border.with_opacity(0.30)
         };
+
+        // Confirm action colors
+        let (confirm_keycap_bg, confirm_keycap_color, confirm_label_color) = if is_danger {
+            let e = theme.colors.ui.error;
+            (e.with_opacity(0.06), e.to_rgb(), e.to_rgb())
+        } else {
+            let a = theme.colors.accent.selected;
+            (a.with_opacity(0.06), a.to_rgb(), title_color)
+        };
+
+        // Cancel action colors
+        let cancel_keycap_bg = theme.colors.ui.border.with_opacity(0.06);
+
+        // Read focused button state for visual feedback
+        let current_focused = get_confirm_focused_button();
+        let cancel_focused = current_focused == FocusedButton::Cancel;
+        let confirm_focused = current_focused == FocusedButton::Confirm;
 
         let entity = cx.entity();
         let cancel_entity = entity.clone();
         let confirm_entity = entity.clone();
 
-        let cancel_button = div()
-            .id("confirm-cancel-button")
-            .flex_1()
-            .h(px(CONFIRM_BUTTON_HEIGHT))
-            .px(px(12.))
-            .rounded(px(10.))
-            .border_1()
-            .border_color(cancel_border)
-            .bg(cancel_bg)
-            .cursor_pointer()
+        // ── Title row: optional icon + title ────────────────────
+        let title_row = div()
             .flex()
             .flex_row()
             .items_center()
-            .justify_between()
-            .gap(px(8.))
-            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                cancel_entity.update(cx, |this: &mut Self, cx| {
-                    this.resolve_and_close(false, window, cx);
-                });
+            .gap(px(5.))
+            .when(is_danger, |d| {
+                d.child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.colors.ui.error.to_rgb())
+                        .child("⚠"),
+                )
             })
             .child(
                 div()
-                    .text_sm()
-                    .font_weight(gpui::FontWeight::MEDIUM)
-                    .text_color(cancel_text_color)
-                    .child(self.cancel_text.clone()),
-            )
-            .child(
-                div()
-                    .px(px(6.))
-                    .py(px(2.))
-                    .rounded(px(4.))
-                    .bg(cancel_shortcut_bg)
                     .text_xs()
-                    .font_family(FONT_MONO)
-                    .text_color(cancel_shortcut_text_color)
-                    .child("Esc"),
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(title_color)
+                    .child(self.title.clone()),
             );
 
-        let confirm_button = div()
-            .id("confirm-ok-button")
-            .flex_1()
-            .h(px(CONFIRM_BUTTON_HEIGHT))
-            .px(px(12.))
-            .rounded(px(10.))
-            .border_1()
-            .border_color(confirm_border)
-            .bg(confirm_bg)
-            .cursor_pointer()
+        // ── Keycap action row ───────────────────────────────────
+        let action_row = div()
+            .w_full()
             .flex()
             .flex_row()
-            .items_center()
-            .justify_between()
-            .gap(px(8.))
-            .on_mouse_down(MouseButton::Left, move |_, window, cx| {
-                confirm_entity.update(cx, |this: &mut Self, cx| {
-                    this.resolve_and_close(true, window, cx);
-                });
-            })
+            .justify_end()
+            .gap(px(CONFIRM_BUTTON_GAP))
+            // Cancel: [Esc] Cancel
             .child(
                 div()
-                    .text_sm()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(confirm_text_color)
-                    .child(self.confirm_text.clone()),
+                    .id("confirm-cancel-button")
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(3.))
+                    .cursor_pointer()
+                    .when(cancel_focused, |d| d.opacity(1.0))
+                    .when(!cancel_focused, |d| d.opacity(0.8))
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        cancel_entity.update(cx, |this: &mut Self, cx| {
+                            this.resolve_and_close(false, window, cx);
+                        });
+                    })
+                    .child(
+                        div()
+                            .px(px(4.))
+                            .py(px(1.))
+                            .rounded(px(3.))
+                            .bg(cancel_keycap_bg)
+                            .text_xs()
+                            .font_family(FONT_MONO)
+                            .text_color(muted_color)
+                            .child("Esc"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(muted_color)
+                            .child(self.cancel_text.clone()),
+                    ),
             )
+            // Confirm: [↵] Clear/Delete
             .child(
                 div()
-                    .px(px(6.))
-                    .py(px(2.))
-                    .rounded(px(4.))
-                    .bg(confirm_shortcut_bg)
-                    .text_xs()
-                    .font_family(FONT_MONO)
-                    .text_color(confirm_shortcut_text_color)
-                    .child("↵"),
+                    .id("confirm-ok-button")
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(3.))
+                    .cursor_pointer()
+                    .when(confirm_focused, |d| d.opacity(1.0))
+                    .when(!confirm_focused, |d| d.opacity(0.8))
+                    .on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                        confirm_entity.update(cx, |this: &mut Self, cx| {
+                            this.resolve_and_close(true, window, cx);
+                        });
+                    })
+                    .child(
+                        div()
+                            .px(px(4.))
+                            .py(px(1.))
+                            .rounded(px(3.))
+                            .bg(confirm_keycap_bg)
+                            .text_xs()
+                            .font_family(FONT_MONO)
+                            .text_color(confirm_keycap_color)
+                            .child("↵"),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(confirm_label_color)
+                            .child(self.confirm_text.clone()),
+                    ),
             );
 
         div()
@@ -1026,47 +1021,32 @@ impl Render for ConfirmPopupWindow {
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .bg(surface_bg)
-            .rounded(px(CONFIRM_RADIUS))
-            .border_1()
-            .border_color(border_color)
             .overflow_hidden()
             .child(
                 div()
                     .size_full()
                     .flex()
                     .flex_col()
+                    .bg(panel_bg)
                     .px(px(CONFIRM_PADDING_X))
                     .py(px(CONFIRM_PADDING_Y))
                     .gap(px(CONFIRM_SECTION_GAP))
-                    .child(
-                        div()
-                            .w_full()
-                            .text_lg()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(title_color)
-                            .child(self.title.clone()),
-                    )
+                    .border_t_1()
+                    .border_color(top_border_color)
+                    // Title row
+                    .child(title_row)
+                    // Body (if present)
                     .when(!self.body.is_empty(), |d| {
                         d.child(
                             div()
                                 .w_full()
-                                .text_sm()
+                                .text_xs()
                                 .text_color(body_color)
                                 .child(self.body.clone()),
                         )
                     })
-                    .child(
-                        div()
-                            .w_full()
-                            .border_t_1()
-                            .border_color(divider_color)
-                            .pt(px(CONFIRM_SECTION_GAP))
-                            .flex()
-                            .flex_row()
-                            .gap(px(CONFIRM_BUTTON_GAP))
-                            .child(cancel_button)
-                            .child(confirm_button),
-                    ),
+                    // Action row
+                    .child(action_row),
             )
     }
 }
@@ -1123,7 +1103,7 @@ mod tests {
     }
 
     #[test]
-    fn confirm_window_bounds_center_over_parent_window() {
+    fn confirm_window_bounds_bottom_aligned_over_parent_window() {
         let parent_bounds = Bounds {
             origin: Point {
                 x: px(100.),
@@ -1138,12 +1118,17 @@ mod tests {
         let bounds = confirm_window_bounds(parent_bounds, px(448.), "Confirm", "Body");
         let actual_x: f32 = bounds.origin.x.into();
         let actual_y: f32 = bounds.origin.y.into();
+        let actual_w: f32 = bounds.size.width.into();
 
         let expected_height = confirm_window_dynamic_height(px(448.), "Confirm", "Body");
-        let expected_x = 100.0 + ((750.0 - 448.0) / 2.0);
-        let expected_y = 200.0 + ((500.0 - expected_height) / 2.0);
+        // Should match parent x and width
+        let expected_x = 100.0;
+        // Should bottom-align: parent_y + parent_h - confirm_h
+        let expected_y = 200.0 + 500.0 - expected_height;
 
         assert!((actual_x - expected_x).abs() < 0.5);
         assert!((actual_y - expected_y).abs() < 0.5);
+        // Width matches parent
+        assert!((actual_w - 750.0).abs() < 0.5);
     }
 }
