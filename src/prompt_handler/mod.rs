@@ -70,6 +70,112 @@ enum AcpReadTarget {
     },
 }
 
+/// Resolved automation target for batch/waitFor operations.
+///
+/// Extends `AcpReadTarget` to also accept Notes windows.
+#[derive(Clone)]
+enum AutomationReadTarget {
+    /// Main window (default).
+    Main {
+        info: Option<crate::protocol::AutomationWindowInfo>,
+    },
+    /// Detached ACP chat window.
+    AcpDetached {
+        info: crate::protocol::AutomationWindowInfo,
+        entity: gpui::Entity<crate::ai::acp::view::AcpChatView>,
+    },
+    /// Notes window.
+    Notes {
+        info: crate::protocol::AutomationWindowInfo,
+        entity: gpui::Entity<crate::notes::NotesApp>,
+        handle: gpui::WindowHandle<crate::Root>,
+    },
+}
+
+/// Resolve an automation target that accepts Main, AcpDetached, and Notes.
+///
+/// Used by `batch` and `waitFor` to route commands to the correct window.
+fn resolve_automation_read_target(
+    request_id: &str,
+    op: &'static str,
+    target: Option<&crate::protocol::AutomationWindowTarget>,
+) -> Result<AutomationReadTarget, crate::protocol::TransactionError> {
+    let Some(target) = target else {
+        return Ok(AutomationReadTarget::Main { info: None });
+    };
+
+    let resolved = crate::windows::resolve_automation_window(Some(target)).map_err(|err| {
+        tracing::warn!(
+            target: "script_kit::automation",
+            request_id = %request_id,
+            op = op,
+            error = %err,
+            "automation.target.resolve_failed"
+        );
+        crate::protocol::TransactionError::action_failed(format!(
+            "{op} target resolution failed: {err}"
+        ))
+    })?;
+
+    match resolved.kind {
+        crate::protocol::AutomationWindowKind::Main => {
+            Ok(AutomationReadTarget::Main { info: Some(resolved) })
+        }
+        crate::protocol::AutomationWindowKind::AcpDetached => {
+            match crate::ai::acp::chat_window::get_detached_acp_view_entity() {
+                Some(entity) => {
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        kind = ?resolved.kind,
+                        "automation.target.acp_detached_resolved"
+                    );
+                    Ok(AutomationReadTarget::AcpDetached { info: resolved, entity })
+                }
+                None => Err(crate::protocol::TransactionError::action_failed(format!(
+                    "{op} resolved detached ACP target {} but no live view entity is available",
+                    resolved.id
+                ))),
+            }
+        }
+        crate::protocol::AutomationWindowKind::Notes => {
+            match crate::notes::get_notes_app_entity_and_handle() {
+                Some((entity, handle)) => {
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        kind = ?resolved.kind,
+                        "automation.target.notes_resolved"
+                    );
+                    Ok(AutomationReadTarget::Notes { info: resolved, entity, handle })
+                }
+                None => Err(crate::protocol::TransactionError::action_failed(format!(
+                    "{op} resolved Notes target {} but no live Notes entity is available",
+                    resolved.id
+                ))),
+            }
+        }
+        other_kind => {
+            tracing::warn!(
+                target: "script_kit::automation",
+                request_id = %request_id,
+                op = op,
+                window_id = %resolved.id,
+                kind = ?other_kind,
+                "automation.target.unsupported_kind"
+            );
+            Err(crate::protocol::TransactionError::action_failed(format!(
+                "{op} supports Main, AcpDetached, and Notes targets; resolved {} ({:?})",
+                resolved.id, other_kind
+            )))
+        }
+    }
+}
+
 /// Resolve an automation target for ACP read operations (getAcpState, getAcpTestProbe).
 ///
 /// Allows `Main` and `AcpDetached` kinds. Rejects all other secondary targets
@@ -204,6 +310,90 @@ fn build_acp_resolved_target(
         window_kind,
         title,
     })
+}
+
+/// Build a `UiStateSnapshot` from a live Notes entity.
+///
+/// Used by `waitFor` and `batch` to evaluate generic conditions
+/// (elementExists, elementFocused, inputEmpty, stateMatch) against
+/// the Notes window instead of the main window.
+fn build_notes_ui_snapshot(
+    entity: &gpui::Entity<crate::notes::NotesApp>,
+    cx: &gpui::App,
+) -> crate::protocol::UiStateSnapshot {
+    let editor_text = entity.read(cx).editor_state.read(cx).value().to_string();
+    let surface = crate::windows::automation_surface_collector::collect_surface_snapshot(
+        &crate::protocol::AutomationWindowInfo {
+            id: "notes".to_string(),
+            kind: crate::protocol::AutomationWindowKind::Notes,
+            title: Some("Notes".to_string()),
+            bounds: None,
+            visible: true,
+            focused: true,
+            semantic_surface: Some("notes".to_string()),
+        },
+        200,
+        cx,
+    );
+    let (semantic_ids, focused_id) = match surface {
+        Some(ref snap) => (
+            snap.elements.iter().map(|e| e.semantic_id.clone()).collect(),
+            snap.focused_semantic_id.clone(),
+        ),
+        None => (Vec::new(), None),
+    };
+    crate::protocol::UiStateSnapshot {
+        window_visible: true,
+        window_focused: true,
+        input_value: Some(editor_text),
+        selected_value: None,
+        choice_count: 0,
+        visible_semantic_ids: semantic_ids,
+        focused_semantic_id: focused_id,
+    }
+}
+
+/// Check whether a generic wait condition is satisfied against Notes state.
+///
+/// Only generic conditions (elementExists, elementFocused, inputEmpty,
+/// windowVisible, windowFocused, stateMatch) are meaningful for Notes.
+/// ACP-specific conditions always return `false`.
+fn notes_wait_condition_satisfied(
+    entity: &gpui::Entity<crate::notes::NotesApp>,
+    condition: &crate::protocol::WaitCondition,
+    cx: &gpui::App,
+) -> bool {
+    let snapshot = build_notes_ui_snapshot(entity, cx);
+    match condition {
+        crate::protocol::WaitCondition::Named(crate::protocol::WaitNamedCondition::InputEmpty) => {
+            snapshot.input_value.as_deref().unwrap_or("").is_empty()
+        }
+        crate::protocol::WaitCondition::Named(crate::protocol::WaitNamedCondition::WindowVisible) => {
+            snapshot.window_visible
+        }
+        crate::protocol::WaitCondition::Named(crate::protocol::WaitNamedCondition::WindowFocused) => {
+            snapshot.window_focused
+        }
+        crate::protocol::WaitCondition::Named(crate::protocol::WaitNamedCondition::ChoicesRendered) => {
+            // Notes has no choices
+            false
+        }
+        crate::protocol::WaitCondition::Detailed(
+            crate::protocol::WaitDetailedCondition::ElementExists { semantic_id }
+            | crate::protocol::WaitDetailedCondition::ElementVisible { semantic_id },
+        ) => snapshot.visible_semantic_ids.iter().any(|id| id == semantic_id),
+        crate::protocol::WaitCondition::Detailed(
+            crate::protocol::WaitDetailedCondition::ElementFocused { semantic_id },
+        ) => snapshot.focused_semantic_id.as_deref() == Some(semantic_id.as_str()),
+        crate::protocol::WaitCondition::Detailed(
+            crate::protocol::WaitDetailedCondition::StateMatch { state },
+        ) => {
+            use crate::protocol::transaction_executor::matches_state_spec;
+            matches_state_spec(&snapshot, state)
+        }
+        // ACP-specific conditions are not applicable to Notes.
+        _ => false,
+    }
 }
 
 fn resolve_ai_start_chat_provider(
@@ -1359,6 +1549,38 @@ impl ScriptListApp {
                             None,
                         )
                     }
+                    AppView::AcpHistoryView {
+                        filter,
+                        selected_index,
+                    } => {
+                        let entries = crate::ai::acp::history::load_history();
+                        let filtered_entries: Vec<&crate::ai::acp::history::AcpHistoryEntry> =
+                            if filter.is_empty() {
+                                entries.iter().collect()
+                            } else {
+                                let filter_lower = filter.to_lowercase();
+                                entries
+                                    .iter()
+                                    .filter(|entry| {
+                                        entry.first_message.to_lowercase().contains(&filter_lower)
+                                            || entry.timestamp.to_lowercase().contains(&filter_lower)
+                                    })
+                                    .collect()
+                            };
+                        let selected_value = filtered_entries
+                            .get(*selected_index)
+                            .map(|entry| entry.first_message.clone());
+                        (
+                            "acpHistory".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            entries.len(),
+                            filtered_entries.len(),
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     // P0 FIX: View state only - data comes from self.apps
                     AppView::AppLauncherView {
                         filter,
@@ -2464,13 +2686,18 @@ impl ScriptListApp {
                     )
                 );
 
-                // Resolve target: ACP conditions accept AcpDetached; others are main-only.
-                let detached_entity: Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> =
+                // Resolve target: ACP conditions accept AcpDetached; generic
+                // conditions accept Main, AcpDetached, and Notes.
+                let resolved_target: AutomationReadTarget =
                     if target.is_some() {
                         if is_acp_condition {
                             match resolve_acp_read_target(&rid, "waitFor", target.as_ref()) {
-                                Ok(AcpReadTarget::Detached { entity, .. }) => Some(entity),
-                                Ok(AcpReadTarget::Main { .. }) => None,
+                                Ok(AcpReadTarget::Detached { entity, info }) => {
+                                    AutomationReadTarget::AcpDetached { entity, info }
+                                }
+                                Ok(AcpReadTarget::Main { info }) => {
+                                    AutomationReadTarget::Main { info }
+                                }
                                 Err(error) => {
                                     if let Some(ref sender) = self.response_sender {
                                         let _ = sender.try_send(Message::wait_for_result(
@@ -2484,8 +2711,8 @@ impl ScriptListApp {
                                 }
                             }
                         } else {
-                            match resolve_main_only_target(&rid, "waitFor", target.as_ref()) {
-                                Ok(_resolved) => None,
+                            match resolve_automation_read_target(&rid, "waitFor", target.as_ref()) {
+                                Ok(resolved) => resolved,
                                 Err(error) => {
                                     if let Some(ref sender) = self.response_sender {
                                         let _ = sender.try_send(Message::wait_for_result(
@@ -2500,6 +2727,14 @@ impl ScriptListApp {
                             }
                         }
                     } else {
+                        AutomationReadTarget::Main { info: None }
+                    };
+
+                // Extract the detached ACP entity for backward-compatible condition checking.
+                let detached_entity: Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> =
+                    if let AutomationReadTarget::AcpDetached { ref entity, .. } = resolved_target {
+                        Some(entity.clone())
+                    } else {
                         None
                     };
 
@@ -2513,7 +2748,15 @@ impl ScriptListApp {
                 );
 
                 // Check if condition is already satisfied
-                if self.wait_condition_satisfied_for_target(&condition, detached_entity.as_ref(), cx) {
+                let already_satisfied = match &resolved_target {
+                    AutomationReadTarget::Notes { entity, .. } => {
+                        notes_wait_condition_satisfied(entity, &condition, cx)
+                    }
+                    _ => {
+                        self.wait_condition_satisfied_for_target(&condition, detached_entity.as_ref(), cx)
+                    }
+                };
+                if already_satisfied {
                     let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, true);
                     let trace = if include_trace {
                         let started_at_ms = protocol::transaction_trace::now_epoch_ms();
@@ -2561,6 +2804,12 @@ impl ScriptListApp {
                     let sender = self.response_sender.clone();
                     let condition = condition.clone();
                     let detached_entity = detached_entity.clone();
+                    let notes_entity: Option<gpui::Entity<crate::notes::NotesApp>> =
+                        if let AutomationReadTarget::Notes { ref entity, .. } = resolved_target {
+                            Some(entity.clone())
+                        } else {
+                            None
+                        };
                     cx.spawn(async move |this, cx| {
                         let started_at_ms = protocol::transaction_trace::now_epoch_ms();
                         let start = std::time::Instant::now();
@@ -2617,9 +2866,17 @@ impl ScriptListApp {
                                 }
                                 break;
                             }
-                            match this.update(cx, |this, cx| {
-                                this.wait_condition_satisfied_for_target(&condition, detached_entity.as_ref(), cx)
-                            }) {
+                            let poll_result = if let Some(ref notes_ent) = notes_entity {
+                                let ne = notes_ent.clone();
+                                this.update(cx, |_this, cx| {
+                                    notes_wait_condition_satisfied(&ne, &condition, cx)
+                                })
+                            } else {
+                                this.update(cx, |this, cx| {
+                                    this.wait_condition_satisfied_for_target(&condition, detached_entity.as_ref(), cx)
+                                })
+                            };
+                            match poll_result {
                                 Ok(true) => {
                                     let elapsed_ms = start.elapsed().as_millis() as u64;
                                     let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, true);
@@ -2736,32 +2993,50 @@ impl ScriptListApp {
                 let rid = request_id.clone();
                 let sender = self.response_sender.clone();
 
-                // Fail closed: reject non-main targets before spawning
-                // the async batch executor.
-                if target.is_some() {
-                    match resolve_main_only_target(&rid, "batch", target.as_ref()) {
-                        Ok(_resolved) => { /* main window — proceed */ }
-                        Err(error) => {
-                            if let Some(ref sender) = self.response_sender {
-                                let _ = sender.try_send(Message::batch_result(
-                                    request_id.clone(),
-                                    false,
-                                    vec![crate::protocol::BatchResultEntry {
-                                        index: 0,
-                                        success: false,
-                                        command: "batch".to_string(),
-                                        elapsed: Some(0),
-                                        value: None,
-                                        error: Some(error),
-                                    }],
-                                    Some(0),
-                                    0,
-                                ));
+                // Resolve target: accept Main, AcpDetached, and Notes.
+                let batch_target: AutomationReadTarget =
+                    if target.is_some() {
+                        match resolve_automation_read_target(&rid, "batch", target.as_ref()) {
+                            Ok(resolved) => resolved,
+                            Err(error) => {
+                                if let Some(ref sender) = self.response_sender {
+                                    let _ = sender.try_send(Message::batch_result(
+                                        request_id.clone(),
+                                        false,
+                                        vec![crate::protocol::BatchResultEntry {
+                                            index: 0,
+                                            success: false,
+                                            command: "batch".to_string(),
+                                            elapsed: Some(0),
+                                            value: None,
+                                            error: Some(error),
+                                        }],
+                                        Some(0),
+                                        0,
+                                    ));
+                                }
+                                return;
                             }
-                            return;
                         }
-                    }
-                }
+                    } else {
+                        AutomationReadTarget::Main { info: None }
+                    };
+
+                let detached_batch_entity: Option<gpui::Entity<crate::ai::acp::view::AcpChatView>> =
+                    if let AutomationReadTarget::AcpDetached { ref entity, .. } = batch_target {
+                        Some(entity.clone())
+                    } else {
+                        None
+                    };
+
+                let notes_batch_target: Option<(
+                    gpui::Entity<crate::notes::NotesApp>,
+                    gpui::WindowHandle<crate::Root>,
+                )> = if let AutomationReadTarget::Notes { ref entity, ref handle, .. } = batch_target {
+                    Some((entity.clone(), *handle))
+                } else {
+                    None
+                };
 
                 tracing::info!(
                     category = "AUTOMATION",
@@ -2773,6 +3048,592 @@ impl ScriptListApp {
                 );
 
                 cx.spawn(async move |this, cx| {
+                    // ── Detached ACP batch path ──────────────────────────
+                    // When targeting a detached ACP entity, route commands
+                    // to it instead of the main window. The command set is
+                    // limited to setInput, waitFor, selectByValue, and
+                    // selectBySemanticId.
+                    if let Some(acp_entity) = detached_batch_entity {
+                        let batch_start = std::time::Instant::now();
+                        let batch_timeout = std::time::Duration::from_millis(opts.timeout);
+                        let mut results: Vec<protocol::BatchResultEntry> = Vec::new();
+                        let mut failed = false;
+
+                        for (index, cmd) in commands.iter().enumerate() {
+                            if batch_start.elapsed() >= batch_timeout {
+                                results.push(protocol::BatchResultEntry {
+                                    index,
+                                    success: false,
+                                    command: batch_command_name(cmd),
+                                    elapsed: Some(0),
+                                    value: None,
+                                    error: Some(protocol::TransactionError::wait_timeout("Batch timeout exceeded")),
+                                });
+                                failed = true;
+                                break;
+                            }
+
+                            let cmd_start = std::time::Instant::now();
+                            match cmd {
+                                protocol::BatchCommand::SetInput { text } => {
+                                    let text = text.clone();
+                                    let acp_entity = acp_entity.clone();
+                                    let result = this.update(cx, |_this, cx| {
+                                        acp_entity.update(cx, |view, cx| {
+                                            let Some(thread) = view.thread() else {
+                                                return "detached ACP is in setup mode".to_string();
+                                            };
+                                            thread.update(cx, |thread, cx| {
+                                                thread.set_input(&text, cx);
+                                            });
+                                            tracing::info!(
+                                                target: "script_kit::transaction",
+                                                event = "transaction_detached_acp_set_input",
+                                                text_len = text.len(),
+                                                "detached ACP set_input"
+                                            );
+                                            String::new() // empty = success
+                                        })
+                                    });
+                                    match result {
+                                        Ok(err) if err.is_empty() => {
+                                            tracing::info!(category = "BATCH", request_id = %rid, index, command = "setInput", "batch.detached_acp.step.ok");
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: true, command: "setInput".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None, error: None,
+                                            });
+                                        }
+                                        Ok(err) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "setInput".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(err)),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "setInput".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                protocol::BatchCommand::SelectByValue { value, submit } => {
+                                    let submit = *submit;
+                                    let value = value.clone();
+                                    let acp_entity = acp_entity.clone();
+                                    // Returns Option<String>: Some(matched) or None if not found.
+                                    let selected = this.update(cx, |_this, cx| {
+                                        acp_entity.update(cx, |view, _cx| -> Option<String> {
+                                            let session = view.mention_session.as_ref()?;
+                                            let idx = session.items.iter().position(|item| {
+                                                item.label.as_ref() == value || item.id.as_ref() == value
+                                            })?;
+                                            view.select_mention_index(idx);
+                                            Some(value.clone())
+                                        })
+                                    });
+                                    match selected {
+                                        Ok(Some(v)) => {
+                                            if submit {
+                                                let acp_entity2 = acp_entity.clone();
+                                                let _ = this.update(cx, |_this, cx| {
+                                                    acp_entity2.update(cx, |view, cx| {
+                                                        view.accept_mention_selection(cx);
+                                                    });
+                                                });
+                                            }
+                                            tracing::info!(
+                                                target: "script_kit::transaction",
+                                                event = "transaction_detached_acp_select_by_value",
+                                                value = %v, submit,
+                                                "detached ACP select_by_value"
+                                            );
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: true, command: "selectByValue".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: Some(v), error: None,
+                                            });
+                                        }
+                                        Ok(None) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "selectByValue".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::selection_not_found(
+                                                    format!("selectByValue could not find '{value}' in detached ACP picker")
+                                                )),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "selectByValue".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                protocol::BatchCommand::SelectBySemanticId { semantic_id, submit } => {
+                                    let submit = *submit;
+                                    let semantic_id = semantic_id.clone();
+                                    let acp_entity = acp_entity.clone();
+                                    let selected = this.update(cx, |_this, cx| {
+                                        acp_entity.update(cx, |view, _cx| -> Option<String> {
+                                            let session = view.mention_session.as_ref()?;
+                                            let idx = session.items.iter().position(|item| {
+                                                item.label.as_ref() == semantic_id || item.id.as_ref() == semantic_id
+                                            })?;
+                                            view.select_mention_index(idx);
+                                            Some(semantic_id.clone())
+                                        })
+                                    });
+                                    match selected {
+                                        Ok(Some(v)) => {
+                                            if submit {
+                                                let acp_entity2 = acp_entity.clone();
+                                                let _ = this.update(cx, |_this, cx| {
+                                                    acp_entity2.update(cx, |view, cx| {
+                                                        view.accept_mention_selection(cx);
+                                                    });
+                                                });
+                                            }
+                                            tracing::info!(
+                                                target: "script_kit::transaction",
+                                                event = "transaction_detached_acp_select_by_value",
+                                                value = %v, submit,
+                                                "detached ACP select_by_semantic_id"
+                                            );
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: true, command: "selectBySemanticId".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: Some(v), error: None,
+                                            });
+                                        }
+                                        Ok(None) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "selectBySemanticId".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::selection_not_found(
+                                                    format!("selectBySemanticId could not find '{semantic_id}' in detached ACP picker")
+                                                )),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "selectBySemanticId".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                protocol::BatchCommand::WaitFor { condition, timeout, poll_interval } => {
+                                    let wait_timeout = std::time::Duration::from_millis(timeout.unwrap_or(5_000));
+                                    let wait_poll = std::time::Duration::from_millis(poll_interval.unwrap_or(25));
+                                    let wait_start = std::time::Instant::now();
+                                    let acp_entity_ref = &acp_entity;
+
+                                    let already = this.update(cx, |this, cx| {
+                                        this.wait_condition_satisfied_for_target(condition, Some(acp_entity_ref), cx)
+                                    });
+                                    match already {
+                                        Ok(true) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: true, command: "waitFor".to_string(),
+                                                elapsed: Some(0), value: None, error: None,
+                                            });
+                                        }
+                                        Ok(false) => {
+                                            let mut wait_result: Result<Option<String>, protocol::TransactionError> =
+                                                Err(protocol::TransactionError::wait_timeout(
+                                                    format!("WaitFor timeout after {}ms", wait_timeout.as_millis())
+                                                ));
+                                            loop {
+                                                cx.background_executor().timer(wait_poll).await;
+                                                if wait_start.elapsed() >= wait_timeout { break; }
+                                                match this.update(cx, |this, cx| {
+                                                    this.wait_condition_satisfied_for_target(condition, Some(acp_entity_ref), cx)
+                                                }) {
+                                                    Ok(true) => { wait_result = Ok(None); break; }
+                                                    Ok(false) => continue,
+                                                    _ => {
+                                                        wait_result = Err(protocol::TransactionError::action_failed(
+                                                            "Entity dropped during WaitFor"
+                                                        ));
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            match wait_result {
+                                                Ok(_) => {
+                                                    tracing::info!(
+                                                        target: "script_kit::transaction",
+                                                        event = "transaction_wait_complete",
+                                                        request_id = %rid,
+                                                        index,
+                                                        target = "acpDetached",
+                                                        "batch.detached_acp.wait.ok"
+                                                    );
+                                                    results.push(protocol::BatchResultEntry {
+                                                        index, success: true, command: "waitFor".to_string(),
+                                                        elapsed: Some(wait_start.elapsed().as_millis() as u64),
+                                                        value: None, error: None,
+                                                    });
+                                                }
+                                                Err(e) => {
+                                                    tracing::info!(category = "BATCH", request_id = %rid, index, command = "waitFor", error = %e.message, "batch.detached_acp.step.error");
+                                                    results.push(protocol::BatchResultEntry {
+                                                        index, success: false, command: "waitFor".to_string(),
+                                                        elapsed: Some(wait_start.elapsed().as_millis() as u64),
+                                                        value: None, error: Some(e),
+                                                    });
+                                                    failed = true;
+                                                    if opts.stop_on_error { break; }
+                                                }
+                                            }
+                                        }
+                                        Err(_) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "waitFor".to_string(),
+                                                elapsed: Some(wait_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed("Entity dropped")),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    // Unsupported commands for detached ACP
+                                    results.push(protocol::BatchResultEntry {
+                                        index,
+                                        success: false,
+                                        command: batch_command_name(cmd),
+                                        elapsed: Some(0),
+                                        value: None,
+                                        error: Some(protocol::TransactionError {
+                                            code: protocol::TransactionErrorCode::UnsupportedCommand,
+                                            message: format!(
+                                                "{} is not supported for detached ACP batch targets",
+                                                batch_command_name(cmd)
+                                            ),
+                                            suggestion: Some(
+                                                "Detached ACP batch supports: setInput, waitFor, selectByValue, selectBySemanticId."
+                                                    .to_string(),
+                                            ),
+                                        }),
+                                    });
+                                    failed = true;
+                                    if opts.stop_on_error { break; }
+                                }
+                            }
+                        }
+
+                        let total_elapsed = batch_start.elapsed().as_millis() as u64;
+                        let success = !failed;
+                        let failed_at = if failed {
+                            results.iter().position(|r| !r.success)
+                        } else {
+                            None
+                        };
+
+                        let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, success);
+                        let trace = if include_trace {
+                            let started_at_ms = protocol::transaction_trace::now_epoch_ms()
+                                .saturating_sub(total_elapsed);
+                            Some(protocol::TransactionTrace {
+                                request_id: rid.clone(),
+                                status: if success {
+                                    protocol::TransactionTraceStatus::Ok
+                                } else {
+                                    protocol::TransactionTraceStatus::Failed
+                                },
+                                started_at_ms,
+                                total_elapsed_ms: total_elapsed,
+                                failed_at,
+                                commands: results.iter().map(|r| {
+                                    protocol::TransactionCommandTrace {
+                                        index: r.index,
+                                        command: r.command.clone(),
+                                        started_at_ms,
+                                        elapsed_ms: r.elapsed.unwrap_or(0),
+                                        before: protocol::UiStateSnapshot::default(),
+                                        after: protocol::UiStateSnapshot::default(),
+                                        polls: Vec::new(),
+                                        error: r.error.clone(),
+                                    }
+                                }).collect(),
+                            })
+                        } else {
+                            None
+                        };
+
+                        tracing::info!(
+                            category = "AUTOMATION",
+                            request_id = %rid,
+                            success,
+                            total_elapsed_ms = total_elapsed,
+                            failed_at = ?failed_at,
+                            target = "acpDetached",
+                            trace_included = include_trace,
+                            "automation.batch.detached_acp.completed"
+                        );
+
+                        if let Some(ref s) = sender {
+                            let _ = s.try_send(Message::batch_result_with_trace(
+                                rid.clone(), success, results, failed_at, total_elapsed, trace,
+                            ));
+                        }
+                        return;
+                    }
+
+                    // ── Notes batch path ─────────────────────────────────
+                    // When targeting the Notes window, route setInput and
+                    // waitFor commands to the Notes entity.
+                    if let Some((notes_entity, notes_handle)) = notes_batch_target {
+                        let batch_start = std::time::Instant::now();
+                        let batch_timeout = std::time::Duration::from_millis(opts.timeout);
+                        let mut results: Vec<protocol::BatchResultEntry> = Vec::new();
+                        let mut failed = false;
+
+                        for (index, cmd) in commands.iter().enumerate() {
+                            if batch_start.elapsed() >= batch_timeout {
+                                results.push(protocol::BatchResultEntry {
+                                    index,
+                                    success: false,
+                                    command: batch_command_name(cmd),
+                                    elapsed: Some(0),
+                                    value: None,
+                                    error: Some(protocol::TransactionError::wait_timeout("Batch timeout exceeded")),
+                                });
+                                failed = true;
+                                break;
+                            }
+
+                            let cmd_start = std::time::Instant::now();
+                            match cmd {
+                                protocol::BatchCommand::SetInput { text } => {
+                                    let text = text.clone();
+                                    let ne = notes_entity.clone();
+                                    let nh = notes_handle;
+                                    let result = nh.update(cx, |_root, window, cx| {
+                                        ne.update(cx, |app, cx| {
+                                            app.editor_state.update(cx, |state, inner_cx| {
+                                                state.set_value(text.clone(), window, inner_cx);
+                                            });
+                                        });
+                                        tracing::info!(
+                                            target: "script_kit::transaction",
+                                            event = "transaction_notes_set_input",
+                                            text_len = text.len(),
+                                            "Notes set_input"
+                                        );
+                                    });
+                                    match result {
+                                        Ok(()) => {
+                                            tracing::info!(category = "BATCH", request_id = %rid, index, command = "setInput", "batch.notes.step.ok");
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: true, command: "setInput".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None, error: None,
+                                            });
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "setInput".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                protocol::BatchCommand::WaitFor { condition, timeout, poll_interval } => {
+                                    let wait_timeout = std::time::Duration::from_millis(timeout.unwrap_or(5_000));
+                                    let wait_poll = std::time::Duration::from_millis(poll_interval.unwrap_or(25));
+                                    let wait_start = std::time::Instant::now();
+                                    let ne = notes_entity.clone();
+
+                                    let already = this.update(cx, |_this, cx| {
+                                        notes_wait_condition_satisfied(&ne, condition, cx)
+                                    });
+                                    match already {
+                                        Ok(true) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: true, command: "waitFor".to_string(),
+                                                elapsed: Some(0), value: None, error: None,
+                                            });
+                                        }
+                                        Ok(false) => {
+                                            let mut wait_result: Result<Option<String>, protocol::TransactionError> =
+                                                Err(protocol::TransactionError::wait_timeout(
+                                                    format!("WaitFor timeout after {}ms", wait_timeout.as_millis())
+                                                ));
+                                            loop {
+                                                cx.background_executor().timer(wait_poll).await;
+                                                if wait_start.elapsed() >= wait_timeout { break; }
+                                                let ne2 = ne.clone();
+                                                match this.update(cx, |_this, cx| {
+                                                    notes_wait_condition_satisfied(&ne2, condition, cx)
+                                                }) {
+                                                    Ok(true) => { wait_result = Ok(None); break; }
+                                                    Ok(false) => continue,
+                                                    _ => {
+                                                        wait_result = Err(protocol::TransactionError::action_failed(
+                                                            "Entity dropped during WaitFor"
+                                                        ));
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            match wait_result {
+                                                Ok(_) => {
+                                                    tracing::info!(
+                                                        target: "script_kit::transaction",
+                                                        event = "transaction_notes_wait_complete",
+                                                        request_id = %rid,
+                                                        index,
+                                                        target = "notes",
+                                                        "batch.notes.wait.ok"
+                                                    );
+                                                    results.push(protocol::BatchResultEntry {
+                                                        index, success: true, command: "waitFor".to_string(),
+                                                        elapsed: Some(wait_start.elapsed().as_millis() as u64),
+                                                        value: None, error: None,
+                                                    });
+                                                }
+                                                Err(e) => {
+                                                    tracing::info!(category = "BATCH", request_id = %rid, index, command = "waitFor", error = %e.message, "batch.notes.step.error");
+                                                    results.push(protocol::BatchResultEntry {
+                                                        index, success: false, command: "waitFor".to_string(),
+                                                        elapsed: Some(wait_start.elapsed().as_millis() as u64),
+                                                        value: None, error: Some(e),
+                                                    });
+                                                    failed = true;
+                                                    if opts.stop_on_error { break; }
+                                                }
+                                            }
+                                        }
+                                        Err(_) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "waitFor".to_string(),
+                                                elapsed: Some(wait_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed("Entity dropped")),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    // Unsupported commands for Notes
+                                    results.push(protocol::BatchResultEntry {
+                                        index,
+                                        success: false,
+                                        command: batch_command_name(cmd),
+                                        elapsed: Some(0),
+                                        value: None,
+                                        error: Some(protocol::TransactionError {
+                                            code: protocol::TransactionErrorCode::UnsupportedCommand,
+                                            message: format!(
+                                                "{} is not supported for Notes batch targets",
+                                                batch_command_name(cmd)
+                                            ),
+                                            suggestion: Some(
+                                                "Notes batch supports: setInput, waitFor."
+                                                    .to_string(),
+                                            ),
+                                        }),
+                                    });
+                                    failed = true;
+                                    if opts.stop_on_error { break; }
+                                }
+                            }
+                        }
+
+                        let total_elapsed = batch_start.elapsed().as_millis() as u64;
+                        let success = !failed;
+                        let failed_at = if failed {
+                            results.iter().position(|r| !r.success)
+                        } else {
+                            None
+                        };
+
+                        let include_trace = protocol::transaction_trace::should_include_trace(trace_mode, success);
+                        let trace = if include_trace {
+                            let started_at_ms = protocol::transaction_trace::now_epoch_ms()
+                                .saturating_sub(total_elapsed);
+                            Some(protocol::TransactionTrace {
+                                request_id: rid.clone(),
+                                status: if success {
+                                    protocol::TransactionTraceStatus::Ok
+                                } else {
+                                    protocol::TransactionTraceStatus::Failed
+                                },
+                                started_at_ms,
+                                total_elapsed_ms: total_elapsed,
+                                failed_at,
+                                commands: results.iter().map(|r| {
+                                    protocol::TransactionCommandTrace {
+                                        index: r.index,
+                                        command: r.command.clone(),
+                                        started_at_ms,
+                                        elapsed_ms: r.elapsed.unwrap_or(0),
+                                        before: protocol::UiStateSnapshot::default(),
+                                        after: protocol::UiStateSnapshot::default(),
+                                        polls: Vec::new(),
+                                        error: r.error.clone(),
+                                    }
+                                }).collect(),
+                            })
+                        } else {
+                            None
+                        };
+
+                        tracing::info!(
+                            category = "AUTOMATION",
+                            request_id = %rid,
+                            success,
+                            total_elapsed_ms = total_elapsed,
+                            failed_at = ?failed_at,
+                            target = "notes",
+                            trace_included = include_trace,
+                            "automation.batch.notes.completed"
+                        );
+
+                        if let Some(ref s) = sender {
+                            let _ = s.try_send(Message::batch_result_with_trace(
+                                rid.clone(), success, results, failed_at, total_elapsed, trace,
+                            ));
+                        }
+                        return;
+                    }
+
+                    // ── Main-window batch path (existing) ────────────────
                     let batch_start = std::time::Instant::now();
                     let batch_timeout = std::time::Duration::from_millis(opts.timeout);
                     let mut results: Vec<protocol::BatchResultEntry> = Vec::new();

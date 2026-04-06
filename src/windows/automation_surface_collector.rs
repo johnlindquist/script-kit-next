@@ -135,10 +135,23 @@ fn collect_notes_snapshot(
 }
 
 fn collect_acp_detached_snapshot(
-    resolved: &AutomationWindowInfo,
+    _resolved: &AutomationWindowInfo,
     cx: &gpui::App,
 ) -> Option<SurfaceElementSnapshot> {
     let entity = crate::ai::acp::chat_window::get_detached_acp_view_entity()?;
+    Some(collect_acp_detached_elements(&entity, 1000, cx))
+}
+
+/// Collect semantic elements from a live detached ACP entity.
+///
+/// Shared by the surface snapshot path (`getElements`) and the
+/// [`DetachedAcpTransactionProvider`](super::automation_transaction_provider::DetachedAcpTransactionProvider)
+/// so both see the same semantic model.
+pub(crate) fn collect_acp_detached_elements(
+    entity: &gpui::Entity<crate::ai::acp::view::AcpChatView>,
+    limit: usize,
+    cx: &gpui::App,
+) -> SurfaceElementSnapshot {
     let state = entity.read(cx).collect_acp_state_snapshot(cx);
 
     let picker_open = state.picker.as_ref().map(|p| p.open).unwrap_or(false);
@@ -147,7 +160,7 @@ fn collect_acp_detached_snapshot(
         element(
             "panel:acp-detached",
             ElementType::Panel,
-            resolved.title.clone(),
+            None,
             None,
             None,
             None,
@@ -185,11 +198,15 @@ fn collect_acp_detached_snapshot(
         ));
     }
 
-    Some(SurfaceElementSnapshot {
+    if elements.len() > limit {
+        elements.truncate(limit);
+    }
+
+    SurfaceElementSnapshot {
         total_count: elements.len(),
         elements,
         focused_semantic_id: Some("input:acp-composer".to_string()),
         selected_semantic_id: None,
         warnings: Vec::new(),
-    })
+    }
 }

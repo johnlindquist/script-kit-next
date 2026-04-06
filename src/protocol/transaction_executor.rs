@@ -49,6 +49,14 @@ pub trait TransactionStateProvider {
 
 // ── Condition matching ─────────────────────────────────────────────────────
 
+/// Check whether a `UiStateSnapshot` satisfies a `StateMatchSpec`.
+///
+/// Exported for use by Notes (and other non-main) condition checkers
+/// in the prompt handler that cannot go through the transaction executor.
+pub fn matches_state_spec(snapshot: &UiStateSnapshot, spec: &StateMatchSpec) -> bool {
+    matches_state(snapshot, spec)
+}
+
 fn matches_state(snapshot: &UiStateSnapshot, spec: &StateMatchSpec) -> bool {
     if let Some(ref expected) = spec.input_value {
         if snapshot.input_value.as_deref() != Some(expected.as_str()) {

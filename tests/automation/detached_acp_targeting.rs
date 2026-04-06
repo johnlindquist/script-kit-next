@@ -456,6 +456,94 @@ fn get_acp_state_targeted_from_json() {
 }
 
 #[test]
+// ============================================================
+// Cross-window transaction contract: ACP not rejected as main-only
+// ============================================================
+
+fn get_elements_with_acp_detached_target_parses() {
+    let json = serde_json::json!({
+        "type": "getElements",
+        "requestId": "elm-acp-det",
+        "target": {"type": "kind", "kind": "acpDetached"},
+        "limit": 20
+    });
+    let msg: Message =
+        serde_json::from_value(json).expect("getElements with acpDetached target should parse");
+    match msg {
+        Message::GetElements {
+            request_id,
+            target,
+            limit,
+        } => {
+            assert_eq!(request_id, "elm-acp-det");
+            assert!(target.is_some());
+            assert_eq!(limit, Some(20));
+        }
+        other => panic!("Expected GetElements, got: {:?}", other),
+    }
+}
+
+#[test]
+fn acp_detached_get_elements_not_rejected_as_main_only() {
+    // Verify that getElements routes ACP targets through surface collector,
+    // not the main-only reject path.
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    // getElements must use resolve_automation_window (not resolve_main_only_target)
+    assert!(
+        source.contains("collect_surface_snapshot"),
+        "getElements must delegate non-main targets to surface collector"
+    );
+    // getElements parse test
+    get_elements_with_acp_detached_target_parses();
+}
+
+#[test]
+fn acp_detached_batch_not_rejected_as_main_only() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("resolve_automation_read_target(&rid, \"batch\""),
+        "batch handler must use resolve_automation_read_target (accepts AcpDetached)"
+    );
+    assert!(
+        !source.contains("batch currently supports only the main automation window"),
+        "batch must not reject AcpDetached with main-only error"
+    );
+}
+
+#[test]
+fn acp_detached_wait_for_not_rejected_as_main_only() {
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("resolve_acp_read_target(&request_id, \"waitFor\"")
+            || source.contains("resolve_acp_read_target(&rid, \"waitFor\""),
+        "waitFor handler must use resolve_acp_read_target (accepts AcpDetached)"
+    );
+    assert!(
+        !source.contains(
+            "waitFor currently supports only the main automation window; resolved acpDetached"
+        ),
+        "waitFor must not reject AcpDetached with main-only error"
+    );
+}
+
+#[test]
+fn acp_detached_transaction_provider_builds_snapshot() {
+    let source = include_str!("../../src/windows/automation_transaction_provider.rs");
+    assert!(
+        source.contains("fn snapshot(&self) -> UiStateSnapshot"),
+        "provider must build UiStateSnapshot from detached ACP state"
+    );
+    assert!(
+        source.contains("collect_acp_state_snapshot"),
+        "provider snapshot must use live ACP state"
+    );
+    assert!(
+        source.contains("collect_acp_detached_elements"),
+        "provider snapshot must include semantic IDs from shared collector"
+    );
+}
+
+#[test]
 fn get_acp_test_probe_targeted_from_json() {
     // Verify getAcpTestProbe with detached target parses.
     let json = r#"{"type":"getAcpTestProbe","requestId":"acp-p-1","tail":16,"target":{"type":"kind","kind":"acpDetached","index":0}}"#;

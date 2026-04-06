@@ -89,6 +89,64 @@ fn wait_for_state_match_round_trips_without_semantic_id_fields() {
     assert!(condition_out.get("semantic_id").is_none());
 }
 
+// ============================================================
+// Cross-window target contracts
+// ============================================================
+
+#[test]
+fn wait_for_with_acp_detached_target_round_trips() {
+    let msg =
+        wait_for_message(json!({"type": "elementExists", "semanticId": "input:acp-composer"}));
+    let mut msg_with_target = msg.clone();
+    msg_with_target.as_object_mut().unwrap().insert(
+        "target".into(),
+        json!({"type": "kind", "kind": "acpDetached"}),
+    );
+
+    let parsed: Message = serde_json::from_value(msg_with_target)
+        .expect("waitFor with acpDetached target should parse");
+    let output = serde_json::to_value(parsed).expect("should serialize");
+
+    assert!(
+        output.get("target").is_some(),
+        "target field must survive round-trip"
+    );
+    let target = output.get("target").unwrap();
+    assert_eq!(target["kind"], "acpDetached");
+}
+
+#[test]
+fn wait_for_with_notes_target_round_trips() {
+    let msg =
+        wait_for_message(json!({"type": "elementExists", "semanticId": "input:notes-editor"}));
+    let mut msg_with_target = msg.clone();
+    msg_with_target
+        .as_object_mut()
+        .unwrap()
+        .insert("target".into(), json!({"type": "kind", "kind": "notes"}));
+
+    let parsed: Message =
+        serde_json::from_value(msg_with_target).expect("waitFor with notes target should parse");
+    let output = serde_json::to_value(parsed).expect("should serialize");
+
+    assert!(
+        output.get("target").is_some(),
+        "target field must survive round-trip"
+    );
+    let target = output.get("target").unwrap();
+    assert_eq!(target["kind"], "notes");
+}
+
+#[test]
+fn wait_for_without_target_still_works() {
+    // Ensure backward compatibility: no target = main window
+    let output = round_trip(wait_for_message(json!("choicesRendered")));
+    assert!(
+        output.get("target").is_none() || output.get("target").unwrap().is_null(),
+        "waitFor without target should not inject one"
+    );
+}
+
 #[test]
 fn wait_for_named_condition_round_trips_unchanged() {
     let output = round_trip(wait_for_message(json!("choicesRendered")));

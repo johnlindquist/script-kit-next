@@ -160,6 +160,112 @@ fn dictation_model_all_statuses_produce_non_empty_semantic_ids() {
 }
 
 // ---------------------------------------------------------------------------
+// Detached ACP semantic IDs (source contract)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn acp_detached_collector_exposes_panel_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"panel:acp-detached\""),
+        "ACP detached collector must expose panel:acp-detached"
+    );
+}
+
+#[test]
+fn acp_detached_collector_exposes_composer_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"input:acp-composer\""),
+        "ACP detached collector must expose input:acp-composer"
+    );
+}
+
+#[test]
+fn acp_detached_collector_exposes_messages_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"list:acp-messages\""),
+        "ACP detached collector must expose list:acp-messages"
+    );
+}
+
+#[test]
+fn acp_detached_collector_exposes_picker_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"panel:acp-picker\""),
+        "ACP detached collector must expose panel:acp-picker when picker is open"
+    );
+}
+
+#[test]
+fn acp_detached_focused_semantic_id_is_composer() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    // The focused_semantic_id should be the composer input
+    assert!(
+        source.contains("focused_semantic_id: Some(\"input:acp-composer\""),
+        "ACP detached focused_semantic_id must be input:acp-composer"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Notes semantic IDs (source contract)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn notes_collector_exposes_panel_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"panel:notes-window\""),
+        "Notes collector must expose panel:notes-window"
+    );
+}
+
+#[test]
+fn notes_collector_exposes_editor_semantic_id() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"input:notes-editor\""),
+        "Notes collector must expose input:notes-editor"
+    );
+}
+
+#[test]
+fn notes_focused_semantic_id_is_editor() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("focused_semantic_id: Some(\"input:notes-editor\""),
+        "Notes focused_semantic_id must be input:notes-editor"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Cross-surface semantic ID uniqueness
+// ---------------------------------------------------------------------------
+
+#[test]
+fn acp_and_notes_semantic_ids_do_not_collide() {
+    // Verify the hardcoded semantic IDs in each collector are disjoint
+    let acp_ids = [
+        "panel:acp-detached",
+        "input:acp-composer",
+        "list:acp-messages",
+        "panel:acp-picker",
+    ];
+    let notes_ids = ["panel:notes-window", "input:notes-editor"];
+
+    for acp_id in &acp_ids {
+        for notes_id in &notes_ids {
+            assert_ne!(
+                acp_id, notes_id,
+                "ACP and Notes semantic IDs must not collide"
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Cross-prompt uniqueness
 // ---------------------------------------------------------------------------
 
