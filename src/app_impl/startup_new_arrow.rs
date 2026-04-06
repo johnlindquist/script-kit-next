@@ -325,6 +325,51 @@
                                     }
                                     cx.stop_propagation();
                                 }
+                                AppView::AcpHistoryView {
+                                    selected_index,
+                                    filter,
+                                } => {
+                                    let filtered_len = if filter.is_empty() {
+                                        crate::ai::acp::history::load_history().len()
+                                    } else {
+                                        let filter_lower = filter.to_lowercase();
+                                        crate::ai::acp::history::load_history()
+                                            .into_iter()
+                                            .filter(|entry| {
+                                                entry.first_message
+                                                    .to_lowercase()
+                                                    .contains(&filter_lower)
+                                                    || entry
+                                                        .timestamp
+                                                        .to_lowercase()
+                                                        .contains(&filter_lower)
+                                            })
+                                            .count()
+                                    };
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.acp_history_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.acp_history_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
                                 AppView::SearchAiPresetsView {
                                     selected_index,
                                     filter,

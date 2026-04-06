@@ -60,6 +60,8 @@
             emoji_scroll_handle: UniformListScrollHandle::new(),
             window_list_scroll_handle: UniformListScrollHandle::new(),
             process_list_scroll_handle: UniformListScrollHandle::new(),
+            current_app_commands_scroll_handle: UniformListScrollHandle::new(),
+            acp_history_scroll_handle: ScrollHandle::new(),
             design_gallery_scroll_handle: UniformListScrollHandle::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
             theme_chooser_scroll_handle: UniformListScrollHandle::new(),

@@ -11,7 +11,7 @@ use gpui::{
     div, hsla, list, point, prelude::*, px, rgb, rgba, size, svg, uniform_list, AnyElement, App,
     BoxShadow, Context, CursorStyle, Div, ElementId, Entity, FocusHandle, Focusable, FontWeight,
     KeyDownEvent, ListAlignment, ListOffset, ListSizingBehavior, ListState, MouseMoveEvent, Render,
-    ScrollStrategy, SharedString, Subscription, UniformListScrollHandle, Window,
+    ScrollHandle, ScrollStrategy, SharedString, Subscription, UniformListScrollHandle, Window,
     WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
 
