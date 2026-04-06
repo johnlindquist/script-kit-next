@@ -230,7 +230,7 @@ impl ScriptListApp {
     ) -> AnyElement {
         tracing::info!(
             surface = "render_prompts::chat",
-            footer_mode = "hint_strip",
+            footer_mode = "custom",
             footer_owner = "chat_prompt_internal",
             "prompt_surface_rendered"
         );
@@ -240,7 +240,7 @@ impl ScriptListApp {
             layout_mode: "mini",
             input_mode: "bare",
             divider_mode: "none",
-            footer_mode: "hint_strip",
+            footer_mode: "custom",
             header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
             header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
             hint_count: 3,

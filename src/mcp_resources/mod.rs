@@ -1140,10 +1140,39 @@ fn provider_json_text_has_real_data(text: &str) -> bool {
     if object.get("available").and_then(|v| v.as_bool()) == Some(false) {
         return false;
     }
+
+    let envelope_only = object.keys().all(|key| {
+        matches!(
+            key.as_str(),
+            "schemaVersion"
+                | "type"
+                | "ok"
+                | "available"
+                | "source"
+                | "items"
+                | "note"
+                | "nextStep"
+        )
+    });
+
     if let Some(items) = object.get("items").and_then(|v| v.as_array()) {
-        return !items.is_empty();
+        if !items.is_empty() {
+            return true;
+        }
+        if envelope_only {
+            return false;
+        }
     }
-    object.get("available").and_then(|v| v.as_bool()) == Some(true)
+
+    if object.get("available").and_then(|v| v.as_bool()) == Some(true) && !envelope_only {
+        return true;
+    }
+
+    // Treat any other non-empty provider object as real data too. Some
+    // callers seed legacy payloads like {"transcription":"test"} or valid
+    // empty-state payloads like {"events":[]} that should still surface the
+    // provider-backed picker entries.
+    !object.is_empty()
 }
 
 /// Resolve the raw JSON candidate text and its source label for a provider kind.

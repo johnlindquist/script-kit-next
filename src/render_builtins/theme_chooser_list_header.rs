@@ -176,8 +176,8 @@
                                 d.bg(sel_bg).border_color(rgb(accent_color))
                             })
                             .when(!is_selected, |d| {
-                                d.border_color(gpui::transparent_black())
-                                    .hover(move |s| s.bg(hover_bg))
+                                d.hover(move |s| s.bg(hover_bg))
+                                    .border_color(gpui::transparent_black())
                             })
                             .on_click(click_handler)
                             .child(indicator)
@@ -246,4 +246,3 @@
                         ),
                 )
             });
-

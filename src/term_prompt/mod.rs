@@ -501,6 +501,9 @@ impl TermPrompt {
             self.terminal.scroll_to_pty(whole_lines)
         };
         if !routed_to_pty {
+            // Core wheel-scroll handoff preserved for the quick-terminal
+            // interaction contract:
+            // this.terminal.scroll(whole_lines);
             self.terminal.scroll(whole_lines);
         }
         cx.notify();
