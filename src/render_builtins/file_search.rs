@@ -92,31 +92,6 @@ fn file_search_thumbnail_is_decodable_extension(path: &str) -> bool {
     )
 }
 
-/// Compute the canonical three-key footer hints for file search.
-///
-/// Always returns exactly three hints: a state-specific primary action
-/// plus `⌘K Actions` and `Tab AI`, matching the universal design contract.
-fn live_file_search_hints(
-    selected_file: Option<&file_search::FileResult>,
-    is_directory_query: bool,
-) -> Vec<SharedString> {
-    let primary = match selected_file {
-        Some(file)
-            if matches!(file.file_type, file_search::FileType::Directory) =>
-        {
-            "\u{21b5} Browse"
-        }
-        Some(_) => "\u{21b5} Open",
-        None if is_directory_query => "\u{21b5} Browse",
-        None => "\u{21b5} Run",
-    };
-    vec![
-        primary.into(),
-        "\u{2318}K Actions".into(),
-        "Tab AI".into(),
-    ]
-}
-
 fn file_search_thumbnail_display_size(width: u32, height: u32, max_side_px: f32) -> (f32, f32) {
     let width_f = width as f32;
     let height_f = height as f32;
@@ -1124,12 +1099,37 @@ impl ScriptListApp {
             )
         };
 
-        // Footer: strict three-key pattern — one state-specific primary
-        // action plus ⌘K Actions and Tab AI, matching the universal design.
-        let file_search_hints = live_file_search_hints(
-            selected_file.as_ref(),
-            is_directory_query,
-        );
+        // Footer: strict three-key pattern. The AI entry chords remain
+        // "Explain" / "Plan next steps" via ⌘↵ / ⌘⇧↵ on the key handler,
+        // while the visible footer stays within the canonical three-slot
+        // contract.
+        let file_search_hints = if let Some(file) = selected_file.as_ref() {
+            let primary = if matches!(file.file_type, file_search::FileType::Directory) {
+                "\u{21b5} Browse"
+            } else {
+                "\u{21b5} Open"
+            };
+            vec![
+                primary.into(),
+                "\u{2318}K Actions".into(),
+                "Tab AI".into(),
+            ]
+        } else if self.file_search_current_dir.is_some() {
+            vec![
+                "\u{21b5} Browse".into(),
+                "\u{2318}K Actions".into(),
+                "Tab AI".into(),
+            ]
+        } else if is_loading {
+            vec!["Searching".into(), "\u{2318}F Focus".into(), "Tab AI".into()]
+        } else {
+            let primary = if is_directory_query {
+                "\u{21b5} Browse"
+            } else {
+                "\u{21b5} Run"
+            };
+            vec![primary.into(), "\u{2318}F Focus".into(), "Tab AI".into()]
+        };
 
 
         // Header: bare input + file count (scaffold adds padding/layout)

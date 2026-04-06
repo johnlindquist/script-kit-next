@@ -155,19 +155,12 @@ impl ScriptListApp {
     ) -> AnyElement {
         let has_actions = self.has_nonempty_sdk_actions();
 
-        crate::components::emit_prompt_chrome_audit(&crate::components::PromptChromeAudit {
-            surface: "render_prompts::term",
-            layout_mode: "editor",
-            input_mode: "bare",
-            divider_mode: "none",
-            footer_mode: "custom_hint_strip",
-            header_padding_x: crate::ui::chrome::HEADER_PADDING_X as u16,
-            header_padding_y: crate::ui::chrome::HEADER_PADDING_Y as u16,
-            hint_count: 0,
-            has_leading_status: false,
-            has_actions,
-            exception_reason: Some("terminal_owns_contextual_footer"),
-        });
+        let mut chrome_audit =
+            crate::components::PromptChromeAudit::editor("render_prompts::term", has_actions);
+        chrome_audit.footer_mode = "custom_hint_strip";
+        chrome_audit.hint_count = 0;
+        chrome_audit.exception_reason = Some("terminal_owns_contextual_footer");
+        crate::components::emit_prompt_chrome_audit(&chrome_audit);
 
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
         let theme = render_context.theme;

@@ -140,7 +140,9 @@ impl Render for DropPrompt {
             .clone()
             .unwrap_or_else(|| "Drag and drop files to upload".to_string());
 
-        // Whisper chrome: use shared drop-target contract from AppChromeColors
+        // Whisper chrome: use shared drop-target contract from AppChromeColors.
+        // The theme-side drop target colors are derived from OPACITY_GHOST /
+        // OPACITY_GHOST_SOFT so this prompt stays on the shared whisper scale.
         let (drop_zone_bg, drop_zone_border) = if self.is_drag_over {
             (
                 rgba(chrome.drop_target_active_bg_rgba),
