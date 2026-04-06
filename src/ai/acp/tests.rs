@@ -526,8 +526,9 @@ fn acp_picker_migration_uses_popup_window_instead_of_inline_layer() {
         "ACP chat view should no longer render the mention picker inline"
     );
     assert!(
-        ACP_PICKER_POPUP_SOURCE.contains("WindowKind::PopUp")
-            && ACP_PICKER_POPUP_SOURCE.contains("AcpMentionPopupWindow"),
+        ACP_PICKER_POPUP_SOURCE.contains("AcpMentionPopupWindow")
+            && ACP_PICKER_POPUP_SOURCE.contains("super::popup_window::popup_window_options")
+            && ACP_PICKER_POPUP_SOURCE.contains("super::popup_window::configure_popup_window"),
         "ACP picker migration should render through a popup window entity"
     );
 }
@@ -539,9 +540,19 @@ fn acp_model_selector_migration_uses_popup_window_instead_of_inline_layer() {
         "ACP chat view should no longer render the model selector inline"
     );
     assert!(
-        ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("WindowKind::PopUp")
-            && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("AcpModelSelectorPopupWindow"),
+        ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("AcpModelSelectorPopupWindow")
+            && ACP_MODEL_SELECTOR_POPUP_SOURCE
+                .contains("super::popup_window::popup_window_options")
+            && ACP_MODEL_SELECTOR_POPUP_SOURCE
+                .contains("super::popup_window::configure_popup_window"),
         "ACP model selector should render through a popup window entity"
+    );
+    assert!(
+        ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("render_dense_monoline_picker_row(")
+            && ACP_MODEL_SELECTOR_POPUP_SOURCE.contains("super::popup_window::dense_picker_height")
+            && ACP_MODEL_SELECTOR_POPUP_SOURCE
+                .contains("super::popup_window::dense_picker_width_for_window"),
+        "ACP model selector popup must share the dense picker row and sizing contract with slash/@ pickers"
     );
 }
 

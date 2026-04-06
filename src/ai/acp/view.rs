@@ -463,6 +463,11 @@ impl AcpChatView {
                 crate::ai::acp::model_selector_popup::AcpModelSelectorPopupEntry {
                     id: model.id.clone(),
                     display: SharedString::from(display),
+                    meta: if selected_id.as_deref() == Some(model.id.as_str()) {
+                        SharedString::from("\u{2713}")
+                    } else {
+                        SharedString::from("")
+                    },
                     is_selected: selected_id.as_deref() == Some(model.id.as_str()),
                 }
             })
