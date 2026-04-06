@@ -18,6 +18,10 @@ fn builtin_needs_main_window_for_command_id(identifier: &str) -> bool {
     !NO_MAIN_WINDOW_BUILTINS.contains(&identifier)
 }
 
+fn interactive_script_needs_main_window() -> bool {
+    false
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum InteractiveTempFileMode {
     Executable,
@@ -460,7 +464,8 @@ impl ScriptListApp {
     /// - "app/com.apple.Finder" - launch an app
     /// - Otherwise: treated as a file path (legacy behavior)
     ///
-    /// Returns `true` if the main window should be shown, `false` if not.
+    /// Returns `true` if the main window should be shown immediately, `false` if not.
+    /// Interactive scripts start headless and prompt messages reopen the window on demand.
     /// Apps and certain builtins (AI Chat, Notes) open their own windows
     /// and don't need the main window.
     pub fn execute_by_command_id_or_path(
@@ -485,7 +490,7 @@ impl ScriptListApp {
                         );
                         let path = script.path.to_string_lossy().to_string();
                         self.execute_script_by_path(&path, cx);
-                        return true;
+                        return interactive_script_needs_main_window();
                     }
                     tracing::warn!(command_id = %command_id, "script_command_not_found");
                     return false;
@@ -574,10 +579,10 @@ impl ScriptListApp {
             }
         }
 
-        // Fall back to path-based execution (legacy behavior)
-        // Scripts typically need the main window for prompts
+        // Fall back to path-based execution (legacy behavior).
+        // Interactive scripts show the main window only if they later emit a prompt.
         self.execute_script_by_path(command_id, cx);
-        true
+        interactive_script_needs_main_window()
     }
 }
 
@@ -602,6 +607,11 @@ mod builtin_command_window_visibility_tests {
         assert!(builtin_needs_main_window_for_command_id(
             "builtin/refresh-scripts"
         ));
+    }
+
+    #[test]
+    fn test_interactive_script_does_not_need_immediate_main_window() {
+        assert!(!interactive_script_needs_main_window());
     }
 
     #[test]

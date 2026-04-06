@@ -328,8 +328,8 @@
                         );
                     }
 
-                    // Use app_entity.update to access ScriptListApp directly
-                    // Returns whether main window should be shown (apps/certain builtins don't need it)
+                    // Use app_entity.update to access ScriptListApp directly.
+                    // Interactive scripts reopen the window later if they emit a prompt.
                     let should_show_window = app_entity_inner.update(cx, |view, ctx| {
                         logging::log(
                             "HOTKEY",
@@ -343,7 +343,7 @@
                         logging::log("HOTKEY", "Command needs main window, showing it");
                         show_main_window_helper(window_inner, app_entity_inner.clone(), cx);
                     } else if !should_show_window {
-                        logging::log("HOTKEY", "Command doesn't need main window (app/ai/notes)");
+                        logging::log("HOTKEY", "Command does not need an immediate main window");
                     }
                 });
             }
@@ -394,8 +394,8 @@
                         );
                     }
 
-                    // Use app_entity.update to access ScriptListApp directly
-                    // Returns whether main window should be shown (apps/certain builtins don't need it)
+                    // Use app_entity.update to access ScriptListApp directly.
+                    // Interactive scripts reopen the window later if they emit a prompt.
                     let should_show_window = app_entity_inner.update(cx, |view, ctx| {
                         logging::log(
                             "DEEPLINK",
@@ -409,7 +409,7 @@
                         logging::log("DEEPLINK", "Command needs main window, showing it");
                         show_main_window_helper(window_inner, app_entity_inner.clone(), cx);
                     } else if !should_show_window {
-                        logging::log("DEEPLINK", "Command doesn't need main window (app/ai/notes)");
+                        logging::log("DEEPLINK", "Command does not need an immediate main window");
                     }
                 });
             }
