@@ -369,7 +369,8 @@ impl ScriptListApp {
         // ── First-character ScriptList entry routes ──────────────────
         if let Some(entry) = Self::special_entry_from_script_list_filter(&new_text) {
             match entry {
-                ScriptListSpecialEntry::FileSearchMini { query } => {
+                ScriptListSpecialEntry::FileSearchMini { .. } => {
+                    let query = Self::normalize_mini_file_search_query(&new_text);
                     self.open_file_search_view(query, FileSearchPresentation::Mini, cx);
                 }
                 ScriptListSpecialEntry::AcpSlashPicker => {
