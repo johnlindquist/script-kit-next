@@ -1842,15 +1842,15 @@ fn normalize_builtin_identifier_strips_prefixes() {
 // Real config.ts evaluation tests (require bun on PATH)
 // ---------------------------------------------------------------------------
 
-/// A process-wide mutex to serialize tests that mutate SK_PATH.
-static SK_PATH_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
 /// Writes a real config.ts with an `import` and runtime evaluation,
 /// sets SK_PATH to the temp dir, calls `load_config()`, and asserts
 /// the expected hotkey and `bun_path` values come back.
 #[test]
 fn test_load_config_direct_import_reads_real_config_ts() {
-    let _lock = SK_PATH_MUTEX.lock().expect("SK_PATH_MUTEX poisoned");
+    let _lock = crate::test_utils::SK_PATH_TEST_LOCK
+        .get_or_init(|| std::sync::Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
 
     let tmp = tempfile::tempdir().expect("create temp dir");
     let kit_dir = tmp.path().join("kit");
@@ -1894,7 +1894,10 @@ export default {
 /// serve stale config between launches.
 #[test]
 fn test_load_config_reloads_updated_config_ts() {
-    let _lock = SK_PATH_MUTEX.lock().expect("SK_PATH_MUTEX poisoned");
+    let _lock = crate::test_utils::SK_PATH_TEST_LOCK
+        .get_or_init(|| std::sync::Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
 
     let tmp = tempfile::tempdir().expect("create temp dir");
     let kit_dir = tmp.path().join("kit");
