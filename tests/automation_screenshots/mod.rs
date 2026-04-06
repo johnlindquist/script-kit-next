@@ -78,6 +78,8 @@ fn make_info(
             width: w,
             height: h,
         }),
+        parent_window_id: None,
+        parent_kind: None,
     }
 }
 
@@ -276,6 +278,8 @@ fn make_registered(
         visible: true,
         semantic_surface: None,
         bounds,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(info.clone());
     info
@@ -598,6 +602,122 @@ fn attached_surface_no_own_bounds_fails_closed() {
     );
 
     shot_cleanup(&p, &["main", "actions"]);
+}
+
+// ── Popup capture receipt contract ────────────────────────────────────
+
+use script_kit_gpui::platform::{PopupCaptureReceipt, PopupCaptureStrategy};
+
+/// Helper to build a popup capture receipt for testing.
+fn make_popup_receipt(
+    strategy: PopupCaptureStrategy,
+    kind: &str,
+    target_bounds: Option<InspectBoundsInScreenshot>,
+    semantic_primary: bool,
+) -> PopupCaptureReceipt {
+    PopupCaptureReceipt {
+        strategy,
+        window_kind: kind.to_string(),
+        target_bounds,
+        semantic_receipts_are_primary: semantic_primary,
+    }
+}
+
+/// Popup capture receipt for attached popup with crop bounds includes
+/// both strategy and target_bounds.
+#[test]
+fn popup_receipt_attached_with_bounds() {
+    let receipt = make_popup_receipt(
+        PopupCaptureStrategy::ParentCaptureWithCrop,
+        "ActionsDialog",
+        Some(InspectBoundsInScreenshot {
+            x: 380.0,
+            y: 118.0,
+            width: 520.0,
+            height: 384.0,
+        }),
+        true,
+    );
+
+    assert_eq!(
+        receipt.strategy,
+        PopupCaptureStrategy::ParentCaptureWithCrop
+    );
+    assert_eq!(receipt.window_kind, "ActionsDialog");
+    assert!(receipt.target_bounds.is_some());
+    assert!(receipt.semantic_receipts_are_primary);
+
+    // Serde roundtrip
+    let json = serde_json::to_string(&receipt).expect("serialize");
+    assert!(json.contains("parent_capture_with_crop"));
+    assert!(json.contains("targetBounds"));
+    let parsed: PopupCaptureReceipt = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(parsed.strategy, PopupCaptureStrategy::ParentCaptureWithCrop);
+}
+
+/// Popup capture receipt for detached window has direct strategy and no bounds.
+#[test]
+fn popup_receipt_detached() {
+    let receipt = make_popup_receipt(
+        PopupCaptureStrategy::DirectWindowCapture,
+        "AcpDetached",
+        None,
+        true,
+    );
+
+    assert_eq!(receipt.strategy, PopupCaptureStrategy::DirectWindowCapture);
+    assert!(receipt.target_bounds.is_none());
+    assert!(receipt.semantic_receipts_are_primary);
+}
+
+/// Popup capture receipt for main window has not-applicable strategy.
+#[test]
+fn popup_receipt_main_not_applicable() {
+    let receipt = make_popup_receipt(PopupCaptureStrategy::NotApplicable, "Main", None, false);
+
+    assert_eq!(receipt.strategy, PopupCaptureStrategy::NotApplicable);
+    assert!(!receipt.semantic_receipts_are_primary);
+}
+
+/// Attached popup receipt without target_bounds is structurally representable
+/// but signals a verification failure — agents must treat null bounds as error.
+#[test]
+fn popup_receipt_attached_null_bounds_serializes_for_error_reporting() {
+    let receipt = make_popup_receipt(
+        PopupCaptureStrategy::ParentCaptureWithCrop,
+        "PromptPopup",
+        None,
+        true,
+    );
+
+    let json = serde_json::to_string(&receipt).expect("serialize");
+    assert!(json.contains("parent_capture_with_crop"));
+    assert!(json.contains("\"targetBounds\":null"));
+}
+
+/// All three strategy variants roundtrip through serde.
+#[test]
+fn popup_capture_strategy_serde_roundtrip() {
+    for (strategy, expected_str) in [
+        (
+            PopupCaptureStrategy::ParentCaptureWithCrop,
+            "\"parent_capture_with_crop\"",
+        ),
+        (
+            PopupCaptureStrategy::DirectWindowCapture,
+            "\"direct_window_capture\"",
+        ),
+        (PopupCaptureStrategy::NotApplicable, "\"not_applicable\""),
+    ] {
+        let json = serde_json::to_string(&strategy).expect("serialize");
+        assert_eq!(
+            json, expected_str,
+            "strategy {:?} must serialize to {}",
+            strategy, expected_str
+        );
+        let parsed: PopupCaptureStrategy = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed, strategy);
+    }
 }
 
 /// Default hit point computed from target_bounds_in_screenshot must be

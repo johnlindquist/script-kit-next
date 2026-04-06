@@ -12,24 +12,30 @@ use super::automation_window::{
 /// captured screenshot.
 ///
 /// For attached surfaces (ActionsDialog, PromptPopup), this is offset
-/// from the parent (main) window's origin. For detached windows, the
+/// from the recorded parent window's origin. For detached windows, the
 /// origin is `(0, 0)`.
 ///
-/// Uses the global automation registry to resolve the main window.
+/// Uses the popup's `parent_window_id` metadata to resolve the parent.
+/// Falls back to `AutomationWindowTarget::Main` only when no parent
+/// metadata is recorded (legacy popups registered without a parent).
 /// For test isolation, prefer [`target_bounds_in_screenshot_with_main`].
 pub fn target_bounds_in_screenshot(
     resolved: &AutomationWindowInfo,
 ) -> Option<InspectBoundsInScreenshot> {
-    let main_bounds = match resolved.kind {
+    let parent_bounds = match resolved.kind {
         AutomationWindowKind::ActionsDialog | AutomationWindowKind::PromptPopup => {
-            let main =
-                crate::windows::resolve_automation_window(Some(&AutomationWindowTarget::Main))
-                    .ok()?;
-            main.bounds
+            // Prefer the popup's recorded parent; fall back to Main for
+            // legacy registrations without parent metadata.
+            let parent_target = match resolved.parent_window_id.as_ref() {
+                Some(pid) => AutomationWindowTarget::Id { id: pid.clone() },
+                None => AutomationWindowTarget::Main,
+            };
+            let parent = crate::windows::resolve_automation_window(Some(&parent_target)).ok()?;
+            parent.bounds
         }
         _ => None,
     };
-    target_bounds_in_screenshot_with_main(resolved, main_bounds.as_ref())
+    target_bounds_in_screenshot_with_main(resolved, parent_bounds.as_ref())
 }
 
 /// Like [`target_bounds_in_screenshot`] but accepts explicit main-window
@@ -123,6 +129,8 @@ mod tests {
             visible: true,
             semantic_surface: None,
             bounds,
+            parent_window_id: None,
+            parent_kind: None,
         }
     }
 

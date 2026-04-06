@@ -384,6 +384,8 @@ fn build_notes_ui_snapshot(
             visible: true,
             focused: true,
             semantic_surface: Some("notes".to_string()),
+            parent_window_id: None,
+            parent_kind: None,
         },
         200,
         cx,
@@ -5680,12 +5682,18 @@ impl ScriptListApp {
                 );
 
                 let response = if result.success {
-                    Message::simulate_gpui_event_result_success(request_id)
+                    Message::simulate_gpui_event_result_success(
+                        request_id,
+                        result.dispatch_path,
+                        result.resolved_window_id,
+                    )
                 } else {
                     Message::simulate_gpui_event_result_error(
                         request_id,
                         result.error_code.unwrap_or_else(|| "unknown".to_string()),
                         result.error.unwrap_or_else(|| "Unknown error".to_string()),
+                        result.dispatch_path,
+                        result.resolved_window_id,
                     )
                 };
 

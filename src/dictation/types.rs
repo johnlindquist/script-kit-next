@@ -90,6 +90,7 @@ pub enum DictationToggleOutcome {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictationDestination {
+    MainWindowFilter,
     ActivePrompt,
     FrontmostApp,
     NotesEditor,
@@ -104,6 +105,8 @@ pub enum DictationDestination {
 /// the UI (which may have changed while the user was speaking).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictationTarget {
+    /// The shared launcher/main-menu filter in the primary window (`AppView::ScriptList`).
+    MainWindowFilter,
     /// A prompt in the main window that accepts text input (arg, path,
     /// select, env, template, form, file search, mini, micro).
     MainWindowPrompt,
@@ -122,6 +125,7 @@ impl DictationTarget {
     /// Short, stable label for the overlay destination badge.
     pub fn overlay_label(self) -> &'static str {
         match self {
+            Self::MainWindowFilter => "Main",
             Self::MainWindowPrompt => "Prompt",
             Self::NotesEditor => "Notes",
             Self::AiChatComposer => "AI",

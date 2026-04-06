@@ -46,7 +46,7 @@ pub(crate) const TRANSCRIBING_DOT_SIZE_PX: f32 = 4.0;
 pub(crate) const TRANSCRIBING_DOT_GAP_PX: f32 = 4.0;
 
 /// Threshold: if any bar exceeds this, we treat audio as "active" (green).
-const SOUND_THRESHOLD: f32 = 0.15;
+const SOUND_THRESHOLD: f32 = 0.10;
 
 /// Bottom offset from the screen edge (dock clearance), matching vercel-voice.
 const OVERLAY_BOTTOM_OFFSET_PX: f32 = 15.0;
@@ -938,7 +938,7 @@ impl Render for DictationOverlay {
                         .font_family(FONT_MONO)
                         .text_color(text_color)
                         .overflow_hidden()
-                        .child(finished_label(&self.state.transcript)),
+                        .child(finished_label()),
                 ),
             DictationSessionPhase::Failed(ref msg) => {
                 let err_text: SharedString = format!("Error: {msg}").into();
@@ -993,31 +993,9 @@ impl Render for DictationOverlay {
     }
 }
 
-/// Format a human-readable label for the finished overlay state.
-///
-/// - Empty/whitespace transcript → `"Done"`
-/// - Short transcript (≤28 chars) → `"Done · <transcript>"`
-/// - Long transcript (>28 chars) → `"Done · <first 28 chars>…"`
-pub(crate) fn finished_label(transcript: &SharedString) -> SharedString {
-    let owned = transcript.to_string();
-    let trimmed = owned.trim();
-    if trimmed.is_empty() {
-        return "Done".into();
-    }
-    const MAX_CHARS: usize = 28;
-    let mut preview = String::new();
-    let mut chars = trimmed.chars();
-    for _ in 0..MAX_CHARS {
-        let Some(ch) = chars.next() else {
-            break;
-        };
-        preview.push(ch);
-    }
-    if chars.next().is_some() {
-        format!("Done · {preview}…").into()
-    } else {
-        format!("Done · {preview}").into()
-    }
+/// Format the finished overlay state label.
+pub(crate) fn finished_label() -> SharedString {
+    "Done".into()
 }
 
 /// Render waveform bars matching vercel-voice `.bars-container` styling.

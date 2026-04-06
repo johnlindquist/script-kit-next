@@ -476,21 +476,76 @@ impl Render for ActionsWindow {
                     });
                 }
                 Some(ActionsWindowKeyIntent::ExecuteSelected) => {
-                    // Get selected action and execute via callback
-                    let action_id = this.dialog.read(cx).get_selected_action_id();
-                    if let Some(action_id) = action_id {
-                        tracing::info!(
-                            event = "actions_window_execute_selected",
-                            action = %action_id,
-                        );
-                        // Execute the action's callback
-                        let callback = this.dialog.read(cx).on_select.clone();
-                        callback(action_id.clone());
-                        this.request_close(window, cx, "execute_selected", true);
+                    match this.dialog.update(cx, |d, cx| d.activate_selected(cx)) {
+                        super::dialog::ActionsDialogActivation::DrillDownPushed { .. } => {
+                            let (route_id, search_placeholder) = {
+                                let dialog = this.dialog.read(cx);
+                                (
+                                    dialog.current_route_id().map(str::to_string),
+                                    dialog.current_search_placeholder().map(str::to_string),
+                                )
+                            };
+                            tracing::info!(
+                                target: "script_kit::actions",
+                                host = "detached_actions_window",
+                                route_id = ?route_id,
+                                search_placeholder = ?search_placeholder,
+                                "actions_dialog_route_visible"
+                            );
+                            let dialog = this.dialog.clone();
+                            cx.spawn(async move |_this, cx| {
+                                cx.update(|cx| {
+                                    resize_actions_window(cx, &dialog);
+                                })
+                            })
+                            .detach();
+                        }
+                        super::dialog::ActionsDialogActivation::Executed {
+                            action_id,
+                            should_close,
+                        } => {
+                            tracing::info!(
+                                event = "actions_window_execute_selected",
+                                action = %action_id,
+                                should_close,
+                            );
+                            if should_close {
+                                this.request_close(window, cx, "execute_selected", true);
+                            }
+                        }
+                        super::dialog::ActionsDialogActivation::NoSelection => {}
                     }
                 }
                 Some(ActionsWindowKeyIntent::Close) => {
-                    this.request_close(window, cx, "escape", true);
+                    let outcome = this.dialog.update(cx, |d, cx| d.handle_escape(cx));
+                    match outcome {
+                        super::dialog::ActionsDialogEscapeOutcome::PoppedRoute => {
+                            let (route_id, search_placeholder) = {
+                                let dialog = this.dialog.read(cx);
+                                (
+                                    dialog.current_route_id().map(str::to_string),
+                                    dialog.current_search_placeholder().map(str::to_string),
+                                )
+                            };
+                            tracing::info!(
+                                target: "script_kit::actions",
+                                host = "detached_actions_window",
+                                route_id = ?route_id,
+                                search_placeholder = ?search_placeholder,
+                                "actions_dialog_route_visible"
+                            );
+                            let dialog = this.dialog.clone();
+                            cx.spawn(async move |_this, cx| {
+                                cx.update(|cx| {
+                                    resize_actions_window(cx, &dialog);
+                                })
+                            })
+                            .detach();
+                        }
+                        super::dialog::ActionsDialogEscapeOutcome::CloseDialog => {
+                            this.request_close(window, cx, "escape", true);
+                        }
+                    }
                 }
                 Some(ActionsWindowKeyIntent::Backspace) => {
                     crate::logging::log("ACTIONS", "ActionsWindow: backspace pressed");
@@ -1062,7 +1117,18 @@ pub fn open_actions_window(
     display_id: Option<DisplayId>,
     dialog_entity: Entity<ActionsDialog>,
     position: WindowPosition,
+    parent_automation_id: Option<&str>,
 ) -> anyhow::Result<WindowHandle<ActionsWindow>> {
+    // Fail-closed: abort before opening the window if parent identity is missing.
+    if parent_automation_id.is_none() {
+        tracing::warn!(
+            target: "script_kit::actions",
+            event = "actions_popup_open_blocked_missing_parent",
+            "Actions popup open blocked: no parent automation identity"
+        );
+        anyhow::bail!("Cannot open actions popup: parent automation identity is required");
+    }
+
     // Close any existing actions window first
     close_actions_window(cx);
 
@@ -1192,6 +1258,28 @@ pub fn open_actions_window(
 
     crate::logging::log("ACTIONS", "Actions popup window opened with vibrancy");
 
+    // Register in the automation window registry with parent identity.
+    // Fail-closed: if registration fails, close the popup and propagate the error.
+    let popup_automation_id = "actions-dialog".to_string();
+    if let Err(e) = crate::windows::register_attached_popup(
+        popup_automation_id.clone(),
+        crate::protocol::AutomationWindowKind::ActionsDialog,
+        Some("Actions".to_string()),
+        Some("actionsDialog".to_string()),
+        None,
+        parent_automation_id,
+    ) {
+        tracing::warn!(
+            target: "script_kit::actions",
+            event = "actions_popup_registry_failed",
+            error = %e,
+            "Failed to register actions popup in automation registry — closing popup"
+        );
+        // Close the already-opened popup before returning the error
+        close_actions_window(cx);
+        return Err(e);
+    }
+
     // Structured receipt for agentic verification
     let dialog_ref = dialog_entity.read(cx);
     let section_header_count = if dialog_ref.config.section_style == SectionStyle::Headers {
@@ -1213,6 +1301,9 @@ pub fn open_actions_window(
 
 /// Close the actions window if it's open
 pub fn close_actions_window(cx: &mut App) {
+    // Unregister from automation registry before destroying the window
+    crate::windows::remove_automation_window("actions-dialog");
+
     if let Some(window_storage) = ACTIONS_WINDOW.get() {
         if let Ok(mut guard) = window_storage.lock() {
             if let Some(handle) = guard.take() {

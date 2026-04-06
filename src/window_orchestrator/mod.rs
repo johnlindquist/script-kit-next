@@ -94,6 +94,7 @@ pub enum DictationPhase {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DictationTarget {
+    MainWindowFilter,
     MainWindowPrompt,
     NotesEditor,
     AiChatComposer,

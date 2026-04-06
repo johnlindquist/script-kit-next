@@ -24,8 +24,13 @@ fn is_attached_surface(kind: crate::protocol::AutomationWindowKind) -> bool {
     )
 }
 
-/// Translate mouse coordinates from target-local space into the main
+/// Translate mouse coordinates from target-local space into the parent
 /// window's GPUI dispatch space for attached surfaces.
+///
+/// The parent window is determined from the popup's recorded `parent_window_id`
+/// metadata (set at popup registration time via `register_attached_popup`).
+/// If an attached popup has no parent metadata, dispatch **fails closed** with
+/// an explicit error instead of silently falling back to Main.
 ///
 /// Detached windows and key events pass through unchanged.
 /// Returns `Err` with a deterministic message when bounds are unavailable.
@@ -51,24 +56,39 @@ fn rebase_mouse_event_to_dispatch_space(
         )
     })?;
 
-    let main = crate::windows::resolve_automation_window(Some(
-        &crate::protocol::AutomationWindowTarget::Main,
-    ))
-    .map_err(|err| {
-        format!("Failed to resolve main automation window for attached-surface dispatch: {err}")
-    })?;
-
-    let main_bounds = main.bounds.as_ref().ok_or_else(|| {
+    // Resolve the parent window from the popup's recorded metadata.
+    // Fail closed if no parent metadata exists — never silently fall back to Main.
+    let parent_id = resolved.parent_window_id.as_ref().ok_or_else(|| {
         format!(
-            "Main automation window {} has no bounds; cannot translate attached-surface coordinates",
-            main.id
+            "Attached surface {} ({:?}) has no parent_window_id metadata; \
+             cannot rebase coordinates (fail-closed: will not silently dispatch against Main)",
+            resolved.id, resolved.kind
         )
     })?;
 
-    let offset_x = target_bounds.x - main_bounds.x;
-    let offset_y = target_bounds.y - main_bounds.y;
+    let parent = crate::windows::resolve_automation_window(Some(
+        &crate::protocol::AutomationWindowTarget::Id {
+            id: parent_id.clone(),
+        },
+    ))
+    .map_err(|err| {
+        format!(
+            "Failed to resolve parent window '{}' for attached-surface {} dispatch: {err}",
+            parent_id, resolved.id
+        )
+    })?;
 
-    // Log the rebased coordinates for observability.
+    let parent_bounds = parent.bounds.as_ref().ok_or_else(|| {
+        format!(
+            "Parent window {} ({:?}) has no bounds; cannot translate attached-surface coordinates for {}",
+            parent.id, parent.kind, resolved.id
+        )
+    })?;
+
+    let offset_x = target_bounds.x - parent_bounds.x;
+    let offset_y = target_bounds.y - parent_bounds.y;
+
+    // Log the rebased coordinates for observability, including parent identity.
     match event {
         SimulatedGpuiEvent::MouseMove { x, y }
         | SimulatedGpuiEvent::MouseDown { x, y, .. }
@@ -77,6 +97,8 @@ fn rebase_mouse_event_to_dispatch_space(
                 target: "script_kit::automation",
                 window_id = %resolved.id,
                 kind = ?resolved.kind,
+                parent_window_id = %parent.id,
+                parent_kind = ?parent.kind,
                 local_x = x,
                 local_y = y,
                 offset_x = offset_x,
@@ -182,6 +204,12 @@ pub(crate) struct GpuiEventDispatchResult {
     pub error_code: Option<String>,
     /// Human-readable error message if dispatch could not be attempted.
     pub error: Option<String>,
+    /// The dispatch path that was used: `"exact_handle"` when the resolved
+    /// automation target had a registered runtime handle, `"window_role_fallback"`
+    /// when we fell back to `WindowRole`-based dispatch, or `None` on error.
+    pub dispatch_path: Option<String>,
+    /// The resolved automation window ID, when available.
+    pub resolved_window_id: Option<String>,
 }
 
 /// Dispatch a simulated event through an [`AnyWindowHandle`] via the real GPUI
@@ -193,6 +221,7 @@ fn dispatch_with_any_handle(
     event_type: &str,
     event: &crate::protocol::SimulatedGpuiEvent,
     cx: &mut gpui::App,
+    dispatch_path: &str,
 ) -> GpuiEventDispatchResult {
     use crate::protocol::SimulatedGpuiEvent;
 
@@ -256,6 +285,8 @@ fn dispatch_with_any_handle(
                 success: true,
                 error_code: None,
                 error: None,
+                dispatch_path: Some(dispatch_path.to_string()),
+                resolved_window_id: Some(resolved_id.to_string()),
             }
         }
         Err(err) => {
@@ -271,6 +302,8 @@ fn dispatch_with_any_handle(
                 success: false,
                 error_code: Some("dispatch_failed".to_string()),
                 error: Some(msg),
+                dispatch_path: Some(dispatch_path.to_string()),
+                resolved_window_id: Some(resolved_id.to_string()),
             }
         }
     }
@@ -320,6 +353,8 @@ pub(crate) fn dispatch_gpui_event(
                 success: false,
                 error_code: Some("target_not_found".to_string()),
                 error: Some(err.to_string()),
+                dispatch_path: None,
+                resolved_window_id: None,
             };
         }
     };
@@ -341,6 +376,8 @@ pub(crate) fn dispatch_gpui_event(
                 success: false,
                 error_code: Some("coordinate_translation_failed".to_string()),
                 error: Some(msg),
+                dispatch_path: None,
+                resolved_window_id: Some(resolved.id.clone()),
             };
         }
     };
@@ -371,7 +408,15 @@ pub(crate) fn dispatch_gpui_event(
             window_id = %resolved.id,
             "gpui_event_simulation.dispatch_exact_handle"
         );
-        return dispatch_with_any_handle(handle, request_id, &resolved.id, event_type, &event, cx);
+        return dispatch_with_any_handle(
+            handle,
+            request_id,
+            &resolved.id,
+            event_type,
+            &event,
+            cx,
+            "exact_handle",
+        );
     }
 
     // 3. No exact handle — fall back to WindowRole-based dispatch.
@@ -404,6 +449,8 @@ pub(crate) fn dispatch_gpui_event(
             success: false,
             error_code: Some("target_ambiguous".to_string()),
             error: Some(msg),
+            dispatch_path: None,
+            resolved_window_id: Some(resolved.id.clone()),
         };
     }
 
@@ -412,8 +459,33 @@ pub(crate) fn dispatch_gpui_event(
         Some(r) => r,
         None => {
             // For attached surfaces (ActionsDialog, PromptPopup), dispatch
-            // to the parent (Main) window since they share its GPUI context.
-            crate::windows::WindowRole::Main
+            // to the parent window since they share its GPUI context.
+            // Resolve the parent from the popup's recorded metadata.
+            let parent_kind = resolved
+                .parent_kind
+                .unwrap_or(crate::protocol::AutomationWindowKind::Main);
+            match automation_kind_to_window_role(parent_kind) {
+                Some(r) => r,
+                None => {
+                    let msg = format!(
+                        "Attached surface {} ({:?}) parent kind {:?} has no WindowRole mapping",
+                        resolved.id, resolved.kind, parent_kind
+                    );
+                    tracing::warn!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        error = %msg,
+                        "gpui_event_simulation.parent_role_unmapped"
+                    );
+                    return GpuiEventDispatchResult {
+                        success: false,
+                        error_code: Some("handle_unavailable".to_string()),
+                        error: Some(msg),
+                        dispatch_path: None,
+                        resolved_window_id: Some(resolved.id.clone()),
+                    };
+                }
+            }
         }
     };
 
@@ -437,11 +509,21 @@ pub(crate) fn dispatch_gpui_event(
                 success: false,
                 error_code: Some("handle_unavailable".to_string()),
                 error: Some(msg),
+                dispatch_path: None,
+                resolved_window_id: Some(resolved.id.clone()),
             };
         }
     };
 
-    dispatch_with_any_handle(handle, request_id, &resolved.id, event_type, &event, cx)
+    dispatch_with_any_handle(
+        handle,
+        request_id,
+        &resolved.id,
+        event_type,
+        &event,
+        cx,
+        "window_role_fallback",
+    )
 }
 
 fn parse_mouse_button(button: Option<&str>) -> gpui::MouseButton {

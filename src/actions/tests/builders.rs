@@ -429,14 +429,21 @@ fn chat_context_model_selection_marks_current() {
         has_response: true,
     };
     let actions = get_chat_context_actions(&info);
+    let change_model = find_action(&actions, "chat:change_model").unwrap();
+    assert_eq!(change_model.title, "Change Model");
+    assert_eq!(
+        change_model.description.as_deref(),
+        Some("Current: Claude Sonnet")
+    );
 
-    let sonnet = find_action(&actions, "chat:select_model_claude-sonnet").unwrap();
+    let picker = get_chat_model_picker_actions(&info);
+    let sonnet = find_action(&picker, "chat:select_model_claude-sonnet").unwrap();
     assert!(
         sonnet.title.contains("✓"),
         "Current model should have checkmark"
     );
 
-    let gpt4 = find_action(&actions, "chat:select_model_gpt-4").unwrap();
+    let gpt4 = find_action(&picker, "chat:select_model_gpt-4").unwrap();
     assert!(
         !gpt4.title.contains("✓"),
         "Non-current model should not have checkmark"

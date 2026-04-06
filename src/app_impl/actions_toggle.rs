@@ -171,6 +171,7 @@ impl ScriptListApp {
         opened_log: &'static str,
         failed_prefix: &'static str,
     ) {
+        let parent_automation_id = crate::windows::focused_automation_window_id();
         cx.spawn(async move |this, cx| {
             cx.update(|cx| {
                 match open_actions_window(
@@ -180,6 +181,7 @@ impl ScriptListApp {
                     display_id,
                     dialog,
                     position,
+                    parent_automation_id.as_deref(),
                 ) {
                     Ok(_handle) => {
                         logging::log("ACTIONS", opened_log);
@@ -268,7 +270,7 @@ impl ScriptListApp {
             // Open actions as a separate window with vibrancy blur
             self.begin_actions_popup_window_open(cx, window);
 
-            let acp_actions = if let AppView::AcpChatView { ref entity } = self.current_view {
+            let acp_agent_context = if let AppView::AcpChatView { ref entity } = self.current_view {
                 let (selected_agent_id, catalog_entries) = {
                     let view = entity.read(cx);
                     match &view.session {
@@ -298,12 +300,9 @@ impl ScriptListApp {
                     catalog_count = catalog_entries.len(),
                 );
 
-                crate::actions::get_acp_chat_actions_with_agents(
-                    &catalog_entries,
-                    selected_agent_id.as_deref(),
-                )
+                Some((selected_agent_id, catalog_entries))
             } else {
-                Vec::new()
+                None
             };
             let script_info = self.get_focused_script_info();
 
@@ -316,18 +315,14 @@ impl ScriptListApp {
             // Create the dialog entity
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
-                let mut dialog = if is_acp_chat {
-                    // ACP chat view: use chat-specific actions
-                    ActionsDialog::from_actions_with_context(
+                let mut dialog = if let Some((ref selected_agent_id, ref catalog_entries)) = acp_agent_context {
+                    // ACP chat view: use route-based dialog with drill-down agent picker
+                    ActionsDialog::with_acp_chat(
                         focus_handle,
                         std::sync::Arc::new(|_action_id| {}),
-                        acp_actions,
-                        None,
-                        None,
-                        theme_arc,
-                        crate::designs::DesignVariant::Default,
-                        Some("AI Chat".to_string()),
-                        crate::actions::ActionsDialogConfig::default(),
+                        catalog_entries,
+                        selected_agent_id.as_deref(),
+                        std::sync::Arc::clone(&theme_arc),
                     )
                 } else {
                     ActionsDialog::with_script(

@@ -35,6 +35,8 @@ fn actions_dialog_registered_as_popup() {
         visible: true,
         semantic_surface: Some("scriptList".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(main);
 
@@ -47,6 +49,8 @@ fn actions_dialog_registered_as_popup() {
         visible: true,
         semantic_surface: Some("actionsDialog".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(actions);
 
@@ -116,6 +120,8 @@ fn actions_dialog_close_removes_from_listing() {
         visible: true,
         semantic_surface: None,
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(actions);
 
@@ -143,6 +149,8 @@ fn prompt_popup_kind_resolves_independently() {
         visible: true,
         semantic_surface: Some("confirmDialog".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(popup);
 
@@ -497,4 +505,222 @@ fn prompt_popup_batch_target_fails_closed() {
             .contains("supports Main, AcpDetached, Notes, ActionsDialog, and PromptPopup targets"),
         "unsupported kind error message must list all supported targets including PromptPopup"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Attached popup parent identity contract tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn actions_dialog_records_parent_identity_from_main() {
+    let p = prefix();
+    let main = AutomationWindowInfo {
+        id: format!("{p}:main"),
+        kind: AutomationWindowKind::Main,
+        title: Some("Script Kit".into()),
+        focused: true,
+        visible: true,
+        semantic_surface: Some("scriptList".into()),
+        bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
+    };
+    script_kit_gpui::windows::upsert_automation_window(main);
+    script_kit_gpui::windows::register_attached_popup(
+        format!("{p}:actions-parent"),
+        AutomationWindowKind::ActionsDialog,
+        Some("Actions".into()),
+        Some("actionsDialog".into()),
+        None,
+        Some(&format!("{p}:main")),
+    )
+    .expect("should register with main parent");
+    let resolved =
+        script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Id {
+            id: format!("{p}:actions-parent"),
+        }))
+        .expect("should resolve");
+    assert_eq!(
+        resolved.parent_window_id.as_deref(),
+        Some(format!("{p}:main").as_str()),
+    );
+    assert_eq!(resolved.parent_kind, Some(AutomationWindowKind::Main));
+    cleanup(&p, &["main", "actions-parent"]);
+}
+
+#[test]
+fn actions_dialog_records_parent_identity_from_non_main_host() {
+    let p = prefix();
+    let acp = AutomationWindowInfo {
+        id: format!("{p}:acp"),
+        kind: AutomationWindowKind::AcpDetached,
+        title: Some("AI Chat".into()),
+        focused: true,
+        visible: true,
+        semantic_surface: Some("acpChat".into()),
+        bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
+    };
+    script_kit_gpui::windows::upsert_automation_window(acp);
+    script_kit_gpui::windows::register_attached_popup(
+        format!("{p}:acp-actions"),
+        AutomationWindowKind::ActionsDialog,
+        Some("Actions".into()),
+        Some("actionsDialog".into()),
+        None,
+        Some(&format!("{p}:acp")),
+    )
+    .expect("should register with ACP parent");
+    let resolved =
+        script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Id {
+            id: format!("{p}:acp-actions"),
+        }))
+        .expect("should resolve");
+    assert_eq!(
+        resolved.parent_window_id.as_deref(),
+        Some(format!("{p}:acp").as_str()),
+    );
+    assert_eq!(
+        resolved.parent_kind,
+        Some(AutomationWindowKind::AcpDetached)
+    );
+    cleanup(&p, &["acp", "acp-actions"]);
+}
+
+#[test]
+fn confirm_popup_records_parent_identity() {
+    let p = prefix();
+    let main = AutomationWindowInfo {
+        id: format!("{p}:main"),
+        kind: AutomationWindowKind::Main,
+        title: Some("Script Kit".into()),
+        focused: true,
+        visible: true,
+        semantic_surface: Some("scriptList".into()),
+        bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
+    };
+    script_kit_gpui::windows::upsert_automation_window(main);
+    script_kit_gpui::windows::register_attached_popup(
+        format!("{p}:confirm"),
+        AutomationWindowKind::PromptPopup,
+        Some("Confirm".into()),
+        Some("confirmDialog".into()),
+        None,
+        Some(&format!("{p}:main")),
+    )
+    .expect("should register confirm with main parent");
+    let resolved =
+        script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Id {
+            id: format!("{p}:confirm"),
+        }))
+        .expect("should resolve");
+    assert_eq!(resolved.kind, AutomationWindowKind::PromptPopup);
+    assert_eq!(
+        resolved.parent_window_id.as_deref(),
+        Some(format!("{p}:main").as_str())
+    );
+    assert_eq!(resolved.parent_kind, Some(AutomationWindowKind::Main));
+    cleanup(&p, &["main", "confirm"]);
+}
+
+#[test]
+fn attached_popup_parent_fails_closed_on_unknown_parent() {
+    let p = prefix();
+    let result = script_kit_gpui::windows::register_attached_popup(
+        format!("{p}:orphan"),
+        AutomationWindowKind::ActionsDialog,
+        Some("Actions".into()),
+        None,
+        None,
+        Some("nonexistent-parent-window"),
+    );
+    assert!(
+        result.is_err(),
+        "must fail closed when parent is not in registry"
+    );
+    assert!(
+        script_kit_gpui::windows::resolve_automation_window(Some(&AutomationWindowTarget::Id {
+            id: format!("{p}:orphan"),
+        }))
+        .is_err(),
+        "orphan popup must not be in the registry"
+    );
+}
+
+#[test]
+fn parent_identity_round_trips_through_serde() {
+    let info = AutomationWindowInfo {
+        id: "test-popup".into(),
+        kind: AutomationWindowKind::ActionsDialog,
+        title: Some("Actions".into()),
+        focused: false,
+        visible: true,
+        semantic_surface: Some("actionsDialog".into()),
+        bounds: None,
+        parent_window_id: Some("main".into()),
+        parent_kind: Some(AutomationWindowKind::Main),
+    };
+    let json = serde_json::to_string(&info).expect("serialize");
+    assert!(json.contains("\"parentWindowId\":\"main\""));
+    assert!(json.contains("\"parentKind\":\"main\""));
+    let deserialized: AutomationWindowInfo = serde_json::from_str(&json).expect("deserialize");
+    assert_eq!(deserialized.parent_window_id.as_deref(), Some("main"));
+    assert_eq!(deserialized.parent_kind, Some(AutomationWindowKind::Main));
+}
+
+#[test]
+fn parent_identity_omitted_when_none_in_serde() {
+    let info = AutomationWindowInfo {
+        id: "test-no-parent".into(),
+        kind: AutomationWindowKind::Main,
+        title: None,
+        focused: false,
+        visible: true,
+        semantic_surface: None,
+        bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
+    };
+    let json = serde_json::to_string(&info).expect("serialize");
+    assert!(!json.contains("parentWindowId"));
+    assert!(!json.contains("parentKind"));
+}
+
+#[test]
+fn open_actions_window_registers_in_automation_registry() {
+    let source = include_str!("../../src/actions/window.rs");
+    assert!(source.contains("register_attached_popup("));
+    assert!(source.contains("\"actions-dialog\""));
+}
+
+#[test]
+fn close_actions_window_unregisters_from_automation_registry() {
+    let source = include_str!("../../src/actions/window.rs");
+    assert!(source.contains("remove_automation_window(\"actions-dialog\")"));
+}
+
+#[test]
+fn open_confirm_popup_registers_in_automation_registry() {
+    let source = include_str!("../../src/confirm/window.rs");
+    assert!(source.contains("register_attached_popup("));
+    assert!(source.contains("\"confirm-popup\""));
+}
+
+#[test]
+fn close_confirm_popup_unregisters_from_automation_registry() {
+    let source = include_str!("../../src/confirm/window.rs");
+    assert!(source.contains("remove_automation_window(\"confirm-popup\")"));
+}
+
+#[test]
+fn attached_popup_parent_resolved_log_is_emitted() {
+    let source = include_str!("../../src/windows/automation_registry.rs");
+    assert!(source.contains("\"automation.attached_popup_parent_resolved\""));
+    assert!(source.contains("popup_window_id"));
+    assert!(source.contains("popup_kind"));
+    assert!(source.contains("parent_window_id"));
+    assert!(source.contains("parent_kind"));
 }

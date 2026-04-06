@@ -159,24 +159,32 @@ function buildCmd(
 }
 
 /**
- * Build native-input args with session, optional --surface, and --ensure-focus.
- * Always passes --session so macos-input.ts uses the session-aware focus path.
+ * Build native-input args with session, optional --surface, and optional --ensure-focus.
+ * Always passes --session so macos-input.ts uses the capability ladder
+ * (directBatch → gpuiDispatch → native fallback).
+ *
+ * When `skipEnsureFocus` is true, the `--ensure-focus` flag is omitted so
+ * macos-input.ts will not attempt OS-level focus enforcement before trying
+ * protocol-level and GPUI dispatch paths. This is the correct mode for
+ * detached ACP and popup targets that don't need foreground keyboard focus.
  */
 function nativeInputArgs(
   command: string,
   value: string,
   session: string,
-  surface?: string
+  surface?: string,
+  opts?: { skipEnsureFocus?: boolean }
 ): string[] {
   const args = [
     "bun",
     "scripts/agentic/macos-input.ts",
     command,
     value,
-    "--ensure-focus",
-    "--session",
-    session,
   ];
+  if (!opts?.skipEnsureFocus) {
+    args.push("--ensure-focus");
+  }
+  args.push("--session", session);
   if (surface) {
     args.push("--target", surface);
   }
@@ -499,10 +507,16 @@ async function recipeAcpPickerAccept(
     )
   );
 
-  // 3. Type @ to open picker (native input with focus enforcement)
+  // 3. Type @ to open picker.
+  //    For non-main targets (detached ACP, popups), skip OS-level focus enforcement
+  //    so the capability ladder (directBatch → gpuiDispatch) is tried first. This
+  //    allows detached ACP flows to succeed even when the human user types in another app.
+  const isNonMainTarget = opts.target && !isMainLikeTarget(opts.target);
   const typeAtStep = await step("type-at-trigger", () =>
     runTool(
-      nativeInputArgs("type", "@", session, opts.surface),
+      nativeInputArgs("type", "@", session, opts.surface, {
+        skipEnsureFocus: isNonMainTarget,
+      }),
       "type-at"
     )
   );
@@ -514,7 +528,7 @@ async function recipeAcpPickerAccept(
       recipe: `acp-${acceptKey}-accept`,
       status: "fail",
       steps,
-      summary: `Native input failed at type-at-trigger: focus not confirmed or input not delivered`,
+      summary: `Input failed at type-at-trigger: ${isNonMainTarget ? "protocol/GPUI ladder exhausted" : "focus not confirmed or input not delivered"}`,
     };
   }
 
@@ -562,22 +576,24 @@ async function recipeAcpPickerAccept(
     )
   );
 
-  // 6. Accept with native key (with focus enforcement)
-  const nativeKeyStep = await step(`native-${acceptKey}`, () =>
+  // 6. Accept with key (prefer GPUI dispatch for non-main targets)
+  const acceptKeyStep = await step(`accept-${acceptKey}`, () =>
     runTool(
-      nativeInputArgs("key", acceptKey, session, opts.surface),
-      `native-${acceptKey}`
+      nativeInputArgs("key", acceptKey, session, opts.surface, {
+        skipEnsureFocus: isNonMainTarget,
+      }),
+      `accept-${acceptKey}`
     )
   );
-  steps.push(nativeKeyStep);
+  steps.push(acceptKeyStep);
 
-  if (nativeKeyStep.status !== "pass") {
+  if (acceptKeyStep.status !== "pass") {
     return {
       schemaVersion: SCHEMA_VERSION,
       recipe: `acp-${acceptKey}-accept`,
       status: "fail",
       steps,
-      summary: `Native input failed at native-${acceptKey}: focus not confirmed or key not delivered`,
+      summary: `Input failed at accept-${acceptKey}: ${isNonMainTarget ? "protocol/GPUI ladder exhausted" : "focus not confirmed or key not delivered"}`,
     };
   }
 
@@ -917,9 +933,10 @@ async function recipeAcpDetachedAccept(
   const kind = opts.kind ?? "acpDetached";
   const index = opts.index ?? 0;
 
-  // 1. Inspect the detached ACP target — one call derives targetJson,
-  //    surfaceId, automationWindowId, and osWindowId.
-  const inspectStep = await step("inspect-detached-target", () =>
+  // 1. Promote to exact target — resolve the kind-based target to an exact ID
+  //    first, then inspect. This ensures all subsequent RPCs use the exact ID
+  //    and never re-resolve by kind.
+  const inspectStep = await step("promote-exact-target", () =>
     runTool(
       [
         "bun",
@@ -932,7 +949,7 @@ async function recipeAcpDetachedAccept(
         "--index",
         String(index),
       ],
-      "inspect-target"
+      "promote-exact-target"
     )
   );
   steps.push(inspectStep);
@@ -943,11 +960,11 @@ async function recipeAcpDetachedAccept(
       recipe: "acp-detached-accept",
       status: "error",
       steps,
-      summary: "Cannot proceed: target inspection failed",
+      summary: "Cannot proceed: exact target promotion failed",
     };
   }
 
-  // Extract identity from the inspect envelope
+  // Extract identity from the inspect envelope and promote to exact ID
   const inspectOutput = inspectStep.output as Record<string, unknown>;
   const surfaceId = (inspectOutput.surfaceId as string) ?? null;
   const rawWindowId = inspectOutput.automationWindowId;
@@ -967,11 +984,39 @@ async function recipeAcpDetachedAccept(
     typeof inspectOutput.osWindowId === "number" && inspectOutput.osWindowId > 0
       ? inspectOutput.osWindowId
       : null;
-  const targetJson: AutomationTargetJson = (inspectOutput.targetJson as AutomationTargetJson) ?? {
-    type: "kind",
-    kind,
-    index,
-  };
+
+  // Promote: if we got an automation window ID from inspect, use exact ID
+  // targeting. Detached proof flows MUST have an exact target — no kind fallback.
+  if (automationWindowId == null) {
+    console.error(
+      JSON.stringify({
+        event: "agentic.proof_flow.exact_target_required",
+        fromKind: kind,
+        fromIndex: index,
+        reason: "automationWindowId not available from inspect; detached proof requires exact target",
+      })
+    );
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "acp-detached-accept",
+      status: "error",
+      steps,
+      summary: "Cannot proceed: detached ACP proof requires exact automationWindowId but inspect returned none",
+    };
+  }
+
+  const targetJson: AutomationTargetJson = { type: "id", id: String(automationWindowId) };
+  console.error(
+    JSON.stringify({
+      event: "agentic.promote_exact_target",
+      fromKind: kind,
+      fromIndex: index,
+      promotedTargetJson: targetJson,
+      automationWindowId,
+      surfaceId,
+      osWindowId,
+    })
+  );
 
   const resolved: DetachedResolved = {
     targetJson,
@@ -1005,18 +1050,80 @@ async function recipeAcpDetachedAccept(
     steps.push(s);
   }
 
-  // 4. Validate identity alignment in proof bundle
-  let identityMismatch = false;
+  // 4. Validate proof receipt chain — detached proof requires a real proof bundle
   const proofBundle = acceptResult.proofBundle as Record<string, unknown> | undefined;
-  if (proofBundle) {
-    const captureTarget = proofBundle.captureTarget as Record<string, unknown> | undefined;
-    if (captureTarget) {
-      const requestedId = captureTarget.requestedWindowId;
-      const actualId = captureTarget.actualWindowId;
-      if (requestedId != null && actualId != null && requestedId !== actualId) {
-        identityMismatch = true;
-      }
-    }
+
+  if (!proofBundle) {
+    console.error(
+      JSON.stringify({
+        event: "agentic.proof_flow.receipt_missing",
+        recipe: "acp-detached-accept",
+        automationWindowId,
+        reason: "acceptResult.proofBundle is absent; detached proof requires a real proof bundle",
+      })
+    );
+    steps.push({
+      name: "proof-receipt-check",
+      status: "fail",
+      output: {
+        error: "proofBundle missing from accept result",
+        resolved,
+      },
+      durationMs: 0,
+    });
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "acp-detached-accept",
+      status: "error",
+      steps,
+      summary: "Detached ACP proof failed: proofBundle missing from accept result",
+    };
+  }
+
+  const captureTarget = proofBundle.captureTarget as Record<string, unknown> | undefined;
+  if (!captureTarget) {
+    console.error(
+      JSON.stringify({
+        event: "agentic.proof_flow.receipt_missing",
+        recipe: "acp-detached-accept",
+        automationWindowId,
+        reason: "proofBundle.captureTarget is absent; detached proof requires capture identity",
+      })
+    );
+    steps.push({
+      name: "proof-receipt-check",
+      status: "fail",
+      output: {
+        error: "proofBundle.captureTarget missing",
+        resolved,
+        proofBundle,
+      },
+      durationMs: 0,
+    });
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "acp-detached-accept",
+      status: "error",
+      steps,
+      summary: "Detached ACP proof failed: proofBundle.captureTarget missing",
+    };
+  }
+
+  // Validate identity alignment — requested vs actual window
+  let identityMismatch = false;
+  const requestedId = captureTarget.requestedWindowId;
+  const actualId = captureTarget.actualWindowId;
+  if (requestedId != null && actualId != null && requestedId !== actualId) {
+    identityMismatch = true;
+    console.error(
+      JSON.stringify({
+        event: "agentic.proof_flow.capture_identity_mismatch",
+        recipe: "acp-detached-accept",
+        automationWindowId,
+        requestedWindowId: requestedId,
+        actualWindowId: actualId,
+      })
+    );
   }
 
   if (identityMismatch) {
@@ -1032,6 +1139,12 @@ async function recipeAcpDetachedAccept(
     });
   } else {
     steps.push({
+      name: "proof-receipt-check",
+      status: "pass",
+      output: { resolved, captureTarget },
+      durationMs: 0,
+    });
+    steps.push({
       name: "identity-check",
       status: "pass",
       output: { resolved },
@@ -1041,10 +1154,11 @@ async function recipeAcpDetachedAccept(
 
   const allPass = !identityMismatch && acceptResult.status === "pass";
 
-  // Build proofBundle with resolvedTarget always present
-  const mergedProofBundle: Record<string, unknown> = proofBundle
-    ? { ...proofBundle, resolvedTarget: resolved }
-    : { resolvedTarget: resolved };
+  // Attach resolvedTarget only when a real proof bundle exists
+  const mergedProofBundle: Record<string, unknown> = {
+    ...proofBundle,
+    resolvedTarget: resolved,
+  };
 
   return {
     schemaVersion: SCHEMA_VERSION,

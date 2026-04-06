@@ -426,3 +426,29 @@ fn dispatch_convenience_mutates_in_place() {
         MainVisibility::Hidden(HiddenReason::Dismissed)
     );
 }
+
+#[test]
+fn start_dictation_from_script_list_filter_conceals_and_opens_overlay() {
+    let state = OrchestratorState::default();
+
+    let t = reduce(
+        &state,
+        WindowEvent::StartDictation {
+            target: DictationTarget::MainWindowFilter,
+        },
+    );
+
+    assert!(matches!(
+        t.next.dictation,
+        DictationSurfaceState::Visible {
+            phase: DictationPhase::Recording,
+            target: DictationTarget::MainWindowFilter,
+            restore_main_visibility: true,
+            ..
+        }
+    ));
+    assert!(t.commands.contains(&WindowCommand::ConcealMain));
+    assert!(t.commands.contains(&WindowCommand::OpenDictationOverlay {
+        phase: DictationPhase::Recording,
+    }));
+}

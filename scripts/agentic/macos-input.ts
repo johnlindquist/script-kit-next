@@ -672,6 +672,10 @@ end tell`,
 /**
  * Deliver a key via the capability ladder.
  * Order: directBatch (N/A for keys) → gpuiDispatch → accessibility → quartz.
+ *
+ * `gpuiDispatch` is preferred because it dispatches through GPUI's real input
+ * pipeline without requiring OS-level keyboard focus. Native/quartz methods
+ * are used only as explicit fallback.
  */
 async function sendKeyWithLadder(
   key: string,
@@ -685,10 +689,17 @@ async function sendKeyWithLadder(
   // 1. directBatch — not applicable for raw key events
   fallbackReasons.push({ method: "directBatch", reason: "not_applicable_for_key_events" });
 
-  // 2. gpuiDispatch — try in-process GPUI key simulation
+  // 2. gpuiDispatch — try in-process GPUI key simulation (no OS focus needed)
   if (session) {
     const gpui = await tryGpuiKeyDispatch(session, targetKind, key, modifiers);
     if (gpui.ok) {
+      stderrLog("agentic.input_method_selected", {
+        chosenMethod: "gpuiDispatch",
+        target: targetKind,
+        action: "key",
+        key,
+        modifiers,
+      });
       return {
         key, modifiers, delivered: true, method: "gpuiDispatch", focusEnforced,
         receipt: { target: targetKind, chosenMethod: "gpuiDispatch", fallbackReasons },
@@ -699,13 +710,27 @@ async function sendKeyWithLadder(
     fallbackReasons.push({ method: "gpuiDispatch", reason: "no_session" });
   }
 
-  // 3–4. Fall through to OS-level input (accessibility/quartz)
-  stderrLog("capability_ladder_fallback_to_os", { key, modifiers, fallbackReasons });
+  // 3–4. Fall through to OS-level input (focus-dependent, used only as fallback)
+  stderrLog("agentic.input_method_fallback", {
+    action: "key",
+    target: targetKind,
+    key,
+    modifiers,
+    fallbackReasons,
+  });
   const result = await sendKey(key, modifiers, focusEnforced);
   const chosenMethod: CapabilityMethod = result.method === "cliclick" ? "quartz" : "accessibility";
   if (result.method === "cliclick") {
     fallbackReasons.push({ method: "accessibility", reason: "cliclick_succeeded_first" });
   }
+  stderrLog("agentic.input_method_selected", {
+    chosenMethod,
+    target: targetKind,
+    action: "key",
+    key,
+    modifiers,
+    note: "os_level_fallback",
+  });
   return {
     ...result,
     method: chosenMethod,
@@ -714,8 +739,48 @@ async function sendKeyWithLadder(
 }
 
 /**
+ * Try to deliver text via GPUI event simulation (one keyDown per character).
+ * Second priority for text — uses in-process GPUI dispatch which doesn't need
+ * foreground OS focus but requires a valid window handle.
+ *
+ * Sends each character of `text` as a separate `keyDown` event. This is slower
+ * than `directBatch`/`setInput` but works for surfaces that accept key events
+ * but don't support the `setInput` batch command (e.g., detached ACP input).
+ */
+async function tryGpuiTextDispatch(
+  sessionName: string,
+  targetKind: string | null,
+  text: string
+): Promise<{ ok: boolean; reason?: string }> {
+  if (!sessionName) return { ok: false, reason: "no_session" };
+
+  // Type each character as an individual keyDown event
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const gpuiResult = await tryGpuiKeyDispatch(sessionName, targetKind, char, []);
+    if (!gpuiResult.ok) {
+      return {
+        ok: false,
+        reason: `gpui_char_failed_at_${i}: ${gpuiResult.reason ?? "unknown"}`,
+      };
+    }
+  }
+  stderrLog("capability_ladder_gpui_text_ok", {
+    target: targetKind,
+    textLen: text.length,
+  });
+  return { ok: true };
+}
+
+/**
  * Deliver text via the capability ladder.
- * Order: directBatch (setInput) → gpuiDispatch (N/A for text) → accessibility → quartz.
+ * Order: directBatch (setInput) → gpuiDispatch (char-at-a-time) → accessibility → quartz.
+ *
+ * For targets with direct semantic mutation support (detached ACP, ActionsDialog),
+ * `directBatch` is preferred because it sets the full input atomically.
+ * `gpuiDispatch` is the next focus-independent method, dispatching each character
+ * through GPUI's real input pipeline without requiring OS-level keyboard focus.
+ * Native/quartz methods are used only as explicit fallback.
  */
 async function sendTypeWithLadder(
   text: string,
@@ -725,10 +790,16 @@ async function sendTypeWithLadder(
 ): Promise<TypeResult> {
   const fallbackReasons: ActionReceipt["fallbackReasons"] = [];
 
-  // 1. directBatch — try protocol-level setInput
+  // 1. directBatch — try protocol-level setInput (highest priority, no focus needed)
   if (session && targetKind) {
     const batch = await tryBatchSetInput(session, targetKind, text);
     if (batch.ok) {
+      stderrLog("agentic.input_method_selected", {
+        chosenMethod: "directBatch",
+        target: targetKind,
+        action: "type",
+        textLen: text.length,
+      });
       return {
         text, delivered: true, method: "directBatch", focusEnforced,
         receipt: { target: targetKind, chosenMethod: "directBatch", fallbackReasons },
@@ -742,16 +813,46 @@ async function sendTypeWithLadder(
     });
   }
 
-  // 2. gpuiDispatch — not directly applicable for bulk text
-  fallbackReasons.push({ method: "gpuiDispatch", reason: "not_applicable_for_bulk_text" });
+  // 2. gpuiDispatch — type characters one-at-a-time through GPUI input pipeline
+  //    (no OS-level focus needed, but requires a valid window handle)
+  if (session) {
+    const gpui = await tryGpuiTextDispatch(session, targetKind, text);
+    if (gpui.ok) {
+      stderrLog("agentic.input_method_selected", {
+        chosenMethod: "gpuiDispatch",
+        target: targetKind,
+        action: "type",
+        textLen: text.length,
+      });
+      return {
+        text, delivered: true, method: "gpuiDispatch", focusEnforced,
+        receipt: { target: targetKind, chosenMethod: "gpuiDispatch", fallbackReasons },
+      };
+    }
+    fallbackReasons.push({ method: "gpuiDispatch", reason: gpui.reason ?? "unknown" });
+  } else {
+    fallbackReasons.push({ method: "gpuiDispatch", reason: "no_session" });
+  }
 
-  // 3–4. Fall through to OS-level input
-  stderrLog("capability_ladder_fallback_to_os", { text: text.slice(0, 50), fallbackReasons });
+  // 3–4. Fall through to OS-level input (focus-dependent, used only as fallback)
+  stderrLog("agentic.input_method_fallback", {
+    action: "type",
+    target: targetKind,
+    textLen: text.length,
+    fallbackReasons,
+  });
   const result = await sendType(text, focusEnforced);
   const chosenMethod: CapabilityMethod = result.method === "cliclick" ? "quartz" : "accessibility";
   if (result.method === "cliclick") {
     fallbackReasons.push({ method: "accessibility", reason: "cliclick_succeeded_first" });
   }
+  stderrLog("agentic.input_method_selected", {
+    chosenMethod,
+    target: targetKind,
+    action: "type",
+    textLen: text.length,
+    note: "os_level_fallback",
+  });
   return {
     ...result,
     method: chosenMethod,

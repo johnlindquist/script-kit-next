@@ -32,6 +32,8 @@ pub(crate) use scriptlet::get_scriptlet_defined_actions;
 #[allow(unused_imports)]
 pub(crate) use shared::format_shortcut_hint;
 
+#[allow(unused_imports)]
+pub use chat::get_chat_model_picker_actions;
 pub use chat::{get_ai_command_bar_actions, get_chat_context_actions};
 pub use clipboard::get_clipboard_history_context_actions;
 pub(crate) use file_path::resolve_file_search_secondary_action_id;
@@ -43,6 +45,9 @@ pub use notes::{get_new_chat_actions, get_note_switcher_actions, get_notes_comma
 pub(crate) use script_context::{
     acp_switch_agent_id_from_action, get_acp_chat_actions, get_acp_chat_actions_with_agents,
     get_global_actions, get_script_context_actions,
+};
+pub(crate) use script_context::{
+    get_acp_agent_picker_route, get_acp_chat_root_route, ACP_CHANGE_AGENT_ACTION_ID,
 };
 pub use scriptlet::get_scriptlet_context_actions_with_custom;
 

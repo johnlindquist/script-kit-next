@@ -1534,12 +1534,43 @@ if (inspection) {
   }
 
   if (isAttached) {
-    popupCapture = {
-      strategy: "parent_capture_with_crop",
-      windowKind: wk,
-      targetBounds,
-      semanticReceiptsArePrimary: true,
-    };
+    if (!targetBounds) {
+      // Fail loud: attached popup without crop bounds is not a valid proof.
+      // The Rust layer should have already failed, but enforce here too.
+      diag("automation.capture_screenshot.parent_crop_failed", {
+        windowKind: wk,
+        automationWindowId: inspection.automationWindowId,
+        reason: "attached popup has no targetBoundsInScreenshot — parent identity or popup bounds missing",
+      });
+      popupCapture = {
+        strategy: "parent_capture_with_crop",
+        windowKind: wk,
+        targetBounds: null,
+        semanticReceiptsArePrimary: true,
+      };
+      // Mark the receipt as an error since we cannot verify this popup.
+      // The receipt will show strategy=parent_capture_with_crop but null bounds,
+      // and the overall status will be "error" because hasInfraError will be set.
+      if (!stateResult?.error && !screenshotResult?.error) {
+        // Force infrastructure error when crop bounds are missing for attached popup
+        if (screenshotResult) {
+          screenshotResult.error = `Attached popup ${wk} captured without crop bounds — cannot verify popup region`;
+          screenshotResult.captured = false;
+        }
+      }
+    } else {
+      diag("automation.capture_screenshot.parent_crop_selected", {
+        windowKind: wk,
+        automationWindowId: inspection.automationWindowId,
+        targetBounds,
+      });
+      popupCapture = {
+        strategy: "parent_capture_with_crop",
+        windowKind: wk,
+        targetBounds,
+        semanticReceiptsArePrimary: true,
+      };
+    }
   } else if (isDetached) {
     popupCapture = {
       strategy: "direct_window_capture",

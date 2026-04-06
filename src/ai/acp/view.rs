@@ -344,12 +344,6 @@ impl AcpChatView {
         self.on_open_portal = Some(std::sync::Arc::new(callback));
     }
 
-    /// Register an inline mention token as portal-owned so mention sync
-    /// treats it the same as picker-accepted tokens.
-    pub(crate) fn register_inline_owned_token(&mut self, token: &str) {
-        self.inline_owned_context_tokens.insert(token.to_string());
-    }
-
     /// Invoke a footer callback outside the AcpChatView borrow by spawning an
     /// immediate async task. The host callbacks (toggle_actions, close, etc.)
     /// may need to entity.read() this view, which panics if we're inside update.

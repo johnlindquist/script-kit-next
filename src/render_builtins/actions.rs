@@ -160,6 +160,7 @@ impl ScriptListApp {
         );
 
         // Open the actions window — centered like the mini main menu
+        let parent_automation_id = crate::windows::focused_automation_window_id();
         cx.spawn(async move |_this, cx| {
             cx.update(|cx| {
                 match open_actions_window(
@@ -169,6 +170,7 @@ impl ScriptListApp {
                     display_id,
                     dialog,
                     crate::actions::WindowPosition::TopCenter,
+                    parent_automation_id.as_deref(),
                 ) {
                     Ok(_handle) => {
                         logging::log("ACTIONS", "File search actions popup window opened");
@@ -306,6 +308,7 @@ impl ScriptListApp {
             );
 
             // Open the actions window
+            let parent_automation_id = crate::windows::focused_automation_window_id();
             cx.spawn(async move |_this, cx| {
                 cx.update(|cx| {
                     match open_actions_window(
@@ -315,6 +318,7 @@ impl ScriptListApp {
                         display_id,
                         dialog,
                         crate::actions::WindowPosition::TopCenter,
+                        parent_automation_id.as_deref(),
                     ) {
                         Ok(_handle) => {
                             logging::log("ACTIONS", "Clipboard actions popup window opened");

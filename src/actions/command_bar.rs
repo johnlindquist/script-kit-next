@@ -707,6 +707,7 @@ impl CommandBar {
         self.is_open = true;
 
         // Open the vibrancy window at the specified position
+        let parent_automation_id = crate::windows::focused_automation_window_id();
         match open_actions_window(
             cx,
             window.window_handle(),
@@ -714,6 +715,7 @@ impl CommandBar {
             display_id,
             dialog,
             position,
+            parent_automation_id.as_deref(),
         ) {
             Ok(_) => {
                 logging::log(

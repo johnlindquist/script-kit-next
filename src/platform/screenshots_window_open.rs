@@ -156,18 +156,20 @@ fn score_candidate(
     score
 }
 
-/// Capture the OS window that best matches the resolved automation target.
+/// Select the best-matching OS window candidate for a resolved automation target.
 ///
 /// Returns a hard error when no OS window matches or when the top two
 /// candidates tie (ambiguous match). Emits structured logs on every
-/// successful capture and on ambiguous rejection so agents can audit
-/// which OS window was actually captured.
-fn capture_resolved_window(
+/// successful selection and on ambiguous rejection so agents can audit
+/// which OS window was actually selected.
+///
+/// This is the single candidate-ranking path reused by PNG capture,
+/// RGBA capture, and native `os_window_id` resolution.
+fn select_best_candidate<'a>(
     resolved: &crate::protocol::AutomationWindowInfo,
-    hi_dpi: bool,
-) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
-    let candidates = list_script_kit_candidates()?;
-
+    candidates: &'a [Candidate],
+    caller: &str,
+) -> Result<&'a Candidate, Box<dyn std::error::Error + Send + Sync>> {
     let mut ranked: Vec<(i32, &Candidate)> = candidates
         .iter()
         .map(|candidate| (score_candidate(resolved, candidate), candidate))
@@ -204,6 +206,7 @@ fn capture_resolved_window(
                 target: "script_kit::automation",
                 window_id = %resolved.id,
                 kind = ?resolved.kind,
+                caller = %caller,
                 first_title = %best.title,
                 first_size = %format!("{}x{}", best.width, best.height),
                 second_title = %second.title,
@@ -225,6 +228,7 @@ fn capture_resolved_window(
         target: "script_kit::automation",
         window_id = %resolved.id,
         kind = ?resolved.kind,
+        caller = %caller,
         requested_title = ?resolved.title,
         requested_bounds = ?resolved.bounds,
         candidate_count = ranked.len(),
@@ -237,7 +241,254 @@ fn capture_resolved_window(
         "automation.capture_screenshot.candidate_selected"
     );
 
+    Ok(best)
+}
+
+/// Capture the OS window that best matches the resolved automation target.
+///
+/// Delegates to `select_best_candidate` for the single shared ranking path.
+fn capture_resolved_window(
+    resolved: &crate::protocol::AutomationWindowInfo,
+    hi_dpi: bool,
+) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    let candidates = list_script_kit_candidates()?;
+    let best = select_best_candidate(resolved, &candidates, "capture_png")?;
     capture_and_encode_png(&best.window, hi_dpi)
+}
+
+// ── Popup capture receipt ──────────────────────────────────────────────
+
+/// Strategy used to capture a popup window for verification.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PopupCaptureStrategy {
+    /// Captured the parent window and crop to popup bounds.
+    ParentCaptureWithCrop,
+    /// Captured the detached window directly.
+    DirectWindowCapture,
+    /// Not a popup target (main window or unknown kind).
+    NotApplicable,
+}
+
+/// Deterministic receipt for popup screenshot capture.
+///
+/// Always included in targeted capture results so agents can distinguish
+/// how a popup was captured and whether the crop is trustworthy.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PopupCaptureReceipt {
+    /// The capture strategy used.
+    pub strategy: PopupCaptureStrategy,
+    /// The automation window kind that determined the strategy.
+    pub window_kind: String,
+    /// Crop bounds within the screenshot (null for detached or when not applicable).
+    pub target_bounds: Option<crate::protocol::InspectBoundsInScreenshot>,
+    /// Whether semantic receipts (not screenshots) are the primary verification oracle.
+    pub semantic_receipts_are_primary: bool,
+}
+
+/// Returns `true` for window kinds that are attached popups (rendered
+/// inside the parent window's coordinate space).
+fn is_attached_popup(kind: crate::protocol::AutomationWindowKind) -> bool {
+    matches!(
+        kind,
+        crate::protocol::AutomationWindowKind::ActionsDialog
+            | crate::protocol::AutomationWindowKind::PromptPopup
+    )
+}
+
+/// Returns `true` for window kinds that are detached (own OS window).
+fn is_detached_window(kind: crate::protocol::AutomationWindowKind) -> bool {
+    matches!(
+        kind,
+        crate::protocol::AutomationWindowKind::AcpDetached
+            | crate::protocol::AutomationWindowKind::Notes
+    )
+}
+
+/// Capture a screenshot of a targeted window and produce a popup capture receipt.
+///
+/// For **attached popups** (ActionsDialog, PromptPopup):
+/// - Resolves the parent window identity and popup bounds.
+/// - Captures the parent window and computes crop bounds.
+/// - Emits `automation.capture_screenshot.parent_crop_selected` on success.
+/// - **Fails loudly** with `automation.capture_screenshot.parent_crop_failed`
+///   if parent identity or popup bounds are missing — never returns an
+///   unscoped whole-window screenshot.
+///
+/// For **detached windows** (AcpDetached, Notes):
+/// - Captures the window directly.
+///
+/// For **other targets** (Main, etc.):
+/// - Standard capture with `not_applicable` strategy.
+#[allow(clippy::type_complexity)]
+pub fn capture_targeted_screenshot_with_popup_receipt(
+    target: Option<&crate::protocol::AutomationWindowTarget>,
+    hi_dpi: bool,
+) -> Result<(Vec<u8>, u32, u32, PopupCaptureReceipt), Box<dyn std::error::Error + Send + Sync>> {
+    let resolved = match crate::windows::resolve_automation_window(target) {
+        Ok(info) => info,
+        Err(err) => {
+            tracing::warn!(
+                target: "script_kit::automation",
+                error = %err,
+                target = ?target,
+                "automation.capture_screenshot.target_failed"
+            );
+            return Err(err.to_string().into());
+        }
+    };
+
+    let kind = resolved.kind;
+    let kind_str = format!("{kind:?}");
+
+    if is_attached_popup(kind) {
+        // Attached popup: require parent identity and bounds.
+        let parent_id = match resolved.parent_window_id.as_ref() {
+            Some(pid) => pid.clone(),
+            None => {
+                tracing::error!(
+                    target: "script_kit::automation",
+                    window_id = %resolved.id,
+                    kind = %kind_str,
+                    "automation.capture_screenshot.parent_crop_failed: \
+                     attached popup has no parent_window_id in automation registry"
+                );
+                return Err(format!(
+                    "Attached popup '{}' ({}) cannot be captured: \
+                     no parent window identity registered. \
+                     Refusing to fall back to unscoped whole-window screenshot.",
+                    resolved.id, kind_str
+                )
+                .into());
+            }
+        };
+
+        // Resolve parent window metadata
+        let parent_target = crate::protocol::AutomationWindowTarget::Id { id: parent_id.clone() };
+        let parent_resolved = match crate::windows::resolve_automation_window(Some(&parent_target)) {
+            Ok(p) => p,
+            Err(err) => {
+                tracing::error!(
+                    target: "script_kit::automation",
+                    window_id = %resolved.id,
+                    kind = %kind_str,
+                    parent_id = %parent_id,
+                    error = %err,
+                    "automation.capture_screenshot.parent_crop_failed: \
+                     parent window not found in automation registry"
+                );
+                return Err(format!(
+                    "Attached popup '{}' ({}) cannot be captured: \
+                     parent '{}' not found in registry. \
+                     Refusing to fall back to unscoped whole-window screenshot.",
+                    resolved.id, kind_str, parent_id
+                )
+                .into());
+            }
+        };
+
+        // Compute crop bounds
+        let target_bounds = crate::protocol::target_bounds_in_screenshot_with_main(
+            &resolved,
+            parent_resolved.bounds.as_ref(),
+        );
+
+        if target_bounds.is_none() {
+            tracing::error!(
+                target: "script_kit::automation",
+                window_id = %resolved.id,
+                kind = %kind_str,
+                parent_id = %parent_id,
+                popup_bounds = ?resolved.bounds,
+                parent_bounds = ?parent_resolved.bounds,
+                "automation.capture_screenshot.parent_crop_failed: \
+                 popup or parent bounds missing, cannot compute crop region"
+            );
+            return Err(format!(
+                "Attached popup '{}' ({}) cannot be captured: \
+                 bounds geometry unavailable (popup bounds: {}, parent bounds: {}). \
+                 Refusing to produce unscoped whole-window screenshot.",
+                resolved.id,
+                kind_str,
+                if resolved.bounds.is_some() { "present" } else { "missing" },
+                if parent_resolved.bounds.is_some() { "present" } else { "missing" },
+            )
+            .into());
+        }
+
+        // Capture the parent window
+        tracing::info!(
+            target: "script_kit::automation",
+            window_id = %resolved.id,
+            kind = %kind_str,
+            parent_id = %parent_id,
+            hi_dpi = hi_dpi,
+            "automation.capture_screenshot.targeted"
+        );
+
+        let (png_data, width, height) = capture_resolved_window(&parent_resolved, hi_dpi)?;
+
+        tracing::info!(
+            target: "script_kit::automation",
+            window_id = %resolved.id,
+            kind = %kind_str,
+            parent_id = %parent_id,
+            parent_width = width,
+            parent_height = height,
+            crop_bounds = ?target_bounds,
+            "automation.capture_screenshot.parent_crop_selected"
+        );
+
+        let receipt = PopupCaptureReceipt {
+            strategy: PopupCaptureStrategy::ParentCaptureWithCrop,
+            window_kind: kind_str,
+            target_bounds,
+            semantic_receipts_are_primary: true,
+        };
+
+        Ok((png_data, width, height, receipt))
+    } else if is_detached_window(kind) {
+        // Detached window: direct capture
+        tracing::info!(
+            target: "script_kit::automation",
+            window_id = %resolved.id,
+            kind = %kind_str,
+            hi_dpi = hi_dpi,
+            "automation.capture_screenshot.targeted"
+        );
+
+        let (png_data, width, height) = capture_resolved_window(&resolved, hi_dpi)?;
+
+        let receipt = PopupCaptureReceipt {
+            strategy: PopupCaptureStrategy::DirectWindowCapture,
+            window_kind: kind_str,
+            target_bounds: None,
+            semantic_receipts_are_primary: true,
+        };
+
+        Ok((png_data, width, height, receipt))
+    } else {
+        // Main or other: standard capture
+        tracing::info!(
+            target: "script_kit::automation",
+            window_id = %resolved.id,
+            kind = %kind_str,
+            hi_dpi = hi_dpi,
+            "automation.capture_screenshot.targeted"
+        );
+
+        let (png_data, width, height) = capture_resolved_window(&resolved, hi_dpi)?;
+
+        let receipt = PopupCaptureReceipt {
+            strategy: PopupCaptureStrategy::NotApplicable,
+            window_kind: kind_str,
+            target_bounds: None,
+            semantic_receipts_are_primary: false,
+        };
+
+        Ok((png_data, width, height, receipt))
+    }
 }
 
 // ── Public API ──────────────────────────────────────────────────────────
@@ -390,6 +641,10 @@ pub fn capture_window_by_title_via_resolver(
 /// Returns the raw `image::RgbaImage` (not PNG-encoded) so callers can
 /// extract dimensions and sample individual pixels without a decode step.
 /// Used by `inspectAutomationWindow` for lightweight pixel probes.
+///
+/// Delegates to `select_best_candidate` for the single shared ranking path,
+/// emitting the same ambiguity/selection logs as PNG capture and OS window ID
+/// resolution.
 pub fn capture_targeted_rgba_image(
     target: Option<&crate::protocol::AutomationWindowTarget>,
     hi_dpi: bool,
@@ -400,46 +655,7 @@ pub fn capture_targeted_rgba_image(
         .map_err(|err| err.to_string())?;
 
     let candidates = list_script_kit_candidates()?;
-
-    let mut ranked: Vec<(i32, &Candidate)> = candidates
-        .iter()
-        .map(|candidate| (score_candidate(&resolved, candidate), candidate))
-        .collect();
-
-    ranked.sort_by(|(left_score, left), (right_score, right)| {
-        right_score
-            .cmp(left_score)
-            .then_with(|| right.focused.cmp(&left.focused))
-            .then_with(|| right.title.cmp(&left.title))
-    });
-
-    let Some((best_score, best)) = ranked.first().copied() else {
-        return Err(
-            "No visible Script Kit windows available for screenshot capture"
-                .to_string()
-                .into(),
-        );
-    };
-
-    if best_score <= 0 {
-        return Err(format!(
-            "No OS window matched automation target {} ({:?}) \
-             strongly enough for deterministic capture",
-            resolved.id, resolved.kind
-        )
-        .into());
-    }
-
-    if let Some((second_score, second)) = ranked.get(1).copied() {
-        if second_score == best_score {
-            return Err(format!(
-                "Ambiguous OS window match for automation target {} ({:?}); \
-                 '{}' and '{}' tied at score {}",
-                resolved.id, resolved.kind, best.title, second.title, best_score
-            )
-            .into());
-        }
-    }
+    let best = select_best_candidate(&resolved, &candidates, "capture_rgba")?;
 
     let rgba_image = best.window.capture_image()?;
 
@@ -460,37 +676,14 @@ pub fn capture_targeted_rgba_image(
 /// Resolve the best-matching OS window for an automation target and return its
 /// native CGWindowID.
 ///
-/// Uses the same candidate scoring as `capture_targeted_rgba_image` so the
-/// returned ID is guaranteed to match the window that would be captured.
+/// Delegates to `select_best_candidate` for the single shared ranking path,
+/// emitting the same ambiguity/selection logs as PNG and RGBA capture.
 /// Returns `None` when no candidate matches strongly enough.
 pub fn resolve_targeted_os_window_id(
     target: Option<&crate::protocol::AutomationWindowTarget>,
 ) -> Option<u32> {
     let resolved = crate::windows::resolve_automation_window(target).ok()?;
     let candidates = list_script_kit_candidates().ok()?;
-
-    let mut ranked: Vec<(i32, &Candidate)> = candidates
-        .iter()
-        .map(|candidate| (score_candidate(&resolved, candidate), candidate))
-        .collect();
-
-    ranked.sort_by(|(left_score, left), (right_score, right)| {
-        right_score
-            .cmp(left_score)
-            .then_with(|| right.focused.cmp(&left.focused))
-            .then_with(|| right.title.cmp(&left.title))
-    });
-
-    let (best_score, best) = ranked.first().copied()?;
-    if best_score <= 0 {
-        return None;
-    }
-    // Reject ambiguous matches
-    if let Some((second_score, _)) = ranked.get(1).copied() {
-        if second_score == best_score {
-            return None;
-        }
-    }
-
+    let best = select_best_candidate(&resolved, &candidates, "resolve_os_window_id").ok()?;
     best.window.id().ok()
 }

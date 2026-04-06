@@ -37,6 +37,8 @@ fn detached_acp_targeting_flow() {
         visible: true,
         semantic_surface: Some("scriptList".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(main);
 
@@ -49,6 +51,8 @@ fn detached_acp_targeting_flow() {
         visible: true,
         semantic_surface: Some("acpChat".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp);
 
@@ -98,6 +102,8 @@ fn multiple_detached_acp_windows_indexed() {
         visible: true,
         semantic_surface: Some("acpChat".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp0);
 
@@ -109,6 +115,8 @@ fn multiple_detached_acp_windows_indexed() {
         visible: true,
         semantic_surface: Some("acpChat".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp1);
 
@@ -191,6 +199,8 @@ fn acp_window_close_removes_from_registry() {
         visible: true,
         semantic_surface: Some("acpChat".into()),
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp);
 
@@ -226,6 +236,8 @@ fn acp_visibility_toggle() {
         visible: true,
         semantic_surface: None,
         bounds: None,
+        parent_window_id: None,
+        parent_kind: None,
     };
     script_kit_gpui::windows::upsert_automation_window(acp);
 

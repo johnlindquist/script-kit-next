@@ -171,6 +171,14 @@ async function resolveAutomationWindow(opts: {
     id: automationWindowId,
   };
 
+  stderrLog("agentic.promote_exact_target", {
+    fromKind: opts.kind,
+    fromIndex: opts.index,
+    promotedTargetJson: targetJson,
+    automationWindowId,
+    surfaceId: parsed.surfaceId ?? null,
+  });
+
   return {
     targetJson,
     windowKind: parsed.windowKind ?? opts.kind,

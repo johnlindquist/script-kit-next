@@ -1020,8 +1020,8 @@ mod from_dialog_builtin_action_validation_tests_11 {
             has_response: false,
         };
         let actions = get_chat_context_actions(&info);
-        assert_eq!(actions.len(), 2);
-        assert_eq!(actions[0].id, "chat:continue_in_chat");
+        assert_eq!(actions.len(), 3);
+        assert_eq!(actions[0].id, "chat:change_model");
     }
 
     #[test]
@@ -1043,13 +1043,13 @@ mod from_dialog_builtin_action_validation_tests_11 {
             has_messages: false,
             has_response: false,
         };
-        let actions = get_chat_context_actions(&info);
-        let gpt4 = actions
+        let picker = get_chat_model_picker_actions(&info);
+        let gpt4 = picker
             .iter()
             .find(|a| a.id == "chat:select_model_gpt4")
             .unwrap();
         assert!(gpt4.title.contains('✓'), "Current should have ✓");
-        let claude = actions
+        let claude = picker
             .iter()
             .find(|a| a.id == "chat:select_model_claude")
             .unwrap();
@@ -2353,10 +2353,10 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            assert!(actions.iter().any(|a| a.id == "chat:select_model_gpt-4"));
-            assert!(actions.iter().any(|a| a.id == "chat:select_model_claude-3"));
-            assert!(actions.iter().any(|a| a.id == "chat:select_model_gemini"));
+            let picker = get_chat_model_picker_actions(&info);
+            assert!(picker.iter().any(|a| a.id == "chat:select_model_gpt-4"));
+            assert!(picker.iter().any(|a| a.id == "chat:select_model_claude-3"));
+            assert!(picker.iter().any(|a| a.id == "chat:select_model_gemini"));
         }
     
         #[test]
@@ -2378,13 +2378,13 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let gpt = actions
+            let picker = get_chat_model_picker_actions(&info);
+            let gpt = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_gpt-4")
                 .unwrap();
             assert!(gpt.title.contains("✓"));
-            let claude = actions
+            let claude = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude-3")
                 .unwrap();
@@ -2415,8 +2415,8 @@ mod from_dialog_builtin_action_validation_tests_12 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let m = actions.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let m = picker.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
             assert!(m.description.as_ref().unwrap().contains("Anthropic"));
         }
     
@@ -4251,9 +4251,9 @@ mod from_dialog_builtin_action_validation_tests_13 {
                 false,
                 false,
             );
-            let actions = get_chat_context_actions(&info);
-            assert_eq!(actions[0].id, "chat:select_model_m1");
-            assert_eq!(actions[1].id, "chat:select_model_m2");
+            let picker = get_chat_model_picker_actions(&info);
+            assert_eq!(picker[0].id, "chat:select_model_m1");
+            assert_eq!(picker[1].id, "chat:select_model_m2");
         }
     
         #[test]
@@ -4264,8 +4264,8 @@ mod from_dialog_builtin_action_validation_tests_13 {
                 false,
                 false,
             );
-            let actions = get_chat_context_actions(&info);
-            let m1 = actions.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let m1 = picker.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
             assert!(m1.title.contains('✓'), "Current model should have ✓");
         }
     
@@ -4277,8 +4277,8 @@ mod from_dialog_builtin_action_validation_tests_13 {
                 false,
                 false,
             );
-            let actions = get_chat_context_actions(&info);
-            let m2 = actions.iter().find(|a| a.id == "chat:select_model_m2").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let m2 = picker.iter().find(|a| a.id == "chat:select_model_m2").unwrap();
             assert!(
                 !m2.title.contains('✓'),
                 "Non-current model should NOT have ✓"
@@ -6254,8 +6254,8 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 2);
-            assert_eq!(actions[0].id, "chat:continue_in_chat");
+            assert_eq!(actions.len(), 3);
+            assert_eq!(actions[0].id, "chat:change_model");
         }
 
         #[test]
@@ -6318,10 +6318,10 @@ mod from_dialog_builtin_action_validation_tests_14 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let claude = actions.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let claude = picker.iter().find(|a| a.id == "chat:select_model_m1").unwrap();
             assert!(claude.title.contains("✓"));
-            let gpt = actions.iter().find(|a| a.id == "chat:select_model_m2").unwrap();
+            let gpt = picker.iter().find(|a| a.id == "chat:select_model_m2").unwrap();
             assert!(!gpt.title.contains("✓"));
         }
     
@@ -8087,8 +8087,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
             };
             let actions = get_chat_context_actions(&info);
             // continue_in_chat + capture_screen_area
-            assert_eq!(actions.len(), 2);
-            assert_eq!(actions[0].id, "chat:continue_in_chat");
+            assert_eq!(actions.len(), 3);
+            assert_eq!(actions[0].id, "chat:change_model");
         }
 
         #[test]
@@ -8101,7 +8101,7 @@ mod from_dialog_builtin_action_validation_tests_15 {
             };
             let actions = get_chat_context_actions(&info);
             // continue_in_chat + copy_response + clear_conversation + capture = 4
-            assert_eq!(actions.len(), 4);
+            assert_eq!(actions.len(), 5);
         }
 
         #[test]
@@ -8116,8 +8116,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            assert_eq!(actions[0].id, "chat:select_model_gpt-4o");
+            let picker = get_chat_model_picker_actions(&info);
+            assert_eq!(picker[0].id, "chat:select_model_gpt-4o");
         }
     
         #[test]
@@ -8159,7 +8159,8 @@ mod from_dialog_builtin_action_validation_tests_15 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions[0].shortcut.as_deref(), Some("⌘↵"));
+            let cont = actions.iter().find(|a| a.id == "chat:continue_in_chat").unwrap();
+            assert_eq!(cont.shortcut.as_deref(), Some("⌘↵"));
         }
     
         #[test]
@@ -12189,8 +12190,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            assert!(actions.iter().any(|a| a.id == "chat:select_model_claude-3"));
+            let picker = get_chat_model_picker_actions(&info);
+            assert!(picker.iter().any(|a| a.id == "chat:select_model_claude-3"));
         }
     
         #[test]
@@ -12212,8 +12213,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let ids = action_ids(&actions);
+            let picker = get_chat_model_picker_actions(&info);
+            let ids = action_ids(&picker);
             assert!(ids.contains(&"chat:select_model_m1".to_string()));
             assert!(ids.contains(&"chat:select_model_m2".to_string()));
         }
@@ -12230,8 +12231,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let model_action = actions
+            let picker = get_chat_model_picker_actions(&info);
+            let model_action = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude-3")
                 .unwrap();
@@ -12252,8 +12253,8 @@ mod from_dialog_builtin_action_validation_tests_17 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let model_action = actions
+            let picker = get_chat_model_picker_actions(&info);
+            let model_action = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude-3")
                 .unwrap();
@@ -13802,8 +13803,8 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 2);
-            assert_eq!(actions[0].id, "chat:continue_in_chat");
+            assert_eq!(actions.len(), 3);
+            assert_eq!(actions[0].id, "chat:change_model");
         }
 
         #[test]
@@ -13815,7 +13816,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 4);
+            assert_eq!(actions.len(), 5);
             assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
             assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
             assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
@@ -13865,8 +13866,8 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let model_action = actions
+            let picker = get_chat_model_picker_actions(&info);
+            let model_action = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude-3-5-sonnet")
                 .unwrap();
@@ -13885,8 +13886,8 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let model_action = actions
+            let picker = get_chat_model_picker_actions(&info);
+            let model_action = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude-3-5-sonnet")
                 .unwrap();
@@ -13905,8 +13906,8 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let model_action = actions
+            let picker = get_chat_model_picker_actions(&info);
+            let model_action = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_gpt-4")
                 .unwrap();
@@ -13932,12 +13933,12 @@ mod from_dialog_builtin_action_validation_tests_18 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let m1_idx = actions
+            let picker = get_chat_model_picker_actions(&info);
+            let m1_idx = picker
                 .iter()
                 .position(|a| a.id == "chat:select_model_m1")
                 .unwrap();
-            let m2_idx = actions
+            let m2_idx = picker
                 .iter()
                 .position(|a| a.id == "chat:select_model_m2")
                 .unwrap();
@@ -15605,8 +15606,8 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 2); // continue_in_chat + capture
-            assert_eq!(actions[0].id, "chat:continue_in_chat");
+            assert_eq!(actions.len(), 3); // continue_in_chat + capture
+            assert_eq!(actions[0].id, "chat:change_model");
         }
 
         #[test]
@@ -15618,7 +15619,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 4);
+            assert_eq!(actions.len(), 5);
         }
 
         #[test]
@@ -15641,7 +15642,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 4); // 2 models + continue_in_chat + capture
+            assert_eq!(actions.len(), 3); // 2 models + continue_in_chat + capture
         }
     
         #[test]
@@ -15664,7 +15665,7 @@ mod from_dialog_builtin_action_validation_tests_19 {
                 has_response: true,
             };
             let actions = get_chat_context_actions(&info);
-            assert_eq!(actions.len(), 6); // 2 models + continue + copy + clear + capture
+            assert_eq!(actions.len(), 5); // 2 models + continue + copy + clear + capture
         }
     
         // =========================================================================
@@ -17671,9 +17672,9 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            assert_eq!(actions[0].id, "chat:select_model_gpt-4");
-            assert_eq!(actions[1].id, "chat:select_model_claude");
+            let picker = get_chat_model_picker_actions(&info);
+            assert_eq!(picker[0].id, "chat:select_model_gpt-4");
+            assert_eq!(picker[1].id, "chat:select_model_claude");
         }
     
         #[test]
@@ -17689,15 +17690,8 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 has_response: false,
             };
             let actions = get_chat_context_actions(&info);
-            let model_idx = actions
-                .iter()
-                .position(|a| a.id == "chat:select_model_m1")
-                .unwrap();
-            let cont_idx = actions
-                .iter()
-                .position(|a| a.id == "chat:continue_in_chat")
-                .unwrap();
-            assert!(cont_idx > model_idx);
+            assert_eq!(actions[0].id, "chat:change_model");
+            assert_eq!(actions[1].id, "chat:continue_in_chat");
         }
     
     
@@ -17721,13 +17715,13 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let gpt4 = actions
+            let picker = get_chat_model_picker_actions(&info);
+            let gpt4 = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_gpt-4")
                 .unwrap();
             assert!(gpt4.title.contains('✓'));
-            let claude = actions
+            let claude = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_claude")
                 .unwrap();
@@ -17746,14 +17740,14 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 has_messages: false,
                 has_response: false,
             };
-            let actions = get_chat_context_actions(&info);
-            let m = actions.iter().find(|a| a.id == "chat:select_model_m").unwrap();
+            let picker = get_chat_model_picker_actions(&info);
+            let m = picker.iter().find(|a| a.id == "chat:select_model_m").unwrap();
             assert_eq!(m.description.as_ref().unwrap(), "Uses Acme");
         }
     
         // =========================================================================
         // Category 08: New chat last_used section icon is BoltFilled
-        // Verifies icon and section assignments in get_new_chat_actions.
+        // Verifies icon and section assignments in get_new_chat_picker.
         // =========================================================================
     
         #[test]
