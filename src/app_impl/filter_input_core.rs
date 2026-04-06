@@ -1,5 +1,14 @@
 use super::*;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum ScriptListSpecialEntry {
+    FileSearchMini { query: String },
+    AcpSlashPicker,
+    AcpMentionPicker,
+    QuickTerminal,
+    ActionsHelp,
+}
+
 impl ScriptListApp {
     pub(crate) fn current_view_uses_shared_filter_input(&self) -> bool {
         matches!(
@@ -50,6 +59,26 @@ impl ScriptListApp {
             "~/".to_string()
         } else {
             new_text.to_string()
+        }
+    }
+
+    /// Classify narrow, first-character ScriptList handoffs into dedicated
+    /// surfaces so regular search queries are not hijacked.
+    pub(crate) fn special_entry_from_script_list_filter(
+        new_text: &str,
+    ) -> Option<ScriptListSpecialEntry> {
+        if Self::should_enter_file_search_from_script_list(new_text) {
+            return Some(ScriptListSpecialEntry::FileSearchMini {
+                query: Self::normalize_mini_file_search_query(new_text),
+            });
+        }
+
+        match new_text {
+            "/" => Some(ScriptListSpecialEntry::AcpSlashPicker),
+            "@" => Some(ScriptListSpecialEntry::AcpMentionPicker),
+            ">" => Some(ScriptListSpecialEntry::QuickTerminal),
+            "?" => Some(ScriptListSpecialEntry::ActionsHelp),
+            _ => None,
         }
     }
 
@@ -204,6 +233,52 @@ mod tests {
         assert_eq!(
             ScriptListApp::normalize_mini_file_search_query("~/src"),
             "~/src"
+        );
+    }
+
+    #[test]
+    fn test_special_entry_from_script_list_filter() {
+        use super::{ScriptListApp, ScriptListSpecialEntry};
+
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("~"),
+            Some(ScriptListSpecialEntry::FileSearchMini {
+                query: "~/".to_string()
+            })
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("~/src"),
+            Some(ScriptListSpecialEntry::FileSearchMini {
+                query: "~/src".to_string()
+            })
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("/"),
+            Some(ScriptListSpecialEntry::AcpSlashPicker)
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("@"),
+            Some(ScriptListSpecialEntry::AcpMentionPicker)
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter(">"),
+            Some(ScriptListSpecialEntry::QuickTerminal)
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("?"),
+            Some(ScriptListSpecialEntry::ActionsHelp)
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("/tmp"),
+            None
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("@browser"),
+            None
+        );
+        assert_eq!(
+            ScriptListApp::special_entry_from_script_list_filter("foo"),
+            None
         );
     }
 }

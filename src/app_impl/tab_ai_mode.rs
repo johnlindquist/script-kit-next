@@ -141,6 +141,38 @@ impl ScriptListApp {
         );
     }
 
+    pub(crate) fn open_tab_ai_acp_with_slash_picker(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_tab_ai_acp_with_entry_intent(None, cx);
+
+        if crate::ai::acp::chat_window::open_detached_slash_picker(cx) {
+            return;
+        }
+
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            entity.update(cx, |view, cx| view.open_slash_picker_in_window(window, cx));
+        }
+    }
+
+    pub(crate) fn open_tab_ai_acp_with_mention_picker(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_tab_ai_acp_with_entry_intent(None, cx);
+
+        if crate::ai::acp::chat_window::open_detached_mention_picker(cx) {
+            return;
+        }
+
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            entity.update(cx, |view, cx| view.open_mention_picker_in_window(window, cx));
+        }
+    }
+
     /// Entry point with explicit capture kind.
     ///
     /// Used by `SendScreenToAi`, `SendFocusedWindowToAi`, etc. so each

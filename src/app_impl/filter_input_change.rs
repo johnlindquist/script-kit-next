@@ -1,4 +1,5 @@
 use super::*;
+use crate::filter_input_core::ScriptListSpecialEntry;
 
 impl ScriptListApp {
     pub(crate) fn handle_filter_input_change(
@@ -365,10 +366,27 @@ impl ScriptListApp {
             _ => {} // Continue with main menu logic
         }
 
-        // ── ~ trigger: hand off to mini file search ──────────────────
-        if Self::should_enter_file_search_from_script_list(&new_text) {
-            let query = Self::normalize_mini_file_search_query(&new_text);
-            self.open_file_search_view(query, FileSearchPresentation::Mini, cx);
+        // ── First-character ScriptList entry routes ──────────────────
+        if let Some(entry) = Self::special_entry_from_script_list_filter(&new_text) {
+            match entry {
+                ScriptListSpecialEntry::FileSearchMini { query } => {
+                    self.open_file_search_view(query, FileSearchPresentation::Mini, cx);
+                }
+                ScriptListSpecialEntry::AcpSlashPicker => {
+                    self.open_tab_ai_acp_with_slash_picker(window, cx);
+                }
+                ScriptListSpecialEntry::AcpMentionPicker => {
+                    self.open_tab_ai_acp_with_mention_picker(window, cx);
+                }
+                ScriptListSpecialEntry::QuickTerminal => {
+                    self.open_quick_terminal(cx);
+                }
+                ScriptListSpecialEntry::ActionsHelp => {
+                    if self.has_actions() {
+                        self.toggle_actions(cx, window);
+                    }
+                }
+            }
             return;
         }
 

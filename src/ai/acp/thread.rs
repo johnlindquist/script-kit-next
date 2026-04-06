@@ -463,7 +463,10 @@ impl AcpThread {
 
     /// Update the composer input text (replaces entire content, cursor at end).
     pub(crate) fn set_input(&mut self, value: impl Into<String>, cx: &mut Context<Self>) {
+        let value = value.into();
+        let cursor = value.chars().count();
         self.input.set_text(value);
+        self.input.set_cursor(cursor);
         cx.notify();
     }
 
