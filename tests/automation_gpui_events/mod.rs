@@ -820,8 +820,7 @@ fn attached_surface_fails_closed_when_main_has_no_bounds() {
 
     // Must fail closed — not silently produce (0, 0)
     // Use explicit None main bounds for test isolation
-    let result =
-        script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(&resolved, None);
+    let result = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(&resolved, None);
     assert!(
         result.is_none(),
         "Attached surface must return None when main has no bounds"

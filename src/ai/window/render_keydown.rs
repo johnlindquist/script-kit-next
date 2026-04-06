@@ -633,6 +633,50 @@ impl AiApp {
             return;
         }
 
+        // ── Token-atomic inline mention deletion ──────────────
+        // When backspace/delete lands inside or at the boundary of an inline
+        // @mention token, remove the whole token plus one trailing space
+        // instead of deleting a single character.
+        if is_key_backspace(key) || is_key_delete(key) {
+            let current_text = self.input_state.read(cx).value().to_string();
+            let cursor_byte = self.input_state.read(cx).cursor();
+            // Convert byte offset to char offset for mention functions.
+            let cursor_char = current_text[..cursor_byte.min(current_text.len())]
+                .chars()
+                .count();
+
+            if let Some((next_text, next_cursor_char)) =
+                crate::ai::context_mentions::remove_inline_mention_at_cursor(
+                    &current_text,
+                    cursor_char,
+                    is_key_delete(key),
+                )
+            {
+                tracing::info!(
+                    target: "ai",
+                    event = "ai_inline_mention_deleted_atomically",
+                    key = %key,
+                    cursor_char,
+                    next_cursor_char,
+                );
+
+                // Convert char offset back to byte offset for InputState.
+                let next_cursor_byte = next_text
+                    .char_indices()
+                    .nth(next_cursor_char)
+                    .map(|(byte, _)| byte)
+                    .unwrap_or(next_text.len());
+
+                self.input_state.update(cx, |state, cx| {
+                    state.set_value(next_text, window, cx);
+                    state.set_selection(next_cursor_byte, next_cursor_byte, window, cx);
+                });
+                self.sync_inline_mentions(cx);
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         // Up arrow in empty input: edit last user message
         if is_key_up(key) && self.input_state.read(cx).value().is_empty() && !self.is_streaming {
             self.edit_last_user_message(window, cx);

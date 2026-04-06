@@ -602,7 +602,15 @@ async function captureScreenshot(
       // leave parsed fields null
     }
   } else if (!strictWindowProof) {
-    // Fallback: use session-based captureWindow (only when no ACP assertions)
+    // Fallback: use session-based captureWindow (only when no ACP assertions).
+    // The runtime captureWindow handler now routes through the resolver-driven
+    // capture path (capture_window_by_title_via_resolver), which translates the
+    // title to an AutomationWindowTarget and emits the same structured log
+    // sequence as the protocol captureScreenshot path:
+    //   automation.capture_screenshot.title_compatibility
+    //   automation.capture_screenshot.targeted
+    //   automation.capture_screenshot.candidate_selected (or ambiguous_candidate)
+    // An empty title resolves to AutomationWindowTarget::Main.
     captureMethod = "captureWindow";
     const captureCmd = JSON.stringify({
       type: "captureWindow",

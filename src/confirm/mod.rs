@@ -36,6 +36,14 @@ pub(crate) use window::consume_main_window_key_while_confirm_open;
 #[allow(unused_imports)]
 pub(crate) use window::is_confirm_window_open;
 #[allow(unused_imports)]
+pub(crate) use window::is_confirm_window_open as is_confirm_popup_window_open;
+#[allow(unused_imports)]
 pub(crate) use window::route_key_to_confirm_popup;
+#[allow(unused_imports)]
+pub(crate) use window::send_confirm_result;
+#[allow(unused_imports)]
+pub(crate) use window::{
+    batch_select_confirm_button_by_semantic_id, batch_select_confirm_button_by_value,
+};
 #[allow(unused_imports)]
 pub(crate) use window::{get_confirm_popup_snapshot, ConfirmPopupSnapshot};

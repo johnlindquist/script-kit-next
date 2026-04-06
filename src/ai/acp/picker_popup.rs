@@ -79,6 +79,43 @@ pub(crate) fn get_mention_popup_snapshot(cx: &gpui::App) -> Option<AcpMentionPop
         .ok()
 }
 
+/// Select a mention popup item by its ID (value) for batch automation.
+///
+/// Returns `Some(item_id)` if the item was found and activated, `None` otherwise.
+pub(crate) fn batch_select_mention_item_by_value(value: &str, cx: &mut App) -> Option<String> {
+    let storage = ACP_MENTION_POPUP_WINDOW.get()?;
+    let guard = storage.lock().ok()?;
+    let slot = (*guard)?;
+    let snap = slot
+        .handle
+        .read_with(cx, |popup, _cx| popup.snapshot.clone())
+        .ok()?;
+    let idx = snap
+        .items
+        .iter()
+        .position(|item| item.id.as_ref() == value)?;
+    let _ = slot.handle.update(cx, |popup, _window, cx| {
+        popup.activate_item(idx, cx);
+    });
+    Some(value.to_string())
+}
+
+/// Select a mention popup item by its semantic ID (`choice:<idx>:<id>`).
+///
+/// Returns `Some(semantic_id)` if found and activated, `None` otherwise.
+pub(crate) fn batch_select_mention_item_by_semantic_id(
+    semantic_id: &str,
+    cx: &mut App,
+) -> Option<String> {
+    let parts: Vec<&str> = semantic_id.splitn(3, ':').collect();
+    if parts.len() < 3 || parts[0] != "choice" {
+        return None;
+    }
+    let item_id = parts[2];
+    batch_select_mention_item_by_value(item_id, cx)?;
+    Some(semantic_id.to_string())
+}
+
 fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
     if snapshot.items.is_empty() {
         return super::popup_window::dense_picker_height(0);

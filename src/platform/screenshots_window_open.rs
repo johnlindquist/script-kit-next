@@ -354,6 +354,37 @@ pub fn capture_targeted_screenshot(
     capture_resolved_window(&resolved, hi_dpi)
 }
 
+/// Capture a window screenshot using the resolver-driven path, translating a title
+/// pattern into an `AutomationWindowTarget` for deterministic capture.
+///
+/// This is the replacement for direct `capture_window_by_title` calls from stdin/runtime
+/// paths. Empty titles resolve to `AutomationWindowTarget::Main`; non-empty titles
+/// resolve to `AutomationWindowTarget::TitleContains`.
+///
+/// Emits an explicit compatibility log (`automation.capture_screenshot.title_compatibility`)
+/// before delegating to `capture_targeted_screenshot`.
+pub fn capture_window_by_title_via_resolver(
+    title_pattern: &str,
+    hi_dpi: bool,
+) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    let target = if title_pattern.trim().is_empty() {
+        crate::protocol::AutomationWindowTarget::Main
+    } else {
+        crate::protocol::AutomationWindowTarget::TitleContains {
+            text: title_pattern.to_string(),
+        }
+    };
+
+    tracing::info!(
+        target: "script_kit::automation",
+        title_pattern = %title_pattern,
+        resolved_target = ?target,
+        "automation.capture_screenshot.title_compatibility"
+    );
+
+    capture_targeted_screenshot(Some(&target), hi_dpi)
+}
+
 /// Capture a raw RGBA image of the OS window matching the resolved automation target.
 ///
 /// Returns the raw `image::RgbaImage` (not PNG-encoded) so callers can

@@ -1461,3 +1461,118 @@ fn global_clear_history_remains_separate_from_per_item_delete() {
         "clear_history must remove entire conversations directory"
     );
 }
+
+// =========================================================================
+// Shared inline-token sync kernel — ACP adoption contracts
+// =========================================================================
+
+#[test]
+fn acp_uses_shared_inline_sync_plan() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("build_inline_mention_sync_plan"),
+        "ACP sync_inline_mentions must use the shared sync plan builder"
+    );
+}
+
+#[test]
+fn acp_uses_shared_visible_chip_indices() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("visible_context_chip_indices"),
+        "ACP render_pending_context_chips must use shared visible chip filtering"
+    );
+}
+
+#[test]
+fn acp_uses_shared_atomic_delete() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("remove_inline_mention_at_cursor"),
+        "ACP key handler must use shared token-atomic delete"
+    );
+}
+
+#[test]
+fn acp_emits_inline_mentions_synced_event() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("acp_inline_mentions_synced"),
+        "ACP must emit acp_inline_mentions_synced tracing event on sync"
+    );
+}
+
+#[test]
+fn acp_emits_inline_mention_deleted_atomically_event() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("acp_inline_mention_deleted_atomically"),
+        "ACP must emit acp_inline_mention_deleted_atomically tracing event on atomic delete"
+    );
+}
+
+// =========================================================================
+// AI-window inline-token unification source contracts
+// =========================================================================
+//
+// These tests verify that the AI window picker, chip rendering, and input
+// handling use the same shared inline-token infrastructure as ACP.
+
+const AI_WINDOW_CONTEXT_PICKER_SOURCE: &str = include_str!("../window/context_picker/mod.rs");
+const AI_WINDOW_RENDER_SOURCE: &str = include_str!("../window/render_main_panel.rs");
+const AI_WINDOW_INPUT_SOURCE: &str = include_str!("../window/render_keydown.rs");
+
+#[test]
+fn ai_window_picker_inserts_inline_token_and_syncs_parts() {
+    assert!(
+        AI_WINDOW_CONTEXT_PICKER_SOURCE.contains("ai_context_picker_token_inserted"),
+        "AI window picker must log inline token insertion",
+    );
+    assert!(
+        AI_WINDOW_CONTEXT_PICKER_SOURCE.contains("part_to_inline_token(&part)"),
+        "AI window picker must derive canonical inline tokens from attached parts",
+    );
+    assert!(
+        AI_WINDOW_CONTEXT_PICKER_SOURCE.contains("sync_inline_mentions(cx)"),
+        "AI window picker must synchronize inline tokens back into pending_context_parts",
+    );
+}
+
+#[test]
+fn ai_window_hides_inline_backed_chips() {
+    assert!(
+        AI_WINDOW_RENDER_SOURCE.contains("visible_context_chip_indices"),
+        "AI window chip rendering must hide parts already represented inline",
+    );
+}
+
+#[test]
+fn ai_window_uses_atomic_inline_delete() {
+    assert!(
+        AI_WINDOW_INPUT_SOURCE.contains("remove_inline_mention_at_cursor"),
+        "AI window input handling must use shared token-atomic delete",
+    );
+}
+
+#[test]
+fn ai_window_emits_inline_mentions_synced_event() {
+    assert!(
+        AI_WINDOW_CONTEXT_PICKER_SOURCE.contains("ai_inline_mentions_synced"),
+        "AI window must emit ai_inline_mentions_synced tracing event on sync",
+    );
+}
+
+#[test]
+fn ai_window_emits_inline_mention_deleted_atomically_event() {
+    assert!(
+        AI_WINDOW_INPUT_SOURCE.contains("ai_inline_mention_deleted_atomically"),
+        "AI window must emit ai_inline_mention_deleted_atomically tracing event on atomic delete",
+    );
+}
+
+#[test]
+fn acp_and_ai_window_share_inline_sync_kernel() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("build_inline_mention_sync_plan"),
+        "ACP must use shared inline sync planning",
+    );
+    assert!(
+        AI_WINDOW_CONTEXT_PICKER_SOURCE.contains("build_inline_mention_sync_plan"),
+        "AI window must use shared inline sync planning",
+    );
+}

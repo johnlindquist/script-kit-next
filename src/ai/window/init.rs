@@ -250,6 +250,7 @@ impl AiApp {
             context_picker_last_scrolled_index: None,
             // Attachments state
             pending_context_parts: Vec::new(),
+            inline_owned_context_tokens: std::collections::HashSet::new(),
             context_preview_index: None,
             // Mouse cursor state
             mouse_cursor_hidden: false,

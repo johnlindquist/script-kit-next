@@ -172,6 +172,11 @@ pub struct AiApp {
     /// into prompt blocks at submit time.
     pub(super) pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
 
+    /// Canonical inline `@mention` tokens that are "owned" by the composer text.
+    /// Tracks which `pending_context_parts` were inserted via inline `@token`
+    /// acceptance so that deleting the token from the text also removes the part.
+    pub(super) inline_owned_context_tokens: std::collections::HashSet<String>,
+
     /// Index of the pending context part whose preview panel is currently open.
     /// `None` means no preview is shown. Toggled by clicking the info icon on a chip.
     pub(super) context_preview_index: Option<usize>,

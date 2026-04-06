@@ -536,8 +536,11 @@ impl AiApp {
 
     /// Accept the currently selected picker row.
     ///
-    /// Creates the appropriate `AiContextPart`, adds it to pending parts,
-    /// closes the picker, and strips the trigger+query from the composer.
+    /// For parts that have a canonical inline token (`part_to_inline_token`),
+    /// replaces the active trigger/query text with the short `@token` plus a
+    /// trailing space and claims inline ownership. For parts without an inline
+    /// representation (e.g. slash commands), falls back to the strip-and-chip
+    /// path.
     pub(super) fn accept_context_picker_selection(
         &mut self,
         window: &mut Window,
@@ -574,22 +577,103 @@ impl AiApp {
             (part, label, source, trigger)
         };
 
-        tracing::info!(
-            target: "ai",
-            ?trigger,
-            label = %label,
-            source = %source,
-            "ai_context_picker_accepted"
-        );
+        let current_value = self.input_state.read(cx).value().to_string();
+        let cursor = current_value.chars().count();
 
-        // Strip trigger+query text from the composer input
-        self.strip_context_trigger_from_composer(trigger, window, cx);
+        if let Some(token) = crate::ai::context_mentions::part_to_inline_token(&part) {
+            let replacement = format!("{token} ");
+            let next_value = extract_context_picker_query_before_cursor(&current_value, cursor)
+                .filter(|query| query.trigger == trigger)
+                .map(|query| {
+                    crate::ai::context_mentions::replace_text_in_char_range(
+                        &current_value,
+                        query.char_range,
+                        &replacement,
+                    )
+                })
+                .unwrap_or_else(|| format!("{current_value}{replacement}"));
 
-        // Add the part (dedup + preflight handled internally)
-        self.add_context_part(part, cx);
+            tracing::info!(
+                target: "ai",
+                event = "ai_context_picker_token_inserted",
+                ?trigger,
+                label = %label,
+                source = %source,
+                token = %token,
+            );
+
+            self.set_composer_value(next_value, window, cx);
+            self.inline_owned_context_tokens.insert(token);
+            self.add_context_part(part, cx);
+            self.sync_inline_mentions(cx);
+        } else {
+            tracing::info!(
+                target: "ai",
+                event = "ai_context_picker_non_inline_part_attached",
+                ?trigger,
+                label = %label,
+                source = %source,
+            );
+
+            self.strip_context_trigger_from_composer(trigger, window, cx);
+            self.add_context_part(part, cx);
+        }
 
         // Close picker
         self.close_context_picker(cx);
+    }
+
+    /// Synchronise `pending_context_parts` from the live inline `@mention`
+    /// tokens in the composer. Removes stale parts whose token was deleted
+    /// and adds new parts for freshly typed tokens.
+    pub(super) fn sync_inline_mentions(&mut self, cx: &mut Context<Self>) {
+        let text = self.input_state.read(cx).value().to_string();
+
+        let plan = crate::ai::context_mentions::build_inline_mention_sync_plan(
+            &text,
+            &self.pending_context_parts,
+            &self.inline_owned_context_tokens,
+        );
+
+        // Remove stale parts in reverse order to preserve indices.
+        for ix in plan.stale_indices.iter().rev().copied() {
+            self.remove_context_part(ix, cx);
+        }
+        for part in &plan.added_parts {
+            self.add_context_part(part.clone(), cx);
+        }
+
+        self.inline_owned_context_tokens
+            .retain(|token| plan.desired_tokens.contains(token));
+        self.inline_owned_context_tokens
+            .extend(plan.added_tokens.iter().cloned());
+
+        // Invalidate preview if it targets a part now hidden inline.
+        let visible: std::collections::HashSet<usize> =
+            crate::ai::context_mentions::visible_context_chip_indices(
+                &text,
+                &self.pending_context_parts,
+            )
+            .into_iter()
+            .collect();
+
+        if self
+            .context_preview_index
+            .is_some_and(|ix| !visible.contains(&ix))
+        {
+            self.context_preview_index = None;
+        }
+
+        tracing::info!(
+            target: "ai",
+            event = "ai_inline_mentions_synced",
+            desired_count = plan.desired_parts.len(),
+            added_count = plan.added_parts.len(),
+            removed_count = plan.stale_indices.len(),
+            token_count = self.inline_owned_context_tokens.len(),
+        );
+
+        cx.notify();
     }
 
     /// Close the context picker without accepting.

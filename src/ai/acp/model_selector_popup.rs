@@ -57,6 +57,16 @@ pub(crate) fn close_model_selector_popup_window(cx: &mut App) {
     }
 }
 
+/// Check if the model selector popup window is currently open.
+pub(crate) fn is_model_selector_popup_window_open() -> bool {
+    if let Some(storage) = ACP_MODEL_SELECTOR_POPUP_WINDOW.get() {
+        if let Ok(guard) = storage.lock() {
+            return guard.is_some();
+        }
+    }
+    false
+}
+
 /// Read the model selector popup snapshot if the popup window is open.
 ///
 /// Used by the automation surface collector to extract semantic elements
@@ -70,6 +80,40 @@ pub(crate) fn get_model_selector_popup_snapshot(
     slot.handle
         .read_with(cx, |popup, _cx| popup.snapshot.clone())
         .ok()
+}
+
+/// Select a model by its ID for batch automation.
+///
+/// Returns `Some(model_id)` if found and selected, `None` otherwise.
+pub(crate) fn batch_select_model_by_value(value: &str, cx: &mut App) -> Option<String> {
+    let storage = ACP_MODEL_SELECTOR_POPUP_WINDOW.get()?;
+    let guard = storage.lock().ok()?;
+    let slot = (*guard)?;
+    let snap = slot
+        .handle
+        .read_with(cx, |popup, _cx| popup.snapshot.clone())
+        .ok()?;
+    // Verify the model exists in the snapshot
+    if !snap.entries.iter().any(|entry| entry.id == value) {
+        return None;
+    }
+    let _ = slot.handle.update(cx, |popup, _window, cx| {
+        popup.select_model(value, cx);
+    });
+    Some(value.to_string())
+}
+
+/// Select a model by its semantic ID (`choice:<idx>:<model_id>`).
+///
+/// Returns `Some(semantic_id)` if found and selected, `None` otherwise.
+pub(crate) fn batch_select_model_by_semantic_id(semantic_id: &str, cx: &mut App) -> Option<String> {
+    let parts: Vec<&str> = semantic_id.splitn(3, ':').collect();
+    if parts.len() < 3 || parts[0] != "choice" {
+        return None;
+    }
+    let model_id = parts[2];
+    batch_select_model_by_value(model_id, cx)?;
+    Some(semantic_id.to_string())
 }
 
 fn popup_height(snapshot: &AcpModelSelectorPopupSnapshot) -> f32 {

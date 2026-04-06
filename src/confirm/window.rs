@@ -252,7 +252,7 @@ pub(crate) fn route_key_to_confirm_popup(key: &str, cx: &mut App) -> bool {
     consume_main_window_key_while_confirm_open(key, &gpui::Modifiers::default(), cx)
 }
 
-fn send_confirm_result(confirmed: bool) {
+pub(crate) fn send_confirm_result(confirmed: bool) {
     if let Some(storage) = CONFIRM_RESULT_TX.get() {
         if let Ok(mut guard) = storage.lock() {
             if let Some(tx) = guard.take() {
@@ -260,6 +260,41 @@ fn send_confirm_result(confirmed: bool) {
             }
         }
     }
+}
+
+/// Select and activate a confirm dialog button by value for batch automation.
+///
+/// Accepts `"confirm"` or `"cancel"` as the value. Sends the result and closes
+/// the dialog. Returns `Some(value)` on success, `None` if the value is invalid
+/// or no confirm dialog is open.
+#[allow(dead_code)]
+pub(crate) fn batch_select_confirm_button_by_value(value: &str) -> Option<String> {
+    let confirmed = match value {
+        "confirm" => true,
+        "cancel" => false,
+        _ => return None,
+    };
+    // Verify a confirm window is actually open
+    if !is_confirm_window_open() {
+        return None;
+    }
+    send_confirm_result(confirmed);
+    Some(value.to_string())
+}
+
+/// Select and activate a confirm dialog button by semantic ID.
+///
+/// Accepts `"button:0:confirm"` or `"button:1:cancel"`. Returns the semantic ID
+/// on success.
+#[allow(dead_code)]
+pub(crate) fn batch_select_confirm_button_by_semantic_id(semantic_id: &str) -> Option<String> {
+    let value = match semantic_id {
+        "button:0:confirm" => "confirm",
+        "button:1:cancel" => "cancel",
+        _ => return None,
+    };
+    batch_select_confirm_button_by_value(value)?;
+    Some(semantic_id.to_string())
 }
 
 fn get_confirm_focused_button() -> FocusedButton {

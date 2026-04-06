@@ -85,6 +85,10 @@ impl AiApp {
             self.close_context_picker(cx);
         }
 
+        // Sync inline @mention tokens with pending_context_parts so that
+        // manually typed (or deleted) tokens keep the attachment list in sync.
+        self.sync_inline_mentions(cx);
+
         // Context preflight is intentionally NOT run per-keystroke.
         // It only runs when the user explicitly adds context parts
         // (via /context slash commands or the context picker).

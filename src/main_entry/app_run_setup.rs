@@ -2337,7 +2337,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 logging::log("STDIN", &format!("Capturing window with title '{}' to '{}'", title, path));
                                 match validate_capture_window_output_path(&path) {
                                     Ok(validated_path) => {
-                                        match capture_window_by_title(&title, false) {
+                                        match capture_window_by_title_via_resolver(&title, false) {
                                             Ok((png_data, width, height)) => {
                                                 let mut can_write = true;
                                                 if let Some(parent) = validated_path.parent() {

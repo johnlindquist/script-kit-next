@@ -553,8 +553,7 @@ fn attached_surface_no_main_bounds_fails_closed() {
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
     // Explicit None main bounds for test isolation
-    let result =
-        script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(&resolved, None);
+    let result = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(&resolved, None);
     assert!(
         result.is_none(),
         "Must fail closed when main has no bounds, not silently produce (0, 0)"

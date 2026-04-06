@@ -783,3 +783,105 @@ fn placeholder_provider_envelope_with_items_empty_stays_unavailable() {
 
     restore_env("SCRIPT_KIT_NOTIFICATIONS_JSON", prev_notifications);
 }
+
+// =========================================================================
+// Shared sync kernel tests
+// =========================================================================
+
+#[test]
+fn inline_sync_plan_uses_canonical_tokens() {
+    use super::sync::build_inline_mention_sync_plan;
+    use std::collections::HashSet;
+
+    let attached = vec![crate::ai::context_contract::ContextAttachmentKind::Current.part()];
+    let owned: HashSet<String> = ["@snapshot".to_string()].into_iter().collect();
+    let plan = build_inline_mention_sync_plan("Use @context and @browser", &attached, &owned);
+
+    assert!(plan.desired_tokens.contains("@snapshot"));
+    assert!(plan.desired_tokens.contains("@browser"));
+    // @snapshot is still desired (via @context alias), so not stale.
+    assert!(
+        plan.stale_indices.is_empty(),
+        "existing @snapshot part should not be stale when @context alias is present"
+    );
+    assert_eq!(plan.added_parts.len(), 1, "only @browser should be added");
+    assert_eq!(
+        plan.added_parts[0],
+        crate::ai::context_contract::ContextAttachmentKind::Browser.part()
+    );
+}
+
+#[test]
+fn visible_chip_indices_hide_inline_backed_parts_only() {
+    use super::sync::visible_context_chip_indices;
+
+    let parts = vec![
+        crate::ai::context_contract::ContextAttachmentKind::Browser.part(),
+        crate::ai::message_parts::AiContextPart::AmbientContext {
+            label: "Ask Anything".to_string(),
+        },
+    ];
+    let visible = visible_context_chip_indices("Check @browser", &parts);
+    assert_eq!(visible, vec![1]);
+}
+
+#[test]
+fn remove_inline_mention_at_cursor_consumes_trailing_space() {
+    use super::sync::remove_inline_mention_at_cursor;
+
+    let (next, cursor) = remove_inline_mention_at_cursor("Fix @browser now", 8, false)
+        .expect("inline token should delete atomically");
+    assert_eq!(next, "Fix now");
+    assert_eq!(cursor, 4);
+}
+
+#[test]
+fn alias_and_primary_mentions_share_one_visible_chip_decision() {
+    use super::sync::visible_context_chip_indices;
+
+    let parts = vec![crate::ai::context_contract::ContextAttachmentKind::Current.part()];
+    let visible = visible_context_chip_indices("Use @context", &parts);
+    assert!(
+        visible.is_empty(),
+        "alias @context should suppress the Current Context chip"
+    );
+}
+
+#[test]
+fn sync_plan_detects_stale_tokens() {
+    use super::sync::build_inline_mention_sync_plan;
+    use std::collections::HashSet;
+
+    let attached = vec![
+        crate::ai::context_contract::ContextAttachmentKind::Browser.part(),
+        crate::ai::context_contract::ContextAttachmentKind::Current.part(),
+    ];
+    let owned: HashSet<String> = ["@browser".to_string(), "@snapshot".to_string()]
+        .into_iter()
+        .collect();
+
+    // Text only has @snapshot (no @browser) — @browser should be stale.
+    let plan = build_inline_mention_sync_plan("Use @snapshot", &attached, &owned);
+    assert_eq!(
+        plan.stale_indices,
+        vec![0],
+        "browser at index 0 should be stale"
+    );
+    assert!(plan.added_parts.is_empty());
+}
+
+#[test]
+fn replace_text_in_char_range_works() {
+    use super::sync::replace_text_in_char_range;
+
+    let result = replace_text_in_char_range("hello world", 6..11, "rust");
+    assert_eq!(result, "hello rust");
+}
+
+#[test]
+fn caret_after_replacement_computes_correctly() {
+    use super::sync::caret_after_replacement;
+
+    let pos = caret_after_replacement(&(4..8), "@browser ");
+    assert_eq!(pos, 13); // 4 + 9 chars
+}
