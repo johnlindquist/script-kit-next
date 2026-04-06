@@ -3,13 +3,14 @@ use std::sync::{Mutex, OnceLock};
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    div, px, AnyWindowHandle, App, AppContext, Bounds, Context, DisplayId, FocusHandle, Focusable,
-    InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString,
+    div, px, svg, AnyWindowHandle, App, AppContext, Bounds, Context, DisplayId, FocusHandle,
+    Focusable, InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString,
     StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
 };
 
-use crate::ai::context_picker_row::render_dense_monoline_picker_row;
+use crate::ai::context_picker_row::{render_dense_monoline_picker_row_with_accessory, GOLD};
 use gpui_component::scroll::ScrollableElement;
+use gpui_component::{IconName, IconNamed};
 
 use super::view::AcpChatView;
 
@@ -17,7 +18,6 @@ use super::view::AcpChatView;
 pub(crate) struct AcpModelSelectorPopupEntry {
     pub(crate) id: String,
     pub(crate) display: SharedString,
-    pub(crate) meta: SharedString,
     pub(crate) is_selected: bool,
 }
 
@@ -65,8 +65,11 @@ fn popup_bounds(
     snapshot: &AcpModelSelectorPopupSnapshot,
 ) -> Bounds<Pixels> {
     let height = popup_height(snapshot);
-    let width =
-        super::popup_window::dense_picker_width_for_window(parent_bounds.size.width.as_f32());
+    let width = super::popup_window::dense_picker_width_for_labels(
+        parent_bounds.size.width.as_f32(),
+        snapshot.entries.iter().map(|entry| entry.display.as_ref()),
+        true,
+    );
     let parent_height = parent_bounds.size.height.as_f32();
     let top = super::popup_window::footer_anchored_popup_top(parent_height, height);
 
@@ -193,47 +196,52 @@ impl Render for AcpModelSelectorPopupWindow {
         let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
         let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
 
-        div()
-            .track_focus(&self.focus_handle)
-            .id("acp-model-selector-popup")
-            .w_full()
-            .h_full()
-            .bg(fg.opacity(0.02))
-            .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING / 2.0))
-            .child(
-                div()
-                    .w_full()
-                    .max_h(px(popup_height(&self.snapshot)))
-                    .overflow_y_scrollbar()
-                    .children(
-                        self.snapshot
-                            .entries
-                            .iter()
-                            .enumerate()
-                            .map(|(idx, entry)| {
-                                let model_id = entry.id.clone();
-                                let meta = entry.meta.clone();
-                                let meta_hits: &[usize] =
-                                    if entry.is_selected { &[0usize] } else { &[] };
-                                render_dense_monoline_picker_row(
-                                    SharedString::from(format!("acp-model-selector-{idx}")),
-                                    entry.display.clone(),
-                                    meta,
-                                    &[],
-                                    meta_hits,
-                                    entry.is_selected,
-                                    fg,
-                                    muted_fg,
-                                )
-                                .cursor_pointer()
-                                .on_click(cx.listener(
-                                    move |this, _event, _window, cx| {
-                                        this.select_model(&model_id, cx);
-                                    },
-                                ))
-                            }),
-                    ),
-            )
+        super::popup_window::dense_picker_popup_surface(SharedString::from(
+            "acp-model-selector-popup",
+        ))
+        .track_focus(&self.focus_handle)
+        .w_full()
+        .h_full()
+        .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING / 2.0))
+        .child(
+            div()
+                .w_full()
+                .max_h(px(popup_height(&self.snapshot)))
+                .overflow_y_scrollbar()
+                .children(
+                    self.snapshot
+                        .entries
+                        .iter()
+                        .enumerate()
+                        .map(|(idx, entry)| {
+                            let model_id = entry.id.clone();
+                            let accessory = entry.is_selected.then(|| {
+                                svg()
+                                    .path(IconName::Check.path())
+                                    .size(px(12.0))
+                                    .text_color(GOLD)
+                                    .into_any_element()
+                            });
+                            render_dense_monoline_picker_row_with_accessory(
+                                SharedString::from(format!("acp-model-selector-{idx}")),
+                                entry.display.clone(),
+                                SharedString::default(),
+                                &[],
+                                &[],
+                                entry.is_selected,
+                                fg,
+                                muted_fg,
+                                accessory,
+                            )
+                            .cursor_pointer()
+                            .on_click(cx.listener(
+                                move |this, _event, _window, cx| {
+                                    this.select_model(&model_id, cx);
+                                },
+                            ))
+                        }),
+                ),
+        )
     }
 }
 
@@ -251,13 +259,11 @@ mod tests {
                 AcpModelSelectorPopupEntry {
                     id: "a".into(),
                     display: SharedString::from("A"),
-                    meta: SharedString::from(""),
                     is_selected: false,
                 },
                 AcpModelSelectorPopupEntry {
                     id: "b".into(),
                     display: SharedString::from("B"),
-                    meta: SharedString::from("\u{2713}"),
                     is_selected: true,
                 },
             ],
@@ -272,7 +278,6 @@ mod tests {
             entries: vec![AcpModelSelectorPopupEntry {
                 id: "a".into(),
                 display: SharedString::from("A"),
-                meta: SharedString::from(""),
                 is_selected: false,
             }],
         };
@@ -284,6 +289,6 @@ mod tests {
         let bounds = popup_bounds(parent, &snapshot);
         assert_eq!(f32::from(bounds.origin.x), 108.0);
         assert!(f32::from(bounds.origin.y) > 40.0);
-        assert!(f32::from(bounds.size.width) >= 200.0);
+        assert!(f32::from(bounds.size.width) >= super::super::popup_window::DENSE_PICKER_MIN_WIDTH);
     }
 }
