@@ -1103,6 +1103,61 @@ fn attach_actions_popup_to_parent_window(
     }
 }
 
+fn resolve_actions_popup_parent_automation_id(
+    parent_window_handle: AnyWindowHandle,
+    parent_window_bounds: Bounds<Pixels>,
+    parent_automation_id: Option<&str>,
+) -> anyhow::Result<String> {
+    if let Some(id) = parent_automation_id {
+        return Ok(id.to_string());
+    }
+
+    let Some(main_window_handle) = crate::get_main_window_handle() else {
+        tracing::warn!(
+            target: "script_kit::actions",
+            event = "actions_popup_open_blocked_missing_parent",
+            "Actions popup open blocked: no parent automation identity"
+        );
+        anyhow::bail!("Cannot open actions popup: parent automation identity is required");
+    };
+
+    if main_window_handle != parent_window_handle {
+        tracing::warn!(
+            target: "script_kit::actions",
+            event = "actions_popup_open_blocked_missing_parent",
+            "Actions popup open blocked: no parent automation identity"
+        );
+        anyhow::bail!("Cannot open actions popup: parent automation identity is required");
+    }
+
+    let synthesized_parent_id = "main".to_string();
+    crate::windows::upsert_runtime_window_handle(&synthesized_parent_id, parent_window_handle);
+    crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+        id: synthesized_parent_id.clone(),
+        kind: crate::protocol::AutomationWindowKind::Main,
+        title: Some("Script Kit".to_string()),
+        focused: true,
+        visible: true,
+        semantic_surface: Some("scriptList".to_string()),
+        bounds: Some(crate::protocol::AutomationWindowBounds {
+            x: f32::from(parent_window_bounds.origin.x) as f64,
+            y: f32::from(parent_window_bounds.origin.y) as f64,
+            width: f32::from(parent_window_bounds.size.width) as f64,
+            height: f32::from(parent_window_bounds.size.height) as f64,
+        }),
+        parent_window_id: None,
+        parent_kind: None,
+    });
+    tracing::info!(
+        target: "script_kit::actions",
+        event = "actions_popup_synthesized_main_parent",
+        parent_window_id = %synthesized_parent_id,
+        "Synthesized main-window automation identity for actions popup"
+    );
+
+    Ok(synthesized_parent_id)
+}
+
 /// Open the actions window as a separate floating window with vibrancy.
 /// It does NOT take keyboard focus - the parent window keeps focus and routes
 /// keyboard events to the shared ActionsDialog entity.
@@ -1127,15 +1182,11 @@ pub fn open_actions_window(
     position: WindowPosition,
     parent_automation_id: Option<&str>,
 ) -> anyhow::Result<WindowHandle<ActionsWindow>> {
-    // Fail-closed: abort before opening the window if parent identity is missing.
-    if parent_automation_id.is_none() {
-        tracing::warn!(
-            target: "script_kit::actions",
-            event = "actions_popup_open_blocked_missing_parent",
-            "Actions popup open blocked: no parent automation identity"
-        );
-        anyhow::bail!("Cannot open actions popup: parent automation identity is required");
-    }
+    let parent_automation_id = resolve_actions_popup_parent_automation_id(
+        parent_window_handle,
+        main_window_bounds,
+        parent_automation_id,
+    )?;
 
     // Close any existing actions window first
     close_actions_window(cx);
@@ -1275,7 +1326,7 @@ pub fn open_actions_window(
         Some("Actions".to_string()),
         Some("actionsDialog".to_string()),
         None,
-        parent_automation_id,
+        Some(parent_automation_id.as_str()),
     ) {
         tracing::warn!(
             target: "script_kit::actions",
