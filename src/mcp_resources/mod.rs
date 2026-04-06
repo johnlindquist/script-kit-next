@@ -883,9 +883,21 @@ const CLIPBOARD_HISTORY_DEFAULT_LIMIT: usize = 10;
 /// Maximum limit for clipboard history entries.
 const CLIPBOARD_HISTORY_MAX_LIMIT: usize = 50;
 
-fn parse_clipboard_history_request(uri: &str) -> Result<(usize, bool), String> {
+/// Parsed clipboard history request — either a list query or a single-entry lookup.
+#[derive(Debug)]
+enum ClipboardHistoryRequest {
+    /// List mode: fetch up to `limit` entries, optionally with diagnostics wrapper.
+    List { limit: usize, diagnostics: bool },
+    /// Single-entry mode: fetch the entry with the given ID.
+    SingleEntry { id: String },
+}
+
+fn parse_clipboard_history_request(uri: &str) -> Result<ClipboardHistoryRequest, String> {
     if uri == "kit://clipboard-history" {
-        return Ok((CLIPBOARD_HISTORY_DEFAULT_LIMIT, false));
+        return Ok(ClipboardHistoryRequest::List {
+            limit: CLIPBOARD_HISTORY_DEFAULT_LIMIT,
+            diagnostics: false,
+        });
     }
 
     let (_base, query) = uri
@@ -894,10 +906,14 @@ fn parse_clipboard_history_request(uri: &str) -> Result<(usize, bool), String> {
 
     let mut limit = CLIPBOARD_HISTORY_DEFAULT_LIMIT;
     let mut diagnostics = false;
+    let mut entry_id: Option<String> = None;
 
     for pair in query.split('&').filter(|p| !p.is_empty()) {
         let (key, value) = pair.split_once('=').unwrap_or((pair, "1"));
         match key {
+            "id" => {
+                entry_id = Some(value.to_string());
+            }
             "limit" => {
                 limit = value
                     .parse::<usize>()
@@ -909,13 +925,17 @@ fn parse_clipboard_history_request(uri: &str) -> Result<(usize, bool), String> {
             "diagnostics" => diagnostics = parse_bool_param(value)?,
             _ => {
                 return Err(format!(
-                    "Invalid kit://clipboard-history parameter: {key}. Supported parameters: limit, diagnostics."
+                    "Invalid kit://clipboard-history parameter: {key}. Supported parameters: id, limit, diagnostics."
                 ));
             }
         }
     }
 
-    Ok((limit, diagnostics))
+    if let Some(id) = entry_id {
+        Ok(ClipboardHistoryRequest::SingleEntry { id })
+    } else {
+        Ok(ClipboardHistoryRequest::List { limit, diagnostics })
+    }
 }
 
 fn read_clipboard_history_entries(limit: usize) -> Vec<ClipboardHistoryEntry> {
@@ -941,41 +961,56 @@ fn read_clipboard_history_entries(limit: usize) -> Vec<ClipboardHistoryEntry> {
 
 /// Read kit://clipboard-history resource
 fn read_clipboard_history_resource(uri: &str) -> Result<ResourceContent, String> {
-    let (limit, diagnostics) = parse_clipboard_history_request(uri)?;
+    let request = parse_clipboard_history_request(uri)?;
 
-    let started = Instant::now();
-    let entries = read_clipboard_history_entries(limit);
-    let duration_ms = started.elapsed().as_millis();
+    match request {
+        ClipboardHistoryRequest::SingleEntry { id } => {
+            // Single-entry mode: return the entry's text content directly.
+            let content = crate::clipboard_history::get_entry_content(&id)
+                .ok_or_else(|| format!("Clipboard entry not found: {id}"))?;
+            Ok(ResourceContent {
+                uri: uri.to_string(),
+                mime_type: "text/plain".to_string(),
+                text: content,
+            })
+        }
+        ClipboardHistoryRequest::List { limit, diagnostics } => {
+            let started = Instant::now();
+            let entries = read_clipboard_history_entries(limit);
+            let duration_ms = started.elapsed().as_millis();
 
-    let doc = ClipboardHistoryDocument {
-        schema_version: CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION,
-        count: entries.len(),
-        entries,
-    };
+            let doc = ClipboardHistoryDocument {
+                schema_version: CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION,
+                count: entries.len(),
+                entries,
+            };
 
-    let json = if diagnostics {
-        let diag = ClipboardHistoryDiagnosticsDocument {
-            kind: "clipboard_history_diagnostics",
-            uri: uri.to_string(),
-            meta: ClipboardHistoryDiagnosticsMeta {
-                duration_ms,
-                entry_count: doc.count,
-                source: "cached_entries",
-            },
-            document: doc,
-        };
-        serde_json::to_string_pretty(&diag)
-            .map_err(|e| format!("Failed to serialize clipboard history diagnostics: {e}"))?
-    } else {
-        serde_json::to_string_pretty(&doc)
-            .map_err(|e| format!("Failed to serialize clipboard history: {e}"))?
-    };
+            let json = if diagnostics {
+                let diag = ClipboardHistoryDiagnosticsDocument {
+                    kind: "clipboard_history_diagnostics",
+                    uri: uri.to_string(),
+                    meta: ClipboardHistoryDiagnosticsMeta {
+                        duration_ms,
+                        entry_count: doc.count,
+                        source: "cached_entries",
+                    },
+                    document: doc,
+                };
+                serde_json::to_string_pretty(&diag).map_err(|e| {
+                    format!("Failed to serialize clipboard history diagnostics: {e}")
+                })?
+            } else {
+                serde_json::to_string_pretty(&doc)
+                    .map_err(|e| format!("Failed to serialize clipboard history: {e}"))?
+            };
 
-    Ok(ResourceContent {
-        uri: uri.to_string(),
-        mime_type: "application/json".to_string(),
-        text: json,
-    })
+            Ok(ResourceContent {
+                uri: uri.to_string(),
+                mime_type: "application/json".to_string(),
+                text: json,
+            })
+        }
+    }
 }
 
 // ---------------------------------------------------------------
@@ -2860,23 +2895,42 @@ mod tests {
 
     #[test]
     fn clipboard_history_parse_accepts_limit_param() {
-        let (limit, diagnostics) =
-            parse_clipboard_history_request("kit://clipboard-history?limit=5").unwrap();
-        assert_eq!(limit, 5);
-        assert!(!diagnostics);
+        let req = parse_clipboard_history_request("kit://clipboard-history?limit=5").unwrap();
+        match req {
+            ClipboardHistoryRequest::List { limit, diagnostics } => {
+                assert_eq!(limit, 5);
+                assert!(!diagnostics);
+            }
+            other => panic!("Expected List, got {other:?}"),
+        }
     }
 
     #[test]
     fn clipboard_history_parse_clamps_limit_to_max() {
-        let (limit, _) =
-            parse_clipboard_history_request("kit://clipboard-history?limit=999").unwrap();
-        assert_eq!(limit, CLIPBOARD_HISTORY_MAX_LIMIT);
+        let req = parse_clipboard_history_request("kit://clipboard-history?limit=999").unwrap();
+        match req {
+            ClipboardHistoryRequest::List { limit, .. } => {
+                assert_eq!(limit, CLIPBOARD_HISTORY_MAX_LIMIT);
+            }
+            other => panic!("Expected List, got {other:?}"),
+        }
     }
 
     #[test]
     fn clipboard_history_parse_rejects_unknown_param() {
         let err = parse_clipboard_history_request("kit://clipboard-history?foo=1").unwrap_err();
         assert!(err.contains("Invalid kit://clipboard-history parameter"));
+    }
+
+    #[test]
+    fn clipboard_history_parse_accepts_id_param() {
+        let req = parse_clipboard_history_request("kit://clipboard-history?id=abc123").unwrap();
+        match req {
+            ClipboardHistoryRequest::SingleEntry { id } => {
+                assert_eq!(id, "abc123");
+            }
+            other => panic!("Expected SingleEntry, got {other:?}"),
+        }
     }
 
     #[test]

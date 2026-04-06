@@ -426,8 +426,13 @@ impl ScriptListApp {
                     }
                 }
 
-                // ESC: Clear query first if present, otherwise go back/close
+                // ESC: In portal mode, cancel and return to ACP chat.
+                // Otherwise, clear query first; if empty, go back/close.
                 if is_key_escape(key) {
+                    if this.is_in_attachment_portal() {
+                        this.close_attachment_portal_cancel(cx);
+                        return;
+                    }
                     if !this.clear_builtin_view_filter(cx) {
                         this.go_back_or_close(window, cx);
                     }
@@ -516,7 +521,7 @@ impl ScriptListApp {
                             } else {
                                 if let Some(file) = get_selected_file() {
                                     if file.file_type == FileType::Directory {
-                                        // Directory: browse inline
+                                        // Directory: browse inline (even in portal mode)
                                         let next_query = format!(
                                             "{}/",
                                             file_search::shorten_path(&file.path)
@@ -536,6 +541,21 @@ impl ScriptListApp {
                                         cx.stop_propagation();
                                         return;
                                     }
+
+                                    // Portal mode: attach file to ACP chat and return.
+                                    if this.is_in_attachment_portal() {
+                                        let part = crate::ai::message_parts::AiContextPart::FilePath {
+                                            path: file.path.clone(),
+                                            label: std::path::Path::new(&file.path)
+                                                .file_name()
+                                                .map(|n| n.to_string_lossy().to_string())
+                                                .unwrap_or_else(|| file.path.clone()),
+                                        };
+                                        this.close_attachment_portal_with_part(part, cx);
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
                                     // File: open with default app and close
                                     let _ = file_search::open_file(&file.path);
                                     this.close_and_reset_window(cx);
@@ -1103,7 +1123,23 @@ impl ScriptListApp {
         // "Explain" / "Plan next steps" via ⌘↵ / ⌘⇧↵ on the key handler,
         // while the visible footer stays within the canonical three-slot
         // contract.
-        let file_search_hints = if let Some(file) = selected_file.as_ref() {
+        let file_search_hints = if self.is_in_attachment_portal() {
+            // Portal mode: simplified footer indicating attach context.
+            let primary = if selected_file
+                .as_ref()
+                .map(|f| matches!(f.file_type, file_search::FileType::Directory))
+                .unwrap_or(false)
+            {
+                "\u{21b5} Browse"
+            } else {
+                "\u{21b5} Attach"
+            };
+            vec![
+                primary.into(),
+                "Esc Cancel".into(),
+                "Attaching to AI Chat".into(),
+            ]
+        } else if let Some(file) = selected_file.as_ref() {
             let primary = if matches!(file.file_type, file_search::FileType::Directory) {
                 "\u{21b5} Browse"
             } else {
