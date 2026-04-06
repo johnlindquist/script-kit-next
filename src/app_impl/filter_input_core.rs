@@ -10,6 +10,12 @@ pub(crate) enum ScriptListSpecialEntry {
 }
 
 impl ScriptListApp {
+    /// Transient first-character launch triggers should not persist when the
+    /// user returns to the ScriptList surface.
+    pub(crate) fn is_transient_script_list_trigger(new_text: &str) -> bool {
+        matches!(new_text, "~" | "/" | "@" | ">" | "?")
+    }
+
     pub(crate) fn current_view_uses_shared_filter_input(&self) -> bool {
         matches!(
             self.current_view,
@@ -280,5 +286,24 @@ mod tests {
             ScriptListApp::special_entry_from_script_list_filter("foo"),
             None
         );
+    }
+
+    #[test]
+    fn test_is_transient_script_list_trigger() {
+        use super::ScriptListApp;
+
+        for trigger in ["~", "/", "@", ">", "?"] {
+            assert!(
+                ScriptListApp::is_transient_script_list_trigger(trigger),
+                "expected '{trigger}' to be treated as a transient ScriptList trigger"
+            );
+        }
+
+        for query in ["~/src", "@browser", "/tmp", "foo", ""] {
+            assert!(
+                !ScriptListApp::is_transient_script_list_trigger(query),
+                "expected '{query}' to remain a real query"
+            );
+        }
     }
 }

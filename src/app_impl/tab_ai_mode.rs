@@ -2162,6 +2162,12 @@ impl ScriptListApp {
             _ => FocusedInput::None,
         };
 
+        if matches!(self.current_view, AppView::ScriptList)
+            && Self::is_transient_script_list_trigger(self.filter_text.as_str())
+        {
+            self.reset_script_list_filter_and_selection_state(cx);
+        }
+
         // Keep prewarm only for the actual PTY-backed quick terminal path.
         if closing_quick_terminal {
             self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);
@@ -4673,6 +4679,14 @@ mod tests {
                 "self.schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx);"
             )),
             "close path must schedule a fresh prewarm for the next Tab press"
+        );
+        assert!(
+            body.contains(&tab_ai_contract_compact(
+                "Self::is_transient_script_list_trigger(self.filter_text.as_str())"
+            )) && body.contains(&tab_ai_contract_compact(
+                "self.reset_script_list_filter_and_selection_state(cx);"
+            )),
+            "close path must clear transient ScriptList trigger filters when returning to the main menu"
         );
     }
 
