@@ -34,14 +34,14 @@ jobs:
           key: cargo-bundle-zed-deploy-${{ runner.os }}
       
       - name: Build release
-        run: cargo build --release
+        run: cargo build --release --bin script-kit-gpui
       
       - name: Install cargo-bundle
         if: steps.cache-cargo-bundle.outputs.cache-hit != 'true'
         run: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy
       
       - name: Create bundle
-        run: cargo bundle --release
+        run: cargo bundle --release --bin script-kit-gpui
       
       - name: Create temporary keychain
         env:
