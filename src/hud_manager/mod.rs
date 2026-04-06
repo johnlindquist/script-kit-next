@@ -764,7 +764,7 @@ fn calculate_hud_position(cx: &App, hud_width: f32) -> (f32, f32) {
 #[cfg(target_os = "macos")]
 fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click_through: bool) {
     use cocoa::appkit::NSApp;
-    use cocoa::base::{id, nil};
+    use cocoa::base::id;
     use cocoa::foundation::NSRect;
 
     unsafe {
@@ -806,8 +806,10 @@ fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click
                 // Don't show in window menu
                 let _: () = msg_send![window, setExcludedFromWindowsMenu: true];
 
-                // Order to front without activating the app
-                let _: () = msg_send![window, orderFront: nil];
+                // Keep the HUD visible even after the main launcher orders out.
+                // orderFrontRegardless lifts the overlay without requiring the
+                // app to remain active or the main panel to stay open.
+                let _: () = msg_send![window, orderFrontRegardless];
 
                 let click_status = if click_through {
                     "click-through"
@@ -817,7 +819,7 @@ fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click
                 logging::log(
                     "HUD",
                     &format!(
-                        "Configured HUD NSWindow ({}x{}): level={}, {}, orderFront",
+                        "Configured HUD NSWindow ({}x{}): level={}, {}, orderFrontRegardless",
                         expected_width, expected_height, hud_level, click_status
                     ),
                 );
