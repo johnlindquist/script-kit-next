@@ -1,6 +1,6 @@
 # Fast dev commands — `make test` runs 10k+ tests in ~12s via nextest
 
-.PHONY: test check lint verify run bundle test-all test-system test-slow
+.PHONY: test check lint verify ship-check run bundle test-all test-system test-slow
 
 # Default: fast parallel tests (nextest)
 test:
@@ -14,8 +14,13 @@ check:
 lint:
 	cargo clippy --lib -- -D warnings
 
-# Full verification gate (check + lint + test)
-verify: check lint test
+# Canonical validation gate used by release tags
+verify:
+	bash scripts/verify.sh --skip-bundle
+
+# Full local ship gate (validation + bundle sanity)
+ship-check:
+	bash scripts/verify.sh
 
 # Run the app
 run:

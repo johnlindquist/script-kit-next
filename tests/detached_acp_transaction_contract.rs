@@ -139,6 +139,195 @@ fn transaction_provider_implements_required_methods() {
 }
 
 // ============================================================
+// ActionsDialog batch target resolution
+// ============================================================
+
+#[test]
+fn batch_handler_accepts_actions_dialog_target() {
+    let source = include_str!("../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("actions_dialog_batch_entity"),
+        "batch handler should have an actions_dialog_batch_entity variable for ActionsDialog routing"
+    );
+    assert!(
+        source.contains("automation.batch.actions_dialog.completed"),
+        "batch handler should emit ActionsDialog completion log"
+    );
+}
+
+#[test]
+fn actions_dialog_batch_emits_set_input_log() {
+    let source = include_str!("../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("transaction_actions_dialog_set_input"),
+        "ActionsDialog batch setInput should emit transaction_actions_dialog_set_input log"
+    );
+}
+
+#[test]
+fn actions_dialog_batch_emits_select_by_value_log() {
+    let source = include_str!("../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("transaction_actions_dialog_select_by_value"),
+        "ActionsDialog batch selectByValue should emit transaction_actions_dialog_select_by_value log"
+    );
+}
+
+#[test]
+fn actions_dialog_batch_emits_select_by_semantic_id_log() {
+    let source = include_str!("../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("transaction_actions_dialog_select_by_semantic_id"),
+        "ActionsDialog batch selectBySemanticId should emit transaction_actions_dialog_select_by_semantic_id log"
+    );
+}
+
+#[test]
+fn actions_dialog_batch_unsupported_commands_fail_closed() {
+    let source = include_str!("../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("transaction_actions_dialog_unsupported"),
+        "ActionsDialog batch should emit unsupported command log for rejected commands"
+    );
+}
+
+// ============================================================
+// ActionsDialog target resolution in resolve_automation_read_target
+// ============================================================
+
+#[test]
+fn resolve_automation_read_target_accepts_actions_dialog() {
+    let source = include_str!("../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("AutomationReadTarget::ActionsDialog"),
+        "AutomationReadTarget must have an ActionsDialog variant"
+    );
+    assert!(
+        source.contains("automation.target.actions_dialog_resolved"),
+        "resolve_automation_read_target must emit ActionsDialog resolution log"
+    );
+}
+
+// ============================================================
+// ActionsDialog transaction provider exists
+// ============================================================
+
+#[test]
+fn actions_dialog_transaction_provider_implements_required_methods() {
+    let source = include_str!("../src/windows/automation_transaction_provider.rs");
+    assert!(
+        source.contains("ActionsDialogTransactionProvider"),
+        "transaction provider file must contain ActionsDialogTransactionProvider"
+    );
+    assert!(
+        source.contains("transaction_actions_dialog_set_input"),
+        "ActionsDialog provider must emit set_input log"
+    );
+    assert!(
+        source.contains("transaction_actions_dialog_select_by_value"),
+        "ActionsDialog provider must emit select_by_value log"
+    );
+    assert!(
+        source.contains("transaction_actions_dialog_select_by_semantic_id"),
+        "ActionsDialog provider must emit select_by_semantic_id log"
+    );
+}
+
+// ============================================================
+// ActionsDialog surface collector exposes reusable collector
+// ============================================================
+
+#[test]
+fn surface_collector_has_reusable_actions_dialog_collector() {
+    let source = include_str!("../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("pub(crate) fn collect_actions_dialog_elements"),
+        "surface collector should expose a reusable collect_actions_dialog_elements function"
+    );
+}
+
+#[test]
+fn actions_dialog_elements_include_search_and_actions_list() {
+    let source = include_str!("../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"input:actions-search\""),
+        "ActionsDialog collector should expose input:actions-search semantic ID"
+    );
+    assert!(
+        source.contains("\"list:actions\""),
+        "ActionsDialog collector should expose list:actions semantic ID"
+    );
+}
+
+// ============================================================
+// ActionsDialog direct mutation methods exist
+// ============================================================
+
+#[test]
+fn actions_dialog_has_set_search_text_method() {
+    let source = include_str!("../src/actions/dialog.rs");
+    assert!(
+        source.contains("pub fn set_search_text"),
+        "ActionsDialog must have a pub set_search_text method for direct mutation"
+    );
+}
+
+#[test]
+fn actions_dialog_has_select_action_by_id_method() {
+    let source = include_str!("../src/actions/dialog.rs");
+    assert!(
+        source.contains("pub fn select_action_by_id"),
+        "ActionsDialog must have a pub select_action_by_id method for batch selectByValue"
+    );
+}
+
+#[test]
+fn actions_dialog_has_select_action_by_semantic_id_method() {
+    let source = include_str!("../src/actions/dialog.rs");
+    assert!(
+        source.contains("pub fn select_action_by_semantic_id"),
+        "ActionsDialog must have a pub select_action_by_semantic_id method for batch selectBySemanticId"
+    );
+}
+
+// ============================================================
+// batch request with actionsDialog target parses correctly
+// ============================================================
+
+#[test]
+fn batch_with_actions_dialog_target_parses() {
+    use script_kit_gpui::protocol::Message;
+
+    let json = serde_json::json!({
+        "type": "batch",
+        "requestId": "b-actions",
+        "target": {"type": "kind", "kind": "actionsDialog"},
+        "commands": [
+            {"type": "setInput", "text": "edit"},
+            {"type": "selectByValue", "value": "edit-script", "submit": false},
+            {"type": "selectBySemanticId", "semanticId": "choice:0:edit-script", "submit": true}
+        ],
+        "options": {"stopOnError": true}
+    });
+
+    let msg: Message =
+        serde_json::from_value(json).expect("batch with actionsDialog target should parse");
+    match msg {
+        Message::Batch {
+            request_id,
+            commands,
+            target,
+            ..
+        } => {
+            assert_eq!(request_id, "b-actions");
+            assert_eq!(commands.len(), 3);
+            assert!(target.is_some(), "target should be present");
+        }
+        other => panic!("Expected Batch, got: {other:?}"),
+    }
+}
+
+// ============================================================
 // AcpChatView visibility for cross-module access
 // ============================================================
 

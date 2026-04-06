@@ -173,11 +173,14 @@ resources = ["assets/*"]
 ### Build Command
 
 ```bash
-# Build release binary
-cargo build --release
+# Build the app target explicitly
+cargo build --release --bin script-kit-gpui
 
-# Create .app bundle
-cargo bundle --release
+# Create the .app bundle for the app target explicitly
+cargo bundle --release --bin script-kit-gpui
+
+# Verify the bundle contains only the intended executable
+bash scripts/verify-macos-bundle.sh
 ```
 
 The bundle will be created at `target/release/bundle/osx/Script Kit.app`
@@ -460,13 +463,16 @@ cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.
 
 ```bash
 # Development build (unsigned)
-cargo bundle
+cargo bundle --bin script-kit-gpui
 
 # Release build
-cargo bundle --release
+cargo bundle --release --bin script-kit-gpui
+
+# Verify bundle contents
+bash scripts/verify-macos-bundle.sh
 
 # For specific target
-cargo bundle --release --target aarch64-apple-darwin
+cargo bundle --release --bin script-kit-gpui --target aarch64-apple-darwin
 ```
 
 ### Step 5: Create DMG (Optional)

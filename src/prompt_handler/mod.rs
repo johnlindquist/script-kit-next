@@ -72,7 +72,7 @@ enum AcpReadTarget {
 
 /// Resolved automation target for batch/waitFor operations.
 ///
-/// Extends `AcpReadTarget` to also accept Notes windows.
+/// Extends `AcpReadTarget` to also accept Notes and ActionsDialog windows.
 #[derive(Clone)]
 enum AutomationReadTarget {
     /// Main window (default).
@@ -90,15 +90,21 @@ enum AutomationReadTarget {
         entity: gpui::Entity<crate::notes::NotesApp>,
         handle: gpui::WindowHandle<crate::Root>,
     },
+    /// Actions dialog popup.
+    ActionsDialog {
+        info: crate::protocol::AutomationWindowInfo,
+        entity: gpui::Entity<crate::actions::ActionsDialog>,
+    },
 }
 
-/// Resolve an automation target that accepts Main, AcpDetached, and Notes.
+/// Resolve an automation target that accepts Main, AcpDetached, Notes, and ActionsDialog.
 ///
 /// Used by `batch` and `waitFor` to route commands to the correct window.
 fn resolve_automation_read_target(
     request_id: &str,
     op: &'static str,
     target: Option<&crate::protocol::AutomationWindowTarget>,
+    cx: &gpui::App,
 ) -> Result<AutomationReadTarget, crate::protocol::TransactionError> {
     let Some(target) = target else {
         return Ok(AutomationReadTarget::Main { info: None });
@@ -159,6 +165,25 @@ fn resolve_automation_read_target(
                 ))),
             }
         }
+        crate::protocol::AutomationWindowKind::ActionsDialog => {
+            match crate::actions::get_actions_dialog_entity(cx) {
+                Some(entity) => {
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        op = op,
+                        window_id = %resolved.id,
+                        kind = ?resolved.kind,
+                        "automation.target.actions_dialog_resolved"
+                    );
+                    Ok(AutomationReadTarget::ActionsDialog { info: resolved, entity })
+                }
+                None => Err(crate::protocol::TransactionError::action_failed(format!(
+                    "{op} resolved ActionsDialog target {} but no live dialog entity is available",
+                    resolved.id
+                ))),
+            }
+        }
         other_kind => {
             tracing::warn!(
                 target: "script_kit::automation",
@@ -169,7 +194,7 @@ fn resolve_automation_read_target(
                 "automation.target.unsupported_kind"
             );
             Err(crate::protocol::TransactionError::action_failed(format!(
-                "{op} supports Main, AcpDetached, and Notes targets; resolved {} ({:?})",
+                "{op} supports Main, AcpDetached, Notes, and ActionsDialog targets; resolved {} ({:?})",
                 resolved.id, other_kind
             )))
         }
@@ -2711,7 +2736,7 @@ impl ScriptListApp {
                                 }
                             }
                         } else {
-                            match resolve_automation_read_target(&rid, "waitFor", target.as_ref()) {
+                            match resolve_automation_read_target(&rid, "waitFor", target.as_ref(), cx) {
                                 Ok(resolved) => resolved,
                                 Err(error) => {
                                     if let Some(ref sender) = self.response_sender {
@@ -2996,7 +3021,7 @@ impl ScriptListApp {
                 // Resolve target: accept Main, AcpDetached, and Notes.
                 let batch_target: AutomationReadTarget =
                     if target.is_some() {
-                        match resolve_automation_read_target(&rid, "batch", target.as_ref()) {
+                        match resolve_automation_read_target(&rid, "batch", target.as_ref(), cx) {
                             Ok(resolved) => resolved,
                             Err(error) => {
                                 if let Some(ref sender) = self.response_sender {
@@ -3037,6 +3062,13 @@ impl ScriptListApp {
                 } else {
                     None
                 };
+
+                let actions_dialog_batch_entity: Option<gpui::Entity<crate::actions::ActionsDialog>> =
+                    if let AutomationReadTarget::ActionsDialog { ref entity, .. } = batch_target {
+                        Some(entity.clone())
+                    } else {
+                        None
+                    };
 
                 tracing::info!(
                     category = "AUTOMATION",
@@ -3623,6 +3655,310 @@ impl ScriptListApp {
                             target = "notes",
                             trace_included = include_trace,
                             "automation.batch.notes.completed"
+                        );
+
+                        if let Some(ref s) = sender {
+                            let _ = s.try_send(Message::batch_result_with_trace(
+                                rid.clone(), success, results, failed_at, total_elapsed, trace,
+                            ));
+                        }
+                        return;
+                    }
+
+                    // ── ActionsDialog batch path ────────────────────────
+                    // When targeting the ActionsDialog popup, route setInput,
+                    // selectByValue, selectBySemanticId, and waitFor commands
+                    // to the dialog entity. Unsupported commands fail closed.
+                    if let Some(dialog_entity) = actions_dialog_batch_entity {
+                        let batch_start = std::time::Instant::now();
+                        let batch_timeout = std::time::Duration::from_millis(opts.timeout);
+                        let mut results: Vec<protocol::BatchResultEntry> = Vec::new();
+                        let mut failed = false;
+
+                        for (index, cmd) in commands.iter().enumerate() {
+                            if batch_start.elapsed() >= batch_timeout {
+                                results.push(protocol::BatchResultEntry {
+                                    index,
+                                    success: false,
+                                    command: batch_command_name(cmd),
+                                    elapsed: Some(0),
+                                    value: None,
+                                    error: Some(protocol::TransactionError::wait_timeout("Batch timeout exceeded")),
+                                });
+                                failed = true;
+                                break;
+                            }
+
+                            let cmd_start = std::time::Instant::now();
+                            match cmd {
+                                protocol::BatchCommand::SetInput { text } => {
+                                    let text = text.clone();
+                                    let de = dialog_entity.clone();
+                                    let result = this.update(cx, |_this, cx| {
+                                        de.update(cx, |dialog, cx| {
+                                            dialog.set_search_text(text.clone(), cx);
+                                            tracing::info!(
+                                                target: "script_kit::transaction",
+                                                event = "transaction_actions_dialog_set_input",
+                                                text_len = text.len(),
+                                                "ActionsDialog set_input"
+                                            );
+                                            String::new()
+                                        })
+                                    });
+                                    match result {
+                                        Ok(err) if err.is_empty() => {
+                                            tracing::info!(category = "BATCH", request_id = %rid, index, command = "setInput", "batch.actions_dialog.step.ok");
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: true, command: "setInput".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None, error: None,
+                                            });
+                                        }
+                                        Ok(err) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "setInput".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(err)),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "setInput".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                protocol::BatchCommand::SelectByValue { value, submit: _ } => {
+                                    let value = value.clone();
+                                    let de = dialog_entity.clone();
+                                    let selected = this.update(cx, |_this, cx| {
+                                        de.update(cx, |dialog, cx| -> Option<String> {
+                                            dialog.select_action_by_id(&value, cx)
+                                        })
+                                    });
+                                    match selected {
+                                        Ok(Some(v)) => {
+                                            tracing::info!(
+                                                target: "script_kit::transaction",
+                                                event = "transaction_actions_dialog_select_by_value",
+                                                value = %v,
+                                                "ActionsDialog select_by_value"
+                                            );
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: true, command: "selectByValue".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: Some(v), error: None,
+                                            });
+                                        }
+                                        Ok(None) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "selectByValue".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::selection_not_found(&value)),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "selectByValue".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                protocol::BatchCommand::SelectBySemanticId { semantic_id, submit: _ } => {
+                                    let semantic_id = semantic_id.clone();
+                                    let de = dialog_entity.clone();
+                                    let selected = this.update(cx, |_this, cx| {
+                                        de.update(cx, |dialog, cx| -> Option<String> {
+                                            dialog.select_action_by_semantic_id(&semantic_id, cx)
+                                        })
+                                    });
+                                    match selected {
+                                        Ok(Some(v)) => {
+                                            tracing::info!(
+                                                target: "script_kit::transaction",
+                                                event = "transaction_actions_dialog_select_by_semantic_id",
+                                                semantic_id = %v,
+                                                "ActionsDialog select_by_semantic_id"
+                                            );
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: true, command: "selectBySemanticId".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: Some(v), error: None,
+                                            });
+                                        }
+                                        Ok(None) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "selectBySemanticId".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::element_not_found(&semantic_id)),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "selectBySemanticId".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(protocol::TransactionError::action_failed(format!("{e}"))),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                protocol::BatchCommand::WaitFor { condition, timeout, poll_interval } => {
+                                    let wait_timeout = std::time::Duration::from_millis(timeout.unwrap_or(5_000));
+                                    let wait_poll = std::time::Duration::from_millis(poll_interval.unwrap_or(25));
+                                    let wait_start = std::time::Instant::now();
+
+                                    let already = this.update(cx, |this, cx| {
+                                        this.wait_condition_satisfied(condition, cx)
+                                    });
+
+                                    let mut wait_result: Result<Option<String>, protocol::TransactionError> = match already {
+                                        Ok(true) => Ok(None),
+                                        Ok(false) => Err(protocol::TransactionError::wait_timeout("not yet")),
+                                        Err(ref e) => Err(protocol::TransactionError::action_failed(format!("{e}"))),
+                                    };
+
+                                    if wait_result.is_err() && matches!(already, Ok(false)) {
+                                        loop {
+                                            cx.background_executor().timer(wait_poll).await;
+                                            if wait_start.elapsed() >= wait_timeout {
+                                                wait_result = Err(protocol::TransactionError::wait_timeout(
+                                                    &format!("Timeout after {}ms", wait_timeout.as_millis()),
+                                                ));
+                                                break;
+                                            }
+                                            match this.update(cx, |this, cx| this.wait_condition_satisfied(condition, cx)) {
+                                                Ok(true) => {
+                                                    wait_result = Ok(None);
+                                                    break;
+                                                }
+                                                Ok(false) => continue,
+                                                Err(e) => {
+                                                    wait_result = Err(protocol::TransactionError::action_failed(format!("{e}")));
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    match wait_result {
+                                        Ok(_) => {
+                                            tracing::info!(
+                                                target: "script_kit::transaction",
+                                                event = "transaction_actions_dialog_wait_complete",
+                                                request_id = %rid,
+                                                index,
+                                                target = "actionsDialog",
+                                                "batch.actions_dialog.wait.ok"
+                                            );
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: true, command: "waitFor".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None, error: None,
+                                            });
+                                        }
+                                        Err(e) => {
+                                            results.push(protocol::BatchResultEntry {
+                                                index, success: false, command: "waitFor".to_string(),
+                                                elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                                value: None,
+                                                error: Some(e),
+                                            });
+                                            failed = true;
+                                            if opts.stop_on_error { break; }
+                                        }
+                                    }
+                                }
+                                other => {
+                                    let cmd_name = batch_command_name(other);
+                                    tracing::warn!(
+                                        target: "script_kit::transaction",
+                                        event = "transaction_actions_dialog_unsupported",
+                                        command = %cmd_name,
+                                        "ActionsDialog batch: unsupported command"
+                                    );
+                                    results.push(protocol::BatchResultEntry {
+                                        index,
+                                        success: false,
+                                        command: cmd_name,
+                                        elapsed: Some(cmd_start.elapsed().as_millis() as u64),
+                                        value: None,
+                                        error: Some(protocol::TransactionError {
+                                            code: protocol::TransactionErrorCode::UnsupportedCommand,
+                                            message: format!(
+                                                "ActionsDialog batch supports: setInput, selectByValue, selectBySemanticId, waitFor. Got: {}",
+                                                batch_command_name(other)
+                                            ),
+                                            suggestion: Some("Use a supported command for ActionsDialog targets.".to_string()),
+                                        }),
+                                    });
+                                    failed = true;
+                                    if opts.stop_on_error { break; }
+                                }
+                            }
+                        }
+
+                        let success = !failed;
+                        let failed_at = if failed { results.iter().position(|r| !r.success) } else { None };
+                        let total_elapsed = batch_start.elapsed().as_millis() as u64;
+                        let include_trace = matches!(trace_mode, protocol::TransactionTraceMode::On)
+                            || (matches!(trace_mode, protocol::TransactionTraceMode::OnFailure) && !success);
+                        let started_at_ms = 0u64;
+                        let trace = if include_trace {
+                            Some(protocol::TransactionTrace {
+                                request_id: rid.clone(),
+                                status: if success { protocol::TransactionTraceStatus::Ok } else { protocol::TransactionTraceStatus::Failed },
+                                started_at_ms,
+                                total_elapsed_ms: total_elapsed,
+                                failed_at,
+                                commands: results.iter().map(|r| {
+                                    protocol::TransactionCommandTrace {
+                                        index: r.index,
+                                        command: r.command.clone(),
+                                        started_at_ms,
+                                        elapsed_ms: r.elapsed.unwrap_or(0),
+                                        before: protocol::UiStateSnapshot::default(),
+                                        after: protocol::UiStateSnapshot::default(),
+                                        polls: Vec::new(),
+                                        error: r.error.clone(),
+                                    }
+                                }).collect(),
+                            })
+                        } else {
+                            None
+                        };
+
+                        tracing::info!(
+                            category = "AUTOMATION",
+                            request_id = %rid,
+                            success,
+                            total_elapsed_ms = total_elapsed,
+                            failed_at = ?failed_at,
+                            target = "actionsDialog",
+                            trace_included = include_trace,
+                            "automation.batch.actions_dialog.completed"
                         );
 
                         if let Some(ref s) = sender {

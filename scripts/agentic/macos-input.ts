@@ -20,11 +20,39 @@
 
 import { existsSync } from "fs";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const WINDOW_TS_PATH = new URL("./window.ts", import.meta.url).pathname;
 const DEFAULT_FOCUS_TITLE = "Script Kit";
 const DEFAULT_FOCUS_RETRY = 3;
 const DEFAULT_FOCUS_SETTLE_MS = 200;
+
+// ---------------------------------------------------------------------------
+// Capability ladder types
+// ---------------------------------------------------------------------------
+
+/**
+ * Methods ordered by preference (highest to lowest).
+ * The driver tries each in order and stops at the first success.
+ */
+type CapabilityMethod =
+  | "directBatch"      // Protocol-level batch mutation (setInput/selectByValue)
+  | "gpuiDispatch"     // In-process GPUI event simulation (simulateGpuiEvent)
+  | "accessibility"    // macOS Accessibility / osascript System Events
+  | "quartz";          // Quartz event posting / cliclick
+
+/**
+ * Machine-readable receipt attached to every action result.
+ * Records the target, the method that succeeded, and why higher-priority
+ * methods were skipped.
+ */
+interface ActionReceipt {
+  /** The automation surface targeted (e.g., "actionsDialog", "main"). */
+  target: string | null;
+  /** The method that actually delivered the action. */
+  chosenMethod: CapabilityMethod;
+  /** Why each skipped method was not used, in ladder order. */
+  fallbackReasons: Array<{ method: CapabilityMethod; reason: string }>;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -42,8 +70,10 @@ interface KeyResult {
   key: string;
   modifiers: string[];
   delivered: boolean;
-  method: "cliclick" | "osascript";
+  method: CapabilityMethod;
   focusEnforced: boolean;
+  /** Machine-readable capability ladder receipt. */
+  receipt?: ActionReceipt;
   /** Automation surface targeted, if --target was specified. */
   target?: string;
   /** Session used for focus, if --session was specified. */
@@ -53,8 +83,9 @@ interface KeyResult {
 interface TypeResult {
   text: string;
   delivered: boolean;
-  method: "cliclick" | "osascript";
+  method: CapabilityMethod;
   focusEnforced: boolean;
+  receipt?: ActionReceipt;
   target?: string;
   session?: string;
 }
@@ -64,6 +95,7 @@ interface ClickResult {
   y: number;
   delivered: boolean;
   focusEnforced: boolean;
+  receipt?: ActionReceipt;
   target?: string;
   session?: string;
 }
@@ -330,6 +362,114 @@ async function ensureFocusViaWindowTs(
 }
 
 // ---------------------------------------------------------------------------
+// Capability ladder: protocol-level input paths
+// ---------------------------------------------------------------------------
+
+/**
+ * Try to deliver a text input via direct batch mutation (setInput).
+ * This is the highest-priority method — it mutates popup state directly
+ * without requiring foreground keyboard focus.
+ *
+ * Only available when a session is active and a popup target is specified.
+ */
+async function tryBatchSetInput(
+  sessionName: string,
+  targetKind: string,
+  text: string
+): Promise<{ ok: boolean; reason?: string }> {
+  if (!sessionName) return { ok: false, reason: "no_session" };
+  if (!targetKind) return { ok: false, reason: "no_target" };
+
+  try {
+    const payload = {
+      type: "batch",
+      requestId: `batch-input-${Date.now()}`,
+      target: { type: "kind", kind: targetKind },
+      commands: [{ type: "setInput", text }],
+      options: { stopOnError: true, timeout: 3000 },
+    };
+    const result = await runProcess(
+      [
+        "bash",
+        SESSION_SH_PATH,
+        "rpc",
+        sessionName,
+        JSON.stringify(payload),
+        "--expect",
+        "batchResult",
+        "--timeout",
+        "4000",
+      ],
+      "batch-set-input"
+    );
+    if (result.exitCode !== 0) {
+      return { ok: false, reason: `rpc_exit_${result.exitCode}` };
+    }
+    const parsed = JSON.parse(result.stdout);
+    const response = parsed?.response ?? parsed;
+    if (response?.success === true) {
+      stderrLog("capability_ladder_batch_ok", { target: targetKind, text: text.slice(0, 50) });
+      return { ok: true };
+    }
+    return { ok: false, reason: response?.error ?? "batch_not_successful" };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Try to deliver a key event via GPUI event simulation (simulateGpuiEvent).
+ * Second priority — uses the in-process GPUI dispatch which doesn't need
+ * foreground OS focus but does need a valid window handle.
+ */
+async function tryGpuiKeyDispatch(
+  sessionName: string,
+  targetKind: string | null,
+  key: string,
+  modifiers: string[]
+): Promise<{ ok: boolean; reason?: string }> {
+  if (!sessionName) return { ok: false, reason: "no_session" };
+
+  try {
+    const target = targetKind
+      ? { type: "kind", kind: targetKind }
+      : { type: "main" };
+    const payload = {
+      type: "simulateGpuiEvent",
+      requestId: `gpui-key-${Date.now()}`,
+      target,
+      event: { type: "keyDown", key, modifiers },
+    };
+    const result = await runProcess(
+      [
+        "bash",
+        SESSION_SH_PATH,
+        "rpc",
+        sessionName,
+        JSON.stringify(payload),
+        "--expect",
+        "simulateGpuiEventResult",
+        "--timeout",
+        "3000",
+      ],
+      "gpui-key-dispatch"
+    );
+    if (result.exitCode !== 0) {
+      return { ok: false, reason: `rpc_exit_${result.exitCode}` };
+    }
+    const parsed = JSON.parse(result.stdout);
+    const response = parsed?.response ?? parsed;
+    if (response?.success === true) {
+      stderrLog("capability_ladder_gpui_ok", { target: targetKind, key });
+      return { ok: true };
+    }
+    return { ok: false, reason: response?.errorCode ?? response?.error ?? "gpui_not_successful" };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Input delivery
 // ---------------------------------------------------------------------------
 
@@ -525,6 +665,100 @@ end tell`,
   return { x, y, delivered: true, focusEnforced };
 }
 
+// ---------------------------------------------------------------------------
+// Capability ladder dispatch (tries methods in priority order)
+// ---------------------------------------------------------------------------
+
+/**
+ * Deliver a key via the capability ladder.
+ * Order: directBatch (N/A for keys) → gpuiDispatch → accessibility → quartz.
+ */
+async function sendKeyWithLadder(
+  key: string,
+  modifiers: string[],
+  focusEnforced: boolean,
+  session: string,
+  targetKind: string | null
+): Promise<KeyResult> {
+  const fallbackReasons: ActionReceipt["fallbackReasons"] = [];
+
+  // 1. directBatch — not applicable for raw key events
+  fallbackReasons.push({ method: "directBatch", reason: "not_applicable_for_key_events" });
+
+  // 2. gpuiDispatch — try in-process GPUI key simulation
+  if (session) {
+    const gpui = await tryGpuiKeyDispatch(session, targetKind, key, modifiers);
+    if (gpui.ok) {
+      return {
+        key, modifiers, delivered: true, method: "gpuiDispatch", focusEnforced,
+        receipt: { target: targetKind, chosenMethod: "gpuiDispatch", fallbackReasons },
+      };
+    }
+    fallbackReasons.push({ method: "gpuiDispatch", reason: gpui.reason ?? "unknown" });
+  } else {
+    fallbackReasons.push({ method: "gpuiDispatch", reason: "no_session" });
+  }
+
+  // 3–4. Fall through to OS-level input (accessibility/quartz)
+  stderrLog("capability_ladder_fallback_to_os", { key, modifiers, fallbackReasons });
+  const result = await sendKey(key, modifiers, focusEnforced);
+  const chosenMethod: CapabilityMethod = result.method === "cliclick" ? "quartz" : "accessibility";
+  if (result.method === "cliclick") {
+    fallbackReasons.push({ method: "accessibility", reason: "cliclick_succeeded_first" });
+  }
+  return {
+    ...result,
+    method: chosenMethod,
+    receipt: { target: targetKind, chosenMethod, fallbackReasons },
+  };
+}
+
+/**
+ * Deliver text via the capability ladder.
+ * Order: directBatch (setInput) → gpuiDispatch (N/A for text) → accessibility → quartz.
+ */
+async function sendTypeWithLadder(
+  text: string,
+  focusEnforced: boolean,
+  session: string,
+  targetKind: string | null
+): Promise<TypeResult> {
+  const fallbackReasons: ActionReceipt["fallbackReasons"] = [];
+
+  // 1. directBatch — try protocol-level setInput
+  if (session && targetKind) {
+    const batch = await tryBatchSetInput(session, targetKind, text);
+    if (batch.ok) {
+      return {
+        text, delivered: true, method: "directBatch", focusEnforced,
+        receipt: { target: targetKind, chosenMethod: "directBatch", fallbackReasons },
+      };
+    }
+    fallbackReasons.push({ method: "directBatch", reason: batch.reason ?? "unknown" });
+  } else {
+    fallbackReasons.push({
+      method: "directBatch",
+      reason: !session ? "no_session" : "no_target",
+    });
+  }
+
+  // 2. gpuiDispatch — not directly applicable for bulk text
+  fallbackReasons.push({ method: "gpuiDispatch", reason: "not_applicable_for_bulk_text" });
+
+  // 3–4. Fall through to OS-level input
+  stderrLog("capability_ladder_fallback_to_os", { text: text.slice(0, 50), fallbackReasons });
+  const result = await sendType(text, focusEnforced);
+  const chosenMethod: CapabilityMethod = result.method === "cliclick" ? "quartz" : "accessibility";
+  if (result.method === "cliclick") {
+    fallbackReasons.push({ method: "accessibility", reason: "cliclick_succeeded_first" });
+  }
+  return {
+    ...result,
+    method: chosenMethod,
+    receipt: { target: targetKind, chosenMethod, fallbackReasons },
+  };
+}
+
 async function runSequence(
   steps: SequenceStep[],
   focusEnforced: boolean
@@ -698,7 +932,10 @@ try {
         modIdx >= 0 && args[modIdx + 1]
           ? args[modIdx + 1].split(",").map((m) => m.trim())
           : [];
-      const result = await sendKey(keyName, modifiers, focusEnforced);
+      // Use capability ladder when session is available
+      const result = sessionName
+        ? await sendKeyWithLadder(keyName, modifiers, focusEnforced, sessionName, targetSurface || null)
+        : await sendKey(keyName, modifiers, focusEnforced);
       if (sessionName) result.session = sessionName;
       if (resolvedTarget) result.target = resolvedTarget;
       emit(envelope("key", result));
@@ -719,7 +956,10 @@ try {
         process.exit(1);
         break;
       }
-      const result = await sendType(text, focusEnforced);
+      // Use capability ladder when session is available
+      const result = sessionName
+        ? await sendTypeWithLadder(text, focusEnforced, sessionName, targetSurface || null)
+        : await sendType(text, focusEnforced);
       if (sessionName) result.session = sessionName;
       if (resolvedTarget) result.target = resolvedTarget;
       emit(envelope("type", result));

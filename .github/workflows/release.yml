@@ -40,18 +40,8 @@ jobs:
           bun-version: 1.2.x
       - name: Install JS dependencies
         run: bun install
-      - name: Format
-        run: cargo fmt --check
-      - name: Check
-        run: cargo check
-      - name: Clippy
-        run: cargo clippy --lib -- -D warnings
-      - name: Nextest
-        run: cargo nextest run --lib --no-fail-fast
-      - name: SDK typecheck
-        run: bun run scripts/check-sdk-types.ts
-      - name: SDK tests
-        run: bun run scripts/test-runner.ts --parallel
+      - name: Validate release gates
+        run: bash scripts/verify.sh --skip-bundle
 
   build-macos:
     name: Build macOS
@@ -94,20 +84,7 @@ jobs:
         run: cargo bundle --release --bin script-kit-gpui
 
       - name: Verify bundled macOS app contents
-        run: |
-          set -euo pipefail
-          APP_PATH="target/release/bundle/osx/Script Kit.app"
-          MACOS_DIR="$APP_PATH/Contents/MacOS"
-          test -d "$APP_PATH"
-          test -x "$MACOS_DIR/script-kit-gpui"
-          echo "bundle_verify macos_dir_listing"
-          find "$MACOS_DIR" -maxdepth 1 -type f -print | sort
-          UNEXPECTED="$(find "$MACOS_DIR" -maxdepth 1 -type f ! -name 'script-kit-gpui' -print || true)"
-          if [ -n "$UNEXPECTED" ]; then
-            echo "::error::Unexpected files in app bundle: $UNEXPECTED"
-            exit 1
-          fi
-          echo "bundle_verify ok"
+        run: bash scripts/verify-macos-bundle.sh
 
       - name: Create temporary keychain
         env:

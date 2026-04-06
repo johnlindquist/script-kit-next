@@ -514,23 +514,27 @@ fn not_found_vs_ambiguous_error_codes_are_distinguishable() {
 // use the same offset math for attached surfaces
 // ============================================================
 
-/// Verify that the offset computed by `target_bounds_in_screenshot` for an
-/// attached ActionsDialog matches the offset that `rebase_mouse_event_to_dispatch_space`
-/// would apply. Both must use `(target.x - main.x, target.y - main.y)`.
+/// Verify that the offset computed by `target_bounds_in_screenshot_with_main`
+/// for an attached ActionsDialog matches the offset that
+/// `rebase_mouse_event_to_dispatch_space` would apply. Both must use
+/// `(target.x - main.x, target.y - main.y)`.
+///
+/// Uses `_with_main` variant for test isolation (avoids global main_id race).
 #[test]
 fn inspect_geometry_and_rebase_agree_for_actions_dialog() {
     let p = prefix();
 
+    let main_bounds_val = AutomationWindowBounds {
+        x: 100.0,
+        y: 50.0,
+        width: 800.0,
+        height: 600.0,
+    };
     let main = make_with_bounds(
         &p,
         "main",
         AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 100.0,
-            y: 50.0,
-            width: 800.0,
-            height: 600.0,
-        }),
+        Some(main_bounds_val.clone()),
     );
     let actions = make_with_bounds(
         &p,
@@ -552,22 +556,19 @@ fn inspect_geometry_and_rebase_agree_for_actions_dialog() {
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
-    // Inspect geometry: target_bounds_in_screenshot offset
-    let inspect_bounds = script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved)
-        .expect("should compute bounds");
+    // Inspect geometry: target_bounds_in_screenshot_with_main offset
+    let inspect_bounds = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
+        &resolved,
+        Some(&main_bounds_val),
+    )
+    .expect("should compute bounds");
     let inspect_offset_x = inspect_bounds.x;
     let inspect_offset_y = inspect_bounds.y;
 
     // Rebase offset: target.origin - main.origin (same math dispatch uses)
-    let main_target = AutomationWindowTarget::Id {
-        id: format!("{p}:main"),
-    };
-    let main_resolved =
-        script_kit_gpui::windows::resolve_automation_window(Some(&main_target)).expect("main");
-    let main_bounds = main_resolved.bounds.as_ref().expect("main bounds");
     let target_bounds = resolved.bounds.as_ref().expect("target bounds");
-    let dispatch_offset_x = target_bounds.x - main_bounds.x;
-    let dispatch_offset_y = target_bounds.y - main_bounds.y;
+    let dispatch_offset_x = target_bounds.x - main_bounds_val.x;
+    let dispatch_offset_y = target_bounds.y - main_bounds_val.y;
 
     assert!(
         (inspect_offset_x - dispatch_offset_x).abs() < f64::EPSILON,
@@ -592,20 +593,22 @@ fn inspect_geometry_and_rebase_agree_for_actions_dialog() {
 }
 
 /// Same agreement check for PromptPopup — the other attached surface kind.
+/// Uses `_with_main` variant for test isolation.
 #[test]
 fn inspect_geometry_and_rebase_agree_for_prompt_popup() {
     let p = prefix();
 
+    let main_bounds_val = AutomationWindowBounds {
+        x: 0.0,
+        y: 0.0,
+        width: 1280.0,
+        height: 800.0,
+    };
     let main = make_with_bounds(
         &p,
         "main",
         AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 0.0,
-            y: 0.0,
-            width: 1280.0,
-            height: 800.0,
-        }),
+        Some(main_bounds_val.clone()),
     );
     let popup = make_with_bounds(
         &p,
@@ -627,8 +630,11 @@ fn inspect_geometry_and_rebase_agree_for_prompt_popup() {
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
-    let inspect_bounds = script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved)
-        .expect("should compute bounds");
+    let inspect_bounds = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
+        &resolved,
+        Some(&main_bounds_val),
+    )
+    .expect("should compute bounds");
 
     // Main at origin (0,0), popup at (200,100) → offset = (200, 100)
     assert!(
@@ -654,20 +660,22 @@ fn inspect_geometry_and_rebase_agree_for_prompt_popup() {
 }
 
 /// Inspect hit point must land inside the target bounds when both are present.
+/// Uses `_with_main` variant for test isolation.
 #[test]
 fn inspect_hit_point_lands_inside_target_bounds() {
     let p = prefix();
 
+    let main_bounds_val = AutomationWindowBounds {
+        x: 50.0,
+        y: 25.0,
+        width: 1000.0,
+        height: 700.0,
+    };
     let main = make_with_bounds(
         &p,
         "main",
         AutomationWindowKind::Main,
-        Some(AutomationWindowBounds {
-            x: 50.0,
-            y: 25.0,
-            width: 1000.0,
-            height: 700.0,
-        }),
+        Some(main_bounds_val.clone()),
     );
     let actions = make_with_bounds(
         &p,
@@ -689,8 +697,11 @@ fn inspect_hit_point_lands_inside_target_bounds() {
     let resolved =
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
-    let bounds =
-        script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved).expect("should compute");
+    let bounds = script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(
+        &resolved,
+        Some(&main_bounds_val),
+    )
+    .expect("should compute");
     let hit = script_kit_gpui::protocol::default_surface_hit_point(&bounds);
 
     // Hit point must be within the target bounds rectangle
@@ -808,7 +819,9 @@ fn attached_surface_fails_closed_when_main_has_no_bounds() {
         script_kit_gpui::windows::resolve_automation_window(Some(&target)).expect("should resolve");
 
     // Must fail closed — not silently produce (0, 0)
-    let result = script_kit_gpui::protocol::target_bounds_in_screenshot(&resolved);
+    // Use explicit None main bounds for test isolation
+    let result =
+        script_kit_gpui::protocol::target_bounds_in_screenshot_with_main(&resolved, None);
     assert!(
         result.is_none(),
         "Attached surface must return None when main has no bounds"

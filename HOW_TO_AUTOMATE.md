@@ -168,7 +168,7 @@ let _: () = msg_send![view, setState: 1isize];
 ### Step 1: Build Check
 
 ```bash
-cargo check && cargo clippy --all-targets -- -D warnings
+cargo check && cargo clippy --lib -- -D warnings
 ```
 
 Both must pass with no errors or warnings.
@@ -233,7 +233,7 @@ echo '{"type":"run","path":"'"$(pwd)"'/tests/smoke/test-my-fix.ts"}' | \
 ### Step 5: Run Tests
 
 ```bash
-cargo test
+cargo nextest run --no-fail-fast
 ```
 
 All tests must pass.
@@ -385,7 +385,7 @@ Added explanatory comments.
 
 1. **Build check**:
    ```bash
-   cargo check && cargo clippy --all-targets -- -D warnings
+   cargo check && cargo clippy --lib -- -D warnings
    # Passed
    ```
 
@@ -403,8 +403,8 @@ Added explanatory comments.
 
 4. **Ran tests**:
    ```bash
-   cargo test
-   # All passed (14 passed, 50 ignored)
+   cargo nextest run --no-fail-fast
+   # All passed
    ```
 
 ### Outcome
@@ -460,11 +460,11 @@ Before declaring a fix complete, verify ALL of these:
 
 ### Verification
 - [ ] `cargo check` passes
-- [ ] `cargo clippy --all-targets -- -D warnings` passes
+- [ ] `cargo clippy --lib -- -D warnings` passes
 - [ ] Launched the app with `SCRIPT_KIT_AI_LOG=1` or `RUST_LOG=debug`
 - [ ] Checked logs for confirmation of fix
 - [ ] (If UI change) Captured AND READ screenshot
-- [ ] `cargo test` passes
+- [ ] `cargo nextest run --no-fail-fast` passes
 
 ### Documentation
 - [ ] Fix is self-explanatory from code/comments
@@ -475,8 +475,11 @@ Before declaring a fix complete, verify ALL of these:
 ## Quick Reference Commands
 
 ```bash
-# Build check
-cargo check && cargo clippy --all-targets -- -D warnings
+# Validation gate used by release tags
+make verify
+
+# Full local ship check (includes macOS bundle build + sanity check)
+make ship-check
 
 # Run app with compact logs
 echo '{"type":"show"}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1
@@ -492,10 +495,7 @@ echo '{"type":"run","path":"'"$(pwd)"'/tests/smoke/test-foo.ts"}' | \
 tail -50 ~/.scriptkit/logs/script-kit-gpui.jsonl | grep -i "keyword"
 
 # Run test suite
-cargo test
-
-# Full verification gate (before commit)
-cargo check && cargo clippy --all-targets -- -D warnings && cargo test
+cargo nextest run --no-fail-fast
 ```
 
 ---

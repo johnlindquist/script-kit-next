@@ -106,3 +106,94 @@ impl<'a> TransactionStateProvider for DetachedAcpTransactionProvider<'a> {
         self.entity.read(self.cx).test_probe_snapshot(tail, self.cx)
     }
 }
+
+// ---------------------------------------------------------------------------
+// ActionsDialog transaction provider
+// ---------------------------------------------------------------------------
+
+/// Transaction provider backed by a live ActionsDialog entity.
+///
+/// Enables `setInput`, `selectByValue`, and `selectBySemanticId` against
+/// the actions dialog popup without requiring foreground keyboard focus.
+/// Created per-batch-request and dropped when the batch completes.
+#[allow(dead_code)]
+pub(crate) struct ActionsDialogTransactionProvider<'a> {
+    pub cx: &'a mut App,
+    pub entity: Entity<crate::actions::ActionsDialog>,
+}
+
+impl<'a> TransactionStateProvider for ActionsDialogTransactionProvider<'a> {
+    fn snapshot(&self) -> UiStateSnapshot {
+        let surface = crate::windows::automation_surface_collector::collect_actions_dialog_elements(
+            &self.entity,
+            200,
+            self.cx,
+        );
+
+        let dialog = self.entity.read(self.cx);
+
+        UiStateSnapshot {
+            window_visible: true,
+            window_focused: true,
+            input_value: Some(dialog.search_text.clone()),
+            selected_value: dialog.get_selected_action_id(),
+            choice_count: dialog.filtered_actions.len(),
+            visible_semantic_ids: surface
+                .elements
+                .iter()
+                .map(|el| el.semantic_id.clone())
+                .collect(),
+            focused_semantic_id: surface.focused_semantic_id,
+        }
+    }
+
+    fn set_input(&mut self, text: &str) -> Result<()> {
+        let text = text.to_string();
+        self.entity.update(self.cx, |dialog, cx| {
+            dialog.set_search_text(text.clone(), cx);
+            tracing::info!(
+                target: "script_kit::transaction",
+                event = "transaction_actions_dialog_set_input",
+                text_len = text.len(),
+                "ActionsDialog set_input"
+            );
+        });
+        Ok(())
+    }
+
+    fn select_by_value(&mut self, value: &str, _submit: bool) -> Result<Option<String>> {
+        let value = value.to_string();
+        let result = self
+            .entity
+            .update(self.cx, |dialog, cx| dialog.select_action_by_id(&value, cx));
+        if result.is_some() {
+            tracing::info!(
+                target: "script_kit::transaction",
+                event = "transaction_actions_dialog_select_by_value",
+                value = %value,
+                "ActionsDialog select_by_value"
+            );
+        }
+        Ok(result)
+    }
+
+    fn select_by_semantic_id(
+        &mut self,
+        semantic_id: &str,
+        _submit: bool,
+    ) -> Result<Option<String>> {
+        let semantic_id = semantic_id.to_string();
+        let result = self.entity.update(self.cx, |dialog, cx| {
+            dialog.select_action_by_semantic_id(&semantic_id, cx)
+        });
+        if result.is_some() {
+            tracing::info!(
+                target: "script_kit::transaction",
+                event = "transaction_actions_dialog_select_by_semantic_id",
+                semantic_id = %semantic_id,
+                "ActionsDialog select_by_semantic_id"
+            );
+        }
+        Ok(result)
+    }
+}

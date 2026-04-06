@@ -86,6 +86,27 @@ interface InspectionReceipt {
   warnings: string[];
 }
 
+/**
+ * Deterministic popup capture strategy receipt.
+ *
+ * For attached popups (ActionsDialog, PromptPopup), the screenshot captures
+ * the parent (main) window. The `targetBounds` field specifies the exact
+ * crop region within the parent screenshot where the popup lives.
+ *
+ * For detached windows (AcpDetached, Notes), the screenshot is the window
+ * itself at origin (0, 0).
+ */
+interface PopupCaptureReceipt {
+  /** The capture strategy used. */
+  strategy: "parent_capture_with_crop" | "direct_window_capture" | "not_applicable";
+  /** The automation window kind that determined the strategy. */
+  windowKind: string | null;
+  /** Crop bounds within the screenshot (null for detached or when geometry unavailable). */
+  targetBounds: { x: number; y: number; width: number; height: number } | null;
+  /** Whether semantic receipts (not screenshots) are the primary verification oracle. */
+  semanticReceiptsArePrimary: boolean;
+}
+
 interface VerifyReceipt {
   schemaVersion: number;
   status: "pass" | "fail" | "error";
@@ -104,6 +125,8 @@ interface VerifyReceipt {
   } | null;
   captureTarget: CaptureTarget | null;
   inspection: InspectionReceipt | null;
+  /** Deterministic popup capture strategy receipt. */
+  popupCapture: PopupCaptureReceipt | null;
   visionCrops: VisionCheck[];
   // Detailed receipts (full diagnostics)
   stateReceipt: AcpStateResult | null;
@@ -1483,6 +1506,49 @@ const hasInfraError =
 
 const hasMustReviewItems = visionChecks.some((v) => v.mustReview);
 
+// Compute deterministic popup capture strategy receipt
+let popupCapture: PopupCaptureReceipt | null = null;
+if (inspection) {
+  const wk = inspection.windowKind;
+  const attachedPopupKinds = ["ActionsDialog", "PromptPopup", "actionsDialog", "promptPopup"];
+  const detachedKinds = ["AcpDetached", "Notes", "acpDetached", "notes"];
+  const isAttached = attachedPopupKinds.includes(wk);
+  const isDetached = detachedKinds.includes(wk);
+
+  // Parse targetBoundsInScreenshot from inspection if available
+  let targetBounds: PopupCaptureReceipt["targetBounds"] = null;
+  const inspectAny = inspection as Record<string, unknown>;
+  if (inspectAny.targetBoundsInScreenshot) {
+    const tb = inspectAny.targetBoundsInScreenshot as {
+      x: number; y: number; width: number; height: number;
+    };
+    targetBounds = { x: tb.x, y: tb.y, width: tb.width, height: tb.height };
+  }
+
+  if (isAttached) {
+    popupCapture = {
+      strategy: "parent_capture_with_crop",
+      windowKind: wk,
+      targetBounds,
+      semanticReceiptsArePrimary: true,
+    };
+  } else if (isDetached) {
+    popupCapture = {
+      strategy: "direct_window_capture",
+      windowKind: wk,
+      targetBounds: null,
+      semanticReceiptsArePrimary: true,
+    };
+  } else {
+    popupCapture = {
+      strategy: "not_applicable",
+      windowKind: wk,
+      targetBounds: null,
+      semanticReceiptsArePrimary: false,
+    };
+  }
+}
+
 const receipt: VerifyReceipt = {
   schemaVersion: SCHEMA_VERSION,
   status: hasInfraError ? "error" : allPassed ? "pass" : "fail",
@@ -1508,6 +1574,7 @@ const receipt: VerifyReceipt = {
       }
     : null,
   inspection,
+  popupCapture,
   visionCrops: visionChecks,
   // Detailed receipts
   stateReceipt: stateResult,
