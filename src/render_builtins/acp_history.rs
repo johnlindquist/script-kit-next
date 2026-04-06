@@ -6,6 +6,8 @@ impl ScriptListApp {
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        use gpui_component::scroll::ScrollableElement as _;
+
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::expanded("acp_history", false),
         );
@@ -135,6 +137,8 @@ impl ScriptListApp {
                             &mut this.current_view
                         {
                             *selected_index = current_selected - 1;
+                            this.acp_history_scroll_handle
+                                .scroll_to_item(*selected_index);
                         }
                         cx.notify();
                     }
@@ -145,6 +149,8 @@ impl ScriptListApp {
                             &mut this.current_view
                         {
                             *selected_index = current_selected + 1;
+                            this.acp_history_scroll_handle
+                                .scroll_to_item(*selected_index);
                         }
                         cx.notify();
                     }
@@ -187,6 +193,8 @@ impl ScriptListApp {
                                 } else if new_len == 0 {
                                     *selected_index = 0;
                                 }
+                                this.acp_history_scroll_handle
+                                    .scroll_to_item(*selected_index);
                             }
                         }
                         cx.notify();
@@ -225,10 +233,12 @@ impl ScriptListApp {
             let selected = selected_index;
 
             div()
+                .id("acp-history-list")
                 .w_full()
                 .min_h(px(0.))
                 .flex()
                 .flex_col()
+                .track_scroll(&self.acp_history_scroll_handle)
                 .overflow_y_scrollbar()
                 .children(entries_for_closure.into_iter().enumerate().map(
                     move |(display_ix, (_original_ix, entry))| {
@@ -410,5 +420,22 @@ impl ScriptListApp {
                 });
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod acp_history_scroll_contract {
+    const SOURCE: &str = include_str!("acp_history.rs");
+
+    #[test]
+    fn acp_history_tracks_scroll_and_keeps_selection_visible() {
+        assert!(
+            SOURCE.contains(".track_scroll(&self.acp_history_scroll_handle)"),
+            "ACP history list should track scroll so selection changes can reposition the viewport"
+        );
+        assert!(
+            SOURCE.contains("this.acp_history_scroll_handle"),
+            "ACP history keyboard navigation should scroll the selected row into view"
+        );
     }
 }

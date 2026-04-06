@@ -97,6 +97,8 @@ struct ScriptListApp {
     process_list_scroll_handle: UniformListScrollHandle,
     // Scroll handle for current app commands list
     current_app_commands_scroll_handle: UniformListScrollHandle,
+    // Scroll handle for ACP history list
+    acp_history_scroll_handle: ScrollHandle,
     // Scroll handle for design gallery list
     design_gallery_scroll_handle: UniformListScrollHandle,
     // Scroll handle for file search list

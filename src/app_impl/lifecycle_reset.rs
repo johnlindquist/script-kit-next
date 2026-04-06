@@ -311,6 +311,7 @@ impl ScriptListApp {
                 selected_index,
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
+                self.acp_history_scroll_handle.scroll_to_top_of_item(0);
             }
             AppView::DesignGalleryView {
                 filter,
