@@ -194,7 +194,7 @@ pub(crate) fn focus_token_to_focus_target(token: &FocusToken) -> Option<&'static
 pub(crate) fn to_orchestrator_target(
     target: &crate::dictation::DictationTarget,
 ) -> super::DictationTarget {
-    match target {
+    let mapped = match target {
         crate::dictation::DictationTarget::MainWindowFilter => {
             super::DictationTarget::MainWindowFilter
         }
@@ -205,5 +205,12 @@ pub(crate) fn to_orchestrator_target(
         crate::dictation::DictationTarget::AiChatComposer => super::DictationTarget::AiChatComposer,
         crate::dictation::DictationTarget::TabAiHarness => super::DictationTarget::TabAiHarness,
         crate::dictation::DictationTarget::ExternalApp => super::DictationTarget::ExternalApp,
-    }
+    };
+    tracing::info!(
+        category = "ORCHESTRATOR",
+        source_target = ?target,
+        mapped_target = ?mapped,
+        "Mapped dictation target for orchestrator"
+    );
+    mapped
 }

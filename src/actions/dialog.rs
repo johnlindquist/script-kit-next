@@ -331,23 +331,26 @@ pub struct ActionsDialogRoute {
     pub actions: Vec<Action>,
     pub context_title: Option<String>,
     pub search_placeholder: Option<String>,
+    /// Action ID to pre-select when this route is first displayed.
+    pub initial_selected_action_id: Option<String>,
 }
 
 /// Snapshot of per-route UI state (search text, selected item) so that
 /// popping back to a parent route restores the user's position.
 #[derive(Clone, Debug)]
-struct ActionsDialogRouteState {
-    route: ActionsDialogRoute,
-    search_text: String,
-    selected_action_id: Option<String>,
+pub(super) struct ActionsDialogRouteState {
+    pub(super) route: ActionsDialogRoute,
+    pub(super) search_text: String,
+    pub(super) selected_action_id: Option<String>,
 }
 
 impl ActionsDialogRouteState {
-    fn new(route: ActionsDialogRoute) -> Self {
+    pub(super) fn new(route: ActionsDialogRoute) -> Self {
+        let selected_action_id = route.initial_selected_action_id.clone();
         Self {
             route,
             search_text: String::new(),
-            selected_action_id: None,
+            selected_action_id,
         }
     }
 }
@@ -921,24 +924,52 @@ impl ActionsDialog {
         self.context_title = title;
     }
 
-    /// Set the configuration for appearance and behavior
+    /// Set the configuration for appearance and behavior.
+    ///
+    /// When a route is active, route-owned `context_title` and `search_placeholder`
+    /// are preserved so host config updates don't clobber them.
     pub fn set_config(&mut self, config: ActionsDialogConfig) {
         let should_rebuild = should_rebuild_grouped_items_for_config_change(&self.config, &config);
-        let previously_selected_action_index = self.selected_action_index();
+        let previously_selected_action_id = self.get_selected_action_id();
 
         self.config = config;
+        self.default_search_placeholder = self.config.search_placeholder.clone();
         // Update hide_search based on config for backwards compatibility
         self.hide_search = matches!(self.config.search_position, SearchPosition::Hidden);
 
+        // Preserve route-owned shell state over host defaults
+        if let Some(state) = self.route_stack.last() {
+            if state.route.context_title.is_some() {
+                self.context_title = state.route.context_title.clone();
+            }
+            self.config.search_placeholder = state
+                .route
+                .search_placeholder
+                .clone()
+                .or_else(|| self.default_search_placeholder.clone());
+        }
+
         if should_rebuild {
             self.rebuild_grouped_items();
-            self.selected_index = previously_selected_action_index
-                .and_then(|action_idx| self.grouped_index_for_action_index(action_idx))
+            self.selected_index = previously_selected_action_id
+                .as_deref()
+                .and_then(|id| {
+                    self.restore_selected_action_id(id)
+                        .then_some(self.selected_index)
+                })
                 .unwrap_or_else(|| initial_selection_index(&self.grouped_items));
             if !self.grouped_items.is_empty() {
                 self.list_state.scroll_to_reveal_item(self.selected_index);
             }
         }
+
+        tracing::info!(
+            target: "script_kit::actions",
+            route_id = ?self.current_route_id(),
+            route_depth = self.route_depth(),
+            search_placeholder = ?self.current_search_placeholder(),
+            "actions_dialog_config_applied"
+        );
     }
 
     /// Set skip_track_focus to let parent handle focus (used by ActionsWindow)
@@ -1119,6 +1150,27 @@ impl ActionsDialog {
         }
     }
 
+    /// Try to select an action by ID without requiring `cx`.
+    /// Returns `true` if the action was found and selected.
+    fn restore_selected_action_id(&mut self, action_id: &str) -> bool {
+        let Some(action_index) = self
+            .filtered_actions
+            .iter()
+            .position(|&idx| self.actions.get(idx).is_some_and(|a| a.id == action_id))
+        else {
+            return false;
+        };
+        let Some(grouped_index) = self
+            .grouped_items
+            .iter()
+            .position(|item| matches!(item, GroupedActionItem::Item(fi) if *fi == action_index))
+        else {
+            return false;
+        };
+        self.selected_index = grouped_index;
+        true
+    }
+
     /// Apply a route's actions/title/placeholder to the live dialog (no state restore).
     fn apply_route_state_from_route(&mut self, route: &ActionsDialogRoute) {
         self.actions = route.actions.clone();
@@ -1132,14 +1184,23 @@ impl ActionsDialog {
         self.sdk_actions = None;
         self.sdk_action_indices.clear();
         self.rebuild_grouped_items();
-        self.selected_index = initial_selection_index(&self.grouped_items);
+
+        let restored = route
+            .initial_selected_action_id
+            .as_deref()
+            .map(|id| self.restore_selected_action_id(id))
+            .unwrap_or(false);
+        if !restored {
+            self.selected_index = initial_selection_index(&self.grouped_items);
+        }
+
         if !self.grouped_items.is_empty() {
             self.list_state.scroll_to_reveal_item(self.selected_index);
         }
     }
 
     /// Restore a full route state snapshot (search text + selection).
-    fn apply_route_state(&mut self, state: &ActionsDialogRouteState, cx: &mut Context<Self>) {
+    fn apply_route_state(&mut self, state: &ActionsDialogRouteState, _cx: &mut Context<Self>) {
         self.actions = state.route.actions.clone();
         self.filtered_actions = (0..self.actions.len()).collect();
         self.search_text = state.search_text.clone();
@@ -1152,11 +1213,16 @@ impl ActionsDialog {
         self.sdk_actions = None;
         self.sdk_action_indices.clear();
         self.refilter();
-        if let Some(action_id) = state.selected_action_id.as_deref() {
-            let _ = self.select_action_by_id(action_id, cx);
-        } else {
+
+        let restored = state
+            .selected_action_id
+            .as_deref()
+            .map(|id| self.restore_selected_action_id(id))
+            .unwrap_or(false);
+        if !restored {
             self.selected_index = initial_selection_index(&self.grouped_items);
         }
+
         if !self.grouped_items.is_empty() {
             self.list_state.scroll_to_reveal_item(self.selected_index);
         }
@@ -1176,21 +1242,27 @@ impl ActionsDialog {
 
     /// Create an ActionsDialog pre-configured for ACP Chat with a root route
     /// containing a "Change Agent" drill-down entry and an agent picker sub-route.
-    pub(crate) fn with_acp_chat(
+    /// Accepts an explicit host so that detached ACP can filter unsupported actions.
+    pub(crate) fn with_acp_chat_for_host(
         focus_handle: FocusHandle,
         on_select: ActionCallback,
         catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
         selected_agent_id: Option<&str>,
         theme: Arc<theme::Theme>,
+        host: super::builders::AcpActionsDialogHost,
     ) -> Self {
-        let root_route =
-            super::builders::get_acp_chat_root_route(catalog_entries, selected_agent_id);
+        let root_route = super::builders::get_acp_chat_root_route_for_host(
+            catalog_entries,
+            selected_agent_id,
+            host,
+        );
         let config = ActionsDialogConfig::default();
 
         logging::log(
             "ACTIONS",
             &format!(
-                "ActionsDialog created for ACP chat: selected_agent={:?}, catalog_count={}, root_actions={}",
+                "ActionsDialog created for ACP chat: host={:?}, selected_agent={:?}, catalog_count={}, root_actions={}",
+                host,
                 selected_agent_id,
                 catalog_entries.len(),
                 root_route.actions.len(),
@@ -1212,10 +1284,32 @@ impl ActionsDialog {
         dialog.set_root_route(root_route);
         dialog.register_drill_down_route(
             super::builders::ACP_CHANGE_AGENT_ACTION_ID,
-            super::builders::get_acp_agent_picker_route(catalog_entries, selected_agent_id),
+            super::builders::get_acp_agent_picker_route_for_host(
+                catalog_entries,
+                selected_agent_id,
+                host,
+            ),
         );
 
         dialog
+    }
+
+    /// Create an ActionsDialog pre-configured for ACP Chat (shared host).
+    pub(crate) fn with_acp_chat(
+        focus_handle: FocusHandle,
+        on_select: ActionCallback,
+        catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
+        selected_agent_id: Option<&str>,
+        theme: Arc<theme::Theme>,
+    ) -> Self {
+        Self::with_acp_chat_for_host(
+            focus_handle,
+            on_select,
+            catalog_entries,
+            selected_agent_id,
+            theme,
+            super::builders::AcpActionsDialogHost::Shared,
+        )
     }
 
     /// Create ActionsDialog with custom configuration and actions

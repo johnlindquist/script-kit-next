@@ -4444,9 +4444,10 @@ impl ScriptListApp {
                     };
                     tracing::info!(
                         category = "DICTATION",
-                        destination = ?destination,
+                        ?target,
+                        ?destination,
                         transcript_len = transcript.len(),
-                        "Transcript delivered"
+                        "Internal dictation delivery complete"
                     );
 
                     let _ = crate::dictation::close_dictation_overlay(cx);
@@ -5293,27 +5294,30 @@ impl ScriptListApp {
     /// Priority: notes editor > AI chat composer > launcher main filter >
     /// active prompt > external app.
     fn resolve_dictation_target(&self) -> crate::dictation::DictationTarget {
-        if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
-            return crate::dictation::DictationTarget::TabAiHarness;
-        }
-        if notes::is_notes_window_open() {
-            return crate::dictation::DictationTarget::NotesEditor;
-        }
-        if ai::is_ai_window_open() {
-            return crate::dictation::DictationTarget::AiChatComposer;
-        }
-        if self.can_accept_dictation_into_main_filter() {
-            tracing::info!(
-                category = "DICTATION",
-                resolved_target = ?crate::dictation::DictationTarget::MainWindowFilter,
-                "Resolved dictation target to main window filter"
-            );
-            return crate::dictation::DictationTarget::MainWindowFilter;
-        }
-        if self.can_accept_dictation_into_prompt() {
-            return crate::dictation::DictationTarget::MainWindowPrompt;
-        }
-        crate::dictation::DictationTarget::ExternalApp
+        let target = if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+            crate::dictation::DictationTarget::TabAiHarness
+        } else if notes::is_notes_window_open() {
+            crate::dictation::DictationTarget::NotesEditor
+        } else if ai::is_ai_window_open() {
+            crate::dictation::DictationTarget::AiChatComposer
+        } else if self.can_accept_dictation_into_main_filter() {
+            crate::dictation::DictationTarget::MainWindowFilter
+        } else if self.can_accept_dictation_into_prompt() {
+            crate::dictation::DictationTarget::MainWindowPrompt
+        } else {
+            crate::dictation::DictationTarget::ExternalApp
+        };
+        tracing::info!(
+            category = "DICTATION",
+            ?target,
+            current_view = ?std::mem::discriminant(&self.current_view),
+            notes_open = notes::is_notes_window_open(),
+            ai_open = ai::is_ai_window_open(),
+            accepts_main_filter = self.can_accept_dictation_into_main_filter(),
+            accepts_prompt = self.can_accept_dictation_into_prompt(),
+            "Resolved dictation target"
+        );
+        target
     }
 
     /// Close the dictation overlay and hide Script Kit so macOS naturally

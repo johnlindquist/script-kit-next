@@ -7,7 +7,6 @@ use script_kit_gpui::protocol::transaction_executor::{
 use script_kit_gpui::protocol::{
     BatchCommand, BatchOptions, Message, StateMatchSpec, TransactionError, TransactionErrorCode,
     TransactionTraceMode, UiStateSnapshot, WaitCondition, WaitDetailedCondition,
-    WaitNamedCondition,
 };
 
 // ---------------------------------------------------------------------------
@@ -616,12 +615,12 @@ fn inspect_cleanup(prefix: &str, ids: &[&str]) {
     }
 }
 
-/// Schema version must be the current constant (v2).
+/// Schema version must be the current constant (v3).
 #[test]
 fn inspect_schema_version_is_current() {
     assert_eq!(
-        AUTOMATION_INSPECT_SCHEMA_VERSION, 2,
-        "Schema version must be 2"
+        AUTOMATION_INSPECT_SCHEMA_VERSION, 3,
+        "Schema version must be 3"
     );
 }
 
@@ -685,13 +684,14 @@ fn inspect_popup_response_has_geometry_fields() {
         screenshot_height: Some(600),
         pixel_probes: Vec::new(),
         os_window_id: None,
+        semantic_quality: Some(script_kit_gpui::protocol::SemanticQuality::PanelOnly),
         warnings: vec!["panel_only_actions_dialog".to_string()],
     };
 
     // Serialize and verify JSON contract
     let json = serde_json::to_value(&snapshot).expect("serialize");
 
-    assert_eq!(json["schemaVersion"], 2);
+    assert_eq!(json["schemaVersion"], 3);
     assert_eq!(json["windowKind"], "ActionsDialog");
     assert!(json["targetBoundsInScreenshot"].is_object());
     assert!(json["surfaceHitPoint"].is_object());
@@ -849,6 +849,7 @@ fn inspect_error_snapshot_has_empty_geometry() {
         screenshot_height: None,
         pixel_probes: Vec::new(),
         os_window_id: None,
+        semantic_quality: Some(script_kit_gpui::protocol::SemanticQuality::Unavailable),
         warnings: vec!["target_resolution_failed: no such window".to_string()],
     };
 
@@ -904,12 +905,13 @@ fn inspect_snapshot_v2_geometry_round_trip() {
         screenshot_height: Some(820),
         pixel_probes: Vec::new(),
         os_window_id: None,
+        semantic_quality: Some(script_kit_gpui::protocol::SemanticQuality::Full),
         warnings: Vec::new(),
     };
 
     let json_str = serde_json::to_string(&snapshot).expect("serialize");
     let parsed: AutomationInspectSnapshot = serde_json::from_str(&json_str).expect("deserialize");
-    assert_eq!(parsed, snapshot, "v2 snapshot must round-trip exactly");
+    assert_eq!(parsed, snapshot, "v3 snapshot must round-trip exactly");
 
     // Verify camelCase wire names
     assert!(json_str.contains("targetBoundsInScreenshot"));

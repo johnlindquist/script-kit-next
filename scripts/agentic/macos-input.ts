@@ -1145,6 +1145,24 @@ try {
 
     case "help":
     case "--help": {
+      const jsonFlag = process.argv.includes("--json");
+      if (jsonFlag) {
+        const helpJson = {
+          schemaVersion: 1,
+          script: "macos-input",
+          commands: [
+            { name: "key", description: "Send a keystroke", flags: ["--modifiers", "--ensure-focus", "--session", "--target", "--json"] },
+            { name: "type", description: "Deliver text input", flags: ["--ensure-focus", "--session", "--target", "--json"] },
+            { name: "click", description: "Click at screen coordinates", flags: ["--ensure-focus", "--session", "--target", "--json"] },
+            { name: "sequence", description: "Run a sequence of actions", flags: ["--ensure-focus", "--session", "--target", "--json"] },
+            { name: "check", description: "Verify prerequisites", flags: ["--json"] },
+          ],
+          contracts: ["no-focus-input-ladder"],
+          receipts: ["dispatchPath", "resolvedWindowId", "inputMethod"],
+        };
+        console.log(JSON.stringify(helpJson, null, 2));
+        process.exit(0);
+      }
       console.log(`Usage: bun scripts/agentic/macos-input.ts <command> [options]
 
 Commands:

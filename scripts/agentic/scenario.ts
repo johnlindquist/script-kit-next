@@ -34,6 +34,13 @@ export interface ProofBundleStep {
   response: Record<string, unknown>;
 }
 
+/** Deterministic popup capture strategy. */
+export interface PopupCaptureSummary {
+  strategy: "parent_capture_with_crop" | "direct_window_capture" | "not_applicable";
+  targetBounds?: { x: number; y: number; width: number; height: number } | null;
+  semanticReceiptsArePrimary: boolean;
+}
+
 export interface ProofBundle {
   schemaVersion: 2;
   scenario: string;
@@ -42,6 +49,22 @@ export interface ProofBundle {
     windowKind: string;
     title?: string | null;
     surfaceId?: string | null;
+  };
+  /** Routed input method used during the flow. */
+  inputMethod?: "batch" | "simulateGpuiEvent" | "native";
+  /** Dispatch path: exact_handle when target was an ID. */
+  dispatchPath?: "exact_handle" | "window_role_fallback";
+  /** Resolved window ID (same as resolvedTarget.windowId). */
+  resolvedWindowId?: string;
+  /** OS-level window ID (CGWindowID) when available from inspection. */
+  osWindowId?: number | null;
+  /** Popup capture strategy receipt. */
+  popupCapture?: PopupCaptureSummary;
+  /** Inspection metadata from inspectAutomationWindow. */
+  inspect?: {
+    screenshotWidth?: number | null;
+    screenshotHeight?: number | null;
+    warnings: string[];
   };
   steps: ProofBundleStep[];
   warnings: string[];
@@ -218,6 +241,14 @@ export async function runDetachedAcpExactIdScenario(
       title: resolved.title,
       surfaceId: resolved.surfaceId,
     },
+    inputMethod: "simulateGpuiEvent",
+    dispatchPath: "exact_handle",
+    resolvedWindowId: resolved.automationWindowId,
+    popupCapture: {
+      strategy: "direct_window_capture",
+      targetBounds: null,
+      semanticReceiptsArePrimary: true,
+    },
     steps: [],
     warnings: [],
   };
@@ -260,6 +291,17 @@ export async function runDetachedAcpExactIdScenario(
       },
       response: inspectBefore,
     });
+
+    // Populate V2 inspect fields from the first successful inspection
+    const resp = inspectBefore.response ?? inspectBefore;
+    if (typeof (resp as Record<string, unknown>).osWindowId === "number") {
+      bundle.osWindowId = (resp as Record<string, unknown>).osWindowId as number;
+    }
+    bundle.inspect = {
+      screenshotWidth: (resp as Record<string, unknown>).screenshotWidth as number ?? null,
+      screenshotHeight: (resp as Record<string, unknown>).screenshotHeight as number ?? null,
+      warnings: ((resp as Record<string, unknown>).warnings as string[]) ?? [],
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     bundle.warnings.push(`inspect_before_failed: ${msg}`);
@@ -337,6 +379,155 @@ export async function runDetachedAcpExactIdScenario(
   return bundle;
 }
 
+export async function runPromptPopupExactIdScenario(
+  session: string,
+  index: number
+): Promise<ProofBundle> {
+  stderrLog("scenario.start", {
+    scenario: "prompt-popup-exact-id",
+    session,
+    index,
+  });
+
+  // Step 1: Resolve the prompt popup target to an exact ID
+  const resolved = await resolveAutomationWindow({
+    session,
+    kind: "promptPopup",
+    index,
+  });
+
+  const bundle: ProofBundle = {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "prompt-popup-exact-id",
+    resolvedTarget: {
+      windowId: resolved.automationWindowId,
+      windowKind: resolved.windowKind,
+      title: resolved.title,
+      surfaceId: resolved.surfaceId,
+    },
+    inputMethod: "batch",
+    dispatchPath: "exact_handle",
+    resolvedWindowId: resolved.automationWindowId,
+    popupCapture: {
+      strategy: "parent_capture_with_crop",
+      targetBounds: null, // Populated from inspect if available
+      semanticReceiptsArePrimary: true,
+    },
+    steps: [],
+    warnings: [],
+  };
+
+  pushProofStep(bundle, {
+    type: "resolveTarget",
+    at: new Date().toISOString(),
+    request: { session, kind: "promptPopup", index },
+    response: {
+      automationWindowId: resolved.automationWindowId,
+      windowKind: resolved.windowKind,
+      title: resolved.title,
+      surfaceId: resolved.surfaceId,
+      targetJson: resolved.targetJson,
+    },
+  });
+
+  // Step 2: Inspect the resolved popup window
+  try {
+    const inspectResult = await rpc(
+      session,
+      {
+        type: "inspectAutomationWindow",
+        requestId: "inspect-popup",
+        target: resolved.targetJson,
+        probes: [{ x: 12, y: 12 }],
+      },
+      "automationInspectResult",
+      8000
+    );
+
+    pushProofStep(bundle, {
+      type: "inspect",
+      at: new Date().toISOString(),
+      request: {
+        type: "inspectAutomationWindow",
+        requestId: "inspect-popup",
+        target: resolved.targetJson,
+        probes: [{ x: 12, y: 12 }],
+      },
+      response: inspectResult,
+    });
+
+    // Populate V2 fields from inspection
+    const resp = inspectResult.response ?? inspectResult;
+    if (typeof (resp as Record<string, unknown>).osWindowId === "number") {
+      bundle.osWindowId = (resp as Record<string, unknown>).osWindowId as number;
+    }
+    bundle.inspect = {
+      screenshotWidth: (resp as Record<string, unknown>).screenshotWidth as number ?? null,
+      screenshotHeight: (resp as Record<string, unknown>).screenshotHeight as number ?? null,
+      warnings: ((resp as Record<string, unknown>).warnings as string[]) ?? [],
+    };
+
+    // Populate targetBounds for attached popup crop strategy
+    const tb = (resp as Record<string, unknown>).targetBoundsInScreenshot as
+      | { x: number; y: number; width: number; height: number }
+      | undefined;
+    if (tb && bundle.popupCapture) {
+      bundle.popupCapture.targetBounds = {
+        x: tb.x,
+        y: tb.y,
+        width: tb.width,
+        height: tb.height,
+      };
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    bundle.warnings.push(`inspect_popup_failed: ${msg}`);
+    stderrLog("scenario.inspect_popup_failed", { error: msg });
+  }
+
+  // Step 3: Wait for popup to be ready (using waitFor with the exact target)
+  try {
+    const waitResult = await rpc(
+      session,
+      {
+        type: "waitFor",
+        requestId: "wait-popup-ready",
+        target: resolved.targetJson,
+        condition: { type: "windowVisible" },
+        timeout: 3000,
+        pollInterval: 25,
+      },
+      "waitForResult",
+      5000
+    );
+
+    pushProofStep(bundle, {
+      type: "waitFor",
+      at: new Date().toISOString(),
+      request: {
+        type: "waitFor",
+        requestId: "wait-popup-ready",
+        target: resolved.targetJson,
+        condition: { type: "windowVisible" },
+      },
+      response: waitResult,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    bundle.warnings.push(`wait_popup_ready_failed: ${msg}`);
+    stderrLog("scenario.wait_popup_ready_failed", { error: msg });
+  }
+
+  stderrLog("scenario.complete", {
+    scenario: "prompt-popup-exact-id",
+    stepCount: bundle.steps.length,
+    warningCount: bundle.warnings.length,
+    hasTargetBounds: bundle.popupCapture?.targetBounds != null,
+  });
+
+  return bundle;
+}
+
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
@@ -371,12 +562,14 @@ function parseArgs() {
 if (import.meta.main) {
   const { session, scenario, index } = parseArgs();
 
+  const AVAILABLE_SCENARIOS = ["detached-acp-exact-id", "prompt-popup-exact-id"];
+
   if (!scenario) {
     process.stderr.write(
       JSON.stringify({
         event: "scenario.error",
         error: "Missing --scenario flag",
-        available: ["detached-acp-exact-id"],
+        available: AVAILABLE_SCENARIOS,
       }) + "\n"
     );
     process.exit(2);
@@ -390,12 +583,19 @@ if (import.meta.main) {
       break;
     }
 
+    case "prompt-popup-exact-id": {
+      const bundle = await runPromptPopupExactIdScenario(session, index);
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.warnings.length > 0 ? 1 : 0);
+      break;
+    }
+
     default:
       process.stderr.write(
         JSON.stringify({
           event: "scenario.error",
           error: `Unknown scenario: ${scenario}`,
-          available: ["detached-acp-exact-id"],
+          available: AVAILABLE_SCENARIOS,
         }) + "\n"
       );
       process.exit(2);

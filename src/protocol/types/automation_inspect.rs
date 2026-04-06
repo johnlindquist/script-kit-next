@@ -10,7 +10,23 @@ use serde::{Deserialize, Serialize};
 ///
 /// v2: added `resolved_bounds`, `target_bounds_in_screenshot`,
 ///     `surface_hit_point`, and `suggested_hit_points`.
-pub const AUTOMATION_INSPECT_SCHEMA_VERSION: u32 = 2;
+/// v3: added `semantic_quality` — machine-readable semantic proof level.
+pub const AUTOMATION_INSPECT_SCHEMA_VERSION: u32 = 3;
+
+/// Machine-readable indicator of the semantic element quality in an inspect receipt.
+///
+/// Agents use this to decide whether the receipt carries sufficient proof
+/// without parsing warning strings.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SemanticQuality {
+    /// Full semantic elements collected (input, list, choices, buttons, etc.).
+    Full,
+    /// Only a panel-level element was collected (entity unavailable at inspect time).
+    PanelOnly,
+    /// No collector exists for this window kind.
+    Unavailable,
+}
 
 /// A point in screenshot-relative coordinates.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -137,7 +153,18 @@ pub struct AutomationInspectSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub os_window_id: Option<u32>,
 
-    /// Machine-readable warnings (e.g. `"semantic_elements_non_main_pending"`).
+    /// Machine-readable semantic proof level for this receipt.
+    ///
+    /// `full` — semantic elements are rich (input, list, choices, buttons).
+    /// `panel_only` — only a panel-level element collected (entity unavailable).
+    /// `unavailable` — no collector for this window kind.
+    ///
+    /// Added in schema v3. Absent in older receipts; callers should treat
+    /// missing as `unavailable` for backward compatibility.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub semantic_quality: Option<SemanticQuality>,
+
+    /// Machine-readable warnings (e.g. `"panel_only_acp_detached"`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
 }
@@ -165,6 +192,7 @@ mod tests {
             screenshot_height: None,
             pixel_probes: Vec::new(),
             os_window_id: None,
+            semantic_quality: None,
             warnings: Vec::new(),
         }
     }
@@ -231,7 +259,8 @@ mod tests {
                 a: 255,
             }],
             os_window_id: Some(12345),
-            warnings: vec!["semantic_elements_non_main_pending".to_string()],
+            semantic_quality: Some(SemanticQuality::Full),
+            warnings: vec!["panel_only_notes".to_string()],
         };
 
         let json = serde_json::to_string(&snapshot).expect("serialize");
@@ -241,6 +270,7 @@ mod tests {
         assert!(json.contains("\"targetBoundsInScreenshot\""));
         assert!(json.contains("\"surfaceHitPoint\""));
         assert!(json.contains("\"suggestedHitPoints\""));
+        assert!(json.contains("\"semanticQuality\":\"full\""));
     }
 
     #[test]
@@ -283,6 +313,8 @@ mod tests {
         assert!(!json.contains("targetBoundsInScreenshot"));
         assert!(!json.contains("surfaceHitPoint"));
         assert!(!json.contains("suggestedHitPoints"));
+        // v3 field absent when None
+        assert!(!json.contains("semanticQuality"));
     }
 
     #[test]
@@ -293,6 +325,39 @@ mod tests {
             serde_json::from_str(json).expect("should parse without osWindowId");
         assert_eq!(parsed.os_window_id, None);
         assert_eq!(parsed.window_id, "main:0");
+    }
+
+    #[test]
+    fn backward_compat_without_semantic_quality() {
+        // v2 JSON (no semanticQuality) must still parse.
+        let json = r#"{"schemaVersion":2,"windowId":"main:0","windowKind":"Main","totalCount":0}"#;
+        let parsed: AutomationInspectSnapshot =
+            serde_json::from_str(json).expect("should parse without semanticQuality");
+        assert_eq!(parsed.semantic_quality, None);
+    }
+
+    #[test]
+    fn semantic_quality_serde_roundtrip() {
+        for (quality, expected_str) in [
+            (SemanticQuality::Full, "\"full\""),
+            (SemanticQuality::PanelOnly, "\"panel_only\""),
+            (SemanticQuality::Unavailable, "\"unavailable\""),
+        ] {
+            let json = serde_json::to_string(&quality).expect("serialize");
+            assert_eq!(json, expected_str, "quality {:?}", quality);
+            let back: SemanticQuality = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(back, quality);
+        }
+    }
+
+    #[test]
+    fn semantic_quality_present_in_snapshot_json() {
+        let mut snapshot = make_minimal_snapshot();
+        snapshot.semantic_quality = Some(SemanticQuality::PanelOnly);
+        let json = serde_json::to_string(&snapshot).expect("serialize");
+        assert!(json.contains("\"semanticQuality\":\"panel_only\""));
+        let parsed: AutomationInspectSnapshot = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.semantic_quality, Some(SemanticQuality::PanelOnly));
     }
 
     #[test]

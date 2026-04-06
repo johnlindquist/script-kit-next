@@ -4,6 +4,9 @@ const ACTIONS_TOGGLE_SOURCE: &str = include_str!("../src/app_impl/actions_toggle
 const ACTION_HANDLER_SOURCE: &str = include_str!("../src/app_actions/handle_action/mod.rs");
 const ACTION_BUILDER_SOURCE: &str = include_str!("../src/actions/builders/script_context.rs");
 const DIALOG_SOURCE: &str = include_str!("../src/actions/dialog.rs");
+const CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/acp/chat_window.rs");
+const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/app_impl/actions_dialog.rs");
+const ACTIONS_WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
 
 #[test]
 fn acp_actions_popup_uses_dynamic_agent_actions() {
@@ -161,5 +164,92 @@ fn dialog_has_structured_route_tracing() {
     assert!(
         DIALOG_SOURCE.contains("actions_dialog_escape"),
         "handle_escape must emit actions_dialog_escape tracing"
+    );
+}
+
+// ── Host-aware ACP unification contract tests ───────────────────────────────
+
+#[test]
+fn acp_builder_exposes_host_aware_route_api() {
+    assert!(
+        ACTION_BUILDER_SOURCE.contains("enum AcpActionsDialogHost"),
+        "ACP builder must define AcpActionsDialogHost enum"
+    );
+    assert!(
+        ACTION_BUILDER_SOURCE.contains("AcpActionsDialogHost::Shared"),
+        "AcpActionsDialogHost must have a Shared variant"
+    );
+    assert!(
+        ACTION_BUILDER_SOURCE.contains("AcpActionsDialogHost::Detached"),
+        "AcpActionsDialogHost must have a Detached variant"
+    );
+    assert!(
+        ACTION_BUILDER_SOURCE.contains("get_acp_chat_root_route_for_host"),
+        "Host-aware ACP root route builder must exist"
+    );
+    assert!(
+        ACTION_BUILDER_SOURCE.contains("get_acp_agent_picker_route_for_host"),
+        "Host-aware ACP agent picker route builder must exist"
+    );
+}
+
+#[test]
+fn detached_acp_uses_host_aware_route_builder() {
+    // Detached ACP must NOT use the old flat DETACHED_SUPPORTED_ACTIONS constant
+    assert!(
+        !CHAT_WINDOW_SOURCE.contains("const DETACHED_SUPPORTED_ACTIONS"),
+        "Detached ACP must not define a local DETACHED_SUPPORTED_ACTIONS allowlist"
+    );
+    // Detached ACP must use the host-aware dialog constructor
+    assert!(
+        CHAT_WINDOW_SOURCE.contains("with_acp_chat_for_host"),
+        "Detached ACP must use with_acp_chat_for_host"
+    );
+    assert!(
+        CHAT_WINDOW_SOURCE.contains("AcpActionsDialogHost::Detached")
+            || CHAT_WINDOW_SOURCE.contains("builders::AcpActionsDialogHost::Detached"),
+        "Detached ACP must specify Detached host"
+    );
+}
+
+#[test]
+fn dialog_exposes_host_aware_constructor() {
+    assert!(
+        DIALOG_SOURCE.contains("with_acp_chat_for_host"),
+        "ActionsDialog must expose with_acp_chat_for_host"
+    );
+}
+
+#[test]
+fn detached_host_excludes_unsupported_actions() {
+    // The detached host filter must reject panel-only actions
+    assert!(
+        ACTION_BUILDER_SOURCE.contains("acp_action_supported_in_host"),
+        "ACP builder must have a host action filter function"
+    );
+    assert!(
+        ACTION_BUILDER_SOURCE.contains("filter_acp_actions_for_host"),
+        "ACP builder must have a host action filter"
+    );
+}
+
+#[test]
+fn route_visibility_logs_include_depth_and_escape_hint() {
+    // Both shared and detached log sites must include route_depth and escape_hint
+    assert!(
+        ACTIONS_DIALOG_SOURCE.contains("route_depth"),
+        "Shared actions dialog route logs must include route_depth"
+    );
+    assert!(
+        ACTIONS_DIALOG_SOURCE.contains("escape_hint"),
+        "Shared actions dialog route logs must include escape_hint"
+    );
+    assert!(
+        ACTIONS_WINDOW_SOURCE.contains("route_depth"),
+        "Detached actions window route logs must include route_depth"
+    );
+    assert!(
+        ACTIONS_WINDOW_SOURCE.contains("escape_hint"),
+        "Detached actions window route logs must include escape_hint"
     );
 }

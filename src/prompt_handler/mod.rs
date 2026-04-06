@@ -2371,6 +2371,7 @@ impl ScriptListApp {
                                     "target_unsupported_non_main: getElements has no collector for {} ({:?})",
                                     resolved.id, resolved.kind
                                 )],
+                                quality: crate::windows::automation_surface_collector::SnapshotQuality::PanelOnly,
                             }
                         })
                     }
@@ -2396,6 +2397,7 @@ impl ScriptListApp {
                             selected_semantic_id: outcome.selected_semantic_id(),
                             warnings: outcome.warnings.clone(),
                             elements: outcome.elements,
+                            quality: crate::windows::automation_surface_collector::SnapshotQuality::Full,
                         }
                     }
                 };
@@ -2554,6 +2556,7 @@ impl ScriptListApp {
                             screenshot_height: None,
                             pixel_probes: Vec::new(),
                             os_window_id: None,
+                            semantic_quality: Some(protocol::SemanticQuality::Unavailable),
                             warnings: vec![format!("target_resolution_failed: {}", err)],
                         };
                         if let Some(ref sender) = self.response_sender {
@@ -2607,31 +2610,53 @@ impl ScriptListApp {
                 };
 
                 // Step 3: Collect semantic elements via surface-aware collector.
-                let surface_snapshot = if resolved.kind == protocol::AutomationWindowKind::Main {
+                let (surface_snapshot, semantic_quality) = if resolved.kind
+                    == protocol::AutomationWindowKind::Main
+                {
                     let outcome = self.collect_visible_elements(200, cx);
-                    crate::windows::automation_surface_collector::SurfaceElementSnapshot {
-                        total_count: outcome.total_count,
-                        focused_semantic_id: outcome.focused_semantic_id(),
-                        selected_semantic_id: outcome.selected_semantic_id(),
-                        warnings: outcome.warnings.clone(),
-                        elements: outcome.elements,
-                    }
-                } else {
-                    crate::windows::automation_surface_collector::collect_surface_snapshot(
-                        &resolved, 200, cx,
-                    )
-                    .unwrap_or_else(|| {
+                    (
                         crate::windows::automation_surface_collector::SurfaceElementSnapshot {
-                            elements: Vec::new(),
-                            total_count: 0,
-                            focused_semantic_id: None,
-                            selected_semantic_id: None,
-                            warnings: vec![format!(
-                                "semantic_elements_non_main_pending: no collector for {} ({:?})",
-                                resolved.id, resolved.kind
-                            )],
+                            total_count: outcome.total_count,
+                            focused_semantic_id: outcome.focused_semantic_id(),
+                            selected_semantic_id: outcome.selected_semantic_id(),
+                            warnings: outcome.warnings.clone(),
+                            elements: outcome.elements,
+                            quality:
+                                crate::windows::automation_surface_collector::SnapshotQuality::Full,
+                        },
+                        protocol::SemanticQuality::Full,
+                    )
+                } else {
+                    match crate::windows::automation_surface_collector::collect_surface_snapshot(
+                        &resolved, 200, cx,
+                    ) {
+                        Some(snap) => {
+                            let quality = match snap.quality {
+                                crate::windows::automation_surface_collector::SnapshotQuality::Full => {
+                                    protocol::SemanticQuality::Full
+                                }
+                                crate::windows::automation_surface_collector::SnapshotQuality::PanelOnly => {
+                                    protocol::SemanticQuality::PanelOnly
+                                }
+                            };
+                            (snap, quality)
                         }
-                    })
+                        None => (
+                            crate::windows::automation_surface_collector::SurfaceElementSnapshot {
+                                elements: Vec::new(),
+                                total_count: 0,
+                                focused_semantic_id: None,
+                                selected_semantic_id: None,
+                                warnings: vec![format!(
+                                    "semantic_elements_non_main_pending: no collector for {} ({:?})",
+                                    resolved.id, resolved.kind
+                                )],
+                                quality:
+                                    crate::windows::automation_surface_collector::SnapshotQuality::PanelOnly,
+                            },
+                            protocol::SemanticQuality::Unavailable,
+                        ),
+                    }
                 };
                 warnings.extend(surface_snapshot.warnings.clone());
                 let elements = surface_snapshot.elements;
@@ -2681,6 +2706,7 @@ impl ScriptListApp {
                     screenshot_height: shot_h,
                     pixel_probes: probe_results,
                     os_window_id,
+                    semantic_quality: Some(semantic_quality),
                     warnings,
                 };
 

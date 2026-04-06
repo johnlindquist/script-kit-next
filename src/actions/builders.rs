@@ -46,8 +46,10 @@ pub(crate) use script_context::{
     acp_switch_agent_id_from_action, get_acp_chat_actions, get_acp_chat_actions_with_agents,
     get_global_actions, get_script_context_actions,
 };
+#[allow(unused_imports)]
 pub(crate) use script_context::{
-    get_acp_agent_picker_route, get_acp_chat_root_route, ACP_CHANGE_AGENT_ACTION_ID,
+    get_acp_agent_picker_route, get_acp_agent_picker_route_for_host, get_acp_chat_root_route,
+    get_acp_chat_root_route_for_host, AcpActionsDialogHost, ACP_CHANGE_AGENT_ACTION_ID,
 };
 pub use scriptlet::get_scriptlet_context_actions_with_custom;
 

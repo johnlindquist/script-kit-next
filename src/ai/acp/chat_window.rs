@@ -331,28 +331,8 @@ pub fn close_chat_window(cx: &mut App) {
     }
 }
 
-/// Actions that are supported in the detached window context.
-///
-/// Actions not in this list (e.g. `acp_detach_window`, `acp_paste_to_frontmost`,
-/// code-execution actions) are filtered out because they either don't make sense
-/// when already detached or require main-panel context that isn't available.
-///
-/// Note: `acp_reattach_panel` has a dispatcher arm in `dispatch_detached_action`
-/// but is intentionally excluded here because it only closes the detached window
-/// without transferring the live thread back to the main panel. Exposing it
-/// would mislead users into thinking the conversation reattaches.
-const DETACHED_SUPPORTED_ACTIONS: &[&str] = &[
-    "acp_copy_last_response",
-    "acp_retry_last",
-    "acp_export_markdown",
-    "acp_scroll_to_top",
-    "acp_scroll_to_bottom",
-    "acp_expand_all",
-    "acp_collapse_all",
-    "acp_new_conversation",
-    "acp_clear_history",
-    "acp_close",
-];
+// Detached ACP action allowlist now lives in the ACP route builder layer:
+// `AcpActionsDialogHost::Detached` in src/actions/builders/script_context.rs.
 
 /// Activate (bring to front) the detached chat window.
 pub(crate) fn activate_chat_window(cx: &mut App) {
@@ -429,24 +409,51 @@ pub fn toggle_detached_actions(cx: &mut App) {
             let _ = action_tx.try_send(action_id);
         });
 
-    // Filter actions to only those supported in the detached context
-    let mut detached_actions = actions::get_acp_chat_actions();
-    detached_actions.retain(|action| DETACHED_SUPPORTED_ACTIONS.contains(&action.id.as_str()));
-    let actions_len = detached_actions.len();
+    // Build agent context from the view entity (mirrors actions_toggle.rs pattern)
+    let acp_agent_context: Option<(Option<String>, Vec<crate::ai::acp::AcpAgentCatalogEntry>)> =
+        view_weak.as_ref().and_then(|weak| {
+            weak.upgrade().map(|entity| {
+                let view = entity.read(cx);
+                match &view.session {
+                    crate::ai::acp::AcpChatSession::Setup(state) => (
+                        state
+                            .selected_agent
+                            .as_ref()
+                            .map(|agent| agent.id.to_string()),
+                        state.catalog_entries.clone(),
+                    ),
+                    crate::ai::acp::AcpChatSession::Live(thread) => {
+                        let thread = thread.read(cx);
+                        (
+                            thread.selected_agent_id().map(str::to_string),
+                            thread.available_agents().to_vec(),
+                        )
+                    }
+                }
+            })
+        });
 
-    // Create the dialog entity with the filtered actions
+    let (selected_agent_id, catalog_entries) =
+        acp_agent_context.unwrap_or_else(|| (None, Vec::new()));
+
+    // Create the dialog entity using the host-aware route builder
+    let root_actions_len = crate::actions::get_acp_chat_root_route_for_host(
+        &catalog_entries,
+        selected_agent_id.as_deref(),
+        crate::actions::AcpActionsDialogHost::Detached,
+    )
+    .actions
+    .len();
+
     let dialog = cx.new(|cx| {
         let focus_handle = cx.focus_handle();
-        let mut dialog = ActionsDialog::from_actions_with_context(
+        let mut dialog = ActionsDialog::with_acp_chat_for_host(
             focus_handle,
             callback,
-            detached_actions,
-            None,
-            None,
+            &catalog_entries,
+            selected_agent_id.as_deref(),
             theme_arc,
-            crate::designs::DesignVariant::Default,
-            Some("AI Chat".to_string()),
-            ActionsDialogConfig::default(),
+            crate::actions::AcpActionsDialogHost::Detached,
         );
         dialog.set_skip_track_focus(true);
         dialog
@@ -480,8 +487,14 @@ pub fn toggle_detached_actions(cx: &mut App) {
         window.activate_window();
     });
 
-    tracing::info!(event = "detached_actions_opened", actions_len);
-    tracing::info!(event = "detached_actions_window_activated", actions_len);
+    tracing::info!(
+        event = "detached_actions_opened",
+        actions_len = root_actions_len
+    );
+    tracing::info!(
+        event = "detached_actions_window_activated",
+        actions_len = root_actions_len
+    );
 
     // Spawn a one-shot task that receives the selected action_id from the
     // channel, dispatches it to the AcpChatView entity, and re-focuses the chat.
