@@ -896,6 +896,7 @@ impl AcpChatView {
             let _ = cx.update(|cx| {
                 this.update(cx, |view, cx| {
                     view.cached_slash_commands = commands;
+                    view.refresh_mention_session(cx);
                     cx.notify();
                 })
             });
@@ -2976,35 +2977,18 @@ impl AcpChatView {
     }
 
     /// Check whether accepting a picker item should claim inline ownership
-    /// of the resulting token.  Returns `false` when the part is already
-    /// attached (e.g. from a slash command or chip action) — this prevents
-    /// a duplicate `@` pick from stealing ownership so that later deletion
-    /// of the inline token does not remove the pre-existing attachment.
+    /// of the resulting token.  Delegates to the shared helper in
+    /// `context_mentions::should_claim_inline_mention_ownership`.
     fn should_claim_inline_mention_ownership(
         &self,
         part: &crate::ai::message_parts::AiContextPart,
         cx: &mut Context<Self>,
     ) -> bool {
-        use crate::ai::context_mentions::part_to_inline_token;
-
-        let Some(token) = part_to_inline_token(part) else {
-            return false;
-        };
-
-        // Already owned by a previous inline pick — keep ownership.
-        if self.inline_owned_context_tokens.contains(&token) {
-            return true;
-        }
-
-        // If the part is already attached (from slash/chip/setup), do NOT
-        // claim ownership — deleting the inline token later must not remove
-        // the pre-existing attachment.
-        !self
-            .live_thread()
-            .read(cx)
-            .pending_context_parts()
-            .iter()
-            .any(|existing| existing == part)
+        crate::ai::context_mentions::should_claim_inline_mention_ownership(
+            part,
+            self.live_thread().read(cx).pending_context_parts(),
+            &self.inline_owned_context_tokens,
+        )
     }
 
     /// Return highlight ranges for inline `@mentions` that are **actually

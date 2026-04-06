@@ -409,7 +409,7 @@ fn acp_escape_defers_to_actions_dialog_before_unwinding_chat() {
             "ACP escape block must defer to ACP-local popups while they are open in {name}"
         );
         assert!(
-            escape_block.contains("this.close_tab_ai_harness_terminal(cx);"),
+            escape_block.contains("this.close_tab_ai_harness_terminal_with_window(window, cx);"),
             "ACP escape block must still close the ACP chat when actions are closed in {name}"
         );
     }
@@ -427,7 +427,7 @@ fn simulated_acp_escape_closes_actions_before_unwinding_chat() {
         .find("view.close_actions_popup(ActionsDialogHost::AcpChat, window, ctx);")
         .expect("simulateKey ACP branch must close ACP actions popup");
     let close_chat_pos = acp_block
-        .find("view.close_tab_ai_harness_terminal(ctx);")
+        .find("view.close_tab_ai_harness_terminal_with_window(window, ctx);")
         .expect("simulateKey ACP branch must still close the ACP chat");
 
     assert!(
@@ -609,7 +609,8 @@ fn acp_footer_actions_hint_uses_shared_clickable_toggle_path() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("wire_embedded_acp_footer_callbacks(&view_entity, cx);")
             && TAB_AI_MODE_SOURCE.contains("app.toggle_actions(cx, window);")
-            && TAB_AI_MODE_SOURCE.contains("app.close_tab_ai_harness_terminal(cx);"),
+            && TAB_AI_MODE_SOURCE
+                .contains("app.close_tab_ai_harness_terminal_with_window(window, cx);"),
         "embedded ACP hosts must wire footer clicks to the existing actions toggle and close paths"
     );
     assert!(

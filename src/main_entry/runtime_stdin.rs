@@ -687,10 +687,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             view.close_actions_popup(ActionsDialogHost::AcpChat, window, ctx);
                                         } else if key_lower == "escape" {
                                             logging::log("STDIN", "SimulateKey: Escape - return to main menu from ACP chat");
-                                            view.close_tab_ai_harness_terminal(ctx);
+                                            view.close_tab_ai_harness_terminal_with_window(window, ctx);
                                         } else if has_cmd && key_lower == "w" {
                                             logging::log("STDIN", "SimulateKey: Cmd+W - close window from ACP chat");
-                                            view.close_tab_ai_harness_terminal(ctx);
+                                            view.close_tab_ai_harness_terminal_with_window(window, ctx);
                                             view.close_and_reset_window(ctx);
                                         } else if key_lower == "enter" && !has_shift {
                                             logging::log("STDIN", "SimulateKey: Enter - submit ACP input");

@@ -254,7 +254,7 @@ impl ScriptListApp {
                             && has_cmd
                             && key.eq_ignore_ascii_case("w")
                         {
-                            this.close_tab_ai_harness_terminal(cx);
+                            this.close_tab_ai_harness_terminal_with_window(window, cx);
                             return true;
                         }
 

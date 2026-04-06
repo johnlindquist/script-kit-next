@@ -2923,8 +2923,8 @@ fn quick_terminal_cmd_w_routes_to_harness_close() {
         "QuickTerminalView must reserve Cmd+W as the wrapper close gesture",
     );
     assert!(
-        TERM_RENDER_SOURCE.contains("this.close_tab_ai_harness_terminal(cx);"),
-        "Cmd+W must call close_tab_ai_harness_terminal",
+        TERM_RENDER_SOURCE.contains("this.close_tab_ai_harness_terminal_with_window(window, cx);"),
+        "Cmd+W must call the window-aware harness close path",
     );
 }
 

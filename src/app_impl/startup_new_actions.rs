@@ -130,7 +130,7 @@
                             && matches!(this.current_view, AppView::AcpChatView { .. })
                         {
                             logging::log("KEY", "Interceptor: Cmd+W -> close window from ACP chat");
-                            this.close_tab_ai_harness_terminal(cx);
+                            this.close_tab_ai_harness_terminal_with_window(window, cx);
                             this.close_and_reset_window(cx);
                             cx.stop_propagation();
                             return;
@@ -149,7 +149,7 @@
                             && !acp_escape_popup_open
                             && matches!(this.current_view, AppView::AcpChatView { .. })
                         {
-                            this.close_tab_ai_harness_terminal(cx);
+                            this.close_tab_ai_harness_terminal_with_window(window, cx);
                             logging::log("KEY", "Interceptor: Escape -> return to main menu from ACP chat");
                             cx.stop_propagation();
                             return;
