@@ -575,6 +575,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.theme = std::sync::Arc::new(next_theme);
+        self.sync_open_actions_dialog_theme(cx);
         sync_theme_chooser_preview(cx, &self.theme, reason);
         // Sync native vibrancy so the window material matches the theme
         let is_dark = self.theme.should_use_dark_vibrancy();
@@ -605,6 +606,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.theme = original;
+        self.sync_open_actions_dialog_theme(cx);
         sync_theme_chooser_preview(cx, &self.theme, reason);
         // Sync native vibrancy for the restored theme
         let is_dark = self.theme.should_use_dark_vibrancy();
@@ -2039,6 +2041,33 @@ mod theme_chooser_filter_tests {
         assert!(
             source.contains("trailing_accessory_opt(saved_badge)"),
             "theme chooser should pass Saved badge as trailing accessory"
+        );
+    }
+}
+
+#[cfg(test)]
+mod theme_chooser_actions_dialog_sync_tests {
+    #[test]
+    fn theme_chooser_preview_updates_open_actions_dialog_theme() {
+        let source = include_str!("theme_chooser.rs");
+        let apply_fn = source
+            .split("fn apply_theme_chooser_theme(")
+            .nth(1)
+            .and_then(|section| section.split("fn mutate_theme_chooser_theme(").next())
+            .expect("missing apply_theme_chooser_theme");
+        let restore_fn = source
+            .split("fn restore_theme_chooser_theme(")
+            .nth(1)
+            .and_then(|section| section.split("fn preview_theme_chooser_preset(").next())
+            .expect("missing restore_theme_chooser_theme");
+
+        assert!(
+            apply_fn.contains("self.sync_open_actions_dialog_theme(cx);"),
+            "theme chooser preview mutations should propagate to open actions dialogs"
+        );
+        assert!(
+            restore_fn.contains("self.sync_open_actions_dialog_theme(cx);"),
+            "theme chooser restore should propagate to open actions dialogs"
         );
     }
 }

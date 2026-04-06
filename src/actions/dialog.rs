@@ -618,7 +618,7 @@ impl ActionsDialog {
             default_search_placeholder: config.search_placeholder.clone(),
             config,
             skip_track_focus: false,
-            match_main_window_background: false,
+            match_main_window_background: true,
             on_close: None,
             route_stack: Vec::new(),
             drill_down_routes: HashMap::new(),
