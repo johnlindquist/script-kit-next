@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use gpui::{
-    div, list, prelude::*, px, rgb, rgba, Animation, AnimationExt, App, Context, Entity,
+    div, list, prelude::*, px, rgb, rgba, Animation, AnimationExt, App, Context, ElementId, Entity,
     FocusHandle, Focusable, FontWeight, IntoElement, ListAlignment, ListState, ParentElement,
     Render, SharedString, Task, WeakEntity, Window,
 };
@@ -1499,73 +1499,83 @@ impl AcpChatView {
         let muted_text = theme.colors.text.muted;
         let primary_text = theme.colors.text.primary;
 
-        // Show only the first non-inline part as a chip.
-        let (remove_idx, part) = chip_parts[0];
-        let label = SharedString::from(part.label().to_string());
-
-        let chip = div()
-            .id("acp-ctx-chip")
+        let mut container = div()
+            .id("acp-pending-context-chips")
             .flex()
             .flex_row()
-            .items_center()
-            .gap(px(5.0))
-            // Gold left accent bar
-            .child(
-                div()
-                    .w(px(2.0))
-                    .h(px(14.0))
-                    .rounded(px(1.0))
-                    .bg(rgb(accent)),
-            )
-            // Label + dismiss in ghost container
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(4.0))
-                    .px(px(4.0))
-                    .py(px(2.0))
-                    .rounded(px(3.0))
-                    .bg(rgba((border << 8) | 0x0A))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(dimmed))
-                            .overflow_hidden()
-                            .text_ellipsis()
-                            .max_w(px(280.0))
-                            .child(label),
-                    )
-                    .child(
-                        div()
-                            .id("acp-ctx-remove-0")
-                            .cursor_pointer()
-                            .text_xs()
-                            .text_color(rgba((muted_text << 8) | 0x60))
-                            .px(px(4.0))
-                            .py(px(1.0))
-                            .rounded(px(999.0))
-                            .hover(|el| {
-                                el.text_color(rgb(primary_text))
-                                    .bg(rgba((border << 8) | 0x18))
-                                    .rounded(px(999.0))
-                            })
-                            .on_click(cx.listener(move |this, _, _window, cx| {
-                                this.live_thread().update(cx, |thread, cx| {
-                                    thread.remove_context_part(remove_idx, cx);
-                                });
-                            }))
-                            .child("\u{00d7}"),
-                    ),
-            );
-
-        div()
-            .id("acp-pending-context-chips")
+            .flex_wrap()
+            .gap(px(6.0))
             .px(px(12.0))
-            .pb(px(6.0))
-            .child(chip)
-            .into_any_element()
+            .pb(px(6.0));
+
+        for (chip_idx, &(remove_idx, part)) in chip_parts.iter().enumerate() {
+            let label = SharedString::from(part.label().to_string());
+            let remove_id =
+                ElementId::Name(SharedString::from(format!("acp-ctx-remove-{chip_idx}")));
+
+            let chip = div()
+                .id(ElementId::Name(SharedString::from(format!(
+                    "acp-ctx-chip-{chip_idx}"
+                ))))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(5.0))
+                // Gold left accent bar
+                .child(
+                    div()
+                        .w(px(2.0))
+                        .h(px(14.0))
+                        .rounded(px(1.0))
+                        .bg(rgb(accent)),
+                )
+                // Label + dismiss in ghost container
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(4.0))
+                        .px(px(4.0))
+                        .py(px(2.0))
+                        .rounded(px(3.0))
+                        .bg(rgba((border << 8) | 0x0A))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(dimmed))
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .max_w(px(280.0))
+                                .child(label),
+                        )
+                        .child(
+                            div()
+                                .id(remove_id)
+                                .cursor_pointer()
+                                .text_xs()
+                                .text_color(rgba((muted_text << 8) | 0x60))
+                                .px(px(4.0))
+                                .py(px(1.0))
+                                .rounded(px(999.0))
+                                .hover(|el| {
+                                    el.text_color(rgb(primary_text))
+                                        .bg(rgba((border << 8) | 0x18))
+                                        .rounded(px(999.0))
+                                })
+                                .on_click(cx.listener(move |this, _, _window, cx| {
+                                    this.live_thread().update(cx, |thread, cx| {
+                                        thread.remove_context_part(remove_idx, cx);
+                                    });
+                                }))
+                                .child("\u{00d7}"),
+                        ),
+                );
+
+            container = container.child(chip);
+        }
+
+        container.into_any_element()
     }
 
     /// Render a bootstrap note row below the context chips.
@@ -2918,6 +2928,21 @@ impl AcpChatView {
             }
             ContextPickerItemKind::SlashCommand(_) => return,
             ContextPickerItemKind::Portal(portal_kind) => {
+                // Remove the trigger text (@file, @clip, etc.) from the input
+                // before opening the portal so it doesn't linger on return.
+                let current_text = self.live_thread().read(cx).input.text().to_string();
+                let cleaned = Self::replace_text_in_char_range(
+                    &current_text,
+                    session.trigger_range.clone(),
+                    "",
+                );
+                let cleaned_cursor = session.trigger_range.start;
+                self.live_thread().update(cx, |thread, cx| {
+                    thread.input.set_text(cleaned);
+                    thread.input.set_cursor(cleaned_cursor);
+                    cx.notify();
+                });
+
                 // Dismiss the mention popup and invoke the host portal callback.
                 // Deferred via App::defer to release the AcpChatView entity borrow.
                 self.sync_mention_popup_window_from_cached_parent(cx);

@@ -487,7 +487,8 @@ fn automation_inspect_result_round_trip_and_request_id() {
                 a: 255,
             }],
             os_window_id: Some(99),
-            warnings: vec!["semantic_elements_detached_acp_pending".into()],
+            semantic_quality: Some(crate::protocol::SemanticQuality::PanelOnly),
+            warnings: vec!["panel_only_acp_detached".into()],
         },
     );
     assert_eq!(msg.request_id(), Some("inspect-1"));

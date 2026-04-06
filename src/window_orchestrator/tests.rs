@@ -428,6 +428,36 @@ fn dispatch_convenience_mutates_in_place() {
 }
 
 #[test]
+fn finish_dictation_from_main_filter_reveals_and_restores_main_filter_focus() {
+    let mut state = OrchestratorState::default();
+    // Default state: ScriptList with MainFilter focus.
+    assert_eq!(state.main.return_focus, FocusToken::MainFilter);
+
+    state.dispatch(WindowEvent::StartDictation {
+        target: DictationTarget::MainWindowFilter,
+    });
+
+    // Main should be concealed during dictation.
+    assert_eq!(
+        state.main.visibility,
+        MainVisibility::Hidden(HiddenReason::Concealed)
+    );
+
+    let cmds = state.dispatch(WindowEvent::FinishDictation);
+
+    // Main should be revealed and focus restored to MainFilter.
+    assert_eq!(state.dictation, DictationSurfaceState::Hidden);
+    assert_eq!(state.main.visibility, MainVisibility::Visible);
+    assert_eq!(state.key_surface, Some(SurfaceId::Main));
+    assert!(cmds.contains(&WindowCommand::CloseDictationOverlay));
+    assert!(cmds.contains(&WindowCommand::RevealMain {
+        activate_app: false,
+        make_key: true,
+    }));
+    assert!(cmds.contains(&WindowCommand::FocusMain(FocusToken::MainFilter)));
+}
+
+#[test]
 fn start_dictation_from_script_list_filter_conceals_and_opens_overlay() {
     let state = OrchestratorState::default();
 

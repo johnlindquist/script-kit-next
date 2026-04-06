@@ -33,9 +33,10 @@ pub use acp_state::{
     ACP_TEST_PROBE_SCHEMA_VERSION,
 };
 pub use ai::{AiChatInfo, AiContextPartInput, AiMessageInfo};
+#[allow(unused_imports)]
 pub use automation_inspect::{
     AutomationInspectSnapshot, InspectBoundsInScreenshot, InspectPoint, PixelProbe,
-    PixelProbeResult, SuggestedHitPoint, AUTOMATION_INSPECT_SCHEMA_VERSION,
+    PixelProbeResult, SemanticQuality, SuggestedHitPoint, AUTOMATION_INSPECT_SCHEMA_VERSION,
 };
 pub use automation_inspect_geometry::{
     default_suggested_hit_points, default_surface_hit_point, target_bounds_in_screenshot,

@@ -63,11 +63,26 @@ interface RecipeReceipt {
   proofBundle?: unknown;
 }
 
+/** Input delivery method chosen by the routing logic. */
+type RoutedInputMethod = "batch" | "simulateGpuiEvent" | "native";
+
+interface RoutedInputMetadata {
+  inputMethod: RoutedInputMethod;
+  resolvedWindowId?: string;
+  dispatchPath?: "exact_handle" | "window_role_fallback";
+}
+
 interface StepReceipt {
   name: string;
   status: "pass" | "fail" | "error" | "skipped";
   output: unknown;
   durationMs: number;
+  /** Present on steps that deliver input to a target surface. */
+  inputMethod?: RoutedInputMethod;
+  /** Present when inputMethod is "batch" or "simulateGpuiEvent". */
+  resolvedWindowId?: string;
+  /** Present when inputMethod is "batch" or "simulateGpuiEvent". */
+  dispatchPath?: "exact_handle" | "window_role_fallback";
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +230,151 @@ async function send(
     ["bash", "scripts/agentic/session.sh", "send", session, jsonCmd],
     "send"
   );
+}
+
+/**
+ * Decide how to deliver input to a target surface.
+ *
+ * Decision rule:
+ *   - acpDetached, actionsDialog, promptPopup → "batch" (protocol-level, no OS focus needed)
+ *   - Exact ID targets → "batch"
+ *   - main/focused/unspecified → "native" (OS-level input via macos-input.ts)
+ */
+function chooseInputMethod(target?: AutomationTargetJson): RoutedInputMethod {
+  if (!target) return "native";
+  if (target.type === "id") return "batch";
+  if (target.type === "kind") {
+    if (
+      target.kind === "acpDetached" ||
+      target.kind === "actionsDialog" ||
+      target.kind === "promptPopup"
+    ) {
+      return "batch";
+    }
+  }
+  return "native";
+}
+
+/**
+ * Send text via protocol-level batch setInput command.
+ * Returns the RPC result with routing metadata.
+ */
+async function batchSetInput(
+  session: string,
+  text: string,
+  target: AutomationTargetJson
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const cmd = buildCmd(
+    {
+      type: "batch",
+      requestId: `txn-setInput-${Date.now()}`,
+      commands: [
+        { type: "setInput", text },
+      ],
+      trace: "onFailure",
+    },
+    target
+  );
+  return rpc(session, cmd, { expect: "batchResult", timeout: 5000 });
+}
+
+/**
+ * Send a key via simulateGpuiEvent when batch cannot express the input.
+ * Returns the RPC result with routing metadata.
+ */
+async function gpuiKeyDispatch(
+  session: string,
+  key: string,
+  target: AutomationTargetJson,
+  modifiers: string[] = []
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const cmd = buildCmd(
+    {
+      type: "simulateGpuiEvent",
+      requestId: `gpui-key-${key}-${Date.now()}`,
+      event: { type: "keyDown", key, modifiers },
+    },
+    target
+  );
+  return rpc(session, cmd, { expect: "simulateGpuiEventResult", timeout: 5000 });
+}
+
+/**
+ * Build a routed step: choose batch/GPUI/native based on target, execute, and
+ * attach inputMethod metadata to the StepReceipt.
+ */
+async function routedInputStep(
+  name: string,
+  kind: "type" | "key",
+  value: string,
+  session: string,
+  opts: {
+    target?: AutomationTargetJson;
+    surface?: string;
+    modifiers?: string[];
+  } = {}
+): Promise<StepReceipt> {
+  const method = chooseInputMethod(opts.target);
+  const start = Date.now();
+
+  try {
+    let result: { exitCode: number; stdout: string; stderr: string };
+    let resolvedWindowId: string | undefined;
+    let dispatchPath: "exact_handle" | "window_role_fallback" | undefined;
+
+    if (method === "batch" && kind === "type" && opts.target) {
+      result = await batchSetInput(session, value, opts.target);
+      resolvedWindowId = opts.target.type === "id" ? opts.target.id : undefined;
+      dispatchPath = opts.target.type === "id" ? "exact_handle" : "window_role_fallback";
+    } else if (method === "batch" && kind === "key" && opts.target) {
+      // batch cannot express arbitrary keys; fall through to simulateGpuiEvent
+      result = await gpuiKeyDispatch(session, value, opts.target, opts.modifiers);
+      resolvedWindowId = opts.target.type === "id" ? opts.target.id : undefined;
+      dispatchPath = opts.target.type === "id" ? "exact_handle" : "window_role_fallback";
+      // Override method to reflect actual dispatch
+      return {
+        name,
+        status: result.exitCode === 0 ? "pass" : result.exitCode === 2 ? "error" : "fail",
+        output: parseJson(result.stdout),
+        durationMs: Date.now() - start,
+        inputMethod: "simulateGpuiEvent",
+        resolvedWindowId,
+        dispatchPath,
+      };
+    } else {
+      // Native fallback: use macos-input.ts
+      const isNonMainTarget = opts.target && !isMainLikeTarget(opts.target);
+      const args = nativeInputArgs(kind, value, session, opts.surface, {
+        skipEnsureFocus: isNonMainTarget,
+      });
+      result = await runTool(args, name);
+      return {
+        name,
+        status: result.exitCode === 0 ? "pass" : result.exitCode === 2 ? "error" : "fail",
+        output: parseJson(result.stdout),
+        durationMs: Date.now() - start,
+        inputMethod: "native",
+      };
+    }
+
+    return {
+      name,
+      status: result.exitCode === 0 ? "pass" : result.exitCode === 2 ? "error" : "fail",
+      output: parseJson(result.stdout),
+      durationMs: Date.now() - start,
+      inputMethod: method,
+      resolvedWindowId,
+      dispatchPath,
+    };
+  } catch (e: any) {
+    return {
+      name,
+      status: "error",
+      output: { error: e.message ?? String(e) },
+      durationMs: Date.now() - start,
+      inputMethod: method,
+    };
+  }
 }
 
 function parseTargetJson(raw: string | undefined): AutomationTargetJson | undefined {
@@ -508,18 +668,12 @@ async function recipeAcpPickerAccept(
   );
 
   // 3. Type @ to open picker.
-  //    For non-main targets (detached ACP, popups), skip OS-level focus enforcement
-  //    so the capability ladder (directBatch → gpuiDispatch) is tried first. This
-  //    allows detached ACP flows to succeed even when the human user types in another app.
-  const isNonMainTarget = opts.target && !isMainLikeTarget(opts.target);
-  const typeAtStep = await step("type-at-trigger", () =>
-    runTool(
-      nativeInputArgs("type", "@", session, opts.surface, {
-        skipEnsureFocus: isNonMainTarget,
-      }),
-      "type-at"
-    )
-  );
+  //    For non-main targets (detached ACP, popups), route through batch/GPUI first
+  //    so the flow succeeds even when the human user types in another app.
+  const typeAtStep = await routedInputStep("type-at-trigger", "type", "@", session, {
+    target: opts.target,
+    surface: opts.surface,
+  });
   steps.push(typeAtStep);
 
   if (typeAtStep.status !== "pass") {
@@ -528,7 +682,7 @@ async function recipeAcpPickerAccept(
       recipe: `acp-${acceptKey}-accept`,
       status: "fail",
       steps,
-      summary: `Input failed at type-at-trigger: ${isNonMainTarget ? "protocol/GPUI ladder exhausted" : "focus not confirmed or input not delivered"}`,
+      summary: `Input failed at type-at-trigger (method: ${typeAtStep.inputMethod ?? "unknown"})`,
     };
   }
 
@@ -576,15 +730,11 @@ async function recipeAcpPickerAccept(
     )
   );
 
-  // 6. Accept with key (prefer GPUI dispatch for non-main targets)
-  const acceptKeyStep = await step(`accept-${acceptKey}`, () =>
-    runTool(
-      nativeInputArgs("key", acceptKey, session, opts.surface, {
-        skipEnsureFocus: isNonMainTarget,
-      }),
-      `accept-${acceptKey}`
-    )
-  );
+  // 6. Accept with key (routed: batch/GPUI for non-main, native for main)
+  const acceptKeyStep = await routedInputStep(`accept-${acceptKey}`, "key", acceptKey, session, {
+    target: opts.target,
+    surface: opts.surface,
+  });
   steps.push(acceptKeyStep);
 
   if (acceptKeyStep.status !== "pass") {
@@ -593,7 +743,7 @@ async function recipeAcpPickerAccept(
       recipe: `acp-${acceptKey}-accept`,
       status: "fail",
       steps,
-      summary: `Input failed at accept-${acceptKey}: ${isNonMainTarget ? "protocol/GPUI ladder exhausted" : "focus not confirmed or key not delivered"}`,
+      summary: `Input failed at accept-${acceptKey} (method: ${acceptKeyStep.inputMethod ?? "unknown"})`,
     };
   }
 
@@ -1282,7 +1432,44 @@ switch (recipe) {
   }
 
   case "help":
-  case "--help":
+  case "--help": {
+    const jsonFlag = process.argv.includes("--json");
+    if (jsonFlag) {
+      const helpJson = {
+        schemaVersion: 1,
+        script: "index",
+        commands: [
+          { name: "preflight", description: "Check prerequisites (session, window, permissions)", flags: ["--session", "--json"] },
+          { name: "acp-open", description: "Open ACP and verify ready state", flags: ["--session", "--target-json", "--json"] },
+          { name: "acp-accept", description: "Full ACP picker accept", flags: ["--session", "--key", "--vision", "--target-json", "--surface", "--json"] },
+          { name: "acp-enter-accept", description: "Compatibility alias for --key enter", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
+          { name: "acp-tab-accept", description: "Compatibility alias for --key tab", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
+          { name: "acp-detached-accept", description: "One-command detached ACP proof: resolve, accept, identity check", flags: ["--session", "--kind", "--index", "--key", "--vision", "--json"] },
+          { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
+          { name: "scenario", description: "Run a replayable scenario with proof bundle", flags: ["--session", "--scenario", "--index", "--json"] },
+          { name: "vision-loop", description: "Materialize visionCrops from receipt", flags: ["--receipt", "--out-dir"] },
+          { name: "help", description: "Show help (--json for machine-readable)", flags: ["--json"] },
+        ],
+        contracts: [
+          "detached-proof-contract",
+          "no-focus-input-ladder",
+          "popup-capture-receipts",
+        ],
+        receipts: [
+          "inputMethod",
+          "resolvedWindowId",
+          "dispatchPath",
+          "resolvedTarget.windowId",
+        ],
+        routing: {
+          description: "Non-main targets (acpDetached, actionsDialog, promptPopup) are routed through batch/simulateGpuiEvent first; native input is last resort.",
+          methods: ["batch", "simulateGpuiEvent", "native"],
+          nonMainTargets: ["acpDetached", "actionsDialog", "promptPopup"],
+        },
+      };
+      console.log(JSON.stringify(helpJson, null, 2));
+      process.exit(0);
+    }
     console.log(`Usage: bun scripts/agentic/index.ts <recipe> [--session NAME] [--key enter|tab] [--vision]
   [--target-json '{"type":"kind","kind":"acpDetached","index":0}'] [--surface acp]
   [--kind KIND] [--index N] [--select-agent ID] [--scenario NAME]
@@ -1297,7 +1484,7 @@ Recipes:
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   scenario               Run a replayable scenario with proof bundle output
   vision-loop            Materialize visionCrops from receipt (pass --receipt, --out-dir)
-  help                   Show this help
+  help                   Show this help (--json for machine-readable output)
 
 Target threading:
   --target-json JSON   ACP window target for all RPCs (reused across all steps)
@@ -1305,6 +1492,10 @@ Target threading:
   --kind KIND          Target kind for acp-detached-accept (default: acpDetached)
   --index N            Target kind index for acp-detached-accept (default: 0)
   --scenario NAME      Scenario name for the scenario recipe
+
+Input routing (non-main targets):
+  acpDetached, actionsDialog, promptPopup → batch/simulateGpuiEvent (no OS focus needed)
+  main, focused, unspecified → native (macos-input.ts with OS focus enforcement)
 
 Available scenarios:
   detached-acp-exact-id  Resolve exact detached ACP target, inspect, GPUI event, inspect again
@@ -1316,9 +1507,11 @@ Examples:
     --target-json '{"type":"kind","kind":"acpDetached","index":0}' --surface acp --vision
   bun scripts/agentic/index.ts acp-detached-accept --session default --kind acpDetached --index 0 --key enter --vision
   bun scripts/agentic/index.ts scenario --session default --scenario detached-acp-exact-id --index 0
-  bun scripts/agentic/index.ts acp-setup-recovery --session default --select-agent opencode --json`);
+  bun scripts/agentic/index.ts acp-setup-recovery --session default --select-agent opencode --json
+  bun scripts/agentic/index.ts help --json`);
     process.exit(0);
     break;
+  }
 
   default:
     result = {

@@ -175,17 +175,21 @@ impl ScriptListApp {
                 crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
                     crate::actions::notify_actions_window(cx);
                     crate::actions::resize_actions_window(cx, dialog);
-                    let (route_id, search_placeholder) = {
+                    let (route_id, search_placeholder, route_depth, escape_hint) = {
                         let dialog_ref = dialog.read(cx);
                         (
                             dialog_ref.current_route_id().map(str::to_string),
                             dialog_ref.current_search_placeholder().map(str::to_string),
+                            dialog_ref.route_depth(),
+                            dialog_ref.route_hint_label(),
                         )
                     };
                     tracing::info!(
                         target: "script_kit::actions",
                         host = ?host,
                         route_id = ?route_id,
+                        route_depth,
+                        escape_hint,
                         search_placeholder = ?search_placeholder,
                         "actions_dialog_route_visible"
                     );
@@ -219,17 +223,21 @@ impl ScriptListApp {
                 crate::actions::ActionsDialogEscapeOutcome::PoppedRoute => {
                     crate::actions::notify_actions_window(cx);
                     crate::actions::resize_actions_window(cx, dialog);
-                    let (route_id, search_placeholder) = {
+                    let (route_id, search_placeholder, route_depth, escape_hint) = {
                         let dialog_ref = dialog.read(cx);
                         (
                             dialog_ref.current_route_id().map(str::to_string),
                             dialog_ref.current_search_placeholder().map(str::to_string),
+                            dialog_ref.route_depth(),
+                            dialog_ref.route_hint_label(),
                         )
                     };
                     tracing::info!(
                         target: "script_kit::actions",
                         host = ?host,
                         route_id = ?route_id,
+                        route_depth,
+                        escape_hint,
                         search_placeholder = ?search_placeholder,
                         "actions_dialog_route_visible"
                     );

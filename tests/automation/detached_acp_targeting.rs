@@ -6,8 +6,8 @@
 
 use script_kit_gpui::protocol::{
     AcpResolvedTarget, AcpSetupActionKind, AcpStateSnapshot, AcpTestProbeSnapshot,
-    AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget, Message,
-    SimulatedGpuiEvent,
+    AutomationInspectSnapshot, AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,
+    Message, SemanticQuality, SimulatedGpuiEvent, AUTOMATION_INSPECT_SCHEMA_VERSION,
 };
 use script_kit_gpui::stdin_commands::KeyModifier;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -578,4 +578,132 @@ fn get_acp_test_probe_targeted_from_json() {
         }
         other => panic!("Expected GetAcpTestProbe, got: {:?}", other),
     }
+}
+
+// ============================================================
+// Non-main semantic proof: AcpDetached inspect receipts
+// ============================================================
+
+#[test]
+fn acp_detached_collector_never_returns_non_main_pending_warning() {
+    // The collector source must NOT emit semantic_elements_non_main_pending for AcpDetached.
+    // Instead it must fall back to panel_only_acp_detached.
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"panel_only_acp_detached\""),
+        "AcpDetached must use panel_only_acp_detached fallback, not semantic_elements_non_main_pending"
+    );
+    // The match arm for AcpDetached must use unwrap_or_else, not ?.
+    assert!(
+        !source.contains("collect_acp_detached_snapshot(resolved, cx)?"),
+        "AcpDetached collector must not use ? (which returns None → triggers non_main_pending)"
+    );
+}
+
+#[test]
+fn acp_detached_inspect_receipt_has_semantic_quality_field() {
+    // The handler must set semantic_quality on all inspect receipts
+    let source = include_str!("../../src/prompt_handler/mod.rs");
+    assert!(
+        source.contains("semantic_quality: Some(semantic_quality)"),
+        "inspect handler must set semantic_quality on the snapshot"
+    );
+}
+
+#[test]
+fn inspect_receipt_schema_version_is_v3() {
+    assert_eq!(
+        AUTOMATION_INSPECT_SCHEMA_VERSION, 3,
+        "schema version must be 3 after adding semantic_quality"
+    );
+}
+
+#[test]
+fn semantic_quality_serde_contract() {
+    // Full
+    let json = serde_json::to_string(&SemanticQuality::Full).expect("serialize");
+    assert_eq!(json, "\"full\"");
+    // PanelOnly
+    let json = serde_json::to_string(&SemanticQuality::PanelOnly).expect("serialize");
+    assert_eq!(json, "\"panel_only\"");
+    // Unavailable
+    let json = serde_json::to_string(&SemanticQuality::Unavailable).expect("serialize");
+    assert_eq!(json, "\"unavailable\"");
+}
+
+#[test]
+fn acp_detached_inspect_result_carries_semantic_quality() {
+    // Build an inspect result with semantic_quality and verify it round-trips.
+    let snapshot = AutomationInspectSnapshot {
+        schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
+        window_id: "acpDetached:thread-1".into(),
+        window_kind: "AcpDetached".into(),
+        title: Some("Script Kit AI".into()),
+        resolved_bounds: None,
+        target_bounds_in_screenshot: None,
+        surface_hit_point: None,
+        suggested_hit_points: Vec::new(),
+        elements: Vec::new(),
+        total_count: 0,
+        focused_semantic_id: None,
+        selected_semantic_id: None,
+        screenshot_width: Some(1440),
+        screenshot_height: Some(900),
+        pixel_probes: Vec::new(),
+        os_window_id: Some(99),
+        semantic_quality: Some(SemanticQuality::PanelOnly),
+        warnings: vec!["panel_only_acp_detached".into()],
+    };
+    let msg = Message::automation_inspect_result("inspect-acp-1".into(), snapshot);
+    let json = serde_json::to_value(&msg).expect("serialize");
+
+    // Snapshot fields are flattened into top-level JSON (serde flatten)
+    assert_eq!(json["semanticQuality"], "panel_only");
+    assert_eq!(json["schemaVersion"], 3);
+
+    // Round-trip
+    let back: Message = serde_json::from_value(json).expect("deserialize");
+    match back {
+        Message::AutomationInspectResult { snapshot, .. } => {
+            assert_eq!(snapshot.semantic_quality, Some(SemanticQuality::PanelOnly));
+        }
+        other => panic!("Expected AutomationInspectResult, got: {:?}", other),
+    }
+}
+
+#[test]
+fn acp_detached_full_quality_inspect_receipt() {
+    // Full quality when entity is available
+    let snapshot = AutomationInspectSnapshot {
+        schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
+        window_id: "acpDetached:thread-2".into(),
+        window_kind: "AcpDetached".into(),
+        title: Some("Script Kit AI".into()),
+        resolved_bounds: None,
+        target_bounds_in_screenshot: None,
+        surface_hit_point: None,
+        suggested_hit_points: Vec::new(),
+        elements: vec![script_kit_gpui::protocol::ElementInfo {
+            semantic_id: "input:acp-composer".into(),
+            element_type: script_kit_gpui::protocol::ElementType::Input,
+            text: None,
+            value: Some("hello".into()),
+            selected: None,
+            focused: Some(true),
+            index: None,
+        }],
+        total_count: 1,
+        focused_semantic_id: Some("input:acp-composer".into()),
+        selected_semantic_id: None,
+        screenshot_width: Some(800),
+        screenshot_height: Some(600),
+        pixel_probes: Vec::new(),
+        os_window_id: None,
+        semantic_quality: Some(SemanticQuality::Full),
+        warnings: Vec::new(),
+    };
+    let json = serde_json::to_value(&snapshot).expect("serialize");
+    assert_eq!(json["semanticQuality"], "full");
+    assert!(json.get("warnings").is_none()); // empty vec skipped
+    assert_eq!(json["elements"].as_array().expect("elements").len(), 1);
 }

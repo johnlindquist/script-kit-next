@@ -2403,19 +2403,23 @@ Returns a compact, machine-readable inspection snapshot of one exact automation 
 {
   "type": "automationInspectResult",
   "requestId": "inspect-1",
-  "schemaVersion": 1,
+  "schemaVersion": 3,
   "windowId": "notes:0",
   "windowKind": "Notes",
   "title": "Script Kit Notes",
-  "elements": [],
-  "totalCount": 0,
+  "elements": [
+    {"semanticId": "panel:notes-window", "elementType": "panel", "focused": true}
+  ],
+  "totalCount": 1,
+  "focusedSemanticId": "panel:notes-window",
   "screenshotWidth": 1440,
   "screenshotHeight": 900,
+  "semanticQuality": "panel_only",
   "pixelProbes": [
     {"x": 24, "y": 24, "r": 28, "g": 28, "b": 30, "a": 255},
     {"x": 320, "y": 180, "r": 245, "g": 245, "b": 247, "a": 255}
   ],
-  "warnings": ["semantic_elements_non_main_pending"]
+  "warnings": ["panel_only_notes"]
 }
 ```
 
@@ -2432,18 +2436,27 @@ Returns a compact, machine-readable inspection snapshot of one exact automation 
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schemaVersion` | number | Always `1` for forward compatibility |
+| `schemaVersion` | number | Currently `3` |
 | `windowId` | string | Resolved automation window ID (e.g. `"main:0"`, `"acpDetached:thread-2"`) |
 | `windowKind` | string | Window kind (e.g. `"Main"`, `"Notes"`, `"AcpDetached"`) |
 | `title` | string? | Window title if available |
-| `elements` | ElementInfo[] | Semantic UI elements (empty when unavailable for this window kind) |
+| `elements` | ElementInfo[] | Semantic UI elements (may be a single panel element when entity is unavailable) |
 | `totalCount` | number | Total element count before any limit |
 | `focusedSemanticId` | string? | Semantic ID of the focused element |
 | `selectedSemanticId` | string? | Semantic ID of the selected element |
 | `screenshotWidth` | number? | Screenshot width in pixels (null if capture failed) |
 | `screenshotHeight` | number? | Screenshot height in pixels (null if capture failed) |
 | `pixelProbes` | PixelProbeResult[] | RGBA values at requested coordinates |
+| `semanticQuality` | string? | `"full"`, `"panel_only"`, or `"unavailable"` — indicates the level of semantic proof in this receipt (v3+, absent in older receipts) |
 | `warnings` | string[] | Machine-readable warning codes |
+
+**`semanticQuality` values (v3+):**
+
+| Value | Meaning |
+|-------|---------|
+| `full` | Rich semantic elements collected (inputs, lists, choices, buttons) |
+| `panel_only` | Only a panel-level element collected (entity unavailable at inspect time) |
+| `unavailable` | No collector exists for this window kind |
 
 **Warning codes:**
 
@@ -2451,8 +2464,11 @@ Returns a compact, machine-readable inspection snapshot of one exact automation 
 |------|---------|
 | `target_resolution_failed: <message>` | The target could not be resolved |
 | `screenshot_capture_failed: <message>` | OS screenshot capture failed (dimensions and probes unavailable) |
-| `semantic_elements_non_main_pending` | Semantic element collection not yet implemented for this window kind |
-| `semantic_elements_detached_acp_pending` | Semantic element collection for detached ACP windows is pending |
+| `semantic_elements_non_main_pending` | No collector for this window kind (only for legacy `Ai`/`MiniAi` kinds) |
+| `panel_only_notes` | Notes entity unavailable, panel-level fallback returned |
+| `panel_only_acp_detached` | Detached ACP entity unavailable, panel-level fallback returned |
+| `panel_only_actions_dialog` | Actions dialog entity unavailable, panel-level fallback returned |
+| `panel_only_prompt_popup` | Prompt popup entity unavailable, panel-level fallback returned |
 
 ### Replayable Agentic Scenarios (Proof Bundles)
 

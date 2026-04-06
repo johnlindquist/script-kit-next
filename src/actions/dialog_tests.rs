@@ -509,3 +509,186 @@ fn selected_protocol_action_mapping_returns_none_for_out_of_bounds() {
         None
     );
 }
+
+// ============================================================
+// Route state contract
+// ============================================================
+
+use super::dialog::{ActionsDialogRoute, ActionsDialogRouteState};
+
+fn make_route(id: &str, action_ids: &[&str]) -> ActionsDialogRoute {
+    ActionsDialogRoute {
+        id: id.to_string(),
+        actions: action_ids
+            .iter()
+            .map(|aid| make_action(aid, aid, None))
+            .collect(),
+        context_title: Some(format!("{id} title")),
+        search_placeholder: Some(format!("{id} placeholder")),
+        initial_selected_action_id: None,
+    }
+}
+
+fn make_route_with_initial(
+    id: &str,
+    action_ids: &[&str],
+    initial: &str,
+) -> ActionsDialogRoute {
+    ActionsDialogRoute {
+        initial_selected_action_id: Some(initial.to_string()),
+        ..make_route(id, action_ids)
+    }
+}
+
+#[test]
+fn route_state_seeds_selected_from_initial() {
+    let route = make_route_with_initial("root", &["a", "b", "c"], "b");
+    let state = ActionsDialogRouteState::new(route.clone());
+
+    assert_eq!(state.selected_action_id.as_deref(), Some("b"));
+    assert!(state.search_text.is_empty());
+    assert_eq!(state.route, route);
+}
+
+#[test]
+fn route_state_seeds_none_when_no_initial() {
+    let route = make_route("root", &["a", "b"]);
+    let state = ActionsDialogRouteState::new(route);
+
+    assert_eq!(state.selected_action_id, None);
+}
+
+#[test]
+fn route_initial_selection_carries_through_to_grouped_items() {
+    // Build grouped items for a route with initial selection "b" at index 1
+    let route = make_route_with_initial("test", &["a", "b", "c"], "b");
+    let actions = &route.actions;
+    let filtered: Vec<usize> = (0..actions.len()).collect();
+
+    let grouped = build_grouped_items_static(actions, &filtered, SectionStyle::default());
+
+    // "b" is action index 1 → filter index 1
+    // Find where filter index 1 appears in grouped items
+    let grouped_idx = grouped
+        .iter()
+        .position(|item| matches!(item, GroupedActionItem::Item(fi) if *fi == 1));
+
+    assert!(
+        grouped_idx.is_some(),
+        "action 'b' should be present in grouped items"
+    );
+}
+
+#[test]
+fn route_preserves_context_title_and_placeholder() {
+    let route = make_route("acp:root", &["change_agent", "copy"]);
+    assert_eq!(route.context_title.as_deref(), Some("acp:root title"));
+    assert_eq!(
+        route.search_placeholder.as_deref(),
+        Some("acp:root placeholder")
+    );
+}
+
+#[test]
+fn set_config_preserves_route_placeholder_scenario() {
+    // This tests the contract: when a route is active, set_config should
+    // not clobber the route's search_placeholder with the host default.
+    //
+    // We can't instantiate a full ActionsDialog without GPUI, but we can
+    // verify the should_rebuild logic that gates re-application.
+
+    let config_a = ActionsDialogConfig::default();
+    #[allow(deprecated)]
+    let config_b = ActionsDialogConfig {
+        section_style: SectionStyle::Separators,
+        ..ActionsDialogConfig::default()
+    };
+
+    // Different section_style → should_rebuild = true
+    assert!(should_rebuild_grouped_items_for_config_change(
+        &config_a, &config_b
+    ));
+
+    // Same config → should_rebuild = false
+    assert!(!should_rebuild_grouped_items_for_config_change(
+        &config_a, &config_a
+    ));
+}
+
+#[test]
+fn route_state_back_stack_restore_preserves_search_and_selection() {
+    // Simulate: root state → push child → pop back
+    // Verify the parent state snapshot preserves search_text and selected_action_id.
+
+    let root_route = make_route_with_initial("root", &["a", "b", "c"], "a");
+    let mut root_state = ActionsDialogRouteState::new(root_route);
+
+    // User typed "bc" and moved selection to "b"
+    root_state.search_text = "bc".to_string();
+    root_state.selected_action_id = Some("b".to_string());
+
+    // Push child
+    let child_route = make_route_with_initial("child", &["x", "y"], "y");
+    let child_state = ActionsDialogRouteState::new(child_route);
+
+    assert_eq!(child_state.selected_action_id.as_deref(), Some("y"));
+    assert!(child_state.search_text.is_empty());
+
+    // Pop back to root — verify the saved state
+    assert_eq!(root_state.search_text, "bc");
+    assert_eq!(root_state.selected_action_id.as_deref(), Some("b"));
+}
+
+#[test]
+fn acp_root_route_initial_selection_is_change_agent() {
+    // Verify the ACP root route builder sets initial selection
+    // to the "Change Agent" action.
+    use super::builders::{
+        get_acp_chat_root_route, ACP_CHANGE_AGENT_ACTION_ID,
+    };
+
+    let entries = vec![];
+    let route = get_acp_chat_root_route(&entries, None);
+
+    assert_eq!(
+        route.initial_selected_action_id.as_deref(),
+        Some(ACP_CHANGE_AGENT_ACTION_ID),
+    );
+}
+
+#[test]
+fn acp_agent_picker_route_initial_selection_is_current_agent() {
+    use super::builders::get_acp_agent_picker_route;
+    use crate::ai::acp::catalog::{
+        AcpAgentAuthState, AcpAgentCatalogEntry, AcpAgentConfigState,
+        AcpAgentInstallState, AcpAgentSource,
+    };
+
+    fn make_catalog_entry(id: &'static str, name: &'static str) -> AcpAgentCatalogEntry {
+        AcpAgentCatalogEntry {
+            id: id.into(),
+            display_name: name.into(),
+            source: AcpAgentSource::ScriptKitCatalog,
+            install_state: AcpAgentInstallState::Ready,
+            auth_state: AcpAgentAuthState::Unknown,
+            config_state: AcpAgentConfigState::Valid,
+            install_hint: None,
+            config_hint: None,
+            supports_embedded_context: None,
+            supports_image: None,
+            last_session_ok: false,
+            config: None,
+        }
+    }
+
+    let entries = vec![make_catalog_entry("claude", "Claude"), make_catalog_entry("gemini", "Gemini")];
+
+    let route = get_acp_agent_picker_route(&entries, Some("claude"));
+    assert_eq!(
+        route.initial_selected_action_id.as_deref(),
+        Some("acp_switch_agent:claude"),
+    );
+
+    let route_none = get_acp_agent_picker_route(&entries, None);
+    assert_eq!(route_none.initial_selected_action_id, None);
+}

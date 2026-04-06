@@ -478,17 +478,21 @@ impl Render for ActionsWindow {
                 Some(ActionsWindowKeyIntent::ExecuteSelected) => {
                     match this.dialog.update(cx, |d, cx| d.activate_selected(cx)) {
                         super::dialog::ActionsDialogActivation::DrillDownPushed { .. } => {
-                            let (route_id, search_placeholder) = {
+                            let (route_id, search_placeholder, route_depth, escape_hint) = {
                                 let dialog = this.dialog.read(cx);
                                 (
                                     dialog.current_route_id().map(str::to_string),
                                     dialog.current_search_placeholder().map(str::to_string),
+                                    dialog.route_depth(),
+                                    dialog.route_hint_label(),
                                 )
                             };
                             tracing::info!(
                                 target: "script_kit::actions",
                                 host = "detached_actions_window",
                                 route_id = ?route_id,
+                                route_depth,
+                                escape_hint,
                                 search_placeholder = ?search_placeholder,
                                 "actions_dialog_route_visible"
                             );
@@ -520,17 +524,21 @@ impl Render for ActionsWindow {
                     let outcome = this.dialog.update(cx, |d, cx| d.handle_escape(cx));
                     match outcome {
                         super::dialog::ActionsDialogEscapeOutcome::PoppedRoute => {
-                            let (route_id, search_placeholder) = {
+                            let (route_id, search_placeholder, route_depth, escape_hint) = {
                                 let dialog = this.dialog.read(cx);
                                 (
                                     dialog.current_route_id().map(str::to_string),
                                     dialog.current_search_placeholder().map(str::to_string),
+                                    dialog.route_depth(),
+                                    dialog.route_hint_label(),
                                 )
                             };
                             tracing::info!(
                                 target: "script_kit::actions",
                                 host = "detached_actions_window",
                                 route_id = ?route_id,
+                                route_depth,
+                                escape_hint,
                                 search_placeholder = ?search_placeholder,
                                 "actions_dialog_route_visible"
                             );

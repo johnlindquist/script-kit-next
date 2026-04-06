@@ -114,6 +114,21 @@ interface VerifyReceipt {
   timestamp: string;
   durationMs: number;
   requiresVisionReview: boolean;
+  // Exact target identity — populated from inspection when --target-json is used
+  resolvedTarget: {
+    windowId: string;
+    windowKind: string;
+    title?: string | null;
+    surfaceId?: string | null;
+  } | null;
+  /** Routed input method used during the flow that produced this proof bundle. */
+  inputMethod?: "batch" | "simulateGpuiEvent" | "native";
+  /** Dispatch path for routed input: exact_handle when target was an ID, window_role_fallback otherwise. */
+  dispatchPath?: "exact_handle" | "window_role_fallback";
+  /** Resolved window ID from the automation target (same as resolvedTarget.windowId). */
+  resolvedWindowId?: string;
+  /** OS-level window ID (CGWindowID) when available from inspection. */
+  osWindowId?: number | null;
   // Stable proof bundle fields (canonical names for machine consumption)
   state: Record<string, unknown> | null;
   probe: Record<string, unknown> | null;
@@ -1342,6 +1357,27 @@ function buildVisionChecks(
 const opts = parseArgs();
 
 if (opts.help) {
+  const jsonFlag = process.argv.includes("--json");
+  if (jsonFlag) {
+    const helpJson = {
+      schemaVersion: 1,
+      script: "verify-shot",
+      commands: [
+        { name: "run", description: "Collect state/probe/screenshot proof", flags: ["--session", "--label", "--out", "--target-json", "--capture-window-id", "--vision", "--skip-screenshot", "--skip-state", "--skip-probe", "--json"] },
+      ],
+      contracts: [
+        "popup-capture-receipts",
+        "detached-proof-contract",
+      ],
+      receipts: [
+        "popupCapture.strategy",
+        "popupCapture.targetBounds",
+        "popupCapture.semanticReceiptsArePrimary",
+      ],
+    };
+    console.log(JSON.stringify(helpJson, null, 2));
+    process.exit(0);
+  }
   console.log(`Usage: bun scripts/agentic/verify-shot.ts --session NAME [options]
 
 ACP proof bundle: state receipt + test probe + screenshot + vision prompts.
@@ -1588,6 +1624,23 @@ if (inspection) {
   }
 }
 
+// Build resolvedTarget from inspection when available
+const resolvedTarget: VerifyReceipt["resolvedTarget"] = inspection
+  ? {
+      windowId: inspection.automationWindowId,
+      windowKind: inspection.windowKind,
+      title: null,
+      surfaceId: null,
+    }
+  : null;
+
+// Infer dispatch path from target-json shape
+const dispatchPath: VerifyReceipt["dispatchPath"] = targetJson
+  ? (targetJson as { type: string }).type === "id"
+    ? "exact_handle"
+    : "window_role_fallback"
+  : undefined;
+
 const receipt: VerifyReceipt = {
   schemaVersion: SCHEMA_VERSION,
   status: hasInfraError ? "error" : allPassed ? "pass" : "fail",
@@ -1595,6 +1648,10 @@ const receipt: VerifyReceipt = {
   timestamp: new Date().toISOString(),
   durationMs: Date.now() - startTime,
   requiresVisionReview: hasMustReviewItems,
+  resolvedTarget,
+  ...(dispatchPath ? { dispatchPath } : {}),
+  ...(resolvedTarget ? { resolvedWindowId: resolvedTarget.windowId } : {}),
+  ...(inspection?.osWindowId != null ? { osWindowId: inspection.osWindowId } : {}),
   // Stable proof bundle fields
   state: stateResult?.snapshot ?? null,
   probe: probeResult?.snapshot ?? null,

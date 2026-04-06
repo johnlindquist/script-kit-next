@@ -8,6 +8,18 @@
 
 use crate::protocol::{AutomationWindowInfo, AutomationWindowKind, ElementInfo, ElementType};
 
+/// Machine-readable indicator of the semantic element quality level.
+///
+/// Mirrors [`crate::protocol::SemanticQuality`] at the collector layer.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SnapshotQuality {
+    /// Full semantic elements collected.
+    #[default]
+    Full,
+    /// Only a panel-level element was collected (entity unavailable).
+    PanelOnly,
+}
+
 /// Lightweight snapshot of semantic elements from a non-main surface.
 #[derive(Clone, Debug, Default)]
 pub struct SurfaceElementSnapshot {
@@ -16,6 +28,8 @@ pub struct SurfaceElementSnapshot {
     pub focused_semantic_id: Option<String>,
     pub selected_semantic_id: Option<String>,
     pub warnings: Vec<String>,
+    /// Semantic quality level of this snapshot.
+    pub quality: SnapshotQuality,
 }
 
 impl SurfaceElementSnapshot {
@@ -63,8 +77,21 @@ pub fn collect_surface_snapshot(
     cx: &gpui::App,
 ) -> Option<SurfaceElementSnapshot> {
     let mut snapshot = match resolved.kind {
-        AutomationWindowKind::Notes => collect_notes_snapshot(resolved, cx)?,
-        AutomationWindowKind::AcpDetached => collect_acp_detached_snapshot(resolved, cx)?,
+        AutomationWindowKind::Notes => collect_notes_snapshot(resolved, cx).unwrap_or_else(|| {
+            panel_only_fallback(
+                "panel:notes-window",
+                resolved.title.clone(),
+                "panel_only_notes",
+            )
+        }),
+        AutomationWindowKind::AcpDetached => collect_acp_detached_snapshot(resolved, cx)
+            .unwrap_or_else(|| {
+                panel_only_fallback(
+                    "panel:acp-detached",
+                    resolved.title.clone(),
+                    "panel_only_acp_detached",
+                )
+            }),
         AutomationWindowKind::ActionsDialog => {
             collect_actions_dialog_snapshot(cx).unwrap_or_else(|| {
                 panel_only_fallback(
@@ -106,7 +133,7 @@ pub fn collect_surface_snapshot(
     Some(snapshot)
 }
 
-/// Fallback for surfaces that cannot be introspected.
+/// Fallback for surfaces that cannot be fully introspected.
 fn panel_only_fallback(
     panel_id: &str,
     title: Option<String>,
@@ -126,6 +153,7 @@ fn panel_only_fallback(
         focused_semantic_id: Some(panel_id.to_string()),
         selected_semantic_id: None,
         warnings: vec![warning.to_string()],
+        quality: SnapshotQuality::PanelOnly,
     }
 }
 
@@ -164,6 +192,7 @@ fn collect_notes_snapshot(
         focused_semantic_id: Some("input:notes-editor".to_string()),
         selected_semantic_id: None,
         warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
     })
 }
 
@@ -245,6 +274,7 @@ pub(crate) fn collect_acp_detached_elements(
         focused_semantic_id: Some("input:acp-composer".to_string()),
         selected_semantic_id: None,
         warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
     }
 }
 
@@ -343,6 +373,7 @@ pub(crate) fn collect_actions_dialog_elements(
         focused_semantic_id,
         selected_semantic_id,
         warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
     }
 }
 
@@ -418,6 +449,7 @@ fn collect_mention_picker_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnaps
         focused_semantic_id: selected_semantic_id.clone(),
         selected_semantic_id,
         warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
     })
 }
 
@@ -471,6 +503,7 @@ fn collect_model_selector_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnaps
         focused_semantic_id: selected_semantic_id.clone(),
         selected_semantic_id,
         warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
     })
 }
 
@@ -522,5 +555,6 @@ fn collect_confirm_popup_snapshot(cx: &gpui::App) -> Option<SurfaceElementSnapsh
         focused_semantic_id: Some(focused_semantic_id.to_string()),
         selected_semantic_id: None,
         warnings: Vec::new(),
+        quality: SnapshotQuality::Full,
     })
 }

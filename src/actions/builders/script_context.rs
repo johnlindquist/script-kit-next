@@ -858,10 +858,52 @@ pub(crate) fn get_acp_agent_picker_actions(
         .collect()
 }
 
-/// Build an `ActionsDialogRoute` for the ACP root menu.
-pub(crate) fn get_acp_chat_root_route(
+// ── Host-aware ACP action filtering ─────────────────────────────────────────
+
+/// Distinguishes whether the ACP actions dialog is hosted in the shared main
+/// panel or in the detached ACP chat window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AcpActionsDialogHost {
+    /// Shared ACP surface in the main Script Kit panel — all actions available.
+    Shared,
+    /// Detached ACP chat window — only actions that work without the main panel.
+    Detached,
+}
+
+fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> bool {
+    match host {
+        AcpActionsDialogHost::Shared => true,
+        AcpActionsDialogHost::Detached => {
+            matches!(
+                action_id,
+                "acp:change_agent"
+                    | "acp_copy_last_response"
+                    | "acp_retry_last"
+                    | "acp_export_markdown"
+                    | "acp_scroll_to_top"
+                    | "acp_scroll_to_bottom"
+                    | "acp_expand_all"
+                    | "acp_collapse_all"
+                    | "acp_new_conversation"
+                    | "acp_clear_history"
+                    | "acp_close"
+            ) || action_id.starts_with(ACP_SWITCH_AGENT_ACTION_PREFIX)
+        }
+    }
+}
+
+fn filter_acp_actions_for_host(host: AcpActionsDialogHost, actions: Vec<Action>) -> Vec<Action> {
+    actions
+        .into_iter()
+        .filter(|action| acp_action_supported_in_host(host, &action.id))
+        .collect()
+}
+
+/// Build an `ActionsDialogRoute` for the ACP root menu, filtered for the given host.
+pub(crate) fn get_acp_chat_root_route_for_host(
     catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
     selected_agent_id: Option<&str>,
+    host: AcpActionsDialogHost,
 ) -> crate::actions::ActionsDialogRoute {
     let context_title = selected_agent_id
         .and_then(|id| catalog_entries.iter().find(|e| e.id.as_ref() == id))
@@ -870,23 +912,58 @@ pub(crate) fn get_acp_chat_root_route(
 
     crate::actions::ActionsDialogRoute {
         id: ACP_ROOT_ROUTE_ID.to_string(),
-        actions: get_acp_chat_root_actions(catalog_entries, selected_agent_id),
+        actions: filter_acp_actions_for_host(
+            host,
+            get_acp_chat_root_actions(catalog_entries, selected_agent_id),
+        ),
         context_title,
         search_placeholder: Some("Search ACP actions...".to_string()),
+        initial_selected_action_id: Some(ACP_CHANGE_AGENT_ACTION_ID.to_string()),
     }
 }
 
-/// Build an `ActionsDialogRoute` for the agent picker sub-route.
+/// Build an `ActionsDialogRoute` for the agent picker sub-route, filtered for the given host.
+pub(crate) fn get_acp_agent_picker_route_for_host(
+    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
+    selected_agent_id: Option<&str>,
+    host: AcpActionsDialogHost,
+) -> crate::actions::ActionsDialogRoute {
+    crate::actions::ActionsDialogRoute {
+        id: ACP_AGENT_PICKER_ROUTE_ID.to_string(),
+        actions: filter_acp_actions_for_host(
+            host,
+            get_acp_agent_picker_actions(catalog_entries, selected_agent_id),
+        ),
+        context_title: Some("Change Agent".to_string()),
+        search_placeholder: Some("Search agents...".to_string()),
+        initial_selected_action_id: selected_agent_id.map(acp_switch_agent_action_id),
+    }
+}
+
+/// Build an `ActionsDialogRoute` for the ACP root menu (shared host).
+#[allow(dead_code)]
+pub(crate) fn get_acp_chat_root_route(
+    catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
+    selected_agent_id: Option<&str>,
+) -> crate::actions::ActionsDialogRoute {
+    get_acp_chat_root_route_for_host(
+        catalog_entries,
+        selected_agent_id,
+        AcpActionsDialogHost::Shared,
+    )
+}
+
+/// Build an `ActionsDialogRoute` for the agent picker sub-route (shared host).
+#[allow(dead_code)]
 pub(crate) fn get_acp_agent_picker_route(
     catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
     selected_agent_id: Option<&str>,
 ) -> crate::actions::ActionsDialogRoute {
-    crate::actions::ActionsDialogRoute {
-        id: ACP_AGENT_PICKER_ROUTE_ID.to_string(),
-        actions: get_acp_agent_picker_actions(catalog_entries, selected_agent_id),
-        context_title: Some("Change Agent".to_string()),
-        search_placeholder: Some("Search agents...".to_string()),
-    }
+    get_acp_agent_picker_route_for_host(
+        catalog_entries,
+        selected_agent_id,
+        AcpActionsDialogHost::Shared,
+    )
 }
 
 #[cfg(test)]

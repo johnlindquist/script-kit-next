@@ -5,8 +5,8 @@
 //! that the protocol correctly handles the attached-popup pattern.
 
 use script_kit_gpui::protocol::{
-    AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget, BatchCommand, Message,
-    SimulatedGpuiEvent,
+    AutomationInspectSnapshot, AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,
+    BatchCommand, Message, SemanticQuality, SimulatedGpuiEvent, AUTOMATION_INSPECT_SCHEMA_VERSION,
 };
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -713,6 +713,137 @@ fn open_confirm_popup_registers_in_automation_registry() {
 fn close_confirm_popup_unregisters_from_automation_registry() {
     let source = include_str!("../../src/confirm/window.rs");
     assert!(source.contains("remove_automation_window(\"confirm-popup\")"));
+}
+
+// ---------------------------------------------------------------------------
+// Non-main semantic proof: popup inspect receipts
+// ---------------------------------------------------------------------------
+
+#[test]
+fn actions_dialog_collector_never_returns_non_main_pending_warning() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"panel_only_actions_dialog\""),
+        "ActionsDialog must use panel_only_actions_dialog fallback"
+    );
+}
+
+#[test]
+fn prompt_popup_collector_never_returns_non_main_pending_warning() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"panel_only_prompt_popup\""),
+        "PromptPopup must use panel_only_prompt_popup fallback"
+    );
+}
+
+#[test]
+fn notes_collector_never_returns_non_main_pending_warning() {
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    assert!(
+        source.contains("\"panel_only_notes\""),
+        "Notes must use panel_only_notes fallback"
+    );
+    // Must not use ? which returns None → triggers non_main_pending
+    assert!(
+        !source.contains("collect_notes_snapshot(resolved, cx)?"),
+        "Notes collector must not use ? operator"
+    );
+}
+
+#[test]
+fn supported_non_main_kinds_all_have_panel_only_fallbacks() {
+    // Every supported non-main kind must have a panel_only fallback, not None.
+    let source = include_str!("../../src/windows/automation_surface_collector.rs");
+    for (kind, expected_warning) in [
+        ("Notes", "panel_only_notes"),
+        ("AcpDetached", "panel_only_acp_detached"),
+        ("ActionsDialog", "panel_only_actions_dialog"),
+        ("PromptPopup", "panel_only_prompt_popup"),
+    ] {
+        assert!(
+            source.contains(&format!("\"{expected_warning}\"")),
+            "{kind} must define {expected_warning} fallback warning"
+        );
+    }
+}
+
+#[test]
+fn actions_dialog_inspect_result_with_panel_only_quality() {
+    let snapshot = AutomationInspectSnapshot {
+        schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
+        window_id: "actionsDialog:0".into(),
+        window_kind: "ActionsDialog".into(),
+        title: Some("Actions".into()),
+        resolved_bounds: None,
+        target_bounds_in_screenshot: None,
+        surface_hit_point: None,
+        suggested_hit_points: Vec::new(),
+        elements: Vec::new(),
+        total_count: 0,
+        focused_semantic_id: None,
+        selected_semantic_id: None,
+        screenshot_width: Some(800),
+        screenshot_height: Some(600),
+        pixel_probes: Vec::new(),
+        os_window_id: None,
+        semantic_quality: Some(SemanticQuality::PanelOnly),
+        warnings: vec!["panel_only_actions_dialog".into()],
+    };
+    let json = serde_json::to_value(&snapshot).expect("serialize");
+    assert_eq!(json["semanticQuality"], "panel_only");
+    assert_eq!(json["windowKind"], "ActionsDialog");
+    assert_eq!(json["schemaVersion"], 3);
+}
+
+#[test]
+fn prompt_popup_inspect_result_with_full_quality() {
+    let snapshot = AutomationInspectSnapshot {
+        schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
+        window_id: "promptPopup:0".into(),
+        window_kind: "PromptPopup".into(),
+        title: Some("Confirm".into()),
+        resolved_bounds: None,
+        target_bounds_in_screenshot: None,
+        surface_hit_point: None,
+        suggested_hit_points: Vec::new(),
+        elements: vec![script_kit_gpui::protocol::ElementInfo {
+            semantic_id: "button:0:confirm".into(),
+            element_type: script_kit_gpui::protocol::ElementType::Button,
+            text: Some("Confirm".into()),
+            value: Some("confirm".into()),
+            selected: None,
+            focused: Some(true),
+            index: Some(0),
+        }],
+        total_count: 1,
+        focused_semantic_id: Some("button:0:confirm".into()),
+        selected_semantic_id: None,
+        screenshot_width: Some(800),
+        screenshot_height: Some(600),
+        pixel_probes: Vec::new(),
+        os_window_id: None,
+        semantic_quality: Some(SemanticQuality::Full),
+        warnings: Vec::new(),
+    };
+    let json = serde_json::to_value(&snapshot).expect("serialize");
+    assert_eq!(json["semanticQuality"], "full");
+    assert_eq!(json["focusedSemanticId"], "button:0:confirm");
+}
+
+#[test]
+fn backward_compat_inspect_receipt_without_semantic_quality() {
+    // v2 callers (no semanticQuality) must still parse correctly
+    let json = r#"{
+        "schemaVersion": 2,
+        "windowId": "actionsDialog:0",
+        "windowKind": "ActionsDialog",
+        "totalCount": 0
+    }"#;
+    let parsed: AutomationInspectSnapshot =
+        serde_json::from_str(json).expect("should parse without semanticQuality");
+    assert_eq!(parsed.semantic_quality, None);
+    assert_eq!(parsed.window_id, "actionsDialog:0");
 }
 
 #[test]
