@@ -9,9 +9,9 @@ use std::{
 };
 
 use gpui::{
-    div, prelude::*, px, App, Bounds, Context, DisplayId, FocusHandle, Focusable, MouseButton,
-    Pixels, Point, Render, SharedString, Size, Task, Window, WindowBackgroundAppearance,
-    WindowBounds, WindowHandle, WindowKind, WindowOptions,
+    div, prelude::*, px, AnyWindowHandle, App, Bounds, Context, DisplayId, FocusHandle, Focusable,
+    MouseButton, Pixels, Point, Render, SharedString, Size, Task, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
 };
 use gpui_component::button::ButtonVariant;
 
@@ -414,35 +414,36 @@ pub(crate) fn close_confirm_window(cx: &mut App) {
     }
 }
 
+pub(crate) struct ConfirmPopupParentWindow {
+    pub(crate) handle: AnyWindowHandle,
+    pub(crate) bounds: Bounds<Pixels>,
+    pub(crate) display_id: Option<DisplayId>,
+    pub(crate) automation_id: Option<String>,
+}
+
 pub(crate) fn open_confirm_popup_window(
     cx: &mut App,
-    parent_bounds: Bounds<Pixels>,
-    display_id: Option<DisplayId>,
+    parent_window: ConfirmPopupParentWindow,
     options: ConfirmWindowOptions,
     keep_open_while: Rc<dyn Fn() -> bool>,
     result_tx: async_channel::Sender<bool>,
-    parent_automation_id: Option<&str>,
 ) -> anyhow::Result<WindowHandle<ConfirmPopupWindow>> {
-    // Fail-closed: abort before opening if parent identity is missing.
-    if parent_automation_id.is_none() {
-        tracing::warn!(
-            target: "script_kit::confirm",
-            event = "confirm_popup_open_blocked_missing_parent",
-            title = %options.title,
-            "Confirm popup open blocked: no parent automation identity"
-        );
-        anyhow::bail!("Cannot open confirm popup: parent automation identity is required");
-    }
+    let parent_automation_id = resolve_confirm_popup_parent_automation_id(
+        parent_window.handle,
+        parent_window.bounds,
+        parent_window.automation_id.as_deref(),
+        options.title.as_ref(),
+    )?;
 
     tracing::info!(
         target: "script_kit::confirm",
         event = "open_confirm_popup_window",
         title = %options.title,
-        parent_x = ?parent_bounds.origin.x,
-        parent_y = ?parent_bounds.origin.y,
-        parent_w = ?parent_bounds.size.width,
-        parent_h = ?parent_bounds.size.height,
-        display_id = ?display_id,
+        parent_x = ?parent_window.bounds.origin.x,
+        parent_y = ?parent_window.bounds.origin.y,
+        parent_w = ?parent_window.bounds.size.width,
+        parent_h = ?parent_window.bounds.size.height,
+        display_id = ?parent_window.display_id,
         "open_confirm_popup_window: opening native confirm popup"
     );
     close_confirm_window(cx);
@@ -457,7 +458,7 @@ pub(crate) fn open_confirm_popup_window(
     };
 
     let bounds = confirm_window_bounds(
-        parent_bounds,
+        parent_window.bounds,
         options.width,
         options.title.as_ref(),
         options.body.as_ref(),
@@ -487,7 +488,7 @@ pub(crate) fn open_confirm_popup_window(
             focus: true,
             show: true,
             kind: WindowKind::PopUp,
-            display_id,
+            display_id: parent_window.display_id,
             ..Default::default()
         },
         move |_window, cx| cx.new(|cx| ConfirmPopupWindow::new(request, lifecycle, sender, cx)),
@@ -700,7 +701,7 @@ pub(crate) fn open_confirm_popup_window(
         Some(options.title.to_string()),
         Some("confirmDialog".to_string()),
         None,
-        parent_automation_id,
+        Some(parent_automation_id.as_str()),
     ) {
         tracing::warn!(
             target: "script_kit::confirm",
@@ -719,6 +720,64 @@ pub(crate) fn open_confirm_popup_window(
     );
 
     Ok(handle)
+}
+
+fn resolve_confirm_popup_parent_automation_id(
+    parent_window_handle: AnyWindowHandle,
+    parent_window_bounds: Bounds<Pixels>,
+    parent_automation_id: Option<&str>,
+    title: &str,
+) -> anyhow::Result<String> {
+    if let Some(id) = parent_automation_id {
+        return Ok(id.to_string());
+    }
+
+    let Some(main_window_handle) = crate::get_main_window_handle() else {
+        tracing::warn!(
+            target: "script_kit::confirm",
+            event = "confirm_popup_open_blocked_missing_parent",
+            title,
+            "Confirm popup open blocked: no parent automation identity"
+        );
+        anyhow::bail!("Cannot open confirm popup: parent automation identity is required");
+    };
+
+    if main_window_handle != parent_window_handle {
+        tracing::warn!(
+            target: "script_kit::confirm",
+            event = "confirm_popup_open_blocked_missing_parent",
+            title,
+            "Confirm popup open blocked: no parent automation identity"
+        );
+        anyhow::bail!("Cannot open confirm popup: parent automation identity is required");
+    }
+
+    let synthesized_parent_id = "main".to_string();
+    crate::windows::upsert_runtime_window_handle(&synthesized_parent_id, parent_window_handle);
+    crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+        id: synthesized_parent_id.clone(),
+        kind: crate::protocol::AutomationWindowKind::Main,
+        title: Some("Script Kit".to_string()),
+        focused: true,
+        visible: true,
+        semantic_surface: Some("scriptList".to_string()),
+        bounds: Some(crate::protocol::AutomationWindowBounds {
+            x: f32::from(parent_window_bounds.origin.x) as f64,
+            y: f32::from(parent_window_bounds.origin.y) as f64,
+            width: f32::from(parent_window_bounds.size.width) as f64,
+            height: f32::from(parent_window_bounds.size.height) as f64,
+        }),
+        parent_window_id: None,
+        parent_kind: None,
+    });
+    tracing::info!(
+        target: "script_kit::confirm",
+        event = "confirm_popup_synthesized_main_parent",
+        parent_window_id = %synthesized_parent_id,
+        "Synthesized main-window automation identity for confirm popup"
+    );
+
+    Ok(synthesized_parent_id)
 }
 
 pub(crate) struct ConfirmPopupWindow {
@@ -1235,5 +1294,24 @@ mod tests {
         assert!((actual_y - expected_y).abs() < 0.5);
         // Width matches parent
         assert!((actual_w - 750.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn confirm_popup_can_synthesize_main_parent_identity() {
+        let source = std::fs::read_to_string("src/confirm/window.rs")
+            .expect("Failed to read src/confirm/window.rs");
+
+        assert!(
+            source.contains("fn resolve_confirm_popup_parent_automation_id("),
+            "confirm popup should resolve the parent automation identity through a dedicated helper"
+        );
+        assert!(
+            source.contains("event = \"confirm_popup_synthesized_main_parent\""),
+            "confirm popup should log when it synthesizes the main-window automation identity"
+        );
+        assert!(
+            source.contains("crate::windows::upsert_runtime_window_handle(&synthesized_parent_id, parent_window_handle);"),
+            "confirm popup should register the synthesized main-window runtime handle"
+        );
     }
 }

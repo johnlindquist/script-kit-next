@@ -3,7 +3,7 @@ use std::rc::Rc;
 use gpui::{px, App, AppContext as _, Pixels, SharedString, WeakEntity, Window};
 use gpui_component::button::ButtonVariant;
 
-use super::window::{open_confirm_popup_window, ConfirmWindowOptions};
+use super::window::{open_confirm_popup_window, ConfirmPopupParentWindow, ConfirmWindowOptions};
 
 type ConfirmCallback = Rc<dyn Fn(&mut Window, &mut App)>;
 
@@ -183,12 +183,15 @@ pub(crate) fn open_parent_confirm_dialog_with_lifecycle(
     let parent_automation_id = crate::windows::focused_automation_window_id();
     match open_confirm_popup_window(
         cx,
-        parent_bounds,
-        display_id,
+        ConfirmPopupParentWindow {
+            handle: parent_window_handle,
+            bounds: parent_bounds,
+            display_id,
+            automation_id: parent_automation_id,
+        },
         popup_options,
         keep_open_while,
         result_tx,
-        parent_automation_id.as_deref(),
     ) {
         Ok(_handle) => {
             tracing::info!(

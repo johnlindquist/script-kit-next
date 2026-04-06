@@ -298,6 +298,7 @@ impl Render for HudView {
                         "hud-pill-label-ellipsis",
                     )))
                     .text_sm()
+                    .text_center()
                     .text_color(rgb(colors.text_primary))
                     .w_full()
                     .whitespace_normal()
@@ -1068,6 +1069,18 @@ mod tests {
         assert!(
             view_with_action.has_action(),
             "HudView with action should report has_action() = true"
+        );
+    }
+
+    #[test]
+    fn test_hud_label_text_is_centered_in_render_source() {
+        let source = std::fs::read_to_string("src/hud_manager/mod.rs")
+            .expect("Failed to read src/hud_manager/mod.rs");
+
+        assert!(
+            source.contains(".id(ElementId::Name(SharedString::from(\n                        \"hud-pill-label-ellipsis\",\n                    )))")
+                && source.contains(".text_center()"),
+            "HUD label should keep centered text within the pill"
         );
     }
     #[test]
