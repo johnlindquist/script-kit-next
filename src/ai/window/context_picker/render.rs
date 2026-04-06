@@ -1,8 +1,8 @@
 use super::super::*;
 use super::types::ContextPickerItemKind;
 use crate::ai::context_picker_row::{
-    render_dense_monoline_picker_row, render_highlighted_meta, render_highlighted_text,
-    COMMAND_OPACITY, GHOST, GOLD, HINT, MUTED_OP,
+    render_compact_synopsis_strip, render_dense_monoline_picker_row, render_highlighted_meta,
+    render_highlighted_text, COMMAND_OPACITY, GHOST, GOLD, HINT, MUTED_OP,
 };
 use crate::list_item::FONT_MONO;
 use std::collections::HashSet;
@@ -34,6 +34,7 @@ impl AiApp {
         // Snapshot items and selection for the list closure
         let items = state.items.clone();
         let selected_index = state.selected_index;
+        let selected_item = items.get(selected_index).cloned();
         let entity = cx.entity().clone();
 
         let picker_list = list(
@@ -75,14 +76,29 @@ impl AiApp {
         .max_h(px(260.))
         .min_h(px(0.));
 
-        div()
+        let mut overlay = div()
             .id("context-picker-overlay")
             .w_full()
             // Near-transparent — vibrancy shows through
             .bg(fg.opacity(0.02))
             .py(SP_1)
-            .child(picker_list)
-            .into_any_element()
+            .flex()
+            .flex_col()
+            .child(picker_list);
+
+        if let Some(item) = selected_item.filter(|item| !item.description.is_empty()) {
+            overlay = overlay.child(div().h(px(1.0)).bg(fg.opacity(0.06))).child(
+                render_compact_synopsis_strip(
+                    item.label.clone(),
+                    item.meta.clone(),
+                    item.description.clone(),
+                    fg,
+                    muted_fg,
+                ),
+            );
+        }
+
+        overlay.into_any_element()
     }
 
     /// Render empty state with hint chips when no results match.

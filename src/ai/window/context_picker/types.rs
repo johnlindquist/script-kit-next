@@ -29,7 +29,7 @@ pub struct ContextPickerItem {
     pub id: SharedString,
     /// Display label (e.g. `"Selection"`, `"chat.rs"`).
     pub label: SharedString,
-    /// Optional secondary description used by ACP telemetry/tests.
+    /// Compact synopsis shown for the focused item.
     pub description: SharedString,
     /// Right-side metadata (slash command, mention, or path).
     pub meta: SharedString,

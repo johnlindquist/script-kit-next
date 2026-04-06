@@ -1411,6 +1411,58 @@ impl ActionsDialog {
             cx.notify();
         }
     }
+
+    /// Set search text directly (for automation batch `setInput`).
+    ///
+    /// Replaces the full search string, refilters, and notifies.
+    pub fn set_search_text(&mut self, text: String, cx: &mut Context<Self>) {
+        self.search_text = text;
+        self.refilter();
+        cx.notify();
+    }
+
+    /// Select an action by its `action.id`, optionally triggering it.
+    ///
+    /// Returns `Some(id)` if found, `None` otherwise.
+    pub fn select_action_by_id(
+        &mut self,
+        action_id: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        // Find in filtered_actions
+        let filter_pos = self
+            .filtered_actions
+            .iter()
+            .position(|&idx| self.actions.get(idx).is_some_and(|a| a.id == action_id))?;
+
+        // Map filter_pos to grouped_items index
+        let grouped_idx = self
+            .grouped_items
+            .iter()
+            .position(|item| matches!(item, GroupedActionItem::Item(fi) if *fi == filter_pos))?;
+
+        self.selected_index = grouped_idx;
+        cx.notify();
+        Some(action_id.to_string())
+    }
+
+    /// Select an action by its semantic ID (`choice:<filter_pos>:<action_id>`).
+    ///
+    /// Returns `Some(semantic_id)` if found, `None` otherwise.
+    pub fn select_action_by_semantic_id(
+        &mut self,
+        semantic_id: &str,
+        cx: &mut Context<Self>,
+    ) -> Option<String> {
+        // Parse "choice:<pos>:<id>"
+        let parts: Vec<&str> = semantic_id.splitn(3, ':').collect();
+        if parts.len() < 3 || parts[0] != "choice" {
+            return None;
+        }
+        let action_id = parts[2];
+        self.select_action_by_id(action_id, cx)
+            .map(|_| semantic_id.to_string())
+    }
 }
 
 // --- merged from part_03.rs ---

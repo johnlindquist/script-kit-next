@@ -55,6 +55,7 @@ pub use window::{
 };
 #[allow(unused_imports)] // Used from include!()-ed code in app_impl/
 pub(crate) use window::{emit_actions_popup_event, ActionsPopupEvent};
+pub(crate) use window::get_actions_dialog_entity;
 // get_actions_window_handle available but not re-exported (use window:: directly if needed)
 
 pub mod prelude;

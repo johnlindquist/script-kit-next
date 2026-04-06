@@ -214,7 +214,9 @@ strip = "symbols"
 
 # macOS bundle metadata for cargo-bundle
 # Run: cargo bundle --release
-[package.metadata.bundle]
+# macOS bundle metadata for cargo-bundle
+# Canonical ship path: cargo bundle --release --bin script-kit-gpui
+[package.metadata.bundle.bin.script-kit-gpui]
 name = "Script Kit"
 identifier = "com.scriptkit.app"
 icon = ["assets/icon.png", "assets/icon@2x.png", "assets/icon.icns"]
@@ -228,5 +230,17 @@ resources = ["assets/*"]
 # LSUIElement makes app an "agent app" - no menu bar, no Dock icon (like Raycast)
 osx_info_plist_exts = ["assets/Info.plist.ext"]
 
-[package.metadata.bundle.bin.script-kit-gpui]
+# Transitional compatibility: plain `cargo bundle --release` still works.
+# Remove after all local/doc/workflow paths use: cargo bundle --release --bin script-kit-gpui
+[package.metadata.bundle]
 name = "Script Kit"
+identifier = "com.scriptkit.app"
+icon = ["assets/icon.png", "assets/icon@2x.png", "assets/icon.icns"]
+version = "0.1.0"
+copyright = "Copyright (c) 2024 Script Kit. All rights reserved."
+category = "public.app-category.developer-tools"
+short_description = "Automation made simple"
+osx_minimum_system_version = "10.15"
+osx_url_schemes = ["scriptkit"]
+resources = ["assets/*"]
+osx_info_plist_exts = ["assets/Info.plist.ext"]

@@ -16,33 +16,99 @@ permissions:
   contents: write
 
 jobs:
+  validate:
+    name: Validate release gates
+    runs-on: macos-14
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
+      RUST_TEST_THREADS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "macos-debug"
+          cache-targets: false
+          save-if: false
+      - uses: taiki-e/install-action@nextest
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.x
+      - name: Install JS dependencies
+        run: bun install
+      - name: Format
+        run: cargo fmt --check
+      - name: Check
+        run: cargo check
+      - name: Clippy
+        run: cargo clippy --lib -- -D warnings
+      - name: Nextest
+        run: cargo nextest run --lib --no-fail-fast
+      - name: SDK typecheck
+        run: bun run scripts/check-sdk-types.ts
+      - name: SDK tests
+        run: bun run scripts/test-runner.ts --parallel
+
   build-macos:
     name: Build macOS
     runs-on: macos-14
+    needs: validate
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      RUSTC_WRAPPER: "sccache"
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: dtolnay/rust-toolchain@stable
-      
+
+      - uses: mozilla-actions/sccache-action@v0.0.9
+
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "macos-release"
+          cache-targets: false
+          cache-all-crates: true
 
       - name: Cache cargo-bundle
         id: cache-cargo-bundle
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cargo-bundle
-          key: cargo-bundle-zed-deploy-${{ runner.os }}
-      
-      - name: Build release
-        run: cargo build --release --bin script-kit-gpui
-      
+          key: cargo-bundle-zed-deploy-v1-${{ runner.os }}
+
       - name: Install cargo-bundle
         if: steps.cache-cargo-bundle.outputs.cache-hit != 'true'
         run: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy
-      
+
+      - name: Show cargo-bundle version
+        run: cargo bundle --version
+
+      - name: Build release
+        run: cargo build --release --bin script-kit-gpui
+
       - name: Create bundle
         run: cargo bundle --release --bin script-kit-gpui
-      
+
+      - name: Verify bundled macOS app contents
+        run: |
+          set -euo pipefail
+          APP_PATH="target/release/bundle/osx/Script Kit.app"
+          MACOS_DIR="$APP_PATH/Contents/MacOS"
+          test -d "$APP_PATH"
+          test -x "$MACOS_DIR/script-kit-gpui"
+          echo "bundle_verify macos_dir_listing"
+          find "$MACOS_DIR" -maxdepth 1 -type f -print | sort
+          UNEXPECTED="$(find "$MACOS_DIR" -maxdepth 1 -type f ! -name 'script-kit-gpui' -print || true)"
+          if [ -n "$UNEXPECTED" ]; then
+            echo "::error::Unexpected files in app bundle: $UNEXPECTED"
+            exit 1
+          fi
+          echo "bundle_verify ok"
+
       - name: Create temporary keychain
         env:
           APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
@@ -52,50 +118,50 @@ jobs:
           CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
-          
+
           # Decode certificate
           echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$CERTIFICATE_PATH"
-          
+
           # Create temporary keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-          
+
           # Import certificate
           security import "$CERTIFICATE_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
-          
+
           # Store keychain path for later steps
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
-      
+
       - name: Sign with Developer ID
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           APP_PATH="target/release/bundle/osx/Script Kit.app"
-          
+
           # Find the Developer ID Application identity
           IDENTITY="Developer ID Application: John Lindquist ($APPLE_TEAM_ID)"
-          
+
           # Sign all nested components first (frameworks, helpers, etc.)
           find "$APP_PATH" -type f \( -name "*.dylib" -o -name "*.framework" \) -exec codesign --force --options runtime --sign "$IDENTITY" {} \;
-          
+
           # Sign the main executable
           codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH/Contents/MacOS/script-kit-gpui"
-          
+
           # Sign the entire app bundle
           codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH"
-          
+
           # Verify signature
           codesign --verify --verbose=4 "$APP_PATH"
           spctl --assess --verbose=4 --type execute "$APP_PATH" || echo "Note: spctl may fail until notarized"
-      
+
       - name: Create zip for notarization
         run: |
           cd target/release/bundle/osx
           /usr/bin/ditto -c -k --keepParent "Script Kit.app" "Script-Kit-macos.zip"
-      
+
       - name: Notarize app
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -103,34 +169,34 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           cd target/release/bundle/osx
-          
+
           # Submit for notarization
           xcrun notarytool submit "Script-Kit-macos.zip" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
             --wait
-      
+
       - name: Staple notarization ticket
         run: |
           xcrun stapler staple "target/release/bundle/osx/Script Kit.app"
-          
+
           # Verify stapling
           xcrun stapler validate "target/release/bundle/osx/Script Kit.app"
-      
+
       - name: Create final release zip
         run: |
           cd target/release/bundle/osx
           rm -f Script-Kit-macos.zip
           /usr/bin/ditto -c -k --keepParent "Script Kit.app" "Script-Kit-macos.zip"
-      
+
       - name: Cleanup keychain
         if: always()
         run: |
           if [ -n "$KEYCHAIN_PATH" ] && [ -f "$KEYCHAIN_PATH" ]; then
             security delete-keychain "$KEYCHAIN_PATH" || true
           fi
-      
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -143,13 +209,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: macos-build
           path: artifacts
-      
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

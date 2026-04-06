@@ -1275,6 +1275,15 @@ pub fn get_actions_window_handle() -> Option<WindowHandle<ActionsWindow>> {
     None
 }
 
+/// Get the actions dialog entity from the actions window, if both exist.
+///
+/// Used by the automation surface collector to read dialog state without
+/// needing `&mut App`.
+pub fn get_actions_dialog_entity(cx: &gpui::App) -> Option<Entity<ActionsDialog>> {
+    let handle = get_actions_window_handle()?;
+    handle.read_with(cx, |window, _cx| window.dialog.clone()).ok()
+}
+
 /// Get the current actions window position mode
 fn get_actions_window_position() -> WindowPosition {
     if let Some(pos_storage) = ACTIONS_WINDOW_POSITION.get() {

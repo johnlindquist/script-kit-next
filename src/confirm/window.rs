@@ -23,14 +23,14 @@ use crate::{
 };
 
 const CONFIRM_PADDING_X: f32 = 10.0;
-const CONFIRM_PADDING_Y: f32 = 8.0;
+const CONFIRM_PADDING_Y: f32 = 14.0;
 const CONFIRM_SECTION_GAP: f32 = 4.0;
 const CONFIRM_BUTTON_GAP: f32 = 12.0;
 const CONFIRM_BUTTON_HEIGHT: f32 = 20.0;
 const CONFIRM_TITLE_LINE_HEIGHT: f32 = 16.0;
 const CONFIRM_BODY_LINE_HEIGHT: f32 = 16.0;
-const CONFIRM_MIN_HEIGHT: f32 = 60.0;
-const CONFIRM_MAX_HEIGHT: f32 = 110.0;
+const CONFIRM_MIN_HEIGHT: f32 = 76.0;
+const CONFIRM_MAX_HEIGHT: f32 = 128.0;
 const CONFIRM_BODY_MAX_LINES: usize = 3;
 const CONFIRM_LIFECYCLE_POLL_MS: u64 = 120;
 /// NSWindowOrderingMode::NSWindowAbove — place child above parent.
@@ -303,6 +303,41 @@ fn notify_confirm_window(cx: &mut App) {
 }
 
 #[allow(dead_code)]
+/// Snapshot of the confirm popup's semantic state for automation.
+#[derive(Debug, Clone)]
+pub(crate) struct ConfirmPopupSnapshot {
+    pub(crate) title: String,
+    pub(crate) body: String,
+    pub(crate) confirm_text: String,
+    pub(crate) cancel_text: String,
+    pub(crate) focused_button: &'static str,
+}
+
+/// Read the confirm popup snapshot if the popup window is open.
+///
+/// Used by the automation surface collector to extract semantic elements
+/// from the live popup state without needing `&mut App`.
+pub(crate) fn get_confirm_popup_snapshot(cx: &gpui::App) -> Option<ConfirmPopupSnapshot> {
+    let storage = CONFIRM_WINDOW.get()?;
+    let guard = storage.lock().ok()?;
+    let handle = (*guard)?;
+    handle
+        .read_with(cx, |popup, _cx| {
+            let focused_button = match popup.focused_button {
+                FocusedButton::Confirm => "confirm",
+                FocusedButton::Cancel => "cancel",
+            };
+            ConfirmPopupSnapshot {
+                title: popup.title.to_string(),
+                body: popup.body.to_string(),
+                confirm_text: popup.confirm_text.to_string(),
+                cancel_text: popup.cancel_text.to_string(),
+                focused_button,
+            }
+        })
+        .ok()
+}
+
 pub(crate) fn is_confirm_window_open() -> bool {
     CONFIRM_WINDOW
         .get()

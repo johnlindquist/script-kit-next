@@ -7,6 +7,7 @@ mod actions_mini_variations;
 mod actions_window_stories;
 mod arg_prompt_stories;
 mod at_mention_picker_variations;
+mod autocomplete_description_treatments;
 mod button_stories;
 mod confirm_dialog_variations;
 mod confirm_position_variations;
@@ -46,6 +47,7 @@ pub use actions_mini_variations::ActionsMiniVariationsStory;
 pub use actions_window_stories::ActionsWindowStory;
 pub use arg_prompt_stories::ArgPromptStory;
 pub use at_mention_picker_variations::AtMentionPickerVariationsStory;
+pub use autocomplete_description_treatments::AutocompleteDescriptionTreatmentsStory;
 pub use button_stories::ButtonStory;
 pub use confirm_dialog_variations::ConfirmDialogVariationsStory;
 pub use confirm_position_variations::ConfirmPositionVariationsStory;
@@ -117,6 +119,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(PathPromptStory)),
         StoryEntry::new(Box::new(SelectPromptStory)),
         // AI Chat
+        StoryEntry::new(Box::new(AutocompleteDescriptionTreatmentsStory)),
         StoryEntry::new(Box::new(AtMentionPickerVariationsStory)),
         StoryEntry::new(Box::new(SlashCommandMenuVariationsStory)),
     ]
