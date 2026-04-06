@@ -205,9 +205,14 @@ fn non_streaming_ai_handoffs_remain_submit_false() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn open_only_handoffs_keep_open_only_variant() {
+fn open_only_handoffs_keep_open_only_variant_for_non_harness_paths() {
     let handler = read_action_sources();
     let builtins = read_source("src/app_execute/builtin_execution.rs");
+    let ai_chat_branch = slice_from(&builtins, "builtins::BuiltInFeature::AiChat => {");
+    let ai_command_branch = slice_from(
+        &builtins,
+        "builtins::BuiltInFeature::AiCommand(cmd_type) => {",
+    );
 
     // OpenOnly must remain a no-payload apply path that returns Ok
     assert!(
@@ -215,10 +220,16 @@ fn open_only_handoffs_keep_open_only_variant() {
         "DeferredAiWindowAction::OpenOnly should remain a no-payload open path"
     );
 
-    // Builtin execution must use OpenOnly for open/new/clear flows
+    // Builtin execution now routes AI entry through the Tab AI harness
+    // instead of the legacy deferred AI window helper.
     assert!(
-        builtins.contains("DeferredAiWindowAction::OpenOnly"),
-        "open/new/clear AI flows should use OpenOnly rather than text/image payload variants"
+        ai_chat_branch.contains("self.open_tab_ai_chat(cx);"),
+        "AI chat builtin should open the Tab AI harness"
+    );
+    assert!(
+        ai_command_branch.contains("open_tab_ai_chat_with_entry_intent(")
+            || ai_command_branch.contains("open_tab_ai_chat_with_capture_kind("),
+        "AI command builtins should route through Tab AI harness helpers"
     );
 }
 
@@ -283,34 +294,17 @@ fn capture_helpers_thread_real_dispatch_trace_id() {
         &source,
         "builtins::BuiltInFeature::AiCommand(cmd_type) => {",
     );
-    let send_screen_helper = slice_from(&source, "fn spawn_send_screen_to_ai_after_hide(");
-    let send_window_helper = slice_from(&source, "fn spawn_send_focused_window_to_ai_after_hide(");
-    let send_screen_area_helper =
-        slice_from(&source, "fn spawn_send_screen_area_to_ai_after_hide(");
 
     assert!(
-        send_screen_helper.contains("trace_id: &str"),
-        "spawn_send_screen_to_ai_after_hide should accept the real dispatch trace_id"
+        ai_branch.contains("trace_id = %dctx.trace_id"),
+        "AI command dispatch should log the real dispatch trace_id at the builtin boundary"
     );
     assert!(
-        send_window_helper.contains("trace_id: &str"),
-        "spawn_send_focused_window_to_ai_after_hide should accept the real dispatch trace_id"
-    );
-    assert!(
-        send_screen_area_helper.contains("trace_id: &str"),
-        "spawn_send_screen_area_to_ai_after_hide should accept the real dispatch trace_id"
-    );
-    assert!(
-        ai_branch.contains("self.spawn_send_screen_to_ai_after_hide(&dctx.trace_id, cx);"),
-        "SendScreenToAi should pass dctx.trace_id into the async capture helper"
-    );
-    assert!(
-        ai_branch.contains("self.spawn_send_focused_window_to_ai_after_hide(&dctx.trace_id, cx);"),
-        "SendFocusedWindowToAi should pass dctx.trace_id into the async capture helper"
-    );
-    assert!(
-        ai_branch.contains("self.spawn_send_screen_area_to_ai_after_hide(&dctx.trace_id, cx);"),
-        "SendScreenAreaToAi should pass dctx.trace_id into the async capture helper"
+        ai_branch.contains("ai_send_screen_routed_to_harness")
+            && ai_branch.contains("ai_send_focused_window_routed_to_harness")
+            && ai_branch.contains("ai_send_selected_text_routed_to_harness")
+            && ai_branch.contains("ai_send_browser_tab_routed_to_harness"),
+        "active AI capture commands should route through the harness on the real dispatch path"
     );
 }
 
@@ -460,54 +454,31 @@ fn continue_in_chat_uses_pending_chat_api_after_open() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn selected_text_and_browser_tab_use_deferred_capture_helpers() {
+fn selected_text_and_browser_tab_route_to_harness_capture_kinds() {
     let source = read_source("src/app_execute/builtin_execution.rs");
-    let ai_branch = slice_from(
-        &source,
-        "builtins::BuiltInFeature::AiCommand(cmd_type) => {",
-    );
     let selected_arm = slice_from(&source, "AiCommandType::SendSelectedTextToAi => {");
     let browser_arm = slice_from(&source, "AiCommandType::SendBrowserTabToAi => {");
-    let capture_helper = slice_from(&source, "fn spawn_capture_text_to_ai_after_already_hidden<");
-    let selected_helper = slice_from(&source, "fn spawn_send_selected_text_to_ai_after_hide(");
-    let browser_helper = slice_from(&source, "fn spawn_send_browser_tab_to_ai_after_hide(");
-
-    assert!(
-        ai_branch.contains("self.spawn_send_selected_text_to_ai_after_hide(&dctx.trace_id, cx);"),
-        "SendSelectedTextToAi must delegate to the deferred capture helper"
-    );
-    assert!(
-        ai_branch.contains("self.spawn_send_browser_tab_to_ai_after_hide(&dctx.trace_id, cx);"),
-        "SendBrowserTabToAi must delegate to the deferred capture helper"
-    );
 
     let selected_inline_block = &selected_arm[..selected_arm.len().min(500)];
     assert!(
+        selected_inline_block.contains("open_tab_ai_chat_with_capture_kind(")
+            && selected_inline_block.contains("TabAiCaptureKind::SelectedText"),
+        "SendSelectedTextToAi must route to the harness selected-text capture kind"
+    );
+    assert!(
         !selected_inline_block.contains("crate::selected_text::get_selected_text()"),
-        "SendSelectedTextToAi must not capture selected text inline on the action path"
+        "SendSelectedTextToAi must not capture selected text inline on the builtin path"
     );
 
     let browser_inline_block = &browser_arm[..browser_arm.len().min(500)];
     assert!(
+        browser_inline_block.contains("open_tab_ai_chat_with_capture_kind(")
+            && browser_inline_block.contains("TabAiCaptureKind::BrowserTab"),
+        "SendBrowserTabToAi must route to the harness browser-tab capture kind"
+    );
+    assert!(
         !browser_inline_block.contains("platform::get_focused_browser_tab_url()"),
-        "SendBrowserTabToAi must not capture browser URL inline on the action path"
-    );
-
-    assert!(
-        capture_helper.contains("event = \"ai_capture_scheduled\"")
-            && capture_helper.contains("event = \"ai_capture_completed\"")
-            && capture_helper.contains("DeferredAiWindowAction::SetInput")
-            && capture_helper.contains("submit: false"),
-        "Deferred text capture helper must emit capture logs and enqueue non-streaming SetInput"
-    );
-
-    assert!(
-        selected_helper.contains("crate::selected_text::get_selected_text()"),
-        "selected text helper must own the selected-text capture call"
-    );
-    assert!(
-        browser_helper.contains("platform::get_focused_browser_tab_url()"),
-        "browser tab helper must own the browser URL capture call"
+        "SendBrowserTabToAi must not capture browser URL inline on the builtin path"
     );
 }
 

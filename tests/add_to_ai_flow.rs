@@ -99,16 +99,22 @@ fn test_add_to_ai_flow_forwards_file_reference_to_ai_chat_window_when_file_attac
 }
 
 #[test]
-fn test_ai_builtins_use_already_hidden_helper_after_upstream_hide() {
+fn test_ai_builtins_route_to_tab_ai_harness_after_upstream_hide() {
     let source = read_source("src/app_execute/builtin_execution.rs");
-    let ai_branch = slice_from(
+    let ai_chat_branch = slice_from(&source, "builtins::BuiltInFeature::AiChat => {");
+    let ai_command_branch = slice_from(
         &source,
         "builtins::BuiltInFeature::AiCommand(cmd_type) => {",
     );
 
     assert!(
-        ai_branch.contains("open_ai_window_after_already_hidden("),
-        "AI builtin flows that hide first should use the already-hidden helper"
+        ai_chat_branch.contains("self.open_tab_ai_chat(cx);"),
+        "AI chat builtin should route to the Tab AI harness"
+    );
+    assert!(
+        ai_command_branch.contains("open_tab_ai_chat_with_entry_intent(")
+            || ai_command_branch.contains("open_tab_ai_chat_with_capture_kind("),
+        "AI command builtins should route through Tab AI harness entry helpers"
     );
 }
 
