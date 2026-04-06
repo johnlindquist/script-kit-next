@@ -267,7 +267,7 @@ Exposes a deterministic, schema-versioned snapshot of ambient desktop state as a
 
 ### Typed Context Parts & Resolution
 
-Composable context attachments for AI chat flows with deterministic resolution and partial-failure tolerance.
+Composable context attachments for ACP Chat flows with deterministic resolution and partial-failure tolerance.
 
 **Key files:**
 - `src/ai/message_parts.rs` — `AiContextPart` enum, `ContextResolutionReceipt`, `resolve_context_parts_with_receipt()`, `resolve_context_part_to_prompt_block()`
@@ -305,39 +305,35 @@ Composable context attachments for AI chat flows with deterministic resolution a
 - `tests/context_part_start_chat_flow.rs` — empty message + parts, message + parts, invalid parts, mixed success, order
 - `tests/context_part_submission_flow.rs` — mixed success tracking, full success prefix persistence
 
-### Tab AI — Quick Terminal with Flat Context Injection
+### ACP Chat
 
-Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `TermPrompt`.
+ACP Chat (`AppView::AcpChatView`) is the primary and only AI chat surface. Internal helpers, tests, and capture profiles still use `tab_ai_*` naming in places; treat those as compatibility details, not separate user-facing chat products.
 
 **Entry path:**
-- Plain `Tab` opens the harness terminal and stages a flat labeled `Script Kit context` block using `TabAiHarnessSubmissionMode::PasteOnly`.
-- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens the same harness surface and submits that filter text as `User intent:` using `TabAiHarnessSubmissionMode::Submit`.
-- `Tab` / `Shift+Tab` inside `AppView::QuickTerminalView` are forwarded to the PTY. Do not describe them as focus-navigation keys once the harness terminal is open.
+- Plain `Tab` opens ACP Chat and stages current launcher + desktop context for the active ACP agent.
+- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens ACP Chat and submits that filter text as user intent.
+- Detached ACP Chat windows use the same thread model and automation targeting contract as the in-panel ACP Chat view.
 
 **Close semantics:**
-- `Cmd+W` closes the wrapper and restores the previous view and focus.
-- Plain `Escape` is forwarded to the PTY. The harness TUI owns Escape behavior.
-- The footer hint strip advertises only `⌘W Close`.
+- `Cmd+W` closes a detached ACP Chat window.
+- Plain `Escape` returns the in-panel ACP Chat surface to the previous launcher view when applicable.
+- The footer hint strip remains limited to the launcher’s core affordances.
 
 **Runtime contract:**
-- Entry path: `open_tab_ai_chat()` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
-- Harness session state: `TabAiHarnessSessionState`
-- Harness config: `claudeCode` block in `~/.scriptkit/kit/config.ts`
+- ACP Chat entry lives in `src/app_impl/tab_ai_mode.rs` and sets `AppView::AcpChatView`.
+- Detached ACP Chat windows are managed by `src/ai/acp/chat_window.rs`.
+- ACP chat state is rendered by `src/ai/acp/view.rs`.
+- Agent configuration still lives under the `claudeCode` block in `~/.scriptkit/kit/config.ts`.
 - Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
-- Claude Code provider toggles still live under the `claudeCode` block in `~/.scriptkit/kit/config.ts`
-- Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
-- The landed default Tab flow is PTY-backed text injection
-- `build_tab_ai_harness_submission()` emits a flat text-native context block plus optional artifact authoring guidance
-- No XML wrappers are used in the landed PTY path
-- `PasteOnly` stages context on a fresh line and does not auto-submit
-- `Submit` with a non-empty intent appends `User intent:` and submits immediately
-- `Submit` without a non-empty intent appends `Await the user's next terminal input.`
+- Claude Code provider toggles still live under the `claudeCode` block in `~/.scriptkit/kit/config.ts`.
+- Context assembly still uses compatibility-named helpers such as `snapshot_tab_ai_ui()`, `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())`, and `build_tab_ai_context_from()`.
+- Compatibility-named schema types such as `TabAiContextBlob` remain the context contract backing ACP Chat.
 
 **Capture profiles:**
-- Generic PTY backends use `CaptureContextOptions::tab_ai_submit()` (text-safe, no screenshots — base64 PNG in PTY stdin is fragile).
-- The richer `tab_ai()` profile with screenshots is reserved for a future Claude-specific SDK path.
+- ACP Chat’s current context capture path uses `CaptureContextOptions::tab_ai_submit()` (text-safe, no screenshots).
+- The richer `tab_ai()` profile name remains as an internal compatibility hook.
 
-**Schema-versioned types** (primary PTY-backed Tab AI contract in `src/ai/tab_context.rs`):
+**Schema-versioned types** (ACP Chat context contract in `src/ai/tab_context.rs`):
 
 | Type | Purpose |
 |------|---------|
@@ -370,21 +366,21 @@ These remain for non-primary flows and historical data. Do not describe them as 
 
 - Recovery — if the harness crashes or exits, the next Tab entry respawns it.
 
-**Legacy compatibility only:** `TabAiChat` and `open_tab_ai_full_view_chat()` still exist for non-primary flows. They are not the default Tab AI surface and should not be used to describe the pivot.
+**Legacy compatibility only:** `TabAiChat` and `open_tab_ai_full_view_chat()` still exist internally. They are not separate chat products and should not be used to describe the current ACP Chat surface.
 
 **Do not describe as current behavior:**
-- Do not call `TabAiChat` the primary Tab AI surface
-- Do not describe the old inline chat or custom streaming UI as the default path
-- Do not describe Claude Agent SDK V2 or screenshot attachment support as already landed in the default Tab flow; today's default flow is PTY-backed text injection
+- Do not call `TabAiChat` the primary chat surface.
+- Do not describe the old inline chat or legacy AI window as the default path.
+- Do not describe Claude Agent SDK V2 or screenshot attachment support as already landed in ACP Chat unless the source code shows it.
 
 **Key files:**
-- `src/ai/harness/mod.rs` — `HarnessConfig`, `TabAiHarnessSubmissionMode`, context formatting, config I/O
-- `src/ai/tab_context.rs` — Tab AI data types, context assembly, memory I/O, execution receipts
+- `src/ai/acp/view.rs` — ACP chat view, input handling, context picker integration, and threaded conversation rendering.
+- `src/ai/acp/chat_window.rs` — detached ACP Chat window lifecycle and automation registration.
+- `src/ai/tab_context.rs` — compatibility-named ACP Chat context/data types, assembly, memory I/O, and execution receipts.
 - `src/ai/mod.rs` — re-exports
 - `src/app_impl/startup.rs` — standard startup Tab / Shift+Tab interceptor
 - `src/app_impl/startup_new_tab.rs` — new-tab startup Tab / Shift+Tab interceptor
-- `src/app_impl/tab_ai_mode.rs` — entry-intent normalization, context assembly, harness open/close, submission-mode selection
-- `src/render_prompts/term.rs` — QuickTerminalView rendering and PTY-owned key semantics
+- `src/app_impl/tab_ai_mode.rs` — ACP Chat entry, context assembly, restore/close semantics, and compatibility helpers.
 - `src/context_snapshot/capture.rs` — desktop context providers
 
 **Integration tests:**
@@ -541,7 +537,7 @@ Script Kit is a sharp tool, not a playground. It respects the user's time and at
 
 **Section headers:** Uppercase label + item count. Hint opacity. Section icon left-aligned. No separator lines — spacing alone defines groups.
 
-**Footer:** Exactly `↵ Run · ⌘K Actions · Tab AI`. Hint opacity. Right-aligned. Nothing else.
+**Footer:** Exactly `↵ Run · ⌘K Actions · ACP Chat`. Hint opacity. Right-aligned. Nothing else.
 
 ### Surface Layouts
 

@@ -222,9 +222,9 @@ export default {
 };
 ```
 
-### Tab AI Harness Configuration
+### ACP Chat Configuration
 
-Tab AI launch settings live in the `claudeCode` block of `~/.scriptkit/kit/config.ts`:
+ACP Chat agent launch settings currently live in the `claudeCode` block of `~/.scriptkit/kit/config.ts`:
 
 ```typescript
 claudeCode: {
@@ -242,7 +242,7 @@ Each Tab press writes context to `~/.scriptkit/context/latest.md`, enumerates sk
 Set these in your shell profile (`~/.zshrc` or `~/.bashrc`) to enable AI features:
 
 ```bash
-# AI providers (used by Tab AI harness and AI chat window)
+# AI providers (used by ACP Chat)
 export SCRIPT_KIT_OPENAI_API_KEY="sk-..."
 export SCRIPT_KIT_ANTHROPIC_API_KEY="sk-ant-..."
 
@@ -295,7 +295,7 @@ script-kit-gpui/
 │   ├── prompts/           # Prompt implementations
 │   ├── terminal/          # Terminal emulator
 │   ├── notes/             # Notes window feature
-│   └── ai/                # Tab AI harness + context assembly
+│   └── ai/                # ACP Chat runtime + context assembly
 ├── scripts/
 │   └── kit-sdk.ts         # The SDK (preloaded into scripts)
 ├── tests/
@@ -342,7 +342,7 @@ bash scripts/verify-macos-bundle.sh
 - **App Launcher** - Quick launch applications
 - **Window Switcher** - Switch between open windows (enable in config)
 - **Notes Window** - Floating notes with Markdown support (`Cmd+Shift+N`)
-- **Tab AI** - Press Tab to open a warm harness terminal (`AppView::QuickTerminalView`) with context already staged via PTY-backed text injection
+- **ACP Chat** - Press Tab to open ACP Chat (`AppView::AcpChatView`) with the current context staged for the active agent
 - **System Tray** - Menu bar icon with quick actions
 - **Global Hotkeys** - Trigger scripts from anywhere
 
@@ -367,30 +367,27 @@ bash scripts/verify-macos-bundle.sh
 
 Script Kit exposes desktop context and UI state to scripts and AI agents through protocol commands and MCP resources.
 
-### Tab AI — Quick Terminal with Context Injection
+### ACP Chat
 
-Tab AI is not the old inline chat surface anymore. The primary Tab AI experience is a warm harness terminal rendered in `AppView::QuickTerminalView` via `TermPrompt`.
+ACP Chat is the primary and only AI chat surface. `Tab` and `Shift+Tab` route into ACP Chat; some internal helpers and compatibility types still use `tab_ai_*` naming, but those are implementation details rather than separate chat products.
 
 **Entry path:**
-- Plain `Tab` opens the harness terminal, captures hierarchical context, and stages a schema-versioned `<scriptKitContext>` block in the running harness using `TabAiHarnessSubmissionMode::PasteOnly`.
-- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens the same harness surface and submits that filter text as `User intent:` using `TabAiHarnessSubmissionMode::Submit`.
-- `Tab` / `Shift+Tab` inside `AppView::QuickTerminalView` are forwarded to the PTY. Do not describe them as focus-navigation keys once the harness terminal is open.
+- Plain `Tab` opens ACP Chat and stages current context for the active ACP agent.
+- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens ACP Chat and submits that filter text as user intent.
+- Detached ACP Chat windows use the same conversation model and automation targeting contract as the in-panel ACP Chat view.
 
 **Close semantics:**
-- `Cmd+W` closes the wrapper and restores the previous view and focus.
-- Plain `Escape` is forwarded to the PTY. The harness TUI owns Escape behavior.
-- The footer hint strip advertises only `⌘W Close`.
+- `Cmd+W` closes the detached ACP Chat window.
+- Plain `Escape` returns the in-panel ACP Chat view to the previous launcher surface when applicable.
+- The footer keeps ACP Chat aligned with the launcher chrome and action model.
 
 **Runtime contract:**
-- Entry path: `open_tab_ai_chat()` → `open_tab_ai_chat_with_entry_intent()` → `open_tab_ai_harness_terminal()`
-- Harness session state: `TabAiHarnessSessionState`
-- Harness config: `claudeCode` block in `~/.scriptkit/kit/config.ts`
+- ACP Chat entry is driven from `src/app_impl/tab_ai_mode.rs` and rendered through `AppView::AcpChatView`.
+- Detached ACP Chat windows are managed by `src/ai/acp/chat_window.rs`.
+- Agent configuration still lives in the `claudeCode` block in `~/.scriptkit/kit/config.ts`.
 - Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
-- Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
-- `build_tab_ai_harness_submission()` emits a flat text-native context block plus optional artifact authoring guidance
-- `PasteOnly` stages context on a fresh line and does not auto-submit
-- `Submit` with a non-empty intent appends `User intent:` and submits immediately
-- `Submit` without a non-empty intent appends `Await the user's next terminal input.`
+- Context assembly still uses compatibility-named helpers such as `snapshot_tab_ai_ui()`, `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())`, and `build_tab_ai_context_from()`.
+- Compatibility-named types such as `TabAiContextBlob` remain the schema contract backing ACP Chat context capture.
 
 ### Element Introspection (`getElements`)
 
@@ -461,7 +458,7 @@ Per-field flags: `selectedText`, `frontmostApp`, `menuBar`, `browserUrl`, `focus
 
 ### Context Parts
 
-Context parts attach structured desktop state to AI interactions. Tab AI injects context automatically into the harness terminal; the AI chat window also supports attaching context via slash commands:
+Context parts attach structured desktop state to AI interactions. ACP Chat stages context automatically and also supports attaching context via slash commands:
 
 | Command | Context Attached |
 |---------|-----------------|

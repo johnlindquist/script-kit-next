@@ -21,7 +21,7 @@ What Script Kit GPUI is, how it is positioned, and the major product surfaces it
 ## Key Facts
 - Script Kit GPUI combines a Rust GPUI shell with a Bun-powered TypeScript script runner and SDK.
 - The rewrite is intentionally not a drop-in replacement for legacy Script Kit; the SDK is prompt-centric and expects users to bring their own libraries.
-- The product is optimized for keyboard-first launcher workflows and includes built-ins such as clipboard history, app launcher, window switcher, notes, and Tab AI.
+- The product is optimized for keyboard-first launcher workflows and includes built-ins such as clipboard history, app launcher, window switcher, notes, and ACP Chat.
 - CLAUDE.md is the canonical repository operating contract for contributors and agents.
 
 ## Key Files

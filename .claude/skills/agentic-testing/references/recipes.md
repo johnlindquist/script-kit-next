@@ -13,7 +13,7 @@ Named patterns agents select based on what they changed.
 2. Start session: `bash scripts/agentic/session.sh start default`
 3. Show: `bash scripts/agentic/session.sh send default '{"type":"show"}'`
 4. Capture screenshot of main menu
-5. Read PNG — verify: "Script Kit" header, list items, footer shows "Run ⌘K Actions Tab AI"
+5. Read PNG — verify: "Script Kit" header, list items, footer shows "Run ⌘K Actions ACP Chat"
 6. Set filter: send `{"type":"setFilter","text":"clip"}` → capture → verify filtered results
 7. Clear filter: send `{"type":"setFilter","text":""}` → verify list restores
 
@@ -24,7 +24,7 @@ Named patterns agents select based on what they changed.
 
 ### Recipe: verify-acp-chat-open
 
-**When:** Changes to ACP chat view, Tab AI entry, context bootstrap.
+**When:** Changes to ACP chat view, ACP Chat entry, context bootstrap.
 
 **Surface rule:** Verify the real ACP chat opened through the product entry path. Do not prove ACP UI changes by instantiating `AcpChatView` in an isolated temporary window.
 

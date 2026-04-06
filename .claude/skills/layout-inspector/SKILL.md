@@ -137,7 +137,7 @@ Stdout JSONL response:
 
 ### Agent Assertions
 
-Minimum invariants for the AI window input area:
+Minimum invariants for the ACP Chat input area:
 
 ```
 by_id["ai-input-area"][0].bounds.h > 0          # not collapsed
@@ -213,14 +213,14 @@ fn write_atomic_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
 1. **Build:** `cargo build`
 2. **Start app:** Named pipe pattern from `visual-test` skill
 3. **Show window:** `echo '{"type":"show"}' >&3`
-4. **Trigger dump:** `echo '{"type":"debug.layout_dump","window":"ai","path":"./target/layout_ai.json"}' >&3`
+4. **Trigger dump:** `echo '{"type":"debug.layout_dump","window":"ai","path":"./target/layout_acp.json"}' >&3`
 5. **Wait for ack:** Check stdout log for `debug.layout_dumped`
 6. **Read dump:** Parse JSON, run invariant assertions
 7. **Diagnose:** Match failure signature (collapsed vs clipped)
 8. **Fix:** Apply targeted fix based on computed bounds data
 9. **Verify:** Retrigger dump + screenshot, confirm all invariants pass
 
-## Key Element IDs (AI Window)
+## Key Element IDs (ACP Chat)
 
 | Element ID | Description | Expected |
 |-----------|-------------|----------|

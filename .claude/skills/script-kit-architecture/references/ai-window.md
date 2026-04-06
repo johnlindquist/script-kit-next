@@ -1,14 +1,14 @@
-# AI Window
+# ACP Chat
 
-Separate floating BYOK chat window. SQLite `~/.scriptkit/db/ai-chats.sqlite`. Theme synced from Script Kit theme.
+Primary and only AI chat surface. ACP Chat can render in-panel or in a detached window. SQLite `~/.scriptkit/db/ai-chats.sqlite` remains the conversation store and theme stays synced from Script Kit.
 
 ## Files
 
-- `window.rs` - Main view
-- `storage.rs` - SQLite persistence
-- `model.rs` - `Chat`, `Message`, `ChatId`, roles
-- `providers.rs` - Anthropic/OpenAI implementations
-- `config.rs` - Environment detection
+- `src/ai/acp/view.rs` - Main ACP chat view
+- `src/ai/acp/chat_window.rs` - Detached ACP window lifecycle
+- `src/ai/tab_context.rs` - Compatibility-named ACP context types
+- `src/ai/acp/config.rs` - ACP agent configuration
+- `src/ai/acp/client.rs` - ACP client runtime
 
 ## Features
 
@@ -29,7 +29,7 @@ Set in shell profile or system environment.
 
 ## Testing
 
-- stdin: `{"type":"openAi"}`
+- stdin: `{"type":"openAi"}` (legacy compatibility command that opens ACP Chat)
 - log filter: `grep -i 'ai|chat|PANEL'`
 
 ## Open Methods
@@ -40,4 +40,4 @@ Set in shell profile or system environment.
 
 ## Single-Instance Pattern
 
-Global `OnceLock<Mutex<Option<WindowHandle<Root>>>>`.
+Global detached-window handle is coordinated through `src/ai/acp/chat_window.rs`.

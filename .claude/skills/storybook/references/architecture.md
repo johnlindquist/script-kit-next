@@ -64,7 +64,7 @@ Five footer variations with declarative specs:
 | ID | Logo | Primary | Secondary | Helper | Info | Left Slot | Right Slot |
 |----|------|---------|-----------|--------|------|-----------|------------|
 | `raycast-exact` | yes | yes | yes | — | — | — | — |
-| `scriptkit-branded` | yes | yes | yes | "Tab AI" | "Built-in" | — | — |
+| `scriptkit-branded` | yes | yes | yes | "ACP Chat" | "Built-in" | — | — |
 | `minimal` | no | no | no | — | — | — | key hints |
 | `status-bar` | yes | no | no | — | — | "Ready" | key hints |
 | `invisible` | no | no | no | — | — | — | — |

@@ -2,7 +2,7 @@ import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
-// Wait for AI window to be ready and command bar to open
+// Wait for ACP Chat to be ready and command bar to open
 await new Promise(r => setTimeout(r, 1500));
 
 // Capture screenshot
