@@ -45,6 +45,30 @@ pub(crate) fn caret_after_replacement(range: &Range<usize>, replacement: &str) -
     range.start + replacement.chars().count()
 }
 
+/// Decide whether accepting an inline picker item should claim ownership
+/// of the resulting canonical token.
+///
+/// Returns:
+/// - `false` when the part has no inline token,
+/// - `true` when the token is already owned by inline text,
+/// - `false` when the same part is already attached from a non-inline source,
+/// - `true` otherwise (brand-new inline attachment).
+pub(crate) fn should_claim_inline_mention_ownership(
+    part: &AiContextPart,
+    attached_parts: &[AiContextPart],
+    inline_owned_tokens: &HashSet<String>,
+) -> bool {
+    let Some(token) = super::part_to_inline_token(part) else {
+        return false;
+    };
+
+    if inline_owned_tokens.contains(&token) {
+        return true;
+    }
+
+    !attached_parts.iter().any(|existing| existing == part)
+}
+
 /// Build a plan that describes which parts to add, which to remove, and what
 /// the desired ownership set should look like — without mutating any state.
 ///
