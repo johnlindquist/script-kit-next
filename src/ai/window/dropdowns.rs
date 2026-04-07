@@ -1,41 +1,128 @@
 use super::*;
 
 impl AiApp {
+    fn selected_preset_dropdown_index(&self) -> usize {
+        crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
+            self.presets_selected_index,
+            self.presets.len(),
+        )
+    }
+
     pub(super) fn show_presets_dropdown(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.presets_selected_index = 0;
         self.showing_presets_dropdown = true;
+        tracing::info!(
+            target: "ai",
+            event = "ai_presets_dropdown_opened",
+            preset_count = self.presets.len(),
+            selected_index = self.presets_selected_index,
+            "Opened AI presets inline dropdown"
+        );
         cx.notify();
     }
 
-    /// Hide the presets dropdown
     pub(super) fn hide_presets_dropdown(&mut self, cx: &mut Context<Self>) {
+        if !self.showing_presets_dropdown {
+            return;
+        }
         self.showing_presets_dropdown = false;
+        tracing::info!(
+            target: "ai",
+            event = "ai_presets_dropdown_closed",
+            "Closed AI presets inline dropdown"
+        );
         cx.notify();
     }
 
-    /// Move selection up in presets dropdown
     pub(super) fn presets_select_prev(&mut self, cx: &mut Context<Self>) {
-        if !self.presets.is_empty() {
-            if self.presets_selected_index > 0 {
-                self.presets_selected_index -= 1;
-            } else {
-                self.presets_selected_index = self.presets.len() - 1;
-            }
-            cx.notify();
+        let preset_count = self.presets.len();
+        if preset_count == 0 {
+            return;
         }
+        self.presets_selected_index =
+            crate::components::inline_dropdown::inline_dropdown_select_prev(
+                self.selected_preset_dropdown_index(),
+                preset_count,
+            );
+        let visible = crate::components::inline_dropdown::inline_dropdown_visible_range(
+            self.presets_selected_index,
+            preset_count,
+            8,
+        );
+        tracing::info!(
+            target: "ai",
+            event = "ai_presets_dropdown_selection_moved",
+            direction = "prev",
+            selected_index = self.presets_selected_index,
+            visible_start = visible.start,
+            visible_end = visible.end,
+            "Moved AI presets dropdown selection"
+        );
+        cx.notify();
     }
 
-    /// Move selection down in presets dropdown
     pub(super) fn presets_select_next(&mut self, cx: &mut Context<Self>) {
-        if !self.presets.is_empty() {
-            self.presets_selected_index = (self.presets_selected_index + 1) % self.presets.len();
-            cx.notify();
+        let preset_count = self.presets.len();
+        if preset_count == 0 {
+            return;
         }
+        self.presets_selected_index =
+            crate::components::inline_dropdown::inline_dropdown_select_next(
+                self.selected_preset_dropdown_index(),
+                preset_count,
+            );
+        let visible = crate::components::inline_dropdown::inline_dropdown_visible_range(
+            self.presets_selected_index,
+            preset_count,
+            8,
+        );
+        tracing::info!(
+            target: "ai",
+            event = "ai_presets_dropdown_selection_moved",
+            direction = "next",
+            selected_index = self.presets_selected_index,
+            visible_start = visible.start,
+            visible_end = visible.end,
+            "Moved AI presets dropdown selection"
+        );
+        cx.notify();
     }
 
-    /// Create a new chat with the selected preset
+    pub(super) fn confirm_presets_selection(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let selected_index = self.selected_preset_dropdown_index();
+        let preset_name = self
+            .presets
+            .get(selected_index)
+            .map(|preset| preset.name.to_string())
+            .unwrap_or_default();
+        tracing::info!(
+            target: "ai",
+            event = "ai_presets_dropdown_confirmed",
+            selected_index,
+            preset_name = %preset_name,
+            "Confirmed AI presets inline dropdown selection"
+        );
+        self.presets_selected_index = selected_index;
+        self.create_chat_with_preset(window, cx);
+    }
+
     pub(super) fn create_chat_with_preset(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(preset) = self.presets.get(self.presets_selected_index).cloned() {
+        if let Some(preset) = self
+            .presets
+            .get(self.selected_preset_dropdown_index())
+            .cloned()
+        {
+            tracing::info!(
+                target: "ai",
+                event = "ai_preset_applied",
+                preset_name = %preset.name,
+                preferred_model = ?preset.preferred_model,
+                "Applying AI preset from inline dropdown"
+            );
             self.hide_presets_dropdown(cx);
 
             // Create new chat with system prompt
