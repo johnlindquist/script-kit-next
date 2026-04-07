@@ -37,13 +37,17 @@ mod tests {
     }
 
     #[test]
-    fn test_footer_secondary_visibility_uses_has_actions() {
+    fn test_footer_uses_universal_hint_strip() {
         let content = fs::read_to_string("src/render_script_list/mod.rs")
             .expect("Failed to read src/render_script_list/mod.rs");
 
         assert!(
-            content.contains("show_secondary(self.has_actions())"),
-            "render_script_list footer must use show_secondary(self.has_actions())"
+            content.contains("render_universal_prompt_hint_strip_clickable"),
+            "render_script_list footer must use the universal three-key hint strip"
+        );
+        assert!(
+            content.contains("emit_prompt_hint_audit(\"render_script_list::full\""),
+            "render_script_list footer must emit a prompt hint audit"
         );
     }
 
@@ -116,11 +120,14 @@ mod tests {
             "render loop should sync the popup footer when mini mode visibility changes"
         );
         assert!(
-            footer_popup.contains("render_hint_icons(")
-                && footer_popup.contains("\"↵ Run\"")
-                && footer_popup.contains("\"⌘K Actions\"")
-                && footer_popup.contains("\"Tab AI\""),
-            "popup footer should render the three launcher affordance hints"
+            footer_popup.contains("FOOTER_HINTS: [(FooterAction, &str, &str); 3]")
+                && footer_popup.contains("FooterAction::Run")
+                && footer_popup.contains("FooterAction::Actions")
+                && footer_popup.contains("FooterAction::Ai")
+                && footer_popup.contains("(FooterAction::Run, \"↵\", \"Run\")")
+                && footer_popup.contains("(FooterAction::Actions, \"⌘K\", \"Actions\")")
+                && footer_popup.contains("(FooterAction::Ai, \"Tab\", \"AI\")"),
+            "popup footer should match the universal launcher affordance contract"
         );
     }
 }

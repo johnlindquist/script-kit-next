@@ -39,7 +39,7 @@ pub(crate) enum FooterAction {
 const FOOTER_HINTS: [(FooterAction, &str, &str); 3] = [
     (FooterAction::Run, "↵", "Run"),
     (FooterAction::Actions, "⌘K", "Actions"),
-    (FooterAction::Ai, "⇥", "AI"),
+    (FooterAction::Ai, "Tab", "AI"),
 ];
 
 static FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
@@ -429,7 +429,7 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id) {
     let mut items = Vec::new();
     let mut total_width = 0.0_f64;
     for (index, (action, key, label)) in FOOTER_HINTS.iter().enumerate() {
-        let item = make_footer_hint_item(*action, *key, *label, font, text_color);
+        let item = make_footer_hint_item(*action, key, label, font, text_color);
         if item == nil {
             continue;
         }
@@ -585,11 +585,19 @@ unsafe fn make_footer_hint_text_field(text: &str, font: id, text_color: id) -> i
 
 #[cfg(target_os = "macos")]
 fn send_footer_action(action: FooterAction) {
+    let action_name = footer_action_key(action);
+    tracing::info!(
+        target: "script_kit::footer_popup",
+        event = "native_footer_action_enqueued",
+        action = action_name,
+        "Enqueued native footer action"
+    );
     let (tx, _) = footer_action_channel();
     if let Err(error) = tx.try_send(action) {
         tracing::warn!(
             target: "script_kit::footer_popup",
-            ?action,
+            event = "native_footer_action_enqueue_failed",
+            action = action_name,
             %error,
             "Failed to enqueue footer action"
         );
@@ -676,6 +684,26 @@ fn footer_effect_view_class() -> *const objc::runtime::Class {
             sel!(mouseDown:),
             footer_mouse_down as extern "C" fn(&Object, Sel, id),
         );
+        decl.add_method(
+            sel!(mouseUp:),
+            footer_mouse_up as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(rightMouseDown:),
+            footer_mouse_down as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(otherMouseDown:),
+            footer_mouse_down as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(scrollWheel:),
+            footer_scroll_wheel as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(acceptsFirstMouse:),
+            footer_accepts_first_mouse as extern "C" fn(&Object, Sel, id) -> cocoa::base::BOOL,
+        );
         decl.register() as *const _ as usize
     }) as *const objc::runtime::Class
 }
@@ -703,6 +731,21 @@ extern "C" fn footer_hit_test(
 
 #[cfg(target_os = "macos")]
 extern "C" fn footer_mouse_down(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_mouse_up(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_scroll_wheel(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_accepts_first_mouse(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    _: id,
+) -> cocoa::base::BOOL {
+    YES
+}
 
 #[cfg(target_os = "macos")]
 fn footer_action_target() -> id {

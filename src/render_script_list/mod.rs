@@ -862,10 +862,6 @@ impl ScriptListApp {
         let text_primary = color_resolver.primary_text_color();
         let font_family = typography_resolver.primary_font().to_string();
 
-        // Extract footer colors BEFORE render_preview_panel (borrow checker).
-        // Footer uses theme tokens directly so app-shell chrome stays consistent
-        // across design variants (avoids design-token backgrounds like pure white).
-        let footer_colors = app_shell_footer_colors(&self.theme);
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
@@ -1104,140 +1100,30 @@ impl ScriptListApp {
             main_div = main_div.child(content_row);
         }
 
-        // Footer: Logo left | Run Script ↵ | divider | Actions ⌘K right
-        // Raycast-style footer with Script Kit branding using reusable PromptFooter component
-        // Note: footer colors extracted earlier to avoid borrow conflict with render_preview_panel
-        main_div = main_div.child({
-            let handle_run = cx.entity().downgrade();
-            let handle_actions = cx.entity().downgrade();
-
-            // Resolve footer config — when the storybook feature is enabled,
-            // load the persisted design variant; otherwise use hardcoded defaults.
-            #[cfg(feature = "storybook")]
-            let mut footer_config = {
-                let selected_footer_variant =
-                    script_kit_gpui::storybook::load_selected_story_variant(
-                        "footer-layout-variations",
-                    );
-                let (spec, resolution) =
-                    script_kit_gpui::storybook::resolve_footer_selection_spec(
-                        selected_footer_variant.as_deref(),
-                    );
-                let mut fc = PromptFooterConfig::new()
-                    .primary_label(spec.primary_label)
-                    .primary_shortcut(spec.primary_shortcut)
-                    .secondary_label(spec.secondary_label)
-                    .secondary_shortcut(spec.secondary_shortcut)
-                    .show_logo(spec.show_logo)
-                    .show_primary(spec.show_primary)
-                    .show_secondary(spec.show_secondary)
-                    .show_info_label(spec.show_info_label);
-                if let Some(helper_text) = spec.helper_text {
-                    fc = fc.helper_text(helper_text);
-                }
-                if let Some(info_label) = spec.info_label {
-                    fc = fc.info_label(info_label);
-                }
-                if state_changed {
-                    tracing::info!(
-                        event = "script_list_footer_selection_resolved",
-                        requested_variant_id = resolution
-                            .requested_variant_id
-                            .as_deref()
-                            .unwrap_or(""),
-                        resolved_variant_id = resolution.resolved_variant_id.as_str(),
-                        fallback_used = resolution.fallback_used,
-                        "Resolved footer variant for live script list"
-                    );
-                }
-                // Stash slot texts for later use after footer is built
-                #[allow(unused_variables)]
-                let left_slot_text = spec.left_slot_text;
-                #[allow(unused_variables)]
-                let right_slot_text = spec.right_slot_text;
-                fc
-            };
-
-            #[cfg(not(feature = "storybook"))]
-            let mut footer_config = PromptFooterConfig::new()
-                .primary_label("Open Application")
-                .primary_shortcut("↵")
-                .secondary_label("Actions")
-                .secondary_shortcut("⌘K")
-                .show_logo(true)
-                .show_primary(true)
-                .show_secondary(true)
-                .show_info_label(false);
-
-            footer_config = footer_config.primary_label(script_list_footer_primary_label());
-
-            let window_tweaker_enabled = std::env::var("SCRIPT_KIT_WINDOW_TWEAKER")
-                .map(|v| v == "1")
-                .unwrap_or(false);
-            let opacity_percent = (self.theme.get_opacity().main * 100.0).round() as i32;
-            let material = platform::get_current_material_name();
-            let appearance = platform::get_current_appearance_name();
-            if footer_config.show_info_label {
-                if let Some(info_label) = script_list_footer_info_label(
-                    window_tweaker_enabled,
-                    self.theme.is_dark_mode(),
-                    opacity_percent,
-                    &material,
-                    &appearance,
-                ) {
-                    footer_config = footer_config.info_label(info_label);
-                }
-            }
-            if footer_config.show_secondary {
-                footer_config = footer_config.show_secondary(self.has_actions());
-                footer_config = footer_config.secondary_active(self.show_actions_popup);
-            }
-
-            #[allow(unused_mut)]
-            let mut footer = PromptFooter::new(footer_config, footer_colors)
-                .on_primary_click(Box::new(move |_, _window, cx| {
-                    if let Some(app) = handle_run.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.execute_selected(cx);
-                        });
-                    }
-                }))
-                .on_secondary_click(Box::new(move |_, window, cx| {
-                    if let Some(app) = handle_actions.upgrade() {
-                        app.update(cx, |this, cx| {
-                            this.toggle_actions(cx, window);
-                        });
-                    }
-                }));
-
-            // Slot text rendering is only available with storybook feature
-            #[cfg(feature = "storybook")]
-            {
-                let selected_footer_variant =
-                    script_kit_gpui::storybook::load_selected_story_variant(
-                        "footer-layout-variations",
-                    );
-                let (spec, _) = script_kit_gpui::storybook::resolve_footer_selection_spec(
-                    selected_footer_variant.as_deref(),
-                );
-                if let Some(left_slot_text) = spec.left_slot_text {
-                    footer =
-                        footer.left_slot(script_kit_gpui::storybook::render_footer_slot_text(
-                            left_slot_text,
-                            true,
-                        ));
-                }
-                if let Some(right_slot_text) = spec.right_slot_text {
-                    footer =
-                        footer.right_slot(script_kit_gpui::storybook::render_footer_slot_text(
-                            right_slot_text,
-                            false,
-                        ));
-                }
-            }
-
-            footer
-        });
+        // Footer: Universal three-key hint strip — ↵ Run · ⌘K Actions · Tab AI
+        {
+            let hints = crate::components::universal_prompt_hints();
+            crate::components::emit_prompt_hint_audit("render_script_list::full", &hints);
+            tracing::info!(
+                target: "script_kit::prompt_chrome",
+                event = "script_list_footer_unified",
+                mode = "full",
+                "Script list footer rendered with universal three-key footer"
+            );
+            main_div = main_div.child(
+                crate::components::render_universal_prompt_hint_strip_clickable(
+                    cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+                        this.execute_selected(cx);
+                    }),
+                    cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                        this.toggle_actions(cx, window);
+                    }),
+                    cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
+                        this.open_tab_ai_chat(cx);
+                    }),
+                ),
+            );
+        }
 
         if let Some(panel) = log_panel {
             main_div = main_div.child(panel);
