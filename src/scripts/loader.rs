@@ -95,6 +95,19 @@ pub(crate) fn read_scripts_from_dir(
                                             // Extract kit name from path
                                             let kit_name = extract_kit_from_path(&path, kit_path);
 
+                                            // Read file body for content search indexing
+                                            let body = match std::fs::read_to_string(&path) {
+                                                Ok(contents) => Some(contents),
+                                                Err(e) => {
+                                                    debug!(
+                                                        error = %e,
+                                                        path = %path.display(),
+                                                        "Failed to read script body for content indexing"
+                                                    );
+                                                    None
+                                                }
+                                            };
+
                                             scripts.push(Arc::new(Script {
                                                 name,
                                                 path: path.clone(),
@@ -106,6 +119,7 @@ pub(crate) fn read_scripts_from_dir(
                                                 typed_metadata,
                                                 schema,
                                                 kit_name,
+                                                body,
                                             }));
                                         }
                                     }

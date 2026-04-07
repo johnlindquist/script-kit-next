@@ -207,6 +207,7 @@ impl ScriptListApp {
                 typed_metadata: None,
                 schema: None,
                 kit_name: None,
+                body: None,
             };
 
             self.execute_interactive(&script, cx);
@@ -448,6 +449,7 @@ impl ScriptListApp {
                 typed_metadata: None,
                 schema: None,
                 kit_name: None,
+                body: None,
             };
 
             self.execute_interactive(&script, cx);

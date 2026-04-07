@@ -293,11 +293,26 @@ impl ScriptListApp {
         lang: &str,
         is_dark: bool,
     ) -> &[syntax::HighlightedLine] {
-        // Check if cache is valid for this path
+        self.get_or_update_preview_cache_with_match(script_path, lang, is_dark, None)
+    }
+
+    /// Get or update the preview cache with optional content-match centering.
+    /// When `content_match` is provided, the 15-line window is centered on the matched line
+    /// and the matched span is emphasized with gold accent at ghost opacity.
+    pub(crate) fn get_or_update_preview_cache_with_match(
+        &mut self,
+        script_path: &str,
+        lang: &str,
+        is_dark: bool,
+        content_match: Option<&scripts::ScriptContentMatch>,
+    ) -> &[syntax::HighlightedLine] {
+        let matched_line = content_match.map(|cm| cm.line_number);
+
+        // Check if cache is valid for this path and matched line
         if self.preview_cache_path.as_deref() == Some(script_path)
+            && self.preview_cache_matched_line == matched_line
             && !self.preview_cache_lines.is_empty()
         {
-            // NOTE: Removed cache HIT log - fires every render, only log MISS for diagnostics
             return &self.preview_cache_lines;
         }
 
@@ -305,30 +320,74 @@ impl ScriptListApp {
         let cache_miss_start = std::time::Instant::now();
         logging::log(
             "FILTER_PERF",
-            &format!("[PREVIEW_CACHE_MISS] Loading '{}'", script_path),
+            &format!(
+                "[PREVIEW_CACHE_MISS] Loading '{}' matched_line={:?}",
+                script_path, matched_line
+            ),
         );
 
         self.preview_cache_path = Some(script_path.to_string());
+        self.preview_cache_matched_line = matched_line;
 
         let read_start = std::time::Instant::now();
         self.preview_cache_lines = match std::fs::read_to_string(script_path) {
             Ok(content) => {
                 let read_elapsed = read_start.elapsed();
+                let all_lines: Vec<&str> = content.lines().collect();
+                let total_lines = all_lines.len();
 
-                // Only take first 15 lines for preview
+                // Compute the 15-line window: centered on match or starting from line 1
+                let (window_start, window_lines) = if let Some(match_ln) = matched_line {
+                    // match_ln is 1-based; center it in a 15-line window
+                    let zero_idx = match_ln.saturating_sub(1);
+                    let start = zero_idx.saturating_sub(7);
+                    let end = (start + 15).min(total_lines);
+                    let start = if end < 15 { 0 } else { end - 15 };
+                    (start, &all_lines[start..end])
+                } else {
+                    let end = total_lines.min(15);
+                    (0, &all_lines[..end])
+                };
+
                 let highlight_start = std::time::Instant::now();
-                let preview: String = content.lines().take(15).join("\n");
-                let lines = syntax::highlight_code_lines(&preview, lang, is_dark);
+                let preview: String = window_lines.join("\n");
+                let mut lines = syntax::highlight_code_lines(&preview, lang, is_dark);
                 let highlight_elapsed = highlight_start.elapsed();
+
+                // Apply match emphasis to the matched line's spans
+                if let Some(cm) = content_match {
+                    let match_line_zero = cm.line_number.saturating_sub(1);
+                    if match_line_zero >= window_start {
+                        let line_idx_in_window = match_line_zero - window_start;
+                        if line_idx_in_window < lines.len() {
+                            let raw_line = window_lines[line_idx_in_window];
+                            let leading_ws_chars =
+                                raw_line.chars().take_while(|ch| ch.is_whitespace()).count();
+                            // `line_match_indices` are relative to the trimmed snippet shown in
+                            // the list row. Convert them back into offsets within the full preview
+                            // line so indented matches highlight the correct span.
+                            if let (Some(&first), Some(&last)) =
+                                (cm.line_match_indices.first(), cm.line_match_indices.last())
+                            {
+                                Self::apply_match_emphasis_to_line(
+                                    &mut lines[line_idx_in_window],
+                                    leading_ws_chars + first,
+                                    leading_ws_chars + last + 1,
+                                );
+                            }
+                        }
+                    }
+                }
 
                 logging::log(
                     "FILTER_PERF",
                     &format!(
-                        "[PREVIEW_CACHE_MISS] read={:.2}ms highlight={:.2}ms ({} bytes, {} lines)",
+                        "[PREVIEW_CACHE_MISS] read={:.2}ms highlight={:.2}ms ({} bytes, {} lines, window_start={})",
                         read_elapsed.as_secs_f64() * 1000.0,
                         highlight_elapsed.as_secs_f64() * 1000.0,
                         content.len(),
-                        lines.len()
+                        lines.len(),
+                        window_start
                     ),
                 );
 
@@ -353,10 +412,61 @@ impl ScriptListApp {
         &self.preview_cache_lines
     }
 
-    /// Invalidate the preview cache (call when selection might change to different script)
-    #[allow(dead_code)]
+    /// Apply match emphasis to a specific character range within a highlighted line.
+    /// Splits spans as needed so that only the matched range gets `is_match_emphasis = true`.
+    fn apply_match_emphasis_to_line(
+        line: &mut syntax::HighlightedLine,
+        match_start: usize,
+        match_end: usize,
+    ) {
+        if match_start >= match_end {
+            return;
+        }
+        let mut new_spans = Vec::new();
+        let mut char_offset: usize = 0;
+
+        for span in line.spans.drain(..) {
+            let span_len = span.text.chars().count();
+            let span_end = char_offset + span_len;
+
+            if span_end <= match_start || char_offset >= match_end {
+                // Entirely outside the match range — keep as-is
+                new_spans.push(span);
+            } else {
+                // This span overlaps with the match range — split it
+                let overlap_start = match_start.saturating_sub(char_offset);
+                let overlap_end = (match_end - char_offset).min(span_len);
+
+                let chars: Vec<char> = span.text.chars().collect();
+
+                // Before-match portion
+                if overlap_start > 0 {
+                    let before: String = chars[..overlap_start].iter().collect();
+                    new_spans.push(syntax::HighlightedSpan::new(before, span.color));
+                }
+
+                // Matched portion — with emphasis
+                let matched: String = chars[overlap_start..overlap_end].iter().collect();
+                new_spans
+                    .push(syntax::HighlightedSpan::with_match_emphasis(matched, span.color));
+
+                // After-match portion
+                if overlap_end < span_len {
+                    let after: String = chars[overlap_end..].iter().collect();
+                    new_spans.push(syntax::HighlightedSpan::new(after, span.color));
+                }
+            }
+
+            char_offset = span_end;
+        }
+
+        line.spans = new_spans;
+    }
+
+    /// Invalidate the preview cache (call when scripts are reloaded or selection changes)
     pub(crate) fn invalidate_preview_cache(&mut self) {
         self.preview_cache_path = None;
+        self.preview_cache_matched_line = None;
         self.preview_cache_lines.clear();
     }
 
@@ -414,5 +524,32 @@ mod tests {
         assert_eq!(grouped.len(), 1);
         assert!(matches!(grouped.first(), Some(GroupedListItem::Item(0))));
         assert!(flat.is_empty());
+    }
+
+    #[test]
+    fn test_apply_match_emphasis_handles_indented_match_offsets() {
+        let mut line = syntax::HighlightedLine {
+            spans: vec![syntax::HighlightedSpan::new(
+                "    const superUniqueToken = value;",
+                0xcccccc,
+            )],
+        };
+
+        let leading_ws_chars = 4;
+        let snippet_match_start = 6;
+        let snippet_match_end = 22;
+        ScriptListApp::apply_match_emphasis_to_line(
+            &mut line,
+            leading_ws_chars + snippet_match_start,
+            leading_ws_chars + snippet_match_end,
+        );
+
+        let emphasized: String = line
+            .spans
+            .iter()
+            .filter(|span| span.is_match_emphasis)
+            .map(|span| span.text.as_str())
+            .collect();
+        assert_eq!(emphasized, "superUniqueToken");
     }
 }

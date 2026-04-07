@@ -371,6 +371,8 @@ fn test_search_result_properties() {
         score: 100,
         filename: "test.ts".to_string(),
         match_indices: MatchIndices::default(),
+        match_kind: ScriptMatchKind::default(),
+        content_match: None,
     };
 
     let result = SearchResult::Script(script_match);

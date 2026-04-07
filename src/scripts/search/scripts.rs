@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::sync::Arc;
 
-use super::super::types::{MatchIndices, Script, ScriptMatch};
+use super::super::types::{MatchIndices, Script, ScriptContentMatch, ScriptMatch, ScriptMatchKind};
 use super::{
     contains_ignore_ascii_case, extract_filename, find_ignore_ascii_case, is_exact_name_match,
     is_word_boundary_match, NucleoCtx, MIN_FUZZY_QUERY_LEN,
@@ -32,6 +32,7 @@ const SCORE_DESC_SUBSTRING: i32 = 25;
 const SCORE_DESC_FUZZY_BASE: i32 = 15;
 const SCORE_DESC_FUZZY_DIV: u32 = 30;
 const SCORE_PATH_SUBSTRING: i32 = 10;
+const SCORE_CONTENT_MATCH: i32 = 5;
 
 /// Fuzzy search scripts by query string
 /// Searches across name, filename (e.g., "my-script.ts"), description, and path
@@ -54,6 +55,8 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                     score: 0,
                     filename,
                     match_indices: MatchIndices::default(),
+                    match_kind: ScriptMatchKind::default(),
+                    content_match: None,
                 }
             })
             .collect();
@@ -269,12 +272,46 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             score += SCORE_PATH_SUBSTRING;
         }
 
+        // Determine match kind based on which tier contributed the most
+        let match_kind = if score >= SCORE_EXACT_NAME_MATCH
+            || score >= SCORE_NAME_PREFIX
+            || score >= SCORE_NAME_FUZZY_BASE
+        {
+            ScriptMatchKind::Name
+        } else if score >= SCORE_DESC_SUBSTRING {
+            ScriptMatchKind::Description
+        } else if score >= SCORE_FILENAME_PREFIX {
+            ScriptMatchKind::Filename
+        } else {
+            ScriptMatchKind::Name // default
+        };
+
+        // Content body search — lowest-priority tier (+5)
+        // Only search body when name/description/path didn't already produce a match
+        let mut content_match = None;
+        if score == 0 {
+            if let Some(ref body) = script.body {
+                if let Some(hit) = find_best_content_line(body, &query_lower, query_is_ascii) {
+                    score += SCORE_CONTENT_MATCH;
+                    content_match = Some(hit);
+                }
+            }
+        }
+
+        let final_match_kind = if content_match.is_some() {
+            ScriptMatchKind::Content
+        } else {
+            match_kind
+        };
+
         if score > 0 {
             matches.push(ScriptMatch {
                 script: Arc::clone(script),
                 score,
                 filename,
                 match_indices,
+                match_kind: final_match_kind,
+                content_match,
             });
         }
     }
@@ -286,4 +323,45 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
     });
 
     matches
+}
+
+/// Scan body text line-by-line for the best case-insensitive substring match.
+/// Returns the first matching line with its 1-based line number and match indices.
+fn find_best_content_line(
+    body: &str,
+    query_lower: &str,
+    query_is_ascii: bool,
+) -> Option<ScriptContentMatch> {
+    let mut byte_offset = 0usize;
+    for (idx, line) in body.lines().enumerate() {
+        let match_pos = if query_is_ascii && line.is_ascii() {
+            find_ignore_ascii_case(line, query_lower)
+        } else {
+            let line_lower = line.to_lowercase();
+            line_lower.find(query_lower)
+        };
+        if let Some(pos) = match_pos {
+            let trimmed = line.trim();
+            // Compute match indices relative to the trimmed line
+            let trim_offset = line.len() - line.trim_start().len();
+            let match_indices: Vec<usize> = (0..query_lower.len())
+                .filter_map(|i| {
+                    let abs = pos + i;
+                    if abs >= trim_offset {
+                        Some(abs - trim_offset)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            return Some(ScriptContentMatch {
+                line_number: idx + 1, // 1-based
+                line_text: trimmed.to_string(),
+                line_match_indices: match_indices,
+                byte_range: (byte_offset + pos)..(byte_offset + pos + query_lower.len()),
+            });
+        }
+        byte_offset += line.len() + 1; // +1 for newline
+    }
+    None
 }

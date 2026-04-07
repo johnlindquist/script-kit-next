@@ -277,6 +277,8 @@ fn test_search_result_type_label() {
         score: 100,
         filename: "test.ts".to_string(),
         match_indices: MatchIndices::default(),
+        match_kind: ScriptMatchKind::default(),
+        content_match: None,
     });
 
     let scriptlet = SearchResult::Scriptlet(ScriptletMatch {

@@ -32,6 +32,8 @@ pub struct Script {
     /// Kit name extracted from path (e.g., "main", "cleanshot")
     /// Used for grouping scripts by their source kit in the main menu
     pub kit_name: Option<String>,
+    /// Full file body text, read once at load time for content search
+    pub body: Option<String>,
 }
 
 /// Represents a scriptlet parsed from a markdown file
@@ -85,6 +87,33 @@ pub struct MatchIndices {
     pub description_indices: Vec<usize>,
 }
 
+/// Describes which field produced the winning match for a script
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum ScriptMatchKind {
+    /// Matched on name (default)
+    #[default]
+    Name,
+    /// Matched on description
+    Description,
+    /// Matched on filename
+    Filename,
+    /// Matched on file body content
+    Content,
+}
+
+/// Content-hit metadata for a script that matched on body text
+#[derive(Clone, Debug)]
+pub struct ScriptContentMatch {
+    /// 1-based line number of the matching line
+    pub line_number: usize,
+    /// The full text of the matching line (trimmed)
+    pub line_text: String,
+    /// Character indices within `line_text` that matched the query
+    pub line_match_indices: Vec<usize>,
+    /// Byte range of the match within the original body text
+    pub byte_range: std::ops::Range<usize>,
+}
+
 /// Represents a scored match result for fuzzy search
 /// Uses Arc<Script> for cheap cloning during filter operations (H1 optimization)
 #[derive(Clone, Debug)]
@@ -95,6 +124,10 @@ pub struct ScriptMatch {
     pub filename: String,
     /// Indices of matched characters for UI highlighting
     pub match_indices: MatchIndices,
+    /// Which field produced the dominant match
+    pub match_kind: ScriptMatchKind,
+    /// Content-hit metadata when match_kind == Content
+    pub content_match: Option<ScriptContentMatch>,
 }
 
 /// Represents a scored match result for fuzzy search on scriptlets

@@ -233,12 +233,18 @@
                         );
 
                         // Use cached syntax-highlighted lines (avoids file I/O and highlighting on every render)
+                        // When a content match exists, center the preview on the matched line
                         let script_path = script.path.to_string_lossy().to_string();
                         let lang = script.extension.clone();
                         let is_dark = self.theme.is_dark_mode();
                         let cache_start = std::time::Instant::now();
                         let lines = self
-                            .get_or_update_preview_cache(&script_path, &lang, is_dark)
+                            .get_or_update_preview_cache_with_match(
+                                &script_path,
+                                &lang,
+                                is_dark,
+                                script_match.content_match.as_ref(),
+                            )
                             .to_vec();
                         let cache_elapsed = cache_start.elapsed();
                         if cache_elapsed.as_micros() > 500 {
@@ -280,8 +286,15 @@
                                 line_div = line_div.child(" ");
                             } else {
                                 for span in line.spans {
-                                    line_div = line_div
-                                        .child(div().text_color(rgb(span.color)).child(span.text));
+                                    let mut span_div =
+                                        div().text_color(rgb(span.color)).child(span.text);
+                                    if span.is_match_emphasis {
+                                        // Gold accent (#fbbf24) at ghost opacity (0x0F ≈ 0.06)
+                                        span_div = span_div
+                                            .bg(rgba(0xfbbf240fu32))
+                                            .rounded(px(2.));
+                                    }
+                                    line_div = line_div.child(span_div);
                                 }
                             }
 

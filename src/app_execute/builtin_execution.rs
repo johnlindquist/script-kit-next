@@ -3817,6 +3817,9 @@ impl ScriptListApp {
 
                 match crate::dictation::toggle_dictation(dictation_target) {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        let _ = crate::dictation::set_dictation_target_cycle(
+                            self.dictation_target_cycle_for(dictation_target),
+                        );
                         // Track window state through orchestrator.
                         let orch_target =
                             crate::window_orchestrator::executor::to_orchestrator_target(
@@ -3925,6 +3928,9 @@ impl ScriptListApp {
 
                 match crate::dictation::toggle_dictation(dictation_target) {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        let _ = crate::dictation::set_dictation_target_cycle(
+                            self.dictation_target_cycle_for(dictation_target),
+                        );
                         // Hide the main window SYNCHRONOUSLY before opening
                         // the overlay.  The orchestrator dispatch is deferred
                         // (cx.spawn), so relying on it for ConcealMain causes
@@ -4038,6 +4044,9 @@ impl ScriptListApp {
 
                 match crate::dictation::toggle_dictation(dictation_target) {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        let _ = crate::dictation::set_dictation_target_cycle(
+                            self.dictation_target_cycle_for(dictation_target),
+                        );
                         tracing::info!(
                             category = "DICTATION",
                             ?dictation_target,
@@ -4148,6 +4157,9 @@ impl ScriptListApp {
 
                 match crate::dictation::toggle_dictation(dictation_target) {
                     Ok(crate::dictation::DictationToggleOutcome::Started) => {
+                        let _ = crate::dictation::set_dictation_target_cycle(
+                            self.dictation_target_cycle_for(dictation_target),
+                        );
                         tracing::info!(
                             category = "DICTATION",
                             ?dictation_target,
@@ -4372,6 +4384,9 @@ impl ScriptListApp {
                 // session start, not the current UI state.
                 let delivered_internally = match target {
                     crate::dictation::DictationTarget::MainWindowFilter => {
+                        if !self.can_accept_dictation_into_main_filter() {
+                            self.reset_to_script_list(cx);
+                        }
                         self.try_set_main_window_filter_from_dictation(transcript.clone(), cx)
                     }
                     crate::dictation::DictationTarget::MainWindowPrompt => {
@@ -4451,6 +4466,12 @@ impl ScriptListApp {
                     );
 
                     let _ = crate::dictation::close_dictation_overlay(cx);
+                    if matches!(target, crate::dictation::DictationTarget::MainWindowFilter)
+                        && !script_kit_gpui::is_main_window_visible()
+                    {
+                        script_kit_gpui::set_main_window_visible(true);
+                        crate::platform::show_main_window_without_activation();
+                    }
                     self.schedule_dictation_transcriber_cleanup(
                         cx,
                         std::time::Duration::from_secs(300),
@@ -5271,6 +5292,42 @@ impl ScriptListApp {
             | crate::dictation::DictationTarget::NotesEditor
             | crate::dictation::DictationTarget::AiChatComposer
             | crate::dictation::DictationTarget::TabAiHarness => Ok(()),
+        }
+    }
+
+    /// Build the small per-session destination cycle exposed by the overlay
+    /// badge. Keep it intentionally tight: the primary target plus an
+    /// external-app fallback, except external-app sessions which expose the
+    /// main launcher filter as the alternate target.
+    fn dictation_target_cycle_for(
+        &self,
+        target: crate::dictation::DictationTarget,
+    ) -> Vec<crate::dictation::DictationTarget> {
+        match target {
+            crate::dictation::DictationTarget::ExternalApp => vec![
+                crate::dictation::DictationTarget::ExternalApp,
+                crate::dictation::DictationTarget::MainWindowFilter,
+            ],
+            crate::dictation::DictationTarget::MainWindowFilter => vec![
+                crate::dictation::DictationTarget::MainWindowFilter,
+                crate::dictation::DictationTarget::ExternalApp,
+            ],
+            crate::dictation::DictationTarget::MainWindowPrompt => vec![
+                crate::dictation::DictationTarget::MainWindowPrompt,
+                crate::dictation::DictationTarget::ExternalApp,
+            ],
+            crate::dictation::DictationTarget::NotesEditor => vec![
+                crate::dictation::DictationTarget::NotesEditor,
+                crate::dictation::DictationTarget::ExternalApp,
+            ],
+            crate::dictation::DictationTarget::AiChatComposer => vec![
+                crate::dictation::DictationTarget::AiChatComposer,
+                crate::dictation::DictationTarget::ExternalApp,
+            ],
+            crate::dictation::DictationTarget::TabAiHarness => vec![
+                crate::dictation::DictationTarget::TabAiHarness,
+                crate::dictation::DictationTarget::ExternalApp,
+            ],
         }
     }
 

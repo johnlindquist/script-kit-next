@@ -23,6 +23,7 @@ fn fixture_scripts() -> Vec<Arc<Script>> {
             typed_metadata: None,
             schema: None,
             kit_name: Some("main".into()),
+            body: None,
         }),
         Arc::new(Script {
             name: "fetch-data".into(),
@@ -35,6 +36,7 @@ fn fixture_scripts() -> Vec<Arc<Script>> {
             typed_metadata: None,
             schema: None,
             kit_name: None,
+            body: None,
         }),
     ]
 }
