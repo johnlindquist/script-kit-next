@@ -1012,6 +1012,27 @@ impl ScriptListApp {
                 main_div = main_div.child(panel);
             }
 
+            // Footer mouse-event blocker: the native AppKit footer covers the
+            // bottom 30px of the window, but GPUI doesn't know about it. Without
+            // this spacer, GPUI delivers hover events to list items "behind" the
+            // native footer. This invisible div occupies the footer area in the
+            // GPUI layout and stops mouse event propagation.
+            main_div = main_div.child(
+                div()
+                    .id("footer-event-blocker")
+                    .w_full()
+                    .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+                    .on_mouse_move(|_: &gpui::MouseMoveEvent, _window, cx| {
+                        cx.stop_propagation();
+                    })
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _window, cx| {
+                        cx.stop_propagation();
+                    })
+                    .on_mouse_up(gpui::MouseButton::Left, |_, _window, cx| {
+                        cx.stop_propagation();
+                    }),
+            );
+
             if state_changed {
                 let total_elapsed = render_list_start.elapsed();
                 tracing::info!(

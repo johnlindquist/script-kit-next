@@ -8,7 +8,7 @@ use std::{
 
 use gpui::{
     div, prelude::*, px, rgba, svg, AnyElement, App, ClickEvent, FontWeight, IntoElement,
-    RenderOnce, SharedString, Styled, Window,
+    MouseButton, MouseMoveEvent, RenderOnce, SharedString, Window,
 };
 
 use crate::ui::chrome::{
@@ -640,6 +640,7 @@ impl RenderOnce for HintStrip {
         let active_bg = rgba(chrome.selection_rgba);
 
         let mut row = div()
+            .id("hint-strip-footer")
             .w_full()
             .h(px(HINT_STRIP_HEIGHT))
             .px(px(HINT_STRIP_PADDING_X))
@@ -647,7 +648,10 @@ impl RenderOnce for HintStrip {
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(HINT_STRIP_CONTENT_GAP));
+            .gap(px(HINT_STRIP_CONTENT_GAP))
+            .on_mouse_move(|_: &MouseMoveEvent, _window, cx| cx.stop_propagation())
+            .on_mouse_down(MouseButton::Left, |_, _window, cx| cx.stop_propagation())
+            .on_mouse_up(MouseButton::Left, |_, _window, cx| cx.stop_propagation());
 
         if let Some(leading) = self.leading {
             row = row.child(leading);
