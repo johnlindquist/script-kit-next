@@ -215,6 +215,49 @@ unsafe fn ensure_main_footer_host(ns_window: id) {
         let _: () = msg_send![footer_view, addSubview: hints_view];
     }
 
+    // Store the hover CGColor on the footer view for mouseMoved highlight.
+    {
+        let theme = crate::theme::get_cached_theme();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+        let rgba = chrome.hover_rgba;
+        let r = ((rgba >> 24) & 0xFF) as f64 / 255.0;
+        let g = ((rgba >> 16) & 0xFF) as f64 / 255.0;
+        let b = ((rgba >> 8) & 0xFF) as f64 / 255.0;
+        let a = (rgba & 0xFF) as f64 / 255.0;
+        let hover_ns: id = msg_send![
+            class!(NSColor),
+            colorWithSRGBRed: r green: g blue: b alpha: a
+        ];
+        if hover_ns != nil {
+            let cg_color: id = msg_send![hover_ns, CGColor];
+            if cg_color != nil {
+                // SAFETY: Stash CGColor pointer in the effect view's ivar for
+                // mouseMoved highlight. The ivar is registered in
+                // footer_effect_view_class.
+                if let Some(obj) = footer_view.as_mut() {
+                    obj.set_ivar::<usize>("_hoverCGColor", cg_color as usize);
+                }
+            }
+        }
+    }
+
+    // Add tracking area so mouseEntered/mouseExited/mouseMoved fire.
+    let tracking_opts: usize = 0x01 /* MouseEnteredAndExited */
+        | 0x02 /* MouseMoved */
+        | 0x80 /* ActiveAlways */
+        | 0x20 /* InVisibleRect */;
+    let tracking_area: id = msg_send![class!(NSTrackingArea), alloc];
+    let tracking_area: id = msg_send![
+        tracking_area,
+        initWithRect: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0))
+        options: tracking_opts
+        owner: footer_view
+        userInfo: nil
+    ];
+    if tracking_area != nil {
+        let _: () = msg_send![footer_view, addTrackingArea: tracking_area];
+    }
+
     let _: () = msg_send![
         content_view,
         addSubview: footer_view
@@ -514,7 +557,7 @@ unsafe fn make_footer_hint_item(
         let _: () = msg_send![container_layer, setCornerRadius: FOOTER_HINT_RADIUS];
     }
 
-    let button: id = msg_send![class!(NSButton), alloc];
+    let button: id = msg_send![footer_button_class(), alloc];
     let button: id = msg_send![
         button,
         initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(item_width, item_height))
@@ -549,6 +592,7 @@ unsafe fn make_footer_hint_item(
         container,
         setFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(item_width, item_height))
     ];
+
     container
 }
 
@@ -662,6 +706,200 @@ unsafe fn ns_color_from_hex_with_alpha(hex: u32, alpha: f64) -> id {
 }
 
 #[cfg(target_os = "macos")]
+fn footer_button_class() -> *const objc::runtime::Class {
+    use std::sync::OnceLock;
+
+    use objc::declare::ClassDecl;
+    use objc::runtime::{Object, Sel};
+    use objc::{class, sel, sel_impl};
+
+    static CLASS: OnceLock<usize> = OnceLock::new();
+
+    *CLASS.get_or_init(|| {
+        // SAFETY: Registering an ObjC class from NSButton. ClassDecl::new returns
+        // None only if the class name is already registered, in which case we
+        // fall back to the plain NSButton class.
+        unsafe {
+            let superclass = class!(NSButton);
+            let Some(mut decl) = ClassDecl::new("ScriptKitFooterButton", superclass) else {
+                return class!(NSButton) as *const _ as usize;
+            };
+            decl.add_method(
+                sel!(acceptsFirstMouse:),
+                footer_button_accepts_first_mouse
+                    as extern "C" fn(&Object, Sel, id) -> cocoa::base::BOOL,
+            );
+            decl.add_method(
+                sel!(mouseDownCanMoveWindow),
+                footer_button_mouse_down_can_move_window
+                    as extern "C" fn(&Object, Sel) -> cocoa::base::BOOL,
+            );
+            decl.add_method(
+                sel!(resetCursorRects),
+                footer_button_reset_cursor_rects as extern "C" fn(&Object, Sel),
+            );
+            decl.register() as *const _ as usize
+        }
+    }) as *const objc::runtime::Class
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_button_accepts_first_mouse(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    _: id,
+) -> cocoa::base::BOOL {
+    tracing::debug!(
+        target: "script_kit::footer_popup",
+        event = "native_footer_button_accepts_first_mouse",
+        "Native footer button accepted first mouse"
+    );
+    YES
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_button_mouse_down_can_move_window(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+) -> cocoa::base::BOOL {
+    NO
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_button_reset_cursor_rects(
+    this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+) {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    // SAFETY: `this` is a live NSButton subclass. We add a cursor rect covering
+    // the full button bounds so the pointing-hand cursor appears on hover.
+    unsafe {
+        let bounds: cocoa::foundation::NSRect = msg_send![this, bounds];
+        let cursor: id = msg_send![class!(NSCursor), pointingHandCursor];
+        let _: () = msg_send![this, addCursorRect:bounds cursor:cursor];
+    }
+}
+
+/// Find the hint container (NSView with wantsLayer + cornerRadius) under the
+/// mouse point inside the footer effect view. Returns nil if the point doesn't
+/// hit a container.
+#[cfg(target_os = "macos")]
+unsafe fn footer_container_at_point(
+    footer_view: id,
+    point_in_footer: cocoa::foundation::NSPoint,
+) -> id {
+    use objc::{msg_send, sel, sel_impl};
+
+    let hints_view = find_subview_by_identifier(footer_view, FOOTER_HINTS_ID);
+    if hints_view == nil {
+        return nil;
+    }
+    // Convert point from footer_view coordinates to hints_view coordinates.
+    let point_in_hints: cocoa::foundation::NSPoint =
+        msg_send![hints_view, convertPoint: point_in_footer fromView: footer_view];
+    let subviews: id = msg_send![hints_view, subviews];
+    if subviews == nil {
+        return nil;
+    }
+    let count: usize = msg_send![subviews, count];
+    for i in 0..count {
+        let container: id = msg_send![subviews, objectAtIndex: i];
+        if container != nil {
+            let frame: cocoa::foundation::NSRect = msg_send![container, frame];
+            if point_in_hints.x >= frame.origin.x
+                && point_in_hints.x < frame.origin.x + frame.size.width
+                && point_in_hints.y >= frame.origin.y
+                && point_in_hints.y < frame.origin.y + frame.size.height
+            {
+                return container;
+            }
+        }
+    }
+    nil
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn set_container_hover(container: id, hover_cg_color: usize, highlight: bool) {
+    use objc::{msg_send, sel, sel_impl};
+
+    let layer: id = msg_send![container, layer];
+    if layer == nil {
+        return;
+    }
+    if highlight && hover_cg_color != 0 {
+        let _: () = msg_send![layer, setBackgroundColor: hover_cg_color as id];
+    } else {
+        let null_color: id = std::ptr::null_mut();
+        let _: () = msg_send![layer, setBackgroundColor: null_color];
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_effect_mouse_moved(
+    this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    event: id,
+) {
+    use objc::{msg_send, sel, sel_impl};
+
+    // SAFETY: `this` is the footer effect view. Convert the event's
+    // locationInWindow to our coordinate space and find which container is hovered.
+    unsafe {
+        let location: cocoa::foundation::NSPoint = msg_send![event, locationInWindow];
+        let local: cocoa::foundation::NSPoint =
+            msg_send![this, convertPoint: location fromView: nil];
+        let hover_cg_color: usize = *this.get_ivar::<usize>("_hoverCGColor");
+        let prev_container: usize = *this.get_ivar::<usize>("_hoveredContainer");
+        let container = footer_container_at_point(this as *const _ as id, local);
+        let container_ptr = container as usize;
+
+        if container_ptr == prev_container {
+            return; // No change.
+        }
+
+        // Clear previous.
+        if prev_container != 0 {
+            set_container_hover(prev_container as id, 0, false);
+        }
+        // Highlight new.
+        if container_ptr != 0 {
+            set_container_hover(container, hover_cg_color, true);
+        }
+        // Update tracked pointer.
+        // SAFETY: Writing to the ivar we own.
+        (*(this as *const _ as *mut objc::runtime::Object))
+            .set_ivar::<usize>("_hoveredContainer", container_ptr);
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_effect_mouse_entered(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    _event: id,
+) {
+    // Tracking area entered — mouseMoved will handle highlighting.
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_effect_mouse_exited(
+    this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    _event: id,
+) {
+    // SAFETY: Mouse left the footer — clear any highlighted container.
+    unsafe {
+        let prev_container: usize = *this.get_ivar::<usize>("_hoveredContainer");
+        if prev_container != 0 {
+            set_container_hover(prev_container as id, 0, false);
+            (*(this as *const _ as *mut objc::runtime::Object))
+                .set_ivar::<usize>("_hoveredContainer", 0usize);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn footer_effect_view_class() -> *const objc::runtime::Class {
     use std::sync::OnceLock;
 
@@ -676,6 +914,20 @@ fn footer_effect_view_class() -> *const objc::runtime::Class {
         let Some(mut decl) = ClassDecl::new("ScriptKitFooterEffectView", superclass) else {
             return class!(NSVisualEffectView) as *const _ as usize;
         };
+        decl.add_ivar::<usize>("_hoverCGColor");
+        decl.add_ivar::<usize>("_hoveredContainer");
+        decl.add_method(
+            sel!(mouseMoved:),
+            footer_effect_mouse_moved as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(mouseEntered:),
+            footer_effect_mouse_entered as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(mouseExited:),
+            footer_effect_mouse_exited as extern "C" fn(&Object, Sel, id),
+        );
         decl.add_method(
             sel!(hitTest:),
             footer_hit_test as extern "C" fn(&Object, Sel, cocoa::foundation::NSPoint) -> id,
