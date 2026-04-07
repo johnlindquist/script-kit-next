@@ -309,6 +309,10 @@ impl ScriptListApp {
         let match_signature = scripts::preview_match_signature(content_match);
         let matched_line = content_match.map(|cm| cm.line_number);
 
+        let cached_path_matches = self.preview_cache_path.as_deref() == Some(script_path);
+        let cached_signature_matches = self.preview_cache_match_signature == match_signature;
+        let cache_has_lines = !self.preview_cache_lines.is_empty();
+
         // Check if cache is valid for this path and match signature
         if scripts::preview_cache_is_valid(
             self.preview_cache_path.as_deref(),
@@ -320,8 +324,29 @@ impl ScriptListApp {
             return &self.preview_cache_lines;
         }
 
+        let miss_reason = if !cached_path_matches {
+            "path_changed"
+        } else if !cached_signature_matches {
+            "match_signature_changed"
+        } else if !cache_has_lines {
+            "empty_cache"
+        } else {
+            "unknown"
+        };
+
         // Cache miss - need to re-read and re-highlight
         let cache_miss_start = std::time::Instant::now();
+        logging::log(
+            "FILTER_PERF",
+            &format!(
+                "[PREVIEW_CACHE_MISS_REASON] path='{}' reason={} cached_path={:?} cached_match_signature={:?} requested_match_signature={:?}",
+                script_path,
+                miss_reason,
+                self.preview_cache_path,
+                self.preview_cache_match_signature,
+                match_signature
+            ),
+        );
         logging::log(
             "FILTER_PERF",
             &format!(

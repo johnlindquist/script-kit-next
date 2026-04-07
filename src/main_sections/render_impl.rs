@@ -212,7 +212,7 @@ impl Render for ScriptListApp {
         // NOTE: Prompt messages are now handled via event-driven async_channel listener
         // spawned in execute_interactive() - no polling needed in render()
 
-        self.sync_main_footer_popup(cx);
+        self.sync_main_footer_popup(window, cx);
 
         // P0-4: Clone current_view only for dispatch (needed to call &mut self methods)
         // The clone is unavoidable due to borrow checker: we need &mut self for render methods

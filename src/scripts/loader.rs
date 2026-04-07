@@ -154,3 +154,48 @@ fn load_script_entry(entry: std::fs::DirEntry, kit_path: &Path) -> Option<Arc<Sc
         body,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_test_dir(label: &str) -> PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock should be after UNIX epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("script-kit-gpui-{}-{}", label, nonce))
+    }
+
+    #[test]
+    fn read_scripts_from_dir_reloads_updated_body_content() {
+        let root = unique_test_dir("loader-body-reload");
+        let scripts_dir = root.join("kit").join("main").join("scripts");
+        fs::create_dir_all(&scripts_dir).expect("scripts dir should be created for test");
+
+        let script_path = scripts_dir.join("demo.ts");
+        fs::write(&script_path, "console.log('alphaUniqueToken');\n")
+            .expect("first write should succeed");
+
+        let first = read_scripts_from_dir(&scripts_dir, &root);
+        assert_eq!(first.len(), 1);
+        assert_eq!(
+            first[0].body.as_deref(),
+            Some("console.log('alphaUniqueToken');\n")
+        );
+
+        fs::write(&script_path, "console.log('betaUniqueToken');\n")
+            .expect("second write should succeed");
+
+        let second = read_scripts_from_dir(&scripts_dir, &root);
+        assert_eq!(second.len(), 1);
+        assert_eq!(
+            second[0].body.as_deref(),
+            Some("console.log('betaUniqueToken');\n")
+        );
+
+        let _ = fs::remove_dir_all(&root);
+    }
+}

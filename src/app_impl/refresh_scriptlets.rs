@@ -258,6 +258,16 @@ impl ScriptListApp {
         self.invalidate_grouped_cache();
         self.invalidate_preview_cache();
 
+        let indexed_bodies = self.scripts.iter().filter(|s| s.body.is_some()).count();
+        logging::log(
+            "APP",
+            &format!(
+                "script_content_index_refresh: scripts={} indexed_bodies={} filter_cache_invalidated=true grouped_cache_invalidated=true preview_cache_invalidated=true",
+                self.scripts.len(),
+                indexed_bodies
+            ),
+        );
+
         // Sync list component state and validate selection
         // This moves state mutation OUT of render() (anti-pattern fix)
         self.sync_list_state();
