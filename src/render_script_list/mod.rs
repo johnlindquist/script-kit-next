@@ -860,6 +860,7 @@ impl ScriptListApp {
         // This ensures main menu, AI chat, and all prompts have consistent styling
 
         let mut main_div = div()
+            .relative()
             .flex()
             .flex_col()
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
@@ -1012,24 +1013,21 @@ impl ScriptListApp {
                 main_div = main_div.child(panel);
             }
 
-            // GPUI event blocker: the native NSVisualEffectView footer sits on
-            // top of the Metal layer, but GPUI's own mouse tracking still
-            // delivers hover events to list items behind it. This invisible div
-            // occupies the footer area in the GPUI layout and stops propagation.
+            // GPUI hover blocker: the native NSVisualEffectView footer sits on
+            // top of the Metal layer, but GPUI's own hit test still delivers
+            // hover events to list items behind it. block_mouse_except_scroll
+            // tells the hit test to exclude elements behind this div from hover
+            // while still allowing scroll events through. Absolutely positioned
+            // so the list extends fully underneath for blur-through.
             main_div = main_div.child(
                 div()
-                    .id("footer-event-blocker")
+                    .id("footer-hover-blocker")
+                    .absolute()
+                    .bottom(px(0.))
+                    .left(px(0.))
                     .w_full()
                     .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
-                    .on_mouse_move(|_: &gpui::MouseMoveEvent, _window, cx| {
-                        cx.stop_propagation();
-                    })
-                    .on_mouse_down(gpui::MouseButton::Left, |_, _window, cx| {
-                        cx.stop_propagation();
-                    })
-                    .on_mouse_up(gpui::MouseButton::Left, |_, _window, cx| {
-                        cx.stop_propagation();
-                    }),
+                    .block_mouse_except_scroll(),
             );
 
             if state_changed {
