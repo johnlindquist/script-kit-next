@@ -514,7 +514,7 @@ unsafe fn make_footer_hint_item(
         let _: () = msg_send![container_layer, setCornerRadius: FOOTER_HINT_RADIUS];
     }
 
-    let button: id = msg_send![class!(NSButton), alloc];
+    let button: id = msg_send![footer_button_class(), alloc];
     let button: id = msg_send![
         button,
         initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(item_width, item_height))
@@ -659,6 +659,62 @@ unsafe fn ns_color_from_hex_with_alpha(hex: u32, alpha: f64) -> id {
         blue: blue
         alpha: alpha
     ]
+}
+
+#[cfg(target_os = "macos")]
+fn footer_button_class() -> *const objc::runtime::Class {
+    use std::sync::OnceLock;
+
+    use objc::declare::ClassDecl;
+    use objc::runtime::{Object, Sel};
+    use objc::{class, sel, sel_impl};
+
+    static CLASS: OnceLock<usize> = OnceLock::new();
+
+    *CLASS.get_or_init(|| {
+        // SAFETY: Registering an ObjC class from NSButton. ClassDecl::new returns
+        // None only if the class name is already registered, in which case we
+        // fall back to the plain NSButton class.
+        unsafe {
+            let superclass = class!(NSButton);
+            let Some(mut decl) = ClassDecl::new("ScriptKitFooterButton", superclass) else {
+                return class!(NSButton) as *const _ as usize;
+            };
+            decl.add_method(
+                sel!(acceptsFirstMouse:),
+                footer_button_accepts_first_mouse
+                    as extern "C" fn(&Object, Sel, id) -> cocoa::base::BOOL,
+            );
+            decl.add_method(
+                sel!(mouseDownCanMoveWindow),
+                footer_button_mouse_down_can_move_window
+                    as extern "C" fn(&Object, Sel) -> cocoa::base::BOOL,
+            );
+            decl.register() as *const _ as usize
+        }
+    }) as *const objc::runtime::Class
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_button_accepts_first_mouse(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    _: id,
+) -> cocoa::base::BOOL {
+    tracing::debug!(
+        target: "script_kit::footer_popup",
+        event = "native_footer_button_accepts_first_mouse",
+        "Native footer button accepted first mouse"
+    );
+    YES
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_button_mouse_down_can_move_window(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+) -> cocoa::base::BOOL {
+    NO
 }
 
 #[cfg(target_os = "macos")]
