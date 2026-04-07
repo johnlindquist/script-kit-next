@@ -1,7 +1,6 @@
 use gpui::{
-    div, px, AnyWindowHandle, App, AppContext, Bounds, DisplayId, InteractiveElement, Pixels,
-    SharedString, StatefulInteractiveElement, Styled, Window, WindowBounds, WindowHandle,
-    WindowKind, WindowOptions,
+    px, AnyWindowHandle, App, AppContext, Bounds, DisplayId, Pixels, Window, WindowBounds,
+    WindowHandle, WindowKind, WindowOptions,
 };
 
 use crate::ai::context_picker_row::CONTEXT_PICKER_ROW_HEIGHT;
@@ -69,19 +68,6 @@ where
 pub(crate) fn footer_anchored_popup_top(parent_height: f32, popup_height: f32) -> f32 {
     let bottom_offset = crate::window_resize::mini_layout::HINT_STRIP_HEIGHT + 4.0;
     (parent_height - bottom_offset - popup_height).max(0.0)
-}
-
-pub(crate) fn dense_picker_popup_surface(id: SharedString) -> gpui::Stateful<gpui::Div> {
-    let theme = crate::theme::get_cached_theme();
-    let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-
-    div()
-        .id(id)
-        .rounded(px(8.0))
-        .overflow_hidden()
-        .bg(gpui::rgba(chrome.popup_surface_rgba))
-        .border_1()
-        .border_color(gpui::rgba(chrome.border_rgba))
 }
 
 pub(crate) fn popup_bounds(

@@ -1104,3 +1104,17 @@ fn mention_empty_state_hints_show_available_provider_entries() {
 
     restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
 }
+
+#[test]
+fn context_picker_selection_clamps_via_shared_dropdown_contract() {
+    use crate::components::inline_dropdown::inline_dropdown_clamp_selected_index;
+    assert_eq!(inline_dropdown_clamp_selected_index(0, 0), 0);
+    assert_eq!(inline_dropdown_clamp_selected_index(8, 2), 1);
+}
+
+#[test]
+fn context_picker_visible_range_uses_shared_dropdown_contract() {
+    use crate::components::inline_dropdown::inline_dropdown_visible_range;
+    assert_eq!(inline_dropdown_visible_range(0, 4, 8), 0..4);
+    assert_eq!(inline_dropdown_visible_range(6, 20, 8), 2..10);
+}

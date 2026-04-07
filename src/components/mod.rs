@@ -35,6 +35,7 @@ pub mod form_fields;
 #[cfg(test)]
 mod form_fields_tests;
 pub mod hint_strip;
+pub(crate) mod inline_dropdown;
 pub mod inline_prompt_input;
 pub mod minimal_prompt_shell;
 pub(crate) mod overlay_modal;
@@ -65,6 +66,12 @@ pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextAre
 pub use hint_strip::{
     render_hint_icons, render_hint_icons_clickable, render_hint_icons_hsla, ClickableHint,
     HintStrip,
+};
+#[allow(unused_imports)]
+pub(crate) use inline_dropdown::{
+    inline_dropdown_clamp_selected_index, inline_dropdown_select_next, inline_dropdown_select_prev,
+    inline_dropdown_visible_range, InlineDropdown, InlineDropdownColors, InlineDropdownEmptyState,
+    InlineDropdownSynopsis,
 };
 #[allow(unused_imports)]
 pub use inline_prompt_input::InlinePromptInput;

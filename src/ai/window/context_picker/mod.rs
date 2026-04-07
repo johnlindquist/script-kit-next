@@ -518,10 +518,11 @@ impl AiApp {
             picker.trigger = trigger;
             picker.query = query.clone();
             picker.items = items;
-            // Clamp selected_index to valid range
-            if picker.selected_index >= picker.items.len() {
-                picker.selected_index = picker.items.len().saturating_sub(1);
-            }
+            picker.selected_index =
+                crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
+                    picker.selected_index,
+                    picker.items.len(),
+                );
             tracing::info!(
                 target: "ai",
                 ?trigger,
@@ -688,13 +689,10 @@ impl AiApp {
     /// Move selection up in the picker.
     pub(super) fn context_picker_select_prev(&mut self, cx: &mut Context<Self>) {
         if let Some(picker) = self.context_picker.as_mut() {
-            if !picker.items.is_empty() {
-                if picker.selected_index > 0 {
-                    picker.selected_index -= 1;
-                } else {
-                    picker.selected_index = picker.items.len() - 1;
-                }
-            }
+            picker.selected_index = crate::components::inline_dropdown::inline_dropdown_select_prev(
+                picker.selected_index,
+                picker.items.len(),
+            );
         }
         self.reveal_selected_context_picker_item("keyboard_prev", cx);
     }
@@ -702,9 +700,10 @@ impl AiApp {
     /// Move selection down in the picker.
     pub(super) fn context_picker_select_next(&mut self, cx: &mut Context<Self>) {
         if let Some(picker) = self.context_picker.as_mut() {
-            if !picker.items.is_empty() {
-                picker.selected_index = (picker.selected_index + 1) % picker.items.len();
-            }
+            picker.selected_index = crate::components::inline_dropdown::inline_dropdown_select_next(
+                picker.selected_index,
+                picker.items.len(),
+            );
         }
         self.reveal_selected_context_picker_item("keyboard_next", cx);
     }
