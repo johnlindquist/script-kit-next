@@ -10,7 +10,6 @@ use gpui::{
 
 use crate::ai::context_picker_row::{render_dense_monoline_picker_row_with_accessory, GOLD};
 use crate::components::inline_dropdown::{InlineDropdown, InlineDropdownColors};
-use gpui_component::scroll::ScrollableElement;
 use gpui_component::{IconName, IconNamed};
 
 use super::view::AcpChatView;
@@ -233,6 +232,14 @@ impl AcpModelSelectorPopupWindow {
         self.snapshot = snapshot;
     }
 
+    fn visible_range(&self) -> std::ops::Range<usize> {
+        crate::components::inline_dropdown::inline_dropdown_visible_range(
+            self.snapshot.selected_index,
+            self.snapshot.entries.len(),
+            super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS,
+        )
+    }
+
     fn select_model(&self, model_id: &str, cx: &mut App) {
         if let Some(view) = self.source_view.upgrade() {
             let model_id = model_id.to_string();
@@ -257,17 +264,19 @@ impl Render for AcpModelSelectorPopupWindow {
         let colors = InlineDropdownColors::from_theme(&theme);
         let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
         let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
-        let popup_height = popup_height(&self.snapshot);
+        let visible = self.visible_range();
 
         let body = div()
-            .w_full()
-            .max_h(px(popup_height))
-            .overflow_y_scrollbar()
+            .size_full()
+            .flex()
+            .flex_col()
             .children(
                 self.snapshot
                     .entries
                     .iter()
                     .enumerate()
+                    .skip(visible.start)
+                    .take(visible.len())
                     .map(|(idx, entry)| {
                         let model_id = entry.id.clone();
                         let accessory = entry.is_active.then(|| {
@@ -303,6 +312,8 @@ impl Render for AcpModelSelectorPopupWindow {
             popup = "model_selector",
             entry_count = self.snapshot.entries.len(),
             selected_index = self.snapshot.selected_index,
+            visible_start = visible.start,
+            visible_end = visible.end,
             "inline_dropdown_model_selector_rendered"
         );
 
