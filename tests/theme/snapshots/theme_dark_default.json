@@ -60,7 +60,7 @@
     "input_active": 0.5,
     "border_inactive": 0.125,
     "border_active": 0.25,
-    "vibrancy_background": 0.85
+    "vibrancy_background": 0.75
   },
   "drop_shadow": {
     "enabled": true,
@@ -73,7 +73,7 @@
   },
   "vibrancy": {
     "enabled": true,
-    "material": "popover"
+    "material": "hud"
   },
   "fonts": {
     "mono_family": "JetBrains Mono",
