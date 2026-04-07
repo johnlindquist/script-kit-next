@@ -344,6 +344,12 @@ impl AcpChatView {
         self.on_open_portal = Some(std::sync::Arc::new(callback));
     }
 
+    /// Register an inline mention token as owned so the mention sync system
+    /// will remove the corresponding context part when the token is deleted.
+    pub(crate) fn register_inline_owned_token(&mut self, token: String) {
+        self.inline_owned_context_tokens.insert(token);
+    }
+
     /// Invoke a footer callback outside the AcpChatView borrow by spawning an
     /// immediate async task. The host callbacks (toggle_actions, close, etc.)
     /// may need to entity.read() this view, which panics if we're inside update.

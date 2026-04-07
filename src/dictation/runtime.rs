@@ -35,6 +35,8 @@ struct DictationSession {
     /// Captured at start time so the delivery path knows where to route
     /// the transcript even if the UI changes while the user is speaking.
     target: DictationTarget,
+    /// Ordered list of destinations the overlay badge cycles through.
+    target_cycle: Vec<DictationTarget>,
 }
 
 /// Global singleton guarded by a parking_lot Mutex.
@@ -103,6 +105,63 @@ pub fn toggle_dictation(target: DictationTarget) -> Result<DictationToggleOutcom
 /// session started.  Returns `None` when no session is active.
 pub fn get_dictation_target() -> Option<DictationTarget> {
     SESSION.lock().as_ref().map(|s| s.target)
+}
+
+/// Replace the active session's destination cycle. The current target is
+/// preserved and inserted if omitted so overlay state and delivery stay aligned.
+pub fn set_dictation_target_cycle(targets: Vec<DictationTarget>) -> bool {
+    let mut guard = SESSION.lock();
+    let Some(session) = guard.as_mut() else {
+        return false;
+    };
+
+    let mut cycle = vec![session.target];
+    for target in targets {
+        if !cycle.contains(&target) {
+            cycle.push(target);
+        }
+    }
+
+    session.target_cycle = cycle;
+    true
+}
+
+/// Returns true when the active session has more than one destination in its
+/// cycle, meaning the overlay badge should look interactive.
+pub fn can_cycle_dictation_target() -> bool {
+    SESSION
+        .lock()
+        .as_ref()
+        .map(|session| session.target_cycle.len() > 1)
+        .unwrap_or(false)
+}
+
+/// Advance the active session to the next configured destination.
+pub fn cycle_dictation_target() -> Option<DictationTarget> {
+    let mut guard = SESSION.lock();
+    let session = guard.as_mut()?;
+
+    if session.target_cycle.len() < 2 {
+        return Some(session.target);
+    }
+
+    let current_ix = session
+        .target_cycle
+        .iter()
+        .position(|target| *target == session.target)
+        .unwrap_or(0);
+    let next_ix = (current_ix + 1) % session.target_cycle.len();
+    let next_target = session.target_cycle[next_ix];
+    session.target = next_target;
+
+    tracing::info!(
+        category = "DICTATION",
+        ?next_target,
+        target_label = next_target.overlay_label(),
+        "Dictation target cycled"
+    );
+
+    Some(next_target)
 }
 
 /// Abort the active dictation session without transcribing or delivering text.
@@ -287,6 +346,7 @@ fn start_recording(target: DictationTarget) -> Result<()> {
         started_at: Instant::now(),
         overlay_phase: DictationSessionPhase::Recording,
         target,
+        target_cycle: vec![target],
     };
 
     *SESSION.lock() = Some(session);

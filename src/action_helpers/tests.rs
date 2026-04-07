@@ -10,7 +10,7 @@ use crate::builtins::{BuiltInEntry, BuiltInFeature, BuiltInGroup};
 use crate::fallbacks::{BuiltinFallback, FallbackAction, FallbackCondition, FallbackItem};
 use crate::scripts::{
     AgentMatch, AppMatch, BuiltInMatch, FallbackMatch, MatchIndices, Script, ScriptMatch,
-    Scriptlet, ScriptletMatch, WindowMatch,
+    ScriptMatchKind, Scriptlet, ScriptletMatch, WindowMatch,
 };
 use crate::window_control;
 use std::path::PathBuf;
@@ -28,6 +28,7 @@ fn make_script(name: &str, path: &str) -> Arc<Script> {
         typed_metadata: None,
         schema: None,
         kit_name: None,
+        body: None,
     })
 }
 
@@ -37,6 +38,8 @@ fn make_script_match(name: &str, path: &str) -> ScriptMatch {
         score: 100,
         filename: format!("{}.ts", name),
         match_indices: MatchIndices::default(),
+        match_kind: ScriptMatchKind::default(),
+        content_match: None,
     }
 }
 

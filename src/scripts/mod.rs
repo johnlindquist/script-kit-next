@@ -40,7 +40,8 @@ pub use self::search::{
 #[allow(unused_imports)]
 pub use self::types::{
     AgentMatch, AppMatch, BuiltInMatch, FallbackConfig, FallbackMatch, MatchIndices, Script,
-    ScriptMatch, Scriptlet, ScriptletMatch, SearchResult, WindowMatch,
+    ScriptContentMatch, ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult,
+    WindowMatch,
 };
 
 #[cfg(test)]
@@ -48,10 +49,12 @@ pub(crate) use self::metadata::{
     extract_full_metadata, extract_script_metadata, parse_metadata_line,
 };
 
+pub use self::search::fuzzy_search_scripts;
+
 #[cfg(test)]
 pub(crate) use self::search::{
-    fuzzy_search_scriptlets, fuzzy_search_scripts, fuzzy_search_unified_with_builtins,
-    fuzzy_search_unified_with_windows, fuzzy_search_windows,
+    fuzzy_search_scriptlets, fuzzy_search_unified_with_builtins, fuzzy_search_unified_with_windows,
+    fuzzy_search_windows,
 };
 
 // Re-export external types needed by tests via super::*

@@ -270,19 +270,24 @@
         }).detach();
 
         // Dictation hotkey listener - event-driven via async_channel
-        // Routes through the same BuiltInFeature::Dictation path as the main menu.
-        // Dictation is a no-main-window builtin: we capture the return value and
-        // suppress any main-window show call on this path.
+        // The global dictation shortcut should always target the previously
+        // frontmost external app, even when Script Kit is visible. Route
+        // through the dedicated forced frontmost-app builtin so the
+        // contextual main-window/prompt dictation behavior remains available
+        // from the regular builtin entry.
         let app_entity_for_dictation = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Dictation hotkey listener started (event-driven)");
             while let Ok(hotkey_event) = hotkeys::dictation_hotkey_channel().1.recv().await {
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
-                logging::log("HOTKEY", "Dictation hotkey triggered - toggling dictation via builtin");
+                logging::log(
+                    "HOTKEY",
+                    "Dictation hotkey triggered - toggling dictation to frontmost app via builtin",
+                );
                 let app_entity_inner = app_entity_for_dictation.clone();
                 let _ = cx.update(move |cx: &mut gpui::App| {
                     let should_show_window = app_entity_inner.update(cx, |view, ctx| {
-                        view.execute_by_command_id_or_path("builtin/dictation", ctx)
+                        view.execute_by_command_id_or_path("builtin/dictation-to-app", ctx)
                     });
                     if should_show_window {
                         logging::log(

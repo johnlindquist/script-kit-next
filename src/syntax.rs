@@ -82,6 +82,8 @@ pub struct HighlightedSpan {
     pub color: u32,
     /// Whether this span ends a line (contains newline)
     pub is_line_end: bool,
+    /// Whether this span should be rendered with match emphasis (gold accent at ghost opacity)
+    pub is_match_emphasis: bool,
 }
 
 impl HighlightedSpan {
@@ -93,6 +95,19 @@ impl HighlightedSpan {
             text: text_str,
             color,
             is_line_end,
+            is_match_emphasis: false,
+        }
+    }
+
+    /// Create a span with match emphasis enabled
+    pub fn with_match_emphasis(text: impl Into<String>, color: u32) -> Self {
+        let text_str = text.into();
+        let is_line_end = text_str.ends_with('\n');
+        Self {
+            text: text_str,
+            color,
+            is_line_end,
+            is_match_emphasis: true,
         }
     }
 }

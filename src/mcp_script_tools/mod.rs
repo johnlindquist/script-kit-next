@@ -210,6 +210,7 @@ mod tests {
             typed_metadata: None,
             schema: Some(schema),
             kit_name: None,
+            body: None,
         }
     }
 
@@ -244,6 +245,7 @@ mod tests {
             typed_metadata: None,
             schema: None,
             kit_name: None,
+            body: None,
         }
     }
 

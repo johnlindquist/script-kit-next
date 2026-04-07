@@ -94,22 +94,6 @@ pub(crate) fn has_sound(bars: &[f32; WAVEFORM_BAR_COUNT]) -> bool {
     bars.iter().any(|&bar| bar > SOUND_THRESHOLD)
 }
 
-/// Render a compact mono destination badge for the overlay's right-hand slot.
-fn render_target_badge(target: crate::dictation::DictationTarget) -> impl IntoElement {
-    let theme = get_cached_theme();
-    div()
-        .px(px(8.))
-        .py(px(2.))
-        .rounded(px(999.))
-        .bg(theme.colors.background.main.with_opacity(OPACITY_SUBTLE))
-        .border_1()
-        .border_color(theme.colors.ui.border.with_opacity(OPACITY_SUBTLE))
-        .text_size(px(STATUS_TEXT_SIZE_PX - 1.0))
-        .font_family(FONT_MONO)
-        .text_color(theme.colors.text.muted.with_opacity(OPACITY_SELECTED))
-        .child(target.overlay_label())
-}
-
 /// Pulse cycle duration in seconds (matches vercel-voice 1.4s).
 pub(crate) const TRANSCRIBING_PULSE_PERIOD_SECS: f64 = 1.4;
 /// Stagger between consecutive dots in seconds (matches vercel-voice 0.2s).
@@ -171,8 +155,8 @@ impl Default for DictationOverlayState {
 
 use gpui::{
     div, prelude::*, px, rgb, App, Context, FocusHandle, Focusable, IntoElement, KeyDownEvent,
-    MouseButton, MouseDownEvent, ParentElement, Render, Styled, Task, Window, WindowBounds,
-    WindowOptions,
+    MouseButton, MouseDownEvent, ParentElement, Render, StatefulInteractiveElement, Styled, Task,
+    Window, WindowBounds, WindowOptions,
 };
 
 use crate::list_item::FONT_MONO;
@@ -503,6 +487,20 @@ impl DictationOverlay {
         cx.notify();
     }
 
+    /// Advance the live dictation session to its next configured destination.
+    fn cycle_target(&mut self, cx: &mut Context<Self>) {
+        if self.state.phase != DictationSessionPhase::Recording {
+            return;
+        }
+
+        let Some(next_target) = crate::dictation::cycle_dictation_target() else {
+            return;
+        };
+
+        self.state.target = next_target;
+        cx.notify();
+    }
+
     /// Abort the dictation session via the registered callback and close
     /// the overlay window directly.
     ///
@@ -660,6 +658,59 @@ impl DictationOverlay {
         cx.notify();
     }
 
+    /// Render the right-side target badge, matching footer-button mouse
+    /// affordances when cycling is available.
+    fn render_target_badge_slot(
+        &self,
+        interactive: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let theme = get_cached_theme();
+        let hover_bg = theme.colors.background.main.with_opacity(OPACITY_SELECTED);
+        let active_bg = theme.colors.background.main.with_opacity(OPACITY_ACTIVE);
+
+        let mut label = div()
+            .text_size(px(STATUS_TEXT_SIZE_PX - 1.0))
+            .font_family(FONT_MONO)
+            .text_color(theme.colors.text.muted.with_opacity(OPACITY_SELECTED))
+            .child(self.state.target.overlay_label());
+        if interactive {
+            label = label.cursor_pointer();
+        }
+
+        let mut badge = div()
+            .id("dictation-target-badge")
+            .px(px(8.))
+            .py(px(2.))
+            .rounded(px(999.))
+            .bg(theme.colors.background.main.with_opacity(OPACITY_SUBTLE))
+            .border_1()
+            .border_color(theme.colors.ui.border.with_opacity(OPACITY_SUBTLE))
+            .cursor_default()
+            .child(label);
+
+        if interactive {
+            badge = badge
+                .cursor_pointer()
+                .hover(move |style| style.bg(hover_bg))
+                .active(move |style| style.bg(active_bg))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _event: &MouseDownEvent, _window, cx| {
+                        this.cycle_target(cx);
+                    }),
+                );
+        }
+
+        div()
+            .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_end()
+            .child(badge)
+    }
+
     /// Handle key-down events for the overlay.
     ///
     /// Escape semantics (vercel-voice 5-second threshold pattern):
@@ -788,6 +839,7 @@ impl Render for DictationOverlay {
             DictationSessionPhase::Recording => {
                 let timer_text = format_elapsed(*elapsed);
                 let active = has_sound(bars);
+                let target_badge_interactive = crate::dictation::can_cycle_dictation_target();
 
                 div()
                     .flex()
@@ -815,15 +867,7 @@ impl Render for DictationOverlay {
                             .child(render_waveform_bars(bars, active)),
                     )
                     // Right: destination badge
-                    .child(
-                        div()
-                            .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .justify_end()
-                            .child(render_target_badge(self.state.target)),
-                    )
+                    .child(self.render_target_badge_slot(target_badge_interactive, cx))
             }
             DictationSessionPhase::Confirming => {
                 // Same 3-column horizontal layout as recording — content swaps
@@ -834,6 +878,10 @@ impl Render for DictationOverlay {
                 let continue_color = theme.colors.ui.success.with_opacity(OPACITY_ACTIVE);
                 let stop_bg = theme.colors.ui.error.with_opacity(0.14);
                 let continue_bg = theme.colors.ui.success.with_opacity(0.08);
+                let stop_hover_bg = theme.colors.ui.error.with_opacity(0.22);
+                let stop_active_bg = theme.colors.ui.error.with_opacity(0.30);
+                let continue_hover_bg = theme.colors.ui.success.with_opacity(0.16);
+                let continue_active_bg = theme.colors.ui.success.with_opacity(0.24);
 
                 div()
                     .flex()
@@ -861,6 +909,7 @@ impl Render for DictationOverlay {
                             .gap(px(10.))
                             .child(
                                 div()
+                                    .id("dictation-stop-button")
                                     .px(px(8.))
                                     .py(px(2.))
                                     .bg(stop_bg)
@@ -870,6 +919,9 @@ impl Render for DictationOverlay {
                                     .text_size(px(STATUS_TEXT_SIZE_PX))
                                     .font_family(FONT_MONO)
                                     .text_color(stop_color)
+                                    .cursor_pointer()
+                                    .hover(move |style| style.bg(stop_hover_bg))
+                                    .active(move |style| style.bg(stop_active_bg))
                                     .on_mouse_down(
                                         MouseButton::Left,
                                         cx.listener(|this, _event: &MouseDownEvent, window, cx| {
@@ -880,6 +932,7 @@ impl Render for DictationOverlay {
                             )
                             .child(
                                 div()
+                                    .id("dictation-continue-button")
                                     .px(px(8.))
                                     .py(px(2.))
                                     .bg(continue_bg)
@@ -889,6 +942,9 @@ impl Render for DictationOverlay {
                                     .text_size(px(STATUS_TEXT_SIZE_PX))
                                     .font_family(FONT_MONO)
                                     .text_color(continue_color)
+                                    .cursor_pointer()
+                                    .hover(move |style| style.bg(continue_hover_bg))
+                                    .active(move |style| style.bg(continue_active_bg))
                                     .on_mouse_down(
                                         MouseButton::Left,
                                         cx.listener(|this, _event: &MouseDownEvent, window, cx| {
@@ -899,15 +955,7 @@ impl Render for DictationOverlay {
                             ),
                     )
                     // Right: destination badge
-                    .child(
-                        div()
-                            .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .justify_end()
-                            .child(render_target_badge(self.state.target)),
-                    )
+                    .child(self.render_target_badge_slot(false, cx))
             }
             DictationSessionPhase::Transcribing => {
                 // 3 green dots matching vercel-voice .transcribing-dots

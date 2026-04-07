@@ -116,6 +116,8 @@ fn test_search_result_name_accessor() {
         score: 50,
         filename: "test.ts".to_string(),
         match_indices: MatchIndices::default(),
+        match_kind: ScriptMatchKind::default(),
+        content_match: None,
     });
 
     assert_eq!(script.name(), "TestName");

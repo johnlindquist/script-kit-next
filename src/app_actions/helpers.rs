@@ -535,6 +535,8 @@ mod app_actions_tests {
             score: 0,
             filename: "deploy.ts".to_string(),
             match_indices: scripts::MatchIndices::default(),
+            match_kind: scripts::ScriptMatchKind::default(),
+            content_match: None,
         });
 
         let script_target = script_removal_target_from_result(&script_result);

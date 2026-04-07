@@ -256,6 +256,7 @@ impl ScriptListApp {
         self.scriptlets = loaded_scriptlets;
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();
+        self.invalidate_preview_cache();
 
         // Sync list component state and validate selection
         // This moves state mutation OUT of render() (anti-pattern fix)
@@ -505,6 +506,7 @@ impl ScriptListApp {
         // Invalidate caches
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();
+        self.invalidate_preview_cache();
 
         // Sync list component state so GPUI renders the correct item count
         self.sync_list_state();

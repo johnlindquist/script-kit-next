@@ -2163,6 +2163,7 @@ mod tests {
             typed_metadata: None,
             schema: None,
             kit_name: None,
+            body: None,
         }
     }
 
@@ -2424,6 +2425,7 @@ mod tests {
                 output: HashMap::new(),
             }),
             kit_name: None,
+            body: None,
         };
 
         let entry: ScriptResourceEntry = (&script_with_schema).into();

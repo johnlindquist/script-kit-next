@@ -187,6 +187,8 @@ fn test_search_result_name_never_empty() {
             score: result.score,
             filename: result.filename.clone(),
             match_indices: result.match_indices.clone(),
+            match_kind: ScriptMatchKind::default(),
+            content_match: None,
         };
         let search_result = SearchResult::Script(script_match);
         assert!(!search_result.name().is_empty());
@@ -319,6 +321,8 @@ fn test_search_result_type_label_consistency() {
         score: 0,
         filename: "test.ts".to_string(),
         match_indices: MatchIndices::default(),
+        match_kind: ScriptMatchKind::default(),
+        content_match: None,
     });
 
     // Should always return "Script"

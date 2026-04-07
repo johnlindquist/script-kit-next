@@ -1146,6 +1146,7 @@ impl ScriptListApp {
                     typed_metadata: None,
                     schema: None,
                     kit_name: None,
+                    body: None,
                 };
 
                 tracing::info!(

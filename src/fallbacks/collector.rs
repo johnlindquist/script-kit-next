@@ -169,6 +169,7 @@ mod tests {
             }),
             schema: None,
             kit_name: None,
+            body: None,
         })
     }
 
@@ -185,6 +186,7 @@ mod tests {
             typed_metadata: None,
             schema: None,
             kit_name: None,
+            body: None,
         })
     }
 

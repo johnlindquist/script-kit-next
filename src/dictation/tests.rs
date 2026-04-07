@@ -1402,8 +1402,9 @@ fn dictation_focus_settle_matches_reference_contract() {
 #[test]
 fn dictation_hotkey_routes_through_builtin_toggle_flow() {
     // Verify both entry-point files have a dictation hotkey listener that
-    // routes through execute_by_command_id_or_path("builtin/dictation"),
-    // ensuring one toggle path instead of a duplicate dictation implementation.
+    // routes through the forced frontmost-app builtin, preserving the global
+    // shortcut's default external-app behavior without introducing a duplicate
+    // dictation implementation.
     for (label, path) in [
         (
             "runtime_tray_hotkeys.rs",
@@ -1418,8 +1419,8 @@ fn dictation_hotkey_routes_through_builtin_toggle_flow() {
             "{label} must consume the dictation hotkey channel"
         );
         assert!(
-            src.contains("builtin/dictation"),
-            "{label} must route dictation hotkey through builtin-dictation command"
+            src.contains("builtin/dictation-to-app"),
+            "{label} must route dictation hotkey through builtin/dictation-to-app"
         );
         // Must NOT contain a second toggle_dictation call — only the builtin path owns that.
         let hotkey_section_start = src
@@ -1441,6 +1442,28 @@ fn dictation_hotkey_routes_through_builtin_toggle_flow() {
              it must route through the builtin execution path"
         );
     }
+}
+
+#[test]
+fn generic_dictation_builtin_remains_contextual() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let branch_start = src
+        .find("builtins::BuiltInFeature::Dictation =>")
+        .expect("dictation builtin branch must exist");
+    let branch_tail = &src[branch_start..];
+    let next_branch = branch_tail[1..]
+        .find("builtins::BuiltInFeature::")
+        .map(|offset| offset + 1)
+        .unwrap_or(branch_tail.len());
+    let branch_src = &branch_tail[..next_branch];
+
+    assert!(
+        branch_src
+            .contains("let dictation_target = if !crate::dictation::is_dictation_recording()")
+            && branch_src.contains("self.resolve_dictation_target()"),
+        "generic dictation builtin must continue resolving context-sensitive targets"
+    );
 }
 
 #[test]
@@ -4496,8 +4519,91 @@ fn dictation_session_stores_target() {
         "DictationSession must store the target"
     );
     assert!(
+        src.contains("target_cycle: Vec<DictationTarget>"),
+        "DictationSession must store the per-session target cycle"
+    );
+    assert!(
         src.contains("pub fn get_dictation_target()"),
         "runtime must expose get_dictation_target()"
+    );
+}
+
+#[test]
+fn dictation_runtime_exposes_target_cycle_helpers() {
+    let runtime_src = std::fs::read_to_string("src/dictation/runtime.rs").expect("read runtime.rs");
+    let mod_src = std::fs::read_to_string("src/dictation/mod.rs").expect("read mod.rs");
+
+    assert!(
+        runtime_src.contains("pub fn set_dictation_target_cycle(targets: Vec<DictationTarget>)"),
+        "runtime must expose set_dictation_target_cycle()"
+    );
+    assert!(
+        runtime_src.contains("pub fn can_cycle_dictation_target() -> bool"),
+        "runtime must expose can_cycle_dictation_target()"
+    );
+    assert!(
+        runtime_src.contains("pub fn cycle_dictation_target() -> Option<DictationTarget>"),
+        "runtime must expose cycle_dictation_target()"
+    );
+    assert!(
+        mod_src.contains("set_dictation_target_cycle")
+            && mod_src.contains("can_cycle_dictation_target")
+            && mod_src.contains("cycle_dictation_target"),
+        "dictation mod facade must re-export target cycle helpers"
+    );
+}
+
+#[test]
+fn overlay_target_badge_uses_pointer_affordances_and_cycles() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    assert!(
+        window_src.contains("fn render_target_badge_slot("),
+        "overlay should render the target badge through a dedicated slot helper"
+    );
+    assert!(
+        window_src.contains(".cursor_pointer()")
+            && window_src.contains(".hover(move |style| style.bg(hover_bg))")
+            && window_src.contains("this.cycle_target(cx);"),
+        "interactive target badge must expose pointer + hover + click-to-cycle behavior"
+    );
+}
+
+#[test]
+fn builtin_dictation_configures_target_cycle_and_external_app_alternate() {
+    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    assert!(
+        builtin_src.contains("fn dictation_target_cycle_for("),
+        "builtin execution must define a dictation target cycle helper"
+    );
+    assert!(
+        builtin_src.contains("set_dictation_target_cycle")
+            && builtin_src.contains("DictationTarget::ExternalApp")
+            && builtin_src.contains("DictationTarget::MainWindowFilter"),
+        "dictation start paths must configure a cycle that includes MainWindowFilter for external-app sessions"
+    );
+}
+
+#[test]
+fn main_window_filter_delivery_can_reset_to_script_list_and_reveal_main() {
+    let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+    let handler_start = builtin_src
+        .find("fn handle_dictation_transcript")
+        .expect("handler must exist");
+    let handler_src =
+        &builtin_src[handler_start..handler_start + 5000.min(builtin_src.len() - handler_start)];
+
+    assert!(
+        handler_src.contains("self.reset_to_script_list(cx);"),
+        "main-window dictation delivery must be able to reset to ScriptList before applying the filter"
+    );
+    assert!(
+        handler_src.contains("script_kit_gpui::set_main_window_visible(true);")
+            && handler_src.contains("show_main_window_without_activation"),
+        "main-window dictation delivery must reveal the main window when retargeted from a hidden session"
     );
 }
 

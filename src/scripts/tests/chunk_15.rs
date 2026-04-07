@@ -94,6 +94,8 @@ fn test_compute_match_indices_for_script_result() {
         score: 100,
         filename: "openfile.ts".to_string(),
         match_indices: MatchIndices::default(),
+        match_kind: ScriptMatchKind::default(),
+        content_match: None,
     };
     let result = SearchResult::Script(script_match);
 
@@ -133,6 +135,8 @@ fn test_compute_match_indices_empty_query() {
         score: 0,
         filename: "test.ts".to_string(),
         match_indices: MatchIndices::default(),
+        match_kind: ScriptMatchKind::default(),
+        content_match: None,
     };
     let result = SearchResult::Script(script_match);
 
