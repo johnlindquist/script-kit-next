@@ -1012,19 +1012,6 @@ impl ScriptListApp {
                 main_div = main_div.child(panel);
             }
 
-            // GPUI hover blocker: the native footer returns nil from hitTest
-            // for non-button areas (so scroll passes through), but GPUI's hit
-            // test still delivers hover to list items behind the footer. This
-            // flex-child div uses block_mouse_except_scroll to prevent hover
-            // while allowing scroll through at the GPUI level.
-            main_div = main_div.child(
-                div()
-                    .id("footer-hover-blocker")
-                    .w_full()
-                    .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
-                    .block_mouse_except_scroll(),
-            );
-
             if state_changed {
                 let total_elapsed = render_list_start.elapsed();
                 tracing::info!(
