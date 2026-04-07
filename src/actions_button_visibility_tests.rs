@@ -68,7 +68,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cmd_k_requires_actions() {
+    fn test_cmd_k_routes_through_shared_dispatcher() {
         let content = fs::read_to_string("src/render_script_list/mod.rs")
             .expect("Failed to read src/render_script_list/mod.rs");
 
@@ -76,11 +76,17 @@ mod tests {
             .find("Cmd+K")
             .expect("Cmd+K handler not found in render_script_list.rs");
 
-        let after_cmdk = &content[cmdk_pos..content.len().min(cmdk_pos + 240)];
+        let after_cmdk = &content[cmdk_pos..content.len().min(cmdk_pos + 300)];
 
         assert!(
-            after_cmdk.contains("has_actions"),
-            "Cmd+K handling should be gated by has_actions(). Found section:\n{}",
+            after_cmdk.contains("handle_cmd_k_actions_toggle"),
+            "Cmd+K handling should route through the shared dispatcher (handle_cmd_k_actions_toggle). Found section:\n{}",
+            after_cmdk
+        );
+        // Must NOT directly call toggle_actions — that bypasses the shared dispatcher
+        assert!(
+            !after_cmdk.contains("toggle_actions(cx"),
+            "Cmd+K must not directly call toggle_actions(); it should use handle_cmd_k_actions_toggle. Found section:\n{}",
             after_cmdk
         );
     }
@@ -278,6 +284,82 @@ mod tests {
         assert!(
             sync_section.contains("ensure_main_footer_action_listener"),
             "sync_main_footer_popup must call ensure_main_footer_action_listener to start the bridge"
+        );
+    }
+
+    /// Fails if the shared actions dispatcher stops falling back to the
+    /// generic shared-dialog handler for views that advertise SharedDialog
+    /// support but don't have a dedicated branch.
+    #[test]
+    fn test_dispatcher_has_shared_dialog_fallback() {
+        let content = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("Failed to read src/app_impl/actions_toggle.rs");
+
+        assert!(
+            content.contains("dispatch_shared_actions_toggle_fallback"),
+            "Dispatcher must have a shared-dialog fallback method"
+        );
+        assert!(
+            content.contains("current_view_supports_shared_actions()"),
+            "Dispatcher must check current_view_supports_shared_actions() before the unsupported-view fallthrough"
+        );
+        assert!(
+            content.contains("actions_toggle_dispatch_routed_shared_dialog_fallback"),
+            "Shared-dialog fallback must emit a structured tracing event"
+        );
+    }
+
+    /// Fails if handle_cmd_k_actions_toggle stops routing through the shared
+    /// dispatcher, which would allow keyboard and footer click behavior to
+    /// drift apart again.
+    #[test]
+    fn test_cmd_k_handler_uses_shared_dispatcher() {
+        let content = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("Failed to read src/app_impl/actions_toggle.rs");
+
+        let handler_pos = content
+            .find("fn handle_cmd_k_actions_toggle")
+            .expect("handle_cmd_k_actions_toggle must exist in actions_toggle.rs");
+        let handler_section = &content[handler_pos..content.len().min(handler_pos + 600)];
+
+        assert!(
+            handler_section.contains("dispatch_actions_toggle_for_current_view"),
+            "handle_cmd_k_actions_toggle must delegate to dispatch_actions_toggle_for_current_view"
+        );
+        assert!(
+            handler_section.contains("cmd_k_actions_routed"),
+            "handle_cmd_k_actions_toggle must emit cmd_k_actions_routed tracing event"
+        );
+    }
+
+    /// Fails if the native footer buttons stop using the ScriptKitFooterButton
+    /// subclass that accepts first mouse, which would break single-click
+    /// behavior when the main window is inactive.
+    #[test]
+    fn test_native_footer_buttons_use_first_mouse_subclass() {
+        let content =
+            fs::read_to_string("src/footer_popup.rs").expect("Failed to read src/footer_popup.rs");
+
+        assert!(
+            content.contains("ScriptKitFooterButton"),
+            "Footer buttons must use the ScriptKitFooterButton subclass"
+        );
+        assert!(
+            content.contains("footer_button_class()"),
+            "make_footer_hint_item must allocate from footer_button_class()"
+        );
+        assert!(
+            content.contains("footer_button_accepts_first_mouse"),
+            "ScriptKitFooterButton must implement acceptsFirstMouse:"
+        );
+        assert!(
+            content.contains("footer_button_mouse_down_can_move_window"),
+            "ScriptKitFooterButton must implement mouseDownCanMoveWindow"
+        );
+        // Must NOT allocate plain NSButton for footer hint items
+        assert!(
+            !content.contains("msg_send![class!(NSButton), alloc]"),
+            "Footer hint items must not allocate plain NSButton — use footer_button_class()"
         );
     }
 
