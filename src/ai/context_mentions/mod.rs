@@ -381,16 +381,12 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
         }
         AiContextPart::FocusedTarget { target, label, .. } => {
             // File/directory targets use typed file prefixes (@rs:, @dir:, etc.)
-            if (target.kind == "file" || target.kind == "directory")
-                && target
-                    .metadata
-                    .as_ref()
-                    .and_then(|m| m.get("path"))
-                    .is_some()
+            if let Some(path) = (target.kind == "file" || target.kind == "directory")
+                .then_some(target.metadata.as_ref())
+                .flatten()
+                .and_then(|metadata| metadata.get("path"))
+                .and_then(|path| path.as_str())
             {
-                let path = target.metadata.as_ref().unwrap()["path"]
-                    .as_str()
-                    .unwrap_or(&target.label);
                 let prefix = if target.kind == "directory" {
                     typed_mention_prefix_for_dir()
                 } else {

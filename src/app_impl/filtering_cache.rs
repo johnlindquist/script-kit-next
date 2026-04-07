@@ -306,14 +306,17 @@ impl ScriptListApp {
         is_dark: bool,
         content_match: Option<&scripts::ScriptContentMatch>,
     ) -> &[syntax::HighlightedLine] {
-        let match_signature = preview_match_signature(content_match);
+        let match_signature = scripts::preview_match_signature(content_match);
         let matched_line = content_match.map(|cm| cm.line_number);
 
         // Check if cache is valid for this path and match signature
-        if self.preview_cache_path.as_deref() == Some(script_path)
-            && self.preview_cache_match_signature == match_signature
-            && !self.preview_cache_lines.is_empty()
-        {
+        if scripts::preview_cache_is_valid(
+            self.preview_cache_path.as_deref(),
+            self.preview_cache_match_signature,
+            self.preview_cache_lines.is_empty(),
+            script_path,
+            content_match,
+        ) {
             return &self.preview_cache_lines;
         }
 
@@ -479,14 +482,6 @@ impl ScriptListApp {
     }
 }
 
-/// Compute a cache-key signature from a content match: (line_number, byte_start, byte_end).
-/// Returns None when there is no content match, matching the "no match" cache state.
-fn preview_match_signature(
-    content_match: Option<&scripts::ScriptContentMatch>,
-) -> Option<(usize, usize, usize)> {
-    content_match.map(|cm| (cm.line_number, cm.byte_range.start, cm.byte_range.end))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -583,13 +578,70 @@ mod tests {
             byte_range: 28..32,
         };
         assert_ne!(
-            preview_match_signature(Some(&alpha)),
-            preview_match_signature(Some(&beta))
+            scripts::preview_match_signature(Some(&alpha)),
+            scripts::preview_match_signature(Some(&beta))
         );
     }
 
     #[test]
     fn preview_match_signature_is_none_without_content_match() {
-        assert_eq!(preview_match_signature(None), None);
+        assert_eq!(scripts::preview_match_signature(None), None);
+    }
+
+    #[test]
+    fn preview_cache_is_valid_for_identical_match_signature() {
+        let alpha = scripts::ScriptContentMatch {
+            line_number: 1,
+            line_text: "const alpha = beta;".to_string(),
+            line_match_indices: vec![6, 7, 8, 9, 10],
+            byte_range: 6..11,
+        };
+        assert!(scripts::preview_cache_is_valid(
+            Some("/tmp/demo.ts"),
+            scripts::preview_match_signature(Some(&alpha)),
+            false, // cached_lines_empty
+            "/tmp/demo.ts",
+            Some(&alpha),
+        ));
+    }
+
+    #[test]
+    fn preview_cache_is_invalid_when_same_line_match_moves_to_new_span() {
+        let alpha = scripts::ScriptContentMatch {
+            line_number: 1,
+            line_text: "const alpha = beta;".to_string(),
+            line_match_indices: vec![6, 7, 8, 9, 10],
+            byte_range: 6..11,
+        };
+        let beta = scripts::ScriptContentMatch {
+            line_number: 1,
+            line_text: "const alpha = beta;".to_string(),
+            line_match_indices: vec![14, 15, 16, 17],
+            byte_range: 14..18,
+        };
+        assert!(!scripts::preview_cache_is_valid(
+            Some("/tmp/demo.ts"),
+            scripts::preview_match_signature(Some(&alpha)),
+            false, // cached_lines_empty
+            "/tmp/demo.ts",
+            Some(&beta),
+        ));
+    }
+
+    #[test]
+    fn preview_cache_is_invalid_when_cached_lines_are_empty() {
+        let alpha = scripts::ScriptContentMatch {
+            line_number: 1,
+            line_text: "const alpha = beta;".to_string(),
+            line_match_indices: vec![6, 7, 8, 9, 10],
+            byte_range: 6..11,
+        };
+        assert!(!scripts::preview_cache_is_valid(
+            Some("/tmp/demo.ts"),
+            scripts::preview_match_signature(Some(&alpha)),
+            true, // cached_lines_empty
+            "/tmp/demo.ts",
+            Some(&alpha),
+        ));
     }
 }

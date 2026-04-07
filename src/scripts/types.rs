@@ -114,6 +114,28 @@ pub struct ScriptContentMatch {
     pub byte_range: std::ops::Range<usize>,
 }
 
+/// Compute a cache-key signature from a content match: (line_number, byte_start, byte_end).
+/// Returns None when there is no content match, matching the "no match" cache state.
+pub fn preview_match_signature(
+    content_match: Option<&ScriptContentMatch>,
+) -> Option<(usize, usize, usize)> {
+    content_match.map(|cm| (cm.line_number, cm.byte_range.start, cm.byte_range.end))
+}
+
+/// Returns true when the preview cache already holds valid highlighted lines for the
+/// requested script path and content-match signature. A miss forces a re-read + re-highlight.
+pub fn preview_cache_is_valid(
+    cached_path: Option<&str>,
+    cached_match_signature: Option<(usize, usize, usize)>,
+    cached_lines_empty: bool,
+    requested_path: &str,
+    content_match: Option<&ScriptContentMatch>,
+) -> bool {
+    cached_path == Some(requested_path)
+        && cached_match_signature == preview_match_signature(content_match)
+        && !cached_lines_empty
+}
+
 /// Represents a scored match result for fuzzy search
 /// Uses Arc<Script> for cheap cloning during filter operations (H1 optimization)
 #[derive(Clone, Debug)]

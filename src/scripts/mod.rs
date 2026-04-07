@@ -39,9 +39,9 @@ pub use self::search::{
 };
 #[allow(unused_imports)]
 pub use self::types::{
-    AgentMatch, AppMatch, BuiltInMatch, FallbackConfig, FallbackMatch, MatchIndices, Script,
-    ScriptContentMatch, ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult,
-    WindowMatch,
+    preview_cache_is_valid, preview_match_signature, AgentMatch, AppMatch, BuiltInMatch,
+    FallbackConfig, FallbackMatch, MatchIndices, Script, ScriptContentMatch, ScriptMatch,
+    ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult, WindowMatch,
 };
 
 #[cfg(test)]
