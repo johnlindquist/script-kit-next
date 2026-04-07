@@ -280,24 +280,26 @@ impl AcpChatView {
     }
 
     fn selected_model_popup_index(&self, cx: &App) -> usize {
-        let thread = self.live_thread().read(cx);
-        let model_count = thread.available_models().len();
-        if model_count == 0 {
-            return 0;
-        }
-
-        self.model_selector_selected_index
-            .min(model_count.saturating_sub(1))
+        let model_count = self.live_thread().read(cx).available_models().len();
+        crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
+            self.model_selector_selected_index,
+            model_count,
+        )
     }
 
     fn reset_model_selector_selection(&mut self, cx: &App) {
         let thread = self.live_thread().read(cx);
         let selected_id = thread.selected_model_id();
-        self.model_selector_selected_index = thread
+        let next_index = thread
             .available_models()
             .iter()
             .position(|model| Some(model.id.as_str()) == selected_id)
             .unwrap_or(0);
+        self.model_selector_selected_index =
+            crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
+                next_index,
+                thread.available_models().len(),
+            );
     }
 
     fn mention_popup_snapshot(
@@ -597,9 +599,11 @@ impl AcpChatView {
 
         let thread = self.live_thread().read(cx);
         let selected_id = thread.selected_model_id().map(str::to_string);
-        let selected_index = self
-            .model_selector_selected_index
-            .min(thread.available_models().len().saturating_sub(1));
+        let selected_index =
+            crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
+                self.model_selector_selected_index,
+                thread.available_models().len(),
+            );
         let entries = thread
             .available_models()
             .iter()
@@ -619,6 +623,14 @@ impl AcpChatView {
         if entries.is_empty() {
             return None;
         }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_model_selector_popup_snapshot_built",
+            entry_count = entries.len(),
+            selected_index,
+            "Built ACP model selector popup snapshot"
+        );
 
         Some(
             crate::ai::acp::model_selector_popup::AcpModelSelectorPopupSnapshot {
@@ -659,6 +671,12 @@ impl AcpChatView {
     }
 
     pub(crate) fn select_model_from_popup(&mut self, model_id: &str, cx: &mut Context<Self>) {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_model_selector_selected",
+            model_id,
+            "Selected ACP model from inline dropdown"
+        );
         self.live_thread().update(cx, |thread, cx| {
             thread.select_model(model_id, cx);
         });
@@ -686,14 +704,34 @@ impl AcpChatView {
 
         let selected_index = self.selected_model_popup_index(cx);
         self.model_selector_selected_index = if direction < 0 {
-            if selected_index == 0 {
-                model_count - 1
-            } else {
-                selected_index - 1
-            }
+            crate::components::inline_dropdown::inline_dropdown_select_prev(
+                selected_index,
+                model_count,
+            )
         } else {
-            (selected_index + 1) % model_count
+            crate::components::inline_dropdown::inline_dropdown_select_next(
+                selected_index,
+                model_count,
+            )
         };
+
+        let visible = crate::components::inline_dropdown::inline_dropdown_visible_range(
+            self.model_selector_selected_index,
+            model_count,
+            crate::ai::acp::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS,
+        );
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_model_selector_selection_moved",
+            direction,
+            selected_index = self.model_selector_selected_index,
+            model_count,
+            visible_start = visible.start,
+            visible_end = visible.end,
+            "Moved ACP model selector selection"
+        );
+
         self.sync_model_selector_popup_window_from_cached_parent(cx);
         cx.notify();
     }
