@@ -228,15 +228,25 @@ impl Render for SelectPrompt {
                                                   hovered: &bool,
                                                   _window,
                                                   cx| {
-                                                if *hovered {
-                                                    if this.hovered_index != Some(display_idx) {
-                                                        this.hovered_index = Some(display_idx);
-                                                        cx.notify();
-                                                    }
-                                                } else if this.hovered_index == Some(display_idx) {
-                                                    this.hovered_index = None;
-                                                    cx.notify();
-                                                }
+                                                this.set_hover_from_mouse(
+                                                    display_idx,
+                                                    *hovered,
+                                                    cx,
+                                                );
+                                            },
+                                        );
+                                        let click_handler = cx.listener(
+                                            move |this: &mut SelectPrompt,
+                                                  event: &gpui::ClickEvent,
+                                                  window,
+                                                  cx| {
+                                                this.focus_handle.focus(window, cx);
+                                                let click_count = event.click_count();
+                                                this.activate_row_from_mouse(
+                                                    display_idx,
+                                                    click_count,
+                                                    cx,
+                                                );
                                             },
                                         );
 
@@ -249,6 +259,7 @@ impl Render for SelectPrompt {
                                             .w_full()
                                             .cursor_pointer()
                                             .on_hover(hover_handler)
+                                            .on_click(click_handler)
                                             .child(
                                                 UnifiedListItem::new(
                                                     gpui::ElementId::Name(semantic_id.into()),
@@ -264,6 +275,7 @@ impl Render for SelectPrompt {
                                                 })
                                                 .density(Density::Comfortable)
                                                 .with_accent_bar(is_focused)
+                                                .with_hover_effect(false)
                                                 .colors(item_colors),
                                             );
 
