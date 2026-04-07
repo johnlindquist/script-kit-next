@@ -357,6 +357,14 @@ impl ScriptListApp {
             return true;
         }
 
+        // Generic fallback for any remaining view that advertises SharedDialog
+        // support via actions_support_for_view() but doesn't need a dedicated
+        // branch with selection-specific context (e.g. DivPrompt, EditorPrompt,
+        // TermPrompt, FormPrompt, EmojiPicker, AcpHistory).
+        if self.current_view_supports_shared_actions() {
+            return self.dispatch_shared_actions_toggle_fallback(window, cx, trigger);
+        }
+
         tracing::info!(
             target: "script_kit::actions",
             event = "actions_toggle_dispatch_ignored_unsupported_view",
@@ -365,6 +373,67 @@ impl ScriptListApp {
             "Ignored shared actions toggle because current view does not expose footer actions"
         );
         false
+    }
+
+    /// Shared fallback for views that advertise SharedDialog support but do not
+    /// need a dedicated branch with selection-specific context.
+    fn dispatch_shared_actions_toggle_fallback(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        trigger: &'static str,
+    ) -> bool {
+        let can_toggle = self.has_actions()
+            || self.show_actions_popup
+            || crate::actions::is_actions_window_open();
+
+        if !can_toggle {
+            tracing::info!(
+                target: "script_kit::actions",
+                event = "actions_toggle_dispatch_ignored_no_actions",
+                trigger = trigger,
+                view = ?self.current_view,
+                show_actions_popup = self.show_actions_popup,
+                actions_window_open = crate::actions::is_actions_window_open(),
+                "Ignored shared actions toggle because the current shared-dialog view has no actions"
+            );
+            return false;
+        }
+
+        self.toggle_actions(cx, window);
+        tracing::info!(
+            target: "script_kit::actions",
+            event = "actions_toggle_dispatch_routed_shared_dialog_fallback",
+            trigger = trigger,
+            view = ?self.current_view,
+            show_actions_popup = self.show_actions_popup,
+            actions_window_open = crate::actions::is_actions_window_open(),
+            "Routed shared actions toggle through generic shared-dialog fallback"
+        );
+        true
+    }
+
+    /// Route `Cmd+K` through the shared actions dispatcher.
+    ///
+    /// This ensures the keyboard shortcut uses the same path as footer clicks
+    /// and the native mini-footer bridge, preventing behavioral drift.
+    pub(crate) fn handle_cmd_k_actions_toggle(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let handled = self.dispatch_actions_toggle_for_current_view(window, cx, "cmd_k");
+        tracing::info!(
+            target: "script_kit::actions",
+            event = "cmd_k_actions_routed",
+            handled,
+            view = ?self.current_view,
+            selected_index = self.selected_index,
+            show_actions_popup = self.show_actions_popup,
+            actions_window_open = crate::actions::is_actions_window_open(),
+            "Routed Cmd+K through shared actions dispatcher"
+        );
+        handled
     }
 
     pub(crate) fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
