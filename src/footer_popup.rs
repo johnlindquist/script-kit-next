@@ -1033,9 +1033,10 @@ extern "C" fn footer_hit_test(
     use objc::{class, msg_send, sel, sel_impl};
 
     // SAFETY: `this` is a live NSVisualEffectView subclass instance. We delegate
-    // to AppKit hit testing first, then only allow real NSButton subviews to
-    // receive events. All other hits (containers, text fields, dividers) are
-    // swallowed by returning `self`.
+    // Route clicks to buttons, let everything else (scroll, hover) fall
+    // through to the GPUI Metal view behind us. Returning nil for non-button
+    // areas is critical — returning self would intercept scroll events and
+    // break list scrolling.
     unsafe {
         let this_id = this as *const _ as id;
         let hit: id = msg_send![super(this_id, class!(NSVisualEffectView)), hitTest: point];
@@ -1043,7 +1044,7 @@ extern "C" fn footer_hit_test(
         if button != nil {
             return button;
         }
-        this_id
+        nil
     }
 }
 
