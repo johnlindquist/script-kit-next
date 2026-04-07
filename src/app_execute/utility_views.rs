@@ -243,10 +243,7 @@ impl ScriptListApp {
     }
 
     /// Clamp a display index to the currently rendered file search list.
-    pub(crate) fn clamp_file_search_display_index(
-        &self,
-        selected_index: usize,
-    ) -> Option<usize> {
+    pub(crate) fn clamp_file_search_display_index(&self, selected_index: usize) -> Option<usize> {
         if self.file_search_display_indices.is_empty() {
             None
         } else {
@@ -293,7 +290,9 @@ impl ScriptListApp {
         &mut self,
     ) -> Option<(usize, crate::file_search::FileResult)> {
         let display_index = self.clamp_current_file_search_selection()?;
-        let entry = self.file_search_result_at_display_index(display_index)?.clone();
+        let entry = self
+            .file_search_result_at_display_index(display_index)?
+            .clone();
         Some((display_index, entry))
     }
 
@@ -648,7 +647,7 @@ mod utility_views_file_search_tests {
             |_| None, // parse_directory_path returns None
             |_| true,
             |_| Some("/definitely/not/a/real/dir".to_string()),
-            |_, _| Vec::new(),
+            |_, _, _| Vec::new(),
             |query, onlyin, limit| {
                 assert_eq!(query, "~/missing-dir");
                 assert!(onlyin.is_none());
@@ -668,9 +667,10 @@ mod utility_views_file_search_tests {
             |_| None, // parse_directory_path returns None
             |_| true,
             |_| Some("/definitely/not/a/real/dir".to_string()),
-            |query, limit| {
+            |query, limit, show_hidden| {
                 assert_eq!(query, "~/dir");
                 assert_eq!(limit, crate::file_search::DEFAULT_CACHE_LIMIT);
+                assert!(!show_hidden);
                 vec![test_file_result("directory-result")]
             },
             |_, _, _| {
@@ -707,11 +707,13 @@ mod utility_views_file_search_tests {
         use crate::file_search::ParsedDirPath;
         let results = ScriptListApp::resolve_file_search_results_with(
             "~/dev/fin",
-            |_| Some(ParsedDirPath {
-                directory: "~/dev/".to_string(),
-                filter: Some("fin".to_string()),
-                show_hidden: false,
-            }),
+            |_| {
+                Some(ParsedDirPath {
+                    directory: "~/dev/".to_string(),
+                    filter: Some("fin".to_string()),
+                    show_hidden: false,
+                })
+            },
             |_| true,
             |_| None,
             |query, limit, show_hidden| {

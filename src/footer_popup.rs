@@ -215,49 +215,6 @@ unsafe fn ensure_main_footer_host(ns_window: id) {
         let _: () = msg_send![footer_view, addSubview: hints_view];
     }
 
-    // Store the hover CGColor on the footer view for mouseMoved highlight.
-    {
-        let theme = crate::theme::get_cached_theme();
-        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-        let rgba = chrome.hover_rgba;
-        let r = ((rgba >> 24) & 0xFF) as f64 / 255.0;
-        let g = ((rgba >> 16) & 0xFF) as f64 / 255.0;
-        let b = ((rgba >> 8) & 0xFF) as f64 / 255.0;
-        let a = (rgba & 0xFF) as f64 / 255.0;
-        let hover_ns: id = msg_send![
-            class!(NSColor),
-            colorWithSRGBRed: r green: g blue: b alpha: a
-        ];
-        if hover_ns != nil {
-            let cg_color: id = msg_send![hover_ns, CGColor];
-            if cg_color != nil {
-                // SAFETY: Stash CGColor pointer in the effect view's ivar for
-                // mouseMoved highlight. The ivar is registered in
-                // footer_effect_view_class.
-                if let Some(obj) = footer_view.as_mut() {
-                    obj.set_ivar::<usize>("_hoverCGColor", cg_color as usize);
-                }
-            }
-        }
-    }
-
-    // Add tracking area so mouseEntered/mouseExited/mouseMoved fire.
-    let tracking_opts: usize = 0x01 /* MouseEnteredAndExited */
-        | 0x02 /* MouseMoved */
-        | 0x80 /* ActiveAlways */
-        | 0x20 /* InVisibleRect */;
-    let tracking_area: id = msg_send![class!(NSTrackingArea), alloc];
-    let tracking_area: id = msg_send![
-        tracking_area,
-        initWithRect: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, 0.0))
-        options: tracking_opts
-        owner: footer_view
-        userInfo: nil
-    ];
-    if tracking_area != nil {
-        let _: () = msg_send![footer_view, addTrackingArea: tracking_area];
-    }
-
     let _: () = msg_send![
         content_view,
         addSubview: footer_view
@@ -367,6 +324,31 @@ unsafe fn refresh_main_footer_host(ns_window: id) {
         let alpha = crate::window_resize::mini_layout::HINT_TEXT_OPACITY as f64;
         let text_color = ns_color_from_hex_with_alpha(theme.colors.text.primary, alpha);
         layout_footer_hints(hints_view, text_color);
+
+        // Apply Actions toggle bg if the actions dialog is open.
+        if crate::actions::is_actions_window_open() {
+            let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+            let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);
+            if selected_ns != nil {
+                let cg: id = msg_send![selected_ns, CGColor];
+                if cg != nil {
+                    // Actions is index 1 in FOOTER_HINTS.
+                    let subviews: id = msg_send![hints_view, subviews];
+                    if subviews != nil {
+                        let count: usize = msg_send![subviews, count];
+                        if count > 1 {
+                            let actions_container: id = msg_send![subviews, objectAtIndex: 1usize];
+                            if actions_container != nil {
+                                let layer: id = msg_send![actions_container, layer];
+                                if layer != nil {
+                                    let _: () = msg_send![layer, setBackgroundColor: cg];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     tracing::debug!(
@@ -451,13 +433,38 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id) {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{msg_send, sel, sel_impl};
 
+    // Remove tracking areas from all buttons BEFORE removing them from the
+    // view hierarchy. This prevents use-after-free crashes when AppKit tries
+    // to deliver mouseEntered/mouseExited to a deallocated button owner.
     let subviews: id = msg_send![hints_view, subviews];
     if subviews != nil {
         let count: usize = msg_send![subviews, count];
         for index in (0..count).rev() {
-            let subview: id = msg_send![subviews, objectAtIndex: index];
-            if subview != nil {
-                let _: () = msg_send![subview, removeFromSuperview];
+            let container: id = msg_send![subviews, objectAtIndex: index];
+            if container != nil {
+                // Find and clean up tracking areas on any NSButton inside this container.
+                let container_subs: id = msg_send![container, subviews];
+                if container_subs != nil {
+                    let sub_count: usize = msg_send![container_subs, count];
+                    for si in 0..sub_count {
+                        let child: id = msg_send![container_subs, objectAtIndex: si];
+                        if child != nil {
+                            let is_button: cocoa::base::BOOL =
+                                msg_send![child, isKindOfClass: objc::class!(NSButton)];
+                            if is_button == YES {
+                                let areas: id = msg_send![child, trackingAreas];
+                                if areas != nil {
+                                    let ac: usize = msg_send![areas, count];
+                                    for ai in (0..ac).rev() {
+                                        let area: id = msg_send![areas, objectAtIndex: ai];
+                                        let _: () = msg_send![child, removeTrackingArea: area];
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                let _: () = msg_send![container, removeFromSuperview];
             }
         }
     }
@@ -581,6 +588,15 @@ unsafe fn make_footer_hint_item(
         let _: () = msg_send![button, setTransparent: YES];
         let _: () = msg_send![button, setTarget: footer_action_target()];
         let _: () = msg_send![button, setAction: footer_action_selector(action)];
+
+        // Mark the Actions button so mouseExited can restore its toggle bg.
+        let is_actions = matches!(action, FooterAction::Actions);
+        if let Some(obj) = button.as_mut() {
+            obj.set_ivar::<cocoa::base::BOOL>(
+                "_isActionsButton",
+                if is_actions { YES } else { NO },
+            );
+        }
     }
 
     let _: () = msg_send![container, addSubview: key_field];
@@ -724,6 +740,9 @@ fn footer_button_class() -> *const objc::runtime::Class {
             let Some(mut decl) = ClassDecl::new("ScriptKitFooterButton", superclass) else {
                 return class!(NSButton) as *const _ as usize;
             };
+            decl.add_ivar::<usize>("_hoverCGColor");
+            decl.add_ivar::<usize>("_selectedCGColor");
+            decl.add_ivar::<cocoa::base::BOOL>("_isActionsButton");
             decl.add_method(
                 sel!(acceptsFirstMouse:),
                 footer_button_accepts_first_mouse
@@ -737,6 +756,18 @@ fn footer_button_class() -> *const objc::runtime::Class {
             decl.add_method(
                 sel!(resetCursorRects),
                 footer_button_reset_cursor_rects as extern "C" fn(&Object, Sel),
+            );
+            decl.add_method(
+                sel!(updateTrackingAreas),
+                footer_button_update_tracking_areas as extern "C" fn(&Object, Sel),
+            );
+            decl.add_method(
+                sel!(mouseEntered:),
+                footer_button_mouse_entered as extern "C" fn(&Object, Sel, id),
+            );
+            decl.add_method(
+                sel!(mouseExited:),
+                footer_button_mouse_exited as extern "C" fn(&Object, Sel, id),
             );
             decl.register() as *const _ as usize
         }
@@ -781,120 +812,113 @@ extern "C" fn footer_button_reset_cursor_rects(
     }
 }
 
-/// Find the hint container (NSView with wantsLayer + cornerRadius) under the
-/// mouse point inside the footer effect view. Returns nil if the point doesn't
-/// hit a container.
 #[cfg(target_os = "macos")]
-unsafe fn footer_container_at_point(
-    footer_view: id,
-    point_in_footer: cocoa::foundation::NSPoint,
-) -> id {
+extern "C" fn footer_button_update_tracking_areas(
+    this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+) {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    // SAFETY: Replace old tracking areas with a fresh one matching the button
+    // bounds. This is the standard AppKit pattern for views that change size.
+    unsafe {
+        // Call super first.
+        let this_id = this as *const _ as id;
+        let _: () = msg_send![super(this_id, class!(NSButton)), updateTrackingAreas];
+
+        // Remove existing tracking areas.
+        let existing: id = msg_send![this, trackingAreas];
+        if existing != nil {
+            let count: usize = msg_send![existing, count];
+            for i in (0..count).rev() {
+                let area: id = msg_send![existing, objectAtIndex: i];
+                let _: () = msg_send![this, removeTrackingArea: area];
+            }
+        }
+
+        // Add a new tracking area for mouseEntered/mouseExited.
+        let opts: usize = 0x01 /* MouseEnteredAndExited */ | 0x80 /* ActiveAlways */ | 0x20 /* InVisibleRect */;
+        let bounds: cocoa::foundation::NSRect = msg_send![this, bounds];
+        let area: id = msg_send![class!(NSTrackingArea), alloc];
+        let area: id = msg_send![
+            area,
+            initWithRect: bounds
+            options: opts
+            owner: this_id
+            userInfo: nil
+        ];
+        if area != nil {
+            let _: () = msg_send![this, addTrackingArea: area];
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_button_mouse_entered(
+    this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    _event: id,
+) {
     use objc::{msg_send, sel, sel_impl};
 
-    let hints_view = find_subview_by_identifier(footer_view, FOOTER_HINTS_ID);
-    if hints_view == nil {
-        return nil;
-    }
-    // Convert point from footer_view coordinates to hints_view coordinates.
-    let point_in_hints: cocoa::foundation::NSPoint =
-        msg_send![hints_view, convertPoint: point_in_footer fromView: footer_view];
-    let subviews: id = msg_send![hints_view, subviews];
-    if subviews == nil {
-        return nil;
-    }
-    let count: usize = msg_send![subviews, count];
-    for i in 0..count {
-        let container: id = msg_send![subviews, objectAtIndex: i];
-        if container != nil {
-            let frame: cocoa::foundation::NSRect = msg_send![container, frame];
-            if point_in_hints.x >= frame.origin.x
-                && point_in_hints.x < frame.origin.x + frame.size.width
-                && point_in_hints.y >= frame.origin.y
-                && point_in_hints.y < frame.origin.y + frame.size.height
-            {
-                return container;
+    // SAFETY: Set hover background on the parent container's layer.
+    // Recompute color from theme each time to avoid dangling CGColor pointers.
+    unsafe {
+        let superview: id = msg_send![this, superview];
+        if superview == nil {
+            return;
+        }
+        let layer: id = msg_send![superview, layer];
+        if layer == nil {
+            return;
+        }
+        let theme = crate::theme::get_cached_theme();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+        let hover_ns: id = ns_color_from_rgba(chrome.hover_rgba);
+        if hover_ns != nil {
+            let cg: id = msg_send![hover_ns, CGColor];
+            if cg != nil {
+                let _: () = msg_send![layer, setBackgroundColor: cg];
             }
         }
     }
-    nil
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn set_container_hover(container: id, hover_cg_color: usize, highlight: bool) {
-    use objc::{msg_send, sel, sel_impl};
-
-    let layer: id = msg_send![container, layer];
-    if layer == nil {
-        return;
-    }
-    if highlight && hover_cg_color != 0 {
-        let _: () = msg_send![layer, setBackgroundColor: hover_cg_color as id];
-    } else {
-        let null_color: id = std::ptr::null_mut();
-        let _: () = msg_send![layer, setBackgroundColor: null_color];
-    }
-}
-
-#[cfg(target_os = "macos")]
-extern "C" fn footer_effect_mouse_moved(
-    this: &objc::runtime::Object,
-    _: objc::runtime::Sel,
-    event: id,
-) {
-    use objc::{msg_send, sel, sel_impl};
-
-    // SAFETY: `this` is the footer effect view. Convert the event's
-    // locationInWindow to our coordinate space and find which container is hovered.
-    unsafe {
-        let location: cocoa::foundation::NSPoint = msg_send![event, locationInWindow];
-        let local: cocoa::foundation::NSPoint =
-            msg_send![this, convertPoint: location fromView: nil];
-        let hover_cg_color: usize = *this.get_ivar::<usize>("_hoverCGColor");
-        let prev_container: usize = *this.get_ivar::<usize>("_hoveredContainer");
-        let container = footer_container_at_point(this as *const _ as id, local);
-        let container_ptr = container as usize;
-
-        if container_ptr == prev_container {
-            return; // No change.
-        }
-
-        // Clear previous.
-        if prev_container != 0 {
-            set_container_hover(prev_container as id, 0, false);
-        }
-        // Highlight new.
-        if container_ptr != 0 {
-            set_container_hover(container, hover_cg_color, true);
-        }
-        // Update tracked pointer.
-        // SAFETY: Writing to the ivar we own.
-        (*(this as *const _ as *mut objc::runtime::Object))
-            .set_ivar::<usize>("_hoveredContainer", container_ptr);
-    }
-}
-
-#[cfg(target_os = "macos")]
-extern "C" fn footer_effect_mouse_entered(
-    _this: &objc::runtime::Object,
-    _: objc::runtime::Sel,
-    _event: id,
-) {
-    // Tracking area entered — mouseMoved will handle highlighting.
-}
-
-#[cfg(target_os = "macos")]
-extern "C" fn footer_effect_mouse_exited(
+extern "C" fn footer_button_mouse_exited(
     this: &objc::runtime::Object,
     _: objc::runtime::Sel,
     _event: id,
 ) {
-    // SAFETY: Mouse left the footer — clear any highlighted container.
+    use objc::{msg_send, sel, sel_impl};
+
+    // SAFETY: Clear hover background on the parent container's layer.
+    // If this is the Actions button and actions is open, restore the
+    // selected color instead of clearing.
     unsafe {
-        let prev_container: usize = *this.get_ivar::<usize>("_hoveredContainer");
-        if prev_container != 0 {
-            set_container_hover(prev_container as id, 0, false);
-            (*(this as *const _ as *mut objc::runtime::Object))
-                .set_ivar::<usize>("_hoveredContainer", 0usize);
+        let is_actions: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_isActionsButton");
+        let superview: id = msg_send![this, superview];
+        if superview == nil {
+            return;
+        }
+        let layer: id = msg_send![superview, layer];
+        if layer == nil {
+            return;
+        }
+
+        if is_actions == YES && crate::actions::is_actions_window_open() {
+            let theme = crate::theme::get_cached_theme();
+            let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+            let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);
+            if selected_ns != nil {
+                let cg: id = msg_send![selected_ns, CGColor];
+                if cg != nil {
+                    let _: () = msg_send![layer, setBackgroundColor: cg];
+                }
+            }
+        } else {
+            let null_color: id = std::ptr::null_mut();
+            let _: () = msg_send![layer, setBackgroundColor: null_color];
         }
     }
 }
@@ -914,20 +938,6 @@ fn footer_effect_view_class() -> *const objc::runtime::Class {
         let Some(mut decl) = ClassDecl::new("ScriptKitFooterEffectView", superclass) else {
             return class!(NSVisualEffectView) as *const _ as usize;
         };
-        decl.add_ivar::<usize>("_hoverCGColor");
-        decl.add_ivar::<usize>("_hoveredContainer");
-        decl.add_method(
-            sel!(mouseMoved:),
-            footer_effect_mouse_moved as extern "C" fn(&Object, Sel, id),
-        );
-        decl.add_method(
-            sel!(mouseEntered:),
-            footer_effect_mouse_entered as extern "C" fn(&Object, Sel, id),
-        );
-        decl.add_method(
-            sel!(mouseExited:),
-            footer_effect_mouse_exited as extern "C" fn(&Object, Sel, id),
-        );
         decl.add_method(
             sel!(hitTest:),
             footer_hit_test as extern "C" fn(&Object, Sel, cocoa::foundation::NSPoint) -> id,
@@ -1048,12 +1058,17 @@ extern "C" fn footer_mouse_dragged(_this: &objc::runtime::Object, _: objc::runti
 }
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_scroll_wheel(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
-    tracing::debug!(
-        target: "script_kit::footer_popup",
-        event = "native_footer_background_scroll_swallowed",
-        "Swallowed background scrollWheel in native footer"
-    );
+extern "C" fn footer_scroll_wheel(this: &objc::runtime::Object, _: objc::runtime::Sel, event: id) {
+    use objc::{msg_send, sel, sel_impl};
+
+    // SAFETY: Forward scroll events to the next responder so the GPUI list
+    // behind the footer can scroll.
+    unsafe {
+        let next: id = msg_send![this, nextResponder];
+        if next != nil {
+            let _: () = msg_send![next, scrollWheel: event];
+        }
+    }
 }
 
 #[cfg(target_os = "macos")]

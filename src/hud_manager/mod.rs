@@ -768,6 +768,9 @@ fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click
     use cocoa::base::id;
     use cocoa::foundation::NSRect;
 
+    // SAFETY: NSApp() is valid after app launch, we only inspect AppKit's
+    // current windows array on the main thread, and all selectors used below
+    // are standard NSWindow accessors/setters on the matched HUD window.
     unsafe {
         let app: id = NSApp();
         let windows: id = msg_send![app, windows];
@@ -807,6 +810,10 @@ fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click
                 // Don't show in window menu
                 let _: () = msg_send![window, setExcludedFromWindowsMenu: true];
 
+                // Keep HUD overlays eligible to appear even when the app is
+                // otherwise hidden and interactive scripts are running headless.
+                let _: () = msg_send![window, setCanHide: false];
+
                 // Keep the HUD visible even after the main launcher orders out.
                 // orderFrontRegardless lifts the overlay without requiring the
                 // app to remain active or the main panel to stay open.
@@ -820,8 +827,11 @@ fn configure_hud_window_by_size(expected_width: f32, expected_height: f32, click
                 logging::log(
                     "HUD",
                     &format!(
-                        "Configured HUD NSWindow ({}x{}): level={}, {}, orderFrontRegardless",
-                        expected_width, expected_height, hud_level, click_status
+                        "Configured HUD NSWindow ({}x{}): level={}, {}, canHide=false, orderFrontRegardless",
+                        expected_width,
+                        expected_height,
+                        hud_level,
+                        click_status
                     ),
                 );
                 return;
@@ -1083,6 +1093,17 @@ mod tests {
             "HUD label should keep centered text within the pill"
         );
     }
+
+    #[test]
+    fn test_hud_window_configuration_keeps_overlay_visible_when_app_hidden() {
+        let source = std::fs::read_to_string("src/hud_manager/mod.rs")
+            .expect("Failed to read src/hud_manager/mod.rs");
+
+        assert!(
+            source.contains("setCanHide: false") && source.contains("orderFrontRegardless"),
+            "HUD window config should disable app-hide participation and order the overlay front"
+        );
+    }
     #[test]
     fn test_hud_action_execute_open_url() {
         // Test that HudAction::OpenUrl can be created and executed doesn't panic
@@ -1338,9 +1359,31 @@ mod tests {
         // Max simultaneous HUDs should be at least 1
         const _: () = assert!(MAX_SIMULTANEOUS_HUDS >= 1);
 
-        // HUD dimensions should be positive
-        assert!((HUD_WIDTH as i32) > 0, "HUD width should be positive");
-        assert!((HUD_HEIGHT as i32) > 0, "HUD height should be positive");
+        // HUD dimensions should be positive and internally ordered.
+        assert!(
+            (HUD_MIN_WIDTH as i32) > 0,
+            "HUD min width should be positive"
+        );
+        assert!(
+            HUD_MAX_WIDTH >= HUD_MIN_WIDTH,
+            "HUD max width should be at least the min width"
+        );
+        assert!(
+            (HUD_SINGLE_LINE_HEIGHT as i32) > 0,
+            "HUD single-line height should be positive"
+        );
+        assert!(
+            (HUD_MULTI_LINE_HEIGHT as i32) > 0,
+            "HUD multi-line height should be positive"
+        );
+        assert!(
+            (HUD_ACTION_WIDTH as i32) > 0,
+            "HUD action width should be positive"
+        );
+        assert!(
+            (HUD_ACTION_HEIGHT as i32) > 0,
+            "HUD action height should be positive"
+        );
     }
     #[test]
     fn test_hud_action_variants_debug() {

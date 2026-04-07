@@ -49,6 +49,7 @@ pub(crate) use self::metadata::{
     extract_full_metadata, extract_script_metadata, parse_metadata_line,
 };
 
+#[allow(unused_imports)] // Re-exported for the library target and integration tests.
 pub use self::search::fuzzy_search_scripts;
 
 #[cfg(test)]

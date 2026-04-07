@@ -8,7 +8,6 @@ mod __render_prompts_other_docs {
 // Contains: select, env, drop, template prompts
 // This file is included via include!() macro in main.rs
 
-
 impl ScriptListApp {
     /// Zero-radius shell for whisper chrome (sharp edges per .impeccable.md).
     #[inline]
@@ -112,15 +111,34 @@ impl ScriptListApp {
     }
 
     /// Build the canonical three-key footer with click handlers wired to app actions.
+    ///
+    /// All three buttons route through `dispatch_main_window_footer_action` so
+    /// that prompt footers use the same per-view routing as `Cmd+K` and the
+    /// native mini-footer.
     fn clickable_universal_hint_strip(&self, cx: &mut Context<Self>) -> AnyElement {
-        let on_run = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-            this.execute_selected(cx);
+        let on_run = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Run,
+                window,
+                cx,
+                "gpui_footer",
+            );
         });
         let on_actions = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-            this.toggle_actions(cx, window);
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Actions,
+                window,
+                cx,
+                "gpui_footer",
+            );
         });
-        let on_ai = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-            this.open_tab_ai_chat(cx);
+        let on_ai = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Ai,
+                window,
+                cx,
+                "gpui_footer",
+            );
         });
         crate::components::render_universal_prompt_hint_strip_clickable(on_run, on_actions, on_ai)
     }
@@ -465,7 +483,10 @@ mod other_prompt_render_wrapper_tests {
             ("render_template_prompt", "render_prompts::template"),
             ("render_naming_prompt", "render_prompts::naming"),
             ("render_webcam_prompt", "render_prompts::webcam"),
-            ("render_creation_feedback", "render_prompts::creation_feedback"),
+            (
+                "render_creation_feedback",
+                "render_prompts::creation_feedback",
+            ),
         ] {
             let body = fn_source(fn_name);
             assert!(

@@ -4,7 +4,7 @@
 //! agent workspace structure, and that `HarnessConfig::default()`
 //! points its working directory at the Script Kit root.
 
-use script_kit_gpui::setup::{ensure_kit_setup, get_kit_path, SK_PATH_ENV};
+use script_kit_gpui::setup::{ensure_kit_setup, SK_PATH_ENV};
 use std::fs;
 use tempfile::TempDir;
 

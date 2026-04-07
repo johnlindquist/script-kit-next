@@ -219,16 +219,15 @@ end tell"#,
 #[cfg(test)]
 mod app_actions_tests {
     use super::{
-        clipboard_pin_action_success_hud, extract_scriptlet_source_path,
+        ScriptRemovalTarget, clipboard_pin_action_success_hud, extract_scriptlet_source_path,
         file_search_action_error_hud_prefix, file_search_action_success_hud,
         script_removal_target_from_result, select_clipboard_entry_meta,
         selection_required_message_for_action, should_transition_to_script_list_after_action,
-        ScriptRemovalTarget,
     };
     use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
     use crate::scripts;
     use crate::test_utils::count_occurrences;
-    use crate::AppView;
+    use crate::{AppView, FileSearchPresentation};
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -297,7 +296,10 @@ mod app_actions_tests {
         let entries = vec![entry("1", "First"), entry("2", "Second")];
 
         let result = select_clipboard_entry_meta(&entries, "", 0).unwrap();
-        assert_eq!(result.id, "1", "Index 0 with no filter should return first entry");
+        assert_eq!(
+            result.id, "1",
+            "Index 0 with no filter should return first entry"
+        );
     }
 
     #[test]
@@ -587,8 +589,10 @@ mod app_actions_tests {
             "Expected async editor launch helper to exist"
         );
 
-        let usage_count =
-            count_occurrences(&content, "self.launch_editor_with_feedback_async(&path, trace_id)");
+        let usage_count = count_occurrences(
+            &content,
+            "self.launch_editor_with_feedback_async(&path, trace_id)",
+        );
         assert!(
             usage_count >= 2,
             "Expected edit_script and edit_scriptlet to use async editor launch feedback (found {usage_count} usages)"
@@ -610,10 +614,16 @@ mod app_actions_tests {
             "Expected async reveal helper to exist"
         );
 
-        let usage_count =
-            count_occurrences(&content, "self.reveal_in_finder_with_feedback_async(&path, trace_id)")
-                + count_occurrences(&content, "self.reveal_in_finder_with_feedback_async(path, trace_id)")
-                + count_occurrences(&content, "self.reveal_in_finder_with_feedback_async(&save_path, trace_id)");
+        let usage_count = count_occurrences(
+            &content,
+            "self.reveal_in_finder_with_feedback_async(&path, trace_id)",
+        ) + count_occurrences(
+            &content,
+            "self.reveal_in_finder_with_feedback_async(path, trace_id)",
+        ) + count_occurrences(
+            &content,
+            "self.reveal_in_finder_with_feedback_async(&save_path, trace_id)",
+        );
         assert!(
             usage_count >= 2,
             "Expected reveal actions to use async reveal feedback helper (found {usage_count} usages)"
@@ -625,7 +635,9 @@ mod app_actions_tests {
         );
 
         assert!(
-            content.contains("this.show_hud(\"Opened in Finder\".to_string(), Some(HUD_SHORT_MS), cx);"),
+            content.contains(
+                "this.show_hud(\"Opened in Finder\".to_string(), Some(HUD_SHORT_MS), cx);"
+            ),
             "Expected reveal success HUD to be emitted from async completion callback"
         );
     }

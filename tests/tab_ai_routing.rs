@@ -3226,7 +3226,6 @@ fn live_quick_submit_helper_builds_full_harness_submission() {
 const FILTER_INPUT_CHANGE_SOURCE: &str = include_str!("../src/app_impl/filter_input_change.rs");
 const FILTER_INPUT_CORE_SOURCE: &str = include_str!("../src/app_impl/filter_input_core.rs");
 const FILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
-const UTILITY_VIEWS_SOURCE: &str = include_str!("../src/app_execute/utility_views.rs");
 
 #[test]
 fn tilde_trigger_enters_file_search_as_mini() {

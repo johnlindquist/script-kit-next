@@ -523,23 +523,23 @@ mod tests {
     }
 
     #[test]
-    fn test_render_svg_to_rgba_menu_icons_render() {
-        // Test all menu icon SVGs render successfully
-        let icons = [
-            ("ICON_HOME", ICON_HOME),
-            ("ICON_EDIT", ICON_EDIT),
-            ("ICON_MESSAGE", ICON_MESSAGE),
-            ("ICON_GITHUB", ICON_GITHUB),
-            ("ICON_BOOK", ICON_BOOK),
-            ("ICON_DISCORD", ICON_DISCORD),
-            ("ICON_AT_SIGN", ICON_AT_SIGN),
-            ("ICON_SETTINGS", ICON_SETTINGS),
-            ("ICON_LOG_OUT", ICON_LOG_OUT),
-        ];
-
-        for (name, svg) in icons {
-            let result = render_svg_to_rgba(svg, MENU_ICON_SIZE, MENU_ICON_SIZE);
-            assert!(result.is_ok(), "{} should render: {:?}", name, result);
+    fn test_create_menu_uses_native_menu_icons() {
+        const TRAY_SOURCE: &str = include_str!("mod.rs");
+        for native_icon in [
+            "NativeIcon::Home",
+            "NativeIcon::FontPanel",
+            "NativeIcon::IChatTheater",
+            "NativeIcon::FollowLinkFreestanding",
+            "NativeIcon::Bookmarks",
+            "NativeIcon::UserGroup",
+            "NativeIcon::User",
+            "NativeIcon::PreferencesGeneral",
+            "NativeIcon::StopProgress",
+        ] {
+            assert!(
+                TRAY_SOURCE.contains(native_icon),
+                "Tray menu should use {native_icon}"
+            );
         }
     }
 }

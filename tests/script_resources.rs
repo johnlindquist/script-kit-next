@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use script_kit_gpui::mcp_resources::{
-    self, ScriptResourceEntry, ScriptletsResourceDocument, ScriptsResourceDocument,
-    SdkReferenceDocument, SCRIPTLETS_RESOURCE_SCHEMA_VERSION, SCRIPTS_RESOURCE_SCHEMA_VERSION,
+    self, ScriptletsResourceDocument, ScriptsResourceDocument, SdkReferenceDocument,
+    SCRIPTLETS_RESOURCE_SCHEMA_VERSION, SCRIPTS_RESOURCE_SCHEMA_VERSION,
     SDK_REFERENCE_SCHEMA_VERSION,
 };
 use script_kit_gpui::scripts::{Script, Scriptlet};

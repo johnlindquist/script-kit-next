@@ -324,7 +324,13 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                     "FILTER_PERF",
                     &format!(
                         "[CONTENT_MATCH] script='{}' line={} name_score={} filename_score={} description_score={} primary_text_kind={:?} bonus={}",
-                        script.name, hit.line_number, name_score, filename_score, description_score, primary_text_kind, SCORE_CONTENT_MATCH
+                        script.name,
+                        hit.line_number,
+                        name_score,
+                        filename_score,
+                        description_score,
+                        primary_text_kind,
+                        SCORE_CONTENT_MATCH
                     ),
                 );
                 // Only surface the snippet row when no stronger field won

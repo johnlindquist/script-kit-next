@@ -255,7 +255,7 @@ fn ambiguous_error_message_contains_candidates_and_score() {
 
 // ── Attached-surface target bounds in screenshot ──────────────────────
 
-use script_kit_gpui::protocol::{AutomationWindowTarget, InspectBoundsInScreenshot, InspectPoint};
+use script_kit_gpui::protocol::{AutomationWindowTarget, InspectBoundsInScreenshot};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static SHOT_COUNTER: AtomicU32 = AtomicU32::new(70_000);

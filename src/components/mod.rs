@@ -64,8 +64,8 @@ pub use focusable_prompt_wrapper::{
 pub use form_fields::{FormCheckbox, FormFieldColors, FormFieldState, FormTextArea, FormTextField};
 #[allow(unused_imports)]
 pub use hint_strip::{
-    render_hint_icons, render_hint_icons_clickable, render_hint_icons_hsla, ClickableHint,
-    HintStrip,
+    render_hint_icons, render_hint_icons_clickable, render_hint_icons_hsla,
+    render_selectable_hint_icons, ClickableHint, HintStrip, SelectableHint,
 };
 #[allow(unused_imports)]
 pub(crate) use inline_dropdown::{

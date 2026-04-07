@@ -591,8 +591,8 @@ impl ScriptListApp {
 #[cfg(test)]
 mod builtin_command_window_visibility_tests {
     use super::{
-        build_terminal_command, builtin_needs_main_window_for_command_id,
-        create_interactive_temp_script, InteractiveTempFileMode,
+        InteractiveTempFileMode, build_terminal_command, builtin_needs_main_window_for_command_id,
+        create_interactive_temp_script, interactive_script_needs_main_window,
     };
     use std::path::Path;
 
