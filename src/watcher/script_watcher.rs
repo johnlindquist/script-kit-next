@@ -596,4 +596,52 @@ mod tests {
         assert!(spec.pending.is_empty());
         assert!(spec.full_reload_at.is_none());
     }
+
+    #[test]
+    fn modify_ts_file_emits_file_changed_after_debounce() {
+        let mut spec = ScriptWatcherSpec::new(WatcherSettings::default());
+        let path = PathBuf::from("/tmp/script-content-search-demo.ts");
+
+        let event = notify::Event {
+            kind: notify::EventKind::Modify(notify::event::ModifyKind::Any),
+            paths: vec![path.clone()],
+            attrs: Default::default(),
+        };
+
+        // on_notify queues the event; no immediate emission
+        let immediate = spec.on_notify(event);
+        assert!(immediate.is_empty());
+        assert!(spec.pending.contains_key(&path));
+
+        // Simulate debounce expiry by backdating the pending timestamp
+        if let Some(entry) = spec.pending.get_mut(&path) {
+            entry.1 = Instant::now() - Duration::from_secs(1);
+        }
+
+        let events = spec.on_timeout();
+        assert_eq!(events, vec![ScriptReloadEvent::FileChanged(path)]);
+    }
+
+    #[test]
+    fn modify_js_file_emits_file_changed_after_debounce() {
+        let mut spec = ScriptWatcherSpec::new(WatcherSettings::default());
+        let path = PathBuf::from("/tmp/script-content-search-demo.js");
+
+        let event = notify::Event {
+            kind: notify::EventKind::Modify(notify::event::ModifyKind::Any),
+            paths: vec![path.clone()],
+            attrs: Default::default(),
+        };
+
+        let immediate = spec.on_notify(event);
+        assert!(immediate.is_empty());
+        assert!(spec.pending.contains_key(&path));
+
+        if let Some(entry) = spec.pending.get_mut(&path) {
+            entry.1 = Instant::now() - Duration::from_secs(1);
+        }
+
+        let events = spec.on_timeout();
+        assert_eq!(events, vec![ScriptReloadEvent::FileChanged(path)]);
+    }
 }

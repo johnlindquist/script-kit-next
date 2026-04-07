@@ -446,7 +446,6 @@ app.run(move |cx: &mut App| {
                     let focus_handle = view.focus_handle(ctx);
                     win.focus(&focus_handle, ctx);
                     logging::log("APP", "Focus set on ScriptListApp via Root");
-
                     // Subscribe to window bounds changes to save position when user drags the window.
                     // This persists the position per-display so it can be restored on next show.
                     // Store subscription in view to keep it alive.
@@ -470,13 +469,13 @@ app.run(move |cx: &mut App| {
                                 }
                             }
                         }
-                        view.sync_main_footer_popup(ctx);
+                        view.sync_main_footer_popup(win, ctx);
                         // Suppress unused variable warning - we need win to access window bounds
                         let _ = win;
                     }));
 
                     // Observe window appearance changes (GPUI fires this when macOS changes light/dark mode)
-                    view.appearance_subscription = Some(ctx.observe_window_appearance(win, |view, _win, ctx| {
+                    view.appearance_subscription = Some(ctx.observe_window_appearance(win, |view, win, ctx| {
                         logging::log("APP", "System appearance changed, reloading theme");
 
                         // Invalidate the cached appearance detection so
@@ -503,8 +502,8 @@ app.run(move |cx: &mut App| {
 
                         // Update the app entity theme
                         view.update_theme(ctx);
-                        view.sync_main_footer_popup(ctx);
-                        crate::footer_popup::notify_main_footer_popup(ctx);
+                        view.sync_main_footer_popup(win, ctx);
+                        crate::footer_popup::notify_main_footer_popup(win, ctx);
 
                         // Notify all registered windows to re-render with new colors
                         windows::notify_all_windows(ctx);

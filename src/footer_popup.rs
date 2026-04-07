@@ -1,171 +1,98 @@
-use std::sync::{Mutex, OnceLock};
+use gpui::{App, Window};
 
-use gpui::{
-    div, point, prelude::*, px, rgba, size, AnyWindowHandle, App, Bounds, Pixels, Render, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
-};
+#[cfg(target_os = "macos")]
+use cocoa::base::{id, nil, NO, YES};
 
-use crate::theme::get_cached_theme;
+#[cfg(target_os = "macos")]
+const HINTS_TEXT: &str = "↵ Run    ⌘K Actions    ⇥ AI";
+#[cfg(target_os = "macos")]
+const FOOTER_EFFECT_ID: &str = "script-kit-footer-effect";
+#[cfg(target_os = "macos")]
+const FOOTER_LABEL_ID: &str = "script-kit-footer-label";
+#[cfg(target_os = "macos")]
+const FOOTER_DIVIDER_ID: &str = "script-kit-footer-divider";
 
-/// NSWindowOrderingMode::NSWindowAbove — place child above parent.
-const NS_WINDOW_ABOVE: i64 = 1;
+pub(crate) fn sync_main_footer_popup(window: &mut Window, should_show: bool, _cx: &mut App) {
+    #[cfg(target_os = "macos")]
+    {
+        let Some(ns_window) = main_window_ns_window(window) else {
+            tracing::warn!(
+                target: "script_kit::footer_popup",
+                event = "native_footer_missing_ns_window",
+                "Unable to resolve NSWindow for native footer host"
+            );
+            return;
+        };
 
-static FOOTER_WINDOW: OnceLock<Mutex<Option<WindowHandle<MainFooterPopupWindow>>>> =
-    OnceLock::new();
-static FOOTER_BOUNDS: OnceLock<Mutex<Option<Bounds<Pixels>>>> = OnceLock::new();
-
-fn footer_popup_bounds(parent_bounds: Bounds<Pixels>) -> Bounds<Pixels> {
-    let height = px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT);
-    let x = parent_bounds.origin.x;
-    let y = parent_bounds.origin.y + parent_bounds.size.height - height;
-
-    Bounds {
-        origin: point(x, y),
-        size: size(parent_bounds.size.width, height),
-    }
-}
-
-fn main_window_bounds() -> Option<Bounds<Pixels>> {
-    let (x, y, width, height) = crate::platform::get_main_window_bounds()?;
-    Some(Bounds {
-        origin: point(px(x as f32), px(y as f32)),
-        size: size(px(width as f32), px(height as f32)),
-    })
-}
-
-pub(crate) fn sync_main_footer_popup(should_show: bool, cx: &mut App) {
-    let desired_bounds = should_show
-        .then(main_window_bounds)
-        .flatten()
-        .map(footer_popup_bounds);
-    let current_bounds = FOOTER_BOUNDS
-        .get()
-        .and_then(|storage| storage.lock().ok())
-        .and_then(|guard| *guard);
-    let window_open = FOOTER_WINDOW
-        .get()
-        .and_then(|storage| storage.lock().ok())
-        .is_some_and(|guard| guard.is_some());
-
-    match desired_bounds {
-        Some(bounds) if window_open && current_bounds == Some(bounds) => {}
-        Some(bounds) => {
-            close_main_footer_popup(cx);
-            open_main_footer_popup(bounds, cx);
-        }
-        None => close_main_footer_popup(cx),
-    }
-}
-
-pub(crate) fn notify_main_footer_popup(cx: &mut App) {
-    let Some(storage) = FOOTER_WINDOW.get() else {
-        return;
-    };
-    let Ok(guard) = storage.lock() else {
-        return;
-    };
-    let Some(handle) = *guard else {
-        return;
-    };
-    let _ = handle.update(cx, |_view, _window, cx| {
-        cx.notify();
-    });
-}
-
-pub(crate) fn close_main_footer_popup(cx: &mut App) {
-    if let Some(storage) = FOOTER_WINDOW.get() {
-        if let Ok(mut guard) = storage.lock() {
-            if let Some(handle) = guard.take() {
-                let _ = handle.update(cx, |_view, window, _cx| {
-                    window.remove_window();
-                });
+        // SAFETY: `ns_window` comes from the live GPUI main window currently
+        // being rendered/observed on the AppKit thread.
+        unsafe {
+            if should_show {
+                ensure_main_footer_host(ns_window);
+                refresh_main_footer_host(ns_window);
+            } else {
+                remove_main_footer_host(ns_window);
             }
         }
     }
 
-    if let Some(storage) = FOOTER_BOUNDS.get() {
-        if let Ok(mut guard) = storage.lock() {
-            *guard = None;
-        }
-    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (window, should_show);
 }
 
-fn open_main_footer_popup(bounds: Bounds<Pixels>, cx: &mut App) {
-    let Some(parent_window_handle) = crate::get_main_window_handle() else {
+pub(crate) fn notify_main_footer_popup(window: &mut Window, _cx: &mut App) {
+    #[cfg(target_os = "macos")]
+    {
+        let Some(ns_window) = main_window_ns_window(window) else {
+            return;
+        };
+
+        // SAFETY: `ns_window` comes from the live GPUI main window currently
+        // being rendered/observed on the AppKit thread.
+        unsafe {
+            refresh_main_footer_host(ns_window);
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
+}
+
+pub(crate) fn close_main_footer_popup(cx: &mut App) {
+    let Some(window_handle) = crate::get_main_window_handle() else {
         return;
     };
 
-    let theme = get_cached_theme();
-    let is_dark_vibrancy = theme.should_use_dark_vibrancy();
-    let window_background = if theme.is_vibrancy_enabled() {
-        WindowBackgroundAppearance::Blurred
-    } else {
-        WindowBackgroundAppearance::Opaque
-    };
+    let _ = window_handle.update(cx, move |_, window, _cx| {
+        #[cfg(target_os = "macos")]
+        {
+            let Some(ns_window) = main_window_ns_window(window) else {
+                return;
+            };
 
-    let handle = match cx.open_window(
-        WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(bounds)),
-            titlebar: None,
-            window_background,
-            focus: false,
-            show: true,
-            kind: WindowKind::PopUp,
-            ..Default::default()
-        },
-        |_window, cx| cx.new(|_cx| MainFooterPopupWindow),
-    ) {
-        Ok(handle) => handle,
-        Err(error) => {
-            tracing::warn!(
-                target: "script_kit::footer_popup",
-                event = "footer_popup_open_failed",
-                error = ?error,
-                "Failed to open main footer popup"
-            );
-            return;
+            // SAFETY: `ns_window` comes from the live GPUI main window on the
+            // AppKit main thread while `update_window` is executing.
+            unsafe {
+                remove_main_footer_host(ns_window);
+            }
         }
-    };
 
-    #[cfg(target_os = "macos")]
-    {
-        let _ = handle.update(cx, move |_view, window, cx| {
-            window.defer(cx, move |window, cx| {
-                if let Some(ns_window) = footer_popup_ns_window(window) {
-                    // SAFETY: `ns_window` comes from the live GPUI popup window on
-                    // the AppKit main thread when the deferred callback runs.
-                    unsafe {
-                        crate::platform::configure_footer_popup_window(ns_window, is_dark_vibrancy);
-                    }
-                    attach_footer_popup_to_parent_window(cx, parent_window_handle, ns_window);
-                }
-            });
-        });
-    }
-
-    let storage = FOOTER_WINDOW.get_or_init(|| Mutex::new(None));
-    if let Ok(mut guard) = storage.lock() {
-        *guard = Some(handle);
-    }
-
-    let bounds_storage = FOOTER_BOUNDS.get_or_init(|| Mutex::new(None));
-    if let Ok(mut guard) = bounds_storage.lock() {
-        *guard = Some(bounds);
-    }
+        #[cfg(not(target_os = "macos"))]
+        let _ = window;
+    });
 }
 
 #[cfg(target_os = "macos")]
-fn footer_popup_ns_window(window: &mut Window) -> Option<cocoa::base::id> {
+fn main_window_ns_window(window: &mut Window) -> Option<id> {
     if let Ok(window_handle) = raw_window_handle::HasWindowHandle::window_handle(window) {
         if let raw_window_handle::RawWindowHandle::AppKit(appkit) = window_handle.as_raw() {
-            use cocoa::base::nil;
             use objc::{msg_send, sel, sel_impl};
 
-            let ns_view = appkit.ns_view.as_ptr() as cocoa::base::id;
-            // SAFETY: `ns_view` comes from the live GPUI popup window on the AppKit
+            let ns_view = appkit.ns_view.as_ptr() as id;
+            // SAFETY: `ns_view` comes from a live GPUI window on the AppKit
             // main thread. `-[NSView window]` returns the owning NSWindow or nil.
             unsafe {
-                let ns_window: cocoa::base::id = msg_send![ns_view, window];
+                let ns_window: id = msg_send![ns_view, window];
                 if ns_window != nil {
                     return Some(ns_window);
                 }
@@ -177,85 +104,362 @@ fn footer_popup_ns_window(window: &mut Window) -> Option<cocoa::base::id> {
 }
 
 #[cfg(target_os = "macos")]
-fn attach_footer_popup_to_parent_window(
-    cx: &mut App,
-    parent_window_handle: AnyWindowHandle,
-    child_ns_window: cocoa::base::id,
-) {
-    let _ = cx.update_window(parent_window_handle, move |_, parent_window, _cx| {
-        let Some(parent_ns_window) = footer_popup_ns_window(parent_window) else {
-            return;
-        };
+unsafe fn ensure_main_footer_host(ns_window: id) {
+    use cocoa::appkit::NSViewWidthSizable;
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
 
-        // SAFETY: both NSWindow pointers come from live GPUI windows on the main
-        // thread. We guard against nil/equal pointers before attaching.
-        unsafe {
-            use cocoa::base::nil;
-            use objc::{msg_send, sel, sel_impl};
+    if crate::platform::require_main_thread("ensure_main_footer_host") {
+        return;
+    }
 
-            if parent_ns_window == nil
-                || child_ns_window == nil
-                || parent_ns_window == child_ns_window
-            {
-                return;
-            }
+    let content_view: id = msg_send![ns_window, contentView];
+    if content_view == nil {
+        return;
+    }
 
-            let _: () =
-                msg_send![parent_ns_window, addChildWindow:child_ns_window ordered:NS_WINDOW_ABOVE];
-            let _: () = msg_send![child_ns_window, orderFrontRegardless];
+    let existing = find_subview_by_identifier(content_view, FOOTER_EFFECT_ID);
+    if existing != nil {
+        return;
+    }
+
+    let content_bounds: NSRect = msg_send![content_view, bounds];
+    let footer_frame = NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(content_bounds.size.width, footer_height()),
+    );
+
+    let footer_cls = footer_effect_view_class();
+    let footer_view: id = msg_send![footer_cls, alloc];
+    let footer_view: id = msg_send![footer_view, initWithFrame: footer_frame];
+    if footer_view == nil {
+        return;
+    }
+
+    let effect_identifier = ns_string(FOOTER_EFFECT_ID);
+    if effect_identifier != nil {
+        let _: () = msg_send![footer_view, setIdentifier: effect_identifier];
+    }
+    let _: () = msg_send![footer_view, setAutoresizingMask: NSViewWidthSizable];
+    let _: () = msg_send![footer_view, setWantsLayer: YES];
+
+    let divider_view: id = msg_send![class!(NSView), alloc];
+    let divider_view: id = msg_send![
+        divider_view,
+        initWithFrame: NSRect::new(
+            NSPoint::new(0.0, footer_height() - 1.0),
+            NSSize::new(content_bounds.size.width, 1.0)
+        )
+    ];
+    if divider_view != nil {
+        let divider_identifier = ns_string(FOOTER_DIVIDER_ID);
+        if divider_identifier != nil {
+            let _: () = msg_send![divider_view, setIdentifier: divider_identifier];
         }
-    });
-}
-
-struct MainFooterPopupWindow;
-
-impl Render for MainFooterPopupWindow {
-    fn render(&mut self, _window: &mut Window, _cx: &mut gpui::Context<Self>) -> impl IntoElement {
-        let theme = get_cached_theme();
-        let hint_text_hex = theme.colors.text.primary;
-        let hint_opacity_byte =
-            (crate::window_resize::mini_layout::HINT_TEXT_OPACITY * 255.0).round() as u32;
-        let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
-        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-
-        div()
-            .w_full()
-            .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
-            .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
-            .py(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_Y))
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_end()
-            .border_t(px(crate::window_resize::mini_layout::DIVIDER_HEIGHT))
-            .border_color(rgba(chrome.divider_rgba))
-            .child(crate::components::render_hint_icons(
-                &["↵ Run", "⌘K Actions", "Tab AI"],
-                hint_text_rgba,
-            ))
+        let _: () = msg_send![divider_view, setAutoresizingMask: NSViewWidthSizable];
+        let _: () = msg_send![divider_view, setWantsLayer: YES];
+        let _: () = msg_send![footer_view, addSubview: divider_view];
     }
+
+    let label: id = msg_send![class!(NSTextField), alloc];
+    let label: id = msg_send![label, initWithFrame: footer_label_frame(content_bounds.size.width)];
+    if label != nil {
+        let empty: id = msg_send![class!(NSString), string];
+        let label_identifier = ns_string(FOOTER_LABEL_ID);
+        if label_identifier != nil {
+            let _: () = msg_send![label, setIdentifier: label_identifier];
+        }
+        let _: () = msg_send![label, setStringValue: empty];
+        let _: () = msg_send![label, setBezeled: NO];
+        let _: () = msg_send![label, setBordered: NO];
+        let _: () = msg_send![label, setDrawsBackground: NO];
+        let _: () = msg_send![label, setEditable: NO];
+        let _: () = msg_send![label, setSelectable: NO];
+        let _: () = msg_send![label, setAutoresizingMask: NSViewWidthSizable];
+        let _: () = msg_send![label, setAlignment: 2isize];
+        let _: () = msg_send![footer_view, addSubview: label];
+    }
+
+    let _: () = msg_send![
+        content_view,
+        addSubview: footer_view
+        positioned: 1isize
+        relativeTo: nil
+    ];
+
+    tracing::info!(
+        target: "script_kit::footer_popup",
+        event = "native_footer_host_installed",
+        "Installed native footer host inside the main window contentView"
+    );
 }
 
-#[cfg(test)]
-mod tests {
-    use super::footer_popup_bounds;
-    use gpui::{point, px, size, Bounds};
+#[cfg(target_os = "macos")]
+unsafe fn refresh_main_footer_host(ns_window: id) {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
 
-    #[test]
-    fn footer_popup_bounds_bottom_aligns_to_parent() {
-        let parent_bounds = Bounds {
-            origin: point(px(120.), px(80.)),
-            size: size(px(480.), px(440.)),
-        };
+    if crate::platform::require_main_thread("refresh_main_footer_host") {
+        return;
+    }
 
-        let bounds = footer_popup_bounds(parent_bounds);
+    let content_view: id = msg_send![ns_window, contentView];
+    if content_view == nil {
+        return;
+    }
 
-        assert_eq!(bounds.origin.x, px(120.));
-        assert_eq!(bounds.origin.y, px(490.));
-        assert_eq!(bounds.size.width, px(480.));
-        assert_eq!(
-            bounds.size.height,
-            px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT)
+    let footer_view = find_subview_by_identifier(content_view, FOOTER_EFFECT_ID);
+    if footer_view == nil {
+        return;
+    }
+
+    let theme = crate::theme::get_cached_theme();
+    let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+    let is_dark = theme.should_use_dark_vibrancy();
+    let material = match theme.get_vibrancy().material {
+        crate::theme::VibrancyMaterial::Hud => {
+            crate::platform::ns_visual_effect_material::HUD_WINDOW
+        }
+        crate::theme::VibrancyMaterial::Popover => {
+            crate::platform::ns_visual_effect_material::POPOVER
+        }
+        crate::theme::VibrancyMaterial::Menu => crate::platform::ns_visual_effect_material::MENU,
+        crate::theme::VibrancyMaterial::Sidebar => {
+            crate::platform::ns_visual_effect_material::SIDEBAR
+        }
+        crate::theme::VibrancyMaterial::Content => {
+            crate::platform::ns_visual_effect_material::CONTENT_BACKGROUND
+        }
+    };
+
+    let appearance_name = if is_dark {
+        ns_string("NSAppearanceNameVibrantDark")
+    } else {
+        ns_string("NSAppearanceNameVibrantLight")
+    };
+    if appearance_name != nil {
+        let appearance: id = msg_send![class!(NSAppearance), appearanceNamed: appearance_name];
+        if appearance != nil {
+            let _: () = msg_send![footer_view, setAppearance: appearance];
+        }
+    }
+
+    let _: () = msg_send![footer_view, setMaterial: material];
+    let _: () = msg_send![footer_view, setState: 1isize];
+    let _: () = msg_send![footer_view, setBlendingMode: 1isize];
+    let _: () = msg_send![footer_view, setEmphasized: is_dark];
+    let _: () = msg_send![footer_view, setNeedsDisplay: YES];
+
+    let content_bounds: NSRect = msg_send![content_view, bounds];
+    let footer_frame = NSRect::new(
+        NSPoint::new(0.0, 0.0),
+        NSSize::new(content_bounds.size.width, footer_height()),
+    );
+    let _: () = msg_send![footer_view, setFrame: footer_frame];
+
+    let footer_layer: id = msg_send![footer_view, layer];
+    if footer_layer != nil {
+        let _: () = msg_send![footer_layer, setCornerRadius: 0.0_f64];
+        let _: () = msg_send![footer_layer, setMasksToBounds: YES];
+    }
+
+    let divider_view = find_subview_by_identifier(footer_view, FOOTER_DIVIDER_ID);
+    if divider_view != nil {
+        let divider_frame = NSRect::new(
+            NSPoint::new(0.0, footer_height() - 1.0),
+            NSSize::new(content_bounds.size.width, 1.0),
         );
+        let _: () = msg_send![divider_view, setFrame: divider_frame];
+        let divider_layer: id = msg_send![divider_view, layer];
+        if divider_layer != nil {
+            let divider_color = ns_color_from_rgba(chrome.divider_rgba);
+            if divider_color != nil {
+                let cg_color: id = msg_send![divider_color, CGColor];
+                if cg_color != nil {
+                    let _: () = msg_send![divider_layer, setBackgroundColor: cg_color];
+                }
+            }
+        }
     }
+
+    let label = find_subview_by_identifier(footer_view, FOOTER_LABEL_ID);
+    if label != nil {
+        let _: () = msg_send![label, setFrame: footer_label_frame(content_bounds.size.width)];
+
+        let label_text = ns_string(HINTS_TEXT);
+        if label_text != nil {
+            let _: () = msg_send![label, setStringValue: label_text];
+        }
+
+        let font: id = msg_send![class!(NSFont), systemFontOfSize: 13.0_f64];
+        if font != nil {
+            let _: () = msg_send![label, setFont: font];
+        }
+
+        let alpha = crate::window_resize::mini_layout::HINT_TEXT_OPACITY as f64;
+        let text_color = ns_color_from_hex_with_alpha(theme.colors.text.primary, alpha);
+        if text_color != nil {
+            let _: () = msg_send![label, setTextColor: text_color];
+        }
+    }
+
+    tracing::debug!(
+        target: "script_kit::footer_popup",
+        event = "native_footer_host_refreshed",
+        width = content_bounds.size.width,
+        height = footer_height(),
+        dark = is_dark,
+        "Refreshed native footer host"
+    );
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn remove_main_footer_host(ns_window: id) {
+    use objc::{msg_send, sel, sel_impl};
+
+    if crate::platform::require_main_thread("remove_main_footer_host") {
+        return;
+    }
+
+    let content_view: id = msg_send![ns_window, contentView];
+    if content_view == nil {
+        return;
+    }
+
+    let footer_view = find_subview_by_identifier(content_view, FOOTER_EFFECT_ID);
+    if footer_view == nil {
+        return;
+    }
+
+    let _: () = msg_send![footer_view, removeFromSuperview];
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn find_subview_by_identifier(parent: id, identifier: &str) -> id {
+    use objc::{msg_send, sel, sel_impl};
+
+    let identifier = ns_string(identifier);
+    if parent == nil || identifier == nil {
+        return nil;
+    }
+
+    let subviews: id = msg_send![parent, subviews];
+    if subviews == nil {
+        return nil;
+    }
+
+    let count: usize = msg_send![subviews, count];
+    for index in 0..count {
+        let view: id = msg_send![subviews, objectAtIndex: index];
+        if view == nil {
+            continue;
+        }
+        let view_identifier: id = msg_send![view, identifier];
+        if view_identifier != nil {
+            let matches: cocoa::base::BOOL =
+                msg_send![view_identifier, isEqualToString: identifier];
+            if matches == YES {
+                return view;
+            }
+        }
+    }
+
+    nil
+}
+
+#[cfg(target_os = "macos")]
+fn footer_height() -> f64 {
+    crate::window_resize::mini_layout::HINT_STRIP_HEIGHT as f64
+}
+
+#[cfg(target_os = "macos")]
+fn footer_label_frame(width: f64) -> cocoa::foundation::NSRect {
+    cocoa::foundation::NSRect::new(
+        cocoa::foundation::NSPoint::new(12.0, 0.0),
+        cocoa::foundation::NSSize::new(width - 24.0, footer_height()),
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn ns_string(text: &str) -> id {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let Ok(c_string) = std::ffi::CString::new(text) else {
+        return nil;
+    };
+
+    // SAFETY: The CString is NUL-terminated and lives for the duration of the call.
+    unsafe { msg_send![class!(NSString), stringWithUTF8String: c_string.as_ptr()] }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn ns_color_from_rgba(rgba: u32) -> id {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let red = ((rgba >> 24) & 0xFF) as f64 / 255.0;
+    let green = ((rgba >> 16) & 0xFF) as f64 / 255.0;
+    let blue = ((rgba >> 8) & 0xFF) as f64 / 255.0;
+    let alpha = (rgba & 0xFF) as f64 / 255.0;
+
+    // SAFETY: Standard AppKit color construction on the main thread.
+    msg_send![
+        class!(NSColor),
+        colorWithSRGBRed: red
+        green: green
+        blue: blue
+        alpha: alpha
+    ]
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn ns_color_from_hex_with_alpha(hex: u32, alpha: f64) -> id {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let red = ((hex >> 16) & 0xFF) as f64 / 255.0;
+    let green = ((hex >> 8) & 0xFF) as f64 / 255.0;
+    let blue = (hex & 0xFF) as f64 / 255.0;
+
+    // SAFETY: Standard AppKit color construction on the main thread.
+    msg_send![
+        class!(NSColor),
+        colorWithSRGBRed: red
+        green: green
+        blue: blue
+        alpha: alpha
+    ]
+}
+
+#[cfg(target_os = "macos")]
+fn footer_effect_view_class() -> *const objc::runtime::Class {
+    use std::sync::OnceLock;
+
+    use objc::declare::ClassDecl;
+    use objc::runtime::{Object, Sel};
+    use objc::{class, sel, sel_impl};
+
+    static CLASS: OnceLock<usize> = OnceLock::new();
+
+    *CLASS.get_or_init(|| unsafe {
+        let superclass = class!(NSVisualEffectView);
+        // SAFETY: NSVisualEffectView is always available on macOS 10.10+.
+        // ClassDecl::new only returns None if the class name is already registered,
+        // which cannot happen inside OnceLock::get_or_init.
+        let Some(mut decl) = ClassDecl::new("ScriptKitFooterEffectView", superclass) else {
+            return class!(NSVisualEffectView) as *const _ as usize;
+        };
+        decl.add_method(
+            sel!(hitTest:),
+            footer_hit_test as extern "C" fn(&Object, Sel, cocoa::foundation::NSPoint) -> id,
+        );
+        decl.register() as *const _ as usize
+    }) as *const objc::runtime::Class
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_hit_test(
+    _this: &objc::runtime::Object,
+    _: objc::runtime::Sel,
+    _: cocoa::foundation::NSPoint,
+) -> id {
+    nil
 }

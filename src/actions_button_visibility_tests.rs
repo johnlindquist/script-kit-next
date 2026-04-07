@@ -112,7 +112,7 @@ mod tests {
             "mini mode branch should render the single-column layout and mini perf log"
         );
         assert!(
-            render_impl.contains("self.sync_main_footer_popup(cx);"),
+            render_impl.contains("self.sync_main_footer_popup(window, cx);"),
             "render loop should sync the popup footer when mini mode visibility changes"
         );
         assert!(
