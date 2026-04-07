@@ -379,7 +379,28 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
             let name = typed_mention_display_name(path);
             Some(format_typed_mention_token(prefix, &name))
         }
-        AiContextPart::FocusedTarget { label, .. } => {
+        AiContextPart::FocusedTarget { target, label, .. } => {
+            // File/directory targets use typed file prefixes (@rs:, @dir:, etc.)
+            if (target.kind == "file" || target.kind == "directory")
+                && target
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.get("path"))
+                    .is_some()
+            {
+                let path = target.metadata.as_ref().unwrap()["path"]
+                    .as_str()
+                    .unwrap_or(&target.label);
+                let prefix = if target.kind == "directory" {
+                    typed_mention_prefix_for_dir()
+                } else {
+                    typed_mention_prefix(path)
+                };
+                let name = typed_mention_display_name(path);
+                return Some(format_typed_mention_token(prefix, &name));
+            }
+
+            // Non-file targets use @cmd: prefix.
             let name = label
                 .chars()
                 .take(TYPED_MENTION_NAME_MAX_LEN)

@@ -19,6 +19,7 @@ pub struct NucleoCtx {
     pattern: Pattern,
     matcher: Matcher,
     buf: Vec<char>,
+    indices_buf: Vec<u32>,
 }
 
 impl NucleoCtx {
@@ -30,10 +31,12 @@ impl NucleoCtx {
             nucleo_matcher::pattern::CaseMatching::Ignore,
             nucleo_matcher::pattern::Normalization::Smart,
         );
+        let indices_cap = query.chars().count();
         Self {
             pattern,
             matcher: Matcher::new(nucleo_matcher::Config::DEFAULT),
             buf: Vec::with_capacity(64), // Pre-allocate for typical strings
+            indices_buf: Vec::with_capacity(indices_cap),
         }
     }
 
@@ -45,5 +48,19 @@ impl NucleoCtx {
         self.buf.clear();
         let utf32 = Utf32Str::new(haystack, &mut self.buf);
         self.pattern.score(utf32, &mut self.matcher)
+    }
+
+    /// Score a haystack and return the matched character indices.
+    /// Returns None if no match. Indices are sorted and deduplicated.
+    #[inline]
+    pub fn indices(&mut self, haystack: &str) -> Option<Vec<usize>> {
+        self.buf.clear();
+        self.indices_buf.clear();
+        let utf32 = Utf32Str::new(haystack, &mut self.buf);
+        self.pattern
+            .indices(utf32, &mut self.matcher, &mut self.indices_buf)?;
+        self.indices_buf.sort_unstable();
+        self.indices_buf.dedup();
+        Some(self.indices_buf.iter().map(|idx| *idx as usize).collect())
     }
 }
