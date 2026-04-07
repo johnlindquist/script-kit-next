@@ -295,6 +295,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
 
     // 2. Set visibility state
     set_main_window_visible(false);
+    crate::footer_popup::close_main_footer_popup(cx);
 
     // 3. Check secondary windows BEFORE the update closure
     let notes_open = notes::is_notes_window_open();

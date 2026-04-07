@@ -91,6 +91,10 @@ mod tests {
     fn test_mini_mode_branch_hides_ask_ai_and_skips_preview_footer() {
         let content = fs::read_to_string("src/render_script_list/mod.rs")
             .expect("Failed to read src/render_script_list/mod.rs");
+        let render_impl = fs::read_to_string("src/main_sections/render_impl.rs")
+            .expect("Failed to read src/main_sections/render_impl.rs");
+        let footer_popup =
+            fs::read_to_string("src/footer_popup.rs").expect("Failed to read src/footer_popup.rs");
 
         assert!(
             content.contains("let is_mini = self.main_window_mode == MainWindowMode::Mini;"),
@@ -102,10 +106,21 @@ mod tests {
         );
         assert!(
             content.contains("if is_mini {")
-                && content.contains("// Mini mode: single column, toggle between list and info panel")
-                && content.contains("render_hint_icons")
+                && content
+                    .contains("// Mini mode: single column, toggle between list and info panel")
                 && content.contains("mode = \"mini\""),
-            "mini mode branch should render the single-column layout, compact hint strip, and mini perf log"
+            "mini mode branch should render the single-column layout and mini perf log"
+        );
+        assert!(
+            render_impl.contains("self.sync_main_footer_popup(cx);"),
+            "render loop should sync the popup footer when mini mode visibility changes"
+        );
+        assert!(
+            footer_popup.contains("render_hint_icons(")
+                && footer_popup.contains("\"↵ Run\"")
+                && footer_popup.contains("\"⌘K Actions\"")
+                && footer_popup.contains("\"Tab AI\""),
+            "popup footer should render the three launcher affordance hints"
         );
     }
 }

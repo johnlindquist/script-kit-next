@@ -1020,41 +1020,6 @@ impl ScriptListApp {
                 );
             }
 
-            // Compact hint strip instead of footer — uses shared mini_layout tokens
-            // and opacity-blended text for a softer, Raycast-like launcher feel.
-            let hint_text_hex = self.theme.colors.text.primary;
-            let hint_opacity_byte = (crate::window_resize::mini_layout::HINT_TEXT_OPACITY * 255.0)
-                .round() as u32;
-            let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
-            main_div = main_div.child(
-                div()
-                    .w_full()
-                    .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
-                    .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
-                    .py(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_Y))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_end()
-                    // Subtle top border to separate hint strip from list
-                    .border_t(px(crate::window_resize::mini_layout::DIVIDER_HEIGHT))
-                    .border_color(rgba(chrome.divider_rgba))
-                    .child(crate::components::render_hint_icons_clickable(
-                        vec![
-                            crate::components::ClickableHint::new("↵ Run", cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-                                this.execute_selected(cx);
-                            })),
-                            crate::components::ClickableHint::new("⌘K Actions", cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-                                this.toggle_actions(cx, window);
-                            })),
-                            crate::components::ClickableHint::new("Tab AI", cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-                                this.open_tab_ai_chat(cx);
-                            })),
-                        ],
-                        hint_text_rgba,
-                    )),
-            );
-
             if let Some(panel) = log_panel {
                 main_div = main_div.child(panel);
             }

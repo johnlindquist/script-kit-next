@@ -222,6 +222,8 @@ pub mod stdin_commands;
 
 // Confirmation dialog - modal confirmation window for destructive actions
 pub mod confirm;
+#[allow(dead_code)]
+pub mod footer_popup;
 
 // Notes - Raycast Notes feature parity
 // Separate floating window for note-taking with gpui-component

@@ -8,6 +8,13 @@ fn mini_main_window_sizing_from_grouped_items(
 }
 
 impl ScriptListApp {
+    pub(crate) fn sync_main_footer_popup(&self, cx: &mut Context<Self>) {
+        let should_show = matches!(self.current_view, AppView::ScriptList)
+            && self.main_window_mode == MainWindowMode::Mini
+            && crate::is_main_window_visible();
+        crate::footer_popup::sync_main_footer_popup(should_show, &mut *cx);
+    }
+
     pub(crate) fn toggle_logs(&mut self, cx: &mut Context<Self>) {
         self.show_logs = !self.show_logs;
         cx.notify();
