@@ -706,20 +706,12 @@ impl ScriptListApp {
                             return;
                         }
                         "k" => {
-                            // Cmd+K - Toggle actions menu
-                            let has = this.has_actions();
-                            tracing::debug!(
-                                event = "cmd_k.pressed",
-                                has_actions = has,
-                                selected_index = this.selected_index,
-                                mini_mode = (this.main_window_mode == MainWindowMode::Mini),
-                                "Cmd+K pressed, has_actions={}",
-                                has,
+                            // Cmd+K - Toggle actions menu (routed through shared dispatcher)
+                            logging::log(
+                                "KEY",
+                                "Shortcut Cmd+K -> handle_cmd_k_actions_toggle",
                             );
-                            if has {
-                                logging::log("KEY", "Shortcut Cmd+K -> toggle_actions");
-                                this.toggle_actions(cx, window);
-                            }
+                            this.handle_cmd_k_actions_toggle(window, cx);
                             return;
                         }
                         "i" => {
