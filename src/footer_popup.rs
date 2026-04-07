@@ -28,19 +28,48 @@ const FOOTER_HINT_FONT_WEIGHT_SEMIBOLD: f64 = 0.3;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_BUTTON_ID_PREFIX: &str = "script-kit-footer-button-";
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FooterAction {
     Run,
     Actions,
     Ai,
 }
 
-#[cfg(target_os = "macos")]
-const FOOTER_HINTS: [(FooterAction, &str, &str); 3] = [
-    (FooterAction::Run, "↵", "Run"),
-    (FooterAction::Actions, "⌘K", "Actions"),
-    (FooterAction::Ai, "Tab", "AI"),
-];
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FooterButtonConfig {
+    pub action: FooterAction,
+    pub key: &'static str,
+    pub label: &'static str,
+    pub selected: bool,
+}
+
+impl FooterButtonConfig {
+    pub(crate) fn new(action: FooterAction, key: &'static str, label: &'static str) -> Self {
+        Self {
+            action,
+            key,
+            label,
+            selected: false,
+        }
+    }
+
+    pub(crate) fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct MainWindowFooterConfig {
+    pub surface: &'static str,
+    pub buttons: Vec<FooterButtonConfig>,
+}
+
+impl MainWindowFooterConfig {
+    pub(crate) fn new(surface: &'static str, buttons: Vec<FooterButtonConfig>) -> Self {
+        Self { surface, buttons }
+    }
+}
 
 static FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
     async_channel::Sender<FooterAction>,
@@ -54,7 +83,11 @@ pub(crate) fn footer_action_channel() -> &'static (
     &FOOTER_ACTION_CHANNEL
 }
 
-pub(crate) fn sync_main_footer_popup(window: &mut Window, should_show: bool, _cx: &mut App) {
+pub(crate) fn sync_main_footer_popup(
+    window: &mut Window,
+    config: Option<&MainWindowFooterConfig>,
+    _cx: &mut App,
+) {
     #[cfg(target_os = "macos")]
     {
         let Some(ns_window) = main_window_ns_window(window) else {
@@ -69,9 +102,9 @@ pub(crate) fn sync_main_footer_popup(window: &mut Window, should_show: bool, _cx
         // SAFETY: `ns_window` comes from the live GPUI main window currently
         // being rendered/observed on the AppKit thread.
         unsafe {
-            if should_show {
+            if let Some(config) = config {
                 ensure_main_footer_host(ns_window);
-                refresh_main_footer_host(ns_window);
+                refresh_main_footer_host(ns_window, config);
             } else {
                 remove_main_footer_host(ns_window);
             }
@@ -79,10 +112,14 @@ pub(crate) fn sync_main_footer_popup(window: &mut Window, should_show: bool, _cx
     }
 
     #[cfg(not(target_os = "macos"))]
-    let _ = (window, should_show);
+    let _ = (window, config);
 }
 
-pub(crate) fn notify_main_footer_popup(window: &mut Window, _cx: &mut App) {
+pub(crate) fn notify_main_footer_popup(
+    window: &mut Window,
+    config: Option<&MainWindowFooterConfig>,
+    _cx: &mut App,
+) {
     #[cfg(target_os = "macos")]
     {
         let Some(ns_window) = main_window_ns_window(window) else {
@@ -92,12 +129,14 @@ pub(crate) fn notify_main_footer_popup(window: &mut Window, _cx: &mut App) {
         // SAFETY: `ns_window` comes from the live GPUI main window currently
         // being rendered/observed on the AppKit thread.
         unsafe {
-            refresh_main_footer_host(ns_window);
+            if let Some(config) = config {
+                refresh_main_footer_host(ns_window, config);
+            }
         }
     }
 
     #[cfg(not(target_os = "macos"))]
-    let _ = window;
+    let _ = (window, config);
 }
 
 pub(crate) fn close_main_footer_popup(cx: &mut App) {
@@ -230,7 +269,7 @@ unsafe fn ensure_main_footer_host(ns_window: id) {
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn refresh_main_footer_host(ns_window: id) {
+unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfig) {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{class, msg_send, sel, sel_impl};
 
@@ -323,37 +362,14 @@ unsafe fn refresh_main_footer_host(ns_window: id) {
 
         let alpha = crate::window_resize::mini_layout::HINT_TEXT_OPACITY as f64;
         let text_color = ns_color_from_hex_with_alpha(theme.colors.text.primary, alpha);
-        layout_footer_hints(hints_view, text_color);
-
-        // Apply Actions toggle bg if the actions dialog is open.
-        if crate::actions::is_actions_window_open() {
-            let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-            let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);
-            if selected_ns != nil {
-                let cg: id = msg_send![selected_ns, CGColor];
-                if cg != nil {
-                    // Actions is index 1 in FOOTER_HINTS.
-                    let subviews: id = msg_send![hints_view, subviews];
-                    if subviews != nil {
-                        let count: usize = msg_send![subviews, count];
-                        if count > 1 {
-                            let actions_container: id = msg_send![subviews, objectAtIndex: 1usize];
-                            if actions_container != nil {
-                                let layer: id = msg_send![actions_container, layer];
-                                if layer != nil {
-                                    let _: () = msg_send![layer, setBackgroundColor: cg];
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        layout_footer_hints(hints_view, text_color, &config.buttons);
     }
 
-    tracing::debug!(
+    tracing::info!(
         target: "script_kit::footer_popup",
         event = "native_footer_host_refreshed",
+        surface = config.surface,
+        button_count = config.buttons.len(),
         width = content_bounds.size.width,
         height = footer_height(),
         dark = is_dark,
@@ -429,7 +445,7 @@ fn footer_hints_frame(width: f64) -> cocoa::foundation::NSRect {
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn layout_footer_hints(hints_view: id, text_color: id) {
+unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterButtonConfig]) {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{msg_send, sel, sel_impl};
 
@@ -478,8 +494,8 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id) {
 
     let mut items = Vec::new();
     let mut total_width = 0.0_f64;
-    for (index, (action, key, label)) in FOOTER_HINTS.iter().enumerate() {
-        let item = make_footer_hint_item(*action, key, label, font, text_color);
+    for (index, button_cfg) in buttons.iter().enumerate() {
+        let item = make_footer_hint_item(button_cfg, font, text_color);
         if item == nil {
             continue;
         }
@@ -504,13 +520,7 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id) {
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn make_footer_hint_item(
-    action: FooterAction,
-    key: &str,
-    label: &str,
-    font: id,
-    text_color: id,
-) -> id {
+unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_color: id) -> id {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{class, msg_send, sel, sel_impl};
 
@@ -523,8 +533,8 @@ unsafe fn make_footer_hint_item(
         return nil;
     }
 
-    let key_field = make_footer_hint_text_field(key, font, text_color);
-    let label_field = make_footer_hint_text_field(label, font, text_color);
+    let key_field = make_footer_hint_text_field(button_cfg.key, font, text_color);
+    let label_field = make_footer_hint_text_field(button_cfg.label, font, text_color);
     if key_field == nil || label_field == nil {
         return nil;
     }
@@ -562,6 +572,17 @@ unsafe fn make_footer_hint_item(
     let container_layer: id = msg_send![container, layer];
     if container_layer != nil {
         let _: () = msg_send![container_layer, setCornerRadius: FOOTER_HINT_RADIUS];
+        if button_cfg.selected {
+            let theme = crate::theme::get_cached_theme();
+            let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+            let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);
+            if selected_ns != nil {
+                let cg: id = msg_send![selected_ns, CGColor];
+                if cg != nil {
+                    let _: () = msg_send![container_layer, setBackgroundColor: cg];
+                }
+            }
+        }
     }
 
     let button: id = msg_send![footer_button_class(), alloc];
@@ -577,7 +598,7 @@ unsafe fn make_footer_hint_item(
         let button_id = ns_string(&format!(
             "{}{}",
             FOOTER_HINT_BUTTON_ID_PREFIX,
-            footer_action_key(action)
+            footer_action_key(button_cfg.action)
         ));
         if button_id != nil {
             let _: () = msg_send![button, setIdentifier: button_id];
@@ -587,14 +608,18 @@ unsafe fn make_footer_hint_item(
         let _: () = msg_send![button, setButtonType: 0usize];
         let _: () = msg_send![button, setTransparent: YES];
         let _: () = msg_send![button, setTarget: footer_action_target()];
-        let _: () = msg_send![button, setAction: footer_action_selector(action)];
+        let _: () = msg_send![button, setAction: footer_action_selector(button_cfg.action)];
 
-        // Mark the Actions button so mouseExited can restore its toggle bg.
-        let is_actions = matches!(action, FooterAction::Actions);
+        // Store _selected and _isActionsButton for mouse exit behavior.
+        let is_actions = matches!(button_cfg.action, FooterAction::Actions);
         if let Some(obj) = button.as_mut() {
             obj.set_ivar::<cocoa::base::BOOL>(
                 "_isActionsButton",
                 if is_actions { YES } else { NO },
+            );
+            obj.set_ivar::<cocoa::base::BOOL>(
+                "_selected",
+                if button_cfg.selected { YES } else { NO },
             );
         }
     }
@@ -743,6 +768,7 @@ fn footer_button_class() -> *const objc::runtime::Class {
             decl.add_ivar::<usize>("_hoverCGColor");
             decl.add_ivar::<usize>("_selectedCGColor");
             decl.add_ivar::<cocoa::base::BOOL>("_isActionsButton");
+            decl.add_ivar::<cocoa::base::BOOL>("_selected");
             decl.add_method(
                 sel!(acceptsFirstMouse:),
                 footer_button_accepts_first_mouse
@@ -901,15 +927,17 @@ extern "C" fn footer_button_mouse_exited(
     use objc::{msg_send, sel, sel_impl};
 
     // SAFETY: Clear hover background on the parent container's layer.
-    // If this is the Actions button and actions is open, restore the
-    // selected color instead of clearing.
+    // If this button has _selected set, restore the selected color instead
+    // of clearing.
     unsafe {
+        let selected: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_selected");
         let is_actions: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_isActionsButton");
         let actions_window_open = crate::actions::is_actions_window_open();
         tracing::debug!(
             target: "script_kit::footer_popup",
             event = "native_footer_button_hover_exited",
             is_actions_button = is_actions == YES,
+            selected = selected == YES,
             actions_window_open,
             "Native footer button hover exited"
         );
@@ -923,7 +951,7 @@ extern "C" fn footer_button_mouse_exited(
             return;
         }
 
-        if is_actions == YES && actions_window_open {
+        if selected == YES || (is_actions == YES && actions_window_open) {
             let theme = crate::theme::get_cached_theme();
             let chrome = crate::theme::AppChromeColors::from_theme(&theme);
             let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);

@@ -705,7 +705,7 @@ impl ScriptListApp {
                                 let fallback_icon =
                                     file_search::file_type_icon(file.file_type).to_string();
 
-                                // Click handler via canonical mouse contract
+                                // Click handler: select on click, open/browse on double-click
                                 let click_entity = click_entity_handle.clone();
                                 let file_path = file.path.clone();
                                 let file_type = file.file_type;
@@ -715,7 +715,6 @@ impl ScriptListApp {
                                     if let Some(app) = click_entity.upgrade() {
                                         let file_path = file_path.clone();
                                         app.update(cx, |this, cx| {
-                                            this.enter_mouse_mode_from_row(cx);
                                             this.lock_file_search_selection_to_user_choice();
                                             if let AppView::FileSearchView {
                                                 selected_index, ..
@@ -726,37 +725,39 @@ impl ScriptListApp {
                                             cx.notify();
 
                                             // Double-click: browse directory inline or open file
-                                            if Self::mouse_click_count(event) >= 2 {
-                                                if file_type == FileType::Directory {
-                                                    let next_query = format!(
-                                                        "{}/",
-                                                        file_search::shorten_path(&file_path)
-                                                            .trim_end_matches('/')
-                                                    );
-                                                    let next_presentation =
-                                                        match &this.current_view {
-                                                            AppView::FileSearchView {
-                                                                presentation,
-                                                                ..
-                                                            } => *presentation,
-                                                            _ => FileSearchPresentation::Full,
-                                                        };
-                                                    this.open_file_search_view(
-                                                        next_query,
-                                                        next_presentation,
-                                                        cx,
-                                                    );
-                                                } else {
-                                                    tracing::debug!(
-                                                        target: "script_kit::mouse",
-                                                        event = "file_search_full_row_double_clicked",
-                                                        row_index = ix,
-                                                        path = %file_path,
-                                                        "Opening file from mouse double-click"
-                                                    );
-                                                    let _ =
-                                                        file_search::open_file(&file_path);
-                                                    this.close_and_reset_window(cx);
+                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
+                                                if mouse_event.down.click_count == 2 {
+                                                    if file_type == FileType::Directory {
+                                                        let next_query = format!(
+                                                            "{}/",
+                                                            file_search::shorten_path(&file_path)
+                                                                .trim_end_matches('/')
+                                                        );
+                                                        let next_presentation =
+                                                            match &this.current_view {
+                                                                AppView::FileSearchView {
+                                                                    presentation,
+                                                                    ..
+                                                                } => *presentation,
+                                                                _ => FileSearchPresentation::Full,
+                                                            };
+                                                        this.open_file_search_view(
+                                                            next_query,
+                                                            next_presentation,
+                                                            cx,
+                                                        );
+                                                    } else {
+                                                        logging::log(
+                                                            "UI",
+                                                            &format!(
+                                                                "Double-click opening file: {}",
+                                                                file_path
+                                                            ),
+                                                        );
+                                                        let _ =
+                                                            file_search::open_file(&file_path);
+                                                        this.close_and_reset_window(cx);
+                                                    }
                                                 }
                                             }
                                         });
@@ -1296,24 +1297,31 @@ impl ScriptListApp {
             crate::components::emit_prompt_hint_audit("file_search", &file_search_hints);
         }
 
+        // Build GPUI hint strip, then route through the native footer slot
+        let gpui_footer = crate::components::render_simple_hint_strip(
+            file_search_hints,
+            None,
+        );
+        let footer = self.main_window_footer_slot(gpui_footer);
+
         if is_mini {
-            crate::components::render_minimal_list_prompt_scaffold(
+            crate::components::render_minimal_list_prompt_shell_with_footer(
+                0.0,
+                None,
                 header_element,
                 list_pane,
-                file_search_hints.clone(),
-                None,
+                footer,
             )
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
             .into_any_element()
         } else {
-            crate::components::render_expanded_view_scaffold_with_hints(
+            crate::components::render_expanded_view_scaffold_with_footer(
                 header_element,
                 list_pane,
                 preview_pane,
-                file_search_hints,
-                None,
+                footer,
             )
             .key_context("FileSearchView")
             .track_focus(&self.focus_handle)

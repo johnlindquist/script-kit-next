@@ -73,8 +73,11 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(crate::components::prompt_shell_content(entity.clone())),
             )
-            // Universal three-key hint strip footer
-            .child(self.clickable_universal_hint_strip(cx))
+            // Universal three-key hint strip footer (native or GPUI)
+            .when_some(
+                self.main_window_footer_slot(self.clickable_universal_hint_strip(cx)),
+                |d, footer| d.child(footer),
+            )
             // Actions dialog overlay (when Cmd+K is pressed with SDK actions)
             .when_some(
                 render_actions_backdrop(

@@ -362,7 +362,6 @@ impl ScriptListApp {
                                     }
                                 };
 
-                                // Hover handler via canonical mouse contract
                                 let hover_entity = hover_entity_handle.clone();
                                 let hover_handler =
                                     move |is_hovered: &bool,
@@ -370,7 +369,16 @@ impl ScriptListApp {
                                           cx: &mut gpui::App| {
                                         if let Some(app) = hover_entity.upgrade() {
                                             app.update(cx, |this, cx| {
-                                                this.update_row_hover_from_mouse(ix, *is_hovered, cx);
+                                                if *is_hovered {
+                                                    this.input_mode = InputMode::Mouse;
+                                                    if this.hovered_index != Some(ix) {
+                                                        this.hovered_index = Some(ix);
+                                                        cx.notify();
+                                                    }
+                                                } else if this.hovered_index == Some(ix) {
+                                                    this.hovered_index = None;
+                                                    cx.notify();
+                                                }
                                             });
                                         }
                                     };

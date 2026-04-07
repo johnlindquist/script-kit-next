@@ -254,7 +254,16 @@ impl ScriptListApp {
                         move |is_hovered: &bool, _window: &mut Window, cx: &mut gpui::App| {
                             if let Some(app) = entity_h.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    this.update_row_hover_from_mouse(ix, *is_hovered, cx);
+                                    if *is_hovered {
+                                        this.input_mode = InputMode::Mouse;
+                                        if this.hovered_index != Some(ix) {
+                                            this.hovered_index = Some(ix);
+                                            cx.notify();
+                                        }
+                                    } else if this.hovered_index == Some(ix) {
+                                        this.hovered_index = None;
+                                        cx.notify();
+                                    }
                                 });
                             }
                         }
