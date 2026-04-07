@@ -17,7 +17,6 @@ use gpui_component::scroll::ScrollableElement;
 
 use crate::components::text_input::{
     render_text_input_cursor_selection, TextHighlightRange, TextInputRenderConfig,
-    TextInputRenderIndicator,
 };
 use crate::prompts::markdown::render_markdown_with_scope;
 use crate::theme::{self, PromptColors};
@@ -3291,17 +3290,6 @@ impl AcpChatView {
     /// Approximate glyph width used for popup anchoring and visible-window math.
     const ACP_INPUT_APPROX_CHAR_WIDTH: f32 = 8.5;
 
-    fn acp_input_max_visible_chars(&self, window: &Window) -> usize {
-        const ACP_INPUT_MIN_VISIBLE_CHARS: usize = 18;
-        const ACP_INPUT_MAX_VISIBLE_CHARS: usize = 96;
-        const ACP_INPUT_HORIZONTAL_PADDING_PX: f32 = 48.0;
-
-        let window_width = window.window_bounds().get_bounds().size.width.as_f32();
-        let usable_width = (window_width - ACP_INPUT_HORIZONTAL_PADDING_PX).max(160.0);
-        let visible_chars = (usable_width / Self::ACP_INPUT_APPROX_CHAR_WIDTH).floor() as usize;
-        visible_chars.clamp(ACP_INPUT_MIN_VISIBLE_CHARS, ACP_INPUT_MAX_VISIBLE_CHARS)
-    }
-
     fn mention_picker_width_for_window(window_width: f32) -> f32 {
         let max_width = (window_width - (Self::ACP_MENTION_PICKER_EDGE_GUTTER * 2.0))
             .min(Self::ACP_MENTION_PICKER_WIDTH);
@@ -4863,12 +4851,6 @@ impl Render for AcpChatView {
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
-        let input_has_newline = input_text.contains('\n');
-        let max_visible_chars = self.acp_input_max_visible_chars(window);
-        let (window_start, window_end) = thread.input.visible_window_range(max_visible_chars);
-        let is_window_truncated_left = !input_has_newline && window_start > 0;
-        let is_window_truncated_right =
-            !input_has_newline && window_end < input_text.chars().count();
         let mention_accent = theme::get_cached_theme().colors.accent.selected;
         let mention_highlights = Self::attached_inline_mention_highlight_ranges(
             &input_text,
@@ -4968,8 +4950,7 @@ impl Render for AcpChatView {
                                 render_text_input_cursor_selection(TextInputRenderConfig {
                                     cursor: input_cursor,
                                     selection: Some(input_selection),
-                                    window: (!input_has_newline).then_some((window_start, window_end)),
-                                    multiline: input_has_newline,
+                                    multiline: true,
                                     cursor_visible,
                                     cursor_color: theme.colors.accent.selected,
                                     text_color: theme.colors.text.primary,
@@ -4978,19 +4959,6 @@ impl Render for AcpChatView {
                                     cursor_height: 18.0,
                                     cursor_width: 2.0,
                                     container_height: Some(22.0),
-                                    overflow_x_hidden: !input_has_newline,
-                                    leading_indicator: is_window_truncated_left.then_some(
-                                        TextInputRenderIndicator {
-                                            text: "...",
-                                            color: theme.colors.text.muted,
-                                        },
-                                    ),
-                                    trailing_indicator: is_window_truncated_right.then_some(
-                                        TextInputRenderIndicator {
-                                            text: "...",
-                                            color: theme.colors.text.muted,
-                                        },
-                                    ),
                                     highlight_ranges: &mention_highlights,
                                     ..TextInputRenderConfig::default_for_prompt(&input_text)
                                 })
