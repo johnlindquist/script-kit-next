@@ -14,7 +14,6 @@ impl AiApp {
 
         let selected_index =
             inline_dropdown_clamp_selected_index(self.presets_selected_index, self.presets.len());
-
         let visible = inline_dropdown_visible_range(selected_index, self.presets.len(), 8);
 
         let synopsis = self.presets.get(selected_index).and_then(|preset| {
@@ -35,6 +34,17 @@ impl AiApp {
             }
         });
 
+        tracing::info!(
+            target: "ai",
+            event = "ai_presets_dropdown_rendered",
+            preset_count = self.presets.len(),
+            selected_index,
+            visible_start = visible.start,
+            visible_end = visible.end,
+            has_synopsis = synopsis.is_some(),
+            "Rendered AI presets inline dropdown"
+        );
+
         let body = div()
             .flex()
             .flex_col()
@@ -49,7 +59,7 @@ impl AiApp {
 
                         let accessory = svg()
                             .external_path(preset.icon.external_path())
-                            .size(px(14.))
+                            .size(px(14.0))
                             .text_color(if is_selected {
                                 GOLD
                             } else {
@@ -86,13 +96,11 @@ impl AiApp {
             }))
             .synopsis(synopsis);
 
-        let overlay_bg = Self::get_modal_overlay_background();
-
         div()
             .id("presets-dropdown-overlay")
             .absolute()
             .inset_0()
-            .bg(overlay_bg)
+            .bg(gpui::transparent_black())
             .flex()
             .items_start()
             .justify_start()
@@ -104,8 +112,8 @@ impl AiApp {
             .child(
                 div()
                     .id("presets-dropdown-container")
-                    .w(px(320.0))
                     .on_click(cx.listener(|_, _, _, _| {}))
+                    .w(px(320.0))
                     .child(dropdown),
             )
     }
