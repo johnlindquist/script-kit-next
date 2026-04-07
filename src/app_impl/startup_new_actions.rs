@@ -44,84 +44,15 @@
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt)
+                        // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt, etc.)
                         // This MUST be intercepted here because the Input component has focus and
-                        // normal on_key_down handlers won't receive the event
+                        // normal on_key_down handlers won't receive the event.
+                        // Delegates to the shared per-view dispatcher so that Cmd+K and footer
+                        // clicks always route through the same code path.
                         if has_cmd && key.eq_ignore_ascii_case("k") && !has_shift {
-                            match &mut this.current_view {
-                                AppView::ScriptList => {
-                                    // Toggle actions for the main script list
-                                    if this.has_actions() {
-                                        logging::log(
-                                            "KEY",
-                                            "Interceptor: Cmd+K -> toggle_actions (ScriptList)",
-                                        );
-                                        this.toggle_actions(cx, window);
-                                    }
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                AppView::FileSearchView { .. } => {
-                                    let selected = this.selected_file_search_result_owned();
-
-                                    if let Some((display_index, _)) = &selected {
-                                        if let AppView::FileSearchView {
-                                            selected_index, ..
-                                        } = &mut this.current_view
-                                        {
-                                            *selected_index = *display_index;
-                                        }
-                                    }
-
-                                    this.toggle_file_search_actions(
-                                        selected.as_ref().map(|(_, f)| f),
-                                        window,
-                                        cx,
-                                    );
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                AppView::ArgPrompt { .. } => {
-                                    // Toggle actions for arg prompts (SDK setActions)
-                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_arg_actions (ArgPrompt)");
-                                    this.toggle_arg_actions(cx, window);
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                AppView::ChatPrompt { .. } => {
-                                    // Toggle actions for chat prompts
-                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_chat_actions (ChatPrompt)");
-                                    this.toggle_chat_actions(cx, window);
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                AppView::WebcamView { .. } => {
-                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_webcam_actions (WebcamView)");
-                                    this.toggle_webcam_actions(cx, window);
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                AppView::ClipboardHistoryView { .. } => {
-                                    // Toggle actions for selected clipboard entry
-                                    if let Some(entry) = this.selected_clipboard_entry() {
-                                        logging::log(
-                                            "KEY",
-                                            "Interceptor: Cmd+K -> toggle_clipboard_actions (ClipboardHistoryView)",
-                                        );
-                                        this.toggle_clipboard_actions(entry, window, cx);
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-                                }
-                                AppView::AcpChatView { .. } => {
-                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_actions (AcpChatView)");
-                                    this.toggle_actions(cx, window);
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                _ => {
-                                    // Other views don't support Cmd+K actions
-                                }
+                            if this.dispatch_actions_toggle_for_current_view(window, cx, "cmd_k_interceptor") {
+                                cx.stop_propagation();
+                                return;
                             }
                         }
 
