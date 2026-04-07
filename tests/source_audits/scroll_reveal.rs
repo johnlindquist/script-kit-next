@@ -34,7 +34,7 @@ fn scroll_to_selected_if_needed_logs_reason_on_reveal() {
     let fn_start = content
         .find("fn scroll_to_selected_if_needed(")
         .expect("Expected scroll_to_selected_if_needed function");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 1200)];
+    let fn_body = &content[fn_start..content.len().min(fn_start + 1800)];
 
     assert!(
         fn_body.contains("before_top"),

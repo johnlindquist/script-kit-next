@@ -4,13 +4,55 @@ use gpui::{App, Window};
 use cocoa::base::{id, nil, NO, YES};
 
 #[cfg(target_os = "macos")]
-const HINTS_TEXT: &str = "↵ Run    ⌘K Actions    ⇥ AI";
-#[cfg(target_os = "macos")]
 const FOOTER_EFFECT_ID: &str = "script-kit-footer-effect";
 #[cfg(target_os = "macos")]
-const FOOTER_LABEL_ID: &str = "script-kit-footer-label";
-#[cfg(target_os = "macos")]
 const FOOTER_DIVIDER_ID: &str = "script-kit-footer-divider";
+#[cfg(target_os = "macos")]
+const FOOTER_HINTS_ID: &str = "script-kit-footer-hints";
+#[cfg(target_os = "macos")]
+const FOOTER_HINT_ITEM_GAP: f64 = 8.0;
+#[cfg(target_os = "macos")]
+const FOOTER_HINT_KEY_LABEL_GAP: f64 = 3.0;
+#[cfg(target_os = "macos")]
+const FOOTER_HINT_SIDE_INSET: f64 = crate::window_resize::mini_layout::HINT_STRIP_PADDING_X as f64;
+#[cfg(target_os = "macos")]
+const FOOTER_HINT_PADDING_X: f64 = 4.0;
+#[cfg(target_os = "macos")]
+const FOOTER_HINT_PADDING_Y: f64 = 2.0;
+#[cfg(target_os = "macos")]
+const FOOTER_HINT_RADIUS: f64 = 4.0;
+#[cfg(target_os = "macos")]
+const FOOTER_HINT_FONT_SIZE: f64 = 12.0;
+#[cfg(target_os = "macos")]
+const FOOTER_HINT_FONT_WEIGHT_SEMIBOLD: f64 = 0.3;
+#[cfg(target_os = "macos")]
+const FOOTER_HINT_BUTTON_ID_PREFIX: &str = "script-kit-footer-button-";
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum FooterAction {
+    Run,
+    Actions,
+    Ai,
+}
+
+#[cfg(target_os = "macos")]
+const FOOTER_HINTS: [(FooterAction, &str, &str); 3] = [
+    (FooterAction::Run, "↵", "Run"),
+    (FooterAction::Actions, "⌘K", "Actions"),
+    (FooterAction::Ai, "⇥", "AI"),
+];
+
+static FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
+    async_channel::Sender<FooterAction>,
+    async_channel::Receiver<FooterAction>,
+)> = std::sync::LazyLock::new(|| async_channel::bounded(32));
+
+pub(crate) fn footer_action_channel() -> &'static (
+    async_channel::Sender<FooterAction>,
+    async_channel::Receiver<FooterAction>,
+) {
+    &FOOTER_ACTION_CHANNEL
+}
 
 pub(crate) fn sync_main_footer_popup(window: &mut Window, should_show: bool, _cx: &mut App) {
     #[cfg(target_os = "macos")]
@@ -161,23 +203,16 @@ unsafe fn ensure_main_footer_host(ns_window: id) {
         let _: () = msg_send![footer_view, addSubview: divider_view];
     }
 
-    let label: id = msg_send![class!(NSTextField), alloc];
-    let label: id = msg_send![label, initWithFrame: footer_label_frame(content_bounds.size.width)];
-    if label != nil {
-        let empty: id = msg_send![class!(NSString), string];
-        let label_identifier = ns_string(FOOTER_LABEL_ID);
-        if label_identifier != nil {
-            let _: () = msg_send![label, setIdentifier: label_identifier];
+    let hints_view: id = msg_send![class!(NSView), alloc];
+    let hints_view: id =
+        msg_send![hints_view, initWithFrame: footer_hints_frame(content_bounds.size.width)];
+    if hints_view != nil {
+        let hints_identifier = ns_string(FOOTER_HINTS_ID);
+        if hints_identifier != nil {
+            let _: () = msg_send![hints_view, setIdentifier: hints_identifier];
         }
-        let _: () = msg_send![label, setStringValue: empty];
-        let _: () = msg_send![label, setBezeled: NO];
-        let _: () = msg_send![label, setBordered: NO];
-        let _: () = msg_send![label, setDrawsBackground: NO];
-        let _: () = msg_send![label, setEditable: NO];
-        let _: () = msg_send![label, setSelectable: NO];
-        let _: () = msg_send![label, setAutoresizingMask: NSViewWidthSizable];
-        let _: () = msg_send![label, setAlignment: 2isize];
-        let _: () = msg_send![footer_view, addSubview: label];
+        let _: () = msg_send![hints_view, setAutoresizingMask: NSViewWidthSizable];
+        let _: () = msg_send![footer_view, addSubview: hints_view];
     }
 
     let _: () = msg_send![
@@ -282,25 +317,13 @@ unsafe fn refresh_main_footer_host(ns_window: id) {
         }
     }
 
-    let label = find_subview_by_identifier(footer_view, FOOTER_LABEL_ID);
-    if label != nil {
-        let _: () = msg_send![label, setFrame: footer_label_frame(content_bounds.size.width)];
-
-        let label_text = ns_string(HINTS_TEXT);
-        if label_text != nil {
-            let _: () = msg_send![label, setStringValue: label_text];
-        }
-
-        let font: id = msg_send![class!(NSFont), systemFontOfSize: 13.0_f64];
-        if font != nil {
-            let _: () = msg_send![label, setFont: font];
-        }
+    let hints_view = find_subview_by_identifier(footer_view, FOOTER_HINTS_ID);
+    if hints_view != nil {
+        let _: () = msg_send![hints_view, setFrame: footer_hints_frame(content_bounds.size.width)];
 
         let alpha = crate::window_resize::mini_layout::HINT_TEXT_OPACITY as f64;
         let text_color = ns_color_from_hex_with_alpha(theme.colors.text.primary, alpha);
-        if text_color != nil {
-            let _: () = msg_send![label, setTextColor: text_color];
-        }
+        layout_footer_hints(hints_view, text_color);
     }
 
     tracing::debug!(
@@ -373,11 +396,212 @@ fn footer_height() -> f64 {
 }
 
 #[cfg(target_os = "macos")]
-fn footer_label_frame(width: f64) -> cocoa::foundation::NSRect {
+fn footer_hints_frame(width: f64) -> cocoa::foundation::NSRect {
     cocoa::foundation::NSRect::new(
-        cocoa::foundation::NSPoint::new(12.0, 0.0),
-        cocoa::foundation::NSSize::new(width - 24.0, footer_height()),
+        cocoa::foundation::NSPoint::new(FOOTER_HINT_SIDE_INSET, 0.0),
+        cocoa::foundation::NSSize::new(width - (FOOTER_HINT_SIDE_INSET * 2.0), footer_height()),
     )
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn layout_footer_hints(hints_view: id, text_color: id) {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{msg_send, sel, sel_impl};
+
+    let subviews: id = msg_send![hints_view, subviews];
+    if subviews != nil {
+        let count: usize = msg_send![subviews, count];
+        for index in (0..count).rev() {
+            let subview: id = msg_send![subviews, objectAtIndex: index];
+            if subview != nil {
+                let _: () = msg_send![subview, removeFromSuperview];
+            }
+        }
+    }
+
+    let hints_bounds: NSRect = msg_send![hints_view, bounds];
+    let font: id = msg_send![
+        objc::class!(NSFont),
+        systemFontOfSize: FOOTER_HINT_FONT_SIZE
+        weight: FOOTER_HINT_FONT_WEIGHT_SEMIBOLD
+    ];
+
+    let mut items = Vec::new();
+    let mut total_width = 0.0_f64;
+    for (index, (action, key, label)) in FOOTER_HINTS.iter().enumerate() {
+        let item = make_footer_hint_item(*action, *key, *label, font, text_color);
+        if item == nil {
+            continue;
+        }
+        let item_frame: NSRect = msg_send![item, frame];
+        total_width += item_frame.size.width;
+        if index > 0 {
+            total_width += FOOTER_HINT_ITEM_GAP;
+        }
+        items.push((item, item_frame.size.width));
+    }
+
+    let mut x = (hints_bounds.size.width - total_width).max(0.0);
+    for (item, width) in items {
+        let frame = NSRect::new(
+            NSPoint::new(x, 0.0),
+            NSSize::new(width, hints_bounds.size.height),
+        );
+        let _: () = msg_send![item, setFrame: frame];
+        let _: () = msg_send![hints_view, addSubview: item];
+        x += width + FOOTER_HINT_ITEM_GAP;
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn make_footer_hint_item(
+    action: FooterAction,
+    key: &str,
+    label: &str,
+    font: id,
+    text_color: id,
+) -> id {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let container: id = msg_send![class!(NSView), alloc];
+    let container: id = msg_send![
+        container,
+        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, footer_height()))
+    ];
+    if container == nil {
+        return nil;
+    }
+
+    let key_field = make_footer_hint_text_field(key, font, text_color);
+    let label_field = make_footer_hint_text_field(label, font, text_color);
+    if key_field == nil || label_field == nil {
+        return nil;
+    }
+
+    let key_size: NSSize = msg_send![key_field, fittingSize];
+    let label_size: NSSize = msg_send![label_field, fittingSize];
+    let item_width = key_size.width
+        + FOOTER_HINT_KEY_LABEL_GAP
+        + label_size.width
+        + (FOOTER_HINT_PADDING_X * 2.0);
+    let item_height = footer_height();
+    let content_height = key_size.height.max(label_size.height) + (FOOTER_HINT_PADDING_Y * 2.0);
+    let content_y = ((item_height - content_height) / 2.0).round();
+    let key_y = (content_y + FOOTER_HINT_PADDING_Y).round();
+    let label_y = (content_y + FOOTER_HINT_PADDING_Y).round();
+
+    let _: () = msg_send![
+        key_field,
+        setFrame: NSRect::new(
+            NSPoint::new(FOOTER_HINT_PADDING_X, key_y),
+            NSSize::new(key_size.width, key_size.height)
+        )
+    ];
+    let _: () = msg_send![
+        label_field,
+        setFrame: NSRect::new(
+            NSPoint::new(
+                FOOTER_HINT_PADDING_X + key_size.width + FOOTER_HINT_KEY_LABEL_GAP,
+                label_y
+            ),
+            NSSize::new(label_size.width, label_size.height)
+        )
+    ];
+    let _: () = msg_send![container, setWantsLayer: YES];
+    let container_layer: id = msg_send![container, layer];
+    if container_layer != nil {
+        let _: () = msg_send![container_layer, setCornerRadius: FOOTER_HINT_RADIUS];
+    }
+
+    let button: id = msg_send![class!(NSButton), alloc];
+    let button: id = msg_send![
+        button,
+        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(item_width, item_height))
+    ];
+    if button != nil {
+        let empty_title = ns_string("");
+        if empty_title != nil {
+            let _: () = msg_send![button, setTitle: empty_title];
+        }
+        let button_id = ns_string(&format!(
+            "{}{}",
+            FOOTER_HINT_BUTTON_ID_PREFIX,
+            footer_action_key(action)
+        ));
+        if button_id != nil {
+            let _: () = msg_send![button, setIdentifier: button_id];
+        }
+        let _: () = msg_send![button, setBordered: NO];
+        let _: () = msg_send![button, setBezelStyle: 0usize];
+        let _: () = msg_send![button, setButtonType: 0usize];
+        let _: () = msg_send![button, setTransparent: YES];
+        let _: () = msg_send![button, setTarget: footer_action_target()];
+        let _: () = msg_send![button, setAction: footer_action_selector(action)];
+    }
+
+    let _: () = msg_send![container, addSubview: key_field];
+    let _: () = msg_send![container, addSubview: label_field];
+    if button != nil {
+        let _: () = msg_send![container, addSubview: button];
+    }
+    let _: () = msg_send![
+        container,
+        setFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(item_width, item_height))
+    ];
+    container
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn make_footer_hint_text_field(text: &str, font: id, text_color: id) -> id {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let field: id = msg_send![class!(NSTextField), alloc];
+    let field: id = msg_send![field, init];
+    if field == nil {
+        return nil;
+    }
+
+    let string_value = ns_string(text);
+    if string_value == nil {
+        return nil;
+    }
+
+    let _: () = msg_send![field, setStringValue: string_value];
+    let _: () = msg_send![field, setBezeled: NO];
+    let _: () = msg_send![field, setBordered: NO];
+    let _: () = msg_send![field, setDrawsBackground: NO];
+    let _: () = msg_send![field, setEditable: NO];
+    let _: () = msg_send![field, setSelectable: NO];
+    if font != nil {
+        let _: () = msg_send![field, setFont: font];
+    }
+    if text_color != nil {
+        let _: () = msg_send![field, setTextColor: text_color];
+    }
+    let _: () = msg_send![field, sizeToFit];
+    field
+}
+
+#[cfg(target_os = "macos")]
+fn send_footer_action(action: FooterAction) {
+    let (tx, _) = footer_action_channel();
+    if let Err(error) = tx.try_send(action) {
+        tracing::warn!(
+            target: "script_kit::footer_popup",
+            ?action,
+            %error,
+            "Failed to enqueue footer action"
+        );
+    }
+}
+
+fn footer_action_key(action: FooterAction) -> &'static str {
+    match action {
+        FooterAction::Run => "run",
+        FooterAction::Actions => "actions",
+        FooterAction::Ai => "ai",
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -441,9 +665,6 @@ fn footer_effect_view_class() -> *const objc::runtime::Class {
 
     *CLASS.get_or_init(|| unsafe {
         let superclass = class!(NSVisualEffectView);
-        // SAFETY: NSVisualEffectView is always available on macOS 10.10+.
-        // ClassDecl::new only returns None if the class name is already registered,
-        // which cannot happen inside OnceLock::get_or_init.
         let Some(mut decl) = ClassDecl::new("ScriptKitFooterEffectView", superclass) else {
             return class!(NSVisualEffectView) as *const _ as usize;
         };
@@ -451,15 +672,105 @@ fn footer_effect_view_class() -> *const objc::runtime::Class {
             sel!(hitTest:),
             footer_hit_test as extern "C" fn(&Object, Sel, cocoa::foundation::NSPoint) -> id,
         );
+        decl.add_method(
+            sel!(mouseDown:),
+            footer_mouse_down as extern "C" fn(&Object, Sel, id),
+        );
         decl.register() as *const _ as usize
     }) as *const objc::runtime::Class
 }
 
 #[cfg(target_os = "macos")]
 extern "C" fn footer_hit_test(
-    _this: &objc::runtime::Object,
+    this: &objc::runtime::Object,
     _: objc::runtime::Sel,
-    _: cocoa::foundation::NSPoint,
+    point: cocoa::foundation::NSPoint,
 ) -> id {
-    nil
+    use objc::{class, msg_send, sel, sel_impl};
+
+    // SAFETY: `this` is a live NSVisualEffectView subclass instance. We delegate
+    // to AppKit hit testing first so real subviews win, then swallow background
+    // hits by returning `self` instead of nil.
+    unsafe {
+        let this_id = this as *const _ as id;
+        let hit: id = msg_send![super(this_id, class!(NSVisualEffectView)), hitTest: point];
+        if hit != nil {
+            return hit;
+        }
+        this_id
+    }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_mouse_down(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {}
+
+#[cfg(target_os = "macos")]
+fn footer_action_target() -> id {
+    use std::sync::OnceLock;
+
+    use objc::{msg_send, sel, sel_impl};
+
+    static TARGET: OnceLock<usize> = OnceLock::new();
+
+    *TARGET.get_or_init(|| unsafe {
+        let target: id = msg_send![footer_action_target_class(), new];
+        target as usize
+    }) as id
+}
+
+#[cfg(target_os = "macos")]
+fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
+    use objc::{sel, sel_impl};
+
+    match action {
+        FooterAction::Run => sel!(runFooterAction:),
+        FooterAction::Actions => sel!(actionsFooterAction:),
+        FooterAction::Ai => sel!(aiFooterAction:),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn footer_action_target_class() -> *const objc::runtime::Class {
+    use std::sync::OnceLock;
+
+    use objc::declare::ClassDecl;
+    use objc::runtime::{Object, Sel};
+    use objc::{class, sel, sel_impl};
+
+    static CLASS: OnceLock<usize> = OnceLock::new();
+
+    *CLASS.get_or_init(|| unsafe {
+        let superclass = class!(NSObject);
+        let Some(mut decl) = ClassDecl::new("ScriptKitFooterActionTarget", superclass) else {
+            return class!(NSObject) as *const _ as usize;
+        };
+        decl.add_method(
+            sel!(runFooterAction:),
+            footer_run_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(actionsFooterAction:),
+            footer_actions_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(aiFooterAction:),
+            footer_ai_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.register() as *const _ as usize
+    }) as *const objc::runtime::Class
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_run_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    send_footer_action(FooterAction::Run);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_actions_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    send_footer_action(FooterAction::Actions);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_ai_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    send_footer_action(FooterAction::Ai);
 }

@@ -1,4 +1,88 @@
 #[inline]
+fn main_list_footer_overlay_height() -> gpui::Pixels {
+    gpui::px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT)
+}
+
+#[inline]
+fn script_list_row_height(item: &GroupedListItem) -> f32 {
+    match item {
+        GroupedListItem::SectionHeader(..) => crate::list_item::SECTION_HEADER_HEIGHT,
+        GroupedListItem::Item(..) => crate::list_item::LIST_ITEM_HEIGHT,
+    }
+}
+
+fn script_list_content_height(items: &[GroupedListItem]) -> f32 {
+    items.iter().map(script_list_row_height).sum()
+}
+
+fn script_list_pixel_top_for_item(items: &[GroupedListItem], ix: usize) -> f32 {
+    items.iter().take(ix).map(script_list_row_height).sum()
+}
+
+fn script_list_pixel_top_for_offset(items: &[GroupedListItem], offset: gpui::ListOffset) -> f32 {
+    let offset_in_item = offset.offset_in_item.as_f32().max(0.0);
+    let clamped_item_ix = offset.item_ix.min(items.len());
+    script_list_pixel_top_for_item(items, clamped_item_ix) + offset_in_item
+}
+
+fn script_list_offset_for_pixel_top(
+    items: &[GroupedListItem],
+    scroll_top_px: f32,
+) -> gpui::ListOffset {
+    if items.is_empty() {
+        return gpui::ListOffset {
+            item_ix: 0,
+            offset_in_item: gpui::px(0.0),
+        };
+    }
+
+    let mut accumulated = 0.0_f32;
+    for (ix, item) in items.iter().enumerate() {
+        let item_height = script_list_row_height(item);
+        let item_bottom = accumulated + item_height;
+        if scroll_top_px < item_bottom {
+            return gpui::ListOffset {
+                item_ix: ix,
+                offset_in_item: gpui::px((scroll_top_px - accumulated).max(0.0)),
+            };
+        }
+        accumulated = item_bottom;
+    }
+
+    gpui::ListOffset {
+        item_ix: items.len(),
+        offset_in_item: gpui::px(0.0),
+    }
+}
+
+fn footer_safe_scroll_offset_for_item(
+    items: &[GroupedListItem],
+    current_offset: gpui::ListOffset,
+    viewport_height: gpui::Pixels,
+    footer_overlay_height: gpui::Pixels,
+    target_ix: usize,
+) -> Option<gpui::ListOffset> {
+    if items.is_empty() || target_ix >= items.len() || viewport_height <= footer_overlay_height {
+        return None;
+    }
+
+    let viewport_height = viewport_height.as_f32();
+    let footer_overlay_height = footer_overlay_height.as_f32();
+    let max_scroll_top = (script_list_content_height(items) - viewport_height).max(0.0);
+    let current_scroll_top = script_list_pixel_top_for_offset(items, current_offset);
+    let target_top = script_list_pixel_top_for_item(items, target_ix);
+    let target_bottom = target_top + script_list_row_height(&items[target_ix]);
+    let safe_bottom = current_scroll_top + viewport_height - footer_overlay_height;
+
+    if target_bottom <= safe_bottom {
+        return None;
+    }
+
+    let safe_scroll_top = (current_scroll_top + (target_bottom - safe_bottom)).min(max_scroll_top);
+    Some(script_list_offset_for_pixel_top(items, safe_scroll_top))
+}
+
+#[inline]
 fn scrollbar_fade_duration() -> std::time::Duration {
     crate::transitions::DURATION_MEDIUM + std::time::Duration::from_millis(50)
 }
@@ -11,6 +95,28 @@ fn scrollbar_fade_opacity(progress: f32) -> crate::transitions::Opacity {
 }
 
 impl ScriptListApp {
+    fn adjust_selected_item_above_footer_overlay(&mut self, target: usize) {
+        let viewport_height = self.main_list_state.viewport_bounds().size.height;
+        if viewport_height <= gpui::px(0.0) {
+            return;
+        }
+
+        let adjusted_scroll_offset = {
+            let (grouped_items, _) = self.get_grouped_results_cached();
+            footer_safe_scroll_offset_for_item(
+                &grouped_items,
+                self.main_list_state.logical_scroll_top(),
+                viewport_height,
+                main_list_footer_overlay_height(),
+                target,
+            )
+        };
+
+        if let Some(scroll_offset) = adjusted_scroll_offset {
+            self.main_list_state.scroll_to(scroll_offset);
+        }
+    }
+
     fn scroll_to_selected_if_needed(&mut self, reason: &str) {
         let target = self.selected_index;
 
@@ -33,6 +139,7 @@ impl ScriptListApp {
         // Perform the scroll using ListState for variable-height list
         // This scrolls the actual list() component used in render_script_list
         self.main_list_state.scroll_to_reveal_item(target);
+        self.adjust_selected_item_above_footer_overlay(target);
         self.last_scrolled_index = Some(target);
 
         let after_top = self.main_list_state.logical_scroll_top().item_ix;
@@ -290,6 +397,7 @@ impl ScriptListApp {
         if self.selected_index < item_count {
             self.main_list_state
                 .scroll_to_reveal_item(self.selected_index);
+            self.adjust_selected_item_above_footer_overlay(self.selected_index);
         }
     }
 
@@ -418,7 +526,10 @@ impl ScriptListApp {
 
 #[cfg(test)]
 mod scroll_fade_tests {
-    use super::{scrollbar_fade_duration, scrollbar_fade_opacity};
+    use super::{
+        footer_safe_scroll_offset_for_item, scrollbar_fade_duration, scrollbar_fade_opacity,
+    };
+    use crate::list_item::GroupedListItem;
 
     #[test]
     fn test_scrollbar_fade_duration_does_match_medium_plus_50ms_when_computed() {
@@ -448,5 +559,35 @@ mod scroll_fade_tests {
     fn test_scrollbar_fade_opacity_does_use_ease_in_curve_when_progress_is_midpoint() {
         let midpoint = scrollbar_fade_opacity(0.5).value();
         assert!((midpoint - 0.75).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_footer_safe_scroll_offset_moves_selected_row_above_overlay() {
+        let rows = vec![
+            GroupedListItem::Item(0),
+            GroupedListItem::Item(1),
+            GroupedListItem::Item(2),
+            GroupedListItem::Item(3),
+            GroupedListItem::Item(4),
+            GroupedListItem::Item(5),
+            GroupedListItem::Item(6),
+            GroupedListItem::Item(7),
+            GroupedListItem::Item(8),
+        ];
+
+        let adjusted = footer_safe_scroll_offset_for_item(
+            &rows,
+            gpui::ListOffset {
+                item_ix: 0,
+                offset_in_item: gpui::px(0.0),
+            },
+            gpui::px(360.0),
+            gpui::px(30.0),
+            8,
+        )
+        .expect("target should be pushed above the footer overlay");
+
+        assert_eq!(adjusted.item_ix, 0);
+        assert_eq!(adjusted.offset_in_item, gpui::px(30.0));
     }
 }

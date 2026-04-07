@@ -1091,6 +1091,29 @@ app.run(move |cx: &mut App| {
             logging::log("VISIBILITY", "Show window listener exiting (channel closed)");
         }).detach();
 
+        let app_entity_for_footer = app_entity.clone();
+        let window_for_footer = window;
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            logging::log("FOOTER", "Main footer action listener started");
+            let (_, rx) = crate::footer_popup::footer_action_channel();
+            while let Ok(action) = rx.recv().await {
+                let app_entity_inner = app_entity_for_footer.clone();
+                let window_inner = window_for_footer;
+                cx.update(move |cx: &mut gpui::App| {
+                    let _ = window_inner.update(cx, |_root, win, root_cx| {
+                        app_entity_inner.update(root_cx, |view, ctx| match action {
+                            crate::footer_popup::FooterAction::Run => view.execute_selected(ctx),
+                            crate::footer_popup::FooterAction::Actions => {
+                                view.toggle_actions(ctx, win)
+                            }
+                            crate::footer_popup::FooterAction::Ai => view.open_tab_ai_chat(ctx),
+                        });
+                    });
+                });
+            }
+            logging::log("FOOTER", "Main footer action listener exiting");
+        }).detach();
+
         // Note: Appearance watching is now handled by GPUI's observe_window_appearance
         // (set up during window creation above), replacing the custom AppearanceWatcher.
 
