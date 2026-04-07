@@ -3,7 +3,7 @@ use gpui::{
 };
 
 use super::component::InlineDropdown;
-use crate::ai::context_picker_row::{render_compact_synopsis_strip, MUTED_OP};
+use super::row::{render_compact_synopsis_strip, MUTED_OP};
 
 impl RenderOnce for InlineDropdown {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {

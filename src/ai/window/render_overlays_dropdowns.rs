@@ -1,8 +1,8 @@
 use super::*;
-use crate::ai::context_picker_row::{render_dense_monoline_picker_row_with_accessory, GOLD, HINT};
 use crate::components::inline_dropdown::{
-    inline_dropdown_clamp_selected_index, inline_dropdown_visible_range, InlineDropdown,
-    InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis,
+    inline_dropdown_clamp_selected_index, inline_dropdown_visible_range,
+    render_dense_monoline_picker_row_with_leading_visual, InlineDropdown, InlineDropdownColors,
+    InlineDropdownEmptyState, InlineDropdownSynopsis, GOLD, HINT,
 };
 
 impl AiApp {
@@ -56,27 +56,35 @@ impl AiApp {
                     .take(visible.len())
                     .map(|(idx, preset)| {
                         let is_selected = idx == selected_index;
+                        let model_meta = preset.preferred_model.clone().unwrap_or_default();
 
-                        let accessory = svg()
-                            .external_path(preset.icon.external_path())
-                            .size(px(14.0))
-                            .text_color(if is_selected {
-                                GOLD
-                            } else {
-                                muted_fg.opacity(HINT)
-                            })
+                        let leading_visual = div()
+                            .w(px(14.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                svg()
+                                    .external_path(preset.icon.external_path())
+                                    .size(px(14.0))
+                                    .text_color(if is_selected {
+                                        GOLD
+                                    } else {
+                                        muted_fg.opacity(HINT)
+                                    }),
+                            )
                             .into_any_element();
 
-                        render_dense_monoline_picker_row_with_accessory(
+                        render_dense_monoline_picker_row_with_leading_visual(
                             SharedString::from(format!("preset-{idx}")),
                             SharedString::from(preset.name.to_string()),
-                            SharedString::default(),
+                            SharedString::from(model_meta),
                             &[],
                             &[],
                             is_selected,
                             fg,
                             muted_fg,
-                            Some(accessory),
+                            leading_visual,
                         )
                         .cursor_pointer()
                         .on_click(cx.listener(
