@@ -35,6 +35,9 @@ pub(crate) struct AppChromeColors {
     /// windows (actions dialog, slash picker, mention picker) so they share
     /// the same apparent background density.
     pub popup_surface_rgba: u32,
+    /// Footer-matching ultra-low-opacity surface for inline dropdowns.
+    /// Dark: `selected_subtle` at alpha `0x1f` (~12%). Light: opaque main bg.
+    pub inline_dropdown_surface_rgba: u32,
     pub log_panel_surface_rgba: u32,
     pub input_active_rgba: u32,
     pub divider_rgba: u32,
@@ -127,6 +130,13 @@ impl AppChromeColors {
                 };
                 hex_to_rgba_with_opacity(colors.background.main, popup_opacity)
             },
+            inline_dropdown_surface_rgba: if theme.is_dark_mode() {
+                // Match PromptFooter dark mode: selected_subtle @ ~12% opacity.
+                (colors.accent.selected_subtle << 8) | 0x1f
+            } else {
+                // Match PromptFooter light mode: opaque surface.
+                (colors.background.main << 8) | 0xff
+            },
             log_panel_surface_rgba: hex_to_rgba_with_opacity(
                 colors.background.log_panel,
                 opacity.log_panel,
@@ -208,6 +218,23 @@ mod tests {
         assert_eq!(
             chrome.window_surface_rgba,
             hex_to_rgba_with_opacity(theme.colors.background.main, theme.get_opacity().main,)
+        );
+    }
+
+    #[test]
+    fn inline_dropdown_surface_matches_footer_contract() {
+        let dark = Theme::dark_default();
+        let dark_chrome = AppChromeColors::from_theme(&dark);
+        assert_eq!(
+            dark_chrome.inline_dropdown_surface_rgba,
+            (dark.colors.accent.selected_subtle << 8) | 0x1f
+        );
+
+        let light = Theme::light_default();
+        let light_chrome = AppChromeColors::from_theme(&light);
+        assert_eq!(
+            light_chrome.inline_dropdown_surface_rgba,
+            (light.colors.background.main << 8) | 0xff
         );
     }
 

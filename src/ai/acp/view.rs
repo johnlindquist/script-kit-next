@@ -2724,16 +2724,16 @@ impl AcpChatView {
                     }
                 };
 
-                let selected_index = if items.is_empty() {
-                    0
-                } else {
-                    previous_index.min(items.len().saturating_sub(1))
-                };
+                let selected_index =
+                    crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
+                        previous_index,
+                        items.len(),
+                    );
                 let visible = Self::mention_visible_range_for(selected_index, items.len());
                 tracing::info!(
                     target: "script_kit::tab_ai",
                     event = "acp_mention_picker_refreshed",
-                    layout = "dense_monoline_shared",
+                    layout = "inline_dropdown",
                     ?trigger,
                     query = %query,
                     item_count = items.len(),
@@ -3355,17 +3355,11 @@ impl AcpChatView {
         selected_index: usize,
         item_count: usize,
     ) -> std::ops::Range<usize> {
-        let max_visible = Self::MENTION_PICKER_MAX_VISIBLE;
-        if item_count <= max_visible {
-            return 0..item_count;
-        }
-        let half = max_visible / 2;
-        let mut start = selected_index.saturating_sub(half);
-        let max_start = item_count.saturating_sub(max_visible);
-        if start > max_start {
-            start = max_start;
-        }
-        start..(start + max_visible).min(item_count)
+        crate::components::inline_dropdown::inline_dropdown_visible_range(
+            selected_index,
+            item_count,
+            Self::MENTION_PICKER_MAX_VISIBLE,
+        )
     }
 
     /// Compute the visible range of items around the selected index.

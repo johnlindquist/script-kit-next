@@ -9,6 +9,7 @@ use gpui::{
 };
 
 use crate::ai::context_picker_row::{render_dense_monoline_picker_row_with_accessory, GOLD};
+use crate::components::inline_dropdown::{InlineDropdown, InlineDropdownColors};
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::{IconName, IconNamed};
 
@@ -253,55 +254,61 @@ impl Focusable for AcpModelSelectorPopupWindow {
 impl Render for AcpModelSelectorPopupWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
+        let colors = InlineDropdownColors::from_theme(&theme);
         let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
         let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
         let popup_height = popup_height(&self.snapshot);
 
-        super::popup_window::dense_picker_popup_surface(SharedString::from(
-            "acp-model-selector-popup",
-        ))
-        .track_focus(&self.focus_handle)
-        .w_full()
-        .h(px(popup_height))
-        .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING / 2.0))
-        .child(
-            div()
-                .w_full()
-                .max_h(px(popup_height))
-                .overflow_y_scrollbar()
-                .children(
-                    self.snapshot
-                        .entries
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, entry)| {
-                            let model_id = entry.id.clone();
-                            let accessory = entry.is_active.then(|| {
-                                svg()
-                                    .path(IconName::Check.path())
-                                    .size(px(12.0))
-                                    .text_color(GOLD)
-                                    .into_any_element()
-                            });
-                            render_dense_monoline_picker_row_with_accessory(
-                                SharedString::from(format!("acp-model-selector-{idx}")),
-                                entry.display.clone(),
-                                SharedString::default(),
-                                &[],
-                                &[],
-                                idx == self.snapshot.selected_index,
-                                fg,
-                                muted_fg,
-                                accessory,
-                            )
-                            .cursor_pointer()
-                            .on_click(cx.listener(
-                                move |this, _event, _window, cx| {
-                                    this.select_model(&model_id, cx);
-                                },
-                            ))
-                        }),
-                ),
+        let body = div()
+            .w_full()
+            .max_h(px(popup_height))
+            .overflow_y_scrollbar()
+            .children(
+                self.snapshot
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, entry)| {
+                        let model_id = entry.id.clone();
+                        let accessory = entry.is_active.then(|| {
+                            svg()
+                                .path(IconName::Check.path())
+                                .size(px(12.0))
+                                .text_color(GOLD)
+                                .into_any_element()
+                        });
+                        render_dense_monoline_picker_row_with_accessory(
+                            SharedString::from(format!("acp-model-selector-{idx}")),
+                            entry.display.clone(),
+                            SharedString::default(),
+                            &[],
+                            &[],
+                            idx == self.snapshot.selected_index,
+                            fg,
+                            muted_fg,
+                            accessory,
+                        )
+                        .cursor_pointer()
+                        .on_click(cx.listener(
+                            move |this, _event, _window, cx| {
+                                this.select_model(&model_id, cx);
+                            },
+                        ))
+                    }),
+            )
+            .into_any_element();
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            popup = "model_selector",
+            entry_count = self.snapshot.entries.len(),
+            selected_index = self.snapshot.selected_index,
+            "inline_dropdown_model_selector_rendered"
+        );
+
+        div().size_full().track_focus(&self.focus_handle).child(
+            InlineDropdown::new(SharedString::from("acp-model-selector-popup"), body, colors)
+                .vertical_padding(super::popup_window::DENSE_PICKER_VERTICAL_PADDING / 2.0),
         )
     }
 }
@@ -331,6 +338,26 @@ mod tests {
             ],
         };
 
+        assert!(popup_height(&snapshot) > 40.0);
+    }
+
+    #[test]
+    fn popup_height_still_accounts_for_model_rows_after_inline_dropdown_adoption() {
+        let snapshot = AcpModelSelectorPopupSnapshot {
+            selected_index: 1,
+            entries: vec![
+                AcpModelSelectorPopupEntry {
+                    id: "a".into(),
+                    display: SharedString::from("A"),
+                    is_active: false,
+                },
+                AcpModelSelectorPopupEntry {
+                    id: "b".into(),
+                    display: SharedString::from("B"),
+                    is_active: true,
+                },
+            ],
+        };
         assert!(popup_height(&snapshot) > 40.0);
     }
 

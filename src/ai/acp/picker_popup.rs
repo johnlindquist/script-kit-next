@@ -8,10 +8,14 @@ use gpui::{
 };
 
 use crate::ai::context_picker_row::{
-    render_compact_synopsis_strip, render_dense_monoline_picker_row, CONTEXT_PICKER_SYNOPSIS_HEIGHT,
+    render_dense_monoline_picker_row, CONTEXT_PICKER_SYNOPSIS_HEIGHT,
 };
 use crate::ai::window::context_picker::empty_state_hints;
 use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerTrigger};
+use crate::components::inline_dropdown::{
+    inline_dropdown_visible_range, InlineDropdown, InlineDropdownColors, InlineDropdownEmptyState,
+    InlineDropdownSynopsis,
+};
 
 use super::view::AcpChatView;
 
@@ -41,9 +45,6 @@ struct AcpMentionPopupSlot {
 }
 
 static ACP_MENTION_POPUP_WINDOW: OnceLock<Mutex<Option<AcpMentionPopupSlot>>> = OnceLock::new();
-
-#[cfg(target_os = "macos")]
-const NS_WINDOW_ABOVE: i64 = 1;
 
 pub(crate) fn close_mention_popup_window(cx: &mut App) {
     if let Some(storage) = ACP_MENTION_POPUP_WINDOW.get() {
@@ -229,19 +230,11 @@ impl AcpMentionPopupWindow {
     }
 
     fn visible_range(&self) -> std::ops::Range<usize> {
-        let item_count = self.snapshot.items.len();
-        if item_count <= super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS {
-            return 0..item_count;
-        }
-
-        let half = super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS / 2;
-        let mut start = self.snapshot.selected_index.saturating_sub(half);
-        let max_start =
-            item_count.saturating_sub(super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS);
-        if start > max_start {
-            start = max_start;
-        }
-        start..(start + super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS).min(item_count)
+        inline_dropdown_visible_range(
+            self.snapshot.selected_index,
+            self.snapshot.items.len(),
+            super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS,
+        )
     }
 
     fn activate_item(&self, index: usize, cx: &mut App) {
@@ -274,6 +267,7 @@ impl AcpMentionPopupWindow {
 
     fn render_picker(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let theme = crate::theme::get_cached_theme();
+        let colors = InlineDropdownColors::from_theme(&theme);
         let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
         let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
         let visible = self.visible_range();
@@ -283,68 +277,74 @@ impl AcpMentionPopupWindow {
             .get(self.snapshot.selected_index)
             .cloned();
 
-        let mut popup = super::popup_window::dense_picker_popup_surface(SharedString::from(
-            "acp-mention-popup",
-        ))
-        .size_full()
-        .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING / 2.0))
-        .flex()
-        .flex_col()
-        .children(
-            self.snapshot
-                .items
-                .iter()
-                .enumerate()
-                .skip(visible.start)
-                .take(visible.len())
-                .map(|(idx, item)| {
-                    let is_selected = idx == self.snapshot.selected_index;
-                    let source_view = self.source_view.clone();
-                    render_dense_monoline_picker_row(
-                        SharedString::from(format!("acp-mention-popup-row-{idx}")),
-                        item.label.clone(),
-                        item.meta.clone(),
-                        &item.label_highlight_indices,
-                        &item.meta_highlight_indices,
-                        is_selected,
-                        fg,
-                        muted_fg,
-                    )
-                    .cursor_pointer()
-                    .on_click(cx.listener(move |this, _event, _window, cx| {
-                        if source_view.upgrade().is_none() {
-                            close_mention_popup_window(cx);
-                            return;
-                        }
-                        this.activate_item(idx, cx);
-                    }))
-                    .into_any_element()
-                }),
+        let body = div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .children(
+                self.snapshot
+                    .items
+                    .iter()
+                    .enumerate()
+                    .skip(visible.start)
+                    .take(visible.len())
+                    .map(|(idx, item)| {
+                        let is_selected = idx == self.snapshot.selected_index;
+                        let source_view = self.source_view.clone();
+                        render_dense_monoline_picker_row(
+                            SharedString::from(format!("acp-mention-popup-row-{idx}")),
+                            item.label.clone(),
+                            item.meta.clone(),
+                            &item.label_highlight_indices,
+                            &item.meta_highlight_indices,
+                            is_selected,
+                            fg,
+                            muted_fg,
+                        )
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, _event, _window, cx| {
+                            if source_view.upgrade().is_none() {
+                                close_mention_popup_window(cx);
+                                return;
+                            }
+                            this.activate_item(idx, cx);
+                        }))
+                        .into_any_element()
+                    }),
+            )
+            .into_any_element();
+
+        let synopsis = selected_item
+            .filter(|item| !item.description.is_empty())
+            .map(|item| InlineDropdownSynopsis {
+                label: item.label.clone(),
+                meta: item.meta.clone(),
+                description: item.description.clone(),
+            });
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            popup = "mention",
+            trigger = ?self.snapshot.trigger,
+            item_count = self.snapshot.items.len(),
+            selected_index = self.snapshot.selected_index,
+            "inline_dropdown_popup_synced"
         );
 
-        if let Some(item) = selected_item.filter(|item| !item.description.is_empty()) {
-            popup = popup.child(div().h(px(1.0)).bg(fg.opacity(0.06))).child(
-                render_compact_synopsis_strip(
-                    item.label.clone(),
-                    item.meta.clone(),
-                    item.description.clone(),
-                    fg,
-                    muted_fg,
-                ),
-            );
-        }
-
-        popup.into_any_element()
+        InlineDropdown::new(SharedString::from("acp-mention-popup"), body, colors)
+            .synopsis(synopsis)
+            .vertical_padding(super::popup_window::DENSE_PICKER_VERTICAL_PADDING / 2.0)
+            .into_any_element()
     }
 
     fn render_empty_state(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        use crate::ai::context_picker_row::{GHOST, HINT, MUTED_OP};
+        use crate::ai::context_picker_row::{GHOST, HINT};
         use crate::list_item::FONT_MONO;
 
-        let cached_theme = crate::theme::get_cached_theme();
-        let fg: gpui::Hsla = gpui::rgb(cached_theme.colors.text.primary).into();
-        let muted_fg: gpui::Hsla = gpui::rgb(cached_theme.colors.text.muted).into();
-        let is_slash = self.snapshot.trigger == ContextPickerTrigger::Slash;
+        let theme = crate::theme::get_cached_theme();
+        let colors = InlineDropdownColors::from_theme(&theme);
+        let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
+        let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
 
         let mut chips: Vec<gpui::AnyElement> = Vec::new();
         for hint in empty_state_hints(self.snapshot.trigger).iter() {
@@ -378,26 +378,20 @@ impl AcpMentionPopupWindow {
             );
         }
 
-        super::popup_window::dense_picker_popup_surface(SharedString::from(
-            "acp-mention-popup-empty-state",
-        ))
-        .size_full()
-        .py(px(super::popup_window::DENSE_PICKER_VERTICAL_PADDING))
-        .px(px(6.0))
-        .flex()
-        .flex_col()
-        .gap(px(4.0))
-        .child(
-            div()
-                .text_xs()
-                .text_color(muted_fg.opacity(MUTED_OP))
-                .child(if is_slash {
-                    "No matching commands"
-                } else {
-                    "No matching context"
-                }),
+        InlineDropdown::new(
+            SharedString::from("acp-mention-popup-empty-state"),
+            div().into_any_element(),
+            colors,
         )
-        .child(div().flex().items_center().gap(px(4.0)).children(chips))
+        .empty_state(InlineDropdownEmptyState {
+            message: SharedString::from(if self.snapshot.trigger == ContextPickerTrigger::Slash {
+                "No matching commands"
+            } else {
+                "No matching context"
+            }),
+            hints: chips,
+        })
+        .vertical_padding(super::popup_window::DENSE_PICKER_VERTICAL_PADDING)
         .into_any_element()
     }
 }
