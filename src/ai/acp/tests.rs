@@ -647,6 +647,18 @@ fn acp_picker_refresh_and_navigation_sync_popup_window() {
 }
 
 #[test]
+fn acp_composer_stays_width_wrapped_without_explicit_newline() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("multiline: true"),
+        "ACP composer should use width-driven multiline rendering"
+    );
+    assert!(
+        !ACP_VIEW_SOURCE.contains("multiline: input_has_newline"),
+        "ACP composer should not wait for an explicit newline before wrapping"
+    );
+}
+
+#[test]
 fn acp_model_selector_button_and_selection_sync_popup_window() {
     assert!(
         ACP_VIEW_SOURCE.contains("this.cache_popup_parent_window(window, cx);")
