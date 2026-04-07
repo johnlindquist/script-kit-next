@@ -170,7 +170,7 @@ struct ScriptListApp {
     last_scrolled_index: Option<usize>,
     // Preview cache: avoid re-reading file and re-highlighting on every render
     preview_cache_path: Option<String>,
-    preview_cache_matched_line: Option<usize>,
+    preview_cache_match_signature: Option<(usize, usize, usize)>,
     preview_cache_lines: Vec<syntax::HighlightedLine>,
     // Scriptlet preview cache: avoid re-highlighting scriptlet code on every render
     // Key is scriptlet name (unique within session), value is highlighted lines

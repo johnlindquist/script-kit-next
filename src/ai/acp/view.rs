@@ -398,8 +398,20 @@ impl AcpChatView {
                 crate::ai::message_parts::AiContextPart::FilePath { path, .. } => {
                     crate::ai::context_mentions::format_inline_file_token(path)
                 }
-                crate::ai::message_parts::AiContextPart::FocusedTarget { label, .. } => {
-                    format!("@cmd:{label}")
+                crate::ai::message_parts::AiContextPart::FocusedTarget {
+                    target, label, ..
+                } => {
+                    // File/directory targets expand to full @file:path
+                    if let Some(path) = target
+                        .metadata
+                        .as_ref()
+                        .and_then(|m| m.get("path"))
+                        .and_then(|v| v.as_str())
+                    {
+                        crate::ai::context_mentions::format_inline_file_token(path)
+                    } else {
+                        format!("@cmd:{label}")
+                    }
                 }
                 _ => continue,
             };

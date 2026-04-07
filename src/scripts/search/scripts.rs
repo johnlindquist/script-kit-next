@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::ops::Range;
 use std::sync::Arc;
 
 use super::super::types::{MatchIndices, Script, ScriptContentMatch, ScriptMatch, ScriptMatchKind};
@@ -286,13 +287,27 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             ScriptMatchKind::Name // default
         };
 
+        // Determine whether a primary text field already won
+        let primary_text_match = matches!(
+            match_kind,
+            ScriptMatchKind::Name | ScriptMatchKind::Description | ScriptMatchKind::Filename
+        ) && score > 0;
+
         // Content body search — lowest-priority tier (+5)
-        // Only search body when name/description/path didn't already produce a match
+        // Always search body so content bonus stacks with other tiers
         let mut content_match = None;
-        if score == 0 {
-            if let Some(ref body) = script.body {
-                if let Some(hit) = find_best_content_line(body, &query_lower, query_is_ascii) {
-                    score += SCORE_CONTENT_MATCH;
+        if let Some(ref body) = script.body {
+            if let Some(hit) = find_best_content_line(body, &query_lower) {
+                score += SCORE_CONTENT_MATCH;
+                crate::logging::log(
+                    "FILTER_PERF",
+                    &format!(
+                        "[CONTENT_MATCH] script='{}' line={} primary_text_match={} bonus={}",
+                        script.name, hit.line_number, primary_text_match, SCORE_CONTENT_MATCH
+                    ),
+                );
+                // Only surface the snippet row when no stronger field won
+                if !primary_text_match {
                     content_match = Some(hit);
                 }
             }
@@ -325,43 +340,101 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
     matches
 }
 
-/// Scan body text line-by-line for the best case-insensitive substring match.
-/// Returns the first matching line with its 1-based line number and match indices.
-fn find_best_content_line(
-    body: &str,
-    query_lower: &str,
-    query_is_ascii: bool,
-) -> Option<ScriptContentMatch> {
+/// Candidate for the best fuzzy-matching line within a script body.
+#[derive(Debug)]
+struct ContentLineCandidate {
+    score: u32,
+    line_number: usize,
+    line_text: String,
+    line_match_indices: Vec<usize>,
+    byte_range: Range<usize>,
+}
+
+/// Scan body text line-by-line with nucleo fuzzy matching.
+/// Returns the best-scoring line with its 1-based line number and match indices.
+fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContentMatch> {
+    let mut best: Option<ContentLineCandidate> = None;
+    let mut ctx = NucleoCtx::new(query_lower);
     let mut byte_offset = 0usize;
-    for (idx, line) in body.lines().enumerate() {
-        let match_pos = if query_is_ascii && line.is_ascii() {
-            find_ignore_ascii_case(line, query_lower)
-        } else {
-            let line_lower = line.to_lowercase();
-            line_lower.find(query_lower)
-        };
-        if let Some(pos) = match_pos {
-            let trimmed = line.trim();
-            // Compute match indices relative to the trimmed line
-            let trim_offset = line.len() - line.trim_start().len();
-            let match_indices: Vec<usize> = (0..query_lower.len())
-                .filter_map(|i| {
-                    let abs = pos + i;
-                    if abs >= trim_offset {
-                        Some(abs - trim_offset)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            return Some(ScriptContentMatch {
-                line_number: idx + 1, // 1-based
-                line_text: trimmed.to_string(),
-                line_match_indices: match_indices,
-                byte_range: (byte_offset + pos)..(byte_offset + pos + query_lower.len()),
-            });
+
+    for (idx, segment) in body.split_inclusive('\n').enumerate() {
+        let line = segment.strip_suffix('\n').unwrap_or(segment);
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            byte_offset += segment.len();
+            continue;
         }
-        byte_offset += line.len() + 1; // +1 for newline
+
+        let Some(score) = ctx.score(trimmed) else {
+            byte_offset += segment.len();
+            continue;
+        };
+
+        let Some(line_match_indices) = ctx.indices(trimmed) else {
+            byte_offset += segment.len();
+            continue;
+        };
+
+        let byte_range = match matched_span_byte_range(line, trimmed, &line_match_indices) {
+            Some(line_relative_range) => {
+                (byte_offset + line_relative_range.start)..(byte_offset + line_relative_range.end)
+            }
+            None => {
+                byte_offset += segment.len();
+                continue;
+            }
+        };
+
+        let candidate = ContentLineCandidate {
+            score,
+            line_number: idx + 1,
+            line_text: trimmed.to_string(),
+            line_match_indices,
+            byte_range,
+        };
+
+        let replace = match &best {
+            None => true,
+            Some(current) => {
+                candidate.score > current.score
+                    || (candidate.score == current.score
+                        && candidate.line_number < current.line_number)
+            }
+        };
+        if replace {
+            best = Some(candidate);
+        }
+
+        byte_offset += segment.len();
     }
-    None
+
+    best.map(|c| ScriptContentMatch {
+        line_number: c.line_number,
+        line_text: c.line_text,
+        line_match_indices: c.line_match_indices,
+        byte_range: c.byte_range,
+    })
+}
+
+fn matched_span_byte_range(
+    raw_line: &str,
+    trimmed_line: &str,
+    line_match_indices: &[usize],
+) -> Option<Range<usize>> {
+    let &first_char = line_match_indices.first()?;
+    let &last_char = line_match_indices.last()?;
+    if first_char > last_char {
+        return None;
+    }
+
+    let trimmed_start = raw_line.find(trimmed_line)?;
+    let mut offsets: Vec<usize> = trimmed_line
+        .char_indices()
+        .map(|(byte_idx, _)| byte_idx)
+        .collect();
+    offsets.push(trimmed_line.len());
+
+    let start = *offsets.get(first_char)?;
+    let end = *offsets.get(last_char + 1)?;
+    Some((trimmed_start + start)..(trimmed_start + end))
 }

@@ -211,6 +211,86 @@ fn no_content_search_when_name_already_matches() {
     );
 }
 
+// ── Fuzzy body matching ──────────────────────────────────────────────
+
+#[test]
+fn content_search_uses_fuzzy_matching_for_body_lines() {
+    let scripts = vec![make_script(
+        "alpha",
+        None,
+        Some("import { uniqueTokenXyz } from 'lib';\n"),
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "untknxyz");
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].match_kind, ScriptMatchKind::Content);
+    assert_eq!(results[0].score, 5);
+    assert_eq!(results[0].content_match.as_ref().unwrap().line_number, 1);
+}
+
+#[test]
+fn content_search_prefers_best_fuzzy_line_not_first_line() {
+    let scripts = vec![make_script(
+        "alpha",
+        None,
+        Some("token partial\nveryUniqueTokenHere\nanother token\n"),
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "vutoknhr");
+    assert_eq!(results.len(), 1);
+    let cm = results[0].content_match.as_ref().unwrap();
+    assert_eq!(cm.line_number, 2);
+    assert!(cm.line_text.contains("veryUniqueTokenHere"));
+}
+
+#[test]
+fn content_match_byte_range_tracks_the_matched_span() {
+    let scripts = vec![make_script(
+        "gamma",
+        None,
+        Some("const alpha = beta;\n"),
+    )];
+
+    let alpha_results = fuzzy_search_scripts(&scripts, "alpha");
+    let beta_results = fuzzy_search_scripts(&scripts, "beta");
+
+    let alpha_match = alpha_results[0]
+        .content_match
+        .as_ref()
+        .expect("alpha query should produce a content match");
+    let beta_match = beta_results[0]
+        .content_match
+        .as_ref()
+        .expect("beta query should produce a content match");
+
+    assert_eq!(alpha_match.byte_range, 6..11);
+    assert_eq!(beta_match.byte_range, 14..18);
+    assert_ne!(alpha_match.byte_range, beta_match.byte_range);
+}
+
+#[test]
+fn content_bonus_stacks_with_name_match() {
+    // Script name matches AND body matches — score should include both
+    let scripts = vec![make_script(
+        "finder",
+        None,
+        Some("use finder module here\n"),
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "finder");
+    assert_eq!(results.len(), 1);
+    // Name match contributes > 0, content adds +5
+    assert!(
+        results[0].score > 5,
+        "score ({}) must include name match contribution",
+        results[0].score
+    );
+    // match_kind stays Name since name is the stronger tier
+    assert_ne!(results[0].match_kind, ScriptMatchKind::Content);
+    // content_match is None because primary_text_match suppresses the snippet
+    assert!(results[0].content_match.is_none());
+}
+
 #[test]
 fn script_without_body_does_not_match_on_content() {
     let scripts = vec![make_script("nobody", None, None)];

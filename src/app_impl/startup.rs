@@ -464,7 +464,7 @@ impl ScriptListApp {
             last_scrolled_index: None,
             // Preview cache: start empty, will populate on first render
             preview_cache_path: None,
-            preview_cache_matched_line: None,
+            preview_cache_match_signature: None,
             preview_cache_lines: Vec::new(),
             // Scriptlet preview cache: avoid re-highlighting on every render
             scriptlet_preview_cache_key: None,

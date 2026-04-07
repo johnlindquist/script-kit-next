@@ -306,11 +306,12 @@ impl ScriptListApp {
         is_dark: bool,
         content_match: Option<&scripts::ScriptContentMatch>,
     ) -> &[syntax::HighlightedLine] {
+        let match_signature = preview_match_signature(content_match);
         let matched_line = content_match.map(|cm| cm.line_number);
 
-        // Check if cache is valid for this path and matched line
+        // Check if cache is valid for this path and match signature
         if self.preview_cache_path.as_deref() == Some(script_path)
-            && self.preview_cache_matched_line == matched_line
+            && self.preview_cache_match_signature == match_signature
             && !self.preview_cache_lines.is_empty()
         {
             return &self.preview_cache_lines;
@@ -321,13 +322,20 @@ impl ScriptListApp {
         logging::log(
             "FILTER_PERF",
             &format!(
+                "[PREVIEW_CACHE_KEY] path='{}' match_signature={:?}",
+                script_path, match_signature
+            ),
+        );
+        logging::log(
+            "FILTER_PERF",
+            &format!(
                 "[PREVIEW_CACHE_MISS] Loading '{}' matched_line={:?}",
                 script_path, matched_line
             ),
         );
 
         self.preview_cache_path = Some(script_path.to_string());
-        self.preview_cache_matched_line = matched_line;
+        self.preview_cache_match_signature = match_signature;
 
         let read_start = std::time::Instant::now();
         self.preview_cache_lines = match std::fs::read_to_string(script_path) {
@@ -466,10 +474,17 @@ impl ScriptListApp {
     /// Invalidate the preview cache (call when scripts are reloaded or selection changes)
     pub(crate) fn invalidate_preview_cache(&mut self) {
         self.preview_cache_path = None;
-        self.preview_cache_matched_line = None;
+        self.preview_cache_match_signature = None;
         self.preview_cache_lines.clear();
     }
+}
 
+/// Compute a cache-key signature from a content match: (line_number, byte_start, byte_end).
+/// Returns None when there is no content match, matching the "no match" cache state.
+fn preview_match_signature(
+    content_match: Option<&scripts::ScriptContentMatch>,
+) -> Option<(usize, usize, usize)> {
+    content_match.map(|cm| (cm.line_number, cm.byte_range.start, cm.byte_range.end))
 }
 
 #[cfg(test)]
@@ -551,5 +566,30 @@ mod tests {
             .map(|span| span.text.as_str())
             .collect();
         assert_eq!(emphasized, "superUniqueToken");
+    }
+
+    #[test]
+    fn preview_match_signature_changes_when_byte_range_changes() {
+        let alpha = scripts::ScriptContentMatch {
+            line_number: 4,
+            line_text: "const alpha = beta;".to_string(),
+            line_match_indices: vec![6, 7, 8, 9, 10],
+            byte_range: 20..25,
+        };
+        let beta = scripts::ScriptContentMatch {
+            line_number: 4,
+            line_text: "const alpha = beta;".to_string(),
+            line_match_indices: vec![14, 15, 16, 17],
+            byte_range: 28..32,
+        };
+        assert_ne!(
+            preview_match_signature(Some(&alpha)),
+            preview_match_signature(Some(&beta))
+        );
+    }
+
+    #[test]
+    fn preview_match_signature_is_none_without_content_match() {
+        assert_eq!(preview_match_signature(None), None);
     }
 }
