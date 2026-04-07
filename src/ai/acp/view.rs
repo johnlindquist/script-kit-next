@@ -174,6 +174,10 @@ pub(crate) struct AcpChatView {
     /// This preserves non-inline chip attachments during mention sync while
     /// still letting deleted inline mentions remove the parts they created.
     inline_owned_context_tokens: HashSet<String>,
+    /// Session-local alias registry mapping typed `@type:name` display tokens
+    /// to full `AiContextPart` values for resolution and sync.
+    typed_mention_aliases:
+        std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
     /// Agent picker overlay state for setup mode (None = hidden).
     setup_agent_picker: Option<AcpSetupAgentPickerState>,
     /// Most recently accepted picker item (for telemetry/testing).
@@ -348,6 +352,83 @@ impl AcpChatView {
     /// will remove the corresponding context part when the token is deleted.
     pub(crate) fn register_inline_owned_token(&mut self, token: String) {
         self.inline_owned_context_tokens.insert(token);
+    }
+
+    /// Register a typed mention alias so the parser can resolve `@type:name`
+    /// tokens back to full `AiContextPart` values.
+    pub(crate) fn register_typed_alias(
+        &mut self,
+        token: String,
+        part: crate::ai::message_parts::AiContextPart,
+    ) {
+        self.typed_mention_aliases.insert(token, part);
+    }
+
+    /// Read-only access to the typed mention alias registry.
+    pub(crate) fn typed_aliases(
+        &self,
+    ) -> &std::collections::HashMap<String, crate::ai::message_parts::AiContextPart> {
+        &self.typed_mention_aliases
+    }
+
+    /// Expand typed display tokens in the input text back to full paths/URIs
+    /// before sending to the AI. Replaces `@rs:demo` with `@file:"/full/path.rs"` etc.
+    fn expand_typed_tokens_for_submit(&self, cx: &mut Context<Self>) {
+        if self.typed_mention_aliases.is_empty() {
+            return;
+        }
+        let text = self.live_thread().read(cx).input.text().to_string();
+        if text.is_empty() {
+            return;
+        }
+
+        let mentions = crate::ai::context_mentions::parse_inline_context_mentions_with_aliases(
+            &text,
+            &self.typed_mention_aliases,
+        );
+        if mentions.is_empty() {
+            return;
+        }
+
+        // Build the expanded text by replacing typed tokens with full source paths.
+        // Process mentions in reverse order to preserve character indices.
+        let mut expanded = text.clone();
+        for mention in mentions.iter().rev() {
+            let full_ref = match &mention.part {
+                crate::ai::message_parts::AiContextPart::FilePath { path, .. } => {
+                    crate::ai::context_mentions::format_inline_file_token(path)
+                }
+                crate::ai::message_parts::AiContextPart::FocusedTarget { label, .. } => {
+                    format!("@cmd:{label}")
+                }
+                _ => continue,
+            };
+            let byte_start = expanded
+                .char_indices()
+                .nth(mention.range.start)
+                .map(|(b, _)| b)
+                .unwrap_or(0);
+            let byte_end = expanded
+                .char_indices()
+                .nth(mention.range.end)
+                .map(|(b, _)| b)
+                .unwrap_or(expanded.len());
+            expanded.replace_range(byte_start..byte_end, &full_ref);
+        }
+
+        if expanded != text {
+            self.live_thread().update(cx, |thread, _cx| {
+                thread.input.set_text(expanded);
+            });
+        }
+    }
+
+    /// Submit the current input, expanding typed display tokens to full paths first.
+    fn submit_with_expanded_tokens(&mut self, cx: &mut Context<Self>) {
+        self.expand_typed_tokens_for_submit(cx);
+        let _ = self
+            .live_thread()
+            .update(cx, |thread, cx| thread.submit_input(cx));
     }
 
     /// Invoke a footer callback outside the AcpChatView borrow by spawning an
@@ -943,6 +1024,7 @@ impl AcpChatView {
             mention_session: None,
             mention_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
+            typed_mention_aliases: std::collections::HashMap::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
             test_probe: AcpTestProbe::default(),
@@ -989,6 +1071,7 @@ impl AcpChatView {
             mention_session: None,
             mention_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
+            typed_mention_aliases: std::collections::HashMap::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
             test_probe: AcpTestProbe::default(),
@@ -1469,6 +1552,7 @@ impl AcpChatView {
     ///
     /// Accent left-bar design: a 2px gold bar on the left edge with
     /// a ghost-opacity chip containing the label and a × dismiss button.
+    #[allow(dead_code)]
     fn render_pending_context_chips(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         use crate::ai::context_mentions::visible_context_chip_indices;
 
@@ -2492,9 +2576,7 @@ impl AcpChatView {
                     crate::components::ClickableHint::new(
                         "↩ Send",
                         cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-                            let _ = this
-                                .live_thread()
-                                .update(cx, |thread, cx| thread.submit_input(cx));
+                            this.submit_with_expanded_tokens(cx);
                         }),
                     ),
                     crate::components::ClickableHint::new(
@@ -2550,9 +2632,7 @@ impl AcpChatView {
             btn = btn
                 .cursor_pointer()
                 .on_click(cx.listener(|this, _event, _window, cx| {
-                    let _ = this
-                        .live_thread()
-                        .update(cx, |thread, cx| thread.submit_input(cx));
+                    this.submit_with_expanded_tokens(cx);
                 }));
         } else if is_streaming {
             btn = btn
@@ -3002,6 +3082,17 @@ impl AcpChatView {
             cx.notify();
         });
 
+        // Register typed alias for non-builtin parts so the parser can
+        // resolve typed @type:name tokens back to the full AiContextPart.
+        if matches!(
+            item.kind,
+            ContextPickerItemKind::File(_) | ContextPickerItemKind::Folder(_)
+        ) {
+            if let Some(token) = part_to_inline_token(&part) {
+                self.typed_mention_aliases.insert(token, part.clone());
+            }
+        }
+
         if allow_inline_sync {
             if let Some(token) = part_to_inline_token(&part) {
                 if should_claim_inline_ownership {
@@ -3059,15 +3150,18 @@ impl AcpChatView {
         text: &str,
         attached_parts: &[AiContextPart],
         accent_color: u32,
+        aliases: &std::collections::HashMap<String, AiContextPart>,
     ) -> Vec<TextHighlightRange> {
-        use crate::ai::context_mentions::{parse_inline_context_mentions, part_to_inline_token};
+        use crate::ai::context_mentions::{
+            parse_inline_context_mentions_with_aliases, part_to_inline_token,
+        };
 
         let attached_tokens: HashSet<String> = attached_parts
             .iter()
             .filter_map(part_to_inline_token)
             .collect();
 
-        parse_inline_context_mentions(text)
+        parse_inline_context_mentions_with_aliases(text, aliases)
             .into_iter()
             .filter(|mention| attached_tokens.contains(&mention.canonical_token))
             .map(|mention| TextHighlightRange {
@@ -3085,10 +3179,11 @@ impl AcpChatView {
         let text = self.live_thread().read(cx).input.text().to_string();
         let attached_parts = self.live_thread().read(cx).pending_context_parts().to_vec();
 
-        let plan = crate::ai::context_mentions::build_inline_mention_sync_plan(
+        let plan = crate::ai::context_mentions::build_inline_mention_sync_plan_with_aliases(
             &text,
             &attached_parts,
             &self.inline_owned_context_tokens,
+            &self.typed_mention_aliases,
         );
 
         self.live_thread().update(cx, |thread, cx| {
@@ -4603,9 +4698,7 @@ impl AcpChatView {
             let permission_active = self.live_thread().read(cx).pending_permission.is_some();
             self.mention_session = None;
             self.sync_mention_popup_window_from_cached_parent(cx);
-            let _ = self
-                .live_thread()
-                .update(cx, |thread, cx| thread.submit_input(cx));
+            self.submit_with_expanded_tokens(cx);
             self.emit_key_route_telemetry(
                 key,
                 AcpKeyRouteTelemetryArgs {
@@ -4732,10 +4825,12 @@ impl Render for AcpChatView {
         let is_window_truncated_left = !input_has_newline && window_start > 0;
         let is_window_truncated_right =
             !input_has_newline && window_end < input_text.chars().count();
+        let mention_accent = theme::get_cached_theme().colors.accent.selected;
         let mention_highlights = Self::attached_inline_mention_highlight_ranges(
             &input_text,
             &attached_parts,
-            Self::ACP_MENTION_INLINE_GOLD,
+            mention_accent,
+            &self.typed_mention_aliases,
         );
         let pending_permission_has_message_target = pending_permission
             .as_ref()
@@ -4859,8 +4954,8 @@ impl Render for AcpChatView {
                             }),
                     ),
             )
-            // ── Context chips (focused target / Ask Anything) ────
-            .child(self.render_pending_context_chips(cx))
+            // Context chips removed — all attachments are now inline @type:name tokens.
+            // .child(self.render_pending_context_chips(cx))
             .child(self.render_context_bootstrap_note(cx))
             // ── Search bar (Cmd+F) ─────────────────────────
             .when_some(self.search_state.clone(), |d, (query, current_idx)| {

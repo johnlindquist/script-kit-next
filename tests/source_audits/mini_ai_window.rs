@@ -644,10 +644,10 @@ fn mini_context_contract_keeps_essential_surfaces_reachable() {
     let mini_body = &panel[mini_fn_start..full_fn_start];
 
     // Surfaces that MUST be in mini mode
+    // Note: render_pending_context_chips removed — attachments are inline @type:name tokens now.
     for surface in [
         "render_context_bar",
         "render_context_picker",
-        "render_pending_context_chips",
         "render_pending_image_preview",
     ] {
         assert!(

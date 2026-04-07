@@ -188,15 +188,16 @@ fn part_to_inline_token_roundtrips_file() {
         label: "demo.rs".to_string(),
     };
     let token = part_to_inline_token(&part);
-    assert_eq!(token, Some("@file:/tmp/demo.rs".to_string()));
+    // Typed format: @rs:demo (prefix from extension, stem truncated to 7 chars)
+    assert_eq!(token, Some("@rs:demo".to_string()));
 }
 
 #[test]
-fn part_to_inline_token_returns_none_for_ambient() {
+fn part_to_inline_token_returns_typed_token_for_ambient() {
     let part = AiContextPart::AmbientContext {
         label: "test".to_string(),
     };
-    assert_eq!(part_to_inline_token(&part), None);
+    assert_eq!(part_to_inline_token(&part), Some("@env:test".to_string()));
 }
 
 // ── Provider-backed token coverage ───────────────────────────────
@@ -443,7 +444,8 @@ fn formats_file_inline_mentions_with_quotes_when_needed() {
         path: "/tmp/My File.rs".to_string(),
         label: "My File.rs".to_string(),
     });
-    assert_eq!(token.as_deref(), Some(r#"@file:"/tmp/My File.rs""#));
+    // Typed format: stem "My File" → quoted since it has a space, truncated to 7 chars
+    assert_eq!(token.as_deref(), Some("@rs:\"My File\""));
 }
 
 #[test]
@@ -452,19 +454,26 @@ fn formats_file_inline_mentions_without_quotes_when_no_spaces() {
         path: "/tmp/demo.rs".to_string(),
         label: "demo.rs".to_string(),
     });
-    assert_eq!(token.as_deref(), Some("@file:/tmp/demo.rs"));
+    assert_eq!(token.as_deref(), Some("@rs:demo"));
 }
 
 #[test]
-fn quoted_file_token_roundtrips_through_parse_and_format() {
+fn typed_file_token_roundtrips_through_alias_registry() {
     let original = AiContextPart::FilePath {
         path: "/tmp/My File.rs".to_string(),
         label: "My File.rs".to_string(),
     };
     let token = part_to_inline_token(&original).unwrap();
-    assert_eq!(token, r#"@file:"/tmp/My File.rs""#);
+    assert_eq!(token, "@rs:\"My File\"");
 
+    // Without alias, the typed token won't resolve (it's not @file:/path)
     let mentions = parse_inline_context_mentions(&token);
+    assert_eq!(mentions.len(), 0, "typed token needs alias to resolve");
+
+    // With alias registered, it resolves
+    let mut aliases = std::collections::HashMap::new();
+    aliases.insert(token.clone(), original.clone());
+    let mentions = parse_inline_context_mentions_with_aliases(&token, &aliases);
     assert_eq!(mentions.len(), 1);
     assert_eq!(mentions[0].part, original);
 }
@@ -670,21 +679,24 @@ fn atomic_delete_forward_respects_quoted_file_token_boundaries() {
 
 #[test]
 fn parse_inline_mentions_supports_quoted_file_paths() {
+    // Legacy @file:/path format still parses correctly.
     let mentions = parse_inline_context_mentions(r#"Use @file:"/tmp/My File.ts""#);
     assert_eq!(mentions.len(), 1);
     assert_eq!(mentions[0].token, r#"@file:"/tmp/My File.ts""#);
-    assert_eq!(mentions[0].canonical_token, r#"@file:"/tmp/My File.ts""#);
+    // Canonical token now uses typed format from part_to_inline_token.
+    assert_eq!(mentions[0].canonical_token, "@ts:\"My File\"");
 }
 
 #[test]
-fn part_to_inline_token_quotes_paths_with_spaces() {
+fn part_to_inline_token_uses_typed_format_for_paths_with_spaces() {
     let part = AiContextPart::FilePath {
         path: "/tmp/My File.ts".to_string(),
         label: "My File.ts".to_string(),
     };
+    // Typed format: @ts:"My File" (stem has space → quoted, ext dropped)
     assert_eq!(
         part_to_inline_token(&part),
-        Some(r#"@file:"/tmp/My File.ts""#.to_string())
+        Some("@ts:\"My File\"".to_string())
     );
 }
 
@@ -743,11 +755,13 @@ fn incomplete_file_token_does_not_attach_any_part() {
 }
 
 #[test]
-fn quoted_file_token_with_spaces_round_trips() {
+fn quoted_file_token_with_spaces_round_trips_to_typed_format() {
+    // Legacy @file:/path parses to a FilePath part...
     let mentions = parse_inline_context_mentions(r#"Open @file:"/tmp/my file.rs""#);
     assert_eq!(mentions.len(), 1);
+    // ...but part_to_inline_token now produces typed format.
     let token = part_to_inline_token(&mentions[0].part).expect("round-trip token");
-    assert_eq!(token, r#"@file:"/tmp/my file.rs""#);
+    assert_eq!(token, "@rs:\"my file\"");
 }
 
 #[test]

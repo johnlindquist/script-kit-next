@@ -79,7 +79,23 @@ pub(crate) fn build_inline_mention_sync_plan(
     attached_parts: &[AiContextPart],
     inline_owned_tokens: &HashSet<String>,
 ) -> InlineMentionSyncPlan {
-    let parsed = super::parse_inline_context_mentions(text);
+    build_inline_mention_sync_plan_with_aliases(
+        text,
+        attached_parts,
+        inline_owned_tokens,
+        &std::collections::HashMap::new(),
+    )
+}
+
+/// Alias-aware variant — typed `@type:name` tokens are resolved via the
+/// session alias map before comparing against attached parts.
+pub(crate) fn build_inline_mention_sync_plan_with_aliases(
+    text: &str,
+    attached_parts: &[AiContextPart],
+    inline_owned_tokens: &HashSet<String>,
+    aliases: &std::collections::HashMap<String, AiContextPart>,
+) -> InlineMentionSyncPlan {
+    let parsed = super::parse_inline_context_mentions_with_aliases(text, aliases);
 
     let desired_parts: Vec<AiContextPart> = parsed.iter().map(|m| m.part.clone()).collect();
     let desired_tokens: HashSet<String> =

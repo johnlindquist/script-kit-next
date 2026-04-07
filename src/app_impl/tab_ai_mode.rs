@@ -1377,6 +1377,7 @@ impl ScriptListApp {
         );
 
         // --- View switch FIRST: user sees the ACP chat surface immediately ---
+        let view_entity_for_staging = view_entity.clone();
         self.current_view = AppView::AcpChatView {
             entity: view_entity,
         };
@@ -1392,11 +1393,23 @@ impl ScriptListApp {
             elapsed_ms = open_started_at.elapsed().as_millis() as u64,
         );
 
-        // --- Stage focused-target chip or ambient-capture chip ---
+        // --- Stage context part + insert inline @type:name token ---
         if let Some(part) = focused_part.clone() {
+            let inline_token = crate::ai::context_mentions::part_to_inline_token(&part);
             let _ = thread.update(cx, |thread, cx| {
-                thread.add_context_part(part, cx);
+                if let Some(ref token) = inline_token {
+                    let text = format!("{token} ");
+                    thread.input.set_text(text.clone());
+                    thread.input.set_cursor(text.len());
+                }
+                thread.add_context_part(part.clone(), cx);
             });
+            if let Some(token) = inline_token {
+                view_entity_for_staging.update(cx, |view, _cx| {
+                    view.register_typed_alias(token.clone(), part);
+                    view.register_inline_owned_token(token);
+                });
+            }
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "acp_focused_chip_staged_on_thread",
@@ -1406,15 +1419,14 @@ impl ScriptListApp {
                 },
             );
         } else if use_ask_anything_fallback && explicit_ambient_chip_label.is_none() {
-            // Stage a minimal desktop context resource as the Ask Anything chip.
+            // Stage a minimal desktop context resource as the Ask Anything inline token.
+            let part = crate::ai::message_parts::AiContextPart::ResourceUri {
+                uri: crate::ai::message_parts::ASK_ANYTHING_RESOURCE_URI.to_string(),
+                label: crate::ai::message_parts::ASK_ANYTHING_LABEL.to_string(),
+            };
+            // Built-in ResourceUri — uses @snapshot mention, no alias needed.
             let _ = thread.update(cx, |thread, cx| {
-                thread.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: crate::ai::message_parts::ASK_ANYTHING_RESOURCE_URI.to_string(),
-                        label: crate::ai::message_parts::ASK_ANYTHING_LABEL.to_string(),
-                    },
-                    cx,
-                );
+                thread.add_context_part(part, cx);
             });
             tracing::info!(
                 target: "script_kit::tab_ai",
@@ -1425,16 +1437,15 @@ impl ScriptListApp {
                 },
             );
         } else if let Some(ref label) = explicit_ambient_chip_label {
-            // Stage a labeled ambient capture chip for explicit AI commands.
+            // Stage a labeled ambient capture inline token for explicit AI commands.
             let chip_label = label.clone();
+            let part = crate::ai::message_parts::AiContextPart::ResourceUri {
+                uri: crate::ai::message_parts::ASK_ANYTHING_RESOURCE_URI.to_string(),
+                label: chip_label,
+            };
+            // Built-in ResourceUri — uses @snapshot mention, no alias needed.
             let _ = thread.update(cx, |thread, cx| {
-                thread.add_context_part(
-                    crate::ai::message_parts::AiContextPart::ResourceUri {
-                        uri: crate::ai::message_parts::ASK_ANYTHING_RESOURCE_URI.to_string(),
-                        label: chip_label,
-                    },
-                    cx,
-                );
+                thread.add_context_part(part, cx);
             });
             tracing::info!(
                 target: "script_kit::tab_ai",
