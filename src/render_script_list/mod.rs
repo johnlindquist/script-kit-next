@@ -860,7 +860,6 @@ impl ScriptListApp {
         // This ensures main menu, AI chat, and all prompts have consistent styling
 
         let mut main_div = div()
-            .relative()
             .flex()
             .flex_col()
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
@@ -1013,18 +1012,14 @@ impl ScriptListApp {
                 main_div = main_div.child(panel);
             }
 
-            // GPUI hover blocker: the native NSVisualEffectView footer sits on
-            // top of the Metal layer, but GPUI's own hit test still delivers
-            // hover events to list items behind it. block_mouse_except_scroll
-            // tells the hit test to exclude elements behind this div from hover
-            // while still allowing scroll events through. Absolutely positioned
-            // so the list extends fully underneath for blur-through.
+            // GPUI hover blocker: the native footer returns nil from hitTest
+            // for non-button areas (so scroll passes through), but GPUI's hit
+            // test still delivers hover to list items behind the footer. This
+            // flex-child div uses block_mouse_except_scroll to prevent hover
+            // while allowing scroll through at the GPUI level.
             main_div = main_div.child(
                 div()
                     .id("footer-hover-blocker")
-                    .absolute()
-                    .bottom(px(0.))
-                    .left(px(0.))
                     .w_full()
                     .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
                     .block_mouse_except_scroll(),
