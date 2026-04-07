@@ -46,21 +46,21 @@
   },
   "focus_aware": null,
   "opacity": {
-    "main": 0.85,
-    "title_bar": 0.85,
-    "search_box": 0.9,
-    "log_panel": 0.9,
+    "main": 0.75,
+    "title_bar": 0.75,
+    "search_box": 0.81,
+    "log_panel": 0.75,
     "selected": 0.2,
     "hover": 0.14,
     "preview": 0.0,
-    "dialog": 0.85,
-    "input": 0.9,
-    "panel": 0.85,
-    "input_inactive": 0.85,
-    "input_active": 0.9,
+    "dialog": 0.75,
+    "input": 0.79,
+    "panel": 0.75,
+    "input_inactive": 0.77,
+    "input_active": 0.83,
     "border_inactive": 0.3,
     "border_active": 0.45,
-    "vibrancy_background": 0.85
+    "vibrancy_background": 0.75
   },
   "drop_shadow": {
     "enabled": true,
@@ -73,7 +73,7 @@
   },
   "vibrancy": {
     "enabled": true,
-    "material": "popover"
+    "material": "hud"
   },
   "fonts": {
     "mono_family": "JetBrains Mono",

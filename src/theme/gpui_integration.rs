@@ -157,17 +157,17 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
         // IMPORTANT: Light mode requires higher opacity for readability.
         // User theme.json may have low dark mode values (e.g., 0.3) that would
         // make light mode backgrounds too transparent. We enforce a minimum
-        // of 0.85 for light mode to ensure text remains readable.
+        // of 0.75 for light mode to ensure text remains readable.
         let bg_alpha = if is_dark {
             // Dark mode: use user's value or default
-            opacity.vibrancy_background.unwrap_or(0.85)
+            opacity.vibrancy_background.unwrap_or(0.75)
         } else {
-            // Light mode: ensure minimum 0.85 opacity for visibility
-            // User's value is clamped to at least 0.85 for light mode
+            // Light mode: ensure minimum 0.75 opacity for visibility
+            // User's value is clamped to at least 0.75 for light mode
             opacity
                 .vibrancy_background
-                .map(|v| v.max(0.85))
-                .unwrap_or(0.85)
+                .map(|v| v.max(0.75))
+                .unwrap_or(0.75)
         }
         .clamp(0.0, 1.0);
 
