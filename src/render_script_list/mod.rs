@@ -400,40 +400,49 @@ impl ScriptListApp {
                                     // Hover gating is now handled by ListItem via GPUI input modality
                                     let is_hovered = current_hovered == Some(ix);
 
-                                    // Create hover handler via canonical mouse contract
+                                    // Create hover handler
                                     let hover_handler = cx.listener(
                                         move |this: &mut ScriptListApp,
                                               hovered: &bool,
                                               _window,
                                               cx| {
-                                            this.update_row_hover_from_mouse(ix, *hovered, cx);
+                                            if *hovered {
+                                                this.input_mode = InputMode::Mouse;
+                                                if this.hovered_index != Some(ix) {
+                                                    this.hovered_index = Some(ix);
+                                                    cx.notify();
+                                                }
+                                            } else if this.hovered_index == Some(ix) {
+                                                this.hovered_index = None;
+                                                cx.notify();
+                                            }
                                         },
                                     );
 
-                                    // Create click handler via canonical mouse contract
+                                    // Create click handler matching launcher click semantics
                                     let click_handler = cx.listener(
                                         move |this: &mut ScriptListApp,
                                               event: &gpui::ClickEvent,
                                               _window,
                                               cx| {
                                             let was_selected = this.selected_index == ix;
-                                            this.select_row_from_mouse(
-                                                ix,
-                                                "launcher_mouse_click",
-                                                cx,
-                                            );
+                                            // Always select the item on any click
+                                            if !was_selected {
+                                                this.selected_index = ix;
+                                                cx.notify();
+                                            }
 
-                                            let click_count = Self::mouse_click_count(event);
+                                            let click_count = event.click_count();
                                             if crate::ui_foundation::should_submit_selected_row_click(
                                                 was_selected,
                                                 click_count,
                                             ) {
-                                                tracing::debug!(
-                                                    target: "script_kit::mouse",
-                                                    event = "launcher_row_submit",
-                                                    row_index = ix,
-                                                    click_count,
-                                                    "Launcher row click submitting item"
+                                                logging::log(
+                                                    "UI",
+                                                    &format!(
+                                                        "Launcher row click submitting item {} (click_count={})",
+                                                        ix, click_count
+                                                    ),
                                                 );
                                                 this.execute_selected(cx);
                                             }
@@ -1109,7 +1118,7 @@ impl ScriptListApp {
                 mode = "full",
                 "Script list footer rendered with universal three-key footer"
             );
-            main_div = main_div.child(
+            let gpui_footer =
                 crate::components::render_universal_prompt_hint_strip_clickable(
                     cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
                         this.execute_selected(cx);
@@ -1132,8 +1141,10 @@ impl ScriptListApp {
                     cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
                         this.open_tab_ai_chat(cx);
                     }),
-                ),
-            );
+                );
+            if let Some(footer) = self.main_window_footer_slot(gpui_footer) {
+                main_div = main_div.child(footer);
+            }
         }
 
         if let Some(panel) = log_panel {

@@ -205,7 +205,7 @@ impl ScriptListApp {
                                     window_info.bounds.y
                                 );
 
-                                // Click handler via canonical mouse contract
+                                // Click handler: select on click, focus window on double-click
                                 let click_entity = click_entity_handle.clone();
                                 let win_id = window_info.id;
                                 let click_handler = move |event: &gpui::ClickEvent,
@@ -213,7 +213,6 @@ impl ScriptListApp {
                                                            cx: &mut gpui::App| {
                                     if let Some(app) = click_entity.upgrade() {
                                         app.update(cx, |this, cx| {
-                                            this.enter_mouse_mode_from_row(cx);
                                             if let AppView::WindowSwitcherView {
                                                 selected_index, ..
                                             } = &mut this.current_view
@@ -223,29 +222,40 @@ impl ScriptListApp {
                                             cx.notify();
 
                                             // Double-click: focus window
-                                            if Self::mouse_click_count(event) >= 2 {
-                                                tracing::debug!(
-                                                    target: "script_kit::mouse",
-                                                    event = "window_switcher_row_double_clicked",
-                                                    row_index = ix,
-                                                    window_id = win_id,
-                                                    "Focusing window from mouse double-click"
-                                                );
-                                                if window_control::focus_window(win_id).is_ok()
-                                                {
-                                                    this.hide_main_and_reset(cx);
+                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
+                                                if mouse_event.down.click_count == 2 {
+                                                    logging::log(
+                                                        "UI",
+                                                        &format!(
+                                                            "Double-click focusing window {}",
+                                                            win_id
+                                                        ),
+                                                    );
+                                                    if window_control::focus_window(win_id).is_ok()
+                                                    {
+                                                        this.hide_main_and_reset(cx);
+                                                    }
                                                 }
                                             }
                                         });
                                     }
                                 };
 
-                                // Hover handler via canonical mouse contract
+                                // Hover handler for mouse tracking
                                 let hover_entity = hover_entity_handle.clone();
                                 let hover_handler = move |is_hovered: &bool, _window: &mut Window, cx: &mut gpui::App| {
                                     if let Some(app) = hover_entity.upgrade() {
                                         app.update(cx, |this, cx| {
-                                            this.update_row_hover_from_mouse(ix, *is_hovered, cx);
+                                            if *is_hovered {
+                                                this.input_mode = InputMode::Mouse;
+                                                if this.hovered_index != Some(ix) {
+                                                    this.hovered_index = Some(ix);
+                                                    cx.notify();
+                                                }
+                                            } else if this.hovered_index == Some(ix) {
+                                                this.hovered_index = None;
+                                                cx.notify();
+                                            }
                                         });
                                     }
                                 };

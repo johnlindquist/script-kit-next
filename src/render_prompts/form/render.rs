@@ -143,7 +143,7 @@ impl ScriptListApp {
                 .overflow_y_scrollbar()
                 .p(px(design_spacing.padding_lg))
                 .child(entity.clone()),
-            Some(self.clickable_universal_hint_strip(cx)),
+            self.main_window_footer_slot(self.clickable_universal_hint_strip(cx)),
         )
         .h(content_height)
         .text_color(rgb(design_colors.text_primary))

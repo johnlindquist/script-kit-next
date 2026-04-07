@@ -53,12 +53,15 @@
             "clipboard_history_chrome_checkpoint"
         );
 
-        crate::components::render_expanded_view_scaffold_with_hints(
+        // Build GPUI hint strip, then route through the native footer slot
+        let gpui_footer = crate::components::render_simple_hint_strip(hints, None);
+        let footer = self.main_window_footer_slot(gpui_footer);
+
+        crate::components::render_expanded_view_scaffold_with_footer(
             header_element,
             list_pane,
             preview_panel,
-            hints,
-            None,
+            footer,
         )
             .text_color(rgb(text_primary))
             .font_family(design_typography.font_family)
