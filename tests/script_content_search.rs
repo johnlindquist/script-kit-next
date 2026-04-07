@@ -245,11 +245,7 @@ fn content_search_prefers_best_fuzzy_line_not_first_line() {
 
 #[test]
 fn content_match_byte_range_tracks_the_matched_span() {
-    let scripts = vec![make_script(
-        "gamma",
-        None,
-        Some("const alpha = beta;\n"),
-    )];
+    let scripts = vec![make_script("gamma", None, Some("const alpha = beta;\n"))];
 
     let alpha_results = fuzzy_search_scripts(&scripts, "alpha");
     let beta_results = fuzzy_search_scripts(&scripts, "beta");
