@@ -860,6 +860,7 @@ impl ScriptListApp {
         // This ensures main menu, AI chat, and all prompts have consistent styling
 
         let mut main_div = div()
+            .relative()
             .flex()
             .flex_col()
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
@@ -1011,6 +1012,23 @@ impl ScriptListApp {
             if let Some(panel) = log_panel {
                 main_div = main_div.child(panel);
             }
+
+            // GPUI hover blocker: absolutely positioned at the bottom so list
+            // items scroll underneath for blur-through. Uses HitboxBehavior::
+            // BlockMouseExceptScroll to prevent hover on list items behind the
+            // native footer while still allowing scroll events to pass through.
+            // (stop_propagation alone doesn't work — hover is computed from
+            // a pre-rendered hit test, not from event bubbling.)
+            main_div = main_div.child(
+                div()
+                    .id("footer-event-blocker")
+                    .absolute()
+                    .bottom(px(0.))
+                    .left(px(0.))
+                    .w_full()
+                    .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+                    .block_mouse_except_scroll(),
+            );
 
             if state_changed {
                 let total_elapsed = render_list_start.elapsed();
