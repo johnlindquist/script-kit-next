@@ -68,8 +68,15 @@ fn assert_expanded_builtin_surface(name: &str, entry_source: &str, layout_source
     assert!(
         layout_source.contains("render_expanded_view_scaffold(")
             || layout_source.contains("render_expanded_view_scaffold_with_hints(")
+            || layout_source.contains("render_expanded_view_scaffold_with_footer(")
             || layout_source.contains("render_expanded_view_prompt_shell("),
         "{name} layout should use shared expanded-view scaffold/shell"
+    );
+
+    // Layout should route footer rendering through the main-window native footer slot
+    assert!(
+        layout_source.contains("main_window_footer_slot("),
+        "{name} layout should route footer rendering through the main-window native footer slot"
     );
 
     // Must NOT use old PromptFooter
@@ -97,9 +104,10 @@ fn assert_expanded_builtin_surface(name: &str, entry_source: &str, layout_source
     );
 
     eprintln!(
-        "{{\"audit\":\"expanded_contract\",\"surface\":\"{name}\",\"scaffold_used\":{},\"divider_absent\":true,\"footer_absent\":true,\"layout_mode\":\"expanded\"}}",
+        "{{\"audit\":\"expanded_contract\",\"surface\":\"{name}\",\"scaffold_used\":{},\"footer_slot\":true,\"divider_absent\":true,\"footer_absent\":true,\"layout_mode\":\"expanded\"}}",
         layout_source.contains("render_expanded_view_scaffold(")
             || layout_source.contains("render_expanded_view_scaffold_with_hints(")
+            || layout_source.contains("render_expanded_view_scaffold_with_footer(")
             || layout_source.contains("render_expanded_view_prompt_shell(")
     );
 }
@@ -136,10 +144,11 @@ fn file_search_mini_footer_uses_live_hint_contract() {
         "file_search should emit a prompt hint audit"
     );
     assert!(
-        FILE_SEARCH_ENTRY_SOURCE
-            .contains("let file_search_hints = if let Some(file) = selected_file.as_ref()")
-            && FILE_SEARCH_ENTRY_SOURCE.contains("render_minimal_list_prompt_scaffold("),
-        "file_search mini mode should compute live hints and route them through the minimal scaffold"
+        FILE_SEARCH_ENTRY_SOURCE.contains("let file_search_hints = if")
+            && (FILE_SEARCH_ENTRY_SOURCE.contains("render_minimal_list_prompt_scaffold(")
+                || FILE_SEARCH_ENTRY_SOURCE
+                    .contains("render_minimal_list_prompt_shell_with_footer(")),
+        "file_search mini mode should compute live hints and route them through a minimal scaffold"
     );
 }
 
@@ -276,6 +285,226 @@ fn emoji_picker_advertises_and_wires_shared_actions() {
     assert!(
         EMOJI_PICKER_SOURCE.contains("route_key_to_actions_dialog("),
         "emoji_picker must locally wire the shared actions router"
+    );
+}
+
+// ---- Native footer contract tests ----
+
+const UI_WINDOW_SOURCE: &str = include_str!("../../src/app_impl/ui_window.rs");
+const FOOTER_POPUP_SOURCE: &str = include_str!("../../src/footer_popup.rs");
+
+#[test]
+fn ui_window_resolves_native_footer_from_view() {
+    assert!(
+        UI_WINDOW_SOURCE.contains("fn main_window_footer_config("),
+        "ui_window.rs must define a main-window footer config resolver"
+    );
+    assert!(
+        UI_WINDOW_SOURCE.contains("MainWindowFooterConfig::new("),
+        "main-window footer resolver must build MainWindowFooterConfig values"
+    );
+    assert!(
+        UI_WINDOW_SOURCE.contains("main_window_footer_slot("),
+        "ui_window.rs must expose a footer-slot helper for GPUI surfaces"
+    );
+    assert!(
+        UI_WINDOW_SOURCE.contains("sync_main_footer_popup(window, config.as_ref(),"),
+        "native footer sync must pass the resolved config into footer_popup.rs"
+    );
+
+    eprintln!(
+        "{{\"audit\":\"native_footer_contract\",\"resolver\":true,\"slot_helper\":true,\"config_sync\":true}}"
+    );
+}
+
+#[test]
+fn footer_popup_accepts_config_driven_refresh() {
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("struct FooterButtonConfig"),
+        "footer_popup.rs must define FooterButtonConfig"
+    );
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("struct MainWindowFooterConfig"),
+        "footer_popup.rs must define MainWindowFooterConfig"
+    );
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("config: Option<&MainWindowFooterConfig>"),
+        "sync_main_footer_popup must accept Option<&MainWindowFooterConfig>"
+    );
+
+    eprintln!(
+        "{{\"audit\":\"native_footer_popup_contract\",\"button_config\":true,\"footer_config\":true,\"config_param\":true}}"
+    );
+}
+
+#[test]
+fn script_list_routes_footer_through_native_slot() {
+    let source = include_str!("../../src/render_script_list/mod.rs");
+    assert!(
+        source.contains("main_window_footer_slot("),
+        "render_script_list should route footer rendering through the main-window native footer slot"
+    );
+
+    eprintln!(
+        "{{\"audit\":\"native_footer_surface\",\"surface\":\"script_list\",\"footer_slot\":true}}"
+    );
+}
+
+#[test]
+fn prompt_wrapper_routes_footer_through_native_slot() {
+    let source = include_str!("../../src/render_prompts/other.rs");
+    assert!(
+        source.contains("main_window_footer_slot("),
+        "render_wrapped_prompt_entity should route footer rendering through the main-window native footer slot"
+    );
+
+    eprintln!(
+        "{{\"audit\":\"native_footer_surface\",\"surface\":\"prompt_wrapper\",\"footer_slot\":true}}"
+    );
+}
+
+#[test]
+fn clipboard_history_routes_footer_through_native_slot() {
+    assert!(
+        CLIPBOARD_HISTORY_LAYOUT_SOURCE.contains("render_expanded_view_scaffold_with_footer("),
+        "clipboard_history should use the footer-aware expanded scaffold"
+    );
+    assert!(
+        CLIPBOARD_HISTORY_LAYOUT_SOURCE.contains("main_window_footer_slot("),
+        "clipboard_history should route footer rendering through the main-window native footer slot"
+    );
+
+    eprintln!(
+        "{{\"audit\":\"native_footer_surface\",\"surface\":\"clipboard_history\",\"footer_slot\":true}}"
+    );
+}
+
+#[test]
+fn file_search_routes_footer_through_native_slot() {
+    assert!(
+        FILE_SEARCH_ENTRY_SOURCE.contains("main_window_footer_slot("),
+        "file_search should route footer rendering through the main-window native footer slot"
+    );
+    assert!(
+        FILE_SEARCH_ENTRY_SOURCE.contains("render_expanded_view_scaffold_with_footer(")
+            || FILE_SEARCH_ENTRY_SOURCE.contains("render_minimal_list_prompt_shell_with_footer("),
+        "file_search should use footer-aware scaffold helpers"
+    );
+
+    eprintln!(
+        "{{\"audit\":\"native_footer_surface\",\"surface\":\"file_search\",\"footer_slot\":true}}"
+    );
+}
+
+#[test]
+fn mini_prompt_routes_footer_through_native_slot() {
+    let source = include_str!("../../src/render_prompts/mini.rs");
+    assert!(
+        source.contains("main_window_footer_slot("),
+        "mini_prompt should route footer rendering through the main-window native footer slot"
+    );
+    assert!(
+        source.contains("render_minimal_list_prompt_shell_with_footer("),
+        "mini_prompt should use the footer-aware minimal list prompt shell"
+    );
+
+    eprintln!(
+        "{{\"audit\":\"native_footer_surface\",\"surface\":\"mini_prompt\",\"footer_slot\":true}}"
+    );
+}
+
+#[test]
+fn div_prompt_routes_footer_through_native_slot() {
+    let source = include_str!("../../src/render_prompts/div.rs");
+    assert!(
+        source.contains("main_window_footer_slot("),
+        "div_prompt should route footer rendering through the main-window native footer slot"
+    );
+
+    eprintln!(
+        "{{\"audit\":\"native_footer_surface\",\"surface\":\"div_prompt\",\"footer_slot\":true}}"
+    );
+}
+
+#[test]
+fn form_prompt_routes_footer_through_native_slot() {
+    let source = include_str!("../../src/render_prompts/form/render.rs");
+    assert!(
+        source.contains("main_window_footer_slot("),
+        "form_prompt should route footer rendering through the main-window native footer slot"
+    );
+
+    eprintln!(
+        "{{\"audit\":\"native_footer_surface\",\"surface\":\"form_prompt\",\"footer_slot\":true}}"
+    );
+}
+
+#[test]
+fn editor_prompt_routes_footer_through_native_slot() {
+    let source = include_str!("../../src/render_prompts/editor.rs");
+    assert!(
+        source.contains("main_window_footer_slot("),
+        "editor_prompt should route footer rendering through the main-window native footer slot"
+    );
+
+    eprintln!(
+        "{{\"audit\":\"native_footer_surface\",\"surface\":\"editor_prompt\",\"footer_slot\":true}}"
+    );
+}
+
+/// Summary audit: verifies all migrated surfaces route through the native footer
+/// slot, emitting a single JSON envelope listing all covered surfaces.
+#[test]
+fn native_footer_migration_coverage_summary() {
+    let surfaces: &[(&str, &str)] = &[
+        (
+            "script_list",
+            include_str!("../../src/render_script_list/mod.rs"),
+        ),
+        (
+            "prompt_wrapper",
+            include_str!("../../src/render_prompts/other.rs"),
+        ),
+        (
+            "clipboard_history",
+            include_str!("../../src/render_builtins/clipboard_history_layout.rs"),
+        ),
+        (
+            "file_search",
+            include_str!("../../src/render_builtins/file_search.rs"),
+        ),
+        (
+            "mini_prompt",
+            include_str!("../../src/render_prompts/mini.rs"),
+        ),
+        (
+            "div_prompt",
+            include_str!("../../src/render_prompts/div.rs"),
+        ),
+        (
+            "form_prompt",
+            include_str!("../../src/render_prompts/form/render.rs"),
+        ),
+        (
+            "editor_prompt",
+            include_str!("../../src/render_prompts/editor.rs"),
+        ),
+    ];
+
+    let mut covered = Vec::new();
+    for (name, source) in surfaces {
+        assert!(
+            source.contains("main_window_footer_slot("),
+            "{name} must route footer through main_window_footer_slot"
+        );
+        covered.push(*name);
+    }
+
+    let covered_json: Vec<String> = covered.iter().map(|s| format!("\"{}\"", s)).collect();
+    eprintln!(
+        "{{\"audit\":\"native_footer_migration_summary\",\"covered_surfaces\":[{}],\"total\":{}}}",
+        covered_json.join(","),
+        covered.len(),
     );
 }
 

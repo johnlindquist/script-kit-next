@@ -378,6 +378,54 @@ pub(crate) fn render_minimal_list_prompt_shell(
     )
 }
 
+/// Footer-aware variant of [`render_minimal_list_prompt_shell`].
+///
+/// Accepts a pre-built footer element (typically from `main_window_footer_slot`)
+/// instead of raw hints, so callers can swap between the native AppKit footer
+/// spacer and the GPUI hint strip without duplicating scaffold logic.
+#[allow(dead_code)]
+pub(crate) fn render_minimal_list_prompt_shell_with_footer(
+    radius: f32,
+    vibrancy_bg: Option<Rgba>,
+    header: impl IntoElement,
+    content: impl IntoElement,
+    footer: Option<AnyElement>,
+) -> Div {
+    let scaffold = div()
+        .w_full()
+        .h_full()
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .w_full()
+                .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(header),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_h(px(0.))
+                .w_full()
+                .overflow_hidden()
+                .child(content),
+        );
+
+    let scaffold = if let Some(footer) = footer {
+        scaffold.child(footer)
+    } else {
+        scaffold
+    };
+
+    render_simple_prompt_shell(radius, vibrancy_bg, scaffold, None)
+}
+
 /// Shared scaffold for expanded-view surfaces (list + preview split).
 ///
 /// Composes a header row, a chromeless 50/50 split content area (list left,
@@ -504,6 +552,70 @@ pub(crate) fn render_expanded_view_scaffold_with_hints(
         .child(render_simple_hint_strip(hints, leading))
 }
 
+/// Footer-aware variant of [`render_expanded_view_scaffold_with_hints`].
+///
+/// Accepts a pre-built footer element (typically from `main_window_footer_slot`)
+/// instead of raw hints, so callers can swap between the native AppKit footer
+/// spacer and the GPUI hint strip without duplicating scaffold logic.
+#[allow(dead_code)]
+pub(crate) fn render_expanded_view_scaffold_with_footer(
+    header: impl IntoElement,
+    list_pane: impl IntoElement,
+    preview_pane: impl IntoElement,
+    footer: Option<AnyElement>,
+) -> Div {
+    let scaffold = div()
+        .w_full()
+        .h_full()
+        .flex()
+        .flex_col()
+        // Header row with shared padding
+        .child(
+            div()
+                .w_full()
+                .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(header),
+        )
+        // 50/50 split content area — no divider, no wrapper chrome
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .flex_1()
+                .min_h(px(0.))
+                .w_full()
+                .overflow_hidden()
+                // Left: mini-style list pane
+                .child(
+                    div()
+                        .flex_1()
+                        .h_full()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(list_pane),
+                )
+                // Right: chromeless preview slot
+                .child(
+                    div()
+                        .flex_1()
+                        .h_full()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(preview_pane),
+                ),
+        );
+
+    if let Some(footer) = footer {
+        scaffold.child(footer)
+    } else {
+        scaffold
+    }
+}
+
 /// Expanded-view scaffold wrapped in the shared prompt shell container.
 ///
 /// Same as [`render_expanded_view_scaffold`] but wrapped in
@@ -577,6 +689,19 @@ pub(crate) fn universal_prompt_hints() -> Vec<SharedString> {
 #[inline]
 pub(crate) fn render_universal_prompt_hint_strip() -> AnyElement {
     render_simple_hint_strip(universal_prompt_hints(), None)
+}
+
+/// Transparent spacer div matching the native footer height.
+///
+/// Used in place of the GPUI hint strip when the native NSVisualEffectView
+/// footer is active, so content doesn't get hidden behind the AppKit footer.
+#[allow(dead_code)]
+pub(crate) fn render_native_main_window_footer_spacer() -> AnyElement {
+    div()
+        .id("native-main-window-footer-spacer")
+        .w_full()
+        .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+        .into_any_element()
 }
 
 /// Renderer for the canonical three-key footer with click handlers.
@@ -1372,6 +1497,7 @@ mod prompt_layout_shell_tests {
         // Must route through the shared expanded-view scaffold
         assert!(
             source.contains("render_expanded_view_scaffold_with_hints(")
+                || source.contains("render_expanded_view_scaffold_with_footer(")
                 || source.contains("render_expanded_view_scaffold("),
             "clipboard_history_layout.rs should route through the shared expanded-view scaffold"
         );
@@ -1399,7 +1525,8 @@ mod prompt_layout_shell_tests {
         // Must route through the shared expanded-view scaffold
         assert!(
             source.contains("render_expanded_view_scaffold(")
-                || source.contains("render_expanded_view_scaffold_with_hints("),
+                || source.contains("render_expanded_view_scaffold_with_hints(")
+                || source.contains("render_expanded_view_scaffold_with_footer("),
             "file search must use the shared expanded-view scaffold"
         );
         // Must NOT have hand-rolled SectionDivider (scaffold owns structure)

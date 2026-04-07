@@ -186,16 +186,19 @@ impl ScriptListApp {
                     )
             }
         };
-        let leading: Option<gpui::AnyElement> = None;
+        // Build GPUI hint strip, then route through the native footer slot
+        let gpui_footer = crate::components::render_simple_hint_strip(
+            crate::components::universal_prompt_hints(),
+            None,
+        );
+        let footer = self.main_window_footer_slot(gpui_footer);
 
-        // Use the same shared shell as arg/render.rs
-        crate::components::render_minimal_list_prompt_shell(
+        crate::components::render_minimal_list_prompt_shell_with_footer(
             0.0,
             crate::ui_foundation::get_vibrancy_background(&self.theme),
             header,
             content,
-            crate::components::universal_prompt_hints(),
-            leading,
+            footer,
         )
         .text_color(rgb(text_primary))
         .font_family(design_typography.font_family)
@@ -241,8 +244,9 @@ mod mini_prompt_render_tests {
     #[test]
     fn mini_prompt_uses_shared_shell_with_universal_hints() {
         assert!(
-            MINI_SOURCE.contains("render_minimal_list_prompt_shell("),
-            "mini prompt should use the shared prompt shell from arg/render.rs"
+            MINI_SOURCE.contains("render_minimal_list_prompt_shell(")
+                || MINI_SOURCE.contains("render_minimal_list_prompt_shell_with_footer("),
+            "mini prompt should use the shared prompt shell"
         );
         assert!(
             MINI_SOURCE.contains("universal_prompt_hints()"),

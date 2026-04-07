@@ -152,16 +152,11 @@ impl ScriptListApp {
         let shell_radius = self.other_prompt_shell_radius();
         let handle_key = cx.listener(key_handler);
         let vibrancy_bg = get_vibrancy_background(&self.theme);
-        let footer = self.clickable_universal_hint_strip(cx);
+        let footer = self.main_window_footer_slot(self.clickable_universal_hint_strip(cx));
 
-        crate::components::render_simple_prompt_shell(
-            shell_radius,
-            vibrancy_bg,
-            entity,
-            Some(footer),
-        )
-        .on_key_down(handle_key)
-        .into_any_element()
+        crate::components::render_simple_prompt_shell(shell_radius, vibrancy_bg, entity, footer)
+            .on_key_down(handle_key)
+            .into_any_element()
     }
 
     fn render_select_prompt(
@@ -340,8 +335,11 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(entity),
             )
-            // Shared three-key hint strip footer
-            .child(self.clickable_universal_hint_strip(cx))
+            // Shared three-key hint strip footer (native or GPUI)
+            .when_some(
+                self.main_window_footer_slot(self.clickable_universal_hint_strip(cx)),
+                |d, footer| d.child(footer),
+            )
             .into_any_element()
     }
 
@@ -410,7 +408,10 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_xl))
                     .child(panel),
             )
-            .child(self.clickable_universal_hint_strip(cx))
+            .when_some(
+                self.main_window_footer_slot(self.clickable_universal_hint_strip(cx)),
+                |d, footer| d.child(footer),
+            )
             .into_any_element()
     }
 }

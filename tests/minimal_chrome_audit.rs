@@ -47,6 +47,7 @@ fn clipboard_history_uses_shared_expanded_view_contract() {
     // Layout must route through the shared expanded-view scaffold
     assert!(
         layout_source.contains("render_expanded_view_scaffold_with_hints(")
+            || layout_source.contains("render_expanded_view_scaffold_with_footer(")
             || layout_source.contains("render_expanded_view_scaffold("),
         "clipboard history layout should route through the shared expanded-view scaffold"
     );
@@ -92,7 +93,8 @@ fn file_search_uses_shared_expanded_view_contract() {
     // Live source must route through the shared expanded-view scaffold
     assert!(
         entry_source.contains("render_expanded_view_scaffold(")
-            || entry_source.contains("render_expanded_view_scaffold_with_hints("),
+            || entry_source.contains("render_expanded_view_scaffold_with_hints(")
+            || entry_source.contains("render_expanded_view_scaffold_with_footer("),
         "file search should route through the shared expanded-view scaffold"
     );
 

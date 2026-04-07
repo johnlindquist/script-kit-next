@@ -80,6 +80,68 @@ impl ScriptListApp {
         });
     }
 
+    fn standard_main_window_footer_buttons(
+        &self,
+    ) -> Vec<crate::footer_popup::FooterButtonConfig> {
+        use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+        let mut buttons = vec![FooterButtonConfig::new(FooterAction::Run, "↵", "Run")];
+
+        if self.current_view_supports_shared_actions() {
+            buttons.push(
+                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                    .selected(self.show_actions_popup || crate::actions::is_actions_window_open()),
+            );
+        }
+
+        buttons.push(FooterButtonConfig::new(FooterAction::Ai, "Tab", "ACP Chat"));
+        buttons
+    }
+
+    pub(crate) fn main_window_footer_config(
+        &self,
+    ) -> Option<crate::footer_popup::MainWindowFooterConfig> {
+        use crate::footer_popup::MainWindowFooterConfig;
+
+        let surface = match &self.current_view {
+            AppView::ScriptList => "script_list",
+            AppView::SelectPrompt { .. } => "select_prompt",
+            AppView::DivPrompt { .. } => "div_prompt",
+            AppView::FormPrompt { .. } => "form_prompt",
+            AppView::EditorPrompt { .. } => "editor_prompt",
+            AppView::EnvPrompt { .. } => "env_prompt",
+            AppView::DropPrompt { .. } => "drop_prompt",
+            AppView::TemplatePrompt { .. } => "template_prompt",
+            AppView::MiniPrompt { .. } => "mini_prompt",
+            AppView::ClipboardHistoryView { .. } => "clipboard_history",
+            AppView::FileSearchView { .. } => "file_search",
+            AppView::WebcamView { .. } => "webcam_prompt",
+            AppView::NamingPrompt { .. } => "naming_prompt",
+            AppView::CreationFeedback { .. } => "creation_feedback",
+            _ => return None,
+        };
+
+        Some(MainWindowFooterConfig::new(
+            surface,
+            self.standard_main_window_footer_buttons(),
+        ))
+    }
+
+    pub(crate) fn main_window_uses_native_footer(&self) -> bool {
+        crate::is_main_window_visible() && self.main_window_footer_config().is_some()
+    }
+
+    pub(crate) fn main_window_footer_slot(
+        &self,
+        gpui_footer: gpui::AnyElement,
+    ) -> Option<gpui::AnyElement> {
+        if self.main_window_uses_native_footer() {
+            Some(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
+        } else {
+            Some(gpui_footer)
+        }
+    }
+
     fn handle_main_footer_action(
         &mut self,
         action: crate::footer_popup::FooterAction,
@@ -96,9 +158,7 @@ impl ScriptListApp {
             "Dispatching main-window footer action"
         );
 
-        if !matches!(self.current_view, AppView::ScriptList)
-            || self.main_window_mode != MainWindowMode::Mini
-        {
+        if self.main_window_footer_config().is_none() || !crate::is_main_window_visible() {
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_action_ignored_inactive_surface",
@@ -106,43 +166,34 @@ impl ScriptListApp {
                 action = ?action,
                 view = ?self.current_view,
                 main_window_mode = ?self.main_window_mode,
-                "Ignored main-window footer action because the mini ScriptList footer is not the active surface"
+                "Ignored native footer action because current view is not using the native footer"
             );
             return;
         }
 
-        match action {
-            crate::footer_popup::FooterAction::Run => {
-                self.execute_selected(cx);
-            }
-            crate::footer_popup::FooterAction::Actions => {
-                // Native mini-footer must share the exact same toggle seam as Cmd+K
-                // and the GPUI footer buttons.
-                let handled =
-                    self.dispatch_actions_toggle_for_current_view(window, cx, "native_footer");
-                tracing::info!(
-                    target: "script_kit::footer_popup",
-                    event = "main_window_footer_actions_routed",
-                    source = "native_footer",
-                    handled,
-                    selected_index = self.selected_index,
-                    show_actions_popup = self.show_actions_popup,
-                    actions_window_open = crate::actions::is_actions_window_open(),
-                    "Routed native footer Actions through shared dispatcher"
-                );
-            }
-            crate::footer_popup::FooterAction::Ai => {
-                self.open_tab_ai_chat(cx);
-            }
-        }
+        self.dispatch_main_window_footer_action(action, window, cx, "native_footer");
     }
 
     pub(crate) fn sync_main_footer_popup(&self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         self.ensure_main_footer_action_listener(window, cx);
-        let should_show = matches!(self.current_view, AppView::ScriptList)
-            && self.main_window_mode == MainWindowMode::Mini
-            && crate::is_main_window_visible();
-        crate::footer_popup::sync_main_footer_popup(window, should_show, &mut *cx);
+
+        let config = if crate::is_main_window_visible() {
+            self.main_window_footer_config()
+        } else {
+            None
+        };
+
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "main_window_footer_sync",
+            view = ?self.current_view,
+            show = config.is_some(),
+            surface = config.as_ref().map(|c| c.surface).unwrap_or("none"),
+            button_count = config.as_ref().map(|c| c.buttons.len()).unwrap_or(0),
+            "Syncing native main window footer"
+        );
+
+        crate::footer_popup::sync_main_footer_popup(window, config.as_ref(), &mut *cx);
     }
 
     pub(crate) fn toggle_logs(&mut self, cx: &mut Context<Self>) {

@@ -142,14 +142,12 @@ mod tests {
             "render loop should sync the popup footer when mini mode visibility changes"
         );
         assert!(
-            footer_popup.contains("FOOTER_HINTS: [(FooterAction, &str, &str); 3]")
+            footer_popup.contains("struct FooterButtonConfig")
+                && footer_popup.contains("struct MainWindowFooterConfig")
                 && footer_popup.contains("FooterAction::Run")
                 && footer_popup.contains("FooterAction::Actions")
-                && footer_popup.contains("FooterAction::Ai")
-                && footer_popup.contains("(FooterAction::Run, \"↵\", \"Run\")")
-                && footer_popup.contains("(FooterAction::Actions, \"⌘K\", \"Actions\")")
-                && footer_popup.contains("(FooterAction::Ai, \"Tab\", \"AI\")"),
-            "popup footer should match the universal launcher affordance contract"
+                && footer_popup.contains("FooterAction::Ai"),
+            "popup footer should define config types and all three canonical actions"
         );
     }
 
@@ -183,8 +181,8 @@ mod tests {
         );
     }
 
-    /// Fails if handle_main_footer_action stops dispatching all three actions
-    /// through the canonical ScriptListApp methods.
+    /// Fails if handle_main_footer_action stops dispatching through the
+    /// canonical dispatch_main_window_footer_action method.
     #[test]
     fn test_native_footer_dispatches_all_three_canonical_actions() {
         let content = fs::read_to_string("src/app_impl/ui_window.rs")
@@ -196,59 +194,73 @@ mod tests {
             .expect("handle_main_footer_action must exist in ui_window.rs");
         let handler_section = &content[handler_pos..content.len().min(handler_pos + 3000)];
 
-        // Run dispatches to execute_selected
+        // Must route through the shared dispatch_main_window_footer_action
         assert!(
-            handler_section.contains("FooterAction::Run")
-                && handler_section.contains("execute_selected"),
+            handler_section.contains("dispatch_main_window_footer_action(action"),
+            "handle_main_footer_action must route through dispatch_main_window_footer_action()"
+        );
+
+        // dispatch_main_window_footer_action must dispatch all three actions
+        let dispatcher_pos = content
+            .find("fn dispatch_main_window_footer_action")
+            .expect("dispatch_main_window_footer_action must exist in ui_window.rs");
+        let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 3000)];
+
+        assert!(
+            dispatcher_section.contains("FooterAction::Run")
+                && dispatcher_section.contains("execute_selected"),
             "FooterAction::Run must dispatch to execute_selected()"
         );
-
-        // Actions dispatches through the shared actions toggle dispatcher
         assert!(
-            handler_section.contains("FooterAction::Actions")
-                && handler_section.contains("dispatch_actions_toggle_for_current_view"),
+            dispatcher_section.contains("FooterAction::Actions")
+                && dispatcher_section.contains("dispatch_actions_toggle_for_current_view"),
             "FooterAction::Actions must dispatch through dispatch_actions_toggle_for_current_view()"
         );
-
-        // Ai dispatches to open_tab_ai_chat
         assert!(
-            handler_section.contains("FooterAction::Ai")
-                && handler_section.contains("open_tab_ai_chat"),
+            dispatcher_section.contains("FooterAction::Ai")
+                && dispatcher_section.contains("open_tab_ai_chat"),
             "FooterAction::Ai must dispatch to open_tab_ai_chat()"
         );
     }
 
     /// Fails if the native footer Actions dispatch stops using the shared toggle
-    /// dispatcher. The shared dispatcher (`dispatch_actions_toggle_for_current_view`)
-    /// handles the has_actions() gating internally, so the native footer must
-    /// delegate to it rather than duplicating its own gate.
+    /// dispatcher. The shared dispatcher (`dispatch_main_window_footer_action` →
+    /// `dispatch_actions_toggle_for_current_view`) handles the has_actions()
+    /// gating internally, so the native footer must delegate to it.
     #[test]
     fn test_native_footer_actions_gated_by_has_actions() {
         let content = fs::read_to_string("src/app_impl/ui_window.rs")
             .expect("Failed to read src/app_impl/ui_window.rs");
 
+        // handle_main_footer_action must route through dispatch_main_window_footer_action
         let handler_pos = content
             .find("fn handle_main_footer_action")
             .expect("handle_main_footer_action must exist in ui_window.rs");
         let handler_section = &content[handler_pos..content.len().min(handler_pos + 3000)];
+        assert!(
+            handler_section.contains("dispatch_main_window_footer_action(action"),
+            "Native footer handler must route through dispatch_main_window_footer_action"
+        );
 
-        // The Actions arm must use the shared dispatcher which gates on has_actions() internally
-        let actions_pos = handler_section
+        // dispatch_main_window_footer_action must dispatch Actions through the shared dispatcher
+        let dispatcher_pos = content
+            .find("fn dispatch_main_window_footer_action")
+            .expect("dispatch_main_window_footer_action must exist");
+        let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 3000)];
+        let actions_pos = dispatcher_section
             .find("FooterAction::Actions")
-            .expect("FooterAction::Actions arm must exist");
+            .expect("FooterAction::Actions arm must exist in dispatcher");
         let after_actions =
-            &handler_section[actions_pos..handler_section.len().min(actions_pos + 600)];
-
+            &dispatcher_section[actions_pos..dispatcher_section.len().min(actions_pos + 600)];
         assert!(
             after_actions.contains("dispatch_actions_toggle_for_current_view"),
-            "Native footer Actions dispatch must use the shared dispatcher (dispatch_actions_toggle_for_current_view). Found:\n{}",
-            after_actions
+            "Native footer Actions dispatch must use the shared dispatcher (dispatch_actions_toggle_for_current_view)"
         );
     }
 
-    /// Fails if the native footer bridge stops guarding against non-mini or
-    /// non-ScriptList views. The native AppKit footer only applies when the
-    /// mini main window is showing the script list.
+    /// Fails if the native footer bridge stops guarding against views that
+    /// don't support the native footer. The handler must check the view-driven
+    /// footer config resolver before dispatching.
     #[test]
     fn test_native_footer_guards_mini_scriptlist_surface() {
         let content = fs::read_to_string("src/app_impl/ui_window.rs")
@@ -260,12 +272,12 @@ mod tests {
         let handler_section = &content[handler_pos..content.len().min(handler_pos + 1500)];
 
         assert!(
-            handler_section.contains("AppView::ScriptList"),
-            "Native footer handler must check for AppView::ScriptList"
+            handler_section.contains("main_window_footer_config()"),
+            "Native footer handler must check main_window_footer_config() to guard dispatch"
         );
         assert!(
-            handler_section.contains("MainWindowMode::Mini"),
-            "Native footer handler must check for MainWindowMode::Mini"
+            handler_section.contains("is_main_window_visible()"),
+            "Native footer handler must check window visibility"
         );
     }
 
