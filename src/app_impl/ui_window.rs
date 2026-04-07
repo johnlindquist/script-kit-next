@@ -48,7 +48,8 @@ impl ScriptListApp {
     ) {
         tracing::info!(
             target: "script_kit::footer_popup",
-            event = "native_footer_action_received",
+            event = "main_window_footer_action_dispatch",
+            source = "native_footer",
             action = ?action,
             view = ?self.current_view,
             main_window_mode = ?self.main_window_mode,
@@ -74,19 +75,7 @@ impl ScriptListApp {
                 self.execute_selected(cx);
             }
             crate::footer_popup::FooterAction::Actions => {
-                if self.has_actions()
-                    || self.show_actions_popup
-                    || crate::actions::is_actions_window_open()
-                {
-                    self.toggle_actions(cx, window);
-                } else {
-                    tracing::info!(
-                        target: "script_kit::footer_popup",
-                        event = "native_footer_actions_ignored_no_actions",
-                        selected_index = self.selected_index,
-                        "Ignored native footer actions click because the current selection has no actions"
-                    );
-                }
+                self.dispatch_actions_toggle_for_current_view(window, cx, "native_footer");
             }
             crate::footer_popup::FooterAction::Ai => {
                 self.open_tab_ai_chat(cx);
