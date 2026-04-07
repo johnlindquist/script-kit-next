@@ -54,6 +54,7 @@ pub use color_resolver::{
 };
 
 // Re-export loader functions
+#[allow(unused_imports)] // Re-exported for the library target and startup paths.
 pub use types::load_theme;
 
 // Re-export cached theme access (use in render code instead of load_theme)

@@ -800,3 +800,71 @@ pub fn render_hint_icons_clickable(hints: Vec<ClickableHint>, text_rgba: u32) ->
 
     row.into_any_element()
 }
+
+/// A hint label with click handler and optional selected/toggle state.
+pub struct SelectableHint {
+    pub label: &'static str,
+    pub on_click: Option<HintClickHandler>,
+    pub selected: bool,
+}
+
+impl SelectableHint {
+    pub fn new(
+        label: &'static str,
+        on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        Self {
+            label,
+            on_click: Some(Rc::new(on_click)),
+            selected: false,
+        }
+    }
+
+    pub fn selected(mut self, selected: bool) -> Self {
+        self.selected = selected;
+        self
+    }
+}
+
+/// Render hint icons with per-hint click handlers and optional selected state.
+///
+/// Selected hints show a persistent `selection_rgba` background (like the ACP
+/// chat Actions toggle). Uses the same icon-aware rendering as the ACP footer.
+pub fn render_selectable_hint_icons(hints: Vec<SelectableHint>, text_rgba: u32) -> AnyElement {
+    let theme = crate::theme::get_cached_theme();
+    let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+    let hover_bg = rgba(chrome.hover_rgba);
+    let active_bg = rgba(chrome.selection_rgba);
+    let color: gpui::Hsla = rgba(text_rgba).into();
+
+    let mut row = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(HINT_STRIP_CONTENT_GAP));
+
+    for (i, hint) in hints.into_iter().enumerate() {
+        let element = parse_hint(hint.label);
+        let hint_content = render_hint_element_hsla(element, color);
+        let is_selected = hint.selected;
+
+        let mut button = div()
+            .id(SharedString::from(format!("hint-sel-{i}")))
+            .cursor_pointer()
+            .px(px(HINT_BUTTON_PADDING_X))
+            .py(px(HINT_BUTTON_PADDING_Y))
+            .rounded(px(HINT_BUTTON_RADIUS))
+            .when(is_selected, |d| d.bg(active_bg))
+            .hover(move |s| s.bg(hover_bg))
+            .active(move |s| s.bg(active_bg))
+            .child(hint_content);
+
+        if let Some(handler) = hint.on_click {
+            button = button.on_click(move |event, window, cx| handler(event, window, cx));
+        }
+
+        row = row.child(button);
+    }
+
+    row.into_any_element()
+}

@@ -3,8 +3,6 @@ const CLIPBOARD_HISTORY_ENTRY_SOURCE: &str = include_str!("../../src/render_buil
 const CLIPBOARD_HISTORY_LAYOUT_SOURCE: &str =
     include_str!("../../src/render_builtins/clipboard_history_layout.rs");
 const FILE_SEARCH_ENTRY_SOURCE: &str = include_str!("../../src/render_builtins/file_search.rs");
-const FILE_SEARCH_LAYOUT_SOURCE: &str =
-    include_str!("../../src/render_builtins/file_search_layout.rs");
 
 // file_search_layout.rs is now a legacy stub — expanded/mini contract
 // assertions use the live file_search.rs entry source instead.
@@ -138,7 +136,8 @@ fn file_search_mini_footer_uses_live_hint_contract() {
         "file_search should emit a prompt hint audit"
     );
     assert!(
-        FILE_SEARCH_ENTRY_SOURCE.contains("let file_search_hints = if let Some(file) = selected_file.as_ref()")
+        FILE_SEARCH_ENTRY_SOURCE
+            .contains("let file_search_hints = if let Some(file) = selected_file.as_ref()")
             && FILE_SEARCH_ENTRY_SOURCE.contains("render_minimal_list_prompt_scaffold("),
         "file_search mini mode should compute live hints and route them through the minimal scaffold"
     );
