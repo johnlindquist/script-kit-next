@@ -57,6 +57,38 @@ fn kit_sdk_mentions_current_public_config_fields() {
 }
 
 #[test]
+fn kit_sdk_yields_focus_before_set_selected_text() {
+    let sdk = include_str!("../scripts/kit-sdk.ts");
+    let set_fn_start = sdk
+        .find("globalThis.setSelectedText")
+        .expect("kit-sdk.ts must define setSelectedText");
+    let get_fn_start = sdk[set_fn_start..]
+        .find("globalThis.getSelectedText")
+        .map(|offset| set_fn_start + offset)
+        .expect("setSelectedText block must end before getSelectedText");
+    let set_block = &sdk[set_fn_start..get_fn_start];
+
+    let hide_pos = set_block
+        .find("await hide();")
+        .expect("setSelectedText must hide before pasting into the frontmost app");
+    let delay_pos = set_block
+        .find("await new Promise(r => setTimeout(r, 20));")
+        .expect("setSelectedText must briefly yield focus before sending the paste request");
+    let send_pos = set_block
+        .find("const message: SetSelectedTextMessage")
+        .expect("setSelectedText must send a protocol request");
+
+    assert!(
+        hide_pos < delay_pos,
+        "setSelectedText must wait only after it has hidden the main window"
+    );
+    assert!(
+        delay_pos < send_pos,
+        "setSelectedText must hide and yield focus before sending the paste request"
+    );
+}
+
+#[test]
 fn config_cli_known_top_level_is_current() {
     let cli = include_str!("../scripts/config-cli.ts");
     for field in [
