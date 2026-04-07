@@ -93,6 +93,10 @@ impl AiApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.presets.is_empty() {
+            self.hide_presets_dropdown(cx);
+            return;
+        }
         let selected_index = self.selected_preset_dropdown_index();
         let preset_name = self
             .presets
