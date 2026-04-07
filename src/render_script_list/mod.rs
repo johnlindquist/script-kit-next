@@ -1116,7 +1116,19 @@ impl ScriptListApp {
                         this.execute_selected(cx);
                     }),
                     cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-                        this.toggle_actions(cx, window);
+                        if this.has_actions()
+                            || this.show_actions_popup
+                            || crate::actions::is_actions_window_open()
+                        {
+                            this.toggle_actions(cx, window);
+                        } else {
+                            tracing::info!(
+                                target: "script_kit::prompt_chrome",
+                                event = "render_script_list_footer_actions_ignored_no_actions",
+                                selected_index = this.selected_index,
+                                "Ignored ScriptList footer actions click because the current selection has no actions"
+                            );
+                        }
                     }),
                     cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
                         this.open_tab_ai_chat(cx);

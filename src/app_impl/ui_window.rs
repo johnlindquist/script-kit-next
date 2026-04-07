@@ -1,4 +1,7 @@
 use super::*;
+use std::sync::Once;
+
+static MAIN_FOOTER_ACTION_LISTENER: Once = Once::new();
 
 /// Thin wrapper delegating to the canonical implementation in `window_resize`.
 fn mini_main_window_sizing_from_grouped_items(
@@ -8,11 +11,95 @@ fn mini_main_window_sizing_from_grouped_items(
 }
 
 impl ScriptListApp {
+    /// Start a one-time async bridge that drains `footer_action_channel()` and
+    /// dispatches each action into the existing `ScriptListApp` methods.
+    fn ensure_main_footer_action_listener(&self, window: &Window, cx: &mut Context<Self>) {
+        MAIN_FOOTER_ACTION_LISTENER.call_once(|| {
+            let rx = crate::footer_popup::footer_action_channel().1.clone();
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "native_footer_listener_started",
+                "Started native footer action listener"
+            );
+            cx.spawn_in(window, async move |this, cx| {
+                while let Ok(action) = rx.recv().await {
+                    if let Err(error) = this.update_in(cx, |app, window, cx| {
+                        app.handle_main_footer_action(action, window, cx);
+                    }) {
+                        tracing::warn!(
+                            target: "script_kit::footer_popup",
+                            event = "native_footer_action_dispatch_failed",
+                            action = ?action,
+                            %error,
+                            "Failed to dispatch native footer action into ScriptListApp"
+                        );
+                    }
+                }
+            })
+            .detach();
+        });
+    }
+
+    fn handle_main_footer_action(
+        &mut self,
+        action: crate::footer_popup::FooterAction,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "native_footer_action_received",
+            action = ?action,
+            view = ?self.current_view,
+            main_window_mode = ?self.main_window_mode,
+            "Dispatching native footer action"
+        );
+
+        if !matches!(self.current_view, AppView::ScriptList)
+            || self.main_window_mode != MainWindowMode::Mini
+        {
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "native_footer_action_ignored_inactive_surface",
+                action = ?action,
+                view = ?self.current_view,
+                main_window_mode = ?self.main_window_mode,
+                "Ignored native footer action because the mini ScriptList footer is not the active surface"
+            );
+            return;
+        }
+
+        match action {
+            crate::footer_popup::FooterAction::Run => {
+                self.execute_selected(cx);
+            }
+            crate::footer_popup::FooterAction::Actions => {
+                if self.has_actions()
+                    || self.show_actions_popup
+                    || crate::actions::is_actions_window_open()
+                {
+                    self.toggle_actions(cx, window);
+                } else {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "native_footer_actions_ignored_no_actions",
+                        selected_index = self.selected_index,
+                        "Ignored native footer actions click because the current selection has no actions"
+                    );
+                }
+            }
+            crate::footer_popup::FooterAction::Ai => {
+                self.open_tab_ai_chat(cx);
+            }
+        }
+    }
+
     pub(crate) fn sync_main_footer_popup(
         &self,
         window: &mut gpui::Window,
         cx: &mut Context<Self>,
     ) {
+        self.ensure_main_footer_action_listener(window, cx);
         let should_show = matches!(self.current_view, AppView::ScriptList)
             && self.main_window_mode == MainWindowMode::Mini
             && crate::is_main_window_visible();
