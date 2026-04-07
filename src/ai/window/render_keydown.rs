@@ -272,8 +272,8 @@ impl AiApp {
                     cx.stop_propagation();
                     return;
                 }
-                k if is_key_enter(k) => {
-                    self.create_chat_with_preset(window, cx);
+                k if is_key_enter(k) || is_key_tab(k) => {
+                    self.confirm_presets_selection(window, cx);
                     cx.stop_propagation();
                     return;
                 }

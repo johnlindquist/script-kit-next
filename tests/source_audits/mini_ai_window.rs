@@ -1611,3 +1611,78 @@ fn mini_history_panel_buttons_delegate_correctly() {
         "Mini history close button must call dismiss_mini_history_overlay"
     );
 }
+
+// ── Presets InlineDropdown adoption source audit ────────────────────
+
+#[test]
+fn presets_dropdown_renders_through_inline_dropdown_component() {
+    // After the InlineDropdown migration, the presets overlay must render
+    // through the shared InlineDropdown component, not bespoke panel/list code.
+    let overlay_src = read("src/ai/window/render_overlays_dropdowns.rs");
+
+    // Must import InlineDropdown types
+    assert!(
+        overlay_src.contains("InlineDropdown"),
+        "render_overlays_dropdowns.rs must use InlineDropdown component"
+    );
+    assert!(
+        overlay_src.contains("InlineDropdownColors"),
+        "render_overlays_dropdowns.rs must use InlineDropdownColors"
+    );
+
+    // Must construct InlineDropdown::new with the presets ID
+    assert!(
+        overlay_src.contains("InlineDropdown::new("),
+        "presets must construct an InlineDropdown instance"
+    );
+    assert!(
+        overlay_src.contains("\"presets-dropdown\""),
+        "presets InlineDropdown must use 'presets-dropdown' ID"
+    );
+
+    // Must use shared visible range helper (not manual skip/take with hardcoded offsets)
+    assert!(
+        overlay_src.contains("inline_dropdown_visible_range"),
+        "presets overlay must use inline_dropdown_visible_range for row windowing"
+    );
+
+    // Must support empty state
+    assert!(
+        overlay_src.contains("InlineDropdownEmptyState"),
+        "presets overlay must provide InlineDropdownEmptyState for zero-preset case"
+    );
+
+    // Must support synopsis
+    assert!(
+        overlay_src.contains("InlineDropdownSynopsis"),
+        "presets overlay must provide InlineDropdownSynopsis for selected preset info"
+    );
+}
+
+#[test]
+fn presets_dropdown_preserves_overlay_dismiss_on_click_outside() {
+    // The presets dropdown must still dismiss when clicking outside, using the
+    // same overlay pattern as before the InlineDropdown migration.
+    let overlay_src = read("src/ai/window/render_overlays_dropdowns.rs");
+
+    assert!(
+        overlay_src.contains("presets-dropdown-overlay"),
+        "presets overlay must have a click-outside overlay element"
+    );
+    assert!(
+        overlay_src.contains("hide_presets_dropdown"),
+        "overlay click handler must call hide_presets_dropdown"
+    );
+}
+
+#[test]
+fn presets_dropdown_uses_dense_monoline_picker_rows() {
+    // The presets dropdown must render rows using the shared dense monoline
+    // picker row renderer, matching the visual style of ACP and context pickers.
+    let overlay_src = read("src/ai/window/render_overlays_dropdowns.rs");
+
+    assert!(
+        overlay_src.contains("render_dense_monoline_picker_row_with_accessory"),
+        "presets must render rows with the shared dense monoline picker renderer"
+    );
+}
