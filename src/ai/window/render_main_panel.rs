@@ -184,9 +184,7 @@ impl AiApp {
                     .when(self.is_context_picker_open(), |d| {
                         d.child(self.render_context_picker(cx))
                     })
-                    .when(has_pending_context_parts, |d| {
-                        d.child(self.render_pending_context_chips(cx))
-                    })
+                    // Context chips removed — attachments are now inline @type:name tokens.
                     .when(has_pending_image, |d| {
                         d.child(
                             div()
@@ -388,10 +386,7 @@ impl AiApp {
             .when(self.is_context_picker_open(), |d| {
                 d.child(self.render_context_picker(cx))
             })
-            // Pending context part chips (shown above input when parts are attached)
-            .when(has_pending_context_parts, |d| {
-                d.child(self.render_pending_context_chips(cx))
-            })
+            // Context chips removed — attachments are now inline @type:name tokens.
             // Pending image preview (shown above input when image is attached)
             .when(has_pending_image, |d| {
                 d.child(self.render_pending_image_preview(cx))
@@ -1228,6 +1223,7 @@ impl AiApp {
     /// Each ResourceUri chip includes an expand/collapse chevron that toggles
     /// an inline preview panel showing the source URI, profile, and payload
     /// summary. FilePath chips show only the close button (no preview needed).
+    #[allow(dead_code)]
     fn render_pending_context_chips(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let accent = cx.theme().accent;
         let muted_fg = cx.theme().muted_foreground;

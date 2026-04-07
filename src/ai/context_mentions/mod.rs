@@ -72,22 +72,33 @@ fn trim_inline_token_trailing_punctuation(token: &str) -> &str {
 }
 
 /// Scan a single inline token starting at `start` (which must be `@`).
-/// Handles quoted `@file:"..."` / `@file:'...'` tokens that may contain
-/// spaces and escape sequences. Returns `(raw_token, next_index)`.
+/// Handles quoted `@word:"..."` / `@word:'...'` tokens (any prefix, not just
+/// `@file:`) that may contain spaces and escape sequences.
+/// Returns `(raw_token, next_index)`.
 fn scan_inline_token(chars: &[char], start: usize) -> (String, usize) {
-    // Check for `@file:` prefix followed by a quote
-    let is_file_prefix = chars.len() > start + 6
-        && chars[start] == '@'
-        && chars[start + 1] == 'f'
-        && chars[start + 2] == 'i'
-        && chars[start + 3] == 'l'
-        && chars[start + 4] == 'e'
-        && chars[start + 5] == ':';
+    // Look for `@word:` prefix followed by a quote — generalized from @file: only.
+    // Scan ahead for a colon within the first ~10 chars after @.
+    let mut colon_pos = None;
+    for (offset, &ch) in chars
+        .get(start + 1..chars.len().min(start + 12))
+        .unwrap_or(&[])
+        .iter()
+        .enumerate()
+    {
+        if ch == ':' {
+            colon_pos = Some(start + 1 + offset);
+            break;
+        }
+        if ch.is_whitespace() || ch == '@' {
+            break;
+        }
+    }
 
-    if is_file_prefix {
-        if let Some(&quote) = chars.get(start + 6) {
+    if let Some(cp) = colon_pos {
+        // Check if char after colon is a quote
+        if let Some(&quote) = chars.get(cp + 1) {
             if quote == '"' || quote == '\'' {
-                let mut i = start + 7;
+                let mut i = cp + 2;
                 let mut escaped = false;
                 while i < chars.len() {
                     let ch = chars[i];
@@ -140,7 +151,7 @@ fn unescape_quoted_path(path: &str) -> String {
 
 /// Format a file path as a canonical inline `@file:` token, quoting paths
 /// that contain whitespace.
-fn format_inline_file_token(path: &str) -> String {
+pub(crate) fn format_inline_file_token(path: &str) -> String {
     if path.chars().any(char::is_whitespace) {
         format!(
             "@file:\"{}\"",
@@ -151,10 +162,102 @@ fn format_inline_file_token(path: &str) -> String {
     }
 }
 
+/// Maximum display name length for typed mention tokens.
+const TYPED_MENTION_NAME_MAX_LEN: usize = 7;
+
+/// Map a file extension to a short type prefix for typed mentions.
+pub(crate) fn typed_mention_prefix(path: &str) -> &'static str {
+    let p = Path::new(path);
+
+    // Directories first.
+    if p.extension().is_none() && !path.contains('.') {
+        // Heuristic: no extension and no dots = likely a directory or binary.
+        // For actual directory detection, the caller would need to check fs.
+        // We default to "file" and let the caller override for known dirs.
+        return "file";
+    }
+
+    match p
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase()
+        .as_str()
+    {
+        "rs" => "rs",
+        "ts" | "tsx" => "ts",
+        "js" | "jsx" | "mjs" | "cjs" => "js",
+        "py" => "py",
+        "rb" => "rb",
+        "go" => "go",
+        "java" => "java",
+        "swift" => "swift",
+        "c" | "h" => "c",
+        "cpp" | "cc" | "cxx" | "hpp" => "cpp",
+        "md" | "mdx" => "md",
+        "json" => "json",
+        "toml" => "toml",
+        "yaml" | "yml" => "yaml",
+        "xml" => "xml",
+        "html" | "htm" => "html",
+        "css" | "scss" | "less" => "css",
+        "sh" | "bash" | "zsh" | "fish" => "sh",
+        "png" | "jpg" | "jpeg" | "gif" | "svg" | "webp" | "ico" | "bmp" | "tiff" => "img",
+        "mp4" | "mov" | "avi" | "mkv" | "webm" => "vid",
+        "mp3" | "wav" | "flac" | "ogg" | "aac" => "audio",
+        "sql" => "sql",
+        "txt" | "log" => "txt",
+        _ => "file",
+    }
+}
+
+/// Map a file path to a "dir" prefix if it looks like a directory.
+pub(crate) fn typed_mention_prefix_for_dir() -> &'static str {
+    "dir"
+}
+
+/// Extract a short display name from a file path: filename without extension,
+/// truncated to `TYPED_MENTION_NAME_MAX_LEN` characters.
+pub(crate) fn typed_mention_display_name(path: &str) -> String {
+    let p = Path::new(path);
+    let stem = p
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or_else(|| p.file_name().and_then(|n| n.to_str()).unwrap_or("file"));
+
+    let mut name: String = stem.chars().take(TYPED_MENTION_NAME_MAX_LEN).collect();
+    if stem.len() > TYPED_MENTION_NAME_MAX_LEN {
+        name.push('\u{2026}'); // ellipsis
+    }
+    name
+}
+
+/// Format a typed mention token: `@type:name` or `@type:"name with spaces"`.
+pub(crate) fn format_typed_mention_token(prefix: &str, name: &str) -> String {
+    if name.chars().any(|ch| ch.is_whitespace()) {
+        format!(
+            "@{prefix}:\"{}\"",
+            name.replace('\\', "\\\\").replace('"', "\\\"")
+        )
+    } else {
+        format!("@{prefix}:{name}")
+    }
+}
+
 /// Scan `text` for inline `@mention` tokens and resolve each to an
 /// `AiContextPart`. Supports built-in mentions (`@browser`, `@git-status`,
-/// etc.) and file mentions (`@file:/path`), including quoted paths with spaces.
+/// etc.), file mentions (`@file:/path`), and typed mentions (`@type:name`)
+/// via the session alias registry.
 pub fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMention> {
+    parse_inline_context_mentions_with_aliases(text, &std::collections::HashMap::new())
+}
+
+/// Parse inline mentions with a session-local alias registry for typed
+/// `@type:name` tokens. Aliases map short display tokens to full `AiContextPart`s.
+pub fn parse_inline_context_mentions_with_aliases(
+    text: &str,
+    aliases: &std::collections::HashMap<String, AiContextPart>,
+) -> Vec<InlineContextMention> {
     let chars: Vec<char> = text.chars().collect();
     let mut out = Vec::new();
     let mut i = 0;
@@ -177,7 +280,10 @@ pub fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMention> {
         let trimmed_char_len = trimmed.chars().count();
         let end = start + trimmed_char_len;
 
-        let part = resolve_builtin_mention_token(trimmed).or_else(|| parse_file_mention(trimmed));
+        // Resolution order: built-in → @file:/path → alias registry
+        let part = resolve_builtin_mention_token(trimmed)
+            .or_else(|| parse_file_mention(trimmed))
+            .or_else(|| aliases.get(trimmed).cloned());
 
         if let Some(part) = part {
             let canonical_token =
@@ -205,7 +311,16 @@ pub fn parse_inline_context_mentions(text: &str) -> Vec<InlineContextMention> {
 /// covers `cursor`. Returns `None` when the cursor is not inside or at the
 /// boundary of any recognised mention.
 pub fn mention_range_at_cursor(text: &str, cursor: usize) -> Option<std::ops::Range<usize>> {
-    parse_inline_context_mentions(text)
+    mention_range_at_cursor_with_aliases(text, cursor, &std::collections::HashMap::new())
+}
+
+/// Alias-aware variant of `mention_range_at_cursor`.
+pub fn mention_range_at_cursor_with_aliases(
+    text: &str,
+    cursor: usize,
+    aliases: &std::collections::HashMap<String, AiContextPart>,
+) -> Option<std::ops::Range<usize>> {
+    parse_inline_context_mentions_with_aliases(text, aliases)
         .into_iter()
         .find(|mention| cursor > mention.range.start && cursor <= mention.range.end)
         .map(|mention| mention.range)
@@ -221,19 +336,35 @@ pub fn mention_range_for_atomic_delete(
     cursor: usize,
     delete_forward: bool,
 ) -> Option<std::ops::Range<usize>> {
+    mention_range_for_atomic_delete_with_aliases(
+        text,
+        cursor,
+        delete_forward,
+        &std::collections::HashMap::new(),
+    )
+}
+
+/// Alias-aware variant of `mention_range_for_atomic_delete`.
+pub fn mention_range_for_atomic_delete_with_aliases(
+    text: &str,
+    cursor: usize,
+    delete_forward: bool,
+    aliases: &std::collections::HashMap<String, AiContextPart>,
+) -> Option<std::ops::Range<usize>> {
     if !delete_forward {
-        return mention_range_at_cursor(text, cursor);
+        return mention_range_at_cursor_with_aliases(text, cursor, aliases);
     }
-    if let Some(range) = mention_range_at_cursor(text, cursor) {
+    if let Some(range) = mention_range_at_cursor_with_aliases(text, cursor, aliases) {
         return Some(range);
     }
-    mention_range_at_cursor(text, cursor.saturating_add(1)).filter(|range| cursor == range.start)
+    mention_range_at_cursor_with_aliases(text, cursor.saturating_add(1), aliases)
+        .filter(|range| cursor == range.start)
 }
 
 /// Convert an `AiContextPart` back to its canonical inline `@token` form.
 ///
-/// Returns `None` for parts that have no inline mention representation
-/// (e.g. `FocusedTarget`, `AmbientContext`).
+/// Uses typed `@type:name` format for files, commands, and ambient context.
+/// Built-in `ResourceUri` parts use their existing `@mention` tokens.
 pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
     match part {
         AiContextPart::ResourceUri { uri, .. } => {
@@ -243,9 +374,43 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
                 .and_then(|spec| spec.mention)
                 .map(ToString::to_string)
         }
-        AiContextPart::FilePath { path, .. } => Some(format_inline_file_token(path)),
-        _ => None,
+        AiContextPart::FilePath { path, .. } => {
+            let prefix = typed_mention_prefix(path);
+            let name = typed_mention_display_name(path);
+            Some(format_typed_mention_token(prefix, &name))
+        }
+        AiContextPart::FocusedTarget { label, .. } => {
+            let name = label
+                .chars()
+                .take(TYPED_MENTION_NAME_MAX_LEN)
+                .collect::<String>();
+            let name = if label.len() > TYPED_MENTION_NAME_MAX_LEN {
+                format!("{name}\u{2026}")
+            } else {
+                name
+            };
+            Some(format_typed_mention_token("cmd", &name))
+        }
+        AiContextPart::AmbientContext { label } => {
+            let name = label
+                .chars()
+                .take(TYPED_MENTION_NAME_MAX_LEN)
+                .collect::<String>();
+            let name = if label.len() > TYPED_MENTION_NAME_MAX_LEN {
+                format!("{name}\u{2026}")
+            } else {
+                name
+            };
+            Some(format_typed_mention_token("env", &name))
+        }
     }
+}
+
+/// Legacy format for backward compatibility — used only by the parser to
+/// recognize manually typed `@file:/path` tokens.
+#[allow(dead_code)]
+fn format_inline_file_token_legacy(path: &str) -> String {
+    format_inline_file_token(path)
 }
 
 /// Returns `true` when the provider-backed mention kind has real data
@@ -305,9 +470,9 @@ fn parse_file_mention(trimmed: &str) -> Option<AiContextPart> {
 
 mod sync;
 pub(crate) use sync::{
-    build_inline_mention_sync_plan, caret_after_replacement, remove_inline_mention_at_cursor,
-    replace_text_in_char_range, should_claim_inline_mention_ownership,
-    visible_context_chip_indices, InlineMentionSyncPlan,
+    build_inline_mention_sync_plan, build_inline_mention_sync_plan_with_aliases,
+    caret_after_replacement, remove_inline_mention_at_cursor, replace_text_in_char_range,
+    should_claim_inline_mention_ownership, visible_context_chip_indices, InlineMentionSyncPlan,
 };
 
 #[cfg(test)]

@@ -120,10 +120,12 @@ impl ScriptListApp {
                 view.live_thread().update(cx, |thread, cx| {
                     thread.input.set_text(new_text);
                     thread.input.set_cursor(new_cursor);
-                    thread.add_context_part(part, cx);
+                    thread.add_context_part(part.clone(), cx);
                     cx.notify();
                 });
 
+                // Register alias so the parser can resolve this typed token.
+                view.register_typed_alias(inline_token.clone(), part);
                 // Register inline ownership so deleting the mention removes the part.
                 view.register_inline_owned_token(inline_token);
                 cx.notify();

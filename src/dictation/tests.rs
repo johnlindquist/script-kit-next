@@ -4593,8 +4593,7 @@ fn main_window_filter_delivery_can_reset_to_script_list_and_reveal_main() {
     let handler_start = builtin_src
         .find("fn handle_dictation_transcript")
         .expect("handler must exist");
-    let handler_src =
-        &builtin_src[handler_start..handler_start + 5000.min(builtin_src.len() - handler_start)];
+    let handler_src = &builtin_src[handler_start..];
 
     assert!(
         handler_src.contains("self.reset_to_script_list(cx);"),
