@@ -197,11 +197,11 @@ mod tests {
             "FooterAction::Run must dispatch to execute_selected()"
         );
 
-        // Actions dispatches to toggle_actions
+        // Actions dispatches through the shared actions toggle dispatcher
         assert!(
             handler_section.contains("FooterAction::Actions")
-                && handler_section.contains("toggle_actions"),
-            "FooterAction::Actions must dispatch to toggle_actions()"
+                && handler_section.contains("dispatch_actions_toggle_for_current_view"),
+            "FooterAction::Actions must dispatch through dispatch_actions_toggle_for_current_view()"
         );
 
         // Ai dispatches to open_tab_ai_chat
@@ -212,9 +212,10 @@ mod tests {
         );
     }
 
-    /// Fails if the native footer Actions dispatch stops gating on has_actions().
-    /// Without this gate, clicking ⌘K Actions when no actions exist would open
-    /// an empty popup instead of no-oping.
+    /// Fails if the native footer Actions dispatch stops using the shared toggle
+    /// dispatcher. The shared dispatcher (`dispatch_actions_toggle_for_current_view`)
+    /// handles the has_actions() gating internally, so the native footer must
+    /// delegate to it rather than duplicating its own gate.
     #[test]
     fn test_native_footer_actions_gated_by_has_actions() {
         let content = fs::read_to_string("src/app_impl/ui_window.rs")
@@ -225,7 +226,7 @@ mod tests {
             .expect("handle_main_footer_action must exist in ui_window.rs");
         let handler_section = &content[handler_pos..content.len().min(handler_pos + 3000)];
 
-        // The Actions arm must check has_actions() before opening the popup
+        // The Actions arm must use the shared dispatcher which gates on has_actions() internally
         let actions_pos = handler_section
             .find("FooterAction::Actions")
             .expect("FooterAction::Actions arm must exist");
@@ -233,8 +234,8 @@ mod tests {
             &handler_section[actions_pos..handler_section.len().min(actions_pos + 600)];
 
         assert!(
-            after_actions.contains("has_actions()"),
-            "Native footer Actions dispatch must gate on has_actions(). Found:\n{}",
+            after_actions.contains("dispatch_actions_toggle_for_current_view"),
+            "Native footer Actions dispatch must use the shared dispatcher (dispatch_actions_toggle_for_current_view). Found:\n{}",
             after_actions
         );
     }
