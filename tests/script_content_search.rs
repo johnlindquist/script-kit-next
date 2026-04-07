@@ -312,3 +312,55 @@ fn empty_query_returns_all_scripts_without_content_match() {
         assert_eq!(r.match_kind, ScriptMatchKind::Name);
     }
 }
+
+// ── Dominant primary-text field regression ─────────────────────────────
+
+#[test]
+fn alias_match_does_not_block_content_snippet_when_name_and_description_do_not_match() {
+    let scripts = vec![Arc::new(Script {
+        name: "utility".to_string(),
+        path: PathBuf::from("/tmp/test-scripts/utility.ts"),
+        extension: "ts".to_string(),
+        description: None,
+        icon: None,
+        alias: Some("tok".to_string()),
+        shortcut: None,
+        typed_metadata: None,
+        schema: None,
+        kit_name: Some("test".to_string()),
+        body: Some("const tok = 1;\n".to_string()),
+    })];
+
+    let results = fuzzy_search_scripts(&scripts, "tok");
+    assert_eq!(results.len(), 1);
+    // Alias contributes 80 + content contributes 5 = 85
+    assert_eq!(results[0].score, 85);
+    // No primary text field (name/filename/description) matched, so match_kind is Content
+    assert_eq!(results[0].match_kind, ScriptMatchKind::Content);
+    assert_eq!(
+        results[0].content_match.as_ref().map(|cm| cm.line_number),
+        Some(1)
+    );
+}
+
+#[test]
+fn filename_match_remains_primary_when_body_also_matches() {
+    let scripts = vec![Arc::new(Script {
+        name: "launcher".to_string(),
+        path: PathBuf::from("/tmp/test-scripts/utility.ts"),
+        extension: "ts".to_string(),
+        description: None,
+        icon: None,
+        alias: None,
+        shortcut: None,
+        typed_metadata: None,
+        schema: None,
+        kit_name: Some("test".to_string()),
+        body: Some("import './utility.ts';\n".to_string()),
+    })];
+
+    let results = fuzzy_search_scripts(&scripts, "utility.ts");
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].match_kind, ScriptMatchKind::Filename);
+    assert!(results[0].content_match.is_none());
+}

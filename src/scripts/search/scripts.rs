@@ -35,6 +35,25 @@ const SCORE_DESC_FUZZY_DIV: u32 = 30;
 const SCORE_PATH_SUBSTRING: i32 = 10;
 const SCORE_CONTENT_MATCH: i32 = 5;
 
+fn dominant_primary_text_match_kind(
+    name_score: i32,
+    filename_score: i32,
+    description_score: i32,
+) -> Option<ScriptMatchKind> {
+    if name_score <= 0 && filename_score <= 0 && description_score <= 0 {
+        return None;
+    }
+    // Tie-break priority stays deterministic:
+    // Name > Filename > Description
+    if name_score >= filename_score && name_score >= description_score {
+        return Some(ScriptMatchKind::Name);
+    }
+    if filename_score >= description_score {
+        return Some(ScriptMatchKind::Filename);
+    }
+    Some(ScriptMatchKind::Description)
+}
+
 /// Fuzzy search scripts by query string
 /// Searches across name, filename (e.g., "my-script.ts"), description, and path
 /// Returns results sorted by relevance score (highest first)
@@ -82,6 +101,9 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         }
 
         let mut score = 0i32;
+        let mut name_score = 0i32;
+        let mut filename_score = 0i32;
+        let mut description_score = 0i32;
         // Lazy match indices - don't compute during scoring, will be computed on-demand
         let match_indices = MatchIndices::default();
 
@@ -93,21 +115,24 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             && is_exact_name_match(&script.name, &query_lower)
         {
             score += SCORE_EXACT_NAME_MATCH;
+            name_score += SCORE_EXACT_NAME_MATCH;
         }
 
         // Score by name match - highest priority
         // Only use ASCII fast-path when both strings are ASCII
         if query_is_ascii && script.name.is_ascii() {
             if let Some(pos) = find_ignore_ascii_case(&script.name, &query_lower) {
-                // Bonus for exact substring match at start of name
-                score += if pos == 0 {
+                let delta = if pos == 0 {
                     SCORE_NAME_PREFIX
                 } else {
                     SCORE_NAME_SUBSTRING
                 };
+                score += delta;
+                name_score += delta;
                 // Extra bonus for word-boundary matches (e.g., "new" in "New Tab")
                 if pos > 0 && is_word_boundary_match(&script.name, pos) {
                     score += SCORE_WORD_BOUNDARY;
+                    name_score += SCORE_WORD_BOUNDARY;
                 }
             }
         }
@@ -116,8 +141,9 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         // Only for queries >= MIN_FUZZY_QUERY_LEN to avoid noisy single-char matches
         if use_nucleo {
             if let Some(nucleo_s) = nucleo.score(&script.name) {
-                // Scale nucleo score (0-1000+) to match existing weights (~50 for fuzzy match)
-                score += SCORE_NAME_FUZZY_BASE + (nucleo_s / SCORE_NAME_FUZZY_DIV) as i32;
+                let delta = SCORE_NAME_FUZZY_BASE + (nucleo_s / SCORE_NAME_FUZZY_DIV) as i32;
+                score += delta;
+                name_score += delta;
             }
         }
 
@@ -125,20 +151,23 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         // Filenames are typically ASCII
         if query_is_ascii && filename.is_ascii() {
             if let Some(pos) = find_ignore_ascii_case(&filename, &query_lower) {
-                // Bonus for exact substring match at start of filename
-                score += if pos == 0 {
+                let delta = if pos == 0 {
                     SCORE_FILENAME_PREFIX
                 } else {
                     SCORE_FILENAME_SUBSTRING
                 };
+                score += delta;
+                filename_score += delta;
             }
         }
 
         // Fuzzy character matching in filename using nucleo (handles Unicode)
         if use_nucleo {
             if let Some(nucleo_s) = nucleo.score(&filename) {
-                // Scale nucleo score to match existing weights (~35 for filename fuzzy match)
-                score += SCORE_FILENAME_FUZZY_BASE + (nucleo_s / SCORE_FILENAME_FUZZY_DIV) as i32;
+                let delta =
+                    SCORE_FILENAME_FUZZY_BASE + (nucleo_s / SCORE_FILENAME_FUZZY_DIV) as i32;
+                score += delta;
+                filename_score += delta;
             }
         }
 
@@ -254,11 +283,14 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
         if let Some(ref desc) = script.description {
             if query_is_ascii && desc.is_ascii() && contains_ignore_ascii_case(desc, &query_lower) {
                 score += SCORE_DESC_SUBSTRING;
+                description_score += SCORE_DESC_SUBSTRING;
             }
             // Fuzzy match on description using nucleo (catches typos and partial terms)
             if use_nucleo {
                 if let Some(nucleo_s) = nucleo.score(desc) {
-                    score += SCORE_DESC_FUZZY_BASE + (nucleo_s / SCORE_DESC_FUZZY_DIV) as i32;
+                    let delta = SCORE_DESC_FUZZY_BASE + (nucleo_s / SCORE_DESC_FUZZY_DIV) as i32;
+                    score += delta;
+                    description_score += delta;
                 }
             }
         }
@@ -273,25 +305,14 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
             score += SCORE_PATH_SUBSTRING;
         }
 
-        // Determine match kind based on which tier contributed the most
-        let match_kind = if score >= SCORE_EXACT_NAME_MATCH
-            || score >= SCORE_NAME_PREFIX
-            || score >= SCORE_NAME_FUZZY_BASE
-        {
-            ScriptMatchKind::Name
-        } else if score >= SCORE_DESC_SUBSTRING {
-            ScriptMatchKind::Description
-        } else if score >= SCORE_FILENAME_PREFIX {
-            ScriptMatchKind::Filename
-        } else {
-            ScriptMatchKind::Name // default
+        // Determine match kind from the dominant primary text field score
+        let primary_text_kind =
+            dominant_primary_text_match_kind(name_score, filename_score, description_score);
+        let primary_text_match = primary_text_kind.is_some();
+        let match_kind = match primary_text_kind {
+            Some(ref k) => k.clone(),
+            None => ScriptMatchKind::default(),
         };
-
-        // Determine whether a primary text field already won
-        let primary_text_match = matches!(
-            match_kind,
-            ScriptMatchKind::Name | ScriptMatchKind::Description | ScriptMatchKind::Filename
-        ) && score > 0;
 
         // Content body search — lowest-priority tier (+5)
         // Always search body so content bonus stacks with other tiers
@@ -302,8 +323,8 @@ pub fn fuzzy_search_scripts(scripts: &[Arc<Script>], query: &str) -> Vec<ScriptM
                 crate::logging::log(
                     "FILTER_PERF",
                     &format!(
-                        "[CONTENT_MATCH] script='{}' line={} primary_text_match={} bonus={}",
-                        script.name, hit.line_number, primary_text_match, SCORE_CONTENT_MATCH
+                        "[CONTENT_MATCH] script='{}' line={} name_score={} filename_score={} description_score={} primary_text_kind={:?} bonus={}",
+                        script.name, hit.line_number, name_score, filename_score, description_score, primary_text_kind, SCORE_CONTENT_MATCH
                     ),
                 );
                 // Only surface the snippet row when no stronger field won
