@@ -201,7 +201,7 @@ impl BackgroundOpacity {
             input_active: 0.50, // Input fields when has text/active
             border_inactive: 0.125, // Borders when inactive
             border_active: 0.25, // Borders when active
-            vibrancy_background: Some(0.85), // Main window vibrancy background
+            vibrancy_background: Some(0.75), // Main window vibrancy background
         }
     }
 
@@ -210,28 +210,25 @@ impl BackgroundOpacity {
     /// Lower opacity allows more blur to show through while keeping text readable.
     /// Use Cmd+Shift+[ and Cmd+Shift+] to adjust opacity in real-time.
     ///
-    /// These values are aligned with the vibrancy POC (src/bin/vibrancy-poc.rs):
-    /// - POC uses rgba(0xFAFAFAD9) = #FAFAFA at 85% opacity (0xD9/255 = 0.851)
-    /// - POC uses rgba(0xFFFFFFE6) = white at 90% opacity for input area
+    /// Base value is 75% — offsets match `apply_surface_opacity_preset()`:
+    /// search_box +0.06, input +0.04, input_inactive +0.02, input_active +0.08
     pub fn light_default() -> Self {
         BackgroundOpacity {
-            // 85% opacity matches the POC and provides good blur visibility
-            // while maintaining text readability. Adjustable via Cmd+-/+
-            main: 0.85,                      // 85% - matches POC container_bg
-            title_bar: 0.85,                 // Match main for consistency
-            search_box: 0.90,                // 90% - matches POC input_area_bg
-            log_panel: 0.90,                 // Slightly more opaque for terminal readability
+            main: 0.75,                      // 75% base
+            title_bar: 0.75,                 // Match main for consistency
+            search_box: 0.81,                // +0.06
+            log_panel: 0.75,                 // Match main
             selected: 0.20,                  // Light mode selection — whisper-subtle darkening
             hover: 0.14,                     // Light mode hover — barely visible state affordance
             preview: 0.0,                    // Preview panel (0 = fully transparent)
-            dialog: 0.85,                    // Dialogs match main
-            input: 0.90,                     // Input fields - 90% like POC input_area_bg
-            panel: 0.85,                     // Panels match main
-            input_inactive: 0.85,            // Input fields when empty/inactive
-            input_active: 0.90,              // Input fields when has text/active
+            dialog: 0.75,                    // Dialogs match main
+            input: 0.79,                     // +0.04
+            panel: 0.75,                     // Panels match main
+            input_inactive: 0.77,            // +0.02
+            input_active: 0.83,              // +0.08
             border_inactive: 0.30,           // Borders when inactive
             border_active: 0.45,             // Borders when active
-            vibrancy_background: Some(0.85), // Match POC: 85% opacity (0xD9/255)
+            vibrancy_background: Some(0.75), // Match main
         }
     }
 
@@ -276,9 +273,9 @@ impl BackgroundOpacity {
 #[strum(serialize_all = "snake_case", ascii_case_insensitive)]
 pub enum VibrancyMaterial {
     /// Dark, high contrast material (like HUD windows)
-    Hud,
-    /// Light blur, used in popovers (default)
     #[default]
+    Hud,
+    /// Light blur, used in popovers
     Popover,
     /// Similar to system menus
     Menu,
@@ -295,8 +292,8 @@ pub struct VibrancySettings {
     /// Whether vibrancy is enabled (default: true)
     pub enabled: bool,
     /// Vibrancy material type
-    /// - `hud`: Dark, high contrast (like HUD windows)
-    /// - `popover`: Light blur, used in popovers (default)
+    /// - `hud`: Dark, high contrast (like HUD windows) (default)
+    /// - `popover`: Light blur, used in popovers
     /// - `menu`: Similar to system menus
     /// - `sidebar`: Sidebar-style blur
     /// - `content`: Content background blur

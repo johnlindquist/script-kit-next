@@ -124,7 +124,7 @@ impl AppChromeColors {
                 // so all popup windows share the same apparent density.
                 // Opaque mode: near-full floor for readability.
                 let popup_opacity = if theme.is_vibrancy_enabled() {
-                    opacity.vibrancy_background.unwrap_or(0.85).clamp(0.0, 1.0)
+                    opacity.vibrancy_background.unwrap_or(0.75).clamp(0.0, 1.0)
                 } else {
                     opacity.dialog.max(0.95)
                 };

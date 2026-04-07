@@ -1937,12 +1937,12 @@ fn actions_dialog_rgba_with_alpha(hex: u32, alpha: u8) -> gpui::Rgba {
 fn actions_dialog_main_window_background_alpha(theme: &theme::Theme) -> u8 {
     let opacity = theme.get_opacity();
     let resolved_opacity = if theme.has_dark_colors() {
-        opacity.vibrancy_background.unwrap_or(0.85)
+        opacity.vibrancy_background.unwrap_or(0.75)
     } else {
         opacity
             .vibrancy_background
-            .map(|value| value.max(0.85))
-            .unwrap_or(0.85)
+            .map(|value| value.max(0.75))
+            .unwrap_or(0.75)
     }
     .clamp(0.0, 1.0);
 
@@ -2238,7 +2238,7 @@ mod actions_dialog_opacity_consistency_tests {
     #[test]
     fn test_actions_dialog_main_window_background_alpha_matches_dark_window_default() {
         let theme = Theme::dark_default();
-        assert_eq!(actions_dialog_main_window_background_alpha(&theme), 216);
+        assert_eq!(actions_dialog_main_window_background_alpha(&theme), 191);
     }
 
     #[test]
@@ -2248,7 +2248,7 @@ mod actions_dialog_opacity_consistency_tests {
         opacity.vibrancy_background = Some(0.40);
         theme.opacity = Some(opacity);
 
-        assert_eq!(actions_dialog_main_window_background_alpha(&theme), 216);
+        assert_eq!(actions_dialog_main_window_background_alpha(&theme), 191);
     }
 
     #[test]

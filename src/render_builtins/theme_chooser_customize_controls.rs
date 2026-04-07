@@ -1,6 +1,6 @@
         // ── Preview panel with customization controls ─────────────
         let border_rgba = rgba((ui_border << 8) | 0x40);
-        let current_opacity_main = opacity.vibrancy_background.unwrap_or(0.85);
+        let current_opacity_main = opacity.vibrancy_background.unwrap_or(0.75);
         let vibrancy_enabled = self
             .theme
             .vibrancy
