@@ -400,49 +400,40 @@ impl ScriptListApp {
                                     // Hover gating is now handled by ListItem via GPUI input modality
                                     let is_hovered = current_hovered == Some(ix);
 
-                                    // Create hover handler
+                                    // Create hover handler via canonical mouse contract
                                     let hover_handler = cx.listener(
                                         move |this: &mut ScriptListApp,
                                               hovered: &bool,
                                               _window,
                                               cx| {
-                                            if *hovered {
-                                                this.input_mode = InputMode::Mouse;
-                                                if this.hovered_index != Some(ix) {
-                                                    this.hovered_index = Some(ix);
-                                                    cx.notify();
-                                                }
-                                            } else if this.hovered_index == Some(ix) {
-                                                this.hovered_index = None;
-                                                cx.notify();
-                                            }
+                                            this.update_row_hover_from_mouse(ix, *hovered, cx);
                                         },
                                     );
 
-                                    // Create click handler matching launcher click semantics
+                                    // Create click handler via canonical mouse contract
                                     let click_handler = cx.listener(
                                         move |this: &mut ScriptListApp,
                                               event: &gpui::ClickEvent,
                                               _window,
                                               cx| {
                                             let was_selected = this.selected_index == ix;
-                                            // Always select the item on any click
-                                            if !was_selected {
-                                                this.selected_index = ix;
-                                                cx.notify();
-                                            }
+                                            this.select_row_from_mouse(
+                                                ix,
+                                                "launcher_mouse_click",
+                                                cx,
+                                            );
 
-                                            let click_count = event.click_count();
+                                            let click_count = Self::mouse_click_count(event);
                                             if crate::ui_foundation::should_submit_selected_row_click(
                                                 was_selected,
                                                 click_count,
                                             ) {
-                                                logging::log(
-                                                    "UI",
-                                                    &format!(
-                                                        "Launcher row click submitting item {} (click_count={})",
-                                                        ix, click_count
-                                                    ),
+                                                tracing::debug!(
+                                                    target: "script_kit::mouse",
+                                                    event = "launcher_row_submit",
+                                                    row_index = ix,
+                                                    click_count,
+                                                    "Launcher row click submitting item"
                                                 );
                                                 this.execute_selected(cx);
                                             }

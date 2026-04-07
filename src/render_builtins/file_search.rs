@@ -705,7 +705,7 @@ impl ScriptListApp {
                                 let fallback_icon =
                                     file_search::file_type_icon(file.file_type).to_string();
 
-                                // Click handler: select on click, open/browse on double-click
+                                // Click handler via canonical mouse contract
                                 let click_entity = click_entity_handle.clone();
                                 let file_path = file.path.clone();
                                 let file_type = file.file_type;
@@ -715,6 +715,7 @@ impl ScriptListApp {
                                     if let Some(app) = click_entity.upgrade() {
                                         let file_path = file_path.clone();
                                         app.update(cx, |this, cx| {
+                                            this.enter_mouse_mode_from_row(cx);
                                             this.lock_file_search_selection_to_user_choice();
                                             if let AppView::FileSearchView {
                                                 selected_index, ..
@@ -725,39 +726,37 @@ impl ScriptListApp {
                                             cx.notify();
 
                                             // Double-click: browse directory inline or open file
-                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
-                                                if mouse_event.down.click_count == 2 {
-                                                    if file_type == FileType::Directory {
-                                                        let next_query = format!(
-                                                            "{}/",
-                                                            file_search::shorten_path(&file_path)
-                                                                .trim_end_matches('/')
-                                                        );
-                                                        let next_presentation =
-                                                            match &this.current_view {
-                                                                AppView::FileSearchView {
-                                                                    presentation,
-                                                                    ..
-                                                                } => *presentation,
-                                                                _ => FileSearchPresentation::Full,
-                                                            };
-                                                        this.open_file_search_view(
-                                                            next_query,
-                                                            next_presentation,
-                                                            cx,
-                                                        );
-                                                    } else {
-                                                        logging::log(
-                                                            "UI",
-                                                            &format!(
-                                                                "Double-click opening file: {}",
-                                                                file_path
-                                                            ),
-                                                        );
-                                                        let _ =
-                                                            file_search::open_file(&file_path);
-                                                        this.close_and_reset_window(cx);
-                                                    }
+                                            if Self::mouse_click_count(event) >= 2 {
+                                                if file_type == FileType::Directory {
+                                                    let next_query = format!(
+                                                        "{}/",
+                                                        file_search::shorten_path(&file_path)
+                                                            .trim_end_matches('/')
+                                                    );
+                                                    let next_presentation =
+                                                        match &this.current_view {
+                                                            AppView::FileSearchView {
+                                                                presentation,
+                                                                ..
+                                                            } => *presentation,
+                                                            _ => FileSearchPresentation::Full,
+                                                        };
+                                                    this.open_file_search_view(
+                                                        next_query,
+                                                        next_presentation,
+                                                        cx,
+                                                    );
+                                                } else {
+                                                    tracing::debug!(
+                                                        target: "script_kit::mouse",
+                                                        event = "file_search_full_row_double_clicked",
+                                                        row_index = ix,
+                                                        path = %file_path,
+                                                        "Opening file from mouse double-click"
+                                                    );
+                                                    let _ =
+                                                        file_search::open_file(&file_path);
+                                                    this.close_and_reset_window(cx);
                                                 }
                                             }
                                         });
