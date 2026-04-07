@@ -263,6 +263,110 @@ impl ScriptListApp {
         }
     }
 
+    /// Single per-view actions-toggle dispatcher.
+    ///
+    /// Every footer click and `Cmd+K` keystroke should funnel through this
+    /// method so that the correct view-specific toggle runs regardless of
+    /// the trigger source.  Returns `true` when the current view handled
+    /// the toggle (caller should stop propagation), `false` otherwise.
+    pub(crate) fn dispatch_actions_toggle_for_current_view(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        trigger: &'static str,
+    ) -> bool {
+        tracing::info!(
+            target: "script_kit::actions",
+            event = "actions_toggle_dispatch_started",
+            trigger = trigger,
+            view = ?self.current_view,
+            show_actions_popup = self.show_actions_popup,
+            actions_window_open = crate::actions::is_actions_window_open(),
+            "Dispatching shared actions toggle for current view"
+        );
+
+        if matches!(&self.current_view, AppView::ScriptList) {
+            if self.has_actions()
+                || self.show_actions_popup
+                || crate::actions::is_actions_window_open()
+            {
+                self.toggle_actions(cx, window);
+                return true;
+            } else {
+                tracing::info!(
+                    target: "script_kit::actions",
+                    event = "actions_toggle_dispatch_ignored_no_actions",
+                    trigger = trigger,
+                    view = ?self.current_view,
+                    selected_index = self.selected_index,
+                    "Ignored shared actions toggle because the current script selection has no actions"
+                );
+                return false;
+            }
+        }
+
+        if matches!(&self.current_view, AppView::FileSearchView { .. }) {
+            let selected = self.selected_file_search_result_owned();
+            if let Some((display_index, _)) = &selected {
+                if let AppView::FileSearchView {
+                    selected_index, ..
+                } = &mut self.current_view
+                {
+                    *selected_index = *display_index;
+                }
+            }
+            self.toggle_file_search_actions(selected.as_ref().map(|(_, f)| f), window, cx);
+            return true;
+        }
+
+        if matches!(&self.current_view, AppView::ArgPrompt { .. }) {
+            self.toggle_arg_actions(cx, window);
+            return true;
+        }
+
+        if matches!(&self.current_view, AppView::ChatPrompt { .. }) {
+            self.toggle_chat_actions(cx, window);
+            return true;
+        }
+
+        if matches!(&self.current_view, AppView::WebcamView { .. }) {
+            self.toggle_webcam_actions(cx, window);
+            return true;
+        }
+
+        if matches!(&self.current_view, AppView::ClipboardHistoryView { .. }) {
+            if let Some(entry) = self.selected_clipboard_entry() {
+                self.toggle_clipboard_actions(entry, window, cx);
+                return true;
+            }
+            if self.show_actions_popup || crate::actions::is_actions_window_open() {
+                self.toggle_actions(cx, window);
+                return true;
+            }
+            tracing::info!(
+                target: "script_kit::actions",
+                event = "actions_toggle_dispatch_ignored_no_clipboard_selection",
+                trigger = trigger,
+                "Ignored shared actions toggle because clipboard history has no selected entry"
+            );
+            return false;
+        }
+
+        if matches!(&self.current_view, AppView::AcpChatView { .. }) {
+            self.toggle_actions(cx, window);
+            return true;
+        }
+
+        tracing::info!(
+            target: "script_kit::actions",
+            event = "actions_toggle_dispatch_ignored_unsupported_view",
+            trigger = trigger,
+            view = ?self.current_view,
+            "Ignored shared actions toggle because current view does not expose footer actions"
+        );
+        false
+    }
+
     pub(crate) fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         let Some(host) = self.actions_dialog_host_for_current_view() else {
             tracing::info!(
