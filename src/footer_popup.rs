@@ -864,6 +864,14 @@ extern "C" fn footer_button_mouse_entered(
     // SAFETY: Set hover background on the parent container's layer.
     // Recompute color from theme each time to avoid dangling CGColor pointers.
     unsafe {
+        let is_actions: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_isActionsButton");
+        tracing::debug!(
+            target: "script_kit::footer_popup",
+            event = "native_footer_button_hover_entered",
+            is_actions_button = is_actions == YES,
+            "Native footer button hover entered"
+        );
+
         let superview: id = msg_send![this, superview];
         if superview == nil {
             return;
@@ -897,6 +905,15 @@ extern "C" fn footer_button_mouse_exited(
     // selected color instead of clearing.
     unsafe {
         let is_actions: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_isActionsButton");
+        let actions_window_open = crate::actions::is_actions_window_open();
+        tracing::debug!(
+            target: "script_kit::footer_popup",
+            event = "native_footer_button_hover_exited",
+            is_actions_button = is_actions == YES,
+            actions_window_open,
+            "Native footer button hover exited"
+        );
+
         let superview: id = msg_send![this, superview];
         if superview == nil {
             return;
@@ -906,7 +923,7 @@ extern "C" fn footer_button_mouse_exited(
             return;
         }
 
-        if is_actions == YES && crate::actions::is_actions_window_open() {
+        if is_actions == YES && actions_window_open {
             let theme = crate::theme::get_cached_theme();
             let chrome = crate::theme::AppChromeColors::from_theme(&theme);
             let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);

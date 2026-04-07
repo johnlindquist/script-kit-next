@@ -1078,6 +1078,14 @@ fn attach_actions_popup_to_parent_window(
             let _: () =
                 msg_send![parent_ns_window, addChildWindow:child_ns_window ordered:NS_WINDOW_ABOVE];
             let _: () = msg_send![child_ns_window, orderFrontRegardless];
+
+            tracing::info!(
+                target: "script_kit::actions",
+                event = "actions_popup_attached_to_parent",
+                parent = format!("{:?}", parent_ns_window),
+                child = format!("{:?}", child_ns_window),
+                "Attached actions popup as native child window"
+            );
         }
 
         true

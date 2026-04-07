@@ -22,6 +22,21 @@ It covers:
 | Native footer host | `src/footer_popup.rs` | In-window `NSVisualEffectView` host inside main content view | `WithinWindow` (`1`) | Swallow footer background clicks, forward scroll, route real button hits | Current launcher footer path |
 | Secondary popups sharing actions config | `src/platform/secondary_window_config.rs` | Same popup vibrancy common path | Usually `BehindWindow` (`0`) | Child-popup rules | Reusable overlay family |
 
+## Specialized Overlay Recipes
+
+These surfaces reuse the blur stack but intentionally change the presentation contract.
+
+| Surface | Primary files | Base helper | Required divergence | Why |
+| --- | --- | --- | --- | --- |
+| ACP inline dropdown | `src/ai/acp/popup_window.rs`, `src/platform/secondary_window_config.rs` | `configure_inline_dropdown_popup_window()` | Keep `WindowKind::PopUp`, attach as a native child window, disable shadow | Inline pickers should read as panel chrome, not as detached popovers |
+| Dictation overlay | `src/dictation/window.rs`, `src/platform/secondary_window_config.rs` | `configure_secondary_window_vibrancy()` | Create hidden with `show: false`, surface via `orderFrontRegardless`, optionally call `makeKeyWindow`, and avoid surfacing the main launcher first | The mic pill must appear alone and feel instant |
+
+### Specialized Overlay Rules
+
+- ACP inline dropdowns are still popup-family windows, but they intentionally drop the detached shadow so they feel attached to the chat surface.
+- Dictation overlays are popup-family windows that prioritize zero-flash presentation over normal launcher visibility semantics.
+- If you document one of these surfaces as "just another popup," the implementation will likely keep the blur but lose the feel.
+
 ## GPUI Blur Stack
 
 GPUI blur is necessary but not sufficient.
@@ -176,6 +191,33 @@ unsafe fn refresh_main_footer_host(ns_window: id) {
 - Use hover only as reinforcement, not as the sole discovery mechanism.
 - Keep child popups visually above the parent without demoting the parent panel.
 - Separate "blur working" from "theme tint/opacity misconfigured".
+
+## Polish Contract: Alpha, Hover, and Tint
+
+`NSVisualEffectView` blur is only half the result. Native feel comes from keeping overlays translucent enough for blur, then using hover and selection as low-amplitude reinforcement.
+
+### Opacity precedence
+
+1. If `theme.opacity.vibrancy_background` is set, that value wins.
+2. Otherwise, `ui_foundation::resolve_window_vibrancy_opacity()` falls back to the mode-specific root opacity.
+3. Inner surfaces should usually be lower-alpha than the window root so the system blur remains visible.
+
+### Current numeric contract
+
+| Token | Dark | Light | Why |
+| --- | --- | --- | --- |
+| `hover` | `0.12` | `0.14` | Reinforcement only |
+| `selected` | `0.18` | `0.20` | Clearer than hover, still translucent |
+| `dialog` | `0.15` | `0.85` | Dark popups stay airy; light popups need stronger readability |
+| `vibrancy_background` theme default | `0.85` | `0.85` | Stable default theme tint |
+| Root fallback when unset | `VIBRANCY_DARK_OPACITY` | `VIBRANCY_LIGHT_OPACITY` | `ui_foundation` fallback path |
+
+### Footer hover contract
+
+- Pointer affordance comes from native AppKit cursor rects.
+- `mouseEntered:` should tint the button container layer only.
+- `mouseExited:` should clear that tint, except the Actions button restores its selected tint while the actions popup remains open.
+- Hover must brighten subtly, not paint an opaque band.
 
 ## Known Pitfalls
 
@@ -355,6 +397,37 @@ pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
 }
 ```
 
+## Caller-Side Ordering Contract
+
+`configure_actions_popup_window()` and `configure_confirm_popup_window()` do not finish the job alone.
+The caller still owns native parent/child ordering.
+
+### Actions popup
+
+```rs
+// src/actions/window.rs — attach_actions_popup_to_parent_window()
+let _: () = msg_send![parent_ns_window, addChildWindow:child_ns_window ordered:NS_WINDOW_ABOVE];
+let _: () = msg_send![child_ns_window, orderFrontRegardless];
+```
+
+### Confirm popup
+
+```rs
+// src/confirm/window.rs — confirm window setup
+let _: () = msg_send![main_ns_window, addChildWindow:confirm_ns_window ordered:NS_WINDOW_ABOVE];
+let _: () = msg_send![confirm_ns_window, orderFrontRegardless];
+let _: () = msg_send![confirm_ns_window, makeKeyWindow];
+```
+
+### Why this matters
+
+The shared popup helper gives you blur, material, and `setBecomesKeyOnlyIfNeeded:true`.
+The caller-side attachment gives you stable visual stacking above the parent.
+
+If you skip caller-side attachment, you can keep the blur and still lose the
+"parent stays active, child stays above" feel. Confirm additionally calls
+`makeKeyWindow` so key events (Escape/Enter) route to the confirm dialog.
+
 ### Decision Examples
 
 | Input | Expected decision |
@@ -362,6 +435,8 @@ pub unsafe fn configure_confirm_popup_window(window: id, is_dark: bool) {
 | "A detached popup that should stay above the launcher but not steal key focus." | Use the actions-popup family: `WindowBackgroundAppearance::Blurred` + shared popup vibrancy config + `setBecomesKeyOnlyIfNeeded:true` + `orderFrontRegardless`. |
 | "A footer strip inside the main launcher that needs hoverable buttons but should not block list scrolling." | Use the native in-window footer host with `WithinWindow` blending, custom hit-testing, swallowed background mouse, and forwarded scroll-wheel events. |
 | "A flush confirm dialog attached to the bottom edge of the launcher." | Reuse the actions-popup blur path, then remove rounded corners and disable the shadow. |
+| "A dense slash or mention picker inside ACP chat that should feel attached, not floating." | Use `configure_inline_dropdown_popup_window()`, keep the shared popup blur path, attach it as a native child window, and disable shadow. |
+| "A compact dictation pill that must appear without flashing the hidden launcher." | Create a hidden `WindowKind::PopUp`, configure vibrancy after creation, then surface only that window with `orderFrontRegardless` and optionally `makeKeyWindow`. |
 
 ## Verification Checklist
 
