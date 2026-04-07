@@ -1682,7 +1682,7 @@ fn presets_dropdown_uses_dense_monoline_picker_rows() {
     let overlay_src = read("src/ai/window/render_overlays_dropdowns.rs");
 
     assert!(
-        overlay_src.contains("render_dense_monoline_picker_row_with_accessory"),
-        "presets must render rows with the shared dense monoline picker renderer"
+        overlay_src.contains("render_dense_monoline_picker_row_with_leading_visual"),
+        "presets must render rows with the shared dense monoline picker renderer (leading visual variant)"
     );
 }
