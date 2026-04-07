@@ -650,6 +650,13 @@ pub(crate) fn open_confirm_popup_window(
                         if main_ns_window != nil {
                             // SAFETY: both pointers verified non-nil and distinct.
                             let _: () = msg_send![main_ns_window, addChildWindow:confirm_ns_window ordered:NS_WINDOW_ABOVE];
+                            tracing::info!(
+                                target: "script_kit::confirm",
+                                event = "confirm_window_attached_to_parent",
+                                parent = format!("{:?}", main_ns_window),
+                                child = format!("{:?}", confirm_ns_window),
+                                "Attached confirm popup as native child window"
+                            );
                         }
 
                         // Always order front + make key regardless of parent attachment.

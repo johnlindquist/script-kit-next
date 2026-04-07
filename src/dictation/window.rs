@@ -1372,6 +1372,14 @@ pub fn open_dictation_overlay(
                         if should_key_overlay {
                             let () = msg_send![ns_window, makeKeyWindow];
                         }
+
+                        tracing::info!(
+                            target: "script_kit::dictation",
+                            event = "dictation_overlay_nswindow_surfaced",
+                            main_was_visible,
+                            made_key = should_key_overlay,
+                            "Surfaced dictation overlay without surfacing sibling launcher panels"
+                        );
                     }
                 }
             }

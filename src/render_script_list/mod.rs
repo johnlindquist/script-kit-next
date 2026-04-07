@@ -860,7 +860,6 @@ impl ScriptListApp {
         // This ensures main menu, AI chat, and all prompts have consistent styling
 
         let mut main_div = div()
-            .relative()
             .flex()
             .flex_col()
             // NOTE: No shadow - shadows on transparent elements cause gray fill with vibrancy
@@ -1013,21 +1012,24 @@ impl ScriptListApp {
                 main_div = main_div.child(panel);
             }
 
-            // GPUI hover blocker: absolutely positioned at the bottom so list
-            // items scroll underneath for blur-through. Uses HitboxBehavior::
-            // BlockMouseExceptScroll to prevent hover on list items behind the
-            // native footer while still allowing scroll events to pass through.
-            // (stop_propagation alone doesn't work — hover is computed from
-            // a pre-rendered hit test, not from event bubbling.)
+            // GPUI event blocker: the native NSVisualEffectView footer sits on
+            // top of the Metal layer, but GPUI's own mouse tracking still
+            // delivers hover events to list items behind it. This invisible div
+            // occupies the footer area in the GPUI layout and stops propagation.
             main_div = main_div.child(
                 div()
                     .id("footer-event-blocker")
-                    .absolute()
-                    .bottom(px(0.))
-                    .left(px(0.))
                     .w_full()
                     .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
-                    .block_mouse_except_scroll(),
+                    .on_mouse_move(|_: &gpui::MouseMoveEvent, _window, cx| {
+                        cx.stop_propagation();
+                    })
+                    .on_mouse_down(gpui::MouseButton::Left, |_, _window, cx| {
+                        cx.stop_propagation();
+                    })
+                    .on_mouse_up(gpui::MouseButton::Left, |_, _window, cx| {
+                        cx.stop_propagation();
+                    }),
             );
 
             if state_changed {
