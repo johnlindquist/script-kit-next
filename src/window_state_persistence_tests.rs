@@ -149,6 +149,7 @@ mod tests {
                 ai: None,
                 ai_per_display: std::collections::HashMap::new(),
                 ai_mini: None,
+                acp_chat: None,
             };
             assert!(save_state_file(&state));
             let loaded = load_state_file().expect("Should load saved state");

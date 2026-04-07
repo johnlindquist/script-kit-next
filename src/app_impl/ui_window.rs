@@ -11,6 +11,46 @@ fn mini_main_window_sizing_from_grouped_items(
 }
 
 impl ScriptListApp {
+    pub(crate) fn dispatch_main_window_footer_action(
+        &mut self,
+        action: crate::footer_popup::FooterAction,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+        source: &'static str,
+    ) {
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "main_window_footer_action_dispatch",
+            source,
+            action = ?action,
+            view = ?self.current_view,
+            main_window_mode = ?self.main_window_mode,
+            "Dispatching main-window footer action"
+        );
+
+        match action {
+            crate::footer_popup::FooterAction::Run => {
+                self.execute_selected(cx);
+            }
+            crate::footer_popup::FooterAction::Actions => {
+                let handled = self.dispatch_actions_toggle_for_current_view(window, cx, source);
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "main_window_footer_actions_routed",
+                    source,
+                    handled,
+                    selected_index = self.selected_index,
+                    show_actions_popup = self.show_actions_popup,
+                    actions_window_open = crate::actions::is_actions_window_open(),
+                    "Routed footer Actions through shared dispatcher"
+                );
+            }
+            crate::footer_popup::FooterAction::Ai => {
+                self.open_tab_ai_chat(cx);
+            }
+        }
+    }
+
     /// Start a one-time async bridge that drains `footer_action_channel()` and
     /// dispatches each action into the existing `ScriptListApp` methods.
     fn ensure_main_footer_action_listener(&self, window: &Window, cx: &mut Context<Self>) {
@@ -97,11 +137,7 @@ impl ScriptListApp {
         }
     }
 
-    pub(crate) fn sync_main_footer_popup(
-        &self,
-        window: &mut gpui::Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn sync_main_footer_popup(&self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         self.ensure_main_footer_action_listener(window, cx);
         let should_show = matches!(self.current_view, AppView::ScriptList)
             && self.main_window_mode == MainWindowMode::Mini
@@ -223,8 +259,7 @@ impl ScriptListApp {
                 selected_category,
                 ..
             } => {
-                let row_count =
-                    crate::emoji::filtered_grid_row_count(filter, *selected_category);
+                let row_count = crate::emoji::filtered_grid_row_count(filter, *selected_category);
                 Some((ViewType::ScriptList, row_count))
             }
             AppView::AppLauncherView { filter, .. } => {
@@ -330,12 +365,8 @@ impl ScriptListApp {
             }
             AppView::CreationFeedback { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::NamingPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
-            AppView::BrowseKitsView { results, .. } => {
-                Some((ViewType::ScriptList, results.len()))
-            }
-            AppView::InstalledKitsView { kits, .. } => {
-                Some((ViewType::ScriptList, kits.len()))
-            }
+            AppView::BrowseKitsView { results, .. } => Some((ViewType::ScriptList, results.len())),
+            AppView::InstalledKitsView { kits, .. } => Some((ViewType::ScriptList, kits.len())),
             AppView::SearchAiPresetsView { .. } => {
                 // Presets list - defaults (5) + user presets
                 let count = crate::ai::presets::load_presets()
@@ -607,8 +638,7 @@ impl ScriptListApp {
             return;
         }
         self.main_window_preflight_cache_key = new_key;
-        let receipt =
-            crate::main_window_preflight::build_main_window_preflight_receipt(self);
+        let receipt = crate::main_window_preflight::build_main_window_preflight_receipt(self);
         if let Some(ref r) = receipt {
             crate::main_window_preflight::log_main_window_preflight_receipt(r);
         }

@@ -52,8 +52,13 @@ impl ScriptListApp {
                         DispatchOutcome::success()
                     }
                     Err(msg) => {
-                        let msg = msg.unwrap_or_else(|| gpui::SharedString::from("Cannot show info for this item"));
-                        DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, msg.to_string())
+                        let msg = msg.unwrap_or_else(|| {
+                            gpui::SharedString::from("Cannot show info for this item")
+                        });
+                        DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            msg.to_string(),
+                        )
                     }
                 }
             }
@@ -100,8 +105,13 @@ impl ScriptListApp {
                         DispatchOutcome::success()
                     }
                     Err(msg) => {
-                        let msg = msg.unwrap_or_else(|| gpui::SharedString::from("Cannot show package contents for this item"));
-                        DispatchOutcome::error(crate::action_helpers::ERROR_ACTION_FAILED, msg.to_string())
+                        let msg = msg.unwrap_or_else(|| {
+                            gpui::SharedString::from("Cannot show package contents for this item")
+                        });
+                        DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            msg.to_string(),
+                        )
                     }
                 }
             }
@@ -110,10 +120,12 @@ impl ScriptListApp {
                 if let Some(result) = self.get_selected_result() {
                     let name = match &result {
                         scripts::SearchResult::App(m) => m.app.name.clone(),
-                        _ => return DispatchOutcome::error(
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            "Copy Name is only available for applications",
-                        ),
+                        _ => {
+                            return DispatchOutcome::error(
+                                crate::action_helpers::ERROR_ACTION_FAILED,
+                                "Copy Name is only available for applications",
+                            );
+                        }
                     };
                     self.copy_to_clipboard_with_feedback(
                         &name,
@@ -172,9 +184,7 @@ impl ScriptListApp {
                         let name = app_name.clone();
                         let result = cx
                             .background_executor()
-                            .spawn(async move {
-                                quit_app_by_name(&name)
-                            })
+                            .spawn(async move { quit_app_by_name(&name) })
                             .await;
                         if let Err(e) = result {
                             tracing::error!(trace_id = %trace_id, error = %e, "quit_app failed");
@@ -195,7 +205,11 @@ impl ScriptListApp {
                     let app_name = m.app.name.clone();
                     let bundle_id = m.app.bundle_id.clone();
                     let trace_id = trace_id.to_string();
-                    self.show_hud(format!("Force quitting {}", app_name), Some(HUD_SHORT_MS), cx);
+                    self.show_hud(
+                        format!("Force quitting {}", app_name),
+                        Some(HUD_SHORT_MS),
+                        cx,
+                    );
                     self.hide_main_and_reset(cx);
                     cx.spawn(async move |_this, cx| {
                         let result = cx
@@ -278,10 +292,7 @@ impl ScriptListApp {
 /// Gracefully quit an application by name using AppleScript.
 fn quit_app_by_name(name: &str) -> Result<(), String> {
     std::process::Command::new("osascript")
-        .args([
-            "-e",
-            &format!(r#"tell application "{}" to quit"#, name),
-        ])
+        .args(["-e", &format!(r#"tell application "{}" to quit"#, name)])
         .output()
         .map_err(|e| format!("Failed to run osascript: {}", e))
         .and_then(|output| {
@@ -335,8 +346,6 @@ end tell"#
 
 #[cfg(test)]
 mod app_action_tests {
-    use super::*;
-
     #[test]
     fn test_show_package_contents_path_is_app_path_plus_contents() {
         let app_path = std::path::PathBuf::from("/Applications/Safari.app");

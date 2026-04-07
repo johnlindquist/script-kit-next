@@ -41,7 +41,8 @@ struct TabAiDeferredCaptureArtifacts {
 }
 
 /// Channel receiver for deferred capture results.
-type TabAiDeferredCaptureRx = async_channel::Receiver<Result<TabAiDeferredCaptureArtifacts, String>>;
+type TabAiDeferredCaptureRx =
+    async_channel::Receiver<Result<TabAiDeferredCaptureArtifacts, String>>;
 
 /// Maximum visible elements captured per UI snapshot for Tab AI context.
 const TAB_AI_VISIBLE_ELEMENT_LIMIT: usize = 24;
@@ -218,7 +219,9 @@ impl ScriptListApp {
                 event = "acp_trigger_picker_open_embedded",
                 trigger = "@",
             );
-            entity.update(cx, |view, cx| view.open_mention_picker_in_window(window, cx));
+            entity.update(cx, |view, cx| {
+                view.open_mention_picker_in_window(window, cx)
+            });
         }
     }
 
@@ -499,8 +502,7 @@ impl ScriptListApp {
                         &resolved.context.desktop,
                         resolved.context.focused_target.as_ref(),
                     );
-                    let apply_back_hint =
-                        build_tab_ai_apply_back_hint(source_type.as_ref());
+                    let apply_back_hint = build_tab_ai_apply_back_hint(source_type.as_ref());
 
                     this.tab_ai_harness_apply_back_route = source_type
                         .clone()
@@ -541,9 +543,7 @@ impl ScriptListApp {
                             );
                             this.toast_manager.push(
                                 crate::components::toast::Toast::error(
-                                    format!(
-                                        "Failed to build quick-submit context: {error}"
-                                    ),
+                                    format!("Failed to build quick-submit context: {error}"),
                                     &this.theme,
                                 )
                                 .duration_ms(Some(TOAST_ERROR_MS)),
@@ -577,9 +577,7 @@ impl ScriptListApp {
     }
 
     /// Format a canonical chip label from a resolved target.
-    fn format_tab_ai_focused_chip_label(
-        target: &crate::ai::TabAiTargetContext,
-    ) -> String {
+    fn format_tab_ai_focused_chip_label(target: &crate::ai::TabAiTargetContext) -> String {
         format!(
             "{}: {}",
             Self::tab_ai_chip_prefix_for_kind(&target.kind),
@@ -639,11 +637,7 @@ impl ScriptListApp {
         ui_snapshot: &crate::ai::TabAiUiSnapshot,
     ) -> Option<crate::ai::message_parts::AiContextPart> {
         let (focused_target, _visible_targets) =
-            self.resolve_tab_ai_targets_with_audit_for_view(
-                source_view,
-                ui_snapshot,
-                "pre_open",
-            );
+            self.resolve_tab_ai_targets_with_audit_for_view(source_view, ui_snapshot, "pre_open");
         focused_target.map(|target| {
             let label = Self::format_tab_ai_focused_chip_label(&target);
             tracing::info!(
@@ -710,12 +704,11 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         let snapshot_started_at = std::time::Instant::now();
-        let (ui_snapshot, invocation_receipt) =
-            if matches!(source_view, AppView::ScriptList) {
-                self.snapshot_tab_ai_ui_fast_for_script_list()
-            } else {
-                self.snapshot_tab_ai_ui(cx)
-            };
+        let (ui_snapshot, invocation_receipt) = if matches!(source_view, AppView::ScriptList) {
+            self.snapshot_tab_ai_ui_fast_for_script_list()
+        } else {
+            self.snapshot_tab_ai_ui(cx)
+        };
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_open_stage",
@@ -793,23 +786,18 @@ impl ScriptListApp {
 
         // Resolve whether we have a focused target or need the Ask Anything
         // fallback *before* spawning background capture.
-        let use_ask_anything_fallback = self.should_use_tab_ai_ask_anything_fallback(
-            &request.source_view,
-            &request.ui_snapshot,
-        );
+        let use_ask_anything_fallback = self
+            .should_use_tab_ai_ask_anything_fallback(&request.source_view, &request.ui_snapshot);
 
         // Explicit AI commands (screen, focused window, selected text, browser tab)
         // must force ambient capture even when the source surface has a focused item.
-        let explicit_ambient_chip_label = Self::tab_ai_explicit_ambient_chip_label(&request.capture_kind)
-            .map(str::to_string);
+        let explicit_ambient_chip_label =
+            Self::tab_ai_explicit_ambient_chip_label(&request.capture_kind).map(str::to_string);
 
         let focused_part = if use_ask_anything_fallback || explicit_ambient_chip_label.is_some() {
             None
         } else {
-            self.build_tab_ai_focused_part_for_view(
-                &request.source_view,
-                &request.ui_snapshot,
-            )
+            self.build_tab_ai_focused_part_for_view(&request.source_view, &request.ui_snapshot)
         };
 
         // Only run expensive ambient capture for the Ask Anything fallback path
@@ -846,14 +834,23 @@ impl ScriptListApp {
                 },
             );
             // No ambient capture needed — return a dummy closed channel.
-            let (_tx, rx) = async_channel::bounded::<Result<TabAiDeferredCaptureArtifacts, String>>(1);
+            let (_tx, rx) =
+                async_channel::bounded::<Result<TabAiDeferredCaptureArtifacts, String>>(1);
             rx
         };
 
         if surface_preference.use_quick_terminal && !force_acp_surface {
             self.open_tab_ai_harness_terminal_from_request(request, capture_rx, cx);
         } else {
-            self.open_tab_ai_acp_view_from_request_impl(request, capture_rx, focused_part, use_ask_anything_fallback, explicit_ambient_chip_label, force_acp_surface, cx);
+            self.open_tab_ai_acp_view_from_request_impl(
+                request,
+                capture_rx,
+                focused_part,
+                use_ask_anything_fallback,
+                explicit_ambient_chip_label,
+                force_acp_surface,
+                cx,
+            );
         }
     }
 
@@ -940,9 +937,7 @@ impl ScriptListApp {
     /// Compute the canonical submission intent for ACP launches, matching the
     /// PTY path's normalization: prefer `quick_submit_plan.submission_intent()`
     /// over raw `entry_intent`, trim whitespace, and drop empty strings.
-    fn tab_ai_effective_submission_intent(
-        request: &TabAiLaunchRequest,
-    ) -> Option<String> {
+    fn tab_ai_effective_submission_intent(request: &TabAiLaunchRequest) -> Option<String> {
         request
             .quick_submit_plan
             .as_ref()
@@ -994,17 +989,15 @@ impl ScriptListApp {
         let early_source_type = detect_tab_ai_source_type_early(source_view, ui_snapshot);
         let focused_target = Self::tab_ai_focused_target_from_part(focused_part);
 
-        self.tab_ai_harness_apply_back_route = early_source_type
-            .clone()
-            .and_then(|source_type| {
-                build_tab_ai_apply_back_hint(Some(&source_type)).map(|hint| {
-                    crate::ai::TabAiApplyBackRoute {
-                        source_type,
-                        hint,
-                        focused_target: focused_target.clone(),
-                    }
-                })
-            });
+        self.tab_ai_harness_apply_back_route = early_source_type.clone().and_then(|source_type| {
+            build_tab_ai_apply_back_hint(Some(&source_type)).map(|hint| {
+                crate::ai::TabAiApplyBackRoute {
+                    source_type,
+                    hint,
+                    focused_target: focused_target.clone(),
+                }
+            })
+        });
 
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -1138,12 +1131,10 @@ impl ScriptListApp {
                     catalog_entries: Vec::new(),
                     launch_requirements: crate::ai::acp::AcpLaunchRequirements::default(),
                 };
-                let view_entity =
-                    cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
+                let view_entity = cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
                 self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
                 self.tab_ai_harness_return_view = Some(source_view.clone());
-                self.tab_ai_harness_return_focus_target =
-                    Some(self.tab_ai_return_focus_target());
+                self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
                 self.current_view = AppView::AcpChatView {
                     entity: view_entity,
                 };
@@ -1209,12 +1200,10 @@ impl ScriptListApp {
                 &acp_launch_resolution,
                 requirements,
             );
-            let view_entity =
-                cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
+            let view_entity = cx.new(|cx| crate::ai::acp::AcpChatView::new_setup(setup, cx));
             self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
             self.tab_ai_harness_return_view = Some(source_view.clone());
-            self.tab_ai_harness_return_focus_target =
-                Some(self.tab_ai_return_focus_target());
+            self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
             self.current_view = AppView::AcpChatView {
                 entity: view_entity,
             };
@@ -1254,9 +1243,7 @@ impl ScriptListApp {
         // Extract model info before `agent` is moved into spawn_with_approval.
         let agent_models = agent.models.clone();
         // Use persisted model from settings.json, falling back to first model.
-        let persisted_model = crate::config::load_user_preferences()
-            .ai
-            .selected_model_id;
+        let persisted_model = crate::config::load_user_preferences().ai.selected_model_id;
         let default_model_id = persisted_model
             .filter(|id| agent_models.iter().any(|m| m.id == *id))
             .or_else(|| agent_models.first().map(|m| m.id.clone()));
@@ -1325,7 +1312,9 @@ impl ScriptListApp {
         // request / first-run) or already aligned with the saved preference.
         // Automatic capability fallback should not silently rewrite the user's
         // preferred agent.
-        let selected_agent_id = acp_launch_resolution.selected_agent_id().map(str::to_string);
+        let selected_agent_id = acp_launch_resolution
+            .selected_agent_id()
+            .map(str::to_string);
         let should_persist_selected_agent = retry_request.is_some()
             || preferred_agent_id.is_none()
             || preferred_agent_id.as_deref() == selected_agent_id.as_deref();
@@ -1516,9 +1505,7 @@ impl ScriptListApp {
 
         cx.spawn(async move |_this, cx| {
             // Let the ACP chat render once before any heavy context staging runs.
-            cx.background_executor()
-                .timer(first_paint_delay)
-                .await;
+            cx.background_executor().timer(first_paint_delay).await;
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "acp_context_stage",
@@ -1594,8 +1581,7 @@ impl ScriptListApp {
                         &resolved.context.desktop,
                         resolved.context.focused_target.as_ref(),
                     );
-                    let apply_back_hint =
-                        build_tab_ai_apply_back_hint(source_type.as_ref());
+                    let apply_back_hint = build_tab_ai_apply_back_hint(source_type.as_ref());
 
                     // Persist the apply-back route
                     this.tab_ai_harness_apply_back_route = source_type
@@ -1667,9 +1653,7 @@ impl ScriptListApp {
         let reuse_fresh_prewarm = self
             .tab_ai_harness
             .as_ref()
-            .map(|session| {
-                session.is_fresh_prewarm() && session.entity.read(cx).is_alive()
-            })
+            .map(|session| session.is_fresh_prewarm() && session.entity.read(cx).is_alive())
             .unwrap_or(false);
 
         if reuse_fresh_prewarm {
@@ -1678,25 +1662,26 @@ impl ScriptListApp {
             }
         }
 
-        let (entity, _was_cold_start) =
-            match self.ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx) {
-                Ok(result) => result,
-                Err(error) => {
-                    tracing::error!(
-                        event = "tab_ai_harness_start_failed",
-                        error = %error,
-                    );
-                    self.toast_manager.push(
+        let (entity, _was_cold_start) = match self
+            .ensure_tab_ai_harness_terminal(!reuse_fresh_prewarm, cx)
+        {
+            Ok(result) => result,
+            Err(error) => {
+                tracing::error!(
+                    event = "tab_ai_harness_start_failed",
+                    error = %error,
+                );
+                self.toast_manager.push(
                         crate::components::toast::Toast::error(
                             format!("Failed to start harness: {error}. Install the configured CLI or update claudeCode.path in ~/.scriptkit/kit/config.ts"),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
                     );
-                    cx.notify();
-                    return;
-                }
-            };
+                cx.notify();
+                return;
+            }
+        };
 
         // Determine readiness based on actual PTY output, not cold-start flag.
         let wait_for_readiness = Self::tab_ai_harness_needs_readiness_wait(&entity, cx);
@@ -1714,11 +1699,7 @@ impl ScriptListApp {
         // Seed apply-back route synchronously so the footer shows the correct
         // Cmd+Enter label on first render and the first ⌘↩ press works without
         // waiting for the deferred capture.  PTY path has no focused part.
-        self.seed_tab_ai_apply_back_route(
-            &request.source_view,
-            &request.ui_snapshot,
-            None,
-        );
+        self.seed_tab_ai_apply_back_route(&request.source_view, &request.ui_snapshot, None);
 
         // --- View switch FIRST: user sees the terminal immediately ---
         self.current_view = AppView::QuickTerminalView {
@@ -1762,7 +1743,9 @@ impl ScriptListApp {
 
             // Apply the captured context
             let _ = cx.update(|cx| {
-                let Some(app) = app_weak.upgrade() else { return; };
+                let Some(app) = app_weak.upgrade() else {
+                    return;
+                };
                 app.update(cx, |this, cx| {
                     // Stale generation check
                     if this.tab_ai_harness_capture_generation != capture_gen {
@@ -1973,11 +1956,9 @@ impl ScriptListApp {
             // Terminate FIRST, then clear the handle — if termination fails
             // the handle stays in app state so we don't lose track of a live PTY.
             if let Some(existing) = self.tab_ai_harness.as_ref() {
-                existing
-                    .entity
-                    .update(cx, |term, _cx| {
-                        term.terminate_session().map_err(|e| e.to_string())
-                    })?;
+                existing.entity.update(cx, |term, _cx| {
+                    term.terminate_session().map_err(|e| e.to_string())
+                })?;
             }
             if self.tab_ai_harness.is_some() {
                 self.tab_ai_harness = None;
@@ -2151,18 +2132,18 @@ impl ScriptListApp {
     /// tear down the PTY for `QuickTerminalView`.
     fn terminate_tab_ai_harness_session(&mut self, cx: &mut Context<Self>) {
         if let Some(session) = self.tab_ai_harness.as_ref() {
-            let result = session
-                .entity
-                .update(cx, |term, _cx| term.terminate_session().map_err(|e| e.to_string()));
+            let result = session.entity.update(cx, |term, _cx| {
+                term.terminate_session().map_err(|e| e.to_string())
+            });
             match result {
                 Ok(()) => {
                     self.tab_ai_harness = None;
                 }
                 Err(error) => {
-                tracing::warn!(
-                    event = "tab_ai_harness_terminal_kill_failed",
-                    error = %error,
-                );
+                    tracing::warn!(
+                        event = "tab_ai_harness_terminal_kill_failed",
+                        error = %error,
+                    );
                 }
             }
         }
@@ -2206,7 +2187,11 @@ impl ScriptListApp {
         }
     }
 
-    fn close_tab_ai_harness_terminal_impl(&mut self, window: Option<&mut Window>, cx: &mut Context<Self>) {
+    fn close_tab_ai_harness_terminal_impl(
+        &mut self,
+        window: Option<&mut Window>,
+        cx: &mut Context<Self>,
+    ) {
         let return_is_script_list = self
             .tab_ai_harness_return_view
             .as_ref()
@@ -2386,13 +2371,13 @@ impl ScriptListApp {
             clipboard_selected_index,
             TAB_AI_CLIPBOARD_HISTORY_LIMIT,
         );
-        let clipboard = clipboard_history.first().map(|entry| {
-            crate::ai::TabAiClipboardContext {
+        let clipboard = clipboard_history
+            .first()
+            .map(|entry| crate::ai::TabAiClipboardContext {
                 content_type: entry.content_type.clone(),
                 preview: entry.preview.clone(),
                 ocr_text: entry.ocr_text.clone(),
-            }
-        });
+            });
         let prior_automations = match crate::ai::resolve_tab_ai_prior_automations_for_entry(
             &intent_for_lookup,
             bundle_id.as_deref(),
@@ -2478,9 +2463,7 @@ impl ScriptListApp {
                 FocusTarget::TermPrompt
             }
 
-            AppView::ChatPrompt { .. } | AppView::AcpChatView { .. } => {
-                FocusTarget::ChatPrompt
-            }
+            AppView::ChatPrompt { .. } | AppView::AcpChatView { .. } => FocusTarget::ChatPrompt,
             AppView::NamingPrompt { .. } => FocusTarget::NamingPrompt,
 
             #[cfg(feature = "storybook")]
@@ -2743,10 +2726,7 @@ impl ScriptListApp {
         surface_metadata: &serde_json::Map<String, serde_json::Value>,
     ) -> crate::ai::TabAiTargetContext {
         let mut metadata = surface_metadata.clone();
-        metadata.insert(
-            "displayIndex".to_string(),
-            serde_json::json!(display_index),
-        );
+        metadata.insert("displayIndex".to_string(), serde_json::json!(display_index));
         metadata.insert(
             "path".to_string(),
             serde_json::Value::String(entry.path.clone()),
@@ -2977,9 +2957,7 @@ impl ScriptListApp {
                             source: "WindowSwitcher".to_string(),
                             kind: "window".to_string(),
                             semantic_id: crate::protocol::generate_semantic_id(
-                                "choice",
-                                index,
-                                &label,
+                                "choice", index, &label,
                             ),
                             label,
                             metadata: Some(serde_json::json!({
@@ -2992,21 +2970,22 @@ impl ScriptListApp {
                 (focused_target, visible_targets)
             }
             AppView::AppLauncherView { selected_index, .. } => {
-                let focused_target = self.apps.get(*selected_index).map(|app| {
-                    crate::ai::TabAiTargetContext {
-                        source: "AppLauncher".to_string(),
-                        kind: "app".to_string(),
-                        semantic_id: crate::protocol::generate_semantic_id(
-                            "choice",
-                            *selected_index,
-                            &app.name,
-                        ),
-                        label: app.name.clone(),
-                        metadata: Some(serde_json::json!({
-                            "name": app.name.clone(),
-                        })),
-                    }
-                });
+                let focused_target =
+                    self.apps
+                        .get(*selected_index)
+                        .map(|app| crate::ai::TabAiTargetContext {
+                            source: "AppLauncher".to_string(),
+                            kind: "app".to_string(),
+                            semantic_id: crate::protocol::generate_semantic_id(
+                                "choice",
+                                *selected_index,
+                                &app.name,
+                            ),
+                            label: app.name.clone(),
+                            metadata: Some(serde_json::json!({
+                                "name": app.name.clone(),
+                            })),
+                        });
                 let visible_targets = self
                     .apps
                     .iter()
@@ -3016,9 +2995,7 @@ impl ScriptListApp {
                         source: "AppLauncher".to_string(),
                         kind: "app".to_string(),
                         semantic_id: crate::protocol::generate_semantic_id(
-                            "choice",
-                            index,
-                            &app.name,
+                            "choice", index, &app.name,
                         ),
                         label: app.name.clone(),
                         metadata: Some(serde_json::json!({
@@ -3029,22 +3006,21 @@ impl ScriptListApp {
                 (focused_target, visible_targets)
             }
             AppView::ProcessManagerView { selected_index, .. } => {
-                let focused_target =
-                    self.cached_processes.get(*selected_index).map(|process| {
-                        crate::ai::TabAiTargetContext {
-                            source: "ProcessManager".to_string(),
-                            kind: "process".to_string(),
-                            semantic_id: crate::protocol::generate_semantic_id(
-                                "choice",
-                                *selected_index,
-                                &process.script_path,
-                            ),
-                            label: process.script_path.clone(),
-                            metadata: Some(serde_json::json!({
-                                "scriptPath": process.script_path.clone(),
-                            })),
-                        }
-                    });
+                let focused_target = self.cached_processes.get(*selected_index).map(|process| {
+                    crate::ai::TabAiTargetContext {
+                        source: "ProcessManager".to_string(),
+                        kind: "process".to_string(),
+                        semantic_id: crate::protocol::generate_semantic_id(
+                            "choice",
+                            *selected_index,
+                            &process.script_path,
+                        ),
+                        label: process.script_path.clone(),
+                        metadata: Some(serde_json::json!({
+                            "scriptPath": process.script_path.clone(),
+                        })),
+                    }
+                });
                 let visible_targets = self
                     .cached_processes
                     .iter()
@@ -3067,22 +3043,22 @@ impl ScriptListApp {
                 (focused_target, visible_targets)
             }
             AppView::CurrentAppCommandsView { selected_index, .. } => {
-                let focused_target = self
-                    .cached_current_app_entries
-                    .get(*selected_index)
-                    .map(|entry| crate::ai::TabAiTargetContext {
-                        source: "CurrentAppCommands".to_string(),
-                        kind: "menu_command".to_string(),
-                        semantic_id: crate::protocol::generate_semantic_id(
-                            "choice",
-                            *selected_index,
-                            &entry.name,
-                        ),
-                        label: entry.name.clone(),
-                        metadata: Some(serde_json::json!({
-                            "name": entry.name.clone(),
-                        })),
-                    });
+                let focused_target =
+                    self.cached_current_app_entries
+                        .get(*selected_index)
+                        .map(|entry| crate::ai::TabAiTargetContext {
+                            source: "CurrentAppCommands".to_string(),
+                            kind: "menu_command".to_string(),
+                            semantic_id: crate::protocol::generate_semantic_id(
+                                "choice",
+                                *selected_index,
+                                &entry.name,
+                            ),
+                            label: entry.name.clone(),
+                            metadata: Some(serde_json::json!({
+                                "name": entry.name.clone(),
+                            })),
+                        });
                 let visible_targets = self
                     .cached_current_app_entries
                     .iter()
@@ -3117,10 +3093,7 @@ impl ScriptListApp {
                         _ => None,
                     })
                     .map(|result| {
-                        Self::tab_ai_target_from_search_result(
-                            self.selected_index,
-                            result,
-                        )
+                        Self::tab_ai_target_from_search_result(self.selected_index, result)
                     })
                     .or_else(|| {
                         let trimmed = self.filter_text.trim();
@@ -3178,10 +3151,7 @@ impl ScriptListApp {
                                     .iter()
                                     .find(|element| element.semantic_id == semantic_id)
                                     .map(|element| {
-                                        Self::tab_ai_target_from_element(
-                                            &ui.prompt_type,
-                                            element,
-                                        )
+                                        Self::tab_ai_target_from_element(&ui.prompt_type, element)
                                     })
                             })
                     })
@@ -3190,12 +3160,7 @@ impl ScriptListApp {
                             .as_deref()
                             .map(str::trim)
                             .filter(|text| !text.is_empty())
-                            .map(|text| {
-                                Self::tab_ai_target_from_input_text(
-                                    &ui.prompt_type,
-                                    text,
-                                )
-                            })
+                            .map(|text| Self::tab_ai_target_from_input_text(&ui.prompt_type, text))
                     });
 
                 (focused_target, visible_targets)
@@ -3364,14 +3329,12 @@ impl ScriptListApp {
         plan_mode: bool,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some((_display_index, selected)) =
-            self.selected_file_search_result(selected_index)
+        let Some((_display_index, selected)) = self.selected_file_search_result(selected_index)
         else {
             return false;
         };
 
-        let Some(intent) =
-            self.build_file_search_ai_entry_intent(query, selected_index, plan_mode)
+        let Some(intent) = self.build_file_search_ai_entry_intent(query, selected_index, plan_mode)
         else {
             return false;
         };
@@ -3421,7 +3384,10 @@ impl ScriptListApp {
     /// already uses `cached_grouped_items` / `cached_grouped_flat_results`.
     fn snapshot_tab_ai_ui_fast_for_script_list(
         &self,
-    ) -> (crate::ai::TabAiUiSnapshot, crate::ai::TabAiInvocationReceipt) {
+    ) -> (
+        crate::ai::TabAiUiSnapshot,
+        crate::ai::TabAiInvocationReceipt,
+    ) {
         let prompt_type = "ScriptList".to_string();
         let input_text = if self.filter_text.is_empty() {
             None
@@ -3429,19 +3395,19 @@ impl ScriptListApp {
             Some(self.filter_text.clone())
         };
 
-        let focused_semantic_id = self
-            .cached_grouped_items
-            .get(self.selected_index)
-            .and_then(|item| match item {
-                GroupedListItem::Item(result_idx) => self
-                    .cached_grouped_flat_results
-                    .get(*result_idx)
-                    .map(|result| {
-                        Self::tab_ai_target_from_search_result(self.selected_index, result)
-                            .semantic_id
-                    }),
-                _ => None,
-            });
+        let focused_semantic_id =
+            self.cached_grouped_items
+                .get(self.selected_index)
+                .and_then(|item| match item {
+                    GroupedListItem::Item(result_idx) => self
+                        .cached_grouped_flat_results
+                        .get(*result_idx)
+                        .map(|result| {
+                            Self::tab_ai_target_from_search_result(self.selected_index, result)
+                                .semantic_id
+                        }),
+                    _ => None,
+                });
         let selected_semantic_id = focused_semantic_id.clone();
 
         let snapshot = crate::ai::TabAiUiSnapshot {
@@ -3481,7 +3447,10 @@ impl ScriptListApp {
     fn snapshot_tab_ai_ui(
         &self,
         cx: &Context<Self>,
-    ) -> (crate::ai::TabAiUiSnapshot, crate::ai::TabAiInvocationReceipt) {
+    ) -> (
+        crate::ai::TabAiUiSnapshot,
+        crate::ai::TabAiInvocationReceipt,
+    ) {
         let prompt_type = self.app_view_name();
 
         // Collect visible elements
@@ -3588,9 +3557,7 @@ impl ScriptListApp {
 
             AppView::ArgPrompt { .. }
             | AppView::MiniPrompt { .. }
-            | AppView::MicroPrompt { .. } => {
-                non_empty(self.arg_input.text().to_string())
-            }
+            | AppView::MicroPrompt { .. } => non_empty(self.arg_input.text().to_string()),
 
             AppView::ClipboardHistoryView { filter, .. }
             | AppView::AppLauncherView { filter, .. }
@@ -3609,16 +3576,11 @@ impl ScriptListApp {
             AppView::BrowseKitsView { query, .. } => non_empty(query.clone()),
 
             // --- Entity-based prompts ---
-
             AppView::EditorPrompt { entity, .. } => {
-                entity.read_with(cx, |editor, app| {
-                    non_empty(editor.content_from_app(app))
-                })
+                entity.read_with(cx, |editor, app| non_empty(editor.content_from_app(app)))
             }
             AppView::ScratchPadView { entity, .. } => {
-                entity.read_with(cx, |editor, app| {
-                    non_empty(editor.content_from_app(app))
-                })
+                entity.read_with(cx, |editor, app| non_empty(editor.content_from_app(app)))
             }
             AppView::ChatPrompt { entity, .. } => {
                 non_empty(entity.read(cx).input.text().to_string())
@@ -3626,8 +3588,7 @@ impl ScriptListApp {
             AppView::PathPrompt { entity, .. } => {
                 let p = entity.read(cx);
                 // Prefer active filter text; fall back to current directory path
-                non_empty(p.filter_text.clone())
-                    .or_else(|| non_empty(p.current_path.clone()))
+                non_empty(p.filter_text.clone()).or_else(|| non_empty(p.current_path.clone()))
             }
             AppView::EnvPrompt { entity, .. } => {
                 let p = entity.read(cx);
@@ -3636,23 +3597,32 @@ impl ScriptListApp {
                 if p.secret {
                     // For secret fields, report presence but not content
                     let text = p.input_text();
-                    if text.is_empty() { None } else { Some("[secret]".to_string()) }
+                    if text.is_empty() {
+                        None
+                    } else {
+                        Some("[secret]".to_string())
+                    }
                 } else {
                     non_empty(p.input_text().to_string())
                 }
             }
-            AppView::SelectPrompt { entity, .. } => {
-                non_empty(entity.read(cx).filter_text.clone())
-            }
+            AppView::SelectPrompt { entity, .. } => non_empty(entity.read(cx).filter_text.clone()),
             AppView::NamingPrompt { entity, .. } => {
                 non_empty(entity.read(cx).friendly_name.clone())
             }
             AppView::TemplatePrompt { entity, .. } => {
                 let p = entity.read(cx);
                 // Return the value of the currently focused template input
-                p.values.get(p.current_input).and_then(|v| non_empty(v.clone()))
+                p.values
+                    .get(p.current_input)
+                    .and_then(|v| non_empty(v.clone()))
             }
-            AppView::CreateAiPresetView { name, system_prompt, model, active_field } => {
+            AppView::CreateAiPresetView {
+                name,
+                system_prompt,
+                model,
+                active_field,
+            } => {
                 // Return whichever field is active
                 match active_field {
                     0 => non_empty(name.clone()),
@@ -3807,8 +3777,7 @@ impl ScriptListApp {
                     filename_stem = %state.filename_stem,
                 );
                 if let Some(save_state) = &mut self.tab_ai_save_offer_state {
-                    save_state.error =
-                        Some(format!("Failed to create script: {error}").into());
+                    save_state.error = Some(format!("Failed to create script: {error}").into());
                 }
                 cx.notify();
                 return;
@@ -3822,8 +3791,7 @@ impl ScriptListApp {
                 path = %created_path.display(),
             );
             if let Some(save_state) = &mut self.tab_ai_save_offer_state {
-                save_state.error =
-                    Some(format!("Failed to write script: {error}").into());
+                save_state.error = Some(format!("Failed to write script: {error}").into());
             }
             cx.notify();
             return;
@@ -3866,10 +3834,7 @@ impl ScriptListApp {
             None => {
                 self.toast_manager.push(
                     components::toast::Toast::success(
-                        format!(
-                            "Saved '{}' and opened in editor",
-                            state.filename_stem
-                        ),
+                        format!("Saved '{}' and opened in editor", state.filename_stem),
                         &self.theme,
                     )
                     .duration_ms(Some(TOAST_SUCCESS_MS)),
@@ -3950,17 +3915,13 @@ impl ScriptListApp {
             .bg(bg_scrim)
             // Message row — bare text, no card, no accent bar
             .child(
-                div()
-                    .w_full()
-                    .px(px(hint_px))
-                    .py(px(10.))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_family(crate::list_item::FONT_MONO)
-                            .text_color(text_primary)
-                            .child(message),
-                    ),
+                div().w_full().px(px(hint_px)).py(px(10.)).child(
+                    div()
+                        .text_sm()
+                        .font_family(crate::list_item::FONT_MONO)
+                        .text_color(text_primary)
+                        .child(message),
+                ),
             )
             // Hairline divider — ghost opacity
             .child(div().w_full().h(px(1.)).bg(divider_rgba))
@@ -4034,9 +3995,7 @@ fn detect_tab_ai_source_type_early(
 ) -> Option<crate::ai::TabAiSourceType> {
     let prompt_type = app_view_to_prompt_type_str(source_view);
     match prompt_type {
-        "ScriptList"
-            if ui.focused_semantic_id.is_some() || ui.selected_semantic_id.is_some() =>
-        {
+        "ScriptList" if ui.focused_semantic_id.is_some() || ui.selected_semantic_id.is_some() => {
             Some(crate::ai::TabAiSourceType::ScriptListItem)
         }
         "ClipboardHistory" => Some(crate::ai::TabAiSourceType::ClipboardEntry),
@@ -4130,9 +4089,7 @@ impl ScriptListApp {
         );
         self.toast_manager.push(
             crate::components::toast::Toast::error(
-                format!(
-                    "{apply_label} failed: select terminal text or wait for output."
-                ),
+                format!("{apply_label} failed: select terminal text or wait for output."),
                 &self.theme,
             )
             .duration_ms(Some(TOAST_ERROR_MS)),
@@ -4278,8 +4235,7 @@ impl ScriptListApp {
                 }
                 cx.notify();
             }
-            crate::ai::TabAiSourceType::DesktopSelection
-            | crate::ai::TabAiSourceType::Desktop => {
+            crate::ai::TabAiSourceType::DesktopSelection | crate::ai::TabAiSourceType::Desktop => {
                 // Desktop selection / generic desktop: hide the main window first,
                 // wait for focus to settle back to the previous frontmost app,
                 // then apply via set_selected_text or TextInjector::paste_text.
@@ -4359,11 +4315,7 @@ impl ScriptListApp {
     /// is still unavailable after the deadline, show a route-aware error
     /// toast instead of waiting forever.  Cancels silently if the harness
     /// closes (view leaves `QuickTerminalView`) or the entity is dropped.
-    fn apply_tab_ai_result_text_or_wait_for_route(
-        &mut self,
-        text: String,
-        cx: &mut Context<Self>,
-    ) {
+    fn apply_tab_ai_result_text_or_wait_for_route(&mut self, text: String, cx: &mut Context<Self>) {
         if let Some(route) = self.tab_ai_harness_apply_back_route.clone() {
             self.apply_tab_ai_result_text(route, text, cx);
             return;
@@ -4450,9 +4402,8 @@ impl ScriptListApp {
     ) {
         // Try to read the terminal selection directly — avoids the
         // clipboard prime → timer → read race entirely.
-        let selected_text = entity.update(cx, |term_prompt, _cx| {
-            term_prompt.selected_text_for_apply()
-        });
+        let selected_text =
+            entity.update(cx, |term_prompt, _cx| term_prompt.selected_text_for_apply());
 
         if let Some(text) = selected_text {
             self.apply_tab_ai_result_text_or_wait_for_route(text, cx);
@@ -4498,6 +4449,8 @@ impl ScriptListApp {
 
 #[cfg(test)]
 mod tests {
+    use crate::{AppView, ScriptListApp};
+
     #[test]
     fn tab_ai_user_prompt_contains_intent_and_context() {
         let prompt = crate::ai::build_tab_ai_user_prompt("force quit", r#"{"ui":{}}"#);
@@ -4618,11 +4571,7 @@ mod tests {
             metadata: None,
         };
         assert_eq!(
-            super::detect_tab_ai_source_type(
-                &AppView::ScriptList,
-                &desktop,
-                Some(&focused_target),
-            ),
+            super::detect_tab_ai_source_type(&AppView::ScriptList, &desktop, Some(&focused_target),),
             Some(crate::ai::TabAiSourceType::DesktopSelection),
             "Desktop selected text must take precedence over ScriptList classification"
         );
@@ -4648,11 +4597,7 @@ mod tests {
             metadata: None,
         };
         assert_eq!(
-            super::detect_tab_ai_source_type(
-                &AppView::ScriptList,
-                &desktop,
-                Some(&focused_target),
-            ),
+            super::detect_tab_ai_source_type(&AppView::ScriptList, &desktop, Some(&focused_target),),
             Some(crate::ai::TabAiSourceType::ScriptListItem),
             "ScriptList with focused target must resolve to ScriptListItem"
         );
@@ -4846,6 +4791,4 @@ mod tests {
             "Should derive from intent, got: {name}"
         );
     }
-
-
 }
