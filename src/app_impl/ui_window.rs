@@ -48,11 +48,12 @@ impl ScriptListApp {
     ) {
         tracing::info!(
             target: "script_kit::footer_popup",
-            event = "native_footer_action_received",
+            event = "main_window_footer_action_dispatch",
+            source = "native_footer",
             action = ?action,
             view = ?self.current_view,
             main_window_mode = ?self.main_window_mode,
-            "Dispatching native footer action"
+            "Dispatching main-window footer action"
         );
 
         if !matches!(self.current_view, AppView::ScriptList)
@@ -60,11 +61,12 @@ impl ScriptListApp {
         {
             tracing::info!(
                 target: "script_kit::footer_popup",
-                event = "native_footer_action_ignored_inactive_surface",
+                event = "main_window_footer_action_ignored_inactive_surface",
+                source = "native_footer",
                 action = ?action,
                 view = ?self.current_view,
                 main_window_mode = ?self.main_window_mode,
-                "Ignored native footer action because the mini ScriptList footer is not the active surface"
+                "Ignored main-window footer action because the mini ScriptList footer is not the active surface"
             );
             return;
         }
@@ -74,19 +76,20 @@ impl ScriptListApp {
                 self.execute_selected(cx);
             }
             crate::footer_popup::FooterAction::Actions => {
-                if self.has_actions()
-                    || self.show_actions_popup
-                    || crate::actions::is_actions_window_open()
-                {
-                    self.toggle_actions(cx, window);
-                } else {
-                    tracing::info!(
-                        target: "script_kit::footer_popup",
-                        event = "native_footer_actions_ignored_no_actions",
-                        selected_index = self.selected_index,
-                        "Ignored native footer actions click because the current selection has no actions"
-                    );
-                }
+                // Native mini-footer must share the exact same toggle seam as Cmd+K
+                // and the GPUI footer buttons.
+                let handled =
+                    self.dispatch_actions_toggle_for_current_view(window, cx, "native_footer");
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "main_window_footer_actions_routed",
+                    source = "native_footer",
+                    handled,
+                    selected_index = self.selected_index,
+                    show_actions_popup = self.show_actions_popup,
+                    actions_window_open = crate::actions::is_actions_window_open(),
+                    "Routed native footer Actions through shared dispatcher"
+                );
             }
             crate::footer_popup::FooterAction::Ai => {
                 self.open_tab_ai_chat(cx);
