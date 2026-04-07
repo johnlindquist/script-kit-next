@@ -1,8 +1,6 @@
 use super::super::*;
 use super::types::ContextPickerItemKind;
-use crate::ai::context_picker_row::{
-    render_dense_monoline_picker_row, GHOST, HINT,
-};
+use crate::ai::context_picker_row::{render_dense_monoline_picker_row, GHOST, HINT};
 use crate::components::inline_dropdown::{
     InlineDropdown, InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis,
 };

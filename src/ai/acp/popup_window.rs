@@ -124,12 +124,19 @@ pub(crate) fn configure_popup_window<T: 'static>(
                         // SAFETY: `ns_window` comes from the live GPUI popup window on the
                         // main thread and is nil-checked before configuration.
                         unsafe {
-                            crate::platform::configure_actions_popup_window(
+                            crate::platform::configure_inline_dropdown_popup_window(
                                 ns_window,
                                 is_dark_vibrancy,
                             );
                         }
                         attach_popup_to_parent_window(cx, parent_window_handle, ns_window);
+
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_inline_dropdown_popup_attached",
+                            dark = is_dark_vibrancy,
+                            "Attached ACP inline dropdown popup to parent window"
+                        );
                     }
                 });
             })

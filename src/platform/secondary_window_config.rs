@@ -169,6 +169,31 @@ pub fn configure_actions_popup_window(_window: *mut std::ffi::c_void, _is_dark: 
     // No-op on non-macOS platforms
 }
 
+/// Configure an ACP inline dropdown popup window with the same vibrancy path as
+/// actions popups, but without the detached AppKit shadow.
+///
+/// # Safety
+/// Same invariants as `configure_actions_popup_window`.
+#[cfg(target_os = "macos")]
+pub unsafe fn configure_inline_dropdown_popup_window(window: id, is_dark: bool) {
+    configure_actions_popup_window(window, is_dark);
+
+    // Inline dropdowns should read as panel chrome, not floating popovers.
+    let _: () = msg_send![window, setHasShadow: false];
+
+    tracing::info!(
+        target: "script_kit::popup",
+        event = "inline_dropdown_popup_window_configured",
+        dark = is_dark,
+        "Configured inline dropdown popup window"
+    );
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn configure_inline_dropdown_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
+    // No-op on non-macOS platforms
+}
+
 /// Configure the confirm popup window with the same vibrancy setup as the
 /// actions popup. Reuses the shared popup vibrancy path so confirm dialogs
 /// get native macOS blur.

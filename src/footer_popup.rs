@@ -689,12 +689,24 @@ fn footer_effect_view_class() -> *const objc::runtime::Class {
             footer_mouse_up as extern "C" fn(&Object, Sel, id),
         );
         decl.add_method(
+            sel!(mouseDragged:),
+            footer_mouse_dragged as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
             sel!(rightMouseDown:),
             footer_mouse_down as extern "C" fn(&Object, Sel, id),
         );
         decl.add_method(
+            sel!(rightMouseUp:),
+            footer_mouse_up as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
             sel!(otherMouseDown:),
             footer_mouse_down as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(otherMouseUp:),
+            footer_mouse_up as extern "C" fn(&Object, Sel, id),
         );
         decl.add_method(
             sel!(scrollWheel:),
@@ -709,6 +721,31 @@ fn footer_effect_view_class() -> *const objc::runtime::Class {
 }
 
 #[cfg(target_os = "macos")]
+/// Walk up the view hierarchy from `view` looking for the nearest NSButton.
+/// Returns the button if found, nil otherwise.
+///
+/// SAFETY: Caller must ensure `view` is a valid, live AppKit view pointer on
+/// the main thread.
+unsafe fn nearest_footer_button(mut view: id) -> id {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    while view != nil {
+        let is_button: cocoa::base::BOOL = msg_send![view, isKindOfClass: class!(NSButton)];
+        if is_button == YES {
+            return view;
+        }
+
+        let superview: id = msg_send![view, superview];
+        if superview == nil || superview == view {
+            break;
+        }
+        view = superview;
+    }
+
+    nil
+}
+
+#[cfg(target_os = "macos")]
 extern "C" fn footer_hit_test(
     this: &objc::runtime::Object,
     _: objc::runtime::Sel,
@@ -717,26 +754,55 @@ extern "C" fn footer_hit_test(
     use objc::{class, msg_send, sel, sel_impl};
 
     // SAFETY: `this` is a live NSVisualEffectView subclass instance. We delegate
-    // to AppKit hit testing first so real subviews win, then swallow background
-    // hits by returning `self` instead of nil.
+    // to AppKit hit testing first, then only allow real NSButton subviews to
+    // receive events. All other hits (containers, text fields, dividers) are
+    // swallowed by returning `self`.
     unsafe {
         let this_id = this as *const _ as id;
         let hit: id = msg_send![super(this_id, class!(NSVisualEffectView)), hitTest: point];
-        if hit != nil {
-            return hit;
+        let button = nearest_footer_button(hit);
+        if button != nil {
+            return button;
         }
         this_id
     }
 }
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_mouse_down(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {}
+extern "C" fn footer_mouse_down(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    tracing::debug!(
+        target: "script_kit::footer_popup",
+        event = "native_footer_background_mouse_swallowed",
+        "Swallowed background mouseDown in native footer"
+    );
+}
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_mouse_up(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {}
+extern "C" fn footer_mouse_up(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    tracing::debug!(
+        target: "script_kit::footer_popup",
+        event = "native_footer_background_mouse_up_swallowed",
+        "Swallowed background mouseUp in native footer"
+    );
+}
 
 #[cfg(target_os = "macos")]
-extern "C" fn footer_scroll_wheel(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {}
+extern "C" fn footer_mouse_dragged(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    tracing::debug!(
+        target: "script_kit::footer_popup",
+        event = "native_footer_background_mouse_dragged_swallowed",
+        "Swallowed background mouseDragged in native footer"
+    );
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_scroll_wheel(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    tracing::debug!(
+        target: "script_kit::footer_popup",
+        event = "native_footer_background_scroll_swallowed",
+        "Swallowed background scrollWheel in native footer"
+    );
+}
 
 #[cfg(target_os = "macos")]
 extern "C" fn footer_accepts_first_mouse(

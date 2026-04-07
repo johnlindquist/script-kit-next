@@ -134,6 +134,25 @@ fn terminal_actions_for_dialog() -> Vec<crate::actions::Action> {
     actions
 }
 
+fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
+    match host {
+        ActionsDialogHost::MainList => "MainList",
+        ActionsDialogHost::ClipboardHistory => "ClipboardHistory",
+        ActionsDialogHost::EmojiPicker => "EmojiPicker",
+        ActionsDialogHost::FileSearch => "FileSearch",
+        ActionsDialogHost::ChatPrompt => "ChatPrompt",
+        ActionsDialogHost::ArgPrompt => "ArgPrompt",
+        ActionsDialogHost::DivPrompt => "DivPrompt",
+        ActionsDialogHost::EditorPrompt => "EditorPrompt",
+        ActionsDialogHost::TermPrompt => "TermPrompt",
+        ActionsDialogHost::FormPrompt => "FormPrompt",
+        ActionsDialogHost::WebcamPrompt => "WebcamPrompt",
+        ActionsDialogHost::AppLauncher => "AppLauncher",
+        ActionsDialogHost::AcpChat => "AcpChat",
+        ActionsDialogHost::AcpHistory => "AcpHistory",
+    }
+}
+
 impl ScriptListApp {
     fn make_actions_window_on_close_callback(
         app_entity: Entity<Self>,
@@ -237,22 +256,59 @@ impl ScriptListApp {
         self.gpui_input_focused = false;
     }
 
+    fn actions_dialog_host_for_current_view(&self) -> Option<ActionsDialogHost> {
+        match self.actions_support_for_view() {
+            super::actions_dialog::ActionsSupport::SharedDialog(host) => Some(host),
+            super::actions_dialog::ActionsSupport::None => None,
+        }
+    }
+
     pub(crate) fn toggle_actions(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        let is_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
-        let host = if is_acp_chat {
-            ActionsDialogHost::AcpChat
-        } else {
-            ActionsDialogHost::MainList
+        let Some(host) = self.actions_dialog_host_for_current_view() else {
+            tracing::info!(
+                target: "script_kit::actions",
+                event = "actions_toggle_ignored_unsupported_view",
+                view = ?self.current_view,
+                "Ignored actions toggle because current view does not participate in the shared actions dialog"
+            );
+            cx.notify();
+            return;
         };
-        let host_label = if is_acp_chat { "AcpChat" } else { "MainList" };
+
+        let host_label = actions_dialog_host_label(&host);
         let recently_closed = self.was_actions_recently_closed();
+
+        tracing::info!(
+            target: "script_kit::actions",
+            event = "actions_toggle_routed",
+            host = host_label,
+            view = ?self.current_view,
+            show_actions_popup = self.show_actions_popup,
+            actions_window_open = is_actions_window_open(),
+            "Routing actions toggle through canonical view host"
+        );
+
         if self.show_actions_popup || is_actions_window_open() {
             self.close_actions_popup(host, window, cx);
         } else if recently_closed {
             // The activation-triggered close (focus_lost) already closed the dialog
             // between mouseDown and the click handler. Suppress reopen.
+            tracing::info!(
+                target: "script_kit::actions",
+                event = "actions_toggle_suppressed_recent_close",
+                host = host_label,
+                view = ?self.current_view,
+                "Suppressed actions reopen because the dialog was just closed"
+            );
         } else {
             if !self.has_actions() {
+                tracing::info!(
+                    target: "script_kit::actions",
+                    event = "actions_toggle_ignored_no_actions",
+                    host = host_label,
+                    view = ?self.current_view,
+                    "Ignored actions toggle because the current selection has no actions"
+                );
                 return;
             }
 
