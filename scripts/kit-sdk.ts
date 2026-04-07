@@ -5066,6 +5066,12 @@ globalThis.setInput = function setInput(text: string): void {
  * @throws If paste operation fails
  */
 globalThis.setSelectedText = async function setSelectedText(text: string): Promise<void> {
+  // Hide the window so the previous app regains focus before we simulate Cmd+V.
+  await hide();
+
+  // Brief delay to ensure focus has transferred to the previous app.
+  await new Promise(r => setTimeout(r, 20));
+
   const id = nextId();
 
   return new Promise((resolve, reject) => {
