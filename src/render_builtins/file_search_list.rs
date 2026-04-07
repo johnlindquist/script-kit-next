@@ -7,6 +7,7 @@
             .collect();
         let current_selected = selected_index;
         let file_hovered = self.hovered_index;
+        let current_input_mode = self.input_mode;
         let is_loading = self.file_search_loading;
         let click_entity_handle = cx.entity().downgrade();
         let hover_entity_handle = cx.entity().downgrade();
@@ -76,8 +77,8 @@
             uniform_list(
                 "file-search-list",
                 filtered_len,
-                move |visible_range, window, _cx| {
-                    let hover_allowed = !window.last_input_was_keyboard();
+                move |visible_range, _window, _cx| {
+                    let hover_allowed = current_input_mode == InputMode::Mouse;
                     visible_range
                         .map(|ix| {
                             if let Some((_result_idx, file)) = files_for_closure.get(ix) {
@@ -94,7 +95,7 @@
                                 };
                                 let hover_bg = rgba((list_hover << 8) | hover_alpha);
 
-                                // Click handler: select on click, open file on double-click
+                                // Click handler via canonical mouse contract
                                 let click_entity = click_entity_handle.clone();
                                 let file_path = file.path.clone();
                                 let click_handler = move |event: &gpui::ClickEvent,
@@ -103,47 +104,53 @@
                                     if let Some(app) = click_entity.upgrade() {
                                         let file_path = file_path.clone();
                                         app.update(cx, |this, cx| {
+                                            let mode_was_keyboard =
+                                                !matches!(this.input_mode, InputMode::Mouse);
+                                            this.enter_mouse_mode_from_row(cx);
+
+                                            let mut selection_changed = false;
                                             if let AppView::FileSearchView {
                                                 selected_index, ..
                                             } = &mut this.current_view
                                             {
-                                                *selected_index = ix;
-                                            }
-                                            cx.notify();
-
-                                            // Double-click: open file
-                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
-                                                if mouse_event.down.click_count == 2 {
-                                                    logging::log(
-                                                        "UI",
-                                                        &format!(
-                                                            "Double-click opening file: {}",
-                                                            file_path
-                                                        ),
+                                                if *selected_index != ix {
+                                                    tracing::debug!(
+                                                        target: "script_kit::mouse",
+                                                        event = "file_search_row_selected_from_mouse",
+                                                        row_index = ix,
+                                                        selected_index_before = *selected_index,
+                                                        "Selected file-search row from mouse click"
                                                     );
-                                                    let _ = file_search::open_file(&file_path);
-                                                    this.close_and_reset_window(cx);
+                                                    *selected_index = ix;
+                                                    selection_changed = true;
                                                 }
+                                            }
+
+                                            if selection_changed || mode_was_keyboard {
+                                                cx.notify();
+                                            }
+
+                                            if Self::mouse_click_count(event) >= 2 {
+                                                tracing::debug!(
+                                                    target: "script_kit::mouse",
+                                                    event = "file_search_row_double_clicked",
+                                                    row_index = ix,
+                                                    path = %file_path,
+                                                    "Opening file from mouse double-click"
+                                                );
+                                                let _ = file_search::open_file(&file_path);
+                                                this.close_and_reset_window(cx);
                                             }
                                         });
                                     }
                                 };
 
-                                // Hover handler for mouse tracking
+                                // Hover handler via canonical mouse contract
                                 let hover_entity = hover_entity_handle.clone();
                                 let hover_handler = move |hov: &bool, _window: &mut Window, cx: &mut gpui::App| {
                                     if let Some(app) = hover_entity.upgrade() {
                                         app.update(cx, |this, cx| {
-                                            if *hov {
-                                                this.input_mode = InputMode::Mouse;
-                                                if this.hovered_index != Some(ix) {
-                                                    this.hovered_index = Some(ix);
-                                                    cx.notify();
-                                                }
-                                            } else if this.hovered_index == Some(ix) {
-                                                this.hovered_index = None;
-                                                cx.notify();
-                                            }
+                                            this.update_row_hover_from_mouse(ix, *hov, cx);
                                         });
                                     }
                                 };

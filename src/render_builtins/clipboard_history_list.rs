@@ -89,7 +89,7 @@
                                     item = item.icon("📄");
                                 }
 
-                                // Click handler: select on click, paste on double-click
+                                // Click handler via canonical mouse contract
                                 let click_entity = click_entity_handle.clone();
                                 let entry_id = entry.id.clone();
                                 let click_handler = move |event: &gpui::ClickEvent,
@@ -98,6 +98,7 @@
                                     if let Some(app) = click_entity.upgrade() {
                                         let entry_id = entry_id.clone();
                                         app.update(cx, |this, cx| {
+                                            this.enter_mouse_mode_from_row(cx);
                                             if let AppView::ClipboardHistoryView {
                                                 selected_index, ..
                                             } = &mut this.current_view
@@ -109,56 +110,45 @@
                                             cx.notify();
 
                                             // Double-click: copy and paste
-                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
-                                                if mouse_event.down.click_count == 2 {
-                                                    logging::log(
-                                                        "UI",
-                                                        &format!(
-                                                            "Double-click paste clipboard entry {}",
-                                                            entry_id
-                                                        ),
+                                            if Self::mouse_click_count(event) >= 2 {
+                                                tracing::debug!(
+                                                    target: "script_kit::mouse",
+                                                    event = "clipboard_list_row_double_clicked",
+                                                    row_index = ix,
+                                                    entry_id = %entry_id,
+                                                    "Pasting clipboard entry from mouse double-click"
+                                                );
+                                                if clipboard_history::copy_entry_to_clipboard(
+                                                    &entry_id,
+                                                )
+                                                .is_ok()
+                                                {
+                                                    script_kit_gpui::set_main_window_visible(
+                                                        false,
                                                     );
-                                                    if clipboard_history::copy_entry_to_clipboard(
-                                                        &entry_id,
-                                                    )
-                                                    .is_ok()
-                                                    {
-                                                        script_kit_gpui::set_main_window_visible(
-                                                            false,
+                                                    platform::defer_hide_main_window(cx);
+                                                    NEEDS_RESET
+                                                        .store(true, Ordering::SeqCst);
+                                                    std::thread::spawn(|| {
+                                                        std::thread::sleep(
+                                                            std::time::Duration::from_millis(
+                                                                100,
+                                                            ),
                                                         );
-                                                        platform::defer_hide_main_window(cx);
-                                                        NEEDS_RESET
-                                                            .store(true, Ordering::SeqCst);
-                                                        std::thread::spawn(|| {
-                                                            std::thread::sleep(
-                                                                std::time::Duration::from_millis(
-                                                                    100,
-                                                                ),
-                                                            );
-                                                            let _ = selected_text::simulate_paste_with_cg();
-                                                        });
-                                                    }
+                                                        let _ = selected_text::simulate_paste_with_cg();
+                                                    });
                                                 }
                                             }
                                         });
                                     }
                                 };
 
-                                // Hover handler for mouse tracking
+                                // Hover handler via canonical mouse contract
                                 let hover_entity = hover_entity_handle.clone();
                                 let hover_handler = move |is_hovered: &bool, _window: &mut Window, cx: &mut gpui::App| {
                                     if let Some(app) = hover_entity.upgrade() {
                                         app.update(cx, |this, cx| {
-                                            if *is_hovered {
-                                                this.input_mode = InputMode::Mouse;
-                                                if this.hovered_index != Some(ix) {
-                                                    this.hovered_index = Some(ix);
-                                                    cx.notify();
-                                                }
-                                            } else if this.hovered_index == Some(ix) {
-                                                this.hovered_index = None;
-                                                cx.notify();
-                                            }
+                                            this.update_row_hover_from_mouse(ix, *is_hovered, cx);
                                         });
                                     }
                                 };

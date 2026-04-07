@@ -229,6 +229,93 @@ impl ScriptListApp {
         self.set_selected_index(target_index, reason, cx);
     }
 
+    // =========================================================================
+    // Canonical row mouse contract
+    // =========================================================================
+
+    #[inline]
+    fn enter_mouse_mode_from_row(&mut self, cx: &mut Context<Self>) {
+        if !matches!(self.input_mode, InputMode::Mouse) {
+            tracing::debug!(
+                target: "script_kit::mouse",
+                event = "mouse_mode_entered",
+                "Switched input mode to mouse"
+            );
+        }
+        self.input_mode = InputMode::Mouse;
+        self.show_mouse_cursor(cx);
+    }
+
+    #[inline]
+    fn update_row_hover_from_mouse(
+        &mut self,
+        row_index: usize,
+        hovered: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let mode_was_keyboard = !matches!(self.input_mode, InputMode::Mouse);
+        self.enter_mouse_mode_from_row(cx);
+
+        if hovered {
+            if self.hovered_index != Some(row_index) {
+                tracing::debug!(
+                    target: "script_kit::mouse",
+                    event = "row_hover_entered",
+                    row_index,
+                    selected_index = self.selected_index,
+                    "Mouse row hover entered"
+                );
+                self.hovered_index = Some(row_index);
+                cx.notify();
+            } else if mode_was_keyboard {
+                cx.notify();
+            }
+            return;
+        }
+
+        if self.hovered_index == Some(row_index) {
+            tracing::debug!(
+                target: "script_kit::mouse",
+                event = "row_hover_exited",
+                row_index,
+                selected_index = self.selected_index,
+                "Mouse row hover exited"
+            );
+            self.hovered_index = None;
+            cx.notify();
+        }
+    }
+
+    #[inline]
+    fn select_row_from_mouse(
+        &mut self,
+        row_index: usize,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let mode_was_keyboard = !matches!(self.input_mode, InputMode::Mouse);
+        self.enter_mouse_mode_from_row(cx);
+
+        if row_index != self.selected_index {
+            tracing::debug!(
+                target: "script_kit::mouse",
+                event = "row_selected_from_mouse",
+                row_index,
+                selected_index_before = self.selected_index,
+                reason,
+                "Mouse row click selected row"
+            );
+            self.set_selected_index(row_index, reason, cx);
+        } else if mode_was_keyboard {
+            cx.notify();
+        }
+    }
+
+    #[inline]
+    fn mouse_click_count(event: &gpui::ClickEvent) -> usize {
+        event.click_count()
+    }
+
     /// Jump to the last selectable (non-header) item in the list
     fn move_selection_to_last(&mut self, cx: &mut Context<Self>) {
         self.enter_keyboard_mode(cx);
