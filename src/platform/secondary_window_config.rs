@@ -203,6 +203,32 @@ pub fn configure_confirm_popup_window(_window: *mut std::ffi::c_void, _is_dark: 
     // No-op on non-macOS platforms
 }
 
+/// Configure the launcher footer popup window. This uses the shared popup
+/// vibrancy path, disables its shadow, and ignores mouse events so the launcher
+/// content beneath it remains interactive.
+///
+/// # Safety
+/// Same invariants as `configure_actions_popup_window`.
+#[cfg(target_os = "macos")]
+pub unsafe fn configure_footer_popup_window(window: id, is_dark: bool) {
+    configure_confirm_popup_window(window, is_dark);
+    let _: () = msg_send![window, setIgnoresMouseEvents: true];
+
+    let title: id = msg_send![
+        class!(NSString),
+        stringWithUTF8String: c"Script Kit Footer".as_ptr()
+    ];
+    if title != nil {
+        let _: () = msg_send![window, setTitle: title];
+    }
+
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn configure_footer_popup_window(_window: *mut std::ffi::c_void, _is_dark: bool) {
+    // No-op on non-macOS platforms
+}
+
 // ============================================================================
 // Secondary Window Vibrancy Configuration
 // ============================================================================
@@ -318,6 +344,7 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
             if title_string.contains("Script Kit AI")
                 || title_string.contains("Script Kit Notes")
                 || title_string.contains("Actions")
+                || title_string.contains("Script Kit Footer")
             {
                 // Clear window appearance so GPUI can detect system appearance changes.
                 // Set appearance on individual NSVisualEffectViews instead.

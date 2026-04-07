@@ -144,6 +144,7 @@ impl ScriptListApp {
 
         // Update visibility state FIRST to prevent race conditions
         script_kit_gpui::set_main_window_visible(false);
+        crate::footer_popup::close_main_footer_popup(&mut *cx);
         logging::log("VISIBILITY", "WINDOW_VISIBLE set to: false");
 
         // If in a prompt, cancel the script execution

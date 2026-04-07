@@ -57,7 +57,7 @@
                     // Subscribe to window bounds changes to save position when user drags the window.
                     // This persists the position per-display so it can be restored on next show.
                     // Store subscription in view to keep it alive.
-                    view.bounds_subscription = Some(ctx.observe_window_bounds(win, |_view, win, _ctx| {
+                    view.bounds_subscription = Some(ctx.observe_window_bounds(win, |view, win, ctx| {
                         // Only save if window is visible (avoid saving during initial positioning)
                         if is_main_window_visible() {
                             if let Some((x, y, width, height)) = platform::get_main_window_bounds() {
@@ -77,6 +77,7 @@
                                 }
                             }
                         }
+                        view.sync_main_footer_popup(ctx);
                         // Suppress unused variable warning - we need win to access window bounds
                         let _ = win;
                     }));
@@ -105,6 +106,8 @@
 
                         // Update the app entity theme
                         view.update_theme(ctx);
+                        view.sync_main_footer_popup(ctx);
+                        crate::footer_popup::notify_main_footer_popup(ctx);
 
                         // Notify all registered windows to re-render with new colors
                         windows::notify_all_windows(ctx);
