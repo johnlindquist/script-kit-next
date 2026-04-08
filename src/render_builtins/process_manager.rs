@@ -475,14 +475,24 @@ impl ScriptListApp {
                     .py(px(design_spacing.padding_xs))
                     .child(list_element),
             )
-            // Footer — minimal hint strip
-            .child(crate::components::render_simple_hint_strip(
-                vec![
+            // Footer — route through native footer slot
+            .children({
+                let hints = vec![
                     gpui::SharedString::from("↵ Stop"),
                     gpui::SharedString::from("Esc Back"),
-                ],
-                None,
-            ))
+                ];
+                let gpui_footer = crate::components::render_simple_hint_strip(hints, None);
+                let footer = self.main_window_footer_slot(gpui_footer);
+
+                tracing::info!(
+                    target: "script_kit::prompt_chrome",
+                    surface = "process_manager",
+                    native_footer = footer.is_none(),
+                    "process_manager_footer_routed"
+                );
+
+                footer
+            })
             .into_any_element()
     }
 }
@@ -495,6 +505,10 @@ mod process_manager_chrome_audit {
         assert!(
             source.contains("render_simple_hint_strip("),
             "process_manager should use render_simple_hint_strip"
+        );
+        assert!(
+            source.contains("main_window_footer_slot("),
+            "process_manager should route footer through main_window_footer_slot"
         );
         assert!(
             source.contains("SectionDivider::new()"),

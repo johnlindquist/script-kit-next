@@ -362,14 +362,24 @@ impl ScriptListApp {
                     .child(actions_panel),
             );
 
-        crate::components::render_minimal_list_prompt_scaffold(
+        let hints = vec![
+            gpui::SharedString::from("↵ Switch"),
+            gpui::SharedString::from("Esc Back"),
+        ];
+        let gpui_footer = crate::components::render_simple_hint_strip(hints, None);
+        let footer = self.main_window_footer_slot(gpui_footer);
+
+        tracing::info!(
+            target: "script_kit::prompt_chrome",
+            surface = "window_switcher",
+            native_footer = footer.is_none(),
+            "window_switcher_footer_routed"
+        );
+
+        crate::components::render_minimal_list_prompt_scaffold_footer_aware(
             header,
             content,
-            vec![
-                gpui::SharedString::from("↵ Switch"),
-                gpui::SharedString::from("Esc Back"),
-            ],
-            None,
+            footer,
         )
         .rounded(px(design_visual.radius_lg))
         .text_color(rgb(text_primary))
@@ -387,8 +397,12 @@ mod window_switcher_chrome_audit {
     fn window_switcher_uses_minimal_chrome_footer() {
         let source = include_str!("window_switcher.rs");
         assert!(
-            source.contains("render_minimal_list_prompt_scaffold("),
-            "window_switcher should use render_minimal_list_prompt_scaffold"
+            source.contains("render_minimal_list_prompt_scaffold_footer_aware("),
+            "window_switcher should use render_minimal_list_prompt_scaffold_footer_aware"
+        );
+        assert!(
+            source.contains("main_window_footer_slot("),
+            "window_switcher should route footer through main_window_footer_slot"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(

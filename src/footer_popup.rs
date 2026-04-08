@@ -405,6 +405,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         target: "script_kit::footer_popup",
         event = "native_footer_host_refreshed",
         surface = config.surface,
+        buttons = ?config.buttons,
         button_count = config.buttons.len(),
         width = content_bounds.size.width,
         height = footer_height(),
@@ -1018,10 +1019,13 @@ extern "C" fn footer_button_mouse_entered(
             return;
         }
         let is_actions: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_isActionsButton");
+        let surface = active_main_window_footer_surface().unwrap_or("none");
         tracing::debug!(
             target: "script_kit::footer_popup",
             event = "native_footer_button_hover_entered",
             is_actions_button = is_actions == YES,
+            tint = "hover",
+            surface,
             "Native footer button hover entered"
         );
 
@@ -1035,7 +1039,7 @@ extern "C" fn footer_button_mouse_entered(
         }
         let theme = crate::theme::get_cached_theme();
         let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-        let hover_ns: id = ns_color_from_rgba(chrome.selection_rgba);
+        let hover_ns: id = ns_color_from_rgba(chrome.hover_rgba);
         if hover_ns != nil {
             let cg: id = msg_send![hover_ns, CGColor];
             if cg != nil {
@@ -1060,12 +1064,14 @@ extern "C" fn footer_button_mouse_exited(
         let selected: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_selected");
         let is_actions: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_isActionsButton");
         let actions_window_open = crate::actions::is_actions_window_open();
+        let surface = active_main_window_footer_surface().unwrap_or("none");
         tracing::debug!(
             target: "script_kit::footer_popup",
             event = "native_footer_button_hover_exited",
             is_actions_button = is_actions == YES,
             selected = selected == YES,
             actions_window_open,
+            surface,
             "Native footer button hover exited"
         );
 

@@ -25,6 +25,7 @@ fn assert_minimal_builtin_surface(name: &str, source: &str) {
         source.contains("render_simple_hint_strip(")
             || source.contains("HintStrip::new(")
             || source.contains("render_minimal_list_prompt_scaffold(")
+            || source.contains("render_minimal_list_prompt_scaffold_footer_aware(")
             || source.contains("render_minimal_list_prompt_shell("),
         "{name} should use a shared minimal chrome helper (hint strip or minimal scaffold)"
     );
@@ -35,6 +36,7 @@ fn assert_minimal_builtin_surface(name: &str, source: &str) {
     );
 
     let uses_scaffold = source.contains("render_minimal_list_prompt_scaffold(")
+        || source.contains("render_minimal_list_prompt_scaffold_footer_aware(")
         || source.contains("render_minimal_list_prompt_shell(");
 
     if !uses_scaffold {

@@ -255,14 +255,24 @@ impl ScriptListApp {
             .py(px(design_spacing.padding_xs))
             .child(list_element);
 
-        crate::components::render_minimal_list_prompt_scaffold(
+        let hints = vec![
+            gpui::SharedString::from("↵ Run"),
+            gpui::SharedString::from("Esc Back"),
+        ];
+        let gpui_footer = crate::components::render_simple_hint_strip(hints, None);
+        let footer = self.main_window_footer_slot(gpui_footer);
+
+        tracing::info!(
+            target: "script_kit::prompt_chrome",
+            surface = "current_app_commands",
+            native_footer = footer.is_none(),
+            "current_app_commands_footer_routed"
+        );
+
+        crate::components::render_minimal_list_prompt_scaffold_footer_aware(
             header,
             content,
-            vec![
-                gpui::SharedString::from("↵ Run"),
-                gpui::SharedString::from("Esc Back"),
-            ],
-            None,
+            footer,
         )
         .rounded(px(design_visual.radius_lg))
         .text_color(rgb(text_primary))
@@ -280,8 +290,12 @@ mod current_app_commands_chrome_audit {
     fn current_app_commands_uses_minimal_chrome_footer() {
         let source = include_str!("current_app_commands.rs");
         assert!(
-            source.contains("render_minimal_list_prompt_scaffold("),
-            "current_app_commands should use render_minimal_list_prompt_scaffold"
+            source.contains("render_minimal_list_prompt_scaffold_footer_aware("),
+            "current_app_commands should use render_minimal_list_prompt_scaffold_footer_aware"
+        );
+        assert!(
+            source.contains("main_window_footer_slot("),
+            "current_app_commands should route footer through main_window_footer_slot"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(

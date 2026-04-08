@@ -378,6 +378,50 @@ pub(crate) fn render_minimal_list_prompt_shell(
     )
 }
 
+/// Footer-aware variant of [`render_minimal_list_prompt_scaffold`].
+///
+/// When the native AppKit footer owns the footer slot, `footer` is `None`
+/// and the scaffold omits the GPUI hint strip entirely.  Otherwise the
+/// pre-built GPUI footer element is appended as-is.
+#[allow(dead_code)]
+pub(crate) fn render_minimal_list_prompt_scaffold_footer_aware(
+    header: impl IntoElement,
+    content: impl IntoElement,
+    footer: Option<AnyElement>,
+) -> Div {
+    let scaffold = div()
+        .w_full()
+        .h_full()
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .w_full()
+                .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(header),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_h(px(0.))
+                .w_full()
+                .overflow_hidden()
+                .child(content),
+        );
+
+    if let Some(footer) = footer {
+        scaffold.child(footer)
+    } else {
+        scaffold
+    }
+}
+
 /// Footer-aware variant of [`render_minimal_list_prompt_shell`].
 ///
 /// Accepts a pre-built footer element (typically from `main_window_footer_slot`)

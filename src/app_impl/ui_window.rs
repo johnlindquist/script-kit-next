@@ -85,20 +85,20 @@ impl ScriptListApp {
                 }
             }
             crate::footer_popup::FooterAction::Close => {
+                let surface = self.main_window_footer_surface().unwrap_or("none");
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "main_window_footer_close_requested",
+                    source,
+                    surface,
+                    view = ?self.current_view,
+                    "Closing current footer-owned surface"
+                );
+
                 if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
-                    tracing::info!(
-                        target: "script_kit::footer_popup",
-                        event = "quick_terminal_footer_close",
-                        "Closing quick terminal from native footer"
-                    );
                     self.close_tab_ai_harness_terminal_with_window(window, cx);
                 } else {
-                    tracing::info!(
-                        target: "script_kit::footer_popup",
-                        event = "main_window_footer_close_ignored",
-                        view = ?self.current_view,
-                        "Ignored Close footer action outside QuickTerminalView"
-                    );
+                    self.go_back_or_close(window, cx);
                 }
             }
         }
@@ -131,6 +131,33 @@ impl ScriptListApp {
             })
             .detach();
         });
+    }
+
+    fn closeable_native_footer_buttons(
+        &self,
+        run_key: &'static str,
+        run_label: &'static str,
+    ) -> Vec<crate::footer_popup::FooterButtonConfig> {
+        use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+        let footer_disabled = self.main_window_footer_buttons_blocked();
+        let enabled = !footer_disabled;
+        let buttons = vec![
+            FooterButtonConfig::new(FooterAction::Run, run_key, run_label).enabled(enabled),
+            FooterButtonConfig::new(FooterAction::Close, "Esc", "Back").enabled(enabled),
+        ];
+
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "main_window_footer_closeable_buttons_resolved",
+            view = ?self.current_view,
+            run_key,
+            run_label,
+            footer_disabled,
+            button_count = buttons.len(),
+            "Resolved closeable native footer buttons"
+        );
+        buttons
     }
 
     fn standard_main_window_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
@@ -181,6 +208,9 @@ impl ScriptListApp {
             AppView::EmojiPickerView { .. } => Some("emoji_picker"),
             AppView::AcpHistoryView { .. } => Some("acp_history"),
             AppView::AcpChatView { .. } => Some("acp_chat"),
+            AppView::ProcessManagerView { .. } => Some("process_manager"),
+            AppView::WindowSwitcherView { .. } => Some("window_switcher"),
+            AppView::CurrentAppCommandsView { .. } => Some("current_app_commands"),
             _ => None,
         }
     }
@@ -217,6 +247,15 @@ impl ScriptListApp {
     ) -> Vec<crate::footer_popup::FooterButtonConfig> {
         match &self.current_view {
             AppView::QuickTerminalView { .. } => self.quick_terminal_footer_buttons(),
+            AppView::WindowSwitcherView { .. } => {
+                self.closeable_native_footer_buttons("↵", "Switch")
+            }
+            AppView::ProcessManagerView { .. } => {
+                self.closeable_native_footer_buttons("↵", "Stop")
+            }
+            AppView::CurrentAppCommandsView { .. } => {
+                self.closeable_native_footer_buttons("↵", "Run")
+            }
             _ => {
                 let buttons = self.standard_main_window_footer_buttons();
                 tracing::info!(

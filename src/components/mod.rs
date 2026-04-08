@@ -107,8 +107,9 @@ pub(crate) use prompt_layout_shell::{
     render_expanded_view_prompt_shell, render_expanded_view_scaffold,
     render_expanded_view_scaffold_with_footer, render_expanded_view_scaffold_with_hints,
     render_hint_strip_leading_text, render_minimal_list_prompt_scaffold,
-    render_minimal_list_prompt_shell, render_minimal_list_prompt_shell_with_footer,
-    render_simple_hint_strip, render_simple_prompt_shell,
+    render_minimal_list_prompt_scaffold_footer_aware, render_minimal_list_prompt_shell,
+    render_minimal_list_prompt_shell_with_footer, render_simple_hint_strip,
+    render_simple_prompt_shell,
 };
 #[allow(unused_imports)]
 pub use section_divider::SectionDivider;
