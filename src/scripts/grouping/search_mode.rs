@@ -21,19 +21,26 @@ pub(super) fn build_search_mode_results(
     {
         let max_frecency_bonus = 50i32;
 
-        // Helper to get the frecency path for a result (mirrors grouped-view logic)
+        // Helper to get the frecency path for a result (mirrors grouped-view logic).
+        // Skills and scriptlets use plugin-qualified keys.
         let get_path = |result: &SearchResult| -> Option<String> {
             match result {
                 SearchResult::Script(sm) => Some(sm.script.path.to_string_lossy().to_string()),
                 SearchResult::App(am) => Some(am.app.path.to_string_lossy().to_string()),
                 SearchResult::BuiltIn(bm) => Some(format!("builtin:{}", bm.entry.id)),
-                SearchResult::Scriptlet(sm) => Some(format!("scriptlet:{}", sm.scriptlet.name)),
+                SearchResult::Scriptlet(sm) => Some(format!(
+                    "scriptlet:{}:{}",
+                    sm.scriptlet.plugin_id, sm.scriptlet.name
+                )),
+                SearchResult::Skill(sm) => Some(format!(
+                    "skill:{}:{}",
+                    sm.skill.plugin_id, sm.skill.skill_id
+                )),
                 SearchResult::Window(wm) => {
                     Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                 }
-                SearchResult::Agent(am) => {
-                    Some(format!("agent:{}", am.agent.path.to_string_lossy()))
-                }
+                // Suppressed: agents don't participate in search-mode frecency
+                SearchResult::Agent(_) => None,
                 SearchResult::Fallback(_) => None,
             }
         };

@@ -1,8 +1,8 @@
 # Script Kit SDK Reference
 
-Complete reference for AI agents creating Script Kit artifacts: scripts, extension bundles, and mdflow agents.
+Complete reference for AI agents creating Script Kit artifacts: scripts, extension bundles, skills, and mdflow agents. Plugins are the package boundary; skills are the preferred reusable AI unit.
 
-> **Package**: `@scriptkit/sdk` — **Runtime**: Bun — **Write under**: `~/.scriptkit/kit/main/{scripts,extensions,agents}`
+> **Package**: `@scriptkit/sdk` — **Runtime**: Bun — **Write under**: `~/.scriptkit/kit/main/{scripts,extensions,skills,agents}`
 
 ## One-Shot First
 
@@ -22,9 +22,15 @@ Use this plain-text route first:
 - Use for snippets, text expansion, quick shell commands, or grouped helpers
 - Write to `~/.scriptkit/kit/main/extensions/<name>.md`
 
-### mdflow agent
-- Use for reusable backend-specific prompt or automation
+### Skill (preferred reusable AI unit)
+- Use for reusable AI instructions that open ACP Chat when selected from the main menu
+- Write to `~/.scriptkit/kit/main/skills/<name>/SKILL.md`
+- Skills are the preferred way to package reusable AI behavior — plugins are the package boundary
+
+### mdflow agent (compatibility)
+- Use only when you need a specific backend suffix or legacy mdflow features
 - Write to `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
+- For new reusable AI work, prefer creating a skill instead
 
 Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact.
 
@@ -32,7 +38,8 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 
 - Create exactly one artifact per request.
 - Save runnable user files only under `~/.scriptkit/kit/main/`.
-- Do not create a `.ts` script when the request is really a bundle or agent.
+- Do not create a `.ts` script when the request is really a bundle, skill, or agent.
+- For new reusable AI work, create a skill (`kit/main/skills/<name>/SKILL.md`), not an agent.
 - For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
 - Agent files do not use `export const metadata`; use underscore-prefixed `_sk_*` keys.
 - Choose the backend suffix deliberately: `.claude.md`, `.gemini.md`, `.codex.md`, `.copilot.md`, or `.i.gemini.md`.
@@ -43,7 +50,8 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 - Machine-readable SDK reference → `kit://sdk-reference`
 - Script details → `~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md`
 - Bundle details → `~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md`
-- Agent details → `~/.scriptkit/kit/authoring/skills/agents/SKILL.md`
+- Skills overview → `~/.scriptkit/kit/authoring/skills/README.md`
+- Agent details (compatibility) → `~/.scriptkit/kit/authoring/skills/agents/SKILL.md`
 - Script example → `~/.scriptkit/kit/examples/scripts/hello-world.ts`
 - Bundle starter → `~/.scriptkit/kit/examples/extensions/starter.md`
 - Agent example → `~/.scriptkit/kit/examples/agents/review-pr.claude.md`
@@ -61,11 +69,19 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 - `tool:<name>` fences must begin with `import "@scriptkit/sdk";`
 - Do not add `export const metadata` at the top of the markdown file
 
-### mdflow agent
+### Skill (preferred reusable AI unit)
+- Create a directory under `~/.scriptkit/kit/main/skills/<name>/`
+- Add a `SKILL.md` file with YAML frontmatter (`name`, `description`)
+- Skills appear in the main menu and always open ACP Chat when selected
+- Plugins are the package boundary — each plugin owns its own skills
+- Prefer skills over agents for any new reusable AI work
+
+### mdflow agent (compatibility)
 - Save to `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
 - Use `_sk_*` metadata keys
 - Do not add `import "@scriptkit/sdk"`
 - Do not use `export const metadata`
+- For new reusable AI work, prefer creating a skill instead
 
 For exact function signatures, treat `kit://sdk-reference` as the source of truth.
 
@@ -301,12 +317,13 @@ export default {
 |---------|------|
 | Scripts | `~/.scriptkit/kit/main/scripts/*.ts` |
 | Extensions | `~/.scriptkit/kit/main/extensions/*.md` |
-| Agents | `~/.scriptkit/kit/main/agents/*.md` |
+| Skills (preferred AI unit) | `~/.scriptkit/kit/main/skills/<name>/SKILL.md` |
+| Agents (compatibility) | `~/.scriptkit/kit/main/agents/*.md` |
 | Config | `~/.scriptkit/kit/config.ts` |
 | Theme | `~/.scriptkit/kit/theme.json` |
 | SDK | `~/.scriptkit/sdk/kit-sdk.ts` (do not edit) |
 | Logs | `~/.scriptkit/logs/` |
-| Skills | `~/.scriptkit/kit/authoring/skills/` |
+| Authoring skills | `~/.scriptkit/kit/authoring/skills/` |
 | Examples (scripts) | `~/.scriptkit/kit/examples/scripts/` |
 | Examples (extensions) | `~/.scriptkit/kit/examples/extensions/` |
 | Examples (agents) | `~/.scriptkit/kit/examples/agents/` |
@@ -354,6 +371,8 @@ Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` vi
 - Do not put scripts in `extensions/` or `agents/`
 - Do not put bundles in `scripts/`
 - Do not put agents in `scripts/` or `extensions/`
+- Do not put skills in `scripts/` or `extensions/` — skills are `SKILL.md` directories under `skills/`
+- Do not create new agents when a skill would work — agents are a compatibility path
 - Do not use CommonJS or the old v1 SDK package
 - Do not use Node.js `fs` / `child_process` — use Bun APIs
 - Do not edit `sdk/` — managed by the app

@@ -177,7 +177,8 @@ impl ScriptListApp {
             }
 
             if let Some(result) = flat_results.get(idx).cloned() {
-                // Record frecency usage before executing (unless excluded)
+                // Record frecency usage before executing (unless excluded).
+                // Skills and scriptlets use plugin-qualified keys.
                 let frecency_path: Option<String> = match &result {
                     scripts::SearchResult::Script(sm) => {
                         Some(sm.script.path.to_string_lossy().to_string())
@@ -195,14 +196,22 @@ impl ScriptListApp {
                         }
                     }
                     scripts::SearchResult::Scriptlet(sm) => {
-                        Some(format!("scriptlet:{}", sm.scriptlet.name))
+                        Some(format!(
+                            "scriptlet:{}:{}",
+                            sm.scriptlet.plugin_id, sm.scriptlet.name
+                        ))
+                    }
+                    scripts::SearchResult::Skill(sm) => {
+                        Some(format!(
+                            "skill:{}:{}",
+                            sm.skill.plugin_id, sm.skill.skill_id
+                        ))
                     }
                     scripts::SearchResult::Window(wm) => {
                         Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                     }
-                    scripts::SearchResult::Agent(am) => {
-                        Some(format!("agent:{}", am.agent.path.to_string_lossy()))
-                    }
+                    // Suppressed: agents don't track frecency in the launcher
+                    scripts::SearchResult::Agent(_) => None,
                     // Fallbacks don't track frecency - they're utility commands
                     scripts::SearchResult::Fallback(_) => None,
                 };
@@ -240,12 +249,26 @@ impl ScriptListApp {
                     scripts::SearchResult::Window(window_match) => {
                         self.execute_window_focus(&window_match.window, cx);
                     }
+                    scripts::SearchResult::Skill(skill_match) => {
+                        // Skills always open ACP Chat with the selected skill staged
+                        tracing::info!(
+                            plugin_id = %skill_match.skill.plugin_id,
+                            skill_id = %skill_match.skill.skill_id,
+                            path = %skill_match.skill.path.display(),
+                            "acp_skill_launch_requested"
+                        );
+                        self.open_acp_with_selected_skill(&skill_match.skill, cx);
+                    }
                     scripts::SearchResult::Agent(agent_match) => {
-                        // TODO: Implement agent execution via mdflow
-                        self.last_output = Some(SharedString::from(format!(
-                            "Agent execution not yet implemented: {}",
-                            agent_match.agent.name
-                        )));
+                        // Suppressed: agents are not launchable from the main menu.
+                        // Skills replace agents as the first-class reusable AI artifact.
+                        // ACP agent catalog/provider selection remains in src/ai/acp/.
+                        tracing::info!(
+                            event = "legacy_agent_result_suppressed",
+                            agent_name = %agent_match.agent.name,
+                            agent_path = %agent_match.agent.path.display(),
+                            "Agent execution suppressed in main menu — use skills or ACP Chat"
+                        );
                     }
                     scripts::SearchResult::Fallback(fallback_match) => {
                         // Execute the fallback with the current filter text as input

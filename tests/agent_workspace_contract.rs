@@ -682,7 +682,7 @@ fn test_seeded_workspace_has_full_artifact_authoring_pack() {
     });
 }
 
-/// Root docs must route scripts, scriptlets, and agents to the correct artifact paths.
+/// Root docs must route scripts, scriptlets, skills, and agents to the correct artifact paths.
 #[test]
 fn test_root_docs_route_scripts_scriptlets_and_agents_to_real_paths() {
     with_temp_sk_path(|kit_root| {
@@ -698,6 +698,7 @@ fn test_root_docs_route_scripts_scriptlets_and_agents_to_real_paths() {
             for needle in [
                 "~/.scriptkit/kit/main/scripts/",
                 "~/.scriptkit/kit/main/extensions/",
+                "~/.scriptkit/kit/main/skills/",
                 "~/.scriptkit/kit/main/agents/",
                 "~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md",
                 "~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md",
@@ -716,6 +717,96 @@ fn test_root_docs_route_scripts_scriptlets_and_agents_to_real_paths() {
                 "kit/examples/README.md missing `{needle}` section"
             );
         }
+    });
+}
+
+/// Seeded content must describe plugins as the package boundary and skills as
+/// the preferred reusable AI unit. Agents must be labeled as compatibility.
+#[test]
+fn test_seeded_content_uses_plugin_and_skill_first_language() {
+    with_temp_sk_path(|kit_root| {
+        let _ = ensure_kit_setup();
+
+        let root_claude = fs::read_to_string(kit_root.join("CLAUDE.md")).expect("read CLAUDE.md");
+        let root_agents = fs::read_to_string(kit_root.join("AGENTS.md")).expect("read AGENTS.md");
+        let skills_readme = fs::read_to_string(
+            kit_root
+                .join("kit")
+                .join("authoring")
+                .join("skills")
+                .join("README.md"),
+        )
+        .expect("read skills README.md");
+        let examples_readme =
+            fs::read_to_string(kit_root.join("kit").join("examples").join("README.md"))
+                .expect("read examples README.md");
+        let start_here =
+            fs::read_to_string(kit_root.join("kit").join("examples").join("START_HERE.md"))
+                .expect("read START_HERE.md");
+
+        // --- Plugins described as the package boundary ---
+        for (label, content) in [
+            ("CLAUDE.md", &root_claude),
+            ("AGENTS.md", &root_agents),
+            ("skills/README.md", &skills_readme),
+        ] {
+            assert!(
+                content.contains("package boundary"),
+                "{label} must describe plugins as the package boundary"
+            );
+        }
+
+        // --- Skills described as the preferred reusable AI unit ---
+        for (label, content) in [
+            ("CLAUDE.md", &root_claude),
+            ("AGENTS.md", &root_agents),
+            ("skills/README.md", &skills_readme),
+        ] {
+            assert!(
+                content.contains("preferred reusable AI unit")
+                    || content.contains("preferred") && content.contains("skill"),
+                "{label} must describe skills as the preferred reusable AI unit"
+            );
+        }
+
+        // --- Skills path referenced in root docs ---
+        for (label, content) in [("CLAUDE.md", &root_claude), ("AGENTS.md", &root_agents)] {
+            assert!(
+                content.contains("kit/main/skills/"),
+                "{label} must reference the plugin-scoped skills path kit/main/skills/"
+            );
+        }
+
+        // --- Agents labeled as compatibility/subordinate ---
+        for (label, content) in [
+            ("CLAUDE.md", &root_claude),
+            ("AGENTS.md", &root_agents),
+            ("examples/README.md", &examples_readme),
+            ("START_HERE.md", &start_here),
+        ] {
+            let has_compat = content.contains("(compatibility)")
+                || content.contains("(Compatibility)")
+                || content.contains("compatibility path");
+            assert!(
+                has_compat,
+                "{label} must label agents as compatibility, not a co-equal authoring model"
+            );
+        }
+
+        // --- Agents skill doc itself already describes compatibility ---
+        let agents_skill = fs::read_to_string(
+            kit_root
+                .join("kit")
+                .join("authoring")
+                .join("skills")
+                .join("agents")
+                .join("SKILL.md"),
+        )
+        .expect("read agents SKILL.md");
+        assert!(
+            agents_skill.contains("Compatibility") || agents_skill.contains("compatibility"),
+            "agents/SKILL.md must label agents as compatibility"
+        );
     });
 }
 
