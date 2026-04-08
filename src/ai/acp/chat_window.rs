@@ -205,6 +205,9 @@ pub fn open_chat_window_with_thread(
             view.set_on_toggle_actions(move |_window, cx| {
                 toggle_detached_actions(cx);
             });
+            view.set_on_open_model_picker(move |_window, cx| {
+                open_detached_model_picker(cx);
+            });
             view.set_on_close_requested(move |_window, cx| {
                 close_chat_window(cx);
             });
@@ -354,14 +357,25 @@ pub(crate) fn activate_chat_window(cx: &mut App) {
 /// detached context, positioned relative to the detached chat window.
 /// After selection, the detached chat re-gains focus.
 pub fn toggle_detached_actions(cx: &mut App) {
+    open_detached_actions(cx, false);
+}
+
+pub fn open_detached_model_picker(cx: &mut App) {
+    open_detached_actions(cx, true);
+}
+
+fn open_detached_actions(cx: &mut App, open_model_picker: bool) {
     use crate::actions::{self, ActionsDialog, ActionsDialogConfig, WindowPosition};
 
     // If actions are already open, close them and re-focus the chat (toggle behavior)
     if actions::is_actions_window_open() {
         actions::close_actions_window(cx);
-        activate_chat_window(cx);
-        tracing::info!(event = "detached_actions_closed");
-        return;
+        if !open_model_picker {
+            activate_chat_window(cx);
+            tracing::info!(event = "detached_actions_closed");
+            return;
+        }
+        tracing::info!(event = "detached_actions_reopen_model_picker");
     }
 
     let (handle, view_weak) = {
@@ -470,6 +484,16 @@ pub fn toggle_detached_actions(cx: &mut App) {
             theme_arc,
             crate::actions::AcpActionsDialogHost::Detached,
         );
+        if open_model_picker {
+            dialog.push_route(
+                crate::actions::get_acp_model_picker_route_for_host(
+                    &available_models,
+                    selected_model_id.as_deref(),
+                    crate::actions::AcpActionsDialogHost::Detached,
+                ),
+                cx,
+            );
+        }
         dialog.set_skip_track_focus(true);
         dialog
     });
@@ -504,11 +528,13 @@ pub fn toggle_detached_actions(cx: &mut App) {
 
     tracing::info!(
         event = "detached_actions_opened",
-        actions_len = root_actions_len
+        actions_len = root_actions_len,
+        open_model_picker,
     );
     tracing::info!(
         event = "detached_actions_window_activated",
-        actions_len = root_actions_len
+        actions_len = root_actions_len,
+        open_model_picker,
     );
 
     // Spawn a one-shot task that receives the selected action_id from the
