@@ -14,9 +14,12 @@ pub mod actions_dialog_variations;
 pub mod adoption;
 pub mod audit_report;
 mod browser;
+pub mod confirm_popup_playground;
+pub mod context_picker_popup_playground;
 mod diagnostics;
 pub mod footer_variations;
 pub mod input_variations;
+pub mod integrated_surface_shell;
 mod layout;
 pub mod main_menu_variations;
 pub mod mini_ai_chat_presenter;
@@ -39,6 +42,14 @@ pub use adoption::{
     VariationId,
 };
 pub use browser::StoryBrowser;
+pub use confirm_popup_playground::{
+    confirm_popup_playground_story_variants, render_confirm_popup_playground_story_preview,
+    ConfirmPopupPlaygroundId,
+};
+pub use context_picker_popup_playground::{
+    context_picker_popup_playground_story_variants,
+    render_context_picker_popup_playground_story_preview, ContextPickerPopupPlaygroundId,
+};
 pub use diagnostics::{
     build_story_catalog_snapshot, load_story_catalog_snapshot, StoryCatalogEntry,
     StoryCatalogSnapshot, StorySurfaceSummary, StoryVariantSummary,
@@ -53,6 +64,10 @@ pub use footer_variations::{
 pub use input_variations::{
     adopted_input_variation, adopted_input_variation_id, input_story_variants,
     input_variation_specs, render_input_story_preview, InputVariationId, InputVariationSpec,
+};
+pub use integrated_surface_shell::{
+    IntegratedOverlayAnchor, IntegratedOverlayPlacement, IntegratedSurfaceShell,
+    IntegratedSurfaceShellConfig,
 };
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use main_menu_variations::{
