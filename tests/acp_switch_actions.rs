@@ -11,12 +11,16 @@ const ACTIONS_WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
 #[test]
 fn acp_actions_popup_uses_dynamic_agent_actions() {
     assert!(
-        ACTIONS_TOGGLE_SOURCE.contains("acp_actions_agent_context_built"),
-        "ACP actions popup must log when it builds ACP agent context from the active session"
+        ACTIONS_TOGGLE_SOURCE.contains("acp_actions_context_built"),
+        "ACP actions popup must log when it builds ACP actions context from the active session"
     );
     assert!(
         ACTIONS_TOGGLE_SOURCE.contains("thread.available_agents().to_vec()"),
         "ACP actions popup must source available agents from the live ACP thread"
+    );
+    assert!(
+        ACTIONS_TOGGLE_SOURCE.contains("thread.available_models().to_vec()"),
+        "ACP actions popup must source available models from the live ACP thread"
     );
 }
 

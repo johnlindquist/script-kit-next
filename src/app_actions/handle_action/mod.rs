@@ -608,6 +608,64 @@ impl ScriptListApp {
             return DispatchOutcome::not_handled();
         };
 
+        if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
+            let Some((current_selected_model_id, model_display_name)) = ({
+                let view = entity.read(cx);
+                view.thread().map(|thread| {
+                    let thread = thread.read(cx);
+                    let current_selected_model_id = thread.selected_model_id().map(str::to_string);
+                    let model_display_name = thread
+                        .available_models()
+                        .iter()
+                        .find(|entry| entry.id == model_id)
+                        .map(|entry| {
+                            entry
+                                .display_name
+                                .clone()
+                                .unwrap_or_else(|| entry.id.clone())
+                        })?;
+                    Some((current_selected_model_id, model_display_name))
+                })
+                .flatten()
+            }) else {
+                return DispatchOutcome::error(
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    format!("ACP model '{model_id}' is no longer available"),
+                );
+            };
+
+            if current_selected_model_id.as_deref() == Some(model_id) {
+                let mut outcome = DispatchOutcome::success();
+                outcome.user_message =
+                    Some(format!("ACP is already using {model_display_name}"));
+                return outcome;
+            }
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_switch_model_requested",
+                model_id,
+                model_display_name = %model_display_name,
+            );
+
+            entity.update(cx, |view, cx| {
+                if let Some(thread) = view.thread() {
+                    thread.update(cx, |thread, cx| {
+                        thread.select_model(model_id, cx);
+                    });
+                }
+            });
+            self.show_hud(
+                format!("Model: {model_display_name}"),
+                Some(HUD_SHORT_MS),
+                cx,
+            );
+
+            let mut outcome = DispatchOutcome::success();
+            outcome.user_message = Some(format!("Switched ACP model to {model_display_name}"));
+            return outcome;
+        }
+
         if let Some(agent_id) = crate::actions::acp_switch_agent_id_from_action(action_id) {
             let (current_selected_agent_id, available_agents) = {
                 let view = entity.read(cx);

@@ -499,8 +499,8 @@ impl ScriptListApp {
             // Open actions as a separate window with vibrancy blur
             self.begin_actions_popup_window_open(cx, window);
 
-            let acp_agent_context = if let AppView::AcpChatView { ref entity } = self.current_view {
-                let (selected_agent_id, catalog_entries) = {
+            let acp_context = if let AppView::AcpChatView { ref entity } = self.current_view {
+                let (selected_agent_id, catalog_entries, selected_model_id, available_models) = {
                     let view = entity.read(cx);
                     match &view.session {
                         crate::ai::acp::AcpChatSession::Setup(state) => (
@@ -509,14 +509,16 @@ impl ScriptListApp {
                                 .as_ref()
                                 .map(|agent| agent.id.to_string()),
                             state.catalog_entries.clone(),
+                            None,
+                            Vec::new(),
                         ),
                         crate::ai::acp::AcpChatSession::Live(thread) => {
                             let thread = thread.read(cx);
                             (
-                                thread
-                                    .selected_agent_id()
-                                    .map(str::to_string),
+                                thread.selected_agent_id().map(str::to_string),
                                 thread.available_agents().to_vec(),
+                                thread.selected_model_id().map(str::to_string),
+                                thread.available_models().to_vec(),
                             )
                         }
                     }
@@ -524,12 +526,19 @@ impl ScriptListApp {
 
                 tracing::info!(
                     target: "script_kit::tab_ai",
-                    event = "acp_actions_agent_context_built",
+                    event = "acp_actions_context_built",
                     selected_agent_id = ?selected_agent_id,
                     catalog_count = catalog_entries.len(),
+                    selected_model_id = ?selected_model_id,
+                    model_count = available_models.len(),
                 );
 
-                Some((selected_agent_id, catalog_entries))
+                Some((
+                    selected_agent_id,
+                    catalog_entries,
+                    selected_model_id,
+                    available_models,
+                ))
             } else {
                 None
             };
@@ -544,13 +553,23 @@ impl ScriptListApp {
             // Create the dialog entity
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
-                let mut dialog = if let Some((ref selected_agent_id, ref catalog_entries)) = acp_agent_context {
-                    // ACP chat view: use route-based dialog with drill-down agent picker
+                let mut dialog = if let Some((
+                    ref selected_agent_id,
+                    ref catalog_entries,
+                    ref selected_model_id,
+                    ref available_models,
+                )) = acp_context
+                {
+                    // ACP chat view: use route-based dialog with drill-down agent/model pickers
                     ActionsDialog::with_acp_chat(
                         focus_handle,
                         std::sync::Arc::new(|_action_id| {}),
-                        catalog_entries,
-                        selected_agent_id.as_deref(),
+                        crate::actions::AcpActionsDialogContext {
+                            catalog_entries,
+                            selected_agent_id: selected_agent_id.as_deref(),
+                            available_models,
+                            selected_model_id: selected_model_id.as_deref(),
+                        },
                         std::sync::Arc::clone(&theme_arc),
                     )
                 } else {
