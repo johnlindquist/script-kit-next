@@ -154,6 +154,7 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.tab_ai_harness_script_list_trigger = Some('/');
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_open_from_script_list_trigger",
@@ -161,9 +162,6 @@ impl ScriptListApp {
             current_view = ?self.current_view,
         );
         self.open_tab_ai_acp_with_entry_intent(None, cx);
-        if matches!(self.current_view, AppView::AcpChatView { .. }) {
-            self.tab_ai_harness_script_list_trigger = Some('/');
-        }
 
         let detached_opened = crate::ai::acp::chat_window::open_detached_slash_picker(cx);
         tracing::info!(
@@ -179,10 +177,10 @@ impl ScriptListApp {
         if let AppView::AcpChatView { entity } = &self.current_view {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_trigger_picker_open_embedded",
+                event = "acp_trigger_picker_open_embedded_deferred",
                 trigger = "/",
             );
-            entity.update(cx, |view, cx| view.open_slash_picker_in_window(window, cx));
+            self.schedule_embedded_acp_picker_open(window.window_handle(), entity.clone(), '/', cx);
         }
     }
 
@@ -191,6 +189,7 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.tab_ai_harness_script_list_trigger = Some('@');
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_open_from_script_list_trigger",
@@ -198,9 +197,6 @@ impl ScriptListApp {
             current_view = ?self.current_view,
         );
         self.open_tab_ai_acp_with_entry_intent(None, cx);
-        if matches!(self.current_view, AppView::AcpChatView { .. }) {
-            self.tab_ai_harness_script_list_trigger = Some('@');
-        }
 
         let detached_opened = crate::ai::acp::chat_window::open_detached_mention_picker(cx);
         tracing::info!(
@@ -216,13 +212,36 @@ impl ScriptListApp {
         if let AppView::AcpChatView { entity } = &self.current_view {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "acp_trigger_picker_open_embedded",
+                event = "acp_trigger_picker_open_embedded_deferred",
                 trigger = "@",
             );
-            entity.update(cx, |view, cx| {
-                view.open_mention_picker_in_window(window, cx)
-            });
+            self.schedule_embedded_acp_picker_open(window.window_handle(), entity.clone(), '@', cx);
         }
+    }
+
+    fn schedule_embedded_acp_picker_open(
+        &self,
+        window_handle: gpui::AnyWindowHandle,
+        entity: gpui::Entity<crate::ai::acp::AcpChatView>,
+        trigger: char,
+        cx: &mut Context<Self>,
+    ) {
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(
+                    Self::ACP_CONTEXT_FIRST_PAINT_DELAY_MS,
+                ))
+                .await;
+
+            let _ = window_handle.update(cx, |_root, window, cx| {
+                entity.update(cx, |view, cx| match trigger {
+                    '/' => view.open_slash_picker_in_window(window, cx),
+                    '@' => view.open_mention_picker_in_window(window, cx),
+                    _ => {}
+                });
+            });
+        })
+        .detach();
     }
 
     /// Entry point with explicit capture kind.
@@ -786,15 +805,34 @@ impl ScriptListApp {
 
         // Resolve whether we have a focused target or need the Ask Anything
         // fallback *before* spawning background capture.
-        let use_ask_anything_fallback = self
-            .should_use_tab_ai_ask_anything_fallback(&request.source_view, &request.ui_snapshot);
+        let pending_script_list_trigger = self.tab_ai_harness_script_list_trigger;
+        let should_stage_focused_part = Self::should_stage_focused_part_for_request(
+            &request.source_view,
+            pending_script_list_trigger,
+        );
+        let use_ask_anything_fallback = should_stage_focused_part
+            && self.should_use_tab_ai_ask_anything_fallback(
+                &request.source_view,
+                &request.ui_snapshot,
+            );
 
         // Explicit AI commands (screen, focused window, selected text, browser tab)
         // must force ambient capture even when the source surface has a focused item.
         let explicit_ambient_chip_label =
             Self::tab_ai_explicit_ambient_chip_label(&request.capture_kind).map(str::to_string);
 
-        let focused_part = if use_ask_anything_fallback || explicit_ambient_chip_label.is_some() {
+        if !should_stage_focused_part {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_focus_chip_suppressed_for_script_list_trigger",
+                trigger = ?pending_script_list_trigger,
+            );
+        }
+
+        let focused_part = if !should_stage_focused_part
+            || use_ask_anything_fallback
+            || explicit_ambient_chip_label.is_some()
+        {
             None
         } else {
             self.build_tab_ai_focused_part_for_view(&request.source_view, &request.ui_snapshot)
@@ -960,6 +998,17 @@ impl ScriptListApp {
             crate::ai::TabAiCaptureKind::SelectedText => Some("Selected Text"),
             crate::ai::TabAiCaptureKind::BrowserTab => Some("Browser Tab"),
         }
+    }
+
+    fn should_stage_focused_part_for_request(
+        source_view: &AppView,
+        pending_script_list_trigger: Option<char>,
+    ) -> bool {
+        if !matches!(source_view, AppView::ScriptList) {
+            return true;
+        }
+
+        !matches!(pending_script_list_trigger, Some('/' | '@'))
     }
 
     /// Extract a `TabAiTargetContext` from an `AiContextPart::FocusedTarget`,
@@ -4747,6 +4796,77 @@ mod tests {
             )),
             "close path must clear transient ScriptList trigger filters when returning to the main menu"
         );
+    }
+
+    #[test]
+    fn script_list_explicit_triggers_do_not_stage_focused_parts() {
+        assert!(!ScriptListApp::should_stage_focused_part_for_request(
+            &AppView::ScriptList,
+            Some('@'),
+        ));
+        assert!(!ScriptListApp::should_stage_focused_part_for_request(
+            &AppView::ScriptList,
+            Some('/'),
+        ));
+        assert!(ScriptListApp::should_stage_focused_part_for_request(
+            &AppView::ScriptList,
+            None,
+        ));
+        assert!(ScriptListApp::should_stage_focused_part_for_request(
+            &AppView::ThemeChooserView {
+                filter: String::new(),
+                selected_index: 0,
+            },
+            Some('@'),
+        ));
+    }
+
+    #[test]
+    fn script_list_trigger_routes_stage_trigger_before_acp_open_contract() {
+        let source = include_str!("tab_ai_mode.rs");
+        for (signature, trigger) in [
+            (
+                "pub(crate) fn open_tab_ai_acp_with_slash_picker(",
+                "Some('/')",
+            ),
+            (
+                "pub(crate) fn open_tab_ai_acp_with_mention_picker(",
+                "Some('@')",
+            ),
+        ] {
+            let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(source, signature));
+            let trigger_idx = body
+                .find(&tab_ai_contract_compact(&format!(
+                    "self.tab_ai_harness_script_list_trigger = {trigger};"
+                )))
+                .expect("route must stage the trigger first");
+            let open_idx = body
+                .find(&tab_ai_contract_compact(
+                    "self.open_tab_ai_acp_with_entry_intent(None, cx);",
+                ))
+                .expect("route must open ACP");
+            assert!(
+                trigger_idx < open_idx,
+                "route must stage the trigger before opening ACP"
+            );
+        }
+    }
+
+    #[test]
+    fn script_list_trigger_routes_defer_embedded_picker_contract() {
+        let source = include_str!("tab_ai_mode.rs");
+        for signature in [
+            "pub(crate) fn open_tab_ai_acp_with_slash_picker(",
+            "pub(crate) fn open_tab_ai_acp_with_mention_picker(",
+        ] {
+            let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(source, signature));
+            assert!(
+                body.contains(&tab_ai_contract_compact(
+                    "self.schedule_embedded_acp_picker_open("
+                )),
+                "trigger route must defer embedded picker opening"
+            );
+        }
     }
 
     // ── Existing save-name tests ──────────────────────────────────
