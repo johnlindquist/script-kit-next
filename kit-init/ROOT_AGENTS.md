@@ -313,7 +313,7 @@ export default {
 
 ## Tab AI — Quick Terminal with Flat Context Injection
 
-Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `TermPrompt`.
+Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` via `TermPrompt`.
 
 **Entry path:**
 - Plain `Tab` opens the harness terminal and stages a flat labeled `Script Kit context` block using `TabAiHarnessSubmissionMode::PasteOnly`.
@@ -337,6 +337,11 @@ Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `
 - `PasteOnly` stages context on a fresh line and does not auto-submit
 - `Submit` with a non-empty intent appends `User intent:` and submits immediately
 - `Submit` without a non-empty intent appends `Await the user's next terminal input.`
+
+**Harness lifecycle:**
+- Each explicit quick-terminal open writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/skills/`, and behaves as a one-shot spawn rendered in `QuickTerminalView`.
+- Internal silent prewarm may seed the PTY ahead of time, but that is a single-use implementation detail rather than a documented warm multi-turn surface.
+- Recovery — if the harness crashes or exits, the next Tab entry respawns it.
 
 **Do not describe as current behavior:**
 - Do not describe the old inline chat entity or custom streaming UI as the primary Tab AI surface

@@ -178,7 +178,7 @@ See `examples/scripts/` for working examples:
 
 ## Tab AI — Quick Terminal with Flat Context Injection
 
-Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `TermPrompt`.
+Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` via `TermPrompt`.
 
 **Entry path:**
 - Plain `Tab` opens the harness terminal and stages a flat labeled `Script Kit context` block using `TabAiHarnessSubmissionMode::PasteOnly`.
@@ -209,9 +209,8 @@ Tab AI is a warm harness terminal rendered in `AppView::QuickTerminalView` via `
 - The richer `tab_ai()` profile with screenshots is reserved for a future Claude-specific SDK path.
 
 **Harness lifecycle:**
-- Each Tab press writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/skills/`, and spawns a fresh `claude` process with `--append-system-prompt` and the user intent as CLI args.
-- No warm/prewarm session — each invocation is a one-shot spawn rendered in QuickTerminalView.
-
+- Each explicit quick-terminal open writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/skills/`, and behaves as a one-shot spawn rendered in `QuickTerminalView`.
+- Internal silent prewarm may seed the PTY ahead of time, but that is a single-use implementation detail rather than a documented warm multi-turn surface.
 - Recovery — if the harness crashes or exits, the next Tab entry respawns it.
 
 **Do not describe as current behavior:**

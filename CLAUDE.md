@@ -305,6 +305,38 @@ Composable context attachments for ACP Chat flows with deterministic resolution 
 - `tests/context_part_start_chat_flow.rs` — empty message + parts, message + parts, invalid parts, mixed success, order
 - `tests/context_part_submission_flow.rs` — mixed success tracking, full success prefix persistence
 
+### Tab AI — Quick Terminal with Flat Context Injection
+
+The PTY-backed Tab AI path renders in `AppView::QuickTerminalView` via `TermPrompt` when verification-bearing or harness-native flows select the quick-terminal surface.
+
+**Entry path:**
+- `open_tab_ai_chat()` routes through `begin_tab_ai_harness_entry()` and `open_tab_ai_harness_terminal_from_request()` when the quick-terminal surface is selected.
+- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens the same PTY-backed surface and submits that filter text as user intent through `TabAiHarnessSubmissionMode::Submit`.
+- `Tab` / `Shift+Tab` inside `AppView::QuickTerminalView` are forwarded to the PTY. Do not describe them as focus-navigation keys once the harness terminal is open.
+
+**Close semantics:**
+- `Cmd+W` closes the wrapper and restores the previous view and focus target.
+- Plain `Escape` is forwarded to the PTY. The harness TUI owns Escape behavior.
+- The quick-terminal footer hint strip stays minimal and wrapper-owned.
+
+**Runtime contract:**
+- Harness config still lives under the `claudeCode` block in `~/.scriptkit/kit/config.ts`.
+- Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
+- Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
+- `build_tab_ai_harness_submission()` emits the flat text-native payload for `TabAiHarnessSubmissionMode::PasteOnly` and `TabAiHarnessSubmissionMode::Submit`.
+- `PasteOnly` stages `Script Kit context` on a fresh line and does not auto-submit.
+- `Submit` with a non-empty intent appends `User intent:` and submits immediately.
+- `Submit` without a non-empty intent appends `Await the user's next terminal input.`
+
+**Harness lifecycle:**
+- The explicit QuickTerminal contract is a one-shot spawn rendered in `QuickTerminalView`, not a reusable warm chat surface.
+- Internal silent prewarm may prepare the PTY ahead of time, but that implementation detail is consumed once and should not be documented as a persistent multi-turn terminal session.
+- Recovery remains spawn-based: if the PTY harness exits, the next quick-terminal open recreates it.
+
+**Legacy compatibility only:**
+- `TabAiChat` and `open_tab_ai_full_view_chat()` still exist internally. They are not separate current Tab AI products.
+- Do not describe the removed inline chat path, legacy full-view AI window, or old context-builder wording as current behavior.
+
 ### ACP Chat
 
 ACP Chat (`AppView::AcpChatView`) is the primary and only AI chat surface. Internal helpers, tests, and capture profiles still use `tab_ai_*` naming in places; treat those as compatibility details, not separate user-facing chat products.
