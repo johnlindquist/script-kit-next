@@ -409,7 +409,9 @@ app.run(move |cx: &mut App| {
             Ok(window) => {
                 // Store the main window handle globally so async contexts can
                 // open parent dialogs without needing a Window reference.
-                crate::set_main_window_handle(window.into());
+                let any_handle: gpui::AnyWindowHandle = window.into();
+                crate::set_main_window_handle(any_handle);
+                sync_main_automation_window(Some(automation_window_bounds_from_gpui(bounds)), false, false);
                 window
             }
             Err(error) => {
@@ -469,6 +471,11 @@ app.run(move |cx: &mut App| {
                                 }
                             }
                         }
+                        sync_main_automation_window(
+                            Some(automation_window_bounds_from_gpui(win.bounds())),
+                            script_kit_gpui::is_main_window_visible(),
+                            crate::platform::is_main_window_focused(),
+                        );
                         view.sync_main_footer_popup(win, ctx);
                         // Suppress unused variable warning - we need win to access window bounds
                         let _ = win;
@@ -1685,6 +1692,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
 
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
+                                sync_main_automation_window(None, true, true);
 
                                 // Send RunScript message to be handled
                                 view.handle_prompt_message(PromptMessage::RunScript { path: path.clone() }, ctx);
@@ -1788,6 +1796,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
 
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
+                                sync_main_automation_window(None, true, true);
                             }
                             ExternalCommand::Hide { ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
@@ -1812,6 +1821,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 }
 
                                 script_kit_gpui::set_main_window_visible(false);
+                                sync_main_automation_window(current_main_automation_bounds(), false, false);
 
                                 // Check if Notes or AI windows are open
                                 let notes_open = notes::is_notes_window_open();
@@ -1986,6 +1996,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                             }
                                                         }
                                                         script_kit_gpui::set_main_window_visible(false);
+                                                        sync_main_automation_window(current_main_automation_bounds(), false, false);
                                                         ctx.hide();
                                                     }
                                                 }

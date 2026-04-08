@@ -372,6 +372,9 @@ pub fn resolve_automation_window(
                 resolution_path = resolution_path,
                 error = %err,
                 target = ?target,
+                focused_id = ?state.focused_id,
+                main_id = ?state.main_id,
+                registered_ids = ?state.windows.keys().cloned().collect::<Vec<_>>(),
                 "automation_window_resolve_failed"
             );
         }

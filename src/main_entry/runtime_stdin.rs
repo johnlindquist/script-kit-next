@@ -119,6 +119,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
 
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
+                                sync_main_automation_window(None, true, true);
 
                                 // Ensure render-loop focus state is set so the input autofocuses
                                 view.focused_input = FocusedInput::MainFilter;
@@ -201,6 +202,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
 
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
+                                sync_main_automation_window(None, true, true);
 
                                 // Ensure render-loop focus state is set so the input autofocuses
                                 view.focused_input = FocusedInput::MainFilter;
@@ -229,6 +231,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 }
 
                                 script_kit_gpui::set_main_window_visible(false);
+                                sync_main_automation_window(current_main_automation_bounds(), false, false);
 
                                 // Check if Notes or AI windows are open
                                 let notes_open = notes::is_notes_window_open();
@@ -398,6 +401,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                             }
                                                         }
                                                         script_kit_gpui::set_main_window_visible(false);
+                                                        sync_main_automation_window(current_main_automation_bounds(), false, false);
                                                         ctx.hide();
                                                     }
                                                 }
