@@ -18,11 +18,11 @@ impl Story for ContextPickerPopupPlaygroundStory {
     }
 
     fn category(&self) -> &'static str {
-        "AI Chat"
+        "Integrated Surfaces"
     }
 
     fn surface(&self) -> StorySurface {
-        StorySurface::MiniAiChat
+        StorySurface::Shell
     }
 
     fn render(&self) -> gpui::AnyElement {
@@ -43,6 +43,13 @@ impl Story for ContextPickerPopupPlaygroundStory {
     }
 
     fn render_variant(&self, variant: &StoryVariant) -> gpui::AnyElement {
+        tracing::info!(
+            event = "storybook_shell_story_rendered",
+            story_id = self.id(),
+            variant_id = %variant.stable_id(),
+            surface = self.surface().label(),
+            "Rendered shell story variant"
+        );
         render_context_picker_popup_playground_story_preview(&variant.stable_id())
     }
 
@@ -59,7 +66,7 @@ mod tests {
     #[test]
     fn context_picker_popup_playground_story_is_compare_ready() {
         let story = ContextPickerPopupPlaygroundStory;
-        assert_eq!(story.surface(), StorySurface::MiniAiChat);
+        assert_eq!(story.surface(), StorySurface::Shell);
         assert!(story.variants().len() > 1);
     }
 }

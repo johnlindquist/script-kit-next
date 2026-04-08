@@ -263,6 +263,25 @@ impl ScriptListApp {
         cx.notify();
     }
 
+    /// Apply a theme AND persist to disk (auto-save on click).
+    /// Does NOT update `theme_before_chooser` — that stays as the entry
+    /// snapshot so Escape can undo all click-saves.
+    fn apply_and_persist_theme(
+        &mut self,
+        next_theme: crate::theme::Theme,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.apply_theme_chooser_theme(next_theme, reason, cx);
+        if let Err(e) = crate::theme::service::persist_theme_and_sync_all_windows(
+            cx,
+            self.theme.as_ref(),
+            reason,
+        ) {
+            tracing::warn!(error = %e, "theme_chooser_auto_save_failed");
+        }
+    }
+
     /// Clone-and-mutate convenience: clones the current theme, applies a
     /// mutation closure, then routes through the unified preview pipeline.
     fn mutate_theme_chooser_theme(
@@ -311,6 +330,23 @@ impl ScriptListApp {
         self.apply_theme_chooser_theme(next_theme, reason, cx);
     }
 
+    /// Preview a preset AND persist to disk (for mouse clicks).
+    fn preview_and_persist_theme_chooser_preset(
+        &mut self,
+        filtered_indices: &[usize],
+        filtered_selected_index: usize,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(&preset_idx) = filtered_indices.get(filtered_selected_index) else {
+            return;
+        };
+        let next_theme = (*theme::presets::preset_theme_cached(preset_idx)).clone();
+        self.theme_chooser_scroll_handle
+            .scroll_to_item(filtered_selected_index, ScrollStrategy::Nearest);
+        self.apply_and_persist_theme(next_theme, reason, cx);
+    }
+
     /// Accent color palette for theme customization
     const ACCENT_PALETTE: &'static [(u32, &'static str)] = theme::ACCENT_PALETTE;
 
@@ -347,9 +383,9 @@ impl ScriptListApp {
     /// Three-item footer hint strip for the theme chooser
     fn theme_chooser_hint_items() -> Vec<gpui::SharedString> {
         vec![
-            gpui::SharedString::from("↵ Apply"),
+            gpui::SharedString::from("↵ Done"),
             gpui::SharedString::from("⌘J Remix"),
-            gpui::SharedString::from("Esc Back"),
+            gpui::SharedString::from("Esc Undo"),
         ]
     }
 
@@ -556,20 +592,31 @@ impl ScriptListApp {
                 let has_cmd = event.keystroke.modifiers.platform;
 
                 // Escape: clear filter first if present, otherwise restore original and close
+                // Escape: clear filter first if present, otherwise undo all changes and close
                 if is_key_escape(key) && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
-                        // No filter to clear — restore original theme and go back
+                        // No filter to clear — restore original theme, persist the undo, and go back
                         if let Some(original) = this.theme_before_chooser.take() {
-                            this.restore_theme_chooser_theme(original, "theme_chooser_escape_restore", cx);
+                            this.restore_theme_chooser_theme(original, "theme_chooser_escape_undo", cx);
+                            let _ = crate::theme::service::persist_theme_and_sync_all_windows(
+                                cx,
+                                this.theme.as_ref(),
+                                "theme_chooser_escape_undo_persist",
+                            );
                         }
                         this.go_back_or_close(window, cx);
                     }
                     return;
                 }
-                // Cmd+W: restore and close window
+                // Cmd+W: undo all changes and close window
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     if let Some(original) = this.theme_before_chooser.take() {
-                        this.restore_theme_chooser_theme(original, "theme_chooser_close_restore", cx);
+                        this.restore_theme_chooser_theme(original, "theme_chooser_close_undo", cx);
+                        let _ = crate::theme::service::persist_theme_and_sync_all_windows(
+                            cx,
+                            this.theme.as_ref(),
+                            "theme_chooser_close_undo_persist",
+                        );
                     }
                     this.close_and_reset_window(cx);
                     return;
@@ -683,23 +730,17 @@ impl ScriptListApp {
                     return;
                 }
                 // Enter: apply (persist) the current theme but stay in the chooser
+                // Enter: persist current theme and close the chooser
                 if is_key_enter(key) {
-                    this.theme_before_chooser = None;
-                    match crate::theme::service::persist_theme_and_sync_all_windows(
+                    if let Err(e) = crate::theme::service::persist_theme_and_sync_all_windows(
                         cx,
                         this.theme.as_ref(),
-                        "theme_chooser_apply",
+                        "theme_chooser_done",
                     ) {
-                        Ok(applied_theme) => {
-                            this.theme = std::sync::Arc::new(applied_theme);
-                            // Snapshot the newly persisted theme so Escape won't revert it
-                            this.theme_before_chooser = Some(this.theme.clone());
-                        }
-                        Err(e) => {
-                            logging::log("ERROR", &format!("Failed to save theme: {}", e));
-                        }
+                        tracing::warn!(error = %e, "theme_chooser_done_persist_failed");
                     }
-                    cx.notify();
+                    this.theme_before_chooser = None;
+                    this.go_back_or_close(window, cx);
                     return;
                 }
 
@@ -851,10 +892,10 @@ impl ScriptListApp {
                                         {
                                             *selected_index = ix;
                                         }
-                                        this.preview_theme_chooser_preset(
+                                        this.preview_and_persist_theme_chooser_preset(
                                             &indices,
                                             ix,
-                                            "theme_chooser_mouse_preview",
+                                            "theme_chooser_mouse_click",
                                             cx,
                                         );
                                     });
@@ -993,7 +1034,7 @@ impl ScriptListApp {
                                     modified.colors.accent.selected = color;
                                     modified.colors.text.on_accent =
                                         best_contrast_of_two(color, 0xFFFFFF, swatch_bg_main);
-                                    this.apply_theme_chooser_theme(modified, "theme_chooser_accent_click", cx);
+                                    this.apply_and_persist_theme(modified, "theme_chooser_accent_click", cx);
                                 });
                             }
                         },
@@ -1039,7 +1080,7 @@ impl ScriptListApp {
                             if let Some(app) = click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), value);
-                                    this.apply_theme_chooser_theme(modified, "theme_chooser_opacity_click", cx);
+                                    this.apply_and_persist_theme(modified, "theme_chooser_opacity_click", cx);
                                 });
                             }
                         },
@@ -1073,7 +1114,7 @@ impl ScriptListApp {
                             if let Some(ref mut vibrancy) = modified.vibrancy {
                                 vibrancy.enabled = !vibrancy.enabled;
                             }
-                            this.apply_theme_chooser_theme(modified, "theme_chooser_vibrancy_click", cx);
+                            this.apply_and_persist_theme(modified, "theme_chooser_vibrancy_click", cx);
                         });
                     }
                 },
@@ -1153,7 +1194,7 @@ impl ScriptListApp {
                                     if let Some(ref mut vibrancy) = modified.vibrancy {
                                         vibrancy.material = material;
                                     }
-                                    this.apply_theme_chooser_theme(modified, "theme_chooser_material_click", cx);
+                                    this.apply_and_persist_theme(modified, "theme_chooser_material_click", cx);
                                 });
                             }
                         },
@@ -1209,7 +1250,7 @@ impl ScriptListApp {
                                             ..Default::default()
                                         });
                                     }
-                                    this.apply_theme_chooser_theme(modified, "theme_chooser_font_size_click", cx);
+                                    this.apply_and_persist_theme(modified, "theme_chooser_font_size_click", cx);
                                 });
                             }
                         },
@@ -1253,7 +1294,7 @@ impl ScriptListApp {
                                 ref selected_index, ..
                             } = this.current_view
                             {
-                                this.preview_theme_chooser_preset(
+                                this.preview_and_persist_theme_chooser_preset(
                                     &filtered,
                                     *selected_index,
                                     "theme_chooser_reset_click",
@@ -1293,7 +1334,7 @@ impl ScriptListApp {
                                 this.theme.as_ref(),
                                 theme_chooser_remix_seed(),
                             );
-                            this.apply_theme_chooser_theme(
+                            this.apply_and_persist_theme(
                                 remixed,
                                 "theme_chooser_surprise_me",
                                 cx,
@@ -1588,12 +1629,12 @@ mod theme_chooser_chrome_audit {
             "theme_chooser should use render_simple_hint_strip"
         );
         assert!(
-            source.contains(r#"SharedString::from("↵ Apply")"#),
-            "theme_chooser should use truthful '↵ Apply' footer label"
+            source.contains(r#"SharedString::from("↵ Done")"#),
+            "theme_chooser should use truthful '↵ Done' footer label"
         );
         assert!(
-            source.contains(r#"SharedString::from("Esc Back")"#),
-            "theme_chooser should use 'Esc Back' footer label"
+            source.contains(r#"SharedString::from("Esc Undo")"#),
+            "theme_chooser should use 'Esc Undo' footer label"
         );
         assert!(
             source.contains(r#"SharedString::from("⌘J Remix")"#),
