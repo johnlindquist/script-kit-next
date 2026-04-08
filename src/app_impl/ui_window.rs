@@ -28,6 +28,24 @@ impl ScriptListApp {
             "Dispatching main-window footer action"
         );
 
+        let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+        if actions_open && !matches!(action, crate::footer_popup::FooterAction::Actions) {
+            if let super::actions_dialog::ActionsSupport::SharedDialog(host) =
+                self.actions_support_for_view()
+            {
+                self.close_actions_popup(host, window, cx);
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "main_window_footer_action_closed_actions_only",
+                    source,
+                    action = ?action,
+                    host = ?host,
+                    "Closed actions dialog from footer outside-click target without dispatching action"
+                );
+            }
+            return;
+        }
+
         match action {
             crate::footer_popup::FooterAction::Run => {
                 self.execute_selected(cx);
@@ -80,22 +98,30 @@ impl ScriptListApp {
         });
     }
 
-    fn standard_main_window_footer_buttons(
-        &self,
-    ) -> Vec<crate::footer_popup::FooterButtonConfig> {
+    fn standard_main_window_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
         use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
-        let mut buttons = vec![FooterButtonConfig::new(FooterAction::Run, "↵", "Run")];
+        let footer_disabled = self.main_window_footer_buttons_blocked();
+        let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+
+        let mut buttons =
+            vec![FooterButtonConfig::new(FooterAction::Run, "↵", "Run").enabled(!footer_disabled)];
 
         if self.current_view_supports_shared_actions() {
             buttons.push(
                 FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
-                    .selected(self.show_actions_popup || crate::actions::is_actions_window_open()),
+                    .selected(actions_open)
+                    .enabled(!footer_disabled),
             );
         }
 
-        buttons.push(FooterButtonConfig::new(FooterAction::Ai, "Tab", "ACP Chat"));
         buttons
+            .push(FooterButtonConfig::new(FooterAction::Ai, "⇥", "AI").enabled(!footer_disabled));
+        buttons
+    }
+
+    fn main_window_footer_buttons_blocked(&self) -> bool {
+        crate::confirm::is_confirm_window_open()
     }
 
     pub(crate) fn main_window_footer_config(
