@@ -13,9 +13,10 @@ use crate::components::inline_dropdown::{
 use crate::components::prompt_footer::{PromptFooter, PromptFooterColors};
 use crate::list_item::FONT_MONO;
 use crate::storybook::{
-    config_from_storybook_footer_selection_value,
-    playground_overlay_metrics::context_picker_playground_overlay_metrics, FooterVariationId,
-    IntegratedSurfaceShell, IntegratedSurfaceShellConfig, StoryVariant,
+    adopted_surface_live, config_from_storybook_footer_selection_value,
+    playground_overlay_metrics::context_picker_playground_overlay_metrics, resolve_surface_live,
+    AdoptableSurface, FooterVariationId, IntegratedSurfaceShell, IntegratedSurfaceShellConfig,
+    StoryVariant, SurfaceSelectionResolution, VariationId,
 };
 use crate::theme::get_cached_theme;
 use crate::ui_foundation::HexColorExt;
@@ -76,6 +77,105 @@ impl ContextPickerPopupPlaygroundId {
             _ => None,
         }
     }
+}
+
+impl VariationId for ContextPickerPopupPlaygroundId {
+    fn as_str(self) -> &'static str {
+        ContextPickerPopupPlaygroundId::as_str(self)
+    }
+
+    fn name(self) -> &'static str {
+        ContextPickerPopupPlaygroundId::name(self)
+    }
+
+    fn description(self) -> &'static str {
+        ContextPickerPopupPlaygroundId::description(self)
+    }
+
+    fn from_stable_id(value: &str) -> Option<Self> {
+        ContextPickerPopupPlaygroundId::from_stable_id(value)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Selection (typed live representation)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ContextPickerPopupPlaygroundSelection {
+    pub id: ContextPickerPopupPlaygroundId,
+    pub trigger: ContextPickerPopupTrigger,
+    pub state: ContextPickerPopupSceneState,
+    pub query: &'static str,
+    pub show_sections: bool,
+    pub show_synopsis: bool,
+}
+
+impl From<ContextPickerPopupPlaygroundSpec> for ContextPickerPopupPlaygroundSelection {
+    fn from(spec: ContextPickerPopupPlaygroundSpec) -> Self {
+        Self {
+            id: spec.id,
+            trigger: spec.trigger,
+            state: spec.state,
+            query: spec.query,
+            show_sections: spec.show_sections,
+            show_synopsis: spec.show_synopsis,
+        }
+    }
+}
+
+fn spec_from_context_picker_selection(
+    selection: ContextPickerPopupPlaygroundSelection,
+) -> ContextPickerPopupPlaygroundSpec {
+    ContextPickerPopupPlaygroundSpec {
+        id: selection.id,
+        trigger: selection.trigger,
+        state: selection.state,
+        query: selection.query,
+        show_sections: selection.show_sections,
+        show_synopsis: selection.show_synopsis,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Adoptable surface
+// ---------------------------------------------------------------------------
+
+pub struct ContextPickerPopupPlaygroundSurface;
+
+impl AdoptableSurface for ContextPickerPopupPlaygroundSurface {
+    type Id = ContextPickerPopupPlaygroundId;
+    type Spec = ContextPickerPopupPlaygroundSpec;
+    type Live = ContextPickerPopupPlaygroundSelection;
+
+    const STORY_ID: &'static str = "context-picker-popup-playground";
+    const DEFAULT_ID: Self::Id = ContextPickerPopupPlaygroundId::MentionDense;
+
+    fn specs() -> &'static [Self::Spec] {
+        &SPECS
+    }
+
+    fn spec_id(spec: &Self::Spec) -> Self::Id {
+        spec.id
+    }
+
+    fn live_from_spec(spec: &Self::Spec) -> Self::Live {
+        (*spec).into()
+    }
+}
+
+pub fn resolve_context_picker_popup_playground_selection(
+    selected: Option<&str>,
+) -> (
+    ContextPickerPopupPlaygroundSelection,
+    SurfaceSelectionResolution,
+) {
+    resolve_surface_live::<ContextPickerPopupPlaygroundSurface>(selected)
+}
+
+pub fn adopted_context_picker_popup_playground_selection() -> ContextPickerPopupPlaygroundSelection
+{
+    adopted_surface_live::<ContextPickerPopupPlaygroundSurface>()
 }
 
 // ---------------------------------------------------------------------------
@@ -248,11 +348,18 @@ pub fn context_picker_popup_playground_story_variants() -> Vec<StoryVariant> {
 }
 
 pub fn render_context_picker_popup_playground_story_preview(stable_id: &str) -> AnyElement {
-    let spec = SPECS
-        .iter()
-        .find(|s| s.id.as_str() == stable_id)
-        .copied()
-        .unwrap_or(SPECS[0]);
+    let (selection, resolution) =
+        resolve_context_picker_popup_playground_selection(Some(stable_id));
+
+    tracing::info!(
+        event = "context_picker_popup_playground_selection_resolved",
+        requested_variant_id = resolution.requested_variant_id.as_deref().unwrap_or(""),
+        resolved_variant_id = %resolution.resolved_variant_id,
+        fallback_used = resolution.fallback_used,
+        "Resolved context picker popup playground selection"
+    );
+
+    let spec = spec_from_context_picker_selection(selection);
 
     let shell = IntegratedSurfaceShellConfig {
         width: 560.0,
@@ -478,7 +585,10 @@ fn highlight_indices(text: &str, query: &str) -> Vec<usize> {
 
 #[cfg(test)]
 mod tests {
-    use super::{context_picker_popup_playground_story_variants, ContextPickerPopupPlaygroundId};
+    use super::{
+        context_picker_popup_playground_story_variants,
+        resolve_context_picker_popup_playground_selection, ContextPickerPopupPlaygroundId,
+    };
     use std::collections::HashSet;
 
     #[test]
@@ -498,5 +608,40 @@ mod tests {
                 Some(id)
             );
         }
+    }
+
+    #[test]
+    fn resolve_slash_grouped_variant_no_fallback() {
+        let (selection, resolution) =
+            resolve_context_picker_popup_playground_selection(Some("slash-grouped"));
+        assert_eq!(selection.id, ContextPickerPopupPlaygroundId::SlashGrouped);
+        assert_eq!(resolution.resolved_variant_id, "slash-grouped");
+        assert!(!resolution.fallback_used);
+    }
+
+    #[test]
+    fn resolve_mention_grouped_variant_no_fallback() {
+        let (selection, resolution) =
+            resolve_context_picker_popup_playground_selection(Some("mention-grouped"));
+        assert_eq!(selection.id, ContextPickerPopupPlaygroundId::MentionGrouped);
+        assert_eq!(resolution.resolved_variant_id, "mention-grouped");
+        assert!(!resolution.fallback_used);
+    }
+
+    #[test]
+    fn resolve_unknown_variant_uses_fallback() {
+        let (selection, resolution) =
+            resolve_context_picker_popup_playground_selection(Some("nonexistent"));
+        assert_eq!(selection.id, ContextPickerPopupPlaygroundId::MentionDense);
+        assert_eq!(resolution.resolved_variant_id, "mention-dense");
+        assert!(resolution.fallback_used);
+    }
+
+    #[test]
+    fn resolve_none_defaults_to_mention_dense() {
+        let (selection, resolution) = resolve_context_picker_popup_playground_selection(None);
+        assert_eq!(selection.id, ContextPickerPopupPlaygroundId::MentionDense);
+        assert_eq!(resolution.resolved_variant_id, "mention-dense");
+        assert!(!resolution.fallback_used);
     }
 }

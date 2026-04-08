@@ -9,9 +9,10 @@ use gpui::*;
 use crate::components::prompt_footer::{PromptFooter, PromptFooterColors};
 use crate::list_item::FONT_MONO;
 use crate::storybook::{
-    config_from_storybook_footer_selection_value,
-    playground_overlay_metrics::confirm_playground_overlay_metrics, FooterVariationId,
-    IntegratedSurfaceShell, IntegratedSurfaceShellConfig, StoryVariant,
+    adopted_surface_live, config_from_storybook_footer_selection_value,
+    playground_overlay_metrics::confirm_playground_overlay_metrics, resolve_surface_live,
+    AdoptableSurface, FooterVariationId, IntegratedSurfaceShell, IntegratedSurfaceShellConfig,
+    StoryVariant, SurfaceSelectionResolution, VariationId,
 };
 use crate::theme::{get_cached_theme, AppChromeColors};
 use crate::ui_foundation::HexColorExt;
@@ -62,6 +63,110 @@ impl ConfirmPopupPlaygroundId {
             _ => None,
         }
     }
+}
+
+impl VariationId for ConfirmPopupPlaygroundId {
+    fn as_str(self) -> &'static str {
+        ConfirmPopupPlaygroundId::as_str(self)
+    }
+
+    fn name(self) -> &'static str {
+        ConfirmPopupPlaygroundId::name(self)
+    }
+
+    fn description(self) -> &'static str {
+        ConfirmPopupPlaygroundId::description(self)
+    }
+
+    fn from_stable_id(value: &str) -> Option<Self> {
+        ConfirmPopupPlaygroundId::from_stable_id(value)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Selection (typed live representation)
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ConfirmPopupPlaygroundSelection {
+    pub id: ConfirmPopupPlaygroundId,
+    pub title: &'static str,
+    pub body: &'static str,
+    pub confirm_text: &'static str,
+    pub cancel_text: &'static str,
+    pub is_danger: bool,
+    pub footer_variant: FooterVariationId,
+    pub border_opacity_tenths: u8,
+    pub confirm_fill_opacity_tenths: u8,
+}
+
+impl From<ConfirmPopupPlaygroundSpec> for ConfirmPopupPlaygroundSelection {
+    fn from(spec: ConfirmPopupPlaygroundSpec) -> Self {
+        Self {
+            id: spec.id,
+            title: spec.title,
+            body: spec.body,
+            confirm_text: spec.confirm_text,
+            cancel_text: spec.cancel_text,
+            is_danger: spec.is_danger,
+            footer_variant: spec.footer_variant,
+            border_opacity_tenths: spec.border_opacity_tenths,
+            confirm_fill_opacity_tenths: spec.confirm_fill_opacity_tenths,
+        }
+    }
+}
+
+fn spec_from_confirm_selection(
+    selection: ConfirmPopupPlaygroundSelection,
+) -> ConfirmPopupPlaygroundSpec {
+    ConfirmPopupPlaygroundSpec {
+        id: selection.id,
+        title: selection.title,
+        body: selection.body,
+        confirm_text: selection.confirm_text,
+        cancel_text: selection.cancel_text,
+        is_danger: selection.is_danger,
+        footer_variant: selection.footer_variant,
+        border_opacity_tenths: selection.border_opacity_tenths,
+        confirm_fill_opacity_tenths: selection.confirm_fill_opacity_tenths,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Adoptable surface
+// ---------------------------------------------------------------------------
+
+pub struct ConfirmPopupPlaygroundSurface;
+
+impl AdoptableSurface for ConfirmPopupPlaygroundSurface {
+    type Id = ConfirmPopupPlaygroundId;
+    type Spec = ConfirmPopupPlaygroundSpec;
+    type Live = ConfirmPopupPlaygroundSelection;
+
+    const STORY_ID: &'static str = "confirm-popup-playground";
+    const DEFAULT_ID: Self::Id = ConfirmPopupPlaygroundId::Current;
+
+    fn specs() -> &'static [Self::Spec] {
+        &SPECS
+    }
+
+    fn spec_id(spec: &Self::Spec) -> Self::Id {
+        spec.id
+    }
+
+    fn live_from_spec(spec: &Self::Spec) -> Self::Live {
+        (*spec).into()
+    }
+}
+
+pub fn resolve_confirm_popup_playground_selection(
+    selected: Option<&str>,
+) -> (ConfirmPopupPlaygroundSelection, SurfaceSelectionResolution) {
+    resolve_surface_live::<ConfirmPopupPlaygroundSurface>(selected)
+}
+
+pub fn adopted_confirm_popup_playground_selection() -> ConfirmPopupPlaygroundSelection {
+    adopted_surface_live::<ConfirmPopupPlaygroundSurface>()
 }
 
 // ---------------------------------------------------------------------------
@@ -134,11 +239,17 @@ pub fn confirm_popup_playground_story_variants() -> Vec<StoryVariant> {
 }
 
 pub fn render_confirm_popup_playground_story_preview(stable_id: &str) -> AnyElement {
-    let spec = SPECS
-        .iter()
-        .find(|s| s.id.as_str() == stable_id)
-        .copied()
-        .unwrap_or(SPECS[0]);
+    let (selection, resolution) = resolve_confirm_popup_playground_selection(Some(stable_id));
+
+    tracing::info!(
+        event = "confirm_popup_playground_selection_resolved",
+        requested_variant_id = resolution.requested_variant_id.as_deref().unwrap_or(""),
+        resolved_variant_id = %resolution.resolved_variant_id,
+        fallback_used = resolution.fallback_used,
+        "Resolved confirm popup playground selection"
+    );
+
+    let spec = spec_from_confirm_selection(selection);
 
     let shell = IntegratedSurfaceShellConfig {
         width: 560.0,
@@ -365,7 +476,10 @@ fn render_keycap_action(
 
 #[cfg(test)]
 mod tests {
-    use super::{confirm_popup_playground_story_variants, ConfirmPopupPlaygroundId, SPECS};
+    use super::{
+        confirm_popup_playground_story_variants, resolve_confirm_popup_playground_selection,
+        ConfirmPopupPlaygroundId, SPECS,
+    };
     use std::collections::HashSet;
 
     #[test]
@@ -385,5 +499,38 @@ mod tests {
                 Some(id)
             );
         }
+    }
+
+    #[test]
+    fn resolve_danger_variant_no_fallback() {
+        let (selection, resolution) = resolve_confirm_popup_playground_selection(Some("danger"));
+        assert_eq!(selection.id, ConfirmPopupPlaygroundId::Danger);
+        assert_eq!(resolution.resolved_variant_id, "danger");
+        assert!(!resolution.fallback_used);
+    }
+
+    #[test]
+    fn resolve_whisper_variant_no_fallback() {
+        let (selection, resolution) = resolve_confirm_popup_playground_selection(Some("whisper"));
+        assert_eq!(selection.id, ConfirmPopupPlaygroundId::Whisper);
+        assert_eq!(resolution.resolved_variant_id, "whisper");
+        assert!(!resolution.fallback_used);
+    }
+
+    #[test]
+    fn resolve_unknown_variant_uses_fallback() {
+        let (selection, resolution) =
+            resolve_confirm_popup_playground_selection(Some("nonexistent"));
+        assert_eq!(selection.id, ConfirmPopupPlaygroundId::Current);
+        assert_eq!(resolution.resolved_variant_id, "current");
+        assert!(resolution.fallback_used);
+    }
+
+    #[test]
+    fn resolve_none_defaults_to_current() {
+        let (selection, resolution) = resolve_confirm_popup_playground_selection(None);
+        assert_eq!(selection.id, ConfirmPopupPlaygroundId::Current);
+        assert_eq!(resolution.resolved_variant_id, "current");
+        assert!(!resolution.fallback_used);
     }
 }
