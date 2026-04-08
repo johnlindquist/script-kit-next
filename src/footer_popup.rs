@@ -1035,7 +1035,7 @@ extern "C" fn footer_button_mouse_entered(
         }
         let theme = crate::theme::get_cached_theme();
         let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-        let hover_ns: id = ns_color_from_rgba(chrome.selection_rgba);
+        let hover_ns: id = ns_color_from_rgba(chrome.hover_rgba);
         if hover_ns != nil {
             let cg: id = msg_send![hover_ns, CGColor];
             if cg != nil {
