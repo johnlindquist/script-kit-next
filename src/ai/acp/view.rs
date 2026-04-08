@@ -1498,20 +1498,27 @@ impl AcpChatView {
             commands.iter().map(|(name, _)| name.clone()).collect();
 
         // Discover skills from all plugin roots via the canonical plugin index.
+        // Use plugin-qualified key for dedup so two plugins with the same
+        // skill_id both appear in the slash picker.
         if let Ok(index) = crate::plugins::discover_plugins() {
             if let Ok(skills) = crate::plugins::discover_plugin_skills(&index) {
                 for skill in &skills {
-                    if seen.contains(&skill.skill_id) {
+                    let qualified_key = format!("{}:{}", skill.plugin_id, skill.skill_id);
+                    if seen.contains(&qualified_key) {
                         continue;
                     }
 
-                    // Parse description from YAML frontmatter
-                    let desc = std::fs::read_to_string(&skill.path)
-                        .ok()
-                        .and_then(|content| parse_skill_description(&content))
-                        .unwrap_or_default();
+                    // Truncate long descriptions for the menu without slicing
+                    // through a multibyte UTF-8 codepoint.
+                    let desc_chars: Vec<char> = skill.description.chars().collect();
+                    let desc = if desc_chars.len() > 80 {
+                        let truncated: String = desc_chars.into_iter().take(77).collect();
+                        format!("{truncated}\u{2026}")
+                    } else {
+                        skill.description.clone()
+                    };
 
-                    seen.insert(skill.skill_id.clone());
+                    seen.insert(qualified_key);
                     commands.push((skill.skill_id.clone(), desc));
                 }
             }

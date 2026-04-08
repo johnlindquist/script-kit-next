@@ -2,6 +2,7 @@
 
 This guide is for AI agents and developers writing scripts for Script Kit.
 Script Kit is a productivity tool that runs TypeScript scripts with a rich UI.
+Plugins are the package boundary; skills are the preferred reusable AI unit.
 
 ---
 
