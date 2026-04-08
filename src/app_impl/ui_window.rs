@@ -29,7 +29,7 @@ impl ScriptListApp {
         );
 
         let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
-        if actions_open && !matches!(action, crate::footer_popup::FooterAction::Actions) {
+        if actions_open && !action.is_actions() {
             if let super::actions_dialog::ActionsSupport::SharedDialog(host) =
                 self.actions_support_for_view()
             {

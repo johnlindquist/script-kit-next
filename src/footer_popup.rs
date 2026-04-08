@@ -68,6 +68,12 @@ impl FooterButtonConfig {
     }
 }
 
+impl FooterAction {
+    pub(crate) fn is_actions(self) -> bool {
+        matches!(self, Self::Actions)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MainWindowFooterConfig {
     pub surface: &'static str,
