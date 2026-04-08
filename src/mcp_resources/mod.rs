@@ -131,7 +131,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
         McpResource {
             uri: "scripts://".to_string(),
             name: "Scripts".to_string(),
-            description: Some("List of all available scripts in ~/.scriptkit/kit/main/scripts/".to_string()),
+            description: Some("List of all available scripts discovered from installed plugins (kit/main/scripts/ is the default personal plugin). Scripts are loaded from all plugin roots under ~/.scriptkit/kit/*/scripts/.".to_string()),
             mime_type: "application/json".to_string(),
         },
         McpResource {
@@ -162,7 +162,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             uri: "kit://scripts".to_string(),
             name: "Scripts (versioned)".to_string(),
             description: Some(
-                "Schema-versioned list of all scripts in ~/.scriptkit/kit/main/scripts/ with metadata. Safe for repeated reads."
+                "Schema-versioned list of all scripts discovered from installed plugins with metadata. kit/main/scripts/ is the default personal plugin. Safe for repeated reads."
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),
@@ -716,7 +716,7 @@ fn build_sdk_reference_document() -> SdkReferenceDocument {
     SdkReferenceDocument {
         schema_version: SDK_REFERENCE_SCHEMA_VERSION,
         sdk_package: "@scriptkit/sdk".into(),
-        script_directory: "~/.scriptkit/kit/main/scripts/".into(),
+        script_directory: "~/.scriptkit/kit/main/scripts/ (default personal plugin; all plugins under kit/*/scripts/ are discovered)".into(),
         scriptlet_pattern: "~/.scriptkit/kit/*/extensions/*.md".into(),
         metadata_format:
             "export const metadata = { name: \"My Script\", description: \"What it does\" }".into(),

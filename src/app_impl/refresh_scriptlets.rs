@@ -3,6 +3,65 @@ use super::*;
 static SCRIPT_REFRESH_REQUEST_ID: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(0);
 
+const HUD_PLUGIN_INVENTORY_MS: u64 = 1400;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PluginInventoryCounts {
+    plugins: usize,
+    scripts: usize,
+    scriptlets: usize,
+}
+
+fn collect_plugin_inventory_counts(
+    scripts: &[std::sync::Arc<scripts::Script>],
+    scriptlets: &[std::sync::Arc<scripts::Scriptlet>],
+) -> PluginInventoryCounts {
+    let mut plugin_ids = std::collections::BTreeSet::new();
+    for script in scripts {
+        if !script.plugin_id.is_empty() {
+            plugin_ids.insert(script.plugin_id.clone());
+        }
+    }
+    for scriptlet in scriptlets {
+        if !scriptlet.plugin_id.is_empty() {
+            plugin_ids.insert(scriptlet.plugin_id.clone());
+        }
+    }
+    PluginInventoryCounts {
+        plugins: plugin_ids.len(),
+        scripts: scripts.len(),
+        scriptlets: scriptlets.len(),
+    }
+}
+
+fn build_plugin_inventory_hud(
+    before: PluginInventoryCounts,
+    after: PluginInventoryCounts,
+) -> Option<String> {
+    if after.plugins == 0 && after.scripts == 0 && after.scriptlets == 0 {
+        return Some(
+            "No plugin entrypoints yet — add one in kit/main or install a plugin".to_string(),
+        );
+    }
+
+    if before == after {
+        return None;
+    }
+
+    let verb = if after.plugins > before.plugins {
+        "ready"
+    } else if after.plugins < before.plugins {
+        "remaining"
+    } else {
+        "loaded"
+    };
+
+    Some(format!(
+        "{} plugins {} · {} scripts · {} snippets",
+        after.plugins, verb, after.scripts, after.scriptlets
+    ))
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum ScriptHotkeyRefreshAction {
     Update {
@@ -248,6 +307,9 @@ impl ScriptListApp {
         loaded_scriptlets: Vec<std::sync::Arc<scripts::Scriptlet>>,
         cx: &mut Context<Self>,
     ) {
+        let before_counts = collect_plugin_inventory_counts(&self.scripts, &self.scriptlets);
+        let after_counts = collect_plugin_inventory_counts(&loaded_scripts, &loaded_scriptlets);
+
         let hotkey_refresh_actions = plan_script_hotkey_refresh(&self.scripts, &loaded_scripts);
         apply_script_hotkey_refresh(&hotkey_refresh_actions);
 
@@ -268,6 +330,13 @@ impl ScriptListApp {
             ),
         );
 
+        tracing::info!(
+            plugins = after_counts.plugins,
+            scripts = after_counts.scripts,
+            scriptlets = after_counts.scriptlets,
+            "plugin_inventory_refreshed"
+        );
+
         // Sync list component state and validate selection
         // This moves state mutation OUT of render() (anti-pattern fix)
         self.sync_list_state();
@@ -281,6 +350,10 @@ impl ScriptListApp {
         let conflicts = self.rebuild_registries();
         for conflict in conflicts {
             self.show_hud(conflict, Some(HUD_CONFLICT_MS), cx); // 4s for conflict messages
+        }
+
+        if let Some(message) = build_plugin_inventory_hud(before_counts, after_counts) {
+            self.show_hud(message, Some(HUD_PLUGIN_INVENTORY_MS), cx);
         }
 
         logging::log(
@@ -650,5 +723,186 @@ mod tests {
         let actions = plan_script_hotkey_refresh(&old_scripts, &new_scripts);
 
         assert!(actions.is_empty());
+    }
+
+    // ── collect_plugin_inventory_counts ─────────────────────────────
+
+    fn test_script_with_plugin(path: &str, plugin_id: &str) -> Arc<Script> {
+        Arc::new(Script {
+            path: PathBuf::from(path),
+            plugin_id: plugin_id.to_string(),
+            ..Default::default()
+        })
+    }
+
+    fn test_scriptlet(name: &str, plugin_id: &str) -> Arc<crate::scripts::Scriptlet> {
+        Arc::new(crate::scripts::Scriptlet {
+            name: name.to_string(),
+            plugin_id: plugin_id.to_string(),
+            code: String::new(),
+            tool: "bash".to_string(),
+            description: None,
+            shortcut: None,
+            keyword: None,
+            group: None,
+            plugin_title: None,
+            file_path: None,
+            command: None,
+            alias: None,
+        })
+    }
+
+    #[test]
+    fn test_collect_counts_groups_by_unique_plugin_id() {
+        let scripts = vec![
+            test_script_with_plugin("/a.ts", "main"),
+            test_script_with_plugin("/b.ts", "main"),
+            test_script_with_plugin("/c.ts", "tools"),
+        ];
+        let scriptlets = vec![
+            test_scriptlet("s1", "main"),
+            test_scriptlet("s2", "examples"),
+        ];
+
+        let counts = collect_plugin_inventory_counts(&scripts, &scriptlets);
+        assert_eq!(counts.plugins, 3, "main + tools + examples");
+        assert_eq!(counts.scripts, 3);
+        assert_eq!(counts.scriptlets, 2);
+    }
+
+    #[test]
+    fn test_collect_counts_skips_empty_plugin_id() {
+        let scripts = vec![
+            test_script_with_plugin("/a.ts", "main"),
+            test_script_with_plugin("/b.ts", ""),
+        ];
+        let scriptlets = vec![test_scriptlet("s1", "")];
+
+        let counts = collect_plugin_inventory_counts(&scripts, &scriptlets);
+        assert_eq!(counts.plugins, 1, "only main counted");
+        assert_eq!(counts.scripts, 2);
+        assert_eq!(counts.scriptlets, 1);
+    }
+
+    #[test]
+    fn test_collect_counts_empty_inventory() {
+        let counts = collect_plugin_inventory_counts(&[], &[]);
+        assert_eq!(counts.plugins, 0);
+        assert_eq!(counts.scripts, 0);
+        assert_eq!(counts.scriptlets, 0);
+    }
+
+    // ── build_plugin_inventory_hud ─────────────────────────────────
+
+    #[test]
+    fn test_hud_shows_empty_state_when_inventory_becomes_empty() {
+        let before = PluginInventoryCounts {
+            plugins: 2,
+            scripts: 5,
+            scriptlets: 3,
+        };
+        let after = PluginInventoryCounts {
+            plugins: 0,
+            scripts: 0,
+            scriptlets: 0,
+        };
+
+        let hud = build_plugin_inventory_hud(before, after);
+        assert!(hud.is_some());
+        assert!(
+            hud.as_ref()
+                .expect("hud should be Some")
+                .contains("No plugin entrypoints yet"),
+            "got: {:?}",
+            hud
+        );
+    }
+
+    #[test]
+    fn test_hud_returns_none_when_inventory_unchanged() {
+        let same = PluginInventoryCounts {
+            plugins: 3,
+            scripts: 10,
+            scriptlets: 5,
+        };
+        assert!(
+            build_plugin_inventory_hud(same, same).is_none(),
+            "unchanged inventory should suppress HUD"
+        );
+    }
+
+    #[test]
+    fn test_hud_says_ready_when_plugins_increase() {
+        let before = PluginInventoryCounts {
+            plugins: 2,
+            scripts: 8,
+            scriptlets: 4,
+        };
+        let after = PluginInventoryCounts {
+            plugins: 3,
+            scripts: 11,
+            scriptlets: 6,
+        };
+
+        let hud = build_plugin_inventory_hud(before, after)
+            .expect("should produce HUD for plugin increase");
+        assert!(hud.contains("ready"), "got: {}", hud);
+        assert!(hud.contains("3 plugins"), "got: {}", hud);
+        assert!(hud.contains("11 scripts"), "got: {}", hud);
+        assert!(hud.contains("6 snippets"), "got: {}", hud);
+    }
+
+    #[test]
+    fn test_hud_says_remaining_when_plugins_decrease() {
+        let before = PluginInventoryCounts {
+            plugins: 5,
+            scripts: 20,
+            scriptlets: 10,
+        };
+        let after = PluginInventoryCounts {
+            plugins: 4,
+            scripts: 16,
+            scriptlets: 8,
+        };
+
+        let hud = build_plugin_inventory_hud(before, after)
+            .expect("should produce HUD for plugin decrease");
+        assert!(hud.contains("remaining"), "got: {}", hud);
+        assert!(hud.contains("4 plugins"), "got: {}", hud);
+    }
+
+    #[test]
+    fn test_hud_says_loaded_when_plugin_count_same_but_scripts_change() {
+        let before = PluginInventoryCounts {
+            plugins: 3,
+            scripts: 10,
+            scriptlets: 5,
+        };
+        let after = PluginInventoryCounts {
+            plugins: 3,
+            scripts: 12,
+            scriptlets: 5,
+        };
+
+        let hud = build_plugin_inventory_hud(before, after)
+            .expect("should produce HUD for script count change");
+        assert!(hud.contains("loaded"), "got: {}", hud);
+        assert!(hud.contains("12 scripts"), "got: {}", hud);
+    }
+
+    #[test]
+    fn test_hud_empty_state_from_zero() {
+        let zero = PluginInventoryCounts {
+            plugins: 0,
+            scripts: 0,
+            scriptlets: 0,
+        };
+        let hud = build_plugin_inventory_hud(zero, zero);
+        assert!(hud.is_some(), "empty-to-empty should still show empty state");
+        assert!(
+            hud.as_ref()
+                .expect("hud should be Some")
+                .contains("No plugin entrypoints yet"),
+        );
     }
 }

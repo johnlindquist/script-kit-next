@@ -64,7 +64,6 @@ impl AcpHistoryPopupEntry {
         }
     }
 }
-
 #[derive(Clone)]
 pub(crate) struct AcpHistoryPopupSnapshot {
     pub(crate) title: SharedString,
