@@ -560,6 +560,8 @@ mod app_actions_tests {
                 shortcut: None,
                 keyword: None,
                 group: Some("Tools".to_string()),
+                plugin_id: String::new(),
+                plugin_title: None,
                 file_path: Some("/tmp/snippets/tools.md#open-github".to_string()),
                 command: Some("open-github".to_string()),
                 alias: None,

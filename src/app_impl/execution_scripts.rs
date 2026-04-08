@@ -145,17 +145,32 @@ fn build_terminal_command(program: &str, script_path: &Path) -> Result<String, S
     Ok(format!("{} {}", program, quote_terminal_arg(path_str)))
 }
 
+fn scriptlet_plugin_source(scriptlet: &scripts::Scriptlet) -> String {
+    scriptlet
+        .plugin_title
+        .clone()
+        .or_else(|| {
+            if scriptlet.plugin_id.is_empty() {
+                scriptlet.group.clone()
+            } else {
+                Some(scriptlet.plugin_id.clone())
+            }
+        })
+        .unwrap_or_else(|| "Unknown Plugin".to_string())
+}
+
 impl ScriptListApp {
     pub(crate) fn execute_scriptlet(
         &mut self,
         scriptlet: &scripts::Scriptlet,
         cx: &mut Context<Self>,
     ) {
+        let plugin_source = scriptlet_plugin_source(scriptlet);
         logging::log(
             "EXEC",
             &format!(
-                "Executing scriptlet: {} (tool: {})",
-                scriptlet.name, scriptlet.tool
+                "Executing scriptlet: {} (tool: {}, plugin: {})",
+                scriptlet.name, scriptlet.tool, plugin_source
             ),
         );
 
@@ -185,7 +200,7 @@ impl ScriptListApp {
                     );
                     self.toast_manager.push(
                         components::toast::Toast::error(
-                            format!("Failed to write scriptlet: {}", e),
+                            format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
@@ -206,11 +221,22 @@ impl ScriptListApp {
                 shortcut: None,
                 typed_metadata: None,
                 schema: None,
-                plugin_id: String::new(),
-                plugin_title: None,
-                kit_name: None,
+                plugin_id: scriptlet.plugin_id.clone(),
+                plugin_title: scriptlet.plugin_title.clone(),
+                kit_name: if scriptlet.plugin_id.is_empty() {
+                    scriptlet.group.clone()
+                } else {
+                    Some(scriptlet.plugin_id.clone())
+                },
                 body: None,
             };
+
+            tracing::info!(
+                plugin_id = %script.plugin_id,
+                plugin_title = ?script.plugin_title,
+                scriptlet = %script.name,
+                "interactive_scriptlet_launch"
+            );
 
             self.execute_interactive(&script, cx);
             return;
@@ -249,7 +275,7 @@ impl ScriptListApp {
                     );
                     self.toast_manager.push(
                         components::toast::Toast::error(
-                            format!("Failed to write extension: {}", e),
+                            format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
@@ -265,7 +291,7 @@ impl ScriptListApp {
                     logging::log("ERROR", &format!("Failed to build terminal command: {}", e));
                     self.toast_manager.push(
                         components::toast::Toast::error(
-                            format!("Failed to run extension: {}", e),
+                            format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
@@ -368,7 +394,7 @@ impl ScriptListApp {
 
                     self.toast_manager.push(
                         components::toast::Toast::error(
-                            format!("Scriptlet failed: {}", error_msg),
+                            format!("{} · {} failed: {}", plugin_source, scriptlet.name, error_msg),
                             &self.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
@@ -384,7 +410,7 @@ impl ScriptListApp {
 
                 self.toast_manager.push(
                     components::toast::Toast::error(
-                        format!("Failed to execute: {}", e),
+                        format!("{} · {} failed: {}", plugin_source, scriptlet.name, e),
                         &self.theme,
                     )
                     .duration_ms(Some(TOAST_ERROR_MS)),

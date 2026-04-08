@@ -131,6 +131,18 @@ pub(crate) struct AcpHistoryResumeRequest {
     pub session_id: String,
 }
 
+/// Structured state for the inline ACP history popup.
+///
+/// Replaces the old `Option<(usize, String, Vec<AcpHistoryEntry>)>` tuple
+/// so ranked search metadata (`AcpHistorySearchHit`) is preserved through
+/// render instead of being discarded before the popup sees it.
+#[derive(Debug, Clone)]
+pub(crate) struct AcpHistoryMenuState {
+    pub(crate) selected_index: usize,
+    pub(crate) query: String,
+    pub(crate) hits: Vec<super::history::AcpHistorySearchHit>,
+}
+
 /// GPUI view entity wrapping an `AcpThread` for the Tab AI surface.
 pub(crate) struct AcpChatView {
     /// The ACP session — either a live thread or inline setup state.
@@ -150,8 +162,8 @@ pub(crate) struct AcpChatView {
     cursor_visible: bool,
     /// Handle to the cursor blink task.
     _blink_task: Task<()>,
-    /// History picker: (selected_index, filter_text, all_entries). None = hidden.
-    pub(crate) history_menu: Option<(usize, String, Vec<super::history::AcpHistoryEntry>)>,
+    /// Ranked history popup state. None = hidden.
+    pub(crate) history_menu: Option<AcpHistoryMenuState>,
     /// Whether the + attachment menu popup is open.
     attach_menu_open: bool,
     /// Whether the model selector dropdown is open.
@@ -535,52 +547,48 @@ impl AcpChatView {
         }
     }
 
+    /// Convert recent history entries into neutral hits (score 0, Title field).
+    fn recent_history_hits() -> Vec<super::history::AcpHistorySearchHit> {
+        super::history::load_history()
+            .into_iter()
+            .map(|entry| super::history::AcpHistorySearchHit {
+                entry,
+                score: 0,
+                matched_field: super::history::AcpHistorySearchField::Title,
+            })
+            .collect()
+    }
+
     fn history_popup_snapshot(
         &self,
     ) -> Option<crate::ai::acp::history_popup::AcpHistoryPopupSnapshot> {
-        let (selected_index, filter, all_entries) = self.history_menu.as_ref()?;
-        let entries = if filter.is_empty() {
-            all_entries
-                .iter()
-                .cloned()
-                .map(|entry| {
-                    crate::ai::acp::history_popup::AcpHistoryPopupEntry::from_hit(
-                        super::history::AcpHistorySearchHit {
-                            entry,
-                            score: 0,
-                            matched_field: super::history::AcpHistorySearchField::Title,
-                        },
-                    )
-                })
-                .collect::<Vec<_>>()
-        } else {
-            let query = filter.to_lowercase();
-            all_entries
-                .iter()
-                .filter(|entry| entry.first_message.to_lowercase().contains(&query))
-                .cloned()
-                .map(|entry| {
-                    crate::ai::acp::history_popup::AcpHistoryPopupEntry::from_hit(
-                        super::history::AcpHistorySearchHit {
-                            entry,
-                            score: 0,
-                            matched_field: super::history::AcpHistorySearchField::Title,
-                        },
-                    )
-                })
-                .collect::<Vec<_>>()
-        };
+        let menu = self.history_menu.as_ref()?;
+        let entries = menu
+            .hits
+            .iter()
+            .cloned()
+            .map(crate::ai::acp::history_popup::AcpHistoryPopupEntry::from_hit)
+            .collect::<Vec<_>>();
         let selected_index = if entries.is_empty() {
             0
         } else {
-            (*selected_index).min(entries.len().saturating_sub(1))
+            menu.selected_index.min(entries.len().saturating_sub(1))
         };
 
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_history_popup_snapshot_built",
+            query = %menu.query,
+            hit_count = menu.hits.len(),
+            visible_count = entries.len(),
+            selected_index,
+        );
+
         Some(crate::ai::acp::history_popup::AcpHistoryPopupSnapshot {
-            title: if filter.is_empty() {
+            title: if menu.query.trim().is_empty() {
                 SharedString::from("Recent Conversations (⌘P)")
             } else {
-                SharedString::from(format!("Search: {filter}"))
+                SharedString::from(format!("History matches \u{201c}{}\u{201d}", menu.query))
             },
             selected_index,
             entries,
@@ -841,12 +849,20 @@ impl AcpChatView {
         hits: Vec<super::history::AcpHistorySearchHit>,
         cx: &mut Context<Self>,
     ) {
-        let entries: Vec<super::history::AcpHistoryEntry> =
-            hits.into_iter().map(|h| h.entry).collect();
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_history_portal_opened",
+            query = %query,
+            hit_count = hits.len(),
+        );
         self.attach_menu_open = false;
         self.model_selector_open = false;
         self.mention_session = None;
-        self.history_menu = Some((0, query, entries));
+        self.history_menu = Some(AcpHistoryMenuState {
+            selected_index: 0,
+            query,
+            hits,
+        });
         self.sync_acp_popup_windows_from_cached_parent(cx);
         cx.notify();
     }
@@ -855,12 +871,16 @@ impl AcpChatView {
         if self.history_menu.is_some() {
             self.history_menu = None;
         } else {
-            let entries = super::history::load_history();
-            if !entries.is_empty() {
+            let hits = Self::recent_history_hits();
+            if !hits.is_empty() {
                 self.attach_menu_open = false;
                 self.model_selector_open = false;
                 self.mention_session = None;
-                self.history_menu = Some((0, String::new(), entries));
+                self.history_menu = Some(AcpHistoryMenuState {
+                    selected_index: 0,
+                    query: String::new(),
+                    hits,
+                });
             }
         }
         self.sync_acp_popup_windows_from_cached_parent(cx);
@@ -2698,6 +2718,16 @@ impl AcpChatView {
                         "↩ Send",
                         cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
                             this.submit_with_expanded_tokens(cx);
+                        }),
+                    ),
+                    crate::components::ClickableHint::new(
+                        "⌘P History",
+                        cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                            tracing::info!(
+                                target: "script_kit::tab_ai",
+                                event = "acp_toolbar_history_clicked",
+                            );
+                            this.trigger_open_history_command(window, cx);
                         }),
                     ),
                     crate::components::ClickableHint::new(

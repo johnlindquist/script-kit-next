@@ -249,6 +249,29 @@ impl ScriptListApp {
             .map_err(|error| format!("Failed to update kit registry: {}", error))
     }
 
+    fn plugin_mutation_message(action: &str, plugin_name: &str) -> String {
+        match action {
+            "install" => format!("Installed plugin '{}' — commands are live now", plugin_name),
+            "update" => format!("Updated plugin '{}' — launcher refreshed", plugin_name),
+            "remove" => format!("Removed plugin '{}' from the launcher", plugin_name),
+            _ => format!("Updated plugin '{}'", plugin_name),
+        }
+    }
+
+    fn request_plugin_runtime_refresh(
+        &mut self,
+        action: &str,
+        plugin_name: &str,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            action = %action,
+            plugin_id = %plugin_name,
+            "plugin_runtime_refresh_requested"
+        );
+        self.refresh_scripts(cx);
+    }
+
     fn kit_store_refresh_installed_view(&mut self, cx: &mut Context<Self>) {
         if let AppView::InstalledKitsView {
             selected_index,
@@ -289,9 +312,11 @@ impl ScriptListApp {
                         install_path = %installed.path.display(),
                         "plugin_store_installed"
                     );
+                    this.kit_store_refresh_installed_view(cx);
+                    this.request_plugin_runtime_refresh("install", &installed.name, cx);
                     this.toast_manager.push(
                         components::toast::Toast::success(
-                            format!("Installed plugin '{}'", installed.name),
+                            Self::plugin_mutation_message("install", &installed.name),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_SUCCESS_MS)),
@@ -338,14 +363,16 @@ impl ScriptListApp {
             let _ = this.update(cx, |this, cx| match result {
                 Ok(()) => {
                     tracing::info!(plugin_id = %kit_name, "plugin_store_updated");
+                    this.kit_store_refresh_installed_view(cx);
+                    this.request_plugin_runtime_refresh("update", &kit_name, cx);
                     this.toast_manager.push(
                         components::toast::Toast::success(
-                            format!("Updated plugin '{}'", kit_name),
+                            Self::plugin_mutation_message("update", &kit_name),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_SUCCESS_MS)),
                     );
-                    this.kit_store_refresh_installed_view(cx);
+                    cx.notify();
                 }
                 Err(error) => {
                     tracing::warn!(plugin_id = %kit_name, error = %error, "plugin_store_update_failed");
@@ -367,6 +394,15 @@ impl ScriptListApp {
         let kit = kit.clone();
         let kit_name = kit.name.clone();
 
+        self.toast_manager.push(
+            components::toast::Toast::info(
+                format!("Removing '{}'...", kit_name),
+                &self.theme,
+            )
+            .duration_ms(Some(TOAST_INFO_MS)),
+        );
+        cx.notify();
+
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
@@ -375,14 +411,16 @@ impl ScriptListApp {
             let _ = this.update(cx, |this, cx| match result {
                 Ok(()) => {
                     tracing::info!(plugin_id = %kit_name, "plugin_store_removed");
+                    this.kit_store_refresh_installed_view(cx);
+                    this.request_plugin_runtime_refresh("remove", &kit_name, cx);
                     this.toast_manager.push(
                         components::toast::Toast::success(
-                            format!("Removed plugin '{}'", kit_name),
+                            Self::plugin_mutation_message("remove", &kit_name),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_SUCCESS_MS)),
                     );
-                    this.kit_store_refresh_installed_view(cx);
+                    cx.notify();
                 }
                 Err(error) => {
                     tracing::warn!(plugin_id = %kit_name, error = %error, "plugin_store_remove_failed");
