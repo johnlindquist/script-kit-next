@@ -2608,18 +2608,16 @@ impl AcpChatView {
                             .read(cx)
                             .selected_model_display()
                             .to_string();
-                        div()
-                            .id("acp-model-display")
-                            .flex()
-                            .items_center()
-                            .cursor_pointer()
-                            .hover(|d| d.opacity(0.85))
-                            .on_click(cx.listener(|this, _event, window, cx| {
-                                this.trigger_open_model_picker(window, cx);
-                            }))
-                            .text_xs()
-                            .text_color(rgba(hint_text_rgba))
-                            .child(model_display)
+                        crate::components::render_hint_icons_clickable(
+                            vec![crate::components::ClickableHint::new(
+                                model_display,
+                                cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                                    this.trigger_open_model_picker(window, cx);
+                                }),
+                            )
+                            .id("acp-model-display")],
+                            hint_text_rgba,
+                        )
                     }),
             )
             // ── Right: clickable hint strip (matches main menu behavior) ──
