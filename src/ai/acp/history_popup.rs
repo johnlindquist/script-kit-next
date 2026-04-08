@@ -2,15 +2,16 @@ use std::sync::{Mutex, OnceLock};
 
 use gpui::prelude::FluentBuilder as _;
 use gpui::{
-    div, px, AnyWindowHandle, App, AppContext, Bounds, Context, DisplayId, FocusHandle, Focusable,
-    FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString,
-    StatefulInteractiveElement, Styled, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind,
+    div, px, uniform_list, AnyElement, AnyWindowHandle, App, AppContext, Bounds, Context,
+    DisplayId, FocusHandle, Focusable, FontWeight, InteractiveElement, IntoElement, ParentElement,
+    Pixels, Render, ScrollStrategy, SharedString, StatefulInteractiveElement, Styled, Subscription,
+    UniformListScrollHandle, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind,
     WindowOptions,
 };
 use gpui_component::scroll::ScrollableElement;
 
 use super::history::{AcpHistoryEntry, AcpHistorySearchField, AcpHistorySearchHit};
-use super::view::AcpChatView;
+use super::view::{AcpChatView, AcpHistoryMenuState};
 
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
@@ -20,12 +21,14 @@ const HISTORY_POPUP_MAX_WIDTH: f32 = 420.0;
 const HISTORY_POPUP_SIDE_MARGIN: f32 = 8.0;
 const HISTORY_POPUP_TOP_INSET: f32 = 56.0;
 const HISTORY_POPUP_BOTTOM_INSET: f32 = 12.0;
-const HISTORY_POPUP_HEADER_HEIGHT: f32 = crate::actions::constants::HEADER_HEIGHT;
+const HISTORY_POPUP_SEARCH_HEIGHT: f32 = crate::actions::constants::SEARCH_INPUT_HEIGHT;
 const HISTORY_POPUP_FOOTER_HEIGHT: f32 = crate::window_resize::mini_layout::HINT_STRIP_HEIGHT;
 const HISTORY_POPUP_ROW_HEIGHT: f32 = 60.0;
 const HISTORY_POPUP_EMPTY_HEIGHT: f32 = 72.0;
 const HISTORY_POPUP_VISIBLE_ROWS: usize = 5;
 const HISTORY_POPUP_VERTICAL_PADDING: f32 = 4.0;
+pub(super) const HISTORY_POPUP_SEARCH_LIMIT: usize = 24;
+pub(super) const HISTORY_POPUP_PAGE_JUMP: usize = 8;
 
 #[cfg(target_os = "macos")]
 const NS_WINDOW_ABOVE: i64 = 1;
@@ -67,6 +70,7 @@ impl AcpHistoryPopupEntry {
 #[derive(Clone)]
 pub(crate) struct AcpHistoryPopupSnapshot {
     pub(crate) title: SharedString,
+    pub(crate) query: SharedString,
     pub(crate) selected_index: usize,
     pub(crate) entries: Vec<AcpHistoryPopupEntry>,
 }
@@ -88,6 +92,20 @@ struct AcpHistoryPopupSlot {
 
 static ACP_HISTORY_POPUP_WINDOW: OnceLock<Mutex<Option<AcpHistoryPopupSlot>>> = OnceLock::new();
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum AcpHistoryPopupKeyIntent {
+    MoveUp,
+    MoveDown,
+    MoveHome,
+    MoveEnd,
+    MovePageUp,
+    MovePageDown,
+    ExecuteSelected,
+    Close,
+    Backspace,
+    TypeChar(char),
+}
+
 pub(crate) fn close_history_popup_window(cx: &mut App) {
     if let Some(storage) = ACP_HISTORY_POPUP_WINDOW.get() {
         if let Ok(mut guard) = storage.lock() {
@@ -100,6 +118,14 @@ pub(crate) fn close_history_popup_window(cx: &mut App) {
     }
 }
 
+fn clear_history_popup_window_slot() {
+    if let Some(storage) = ACP_HISTORY_POPUP_WINDOW.get() {
+        if let Ok(mut guard) = storage.lock() {
+            *guard = None;
+        }
+    }
+}
+
 fn popup_height(snapshot: &AcpHistoryPopupSnapshot) -> f32 {
     let body_height = if snapshot.entries.is_empty() {
         HISTORY_POPUP_EMPTY_HEIGHT
@@ -108,7 +134,7 @@ fn popup_height(snapshot: &AcpHistoryPopupSnapshot) -> f32 {
         visible_rows * HISTORY_POPUP_ROW_HEIGHT
     };
 
-    HISTORY_POPUP_HEADER_HEIGHT
+    HISTORY_POPUP_SEARCH_HEIGHT
         + HISTORY_POPUP_FOOTER_HEIGHT
         + body_height
         + (HISTORY_POPUP_VERTICAL_PADDING * 2.0)
@@ -196,7 +222,14 @@ pub(crate) fn sync_history_popup_window(
     };
 
     let handle = cx.open_window(window_options, |_window, cx| {
-        cx.new(|cx| AcpHistoryPopupWindow::new(snapshot.clone(), source_view.clone(), cx))
+        cx.new(|cx| {
+            AcpHistoryPopupWindow::new(
+                snapshot.clone(),
+                source_view.clone(),
+                parent_window_handle,
+                cx,
+            )
+        })
     })?;
 
     #[cfg(target_os = "macos")]
@@ -240,24 +273,53 @@ pub(crate) fn sync_history_popup_window(
 pub(crate) struct AcpHistoryPopupWindow {
     snapshot: AcpHistoryPopupSnapshot,
     source_view: WeakEntity<AcpChatView>,
+    parent_window_handle: AnyWindowHandle,
     focus_handle: FocusHandle,
+    scroll_handle: UniformListScrollHandle,
+    activation_subscription: Option<Subscription>,
 }
 
 impl AcpHistoryPopupWindow {
     fn new(
         snapshot: AcpHistoryPopupSnapshot,
         source_view: WeakEntity<AcpChatView>,
+        parent_window_handle: AnyWindowHandle,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
             snapshot,
             source_view,
+            parent_window_handle,
             focus_handle: cx.focus_handle(),
+            scroll_handle: UniformListScrollHandle::new(),
+            activation_subscription: None,
         }
     }
 
     fn set_snapshot(&mut self, snapshot: AcpHistoryPopupSnapshot) {
         self.snapshot = snapshot;
+    }
+
+    fn sync_selection_to_source_view(&self, selected_index: usize, cx: &mut App) {
+        if let Some(view) = self.source_view.upgrade() {
+            view.update(cx, |view, cx| {
+                view.sync_history_popup_selection_from_window(selected_index, cx);
+            });
+        }
+    }
+
+    fn sync_state_to_source_view(
+        &self,
+        query: String,
+        hits: Vec<AcpHistorySearchHit>,
+        selected_index: usize,
+        cx: &mut App,
+    ) {
+        if let Some(view) = self.source_view.upgrade() {
+            view.update(cx, |view, cx| {
+                view.sync_history_popup_state_from_window(query, hits, selected_index, cx);
+            });
+        }
     }
 
     /// Default action (Enter / click): attach a summary as a context chip.
@@ -358,7 +420,116 @@ impl AcpHistoryPopupWindow {
         } else {
             (idx + delta as usize).min(len.saturating_sub(1))
         };
+        self.scroll_handle
+            .scroll_to_item(self.snapshot.selected_index, ScrollStrategy::Nearest);
+        self.sync_selection_to_source_view(self.snapshot.selected_index, cx);
         cx.notify();
+    }
+
+    fn jump_to_boundary(&mut self, end: bool, cx: &mut Context<Self>) {
+        if self.snapshot.entries.is_empty() {
+            return;
+        }
+
+        self.snapshot.selected_index = if end {
+            self.snapshot.entries.len().saturating_sub(1)
+        } else {
+            0
+        };
+        self.scroll_handle
+            .scroll_to_item(self.snapshot.selected_index, ScrollStrategy::Nearest);
+        self.sync_selection_to_source_view(self.snapshot.selected_index, cx);
+        cx.notify();
+    }
+
+    fn page_navigate(&mut self, delta: i32, cx: &mut Context<Self>) {
+        if self.snapshot.entries.is_empty() {
+            return;
+        }
+
+        let len = self.snapshot.entries.len();
+        let target = if delta < 0 {
+            self.snapshot
+                .selected_index
+                .saturating_sub(HISTORY_POPUP_PAGE_JUMP)
+        } else {
+            (self.snapshot.selected_index + HISTORY_POPUP_PAGE_JUMP).min(len.saturating_sub(1))
+        };
+        self.snapshot.selected_index = target;
+        self.scroll_handle
+            .scroll_to_item(self.snapshot.selected_index, ScrollStrategy::Nearest);
+        self.sync_selection_to_source_view(self.snapshot.selected_index, cx);
+        cx.notify();
+    }
+
+    fn set_query(&mut self, query: String, cx: &mut Context<Self>) {
+        let hits = super::history::search_history(&query, HISTORY_POPUP_SEARCH_LIMIT);
+        let entries = hits
+            .iter()
+            .cloned()
+            .map(AcpHistoryPopupEntry::from_hit)
+            .collect::<Vec<_>>();
+
+        self.snapshot.query = SharedString::from(query.clone());
+        self.snapshot.entries = entries;
+        self.snapshot.selected_index = 0;
+        self.scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+        self.sync_state_to_source_view(query, hits, 0, cx);
+        cx.notify();
+    }
+
+    fn handle_char_input(&mut self, ch: char, cx: &mut Context<Self>) {
+        let mut query = self.snapshot.query.to_string();
+        query.push(ch);
+        self.set_query(query, cx);
+    }
+
+    fn handle_backspace_input(&mut self, cx: &mut Context<Self>) {
+        let mut query = self.snapshot.query.to_string();
+        if query.is_empty() {
+            return;
+        }
+        query.pop();
+        self.set_query(query, cx);
+    }
+
+    fn request_close(&self, window: &mut Window, cx: &mut Context<Self>, reason: &'static str) {
+        if let Some(view) = self.source_view.upgrade() {
+            view.update(cx, |view, cx| {
+                view.dismiss_history_popup_from_window(reason, cx);
+            });
+        }
+
+        window.defer(cx, |_window, _cx| {
+            clear_history_popup_window_slot();
+            _window.remove_window();
+        });
+    }
+
+    fn ensure_activation_subscription(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.activation_subscription.is_some() {
+            return;
+        }
+
+        let parent_window_handle = self.parent_window_handle;
+        self.activation_subscription = Some(cx.observe_window_activation(
+            window,
+            move |this, window, cx| {
+                let popup_window_active = window.is_window_active();
+                let parent_window_active = cx
+                    .update_window(parent_window_handle, |_, parent_window, _cx| {
+                        parent_window.is_window_active()
+                    })
+                    .ok()
+                    .unwrap_or(false);
+
+                if parent_window_active || popup_window_active {
+                    return;
+                }
+
+                this.request_close(window, cx, "focus_lost");
+            },
+        ));
     }
 }
 
@@ -369,7 +540,9 @@ impl Focusable for AcpHistoryPopupWindow {
 }
 
 impl Render for AcpHistoryPopupWindow {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.ensure_activation_subscription(window, cx);
+
         let theme = crate::theme::get_cached_theme();
         let chrome = crate::theme::AppChromeColors::from_theme(&theme);
         let title_color = gpui::rgb(theme.colors.text.primary);
@@ -380,43 +553,84 @@ impl Render for AcpHistoryPopupWindow {
         let selected_bar = gpui::rgba((theme.colors.accent.selected << 8) | 0xFF);
         let container_bg = gpui::rgba(chrome.popup_surface_rgba);
         let container_border = gpui::rgba(chrome.border_rgba);
-
+        let accent_color = gpui::rgb(theme.colors.accent.selected);
+        let search_query = self.snapshot.query.to_string();
+        let placeholder_text = self.snapshot.title.clone();
+        let search_display = if search_query.is_empty() {
+            SharedString::from(placeholder_text.to_string())
+        } else {
+            SharedString::from(search_query.clone())
+        };
         div()
             .track_focus(&self.focus_handle)
             .id("acp-history-popup")
+            .on_mouse_down_out(cx.listener(|this, _event: &gpui::MouseDownEvent, window, cx| {
+                this.request_close(window, cx, "mouse_down_out");
+            }))
             .on_key_down(
-                cx.listener(|this, event: &gpui::KeyDownEvent, _window, cx| {
+                cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                     let key = event.keystroke.key.as_str();
-                    let has_cmd = event.keystroke.modifiers.platform;
-                    let has_shift = event.keystroke.modifiers.shift;
+                    let modifiers = &event.keystroke.modifiers;
 
-                    if crate::ui_foundation::is_key_up(key) {
-                        this.navigate(-1, cx);
-                        cx.stop_propagation();
-                    } else if crate::ui_foundation::is_key_down(key) {
-                        this.navigate(1, cx);
-                        cx.stop_propagation();
-                    } else if crate::ui_foundation::is_key_enter(key) {
-                        if let Some(entry) = this
-                            .snapshot
-                            .entries
-                            .get(this.snapshot.selected_index)
-                            .cloned()
-                        {
-                            if has_cmd {
-                                this.resume_session(&entry, cx);
-                            } else if has_shift {
-                                this.attach_transcript(&entry, cx);
-                            } else {
-                                this.attach_summary(&entry, cx);
-                            }
+                    match history_popup_key_intent(key, modifiers) {
+                        Some(AcpHistoryPopupKeyIntent::MoveUp) => {
+                            this.navigate(-1, cx);
+                            cx.stop_propagation();
                         }
-                        cx.stop_propagation();
-                    } else if crate::ui_foundation::is_key_escape(key) {
-                        close_history_popup_window(cx);
-                        cx.stop_propagation();
-                    } else {
-                        cx.propagate();
+                        Some(AcpHistoryPopupKeyIntent::MoveDown) => {
+                            this.navigate(1, cx);
+                            cx.stop_propagation();
+                        }
+                        Some(AcpHistoryPopupKeyIntent::MoveHome) => {
+                            this.jump_to_boundary(false, cx);
+                            cx.stop_propagation();
+                        }
+                        Some(AcpHistoryPopupKeyIntent::MoveEnd) => {
+                            this.jump_to_boundary(true, cx);
+                            cx.stop_propagation();
+                        }
+                        Some(AcpHistoryPopupKeyIntent::MovePageUp) => {
+                            this.page_navigate(-1, cx);
+                            cx.stop_propagation();
+                        }
+                        Some(AcpHistoryPopupKeyIntent::MovePageDown) => {
+                            this.page_navigate(1, cx);
+                            cx.stop_propagation();
+                        }
+                        Some(AcpHistoryPopupKeyIntent::ExecuteSelected) => {
+                            let has_cmd = modifiers.platform;
+                            let has_shift = modifiers.shift;
+                            if let Some(entry) = this
+                                .snapshot
+                                .entries
+                                .get(this.snapshot.selected_index)
+                                .cloned()
+                            {
+                                if has_cmd {
+                                    this.resume_session(&entry, cx);
+                                } else if has_shift {
+                                    this.attach_transcript(&entry, cx);
+                                } else {
+                                    this.attach_summary(&entry, cx);
+                                }
+                            }
+                            cx.stop_propagation();
+                        }
+                        Some(AcpHistoryPopupKeyIntent::Close) => {
+                            this.request_close(window, cx, "escape");
+                            cx.stop_propagation();
+                        }
+                        Some(AcpHistoryPopupKeyIntent::Backspace) => {
+                            this.handle_backspace_input(cx);
+                            cx.stop_propagation();
+                        }
+                        Some(AcpHistoryPopupKeyIntent::TypeChar(ch)) => {
+                            this.handle_char_input(ch, cx);
+                            cx.stop_propagation();
+                        }
+                        None => {
+                            cx.propagate();
+                        }
                     }
                 }),
             )
@@ -435,179 +649,240 @@ impl Render for AcpHistoryPopupWindow {
                     .child(
                         div()
                             .w_full()
-                            .h(px(HISTORY_POPUP_HEADER_HEIGHT))
+                            .h(px(HISTORY_POPUP_SEARCH_HEIGHT))
                             .px(px(crate::actions::constants::ACTION_PADDING_X))
-                            .pt(px(crate::actions::constants::ACTION_PADDING_TOP))
-                            .pb(px(4.0))
+                            .py(px(6.0))
                             .flex()
-                            .flex_col()
+                            .flex_row()
+                            .items_center()
                             .justify_center()
                             .child(
                                 div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(dimmed_text)
-                                    .child(self.snapshot.title.clone()),
+                                    .flex_1()
+                                    .h(px(28.0))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .text_sm()
+                                    .text_color(if search_query.is_empty() {
+                                        dimmed_text
+                                    } else {
+                                        title_color
+                                    })
+                                    .when(search_query.is_empty(), |d| {
+                                        d.child(
+                                            div()
+                                                .w(px(2.0))
+                                                .h(px(16.0))
+                                                .mr(px(2.0))
+                                                .rounded(px(1.0))
+                                                .bg(accent_color),
+                                        )
+                                    })
+                                    .child(search_display)
+                                    .when(!search_query.is_empty(), |d| {
+                                        d.child(
+                                            div()
+                                                .w(px(2.0))
+                                                .h(px(16.0))
+                                                .mr(px(2.0))
+                                                .rounded(px(1.0))
+                                                .bg(accent_color),
+                                        )
+                                    }),
                             ),
                     )
-                    .child(div().w_full().flex_1().overflow_y_scrollbar().children(
-                        if self.snapshot.entries.is_empty() {
-                            vec![div()
-                                .w_full()
-                                .h(px(HISTORY_POPUP_EMPTY_HEIGHT))
-                                .px(px(crate::actions::constants::ACTION_PADDING_X))
-                                .flex()
-                                .items_center()
-                                .text_sm()
-                                .text_color(dimmed_text)
-                                .child(
-                                    "No matches yet \u{2014} try words from the prompt, reply, or date",
-                                )
-                                .into_any_element()]
-                        } else {
-                            self.snapshot
-                                .entries
-                                .iter()
-                                .enumerate()
-                                .map(|(idx, entry)| {
-                                    let is_selected = idx == self.snapshot.selected_index;
-                                    let row_entry = entry.clone();
+                    .child(if self.snapshot.entries.is_empty() {
+                        div()
+                            .w_full()
+                            .h(px(HISTORY_POPUP_EMPTY_HEIGHT))
+                            .px(px(crate::actions::constants::ACTION_PADDING_X))
+                            .flex()
+                            .items_center()
+                            .text_sm()
+                            .text_color(dimmed_text)
+                            .child(if search_query.is_empty() {
+                                "No conversation history yet"
+                            } else {
+                                "No matches yet \u{2014} try words from the prompt, reply, or date"
+                            })
+                            .into_any_element()
+                    } else {
+                        let entries = self.snapshot.entries.clone();
+                        let selected_index = self.snapshot.selected_index;
+                        let source_view = self.source_view.clone();
 
-                                    div()
-                                        .id(SharedString::from(format!(
-                                            "acp-history-popup-row-{idx}"
-                                        )))
-                                        .h(px(HISTORY_POPUP_ROW_HEIGHT))
-                                        .w_full()
-                                        .px(px(crate::actions::constants::ACTION_ROW_INSET))
-                                        .py(px(4.0))
-                                        .flex()
-                                        .flex_col()
-                                        .justify_center()
-                                        .border_l(px(crate::actions::constants::ACCENT_BAR_WIDTH))
-                                        .border_color(if is_selected {
-                                            selected_bar
-                                        } else {
-                                            gpui::rgba(0x0000_0000)
-                                        })
-                                        .cursor_pointer()
-                                        .when(is_selected, |d| d.bg(selected_bg))
-                                        .when(!is_selected, |d| d.hover(|d| d.bg(hover_bg)))
-                                        .on_click(
-                                            cx.listener(move |this, _event, _window, cx| {
-                                                this.attach_summary(&row_entry, cx);
-                                            }),
-                                        )
-                                        .child(
-                                            div()
-                                                .w_full()
-                                                .flex()
-                                                .flex_col()
-                                                .gap(px(2.0))
-                                                .px(px(
-                                                    crate::actions::constants::ACTION_PADDING_X
-                                                        - crate::actions::constants::ACTION_ROW_INSET,
-                                                ))
-                                                // ── Row 1: title + match badge + meta ──
-                                                .child(
-                                                    div()
-                                                        .w_full()
-                                                        .flex()
-                                                        .flex_row()
-                                                        .items_center()
-                                                        .gap(px(8.0))
-                                                        .child(
-                                                            div()
-                                                                .flex_1()
-                                                                .min_w(px(0.0))
-                                                                .text_sm()
-                                                                .font_weight(if is_selected {
-                                                                    FontWeight::MEDIUM
-                                                                } else {
-                                                                    FontWeight::NORMAL
-                                                                })
-                                                                .text_color(title_color)
-                                                                .overflow_hidden()
-                                                                .text_ellipsis()
-                                                                .whitespace_nowrap()
-                                                                .child(entry.title.clone()),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .flex_shrink_0()
-                                                                .px(px(6.0))
-                                                                .py(px(2.0))
-                                                                .rounded(px(999.0))
-                                                                .bg(if is_selected {
-                                                                    gpui::rgba(
-                                                                        (theme.colors.accent.selected
-                                                                            << 8)
-                                                                            | 0x18,
-                                                                    )
-                                                                } else {
-                                                                    gpui::rgba(
-                                                                        (theme.colors.ui.border << 8)
-                                                                            | 0x10,
-                                                                    )
-                                                                })
-                                                                .border_1()
-                                                                .border_color(if is_selected {
-                                                                    gpui::rgba(
-                                                                        (theme.colors.accent.selected
-                                                                            << 8)
-                                                                            | 0x30,
-                                                                    )
-                                                                } else {
-                                                                    gpui::rgba(
-                                                                        (theme.colors.ui.border << 8)
-                                                                            | 0x20,
-                                                                    )
-                                                                })
-                                                                .text_xs()
-                                                                .text_color(if is_selected {
-                                                                    gpui::rgb(
-                                                                        theme.colors.accent.selected,
-                                                                    )
-                                                                } else {
-                                                                    dimmed_text
-                                                                })
-                                                                .child(entry.match_label.clone()),
-                                                        )
-                                                        .child(
-                                                            div()
-                                                                .flex_shrink_0()
-                                                                .text_xs()
-                                                                .text_color(if is_selected {
-                                                                    secondary_text
-                                                                } else {
-                                                                    dimmed_text
-                                                                })
-                                                                .whitespace_nowrap()
-                                                                .child(entry.meta.clone()),
-                                                        ),
-                                                )
-                                                // ── Row 2: preview ──
-                                                .child(
-                                                    div()
-                                                        .w_full()
-                                                        .text_xs()
-                                                        .text_color(if is_selected {
-                                                            secondary_text
-                                                        } else {
-                                                            dimmed_text
-                                                        })
-                                                        .overflow_hidden()
-                                                        .text_ellipsis()
-                                                        .whitespace_nowrap()
-                                                        .child(entry.preview.clone()),
-                                                ),
-                                        )
-                                        .into_any_element()
-                                })
-                                .collect::<Vec<_>>()
-                        },
-                    ))
+                        uniform_list(
+                            "acp-history-popup-list",
+                            entries.len(),
+                            cx.processor(
+                                move |_this,
+                                      visible_range: std::ops::Range<usize>,
+                                      _window,
+                                      cx| {
+                                visible_range
+                                    .map(|idx| {
+                                        let entry = entries[idx].clone();
+                                        let is_selected = idx == selected_index;
+                                        let row_entry = entry.clone();
+                                        let row_view = source_view.clone();
+                                        let click_view = source_view.clone();
+
+                                        div()
+                                            .id(SharedString::from(format!(
+                                                "acp-history-popup-row-{idx}"
+                                            )))
+                                            .h(px(HISTORY_POPUP_ROW_HEIGHT))
+                                            .w_full()
+                                            .px(px(crate::actions::constants::ACTION_ROW_INSET))
+                                            .py(px(4.0))
+                                            .flex()
+                                            .flex_col()
+                                            .justify_center()
+                                            .border_l(px(crate::actions::constants::ACCENT_BAR_WIDTH))
+                                            .border_color(if is_selected {
+                                                selected_bar
+                                            } else {
+                                                gpui::rgba(0x0000_0000)
+                                            })
+                                            .cursor_pointer()
+                                            .when(is_selected, |d| d.bg(selected_bg))
+                                            .when(!is_selected, |d| d.hover(|d| d.bg(hover_bg)))
+                                            .on_mouse_move(cx.listener(move |this, _event, _window, cx| {
+                                                if this.snapshot.selected_index != idx {
+                                                    this.snapshot.selected_index = idx;
+                                                    this.sync_selection_to_source_view(idx, cx);
+                                                    cx.notify();
+                                                } else if let Some(view) = row_view.upgrade() {
+                                                    view.update(cx, |view, cx| {
+                                                        view.sync_history_popup_selection_from_window(idx, cx);
+                                                    });
+                                                }
+                                            }))
+                                            .on_click(
+                                                cx.listener(move |this, _event, _window, cx| {
+                                                    this.snapshot.selected_index = idx;
+                                                    if let Some(view) = click_view.upgrade() {
+                                                        view.update(cx, |view, cx| {
+                                                            view.sync_history_popup_selection_from_window(idx, cx);
+                                                        });
+                                                    }
+                                                    this.attach_summary(&row_entry, cx);
+                                                }),
+                                            )
+                                            .child(
+                                                div()
+                                                    .w_full()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .gap(px(2.0))
+                                                    .px(px(
+                                                        crate::actions::constants::ACTION_PADDING_X
+                                                            - crate::actions::constants::ACTION_ROW_INSET,
+                                                    ))
+                                                    .child(
+                                                        div()
+                                                            .w_full()
+                                                            .flex()
+                                                            .flex_row()
+                                                            .items_center()
+                                                            .gap(px(8.0))
+                                                            .child(
+                                                                div()
+                                                                    .flex_1()
+                                                                    .min_w(px(0.0))
+                                                                    .text_sm()
+                                                                    .font_weight(if is_selected {
+                                                                        FontWeight::MEDIUM
+                                                                    } else {
+                                                                        FontWeight::NORMAL
+                                                                    })
+                                                                    .text_color(title_color)
+                                                                    .overflow_hidden()
+                                                                    .text_ellipsis()
+                                                                    .whitespace_nowrap()
+                                                                    .child(entry.title.clone()),
+                                                            )
+                                                            .child(
+                                                                div()
+                                                                    .flex_shrink_0()
+                                                                    .px(px(6.0))
+                                                                    .py(px(2.0))
+                                                                    .rounded(px(999.0))
+                                                                    .bg(if is_selected {
+                                                                        gpui::rgba(
+                                                                            (theme.colors.accent.selected
+                                                                                << 8)
+                                                                                | 0x18,
+                                                                        )
+                                                                    } else {
+                                                                        gpui::rgba(
+                                                                            (theme.colors.ui.border << 8)
+                                                                                | 0x10,
+                                                                        )
+                                                                    })
+                                                                    .border_1()
+                                                                    .border_color(if is_selected {
+                                                                        gpui::rgba(
+                                                                            (theme.colors.accent.selected
+                                                                                << 8)
+                                                                                | 0x30,
+                                                                        )
+                                                                    } else {
+                                                                        gpui::rgba(
+                                                                            (theme.colors.ui.border << 8)
+                                                                                | 0x20,
+                                                                        )
+                                                                    })
+                                                                    .text_xs()
+                                                                    .text_color(if is_selected {
+                                                                        gpui::rgb(theme.colors.accent.selected)
+                                                                    } else {
+                                                                        dimmed_text
+                                                                    })
+                                                                    .child(entry.match_label.clone()),
+                                                            )
+                                                            .child(
+                                                                div()
+                                                                    .flex_shrink_0()
+                                                                    .text_xs()
+                                                                    .text_color(if is_selected {
+                                                                        secondary_text
+                                                                    } else {
+                                                                        dimmed_text
+                                                                    })
+                                                                    .whitespace_nowrap()
+                                                                    .child(entry.meta.clone()),
+                                                            ),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .w_full()
+                                                            .text_xs()
+                                                            .text_color(if is_selected {
+                                                                secondary_text
+                                                            } else {
+                                                                dimmed_text
+                                                            })
+                                                            .overflow_hidden()
+                                                            .text_ellipsis()
+                                                            .whitespace_nowrap()
+                                                            .child(entry.preview.clone()),
+                                                    ),
+                                            )
+                                            .into_any_element()
+                                    })
+                                    .collect::<Vec<AnyElement>>()
+                                },
+                            ),
+                        )
+                        .h_full()
+                        .w_full()
+                        .track_scroll(&self.scroll_handle)
+                        .into_any_element()
+                    })
                     .child(div().w_full().child(crate::components::HintStrip::new(vec![
+                        "Type to Search".into(),
                         "\u{2191}\u{2193} Navigate".into(),
                         "\u{21B5} Attach Summary".into(),
                         "\u{21E7}\u{21B5} Attach Transcript".into(),
@@ -616,6 +891,53 @@ impl Render for AcpHistoryPopupWindow {
                     ]))),
             )
     }
+}
+
+#[inline]
+pub(super) fn history_popup_key_intent(
+    key: &str,
+    modifiers: &gpui::Modifiers,
+) -> Option<AcpHistoryPopupKeyIntent> {
+    if key.eq_ignore_ascii_case("space") {
+        return Some(AcpHistoryPopupKeyIntent::TypeChar(' '));
+    }
+    if crate::ui_foundation::is_key_up(key) {
+        return Some(AcpHistoryPopupKeyIntent::MoveUp);
+    }
+    if crate::ui_foundation::is_key_down(key) {
+        return Some(AcpHistoryPopupKeyIntent::MoveDown);
+    }
+    if key.eq_ignore_ascii_case("home") {
+        return Some(AcpHistoryPopupKeyIntent::MoveHome);
+    }
+    if key.eq_ignore_ascii_case("end") {
+        return Some(AcpHistoryPopupKeyIntent::MoveEnd);
+    }
+    if key.eq_ignore_ascii_case("pageup") {
+        return Some(AcpHistoryPopupKeyIntent::MovePageUp);
+    }
+    if key.eq_ignore_ascii_case("pagedown") {
+        return Some(AcpHistoryPopupKeyIntent::MovePageDown);
+    }
+    if crate::ui_foundation::is_key_enter(key) {
+        return Some(AcpHistoryPopupKeyIntent::ExecuteSelected);
+    }
+    if crate::ui_foundation::is_key_escape(key) {
+        return Some(AcpHistoryPopupKeyIntent::Close);
+    }
+    if crate::ui_foundation::is_key_backspace(key) || key.eq_ignore_ascii_case("delete") {
+        return Some(AcpHistoryPopupKeyIntent::Backspace);
+    }
+    if !modifiers.platform && !modifiers.control && !modifiers.alt {
+        if let Some(ch) = key.chars().next() {
+            if key.len() == 1
+                && (ch.is_alphanumeric() || ch.is_whitespace() || ch == '-' || ch == '_')
+            {
+                return Some(AcpHistoryPopupKeyIntent::TypeChar(ch));
+            }
+        }
+    }
+    None
 }
 
 #[cfg(target_os = "macos")]
@@ -722,8 +1044,8 @@ fn attach_popup_to_parent_window(
 #[cfg(test)]
 mod tests {
     use super::{
-        popup_bounds, popup_height, AcpHistoryPopupEntry, AcpHistoryPopupSnapshot,
-        HISTORY_POPUP_MAX_WIDTH,
+        history_popup_key_intent, popup_bounds, popup_height, AcpHistoryPopupEntry,
+        AcpHistoryPopupKeyIntent, AcpHistoryPopupSnapshot, HISTORY_POPUP_MAX_WIDTH,
     };
     use crate::ai::acp::history::{AcpHistoryEntry, AcpHistorySearchField, AcpHistorySearchHit};
     use gpui::SharedString;
@@ -750,6 +1072,7 @@ mod tests {
     fn popup_height_accounts_for_rows_and_chrome() {
         let snapshot = AcpHistoryPopupSnapshot {
             title: SharedString::from("Recent Conversations"),
+            query: SharedString::from(""),
             selected_index: 0,
             entries: vec![
                 make_entry("one", "First", 3),
@@ -764,6 +1087,7 @@ mod tests {
     fn popup_bounds_center_within_parent() {
         let snapshot = AcpHistoryPopupSnapshot {
             title: SharedString::from("Recent Conversations"),
+            query: SharedString::from(""),
             selected_index: 0,
             entries: vec![make_entry("one", "First", 3)],
         };
@@ -803,5 +1127,53 @@ mod tests {
         assert_eq!(entry.match_label.as_ref(), "transcript");
         assert!(entry.meta.as_ref().contains("14 msgs"));
         assert_eq!(entry.hit.score, 42);
+    }
+
+    #[test]
+    fn history_popup_key_intent_matches_actions_style_navigation_and_search() {
+        let no_mods = gpui::Modifiers::default();
+
+        assert_eq!(
+            history_popup_key_intent("up", &no_mods),
+            Some(AcpHistoryPopupKeyIntent::MoveUp)
+        );
+        assert_eq!(
+            history_popup_key_intent("down", &no_mods),
+            Some(AcpHistoryPopupKeyIntent::MoveDown)
+        );
+        assert_eq!(
+            history_popup_key_intent("home", &no_mods),
+            Some(AcpHistoryPopupKeyIntent::MoveHome)
+        );
+        assert_eq!(
+            history_popup_key_intent("end", &no_mods),
+            Some(AcpHistoryPopupKeyIntent::MoveEnd)
+        );
+        assert_eq!(
+            history_popup_key_intent("pageup", &no_mods),
+            Some(AcpHistoryPopupKeyIntent::MovePageUp)
+        );
+        assert_eq!(
+            history_popup_key_intent("pagedown", &no_mods),
+            Some(AcpHistoryPopupKeyIntent::MovePageDown)
+        );
+        assert_eq!(
+            history_popup_key_intent("backspace", &no_mods),
+            Some(AcpHistoryPopupKeyIntent::Backspace)
+        );
+        assert_eq!(
+            history_popup_key_intent("space", &no_mods),
+            Some(AcpHistoryPopupKeyIntent::TypeChar(' '))
+        );
+        assert_eq!(
+            history_popup_key_intent("a", &no_mods),
+            Some(AcpHistoryPopupKeyIntent::TypeChar('a'))
+        );
+        assert_eq!(
+            history_popup_key_intent("-", &no_mods),
+            Some(AcpHistoryPopupKeyIntent::TypeChar('-'))
+        );
+        assert_eq!(history_popup_key_intent("tab", &no_mods), None);
+        assert_eq!(history_popup_key_intent("arrowleft", &no_mods), None);
     }
 }
