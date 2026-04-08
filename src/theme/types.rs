@@ -183,25 +183,27 @@ impl Default for BackgroundOpacity {
 }
 
 impl BackgroundOpacity {
-    /// Dark mode opacity defaults - lower opacity for dark vibrancy
+    /// Dark mode opacity defaults — 75% base, same as light mode.
+    ///
+    /// Offsets match `apply_surface_opacity_preset()`:
+    /// search_box +0.06, input +0.04, input_inactive +0.02, input_active +0.08
     pub fn dark_default() -> Self {
         BackgroundOpacity {
-            // Lower opacity values to allow vibrancy blur to show through
-            main: 0.30,                      // Root wrapper background
-            title_bar: 0.30,                 // Title bar areas
-            search_box: 0.40,                // Search input backgrounds
-            log_panel: 0.40,                 // Log/terminal panels
+            main: 0.75,                      // 75% base
+            title_bar: 0.75,                 // Match main for consistency
+            search_box: 0.81,                // +0.06
+            log_panel: 0.75,                 // Match main
             selected: 0.18, // Selected list item — whisper-subtle highlight over vibrancy
             hover: 0.12,    // Hovered list item — barely visible state affordance
             preview: 0.0,   // Preview panel (0 = fully transparent)
-            dialog: 0.15,   // Dialogs/popups - very low opacity, let vibrancy blur show through
-            input: 0.30,    // Input fields
-            panel: 0.20,    // Panels/containers
-            input_inactive: 0.25, // Input fields when empty/inactive
-            input_active: 0.50, // Input fields when has text/active
+            dialog: 0.75,   // Dialogs match main
+            input: 0.79,    // +0.04
+            panel: 0.75,    // Panels match main
+            input_inactive: 0.77, // +0.02
+            input_active: 0.83, // +0.08
             border_inactive: 0.125, // Borders when inactive
             border_active: 0.25, // Borders when active
-            vibrancy_background: Some(0.75), // Main window vibrancy background
+            vibrancy_background: Some(0.75), // Match main
         }
     }
 
