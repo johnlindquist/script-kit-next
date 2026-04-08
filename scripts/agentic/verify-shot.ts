@@ -50,7 +50,8 @@
  *   --skip-probe                Skip ACP test probe query
  *   --target-json JSON           ACP window target for getAcpState/getAcpTestProbe RPCs
  *                               (same AutomationWindowTarget shape as the Rust protocol)
- *   --capture-window-id N        Exact window ID for screencapture (from automation-window.ts resolve)
+ *   --capture-window-id N        Exact native window ID for screencapture
+ *                               (the inspected osWindowId, not automationWindowId)
  *   --request-id ID             Request ID for getAcpState (default: auto-generated)
  *   --json                      (default) Output JSON receipt
  *   --help                      Show this help
@@ -64,7 +65,7 @@
 import { existsSync, mkdirSync, statSync } from "fs";
 import { join, resolve } from "path";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
 
 // ---------------------------------------------------------------------------
@@ -76,14 +77,35 @@ interface CaptureTarget {
   actualWindowId: number | null;
 }
 
+type CaptureRouting =
+  | "cli-window-id"
+  | "inspection-os-window-id"
+  | "runtime-capture-window"
+  | "generic-frontmost";
+
 interface InspectionReceipt {
   automationWindowId: string;
   windowKind: string;
+  title?: string | null;
   osWindowId?: number | null;
+  targetBoundsInScreenshot?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null;
   screenshotWidth?: number | null;
   screenshotHeight?: number | null;
   pixelProbes: Array<{ x: number; y: number; r: number; g: number; b: number; a: number }>;
   warnings: string[];
+}
+
+interface CapturePlan {
+  routing: CaptureRouting;
+  requestedAutomationWindowId: string | null;
+  requestedOsWindowId: number | null;
+  inspectionOsWindowId: number | null;
+  showIssuedBeforeCapture: boolean;
 }
 
 /**
@@ -129,6 +151,11 @@ interface VerifyReceipt {
   resolvedWindowId?: string;
   /** OS-level window ID (CGWindowID) when available from inspection. */
   osWindowId?: number | null;
+  inspectionOsWindowId?: number | null;
+  captureRouting?: CaptureRouting;
+  requestedAutomationWindowId?: string | null;
+  requestedOsWindowId?: number | null;
+  showIssuedBeforeCapture?: boolean;
   // Stable proof bundle fields (canonical names for machine consumption)
   state: Record<string, unknown> | null;
   probe: Record<string, unknown> | null;
@@ -488,7 +515,10 @@ async function queryInspection(
   return {
     automationWindowId: String(response.windowId ?? ""),
     windowKind: String(response.windowKind ?? ""),
+    title: (response.title as string) ?? null,
     osWindowId: (response.osWindowId as number) ?? null,
+    targetBoundsInScreenshot:
+      (response.targetBoundsInScreenshot as InspectionReceipt["targetBoundsInScreenshot"]) ?? null,
     screenshotWidth: (response.screenshotWidth as number) ?? null,
     screenshotHeight: (response.screenshotHeight as number) ?? null,
     pixelProbes: (response.pixelProbes as InspectionReceipt["pixelProbes"]) ?? [],
@@ -560,15 +590,116 @@ async function captureScreenshot(
   outPath: string,
   label: string,
   opts: Record<string, string | boolean>,
+  inspection: InspectionReceipt | null,
+  targetJson?: Record<string, unknown>,
   captureWindowId?: number
-): Promise<ScreenshotResult> {
+): Promise<{ result: ScreenshotResult; plan: CapturePlan }> {
   let captureMethod: "window.ts" | "captureWindow" | null = null;
   let windowCaptureMethod: "quartz" | "screencapture" | null = null;
   let windowFrontmost: boolean | null = null;
   let windowFocused: boolean | null = null;
   let windowId: number | null = null;
-
   const strictWindowProof = hasAcpAssertions(opts);
+  const inspectionOsWindowId =
+    typeof inspection?.osWindowId === "number" && inspection.osWindowId > 0
+      ? inspection.osWindowId
+      : null;
+  const requestedAutomationWindowId = inspection?.automationWindowId ?? null;
+  const requestedOsWindowId =
+    typeof captureWindowId === "number" && captureWindowId > 0
+      ? captureWindowId
+      : inspectionOsWindowId;
+  let captureRouting: CaptureRouting =
+    requestedOsWindowId != null
+      ? captureWindowId != null
+        ? "cli-window-id"
+        : "inspection-os-window-id"
+      : "generic-frontmost";
+  let showIssuedBeforeCapture = false;
+
+  if (
+    targetJson &&
+    captureWindowId != null &&
+    inspectionOsWindowId != null &&
+    captureWindowId !== inspectionOsWindowId
+  ) {
+    return {
+      result: {
+        captured: false,
+        path: outPath,
+        sizeBytes: null,
+        width: null,
+        height: null,
+        captureMethod: null,
+        windowCaptureMethod: null,
+        windowFrontmost: null,
+        windowFocused: null,
+        windowId: null,
+        error: `Capture ID mismatch: cli --capture-window-id=${captureWindowId} but inspection resolved osWindowId=${inspectionOsWindowId}`,
+      },
+      plan: {
+        routing: captureRouting,
+        requestedAutomationWindowId,
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        showIssuedBeforeCapture,
+      },
+    };
+  }
+
+  if (targetJson && requestedOsWindowId == null) {
+    return {
+      result: {
+        captured: false,
+        path: outPath,
+        sizeBytes: null,
+        width: null,
+        height: null,
+        captureMethod: null,
+        windowCaptureMethod: null,
+        windowFrontmost: null,
+        windowFocused: null,
+        windowId: null,
+        error:
+          "Targeted screenshot capture requires a native osWindowId, but inspection did not return one",
+      },
+      plan: {
+        routing: captureRouting,
+        requestedAutomationWindowId,
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        showIssuedBeforeCapture,
+      },
+    };
+  }
+
+  const showCommand = await sendSessionCommand(session, JSON.stringify({ type: "show" }));
+  if (!showCommand.ok) {
+    return {
+      result: {
+        captured: false,
+        path: outPath,
+        sizeBytes: null,
+        width: null,
+        height: null,
+        captureMethod: null,
+        windowCaptureMethod: null,
+        windowFrontmost: null,
+        windowFocused: null,
+        windowId: null,
+        error: `Failed to send show before capture: ${showCommand.stderr || showCommand.stdout || "unknown error"}`,
+      },
+      plan: {
+        routing: captureRouting,
+        requestedAutomationWindowId,
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        showIssuedBeforeCapture,
+      },
+    };
+  }
+  showIssuedBeforeCapture = true;
+  await Bun.sleep(500);
 
   // Use the window.ts helper for reliable capture
   const windowScript = join(PROJECT_ROOT, "scripts/agentic/window.ts");
@@ -584,8 +715,8 @@ async function captureScreenshot(
     "200",
   ];
   // Thread exact window ID when provided
-  if (captureWindowId && captureWindowId > 0) {
-    captureArgs.push("--window-id", String(captureWindowId));
+  if (requestedOsWindowId && requestedOsWindowId > 0) {
+    captureArgs.push("--window-id", String(requestedOsWindowId));
   }
   const proc = Bun.spawn(
     captureArgs,
@@ -617,6 +748,7 @@ async function captureScreenshot(
       // leave parsed fields null
     }
   } else if (!strictWindowProof) {
+    captureRouting = "runtime-capture-window";
     // Fallback: use session-based captureWindow (only when no ACP assertions).
     // The runtime captureWindow handler now routes through the resolver-driven
     // capture path (capture_window_by_title_via_resolver), which translates the
@@ -629,7 +761,7 @@ async function captureScreenshot(
     captureMethod = "captureWindow";
     const captureCmd = JSON.stringify({
       type: "captureWindow",
-      title: "",
+      title: inspection?.title ?? "",
       path: outPath,
     });
     const { ok, stderr: sessErr } = await sendSessionCommand(
@@ -640,33 +772,51 @@ async function captureScreenshot(
 
     if (!ok || !existsSync(outPath)) {
       return {
-        captured: false,
-        path: outPath,
-        sizeBytes: null,
-        width: null,
-        height: null,
-        captureMethod,
-        windowCaptureMethod,
-        windowFrontmost,
-        windowFocused,
-        windowId,
-        error: `Capture failed. window.ts: ${stderr.trim()}. session captureWindow: ${sessErr}`,
+        result: {
+          captured: false,
+          path: outPath,
+          sizeBytes: null,
+          width: null,
+          height: null,
+          captureMethod,
+          windowCaptureMethod,
+          windowFrontmost,
+          windowFocused,
+          windowId,
+          error: `Capture failed. window.ts: ${stderr.trim()}. session captureWindow: ${sessErr}`,
+        },
+        plan: {
+          routing: captureRouting,
+          requestedAutomationWindowId,
+          requestedOsWindowId,
+          inspectionOsWindowId,
+          showIssuedBeforeCapture,
+        },
       };
     }
   } else {
     // Strict mode: window.ts failed and we have ACP assertions — do not fall back
     return {
-      captured: false,
-      path: outPath,
-      sizeBytes: null,
-      width: null,
-      height: null,
-      captureMethod: "window.ts",
-      windowCaptureMethod,
-      windowFrontmost,
-      windowFocused,
-      windowId,
-      error: `Strict window capture failed: ${stderr.trim() || stdout.trim() || "window.ts capture failed"}`,
+      result: {
+        captured: false,
+        path: outPath,
+        sizeBytes: null,
+        width: null,
+        height: null,
+        captureMethod: "window.ts",
+        windowCaptureMethod,
+        windowFrontmost,
+        windowFocused,
+        windowId,
+        error: `Strict window capture failed: ${stderr.trim() || stdout.trim() || "window.ts capture failed"}`,
+      },
+      plan: {
+        routing: captureRouting,
+        requestedAutomationWindowId,
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        showIssuedBeforeCapture,
+      },
     };
   }
 
@@ -688,17 +838,56 @@ async function captureScreenshot(
       windowId <= 0)
   ) {
     return {
-      captured: false,
-      path: outPath,
-      sizeBytes: null,
-      width: null,
-      height: null,
-      captureMethod,
-      windowCaptureMethod,
-      windowFrontmost,
-      windowFocused,
-      windowId,
-      error: `Strict window capture required quartz/frontmost/windowId; got method=${windowCaptureMethod ?? "null"} frontmost=${String(windowFrontmost)} windowId=${String(windowId)}`,
+      result: {
+        captured: false,
+        path: outPath,
+        sizeBytes: null,
+        width: null,
+        height: null,
+        captureMethod,
+        windowCaptureMethod,
+        windowFrontmost,
+        windowFocused,
+        windowId,
+        error: `Strict window capture required quartz/frontmost/windowId; got method=${windowCaptureMethod ?? "null"} frontmost=${String(windowFrontmost)} windowId=${String(windowId)}`,
+      },
+      plan: {
+        routing: captureRouting,
+        requestedAutomationWindowId,
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        showIssuedBeforeCapture,
+      },
+    };
+  }
+
+  if (
+    strictWindowProof &&
+    requestedOsWindowId != null &&
+    windowId != null &&
+    windowId !== requestedOsWindowId
+  ) {
+    return {
+      result: {
+        captured: false,
+        path: outPath,
+        sizeBytes: null,
+        width: null,
+        height: null,
+        captureMethod,
+        windowCaptureMethod,
+        windowFrontmost,
+        windowFocused,
+        windowId,
+        error: `Strict window capture targeted osWindowId=${requestedOsWindowId} but captured windowId=${windowId}`,
+      },
+      plan: {
+        routing: captureRouting,
+        requestedAutomationWindowId,
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        showIssuedBeforeCapture,
+      },
     };
   }
 
@@ -707,17 +896,26 @@ async function captureScreenshot(
 
   if (!existsSync(outPath)) {
     return {
-      captured: false,
-      path: outPath,
-      sizeBytes: null,
-      width: null,
-      height: null,
-      captureMethod,
-      windowCaptureMethod,
-      windowFrontmost,
-      windowFocused,
-      windowId,
-      error: "Screenshot file not created after capture",
+      result: {
+        captured: false,
+        path: outPath,
+        sizeBytes: null,
+        width: null,
+        height: null,
+        captureMethod,
+        windowCaptureMethod,
+        windowFrontmost,
+        windowFocused,
+        windowId,
+        error: "Screenshot file not created after capture",
+      },
+      plan: {
+        routing: captureRouting,
+        requestedAutomationWindowId,
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        showIssuedBeforeCapture,
+      },
     };
   }
 
@@ -725,17 +923,26 @@ async function captureScreenshot(
   const dims = await getImageDimensions(outPath);
 
   return {
-    captured: true,
-    path: outPath,
-    sizeBytes: stats.size,
-    width: dims.width,
-    height: dims.height,
-    captureMethod,
-    windowCaptureMethod,
-    windowFrontmost,
-    windowFocused,
-    windowId,
-    error: null,
+    result: {
+      captured: true,
+      path: outPath,
+      sizeBytes: stats.size,
+      width: dims.width,
+      height: dims.height,
+      captureMethod,
+      windowCaptureMethod,
+      windowFrontmost,
+      windowFocused,
+      windowId,
+      error: null,
+    },
+    plan: {
+      routing: captureRouting,
+      requestedAutomationWindowId,
+      requestedOsWindowId,
+      inspectionOsWindowId,
+      showIssuedBeforeCapture,
+    },
   };
 }
 
@@ -1417,7 +1624,8 @@ Options:
   --skip-state                Only capture screenshot, skip state query
   --skip-probe                Skip ACP test probe query
   --target-json JSON          ACP window target for getAcpState/getAcpTestProbe RPCs
-  --capture-window-id N       Exact window ID for screencapture (from automation-window.ts)
+  --capture-window-id N       Exact native window ID for screencapture
+                              (the inspected osWindowId, not automationWindowId)
   --request-id ID             Request ID for getAcpState (auto-generated)
 
 Verification order (ACP golden path):
@@ -1442,7 +1650,10 @@ const skipState = opts.skipState === true;
 const skipProbe = opts.skipProbe === true;
 const probeTail = Number(opts.probeTail ?? 20);
 const captureWindowId = typeof opts.captureWindowId === "string"
-  ? parseInt(opts.captureWindowId, 10)
+  ? (() => {
+      const parsed = parseInt(opts.captureWindowId, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    })()
   : undefined;
 
 // Parse --target-json for ACP window targeting
@@ -1515,8 +1726,19 @@ if (targetJson || opts.emitVisionCrops) {
 
 // Step 3: Capture screenshot (unless skipped)
 let screenshotResult: ScreenshotResult | null = null;
+let capturePlan: CapturePlan | null = null;
 if (!skipScreenshot) {
-  screenshotResult = await captureScreenshot(session, outPath, label, opts, captureWindowId);
+  const captureOutcome = await captureScreenshot(
+    session,
+    outPath,
+    label,
+    opts,
+    inspection,
+    targetJson,
+    captureWindowId
+  );
+  screenshotResult = captureOutcome.result;
+  capturePlan = captureOutcome.plan;
 }
 
 // Step 4: Run assertions against state + probe
@@ -1561,9 +1783,8 @@ if (inspection) {
 
   // Parse targetBoundsInScreenshot from inspection if available
   let targetBounds: PopupCaptureReceipt["targetBounds"] = null;
-  const inspectAny = inspection as Record<string, unknown>;
-  if (inspectAny.targetBoundsInScreenshot) {
-    const tb = inspectAny.targetBoundsInScreenshot as {
+  if (inspection.targetBoundsInScreenshot) {
+    const tb = inspection.targetBoundsInScreenshot as {
       x: number; y: number; width: number; height: number;
     };
     targetBounds = { x: tb.x, y: tb.y, width: tb.width, height: tb.height };
@@ -1629,7 +1850,7 @@ const resolvedTarget: VerifyReceipt["resolvedTarget"] = inspection
   ? {
       windowId: inspection.automationWindowId,
       windowKind: inspection.windowKind,
-      title: null,
+      title: inspection.title ?? null,
       surfaceId: null,
     }
   : null;
@@ -1652,6 +1873,13 @@ const receipt: VerifyReceipt = {
   ...(dispatchPath ? { dispatchPath } : {}),
   ...(resolvedTarget ? { resolvedWindowId: resolvedTarget.windowId } : {}),
   ...(inspection?.osWindowId != null ? { osWindowId: inspection.osWindowId } : {}),
+  ...(capturePlan?.inspectionOsWindowId != null
+    ? { inspectionOsWindowId: capturePlan.inspectionOsWindowId }
+    : {}),
+  ...(capturePlan?.routing ? { captureRouting: capturePlan.routing } : {}),
+  ...(capturePlan ? { requestedAutomationWindowId: capturePlan.requestedAutomationWindowId } : {}),
+  ...(capturePlan ? { requestedOsWindowId: capturePlan.requestedOsWindowId } : {}),
+  ...(capturePlan ? { showIssuedBeforeCapture: capturePlan.showIssuedBeforeCapture } : {}),
   // Stable proof bundle fields
   state: stateResult?.snapshot ?? null,
   probe: probeResult?.snapshot ?? null,
@@ -1665,7 +1893,7 @@ const receipt: VerifyReceipt = {
     : null,
   captureTarget: screenshotResult
     ? {
-        requestedWindowId: captureWindowId ?? null,
+        requestedWindowId: capturePlan?.requestedOsWindowId ?? null,
         actualWindowId: screenshotResult.windowId,
       }
     : null,

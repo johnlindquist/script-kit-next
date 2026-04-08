@@ -22,7 +22,9 @@
             },
         ) {
             Ok(window) => {
-                crate::set_main_window_handle(window.into());
+                let any_handle: gpui::AnyWindowHandle = window.into();
+                crate::set_main_window_handle(any_handle);
+                sync_main_automation_window(Some(automation_window_bounds_from_gpui(bounds)), false, false);
                 window
             }
             Err(error) => {
@@ -76,6 +78,11 @@
                                 }
                             }
                         }
+                        sync_main_automation_window(
+                            Some(automation_window_bounds_from_gpui(win.bounds())),
+                            script_kit_gpui::is_main_window_visible(),
+                            crate::platform::is_main_window_focused(),
+                        );
                         view.sync_main_footer_popup(win, ctx);
                         // Suppress unused variable warning - we need win to access window bounds
                         let _ = win;
