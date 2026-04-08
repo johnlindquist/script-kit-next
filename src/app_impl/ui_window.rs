@@ -66,6 +66,43 @@ impl ScriptListApp {
             crate::footer_popup::FooterAction::Ai => {
                 self.open_tab_ai_chat(cx);
             }
+            crate::footer_popup::FooterAction::Close => {
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "main_window_footer_close_requested",
+                    source,
+                    view = ?self.current_view,
+                    "Closing current footer-owned surface"
+                );
+                match &self.current_view {
+                    AppView::QuickTerminalView { .. } => {
+                        self.close_tab_ai_harness_terminal_with_window(window, cx);
+                    }
+                    _ => {
+                        self.go_back_or_close(window, cx);
+                    }
+                }
+            }
+            crate::footer_popup::FooterAction::Apply => {
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "main_window_footer_apply_requested",
+                    source,
+                    view = ?self.current_view,
+                    "Applying current footer-owned terminal result"
+                );
+                if let AppView::QuickTerminalView { entity } = &self.current_view {
+                    self.apply_tab_ai_result_from_terminal(entity.clone(), cx);
+                } else {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "main_window_footer_apply_ignored",
+                        source,
+                        view = ?self.current_view,
+                        "Ignored Apply outside QuickTerminalView"
+                    );
+                }
+            }
         }
     }
 
@@ -124,10 +161,68 @@ impl ScriptListApp {
         crate::confirm::is_confirm_window_open()
     }
 
+    fn terminal_main_window_footer_config(
+        &self,
+    ) -> crate::footer_popup::MainWindowFooterConfig {
+        use crate::footer_popup::{FooterAction, FooterButtonConfig, MainWindowFooterConfig};
+
+        let footer_disabled = self.main_window_footer_buttons_blocked();
+        let is_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
+        let show_verification_hint =
+            is_quick_terminal && self.tab_ai_harness_return_view.is_some();
+        let can_apply = is_quick_terminal
+            && self.tab_ai_harness_return_view.is_some()
+            && self.tab_ai_harness_apply_back_route.is_some();
+
+        let mut buttons = Vec::new();
+
+        if can_apply {
+            buttons.push(
+                FooterButtonConfig::new(FooterAction::Apply, "⌘↩", "Apply")
+                    .enabled(!footer_disabled),
+            );
+        }
+
+        buttons.push(
+            FooterButtonConfig::new(FooterAction::Close, "⌘W", "Close")
+                .enabled(!footer_disabled),
+        );
+
+        let surface = match &self.current_view {
+            AppView::QuickTerminalView { .. } if show_verification_hint => {
+                "quick_terminal_verification"
+            }
+            AppView::QuickTerminalView { .. } => "quick_terminal",
+            AppView::TermPrompt { .. } => "term_prompt",
+            _ => "terminal",
+        };
+
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "main_window_terminal_footer_config_resolved",
+            surface,
+            is_quick_terminal,
+            show_verification_hint,
+            can_apply,
+            footer_disabled,
+            button_count = buttons.len(),
+            "Resolved terminal native footer config"
+        );
+
+        MainWindowFooterConfig::new(surface, buttons)
+    }
+
     pub(crate) fn main_window_footer_config(
         &self,
     ) -> Option<crate::footer_popup::MainWindowFooterConfig> {
         use crate::footer_popup::MainWindowFooterConfig;
+
+        if matches!(
+            self.current_view,
+            AppView::QuickTerminalView { .. } | AppView::TermPrompt { .. }
+        ) {
+            return Some(self.terminal_main_window_footer_config());
+        }
 
         let surface = match &self.current_view {
             AppView::ScriptList => "script_list",
