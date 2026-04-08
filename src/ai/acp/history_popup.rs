@@ -4,16 +4,12 @@ use gpui::prelude::FluentBuilder as _;
 use gpui::{
     div, px, AnyWindowHandle, App, AppContext, Bounds, Context, DisplayId, FocusHandle, Focusable,
     FontWeight, InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString,
-    StatefulInteractiveElement, Styled, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind,
-    WindowOptions,
+    StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
 };
 use gpui_component::scroll::ScrollableElement;
 
 use super::history::AcpHistoryEntry;
 use super::view::AcpChatView;
-
-#[cfg(target_os = "macos")]
-use objc::{msg_send, sel, sel_impl};
 
 const HISTORY_POPUP_MIN_WIDTH: f32 = crate::actions::constants::POPUP_WIDTH;
 const HISTORY_POPUP_MAX_WIDTH: f32 = 420.0;
@@ -26,9 +22,6 @@ const HISTORY_POPUP_ROW_HEIGHT: f32 = crate::actions::constants::ACTION_ITEM_HEI
 const HISTORY_POPUP_EMPTY_HEIGHT: f32 = 72.0;
 const HISTORY_POPUP_VISIBLE_ROWS: usize = 6;
 const HISTORY_POPUP_VERTICAL_PADDING: f32 = 4.0;
-
-#[cfg(target_os = "macos")]
-const NS_WINDOW_ABOVE: i64 = 1;
 
 #[derive(Clone)]
 pub(crate) struct AcpHistoryPopupSnapshot {
@@ -142,56 +135,28 @@ pub(crate) fn sync_history_popup_window(
         }
     }
 
-    let theme = crate::theme::get_cached_theme();
-    let window_background = if theme.is_vibrancy_enabled() {
-        gpui::WindowBackgroundAppearance::Blurred
-    } else {
-        gpui::WindowBackgroundAppearance::Opaque
-    };
-    let is_dark_vibrancy = theme.should_use_dark_vibrancy();
-
-    let window_options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(bounds)),
-        titlebar: None,
-        window_background,
-        focus: false,
-        show: true,
-        kind: WindowKind::PopUp,
-        display_id,
-        ..Default::default()
-    };
+    let window_options = super::popup_window::popup_window_options(bounds, display_id);
 
     let handle = cx.open_window(window_options, |_window, cx| {
         cx.new(|cx| AcpHistoryPopupWindow::new(snapshot.clone(), source_view.clone(), cx))
     })?;
 
-    #[cfg(target_os = "macos")]
+    if let Err(error) =
+        super::popup_window::configure_actions_style_popup_window(&handle, cx, parent_window_handle)
     {
-        let configure_result = handle.update(cx, move |_popup, window, cx| {
-            window.defer(cx, move |window, cx| {
-                if let Some(ns_window) = popup_ns_window(window) {
-                    // SAFETY: `ns_window` comes from the live GPUI popup window on the
-                    // main thread and is nil-checked before configuration.
-                    unsafe {
-                        crate::platform::configure_actions_popup_window(
-                            ns_window,
-                            is_dark_vibrancy,
-                        );
-                    }
-                    attach_popup_to_parent_window(cx, parent_window_handle, ns_window);
-                }
-            });
+        let _ = handle.update(cx, |_popup, window, _cx| {
+            window.remove_window();
         });
-
-        if configure_result.is_err() {
-            let _ = handle.update(cx, |_popup, window, _cx| {
-                window.remove_window();
-            });
-            return Err(anyhow::anyhow!(
-                "failed to configure ACP history popup window"
-            ));
-        }
+        return Err(error.context("failed to configure ACP history popup window"));
     }
+
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "acp_history_popup_window_synced",
+        entry_count = snapshot.entries.len(),
+        selected_index = snapshot.selected_index,
+        "Synced ACP history popup window"
+    );
 
     if let Ok(mut guard) = storage.lock() {
         *guard = Some(AcpHistoryPopupSlot {
@@ -471,105 +436,8 @@ impl Render for AcpHistoryPopupWindow {
     }
 }
 
-#[cfg(target_os = "macos")]
-fn flipped_ns_window_y(bounds: Bounds<Pixels>, primary_height: f64) -> f64 {
-    primary_height - f32::from(bounds.origin.y) as f64 - f32::from(bounds.size.height) as f64
-}
-
-#[cfg(target_os = "macos")]
 fn set_popup_window_bounds(window: &mut Window, bounds: Bounds<Pixels>, cx: &mut App) {
-    if let Some(ns_window) = popup_ns_window(window) {
-        // SAFETY: `ns_window` comes from a live GPUI popup window on the AppKit
-        // main thread. Coordinates are converted from GPUI's screen-relative
-        // top-left origin into the bottom-left origin NSWindow expects.
-        unsafe {
-            use cocoa::appkit::NSScreen;
-            use cocoa::base::nil;
-
-            let screens: cocoa::base::id = NSScreen::screens(nil);
-            let primary_screen: cocoa::base::id = msg_send![screens, objectAtIndex: 0u64];
-            let primary_frame: cocoa::foundation::NSRect = msg_send![primary_screen, frame];
-            let primary_height = primary_frame.size.height;
-            let target_frame = cocoa::foundation::NSRect::new(
-                cocoa::foundation::NSPoint::new(
-                    f32::from(bounds.origin.x) as f64,
-                    flipped_ns_window_y(bounds, primary_height),
-                ),
-                cocoa::foundation::NSSize::new(
-                    f32::from(bounds.size.width) as f64,
-                    f32::from(bounds.size.height) as f64,
-                ),
-            );
-            let _: () = msg_send![
-                ns_window,
-                setFrame: target_frame
-                display: true
-                animate: false
-            ];
-        }
-    }
-
-    window.resize(bounds.size);
-    window.bounds_changed(cx);
-}
-
-#[cfg(not(target_os = "macos"))]
-fn set_popup_window_bounds(window: &mut Window, bounds: Bounds<Pixels>, cx: &mut App) {
-    let _ = cx;
-    window.resize(bounds.size);
-}
-
-#[cfg(target_os = "macos")]
-fn popup_ns_window(window: &mut Window) -> Option<cocoa::base::id> {
-    if let Ok(window_handle) = raw_window_handle::HasWindowHandle::window_handle(window) {
-        if let raw_window_handle::RawWindowHandle::AppKit(appkit) = window_handle.as_raw() {
-            use cocoa::base::nil;
-
-            let ns_view = appkit.ns_view.as_ptr() as cocoa::base::id;
-            // SAFETY: `ns_view` comes from the live GPUI window on the main thread.
-            unsafe {
-                let ns_window: cocoa::base::id = msg_send![ns_view, window];
-                if ns_window != nil {
-                    return Some(ns_window);
-                }
-            }
-        }
-    }
-
-    None
-}
-
-#[cfg(target_os = "macos")]
-fn attach_popup_to_parent_window(
-    cx: &mut App,
-    parent_window_handle: AnyWindowHandle,
-    child_ns_window: cocoa::base::id,
-) {
-    let _ = cx.update_window(parent_window_handle, move |_, parent_window, _cx| {
-        let Some(parent_ns_window) = popup_ns_window(parent_window) else {
-            return;
-        };
-
-        // SAFETY: both NSWindow pointers come from live GPUI windows on the main
-        // thread, and nil/equality are guarded before AppKit receives them.
-        unsafe {
-            use cocoa::base::nil;
-
-            if parent_ns_window == nil
-                || child_ns_window == nil
-                || parent_ns_window == child_ns_window
-            {
-                return;
-            }
-
-            let _: () = msg_send![
-                parent_ns_window,
-                addChildWindow: child_ns_window
-                ordered: NS_WINDOW_ABOVE
-            ];
-            let _: () = msg_send![child_ns_window, orderFrontRegardless];
-        }
-    });
+    super::popup_window::set_popup_window_bounds(window, bounds, cx);
 }
 
 #[cfg(test)]

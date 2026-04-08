@@ -152,6 +152,46 @@ pub(crate) fn configure_popup_window<T: 'static>(
     Ok(())
 }
 
+pub(crate) fn configure_actions_style_popup_window<T: 'static>(
+    handle: &WindowHandle<T>,
+    cx: &mut App,
+    parent_window_handle: AnyWindowHandle,
+) -> anyhow::Result<()> {
+    #[cfg(target_os = "macos")]
+    {
+        let is_dark_vibrancy = crate::theme::get_cached_theme().should_use_dark_vibrancy();
+        handle
+            .update(cx, move |_popup, window, cx| {
+                window.defer(cx, move |window, cx| {
+                    if let Some(ns_window) = popup_ns_window(window) {
+                        // SAFETY: `ns_window` comes from the live GPUI popup window on the
+                        // main thread and is nil-checked before configuration.
+                        unsafe {
+                            crate::platform::configure_actions_popup_window(
+                                ns_window,
+                                is_dark_vibrancy,
+                            );
+                        }
+                        attach_popup_to_parent_window(cx, parent_window_handle, ns_window);
+
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_actions_style_popup_attached",
+                            dark = is_dark_vibrancy,
+                            "Attached ACP actions-style popup to parent window"
+                        );
+                    }
+                });
+            })
+            .map_err(|_| anyhow::anyhow!("failed to configure ACP actions-style popup window"))?;
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    let _ = (handle, cx, parent_window_handle);
+
+    Ok(())
+}
+
 #[cfg(target_os = "macos")]
 fn ns_window_frame_from_screen_relative_bounds(
     bounds: Bounds<Pixels>,

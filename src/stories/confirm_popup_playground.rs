@@ -46,6 +46,8 @@ impl Story for ConfirmPopupPlaygroundStory {
             story_id = self.id(),
             variant_id = %variant.stable_id(),
             surface = self.surface().label(),
+            category = self.category(),
+            screenshot_ready = true,
             "Rendered shell story variant"
         );
         render_confirm_popup_playground_story_preview(&variant.stable_id())

@@ -44,12 +44,16 @@ pub use adoption::{
 };
 pub use browser::StoryBrowser;
 pub use confirm_popup_playground::{
-    confirm_popup_playground_story_variants, render_confirm_popup_playground_story_preview,
-    ConfirmPopupPlaygroundId,
+    adopted_confirm_popup_playground_selection, confirm_popup_playground_story_variants,
+    render_confirm_popup_playground_story_preview, resolve_confirm_popup_playground_selection,
+    ConfirmPopupPlaygroundId, ConfirmPopupPlaygroundSelection, ConfirmPopupPlaygroundSurface,
 };
 pub use context_picker_popup_playground::{
+    adopted_context_picker_popup_playground_selection,
     context_picker_popup_playground_story_variants,
-    render_context_picker_popup_playground_story_preview, ContextPickerPopupPlaygroundId,
+    render_context_picker_popup_playground_story_preview,
+    resolve_context_picker_popup_playground_selection, ContextPickerPopupPlaygroundId,
+    ContextPickerPopupPlaygroundSelection, ContextPickerPopupPlaygroundSurface,
     ContextPickerPopupSceneState, ContextPickerPopupTrigger,
 };
 pub use diagnostics::{
@@ -86,8 +90,8 @@ pub use mini_ai_chat_variations::{
     SPECS as MINI_AI_CHAT_VARIATION_SPECS,
 };
 pub use registry::{
-    all_categories, all_stories, first_story_with_multiple_variants, stories_by_category,
-    stories_by_surface, StoryEntry,
+    all_categories, all_stories, first_story_with_multiple_variants, shell_story_ids,
+    stories_by_category, stories_by_surface, StoryEntry,
 };
 pub(crate) use selection::selection_store_path;
 pub use selection::{

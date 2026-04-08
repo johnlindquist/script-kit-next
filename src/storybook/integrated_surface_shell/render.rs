@@ -6,11 +6,21 @@ use crate::theme::{get_cached_theme, AppChromeColors};
 use crate::ui_foundation::HexColorExt;
 
 use super::component::IntegratedSurfaceShell;
+use super::types::IntegratedOverlayAnchor;
 
 impl RenderOnce for IntegratedSurfaceShell {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let theme = get_cached_theme();
         let chrome = AppChromeColors::from_theme(&theme);
+
+        let overlay_anchor = self
+            .overlay
+            .as_ref()
+            .map(|(placement, _)| match placement.anchor {
+                IntegratedOverlayAnchor::Composer => "composer",
+                IntegratedOverlayAnchor::Footer => "footer",
+            })
+            .unwrap_or("none");
 
         tracing::info!(
             event = "integrated_surface_shell_rendered",
@@ -18,6 +28,7 @@ impl RenderOnce for IntegratedSurfaceShell {
             height = self.config.height,
             has_footer = self.footer.is_some(),
             has_overlay = self.overlay.is_some(),
+            overlay_anchor = overlay_anchor,
             "Rendered integrated playground shell"
         );
 
