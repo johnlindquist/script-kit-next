@@ -10,8 +10,10 @@ mod at_mention_picker_variations;
 mod autocomplete_description_treatments;
 mod button_stories;
 mod confirm_dialog_variations;
+mod confirm_popup_playground;
 mod confirm_position_variations;
 mod context_indicator_variations;
+mod context_picker_popup_playground;
 mod design_token_stories;
 mod drop_prompt_stories;
 mod env_prompt_stories;
@@ -50,8 +52,10 @@ pub use at_mention_picker_variations::AtMentionPickerVariationsStory;
 pub use autocomplete_description_treatments::AutocompleteDescriptionTreatmentsStory;
 pub use button_stories::ButtonStory;
 pub use confirm_dialog_variations::ConfirmDialogVariationsStory;
+pub use confirm_popup_playground::ConfirmPopupPlaygroundStory;
 pub use confirm_position_variations::ConfirmPositionVariationsStory;
 pub use context_indicator_variations::ContextIndicatorVariationsStory;
+pub use context_picker_popup_playground::ContextPickerPopupPlaygroundStory;
 pub use design_token_stories::DesignTokenStory;
 pub use drop_prompt_stories::DropPromptStory;
 pub use env_prompt_stories::EnvPromptStory;
@@ -87,6 +91,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         // Components
         StoryEntry::new(Box::new(ButtonStory)),
         StoryEntry::new(Box::new(ConfirmDialogVariationsStory)),
+        StoryEntry::new(Box::new(ConfirmPopupPlaygroundStory)),
         StoryEntry::new(Box::new(ConfirmPositionVariationsStory)),
         StoryEntry::new(Box::new(ContextIndicatorVariationsStory)),
         StoryEntry::new(Box::new(ToastStory)),
@@ -119,6 +124,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(PathPromptStory)),
         StoryEntry::new(Box::new(SelectPromptStory)),
         // AI Chat
+        StoryEntry::new(Box::new(ContextPickerPopupPlaygroundStory)),
         StoryEntry::new(Box::new(AutocompleteDescriptionTreatmentsStory)),
         StoryEntry::new(Box::new(AtMentionPickerVariationsStory)),
         StoryEntry::new(Box::new(SlashCommandMenuVariationsStory)),
