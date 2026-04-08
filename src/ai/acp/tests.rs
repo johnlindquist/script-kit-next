@@ -666,6 +666,7 @@ fn acp_model_selection_is_visible_in_footer_and_routed_through_actions() {
     assert!(
         ACP_VIEW_SOURCE.contains(".id(\"acp-model-display\")")
             && !ACP_VIEW_SOURCE.contains(".id(\"acp-model-btn\")")
+            && ACP_VIEW_SOURCE.contains("render_hint_icons_clickable(")
             && ACP_VIEW_SOURCE.contains("this.trigger_open_model_picker(window, cx);")
             && ACP_VIEW_SOURCE.contains("\"⌘K Actions\""),
         "ACP footer should keep the active model visible and route changes through the actions menu"
