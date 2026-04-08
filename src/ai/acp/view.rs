@@ -5,7 +5,7 @@
 //! approval cards. Wraps an `AcpThread` entity for the Tab AI surface.
 
 use std::collections::HashSet;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gpui::{
     div, list, prelude::*, px, rgb, rgba, Animation, AnimationExt, App, Context, ElementId, Entity,
@@ -21,6 +21,10 @@ use crate::components::text_input::{
 use crate::prompts::markdown::render_markdown_with_scope;
 use crate::theme::{self, PromptColors};
 
+use super::history_popup::{
+    history_popup_key_intent, AcpHistoryPopupKeyIntent, HISTORY_POPUP_PAGE_JUMP,
+    HISTORY_POPUP_SEARCH_LIMIT,
+};
 use super::thread::{
     AcpContextBootstrapState, AcpThread, AcpThreadMessage, AcpThreadMessageRole, AcpThreadStatus,
 };
@@ -164,6 +168,8 @@ pub(crate) struct AcpChatView {
     _blink_task: Task<()>,
     /// Ranked history popup state. None = hidden.
     pub(crate) history_menu: Option<AcpHistoryMenuState>,
+    /// Most recent timestamp when the history popup was explicitly dismissed.
+    history_closed_at: Option<Instant>,
     /// Whether the + attachment menu popup is open.
     attach_menu_open: bool,
     /// Whether the model selector dropdown is open.
@@ -258,6 +264,46 @@ impl AcpChatView {
         actions_window_open: bool,
     ) -> bool {
         window_active && view_focused && !actions_window_open
+    }
+
+    fn was_history_recently_closed(&self) -> bool {
+        const HISTORY_CLOSE_DEBOUNCE: Duration = Duration::from_millis(300);
+        self.history_closed_at
+            .map(|t| t.elapsed() < HISTORY_CLOSE_DEBOUNCE)
+            .unwrap_or(false)
+    }
+
+    fn mark_history_popup_closed(&mut self, cx: &mut Context<Self>) {
+        self.history_menu = None;
+        self.history_closed_at = Some(Instant::now());
+        cx.notify();
+    }
+
+    pub(crate) fn dismiss_history_popup(&mut self, cx: &mut Context<Self>) {
+        if self.history_menu.is_none() {
+            return;
+        }
+
+        self.mark_history_popup_closed(cx);
+        self.sync_history_popup_window_from_cached_parent(cx);
+    }
+
+    pub(crate) fn dismiss_history_popup_from_window(
+        &mut self,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        if self.history_menu.is_none() {
+            return;
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_history_popup_closed",
+            reason,
+            "Closed ACP history popup from detached window lifecycle"
+        );
+        self.mark_history_popup_closed(cx);
     }
 
     fn char_to_byte_offset(text: &str, char_idx: usize) -> usize {
@@ -590,6 +636,7 @@ impl AcpChatView {
             } else {
                 SharedString::from(format!("History matches \u{201c}{}\u{201d}", menu.query))
             },
+            query: SharedString::from(menu.query.clone()),
             selected_index,
             entries,
         })
@@ -804,6 +851,116 @@ impl AcpChatView {
         cx.notify();
     }
 
+    fn set_history_popup_query(&mut self, query: String, cx: &mut Context<Self>) {
+        let hits = super::history::search_history(&query, HISTORY_POPUP_SEARCH_LIMIT);
+        self.history_closed_at = None;
+        self.history_menu = Some(AcpHistoryMenuState {
+            selected_index: 0,
+            query,
+            hits,
+        });
+        self.sync_history_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    fn navigate_history_popup_selection(&mut self, delta: i32, cx: &mut Context<Self>) {
+        let Some(menu) = self.history_menu.as_mut() else {
+            return;
+        };
+        if menu.hits.is_empty() {
+            return;
+        }
+
+        let len = menu.hits.len();
+        let current = menu.selected_index;
+        menu.selected_index = if delta < 0 {
+            current.saturating_sub((-delta) as usize)
+        } else {
+            (current + delta as usize).min(len.saturating_sub(1))
+        };
+        self.history_closed_at = None;
+        self.sync_history_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    fn jump_history_popup_selection(&mut self, end: bool, cx: &mut Context<Self>) {
+        let Some(menu) = self.history_menu.as_mut() else {
+            return;
+        };
+        if menu.hits.is_empty() {
+            return;
+        }
+
+        menu.selected_index = if end {
+            menu.hits.len().saturating_sub(1)
+        } else {
+            0
+        };
+        self.history_closed_at = None;
+        self.sync_history_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    fn page_history_popup_selection(&mut self, delta: i32, cx: &mut Context<Self>) {
+        let Some(menu) = self.history_menu.as_mut() else {
+            return;
+        };
+        if menu.hits.is_empty() {
+            return;
+        }
+
+        let len = menu.hits.len();
+        menu.selected_index = if delta < 0 {
+            menu.selected_index.saturating_sub(HISTORY_POPUP_PAGE_JUMP)
+        } else {
+            (menu.selected_index + HISTORY_POPUP_PAGE_JUMP).min(len.saturating_sub(1))
+        };
+        self.history_closed_at = None;
+        self.sync_history_popup_window_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    fn execute_history_popup_selection(
+        &mut self,
+        modifiers: &gpui::Modifiers,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(entry) = self
+            .history_menu
+            .as_ref()
+            .and_then(|menu| menu.hits.get(menu.selected_index))
+            .map(|hit| hit.entry.clone())
+        else {
+            return;
+        };
+
+        self.history_menu = None;
+        self.history_closed_at = None;
+        self.sync_history_popup_window_from_cached_parent(cx);
+
+        if modifiers.platform {
+            self.select_history_from_popup(&entry, cx);
+            return;
+        }
+
+        let mode = if modifiers.shift {
+            super::history_attachment::AcpHistoryAttachMode::Transcript
+        } else {
+            super::history_attachment::AcpHistoryAttachMode::Summary
+        };
+
+        if let Err(error) = self.attach_history_session(&entry.session_id, mode, cx) {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "acp_history_popup_attach_failed",
+                session_id = %entry.session_id,
+                mode = ?mode,
+                error = %error,
+            );
+        }
+        cx.notify();
+    }
+
     /// Attach a prior conversation as a context chip via the existing file attachment path.
     pub(crate) fn attach_history_session(
         &mut self,
@@ -858,6 +1015,7 @@ impl AcpChatView {
         self.attach_menu_open = false;
         self.model_selector_open = false;
         self.mention_session = None;
+        self.history_closed_at = None;
         self.history_menu = Some(AcpHistoryMenuState {
             selected_index: 0,
             query,
@@ -867,15 +1025,106 @@ impl AcpChatView {
         cx.notify();
     }
 
+    pub(crate) fn sync_history_popup_state_from_window(
+        &mut self,
+        query: String,
+        hits: Vec<super::history::AcpHistorySearchHit>,
+        selected_index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        if self.history_menu.is_none() {
+            return;
+        }
+
+        let clamped_selected_index = if hits.is_empty() {
+            0
+        } else {
+            selected_index.min(hits.len().saturating_sub(1))
+        };
+
+        self.history_closed_at = None;
+        self.history_menu = Some(AcpHistoryMenuState {
+            selected_index: clamped_selected_index,
+            query,
+            hits,
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn sync_history_popup_selection_from_window(
+        &mut self,
+        selected_index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(menu) = self.history_menu.as_mut() else {
+            return;
+        };
+
+        menu.selected_index = if menu.hits.is_empty() {
+            0
+        } else {
+            selected_index.min(menu.hits.len().saturating_sub(1))
+        };
+        self.history_closed_at = None;
+        cx.notify();
+    }
+
+    pub(crate) fn open_history_popup_from_host(
+        &mut self,
+        parent_handle: gpui::AnyWindowHandle,
+        parent_bounds: gpui::Bounds<gpui::Pixels>,
+        display_id: Option<gpui::DisplayId>,
+        cx: &mut Context<Self>,
+    ) {
+        self.mention_popup_parent_window = Some(AcpMentionPopupParentWindow {
+            handle: parent_handle,
+            bounds: parent_bounds,
+            display_id,
+        });
+
+        if self.history_menu.is_none() {
+            let hits = Self::recent_history_hits();
+            if hits.is_empty() {
+                self.sync_history_popup_window_from_cached_parent(cx);
+                cx.notify();
+                return;
+            }
+
+            self.attach_menu_open = false;
+            self.model_selector_open = false;
+            self.mention_session = None;
+            self.history_closed_at = None;
+            self.history_menu = Some(AcpHistoryMenuState {
+                selected_index: 0,
+                query: String::new(),
+                hits,
+            });
+        }
+
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
+    }
+
     fn toggle_history_popup_from_cached_parent(&mut self, cx: &mut Context<Self>) {
         if self.history_menu.is_some() {
-            self.history_menu = None;
+            self.dismiss_history_popup(cx);
+            return;
+        }
+
+        if self.was_history_recently_closed() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_history_popup_toggle_suppressed_recent_close",
+                "Suppressed ACP history popup reopen because it was just closed"
+            );
+            return;
         } else {
             let hits = Self::recent_history_hits();
             if !hits.is_empty() {
                 self.attach_menu_open = false;
                 self.model_selector_open = false;
                 self.mention_session = None;
+                self.history_closed_at = None;
                 self.history_menu = Some(AcpHistoryMenuState {
                     selected_index: 0,
                     query: String::new(),
@@ -906,9 +1155,7 @@ impl AcpChatView {
         }
 
         if self.history_menu.is_some() {
-            self.history_menu = None;
-            self.sync_history_popup_window_from_cached_parent(cx);
-            cx.notify();
+            self.dismiss_history_popup(cx);
             return true;
         }
 
@@ -1163,6 +1410,7 @@ impl AcpChatView {
             cursor_visible: true,
             _blink_task: blink_task,
             history_menu: None,
+            history_closed_at: None,
             attach_menu_open: false,
             model_selector_open: false,
             model_selector_selected_index: 0,
@@ -1211,6 +1459,7 @@ impl AcpChatView {
             cursor_visible: false,
             _blink_task: noop_blink,
             history_menu: None,
+            history_closed_at: None,
             attach_menu_open: false,
             model_selector_open: false,
             model_selector_selected_index: 0,
@@ -4596,6 +4845,76 @@ impl AcpChatView {
             }
         }
 
+        if self.history_menu.is_some() {
+            match history_popup_key_intent(key, modifiers) {
+                Some(AcpHistoryPopupKeyIntent::MoveUp) => {
+                    self.navigate_history_popup_selection(-1, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                Some(AcpHistoryPopupKeyIntent::MoveDown) => {
+                    self.navigate_history_popup_selection(1, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                Some(AcpHistoryPopupKeyIntent::MoveHome) => {
+                    self.jump_history_popup_selection(false, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                Some(AcpHistoryPopupKeyIntent::MoveEnd) => {
+                    self.jump_history_popup_selection(true, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                Some(AcpHistoryPopupKeyIntent::MovePageUp) => {
+                    self.page_history_popup_selection(-1, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                Some(AcpHistoryPopupKeyIntent::MovePageDown) => {
+                    self.page_history_popup_selection(1, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                Some(AcpHistoryPopupKeyIntent::ExecuteSelected) => {
+                    self.execute_history_popup_selection(modifiers, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                Some(AcpHistoryPopupKeyIntent::Close) => {
+                    self.dismiss_history_popup(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                Some(AcpHistoryPopupKeyIntent::Backspace) => {
+                    let next_query = self
+                        .history_menu
+                        .as_ref()
+                        .map(|menu| {
+                            let mut query = menu.query.clone();
+                            query.pop();
+                            query
+                        })
+                        .unwrap_or_default();
+                    self.set_history_popup_query(next_query, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                Some(AcpHistoryPopupKeyIntent::TypeChar(ch)) => {
+                    let next_query = self
+                        .history_menu
+                        .as_ref()
+                        .map(|menu| format!("{}{}", menu.query, ch))
+                        .unwrap_or_else(|| ch.to_string());
+                    self.set_history_popup_query(next_query, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                None => {}
+            }
+        }
+
         // ── Cmd+K → open actions dialog ──────
         if modifiers.platform && crate::ui_foundation::is_key_k(key) {
             if crate::ai::acp::chat_window::is_chat_window_open() {
@@ -4970,6 +5289,7 @@ impl Render for AcpChatView {
         let plan_entries = thread.active_plan_entries().to_vec();
         let attached_parts = thread.pending_context_parts().to_vec();
         let messages: Vec<AcpThreadMessage> = thread.messages.clone();
+        let history_popup_open = self.history_menu.is_some();
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
         let mention_accent = theme::get_cached_theme().colors.accent.selected;
@@ -5335,6 +5655,21 @@ impl Render for AcpChatView {
             // ── Attach menu popup ──────────────────────────
             .when(self.attach_menu_open, |d| {
                 d.child(self.render_attach_menu(cx))
+            })
+            .when(history_popup_open, |d| {
+                d.child(
+                    div()
+                        .id("acp-history-popup-backdrop")
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .right_0()
+                        .bottom(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+                        .on_mouse_down(gpui::MouseButton::Left, cx.listener(|this, _, _, cx| {
+                            this.dismiss_history_popup(cx);
+                            cx.stop_propagation();
+                        })),
+                )
             })
             // ── BOTTOM: Hint strip ─────────────────────
             .child(self.render_toolbar(cx))

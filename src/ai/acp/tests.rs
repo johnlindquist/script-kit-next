@@ -328,6 +328,7 @@ const RENDER_IMPL_SOURCE: &str = include_str!("../../main_sections/render_impl.r
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../../main_sections/app_view_state.rs");
 const APP_RUN_SETUP_SOURCE: &str = include_str!("../../main_entry/app_run_setup.rs");
 const RUNTIME_STDIN_SOURCE: &str = include_str!("../../main_entry/runtime_stdin.rs");
+const HANDLE_ACTION_SOURCE: &str = include_str!("../../app_actions/handle_action/mod.rs");
 const ACP_MOD_SOURCE: &str = include_str!("mod.rs");
 const ACP_HISTORY_POPUP_SOURCE: &str = include_str!("history_popup.rs");
 const ACP_MODEL_SELECTOR_POPUP_SOURCE: &str = include_str!("model_selector_popup.rs");
@@ -608,15 +609,25 @@ fn acp_footer_actions_hint_uses_shared_clickable_toggle_path() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("wire_embedded_acp_footer_callbacks(&view_entity, cx);")
             && TAB_AI_MODE_SOURCE.contains("app.toggle_actions(cx, window);")
-            && TAB_AI_MODE_SOURCE
-                .contains("app.close_tab_ai_harness_terminal_with_window(window, cx);"),
-        "embedded ACP hosts must wire footer clicks to the existing actions toggle and close paths"
+            && TAB_AI_MODE_SOURCE.contains("app.close_tab_ai_harness_terminal_with_window(window, cx);")
+            && TAB_AI_MODE_SOURCE.contains("view.set_on_open_history_command")
+            && TAB_AI_MODE_SOURCE.contains("app.open_embedded_acp_history_popup(window, cx);"),
+        "embedded ACP hosts must wire footer clicks to the existing actions, close, and history popup paths"
     );
     assert!(
         ACP_CHAT_WINDOW_SOURCE.contains("view.set_on_toggle_actions")
             && ACP_CHAT_WINDOW_SOURCE.contains("toggle_detached_actions(cx);")
             && ACP_CHAT_WINDOW_SOURCE.contains("close_chat_window(cx);"),
         "detached ACP hosts must wire footer clicks to the detached actions toggle and close paths"
+    );
+}
+
+#[test]
+fn acp_show_history_action_prefers_embedded_popup_before_builtin_browser() {
+    assert!(
+        HANDLE_ACTION_SOURCE.contains("if !self.open_embedded_acp_history_popup(window, cx) {")
+            && HANDLE_ACTION_SOURCE.contains("AppView::AcpHistoryView"),
+        "acp_show_history should open the embedded ACP popup when possible and only fall back to the builtin browser otherwise"
     );
 }
 
@@ -675,6 +686,78 @@ fn acp_history_toggle_and_selection_sync_popup_window() {
             && ACP_VIEW_SOURCE.contains("pub(crate) fn select_history_from_popup")
             && ACP_VIEW_SOURCE.contains("pub(crate) fn toggle_history_popup"),
         "history picker interactions should open and close through the detached popup window"
+    );
+}
+
+#[test]
+fn acp_history_toggle_uses_recent_close_debounce() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("history_closed_at: Option<Instant>")
+            && ACP_VIEW_SOURCE.contains("fn was_history_recently_closed(&self) -> bool")
+            && ACP_VIEW_SOURCE.contains("fn mark_history_popup_closed(&mut self, cx: &mut Context<Self>)")
+            && ACP_VIEW_SOURCE.contains("event = \"acp_history_popup_toggle_suppressed_recent_close\""),
+        "ACP history popup should track recent closes and suppress immediate reopen races like the shared actions dialog"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("view.toggle_history_popup(window, cx);"),
+        "embedded ACP history host should route footer/shortcut toggles through the ACP view toggle path"
+    );
+}
+
+#[test]
+fn acp_history_popup_window_observes_focus_loss_and_escape() {
+    assert!(
+        ACP_HISTORY_POPUP_SOURCE.contains("activation_subscription: Option<Subscription>")
+            && ACP_HISTORY_POPUP_SOURCE.contains("fn ensure_activation_subscription(")
+            && ACP_HISTORY_POPUP_SOURCE
+                .contains("cx.observe_window_activation(window, move |this, window, cx| {")
+            && ACP_HISTORY_POPUP_SOURCE.contains("this.request_close(window, cx, \"focus_lost\");"),
+        "ACP history popup window should observe activation changes and close on focus loss"
+    );
+    assert!(
+        ACP_HISTORY_POPUP_SOURCE.contains(".on_mouse_down_out(cx.listener(|this, _event: &gpui::MouseDownEvent, window, cx| {")
+            && ACP_HISTORY_POPUP_SOURCE.contains("this.request_close(window, cx, \"mouse_down_out\");")
+            && ACP_HISTORY_POPUP_SOURCE.contains("view.dismiss_history_popup_from_window(reason, cx);")
+            && ACP_HISTORY_POPUP_SOURCE.contains("this.request_close(window, cx, \"escape\");"),
+        "ACP history popup window should close on outside clicks and sync dismissals back into ACP state"
+    );
+    assert!(
+        ACP_HISTORY_POPUP_SOURCE.contains("view.dismiss_history_popup_from_window(reason, cx);")
+            && ACP_HISTORY_POPUP_SOURCE.contains("this.request_close(window, cx, \"escape\");"),
+        "ACP history popup window should sync dismissals back into ACP state for both focus loss and Escape"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains(".id(\"acp-history-popup-backdrop\")")
+            && ACP_VIEW_SOURCE.contains("this.dismiss_history_popup(cx);")
+            && ACP_VIEW_SOURCE.contains(".bottom(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))"),
+        "ACP host should render an outside-click backdrop above chat content so clicks outside the popup close it without swallowing the footer toggle"
+    );
+}
+
+#[test]
+fn acp_history_popup_window_supports_actions_style_search_and_keyboard_navigation() {
+    assert!(
+        ACP_HISTORY_POPUP_SOURCE.contains("enum AcpHistoryPopupKeyIntent")
+            && ACP_HISTORY_POPUP_SOURCE.contains("TypeChar(char)")
+            && ACP_HISTORY_POPUP_SOURCE.contains("Backspace")
+            && ACP_HISTORY_POPUP_SOURCE.contains("MovePageDown")
+            && ACP_HISTORY_POPUP_SOURCE.contains("MoveHome")
+            && ACP_HISTORY_POPUP_SOURCE.contains("history_popup_key_intent"),
+        "ACP history popup should use an actions-style key intent model for search and navigation"
+    );
+    assert!(
+        ACP_HISTORY_POPUP_SOURCE.contains("sync_history_popup_state_from_window")
+            && ACP_HISTORY_POPUP_SOURCE.contains("sync_history_popup_selection_from_window")
+            && ACP_HISTORY_POPUP_SOURCE.contains("Type to Search")
+            && ACP_HISTORY_POPUP_SOURCE.contains(".track_scroll(&self.scroll_handle)"),
+        "ACP history popup should expose a visible search row and keep popup state synchronized while keyboard navigation scrolls"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("if self.history_menu.is_some() {")
+            && ACP_VIEW_SOURCE.contains("match history_popup_key_intent(key, modifiers)")
+            && ACP_VIEW_SOURCE.contains("self.set_history_popup_query(next_query, cx);")
+            && ACP_VIEW_SOURCE.contains("self.execute_history_popup_selection(modifiers, cx);"),
+        "ACP host key routing should intercept history popup navigation and search the same way the shared actions popup does"
     );
 }
 
