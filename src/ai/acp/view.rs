@@ -190,8 +190,6 @@ pub(crate) struct AcpChatView {
     pending_history_resume: Option<AcpHistoryResumeRequest>,
     /// Host-owned footer callback for toggling the actions popup.
     on_toggle_actions: Option<AcpFooterActionHandler>,
-    /// Host-owned footer callback for opening the model picker drill-down.
-    on_open_model_picker: Option<AcpFooterActionHandler>,
     /// Host-owned footer callback for closing the ACP surface.
     on_close_requested: Option<AcpFooterActionHandler>,
     /// Host-owned callback for opening the dedicated history command surface.
@@ -337,13 +335,6 @@ impl AcpChatView {
         self.on_toggle_actions = Some(std::sync::Arc::new(callback));
     }
 
-    pub(crate) fn set_on_open_model_picker(
-        &mut self,
-        callback: impl Fn(&mut Window, &mut App) + 'static,
-    ) {
-        self.on_open_model_picker = Some(std::sync::Arc::new(callback));
-    }
-
     pub(crate) fn set_on_close_requested(
         &mut self,
         callback: impl Fn(&mut Window, &mut App) + 'static,
@@ -481,18 +472,6 @@ impl AcpChatView {
                 target: "script_kit::acp",
                 event = "acp_footer_toggle_actions_no_callback",
                 "ACP footer actions click dropped because no host callback was installed"
-            );
-        }
-    }
-
-    fn trigger_open_model_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(callback) = self.on_open_model_picker.clone() {
-            Self::spawn_footer_callback(callback, window, cx);
-        } else {
-            tracing::warn!(
-                target: "script_kit::acp",
-                event = "acp_footer_open_model_picker_no_callback",
-                "ACP footer model click dropped because no host callback was installed"
             );
         }
     }
@@ -1101,7 +1080,6 @@ impl AcpChatView {
             pending_retry_request: None,
             pending_history_resume: None,
             on_toggle_actions: None,
-            on_open_model_picker: None,
             on_close_requested: None,
             on_open_history_command: None,
             on_open_portal: None,
@@ -1149,7 +1127,6 @@ impl AcpChatView {
             pending_retry_request: None,
             pending_history_resume: None,
             on_toggle_actions: None,
-            on_open_model_picker: None,
             on_close_requested: None,
             on_open_history_command: None,
             on_open_portal: None,
@@ -2608,16 +2585,13 @@ impl AcpChatView {
                             .read(cx)
                             .selected_model_display()
                             .to_string();
-                        crate::components::render_hint_icons_clickable(
-                            vec![crate::components::ClickableHint::new(
-                                model_display,
-                                cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-                                    this.trigger_open_model_picker(window, cx);
-                                }),
-                            )
-                            .id("acp-model-display")],
-                            hint_text_rgba,
-                        )
+                        div()
+                            .id("acp-model-display")
+                            .flex()
+                            .items_center()
+                            .text_xs()
+                            .text_color(rgba(hint_text_rgba))
+                            .child(model_display)
                     }),
             )
             // ── Right: clickable hint strip (matches main menu behavior) ──

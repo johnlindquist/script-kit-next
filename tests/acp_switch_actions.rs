@@ -123,26 +123,6 @@ fn toggle_actions_uses_route_based_acp_dialog() {
 }
 
 #[test]
-fn acp_model_picker_can_open_directly_from_footer() {
-    assert!(
-        ACTIONS_TOGGLE_SOURCE.contains("pub(crate) fn open_acp_model_picker_actions"),
-        "embedded ACP must expose a direct model-picker open path for the footer"
-    );
-    assert!(
-        ACTIONS_TOGGLE_SOURCE.contains("get_acp_model_picker_route_for_host")
-            && ACTIONS_TOGGLE_SOURCE.contains("dialog.push_route("),
-        "embedded ACP direct model-picker open path must push the ACP model route"
-    );
-    assert!(
-        CHAT_WINDOW_SOURCE.contains("fn open_detached_actions")
-            && CHAT_WINDOW_SOURCE.contains("open_model_picker: bool")
-            && CHAT_WINDOW_SOURCE.contains("open_detached_model_picker")
-            && CHAT_WINDOW_SOURCE.contains("get_acp_model_picker_route_for_host"),
-        "detached ACP must support opening the model picker route directly from the footer"
-    );
-}
-
-#[test]
 fn dialog_exposes_route_stack_public_api() {
     // Verify the core route/back-stack types and methods exist
     assert!(

@@ -247,14 +247,11 @@ mod tests {
             .find("fn dispatch_main_window_footer_action")
             .expect("dispatch_main_window_footer_action must exist");
         let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 3000)];
-        let match_pos = dispatcher_section
-            .find("match action")
-            .expect("dispatch_main_window_footer_action must match on FooterAction");
-        let match_section = &dispatcher_section[match_pos..];
-        let actions_pos = match_section
+        let actions_pos = dispatcher_section
             .find("FooterAction::Actions")
             .expect("FooterAction::Actions arm must exist in dispatcher");
-        let after_actions = &match_section[actions_pos..match_section.len().min(actions_pos + 600)];
+        let after_actions =
+            &dispatcher_section[actions_pos..dispatcher_section.len().min(actions_pos + 600)];
         assert!(
             after_actions.contains("dispatch_actions_toggle_for_current_view"),
             "Native footer Actions dispatch must use the shared dispatcher (dispatch_actions_toggle_for_current_view)"
@@ -299,83 +296,6 @@ mod tests {
         assert!(
             sync_section.contains("ensure_main_footer_action_listener"),
             "sync_main_footer_popup must call ensure_main_footer_action_listener to start the bridge"
-        );
-    }
-
-    #[test]
-    fn test_native_footer_ai_button_uses_tab_glyph_and_short_ai_label() {
-        let content = fs::read_to_string("src/app_impl/ui_window.rs")
-            .expect("Failed to read src/app_impl/ui_window.rs");
-
-        assert!(
-            content.contains(r#"FooterButtonConfig::new(FooterAction::Ai, "⇥", "AI")"#),
-            "Native footer AI button must use the canonical tab glyph key and short AI label"
-        );
-        assert!(
-            !content.contains(r#"FooterButtonConfig::new(FooterAction::Ai, "Tab", "ACP Chat")"#),
-            "Native footer must no longer use the old Tab / ACP Chat copy"
-        );
-    }
-
-    #[test]
-    fn test_native_footer_buttons_disable_for_blocking_dialogs_but_not_actions_toggle_state() {
-        let ui_window = fs::read_to_string("src/app_impl/ui_window.rs")
-            .expect("Failed to read src/app_impl/ui_window.rs");
-        let footer_popup =
-            fs::read_to_string("src/footer_popup.rs").expect("Failed to read src/footer_popup.rs");
-
-        assert!(
-            ui_window.contains("fn main_window_footer_buttons_blocked(&self) -> bool"),
-            "ui_window.rs must define a dedicated footer-disabled helper"
-        );
-        assert!(
-            ui_window.contains("crate::confirm::is_confirm_window_open()")
-                && !ui_window.contains(
-                    "fn main_window_footer_buttons_blocked(&self) -> bool {\n        self.show_actions_popup"
-                )
-                && !ui_window.contains(
-                    "fn main_window_footer_buttons_blocked(&self) -> bool {\n        crate::actions::is_actions_window_open()"
-                ),
-            "Footer-disabled helper must block confirm-style dialogs without disabling the footer just because Actions is open"
-        );
-        assert!(
-            ui_window.contains(".enabled(!footer_disabled)"),
-            "Footer button configs must propagate the computed disabled state"
-        );
-        assert!(
-            footer_popup.contains(r#"decl.add_ivar::<cocoa::base::BOOL>("_enabled")"#)
-                && footer_popup
-                    .contains(r#"setEnabled: if button_cfg.enabled { YES } else { NO }"#)
-                && footer_popup.contains(r#"get_ivar::<cocoa::base::BOOL>("_enabled")"#),
-            "Native footer buttons must store and enforce enabled state at the ObjC button layer"
-        );
-    }
-
-    #[test]
-    fn test_native_footer_non_actions_clicks_close_actions_dialog_without_submitting() {
-        let ui_window = fs::read_to_string("src/app_impl/ui_window.rs")
-            .expect("Failed to read src/app_impl/ui_window.rs");
-
-        assert!(
-            ui_window.contains("if actions_open && !matches!(action, crate::footer_popup::FooterAction::Actions)")
-                && ui_window.contains("self.close_actions_popup(host, window, cx);")
-                && ui_window.contains("self.actions_support_for_view()")
-                && ui_window.contains("main_window_footer_action_closed_actions_only"),
-            "Footer Run/AI clicks must close the open actions dialog without dispatching their own action"
-        );
-    }
-
-    #[test]
-    fn test_native_footer_balances_button_widths_before_right_aligning() {
-        let footer_popup =
-            fs::read_to_string("src/footer_popup.rs").expect("Failed to read src/footer_popup.rs");
-
-        assert!(
-            footer_popup.contains("let balanced_floor_width = if items.is_empty()")
-                && footer_popup.contains("normalize_footer_hint_item_width")
-                && footer_popup
-                    .contains("let target_width = item_width.max(balanced_floor_width);"),
-            "Native footer layout must softly normalize buttons before packing them right-aligned"
         );
     }
 

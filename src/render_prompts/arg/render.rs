@@ -242,8 +242,6 @@ impl ScriptListApp {
             div()
         };
 
-        let leading: Option<gpui::AnyElement> = None;
-
         let filtered_choices_len = self.filtered_arg_choices().len();
         tracing::info!(
             surface = "render_prompts::arg",
@@ -259,13 +257,18 @@ impl ScriptListApp {
             ),
         );
 
-        crate::components::render_minimal_list_prompt_shell(
+        let gpui_footer = crate::components::render_simple_hint_strip(
+            crate::components::universal_prompt_hints(),
+            None,
+        );
+        let footer = self.main_window_footer_slot(gpui_footer);
+
+        crate::components::render_minimal_list_prompt_shell_with_footer(
             0.0,
             crate::ui_foundation::get_vibrancy_background(&self.theme),
             header,
             content,
-            crate::components::universal_prompt_hints(),
-            leading,
+            footer,
         )
         .relative()
         .text_color(rgb(text_primary))

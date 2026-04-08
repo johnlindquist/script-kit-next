@@ -7,32 +7,6 @@ pub enum IntegratedOverlayAnchor {
     Footer,
 }
 
-/// Discrete overlay states used by compare-mode playgrounds.
-///
-/// These are intentionally compare-friendly states, not runtime animation handles.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IntegratedOverlayState {
-    Resting,
-    Focused,
-    Loading,
-    Empty,
-    Error,
-    Danger,
-}
-
-impl IntegratedOverlayState {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Resting => "resting",
-            Self::Focused => "focused",
-            Self::Loading => "loading",
-            Self::Empty => "empty",
-            Self::Error => "error",
-            Self::Danger => "danger",
-        }
-    }
-}
-
 /// Positioning data for an overlay popup within the shell.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct IntegratedOverlayPlacement {
@@ -53,7 +27,7 @@ impl IntegratedOverlayPlacement {
     }
 }
 
-/// Configuration for the integrated surface shell scene sizing and chrome polish.
+/// Configuration for the integrated surface shell scene sizing.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct IntegratedSurfaceShellConfig {
     pub width: f32,
@@ -61,12 +35,6 @@ pub struct IntegratedSurfaceShellConfig {
     pub corner_radius: f32,
     pub body_padding: f32,
     pub footer_height: f32,
-    pub scrim_alpha: f32,
-    pub overlay_lift: f32,
-    pub overlay_shadow_y: f32,
-    pub overlay_shadow_blur: f32,
-    pub overlay_bridge_width: f32,
-    pub overlay_bridge_height: f32,
 }
 
 impl Default for IntegratedSurfaceShellConfig {
@@ -77,12 +45,6 @@ impl Default for IntegratedSurfaceShellConfig {
             corner_radius: 12.0,
             body_padding: 16.0,
             footer_height: 36.0,
-            scrim_alpha: 0.04,
-            overlay_lift: 6.0,
-            overlay_shadow_y: 12.0,
-            overlay_shadow_blur: 28.0,
-            overlay_bridge_width: 54.0,
-            overlay_bridge_height: 8.0,
         }
     }
 }

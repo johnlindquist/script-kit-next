@@ -369,13 +369,15 @@ impl ScriptListApp {
         ];
         crate::components::emit_prompt_hint_audit("acp_history", &hints);
 
-        // Assemble via shared expanded-view scaffold
-        crate::components::render_expanded_view_scaffold_with_hints(
+        let gpui_footer = crate::components::render_simple_hint_strip(hints, None);
+        let footer = self.main_window_footer_slot(gpui_footer);
+
+        // Assemble via shared expanded-view scaffold (footer-aware variant)
+        crate::components::render_expanded_view_scaffold_with_footer(
             header_element,
             list_pane,
             preview_panel,
-            hints,
-            None,
+            footer,
         )
         .text_color(rgb(text_primary))
         .font_family(design_typography.font_family)

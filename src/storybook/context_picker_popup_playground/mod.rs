@@ -1,22 +1,20 @@
 //! Context-picker popup playground — integrated surface scenes for compare mode.
 //!
-//! Five stable variants (`mention-dense`, `mention-grouped`, `slash-dense`,
-//! `slash-grouped`, `slash-error`) rendered via `IntegratedSurfaceShell` with a
-//! real `PromptFooter` and real `InlineDropdown` anchored under the typed
-//! trigger. No production ACP or live picker code is touched.
+//! Four stable variants (`mention-dense`, `mention-grouped`, `slash-dense`,
+//! `slash-grouped`) rendered via `IntegratedSurfaceShell` with a real
+//! `PromptFooter` and real `InlineDropdown` anchored under the typed trigger.
+//! No production ACP or live picker code is touched.
 
 use gpui::*;
 
 use crate::components::inline_dropdown::{
-    render_dense_monoline_picker_row, InlineDropdown, InlineDropdownColors,
-    InlineDropdownEmptyState, InlineDropdownSynopsis, CONTEXT_PICKER_ROW_HEIGHT,
+    render_dense_monoline_picker_row, InlineDropdown, InlineDropdownColors, InlineDropdownSynopsis,
 };
 use crate::components::prompt_footer::{PromptFooter, PromptFooterColors};
 use crate::list_item::FONT_MONO;
 use crate::storybook::{
     config_from_storybook_footer_selection_value, FooterVariationId, IntegratedOverlayAnchor,
-    IntegratedOverlayPlacement, IntegratedOverlayState, IntegratedSurfaceShell,
-    IntegratedSurfaceShellConfig, StoryVariant,
+    IntegratedOverlayPlacement, IntegratedSurfaceShell, IntegratedSurfaceShellConfig, StoryVariant,
 };
 use crate::theme::get_cached_theme;
 use crate::ui_foundation::HexColorExt;
@@ -31,16 +29,14 @@ pub enum ContextPickerPopupPlaygroundId {
     MentionGrouped,
     SlashDense,
     SlashGrouped,
-    SlashError,
 }
 
 impl ContextPickerPopupPlaygroundId {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 4] = [
         Self::MentionDense,
         Self::MentionGrouped,
         Self::SlashDense,
         Self::SlashGrouped,
-        Self::SlashError,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -49,7 +45,6 @@ impl ContextPickerPopupPlaygroundId {
             Self::MentionGrouped => "mention-grouped",
             Self::SlashDense => "slash-dense",
             Self::SlashGrouped => "slash-grouped",
-            Self::SlashError => "slash-error",
         }
     }
 
@@ -59,7 +54,6 @@ impl ContextPickerPopupPlaygroundId {
             Self::MentionGrouped => "Mention Grouped",
             Self::SlashDense => "Slash Dense",
             Self::SlashGrouped => "Slash Grouped",
-            Self::SlashError => "Slash Error",
         }
     }
 
@@ -67,26 +61,24 @@ impl ContextPickerPopupPlaygroundId {
         match self {
             Self::MentionDense => "Dense @-mention popup with synopsis strip.",
             Self::MentionGrouped => "Grouped @-mention popup with section headers.",
-            Self::SlashDense => "Dense slash popup with inline command rows.",
+            Self::SlashDense => "Dense slash popup with mono meta commands.",
             Self::SlashGrouped => "Grouped slash popup for discovery-heavy command sets.",
-            Self::SlashError => "Slash popup with a recoverable catalog error state.",
         }
     }
 
     pub fn from_stable_id(value: &str) -> Option<Self> {
         match value {
             "mention-dense" => Some(Self::MentionDense),
-            "mention-grouped" | "mention-loading" => Some(Self::MentionGrouped),
-            "slash-dense" | "slash-empty" => Some(Self::SlashDense),
+            "mention-grouped" => Some(Self::MentionGrouped),
+            "slash-dense" => Some(Self::SlashDense),
             "slash-grouped" => Some(Self::SlashGrouped),
-            "slash-error" => Some(Self::SlashError),
             _ => None,
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Trigger & state
+// Trigger & Spec
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,41 +88,12 @@ pub enum ContextPickerPopupTrigger {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ContextPickerPopupSceneState {
-    Results,
-    Loading,
-    Empty,
-    Error,
-}
-
-impl ContextPickerPopupSceneState {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Results => "results",
-            Self::Loading => "loading",
-            Self::Empty => "empty",
-            Self::Error => "error",
-        }
-    }
-
-    pub fn overlay_state(self) -> IntegratedOverlayState {
-        match self {
-            Self::Results => IntegratedOverlayState::Focused,
-            Self::Loading => IntegratedOverlayState::Loading,
-            Self::Empty => IntegratedOverlayState::Empty,
-            Self::Error => IntegratedOverlayState::Error,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ContextPickerPopupPlaygroundSpec {
     pub id: ContextPickerPopupPlaygroundId,
     pub trigger: ContextPickerPopupTrigger,
     pub query: &'static str,
     pub show_sections: bool,
     pub show_synopsis: bool,
-    pub state: ContextPickerPopupSceneState,
 }
 
 // ---------------------------------------------------------------------------
@@ -212,14 +175,13 @@ const SLASH_ROWS: [PickerRow; 4] = [
 // Specs
 // ---------------------------------------------------------------------------
 
-const SPECS: [ContextPickerPopupPlaygroundSpec; 5] = [
+const SPECS: [ContextPickerPopupPlaygroundSpec; 4] = [
     ContextPickerPopupPlaygroundSpec {
         id: ContextPickerPopupPlaygroundId::MentionDense,
         trigger: ContextPickerPopupTrigger::Mention,
         query: "scr",
         show_sections: false,
         show_synopsis: true,
-        state: ContextPickerPopupSceneState::Results,
     },
     ContextPickerPopupPlaygroundSpec {
         id: ContextPickerPopupPlaygroundId::MentionGrouped,
@@ -227,15 +189,13 @@ const SPECS: [ContextPickerPopupPlaygroundSpec; 5] = [
         query: "git",
         show_sections: true,
         show_synopsis: true,
-        state: ContextPickerPopupSceneState::Loading,
     },
     ContextPickerPopupPlaygroundSpec {
         id: ContextPickerPopupPlaygroundId::SlashDense,
         trigger: ContextPickerPopupTrigger::Slash,
         query: "con",
         show_sections: false,
-        show_synopsis: false,
-        state: ContextPickerPopupSceneState::Empty,
+        show_synopsis: true,
     },
     ContextPickerPopupPlaygroundSpec {
         id: ContextPickerPopupPlaygroundId::SlashGrouped,
@@ -243,15 +203,6 @@ const SPECS: [ContextPickerPopupPlaygroundSpec; 5] = [
         query: "bro",
         show_sections: true,
         show_synopsis: true,
-        state: ContextPickerPopupSceneState::Results,
-    },
-    ContextPickerPopupPlaygroundSpec {
-        id: ContextPickerPopupPlaygroundId::SlashError,
-        trigger: ContextPickerPopupTrigger::Slash,
-        query: "con",
-        show_sections: false,
-        show_synopsis: false,
-        state: ContextPickerPopupSceneState::Error,
     },
 ];
 
@@ -279,15 +230,14 @@ pub fn render_context_picker_popup_playground_story_preview(stable_id: &str) -> 
         .unwrap_or(SPECS[0]);
 
     tracing::info!(
-        event = "context_picker_popup_playground_state_built",
+        event = "context_picker_popup_playground_rendered",
         variant_id = spec.id.as_str(),
         trigger = match spec.trigger {
             ContextPickerPopupTrigger::Mention => "mention",
             ContextPickerPopupTrigger::Slash => "slash",
         },
-        state = spec.state.as_str(),
         grouped = spec.show_sections,
-        "Built context picker popup playground state"
+        "Rendered context picker popup playground preview"
     );
 
     IntegratedSurfaceShell::new(
@@ -299,14 +249,13 @@ pub fn render_context_picker_popup_playground_story_preview(stable_id: &str) -> 
         render_chat_body(spec),
     )
     .footer(render_footer())
-    .overlay_with_state(
+    .overlay(
         IntegratedOverlayPlacement::new(
             IntegratedOverlayAnchor::Composer,
             overlay_left(spec.trigger),
             118.0,
             340.0,
         ),
-        spec.state.overlay_state(),
         render_dropdown(spec),
     )
     .into_any_element()
@@ -332,7 +281,7 @@ fn render_chat_body(spec: ContextPickerPopupPlaygroundSpec) -> AnyElement {
         ContextPickerPopupTrigger::Slash => "/",
     };
 
-    let mut body = div()
+    div()
         .w_full()
         .flex()
         .flex_col()
@@ -386,67 +335,11 @@ fn render_chat_body(spec: ContextPickerPopupPlaygroundSpec) -> AnyElement {
                                 .bg(theme.colors.accent.selected.to_rgb()),
                         ),
                 ),
-        );
-
-    if let Some(note) = scene_note(spec.state, spec.trigger) {
-        body = body.child(render_scene_note(note));
-    }
-
-    body.into_any_element()
-}
-
-fn scene_note(
-    state: ContextPickerPopupSceneState,
-    trigger: ContextPickerPopupTrigger,
-) -> Option<&'static str> {
-    match (state, trigger) {
-        (ContextPickerPopupSceneState::Results, _) => None,
-        (ContextPickerPopupSceneState::Loading, ContextPickerPopupTrigger::Mention) => {
-            Some("Scanning project context and system sources\u{2026}")
-        }
-        (ContextPickerPopupSceneState::Loading, ContextPickerPopupTrigger::Slash) => {
-            Some("Searching commands and context actions\u{2026}")
-        }
-        (ContextPickerPopupSceneState::Empty, ContextPickerPopupTrigger::Mention) => {
-            Some("No exact match yet \u{2014} fallback context hints stay available.")
-        }
-        (ContextPickerPopupSceneState::Empty, ContextPickerPopupTrigger::Slash) => {
-            Some("No exact slash match \u{2014} keep dismissal and raw-insert paths obvious.")
-        }
-        (ContextPickerPopupSceneState::Error, ContextPickerPopupTrigger::Mention) => {
-            Some("Context sources are temporarily unavailable.")
-        }
-        (ContextPickerPopupSceneState::Error, ContextPickerPopupTrigger::Slash) => {
-            Some("Command catalog is temporarily unavailable.")
-        }
-    }
-}
-
-fn render_scene_note(text: &str) -> AnyElement {
-    let theme = get_cached_theme();
-
-    div()
-        .rounded(px(6.0))
-        .bg(theme.colors.background.title_bar.with_opacity(0.7))
-        .px(px(10.0))
-        .py(px(6.0))
-        .text_xs()
-        .font_family(FONT_MONO)
-        .text_color(theme.colors.text.dimmed.to_rgb())
-        .child(text.to_string())
+        )
         .into_any_element()
 }
 
 fn render_dropdown(spec: ContextPickerPopupPlaygroundSpec) -> AnyElement {
-    match spec.state {
-        ContextPickerPopupSceneState::Results => render_results_dropdown(spec),
-        ContextPickerPopupSceneState::Loading => render_loading_dropdown(spec),
-        ContextPickerPopupSceneState::Empty => render_empty_dropdown(spec),
-        ContextPickerPopupSceneState::Error => render_error_dropdown(spec),
-    }
-}
-
-fn render_results_dropdown(spec: ContextPickerPopupPlaygroundSpec) -> AnyElement {
     let theme = get_cached_theme();
     let colors = InlineDropdownColors::from_theme(&theme);
 
@@ -497,162 +390,13 @@ fn render_results_dropdown(spec: ContextPickerPopupPlaygroundSpec) -> AnyElement
     });
 
     InlineDropdown::new(
-        SharedString::from("context-picker-playground-results"),
+        SharedString::from("context-picker-playground"),
         body.into_any_element(),
         colors,
     )
     .vertical_padding(3.0)
     .synopsis(synopsis)
     .into_any_element()
-}
-
-fn render_loading_dropdown(spec: ContextPickerPopupPlaygroundSpec) -> AnyElement {
-    let theme = get_cached_theme();
-    let colors = InlineDropdownColors::from_theme(&theme);
-
-    let body = div().w_full().flex().flex_col().children([
-        render_loading_row(match spec.trigger {
-            ContextPickerPopupTrigger::Mention => "Searching project context\u{2026}",
-            ContextPickerPopupTrigger::Slash => "Searching commands\u{2026}",
-        }),
-        render_loading_row("Scoring matches\u{2026}"),
-        render_loading_row("Preparing next actions\u{2026}"),
-    ]);
-
-    let synopsis = InlineDropdownSynopsis {
-        label: SharedString::from(match spec.trigger {
-            ContextPickerPopupTrigger::Mention => "Searching context",
-            ContextPickerPopupTrigger::Slash => "Searching commands",
-        }),
-        meta: SharedString::from(match spec.trigger {
-            ContextPickerPopupTrigger::Mention => "@pending",
-            ContextPickerPopupTrigger::Slash => "/pending",
-        }),
-        description: SharedString::from("Results will appear as soon as the query settles."),
-    };
-
-    InlineDropdown::new(
-        SharedString::from("context-picker-playground-loading"),
-        body.into_any_element(),
-        colors,
-    )
-    .vertical_padding(3.0)
-    .synopsis(Some(synopsis))
-    .into_any_element()
-}
-
-fn render_loading_row(label: &str) -> AnyElement {
-    let theme = get_cached_theme();
-
-    div()
-        .h(px(CONTEXT_PICKER_ROW_HEIGHT))
-        .px(px(8.0))
-        .flex()
-        .items_center()
-        .gap(px(8.0))
-        .child(
-            div().w(px(18.0)).h(px(6.0)).rounded(px(3.0)).bg(theme
-                .colors
-                .text
-                .primary
-                .with_opacity(0.08)),
-        )
-        .child(
-            div()
-                .text_xs()
-                .font_family(FONT_MONO)
-                .text_color(theme.colors.text.dimmed.with_opacity(0.65))
-                .child(label.to_string()),
-        )
-        .into_any_element()
-}
-
-fn render_empty_dropdown(spec: ContextPickerPopupPlaygroundSpec) -> AnyElement {
-    let colors = InlineDropdownColors::from_theme(&get_cached_theme());
-
-    let (message, hints) = match spec.trigger {
-        ContextPickerPopupTrigger::Mention => (
-            "No matching context",
-            vec![
-                render_hint_chip("Esc dismiss"),
-                render_hint_chip("@selection"),
-                render_hint_chip("@clipboard"),
-            ],
-        ),
-        ContextPickerPopupTrigger::Slash => (
-            "No matching commands",
-            vec![
-                render_hint_chip("Esc dismiss"),
-                render_hint_chip("\u{21b5} insert raw"),
-                render_hint_chip("/context"),
-            ],
-        ),
-    };
-
-    InlineDropdown::new(
-        SharedString::from("context-picker-playground-empty"),
-        div().into_any_element(),
-        colors,
-    )
-    .empty_state(InlineDropdownEmptyState {
-        message: SharedString::from(message),
-        hints,
-    })
-    .vertical_padding(6.0)
-    .into_any_element()
-}
-
-fn render_error_dropdown(spec: ContextPickerPopupPlaygroundSpec) -> AnyElement {
-    let colors = InlineDropdownColors::from_theme(&get_cached_theme());
-
-    let (message, hints) = match spec.trigger {
-        ContextPickerPopupTrigger::Mention => (
-            "Context sources unavailable",
-            vec![
-                render_hint_chip("Retry"),
-                render_hint_chip("Esc dismiss"),
-                render_hint_chip("@selection"),
-            ],
-        ),
-        ContextPickerPopupTrigger::Slash => (
-            "Command catalog unavailable",
-            vec![
-                render_hint_chip("Retry"),
-                render_hint_chip("Esc dismiss"),
-                render_hint_chip("/browser"),
-            ],
-        ),
-    };
-
-    InlineDropdown::new(
-        SharedString::from("context-picker-playground-error"),
-        div().into_any_element(),
-        colors,
-    )
-    .empty_state(InlineDropdownEmptyState {
-        message: SharedString::from(message),
-        hints,
-    })
-    .vertical_padding(6.0)
-    .into_any_element()
-}
-
-fn render_hint_chip(label: &str) -> AnyElement {
-    let theme = get_cached_theme();
-
-    div()
-        .px(px(6.0))
-        .py(px(2.0))
-        .rounded(px(4.0))
-        .bg(theme.colors.text.primary.with_opacity(0.06))
-        .child(
-            div()
-                .text_xs()
-                .font_family(FONT_MONO)
-                .text_color(theme.colors.text.dimmed.with_opacity(0.75))
-                .child(label.to_string()),
-        )
-        .into_any_element()
 }
 
 fn render_section_header(label: &str) -> AnyElement {

@@ -1113,6 +1113,8 @@ app.run(move |cx: &mut App| {
                     crate::footer_popup::FooterAction::Run => "run",
                     crate::footer_popup::FooterAction::Actions => "actions",
                     crate::footer_popup::FooterAction::Ai => "ai",
+                    crate::footer_popup::FooterAction::Apply => "apply",
+                    crate::footer_popup::FooterAction::Close => "close",
                 };
                 let app_entity_inner = app_entity_for_footer.clone();
                 let window_inner = window_for_footer;
@@ -1135,6 +1137,13 @@ app.run(move |cx: &mut App| {
                                 }
                                 crate::footer_popup::FooterAction::Ai => {
                                     view.open_tab_ai_chat(ctx)
+                                }
+                                crate::footer_popup::FooterAction::Apply
+                                | crate::footer_popup::FooterAction::Close => {
+                                    // Dispatched via the ui_window.rs handler
+                                    view.dispatch_main_window_footer_action(
+                                        action, win, ctx, "native_footer",
+                                    );
                                 }
                             }
                         });
