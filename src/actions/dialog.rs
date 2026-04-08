@@ -11,7 +11,6 @@ use crate::designs::{get_tokens, DesignColors, DesignVariant};
 use crate::logging;
 use crate::protocol::ProtocolAction;
 use crate::theme;
-use crate::ui_foundation::should_submit_selected_row_click;
 use gpui::{
     div, list, prelude::*, px, rgb, rgba, svg, App, BoxShadow, Context, ElementId, FocusHandle,
     Focusable, ListAlignment, ListState, Render, SharedString, Window,
@@ -378,6 +377,14 @@ pub enum ActionsDialogEscapeOutcome {
     CloseDialog,
 }
 
+#[derive(Clone, Copy)]
+pub struct AcpActionsDialogContext<'a> {
+    pub(crate) catalog_entries: &'a [crate::ai::acp::AcpAgentCatalogEntry],
+    pub(crate) selected_agent_id: Option<&'a str>,
+    pub(crate) available_models: &'a [crate::ai::acp::config::AcpModelEntry],
+    pub(crate) selected_model_id: Option<&'a str>,
+}
+
 /// ActionsDialog - Compact overlay popup for quick actions
 /// Implements Raycast-style design with individual keycap shortcuts
 ///
@@ -436,6 +443,9 @@ pub struct ActionsDialog {
     drill_down_routes: HashMap<String, ActionsDialogRoute>,
     /// Original search placeholder to restore when no route overrides it.
     default_search_placeholder: Option<String>,
+    /// Tracks the last row armed by a mouse click so actions require an explicit
+    /// second click, while native double-click still submits immediately.
+    mouse_armed_row: Option<usize>,
 }
 
 #[cfg(test)]
@@ -622,6 +632,7 @@ impl ActionsDialog {
             on_close: None,
             route_stack: Vec::new(),
             drill_down_routes: HashMap::new(),
+            mouse_armed_row: None,
         }
     }
 
@@ -1175,6 +1186,7 @@ impl ActionsDialog {
             return false;
         };
         self.selected_index = grouped_index;
+        self.clear_mouse_submit_arm();
         true
     }
 
@@ -1199,6 +1211,7 @@ impl ActionsDialog {
             .unwrap_or(false);
         if !restored {
             self.selected_index = initial_selection_index(&self.grouped_items);
+            self.clear_mouse_submit_arm();
         }
 
         if !self.grouped_items.is_empty() {
@@ -1228,6 +1241,7 @@ impl ActionsDialog {
             .unwrap_or(false);
         if !restored {
             self.selected_index = initial_selection_index(&self.grouped_items);
+            self.clear_mouse_submit_arm();
         }
 
         if !self.grouped_items.is_empty() {
@@ -1247,20 +1261,21 @@ impl ActionsDialog {
 
     // ── ACP chat constructor ─────────────────────────────────────────────
 
-    /// Create an ActionsDialog pre-configured for ACP Chat with a root route
-    /// containing a "Change Agent" drill-down entry and an agent picker sub-route.
+    /// Create an ActionsDialog pre-configured for ACP Chat with route-based
+    /// drill-down entries for agent and model changes.
     /// Accepts an explicit host so that detached ACP can filter unsupported actions.
     pub(crate) fn with_acp_chat_for_host(
         focus_handle: FocusHandle,
         on_select: ActionCallback,
-        catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
-        selected_agent_id: Option<&str>,
+        context: AcpActionsDialogContext<'_>,
         theme: Arc<theme::Theme>,
         host: super::builders::AcpActionsDialogHost,
     ) -> Self {
         let root_route = super::builders::get_acp_chat_root_route_for_host(
-            catalog_entries,
-            selected_agent_id,
+            context.catalog_entries,
+            context.selected_agent_id,
+            context.available_models,
+            context.selected_model_id,
             host,
         );
         let config = ActionsDialogConfig::default();
@@ -1270,8 +1285,8 @@ impl ActionsDialog {
             &format!(
                 "ActionsDialog created for ACP chat: host={:?}, selected_agent={:?}, catalog_count={}, root_actions={}",
                 host,
-                selected_agent_id,
-                catalog_entries.len(),
+                context.selected_agent_id,
+                context.catalog_entries.len(),
                 root_route.actions.len(),
             ),
         );
@@ -1292,8 +1307,16 @@ impl ActionsDialog {
         dialog.register_drill_down_route(
             super::builders::ACP_CHANGE_AGENT_ACTION_ID,
             super::builders::get_acp_agent_picker_route_for_host(
-                catalog_entries,
-                selected_agent_id,
+                context.catalog_entries,
+                context.selected_agent_id,
+                host,
+            ),
+        );
+        dialog.register_drill_down_route(
+            super::builders::ACP_CHANGE_MODEL_ACTION_ID,
+            super::builders::get_acp_model_picker_route_for_host(
+                context.available_models,
+                context.selected_model_id,
                 host,
             ),
         );
@@ -1305,15 +1328,13 @@ impl ActionsDialog {
     pub(crate) fn with_acp_chat(
         focus_handle: FocusHandle,
         on_select: ActionCallback,
-        catalog_entries: &[crate::ai::acp::AcpAgentCatalogEntry],
-        selected_agent_id: Option<&str>,
+        context: AcpActionsDialogContext<'_>,
         theme: Arc<theme::Theme>,
     ) -> Self {
         Self::with_acp_chat_for_host(
             focus_handle,
             on_select,
-            catalog_entries,
-            selected_agent_id,
+            context,
             theme,
             super::builders::AcpActionsDialogHost::Shared,
         )
@@ -1632,6 +1653,7 @@ impl ActionsDialog {
     /// - Contains match on description: +25
     /// - Results are sorted by score (descending)
     fn refilter(&mut self) {
+        self.clear_mouse_submit_arm();
         // Preserve selection if possible (track which action was selected)
         // NOTE: selected_index is an index into grouped_items, not filtered_actions.
         // We must extract the filter_idx from the GroupedActionItem first.
@@ -1869,6 +1891,7 @@ impl ActionsDialog {
             .position(|item| matches!(item, GroupedActionItem::Item(fi) if *fi == filter_pos))?;
 
         self.selected_index = grouped_idx;
+        self.clear_mouse_submit_arm();
         cx.notify();
         Some(action_id.to_string())
     }
@@ -1905,6 +1928,11 @@ const ACTIONS_DIALOG_VIBRANT_INLINE_MIN_OPACITY: f32 = 0.25;
 
 fn actions_dialog_alpha_u8(opacity: f32) -> u8 {
     (opacity.clamp(0.0, 1.0) * ACTIONS_DIALOG_COLOR_ALPHA_MAX) as u8
+}
+
+#[inline]
+fn should_submit_actions_dialog_row_click(was_mouse_armed: bool, click_count: usize) -> bool {
+    was_mouse_armed || click_count >= 2
 }
 
 fn actions_dialog_search_border_alpha(border_inactive_opacity: f32) -> u8 {
@@ -1950,6 +1978,10 @@ fn actions_dialog_main_window_background_alpha(theme: &theme::Theme) -> u8 {
 }
 
 impl ActionsDialog {
+    fn clear_mouse_submit_arm(&mut self) {
+        self.mouse_armed_row = None;
+    }
+
     /// Move selection up, skipping section headers
     ///
     /// When moving up and landing on a section header, we must search UPWARD
@@ -1965,6 +1997,7 @@ impl ActionsDialog {
         for i in (0..self.selected_index).rev() {
             if matches!(self.grouped_items.get(i), Some(GroupedActionItem::Item(_))) {
                 self.selected_index = i;
+                self.clear_mouse_submit_arm();
                 self.list_state.scroll_to_reveal_item(self.selected_index);
                 logging::log_debug(
                     "ACTIONS_SCROLL",
@@ -1984,6 +2017,7 @@ impl ActionsDialog {
             for i in new_index..self.grouped_items.len() {
                 if matches!(self.grouped_items.get(i), Some(GroupedActionItem::Item(_))) {
                     self.selected_index = i;
+                    self.clear_mouse_submit_arm();
                     self.list_state.scroll_to_reveal_item(self.selected_index);
                     logging::log_debug(
                         "ACTIONS_SCROLL",
@@ -2047,6 +2081,7 @@ impl ActionsDialog {
             return;
         }
         self.selected_index = ix;
+        self.clear_mouse_submit_arm();
         self.list_state.scroll_to_reveal_item(self.selected_index);
         let action_id = self
             .get_selected_action()
@@ -2060,9 +2095,9 @@ impl ActionsDialog {
         cx.notify();
     }
 
-    /// Handle a click on a row: first click selects, the next click on the
-    /// selected row submits, and native double-clicks also submit. Section
-    /// headers are ignored.
+    /// Handle a click on a row: first click selects, a second click on the
+    /// same mouse-armed row submits, and native double-clicks also submit.
+    /// Section headers are ignored.
     pub fn handle_row_click(
         &mut self,
         ix: usize,
@@ -2075,12 +2110,14 @@ impl ActionsDialog {
         }
 
         let was_selected = self.selected_index == ix;
+        let was_mouse_armed = self.mouse_armed_row == Some(ix);
         if !was_selected {
             self.select_grouped_item(ix, cx);
         }
 
         let click_count = event.click_count();
-        let should_submit = should_submit_selected_row_click(was_selected, click_count);
+        let should_submit = should_submit_actions_dialog_row_click(was_mouse_armed, click_count);
+        self.mouse_armed_row = Some(ix);
 
         let action_id = self
             .grouped_items
@@ -2099,10 +2136,12 @@ impl ActionsDialog {
             action_id = %action_id,
             click_count = click_count,
             was_selected = was_selected,
+            was_mouse_armed = was_mouse_armed,
             should_submit = should_submit,
         );
 
         if should_submit {
+            self.clear_mouse_submit_arm();
             let _ = self.activate_selected(cx);
         }
     }
@@ -3956,20 +3995,17 @@ mod actions_dialog_spec_tests {
 
 #[cfg(test)]
 mod actions_dialog_click_contract_tests {
-    use std::fs;
+    use super::should_submit_actions_dialog_row_click;
 
     #[test]
-    fn actions_dialog_uses_shared_selected_row_click_helper() {
-        let source = fs::read_to_string("src/actions/dialog.rs")
-            .expect("Failed to read src/actions/dialog.rs");
+    fn actions_dialog_requires_second_single_click_after_mouse_selection() {
+        assert!(!should_submit_actions_dialog_row_click(false, 1));
+        assert!(should_submit_actions_dialog_row_click(true, 1));
+    }
 
-        assert!(
-            source.contains("use crate::ui_foundation::should_submit_selected_row_click;"),
-            "actions dialog should import the shared selected-row click helper"
-        );
-        assert!(
-            source.contains("should_submit_selected_row_click(was_selected, click_count)"),
-            "actions dialog should delegate row submission clicks to the shared helper"
-        );
+    #[test]
+    fn actions_dialog_still_submits_on_native_double_click() {
+        assert!(should_submit_actions_dialog_row_click(false, 2));
+        assert!(should_submit_actions_dialog_row_click(false, 3));
     }
 }
