@@ -226,15 +226,54 @@ impl AcpHistoryPopupWindow {
         self.snapshot = snapshot;
     }
 
-    fn select_entry(&self, entry: &AcpHistoryEntry, cx: &mut App) {
+    /// Default action (Enter / click): attach a summary as a context chip.
+    fn attach_summary(&self, entry: &AcpHistoryEntry, cx: &mut App) {
+        if let Some(view) = self.source_view.upgrade() {
+            let session_id = entry.session_id.clone();
+            view.update(cx, |view, cx| {
+                view.history_menu = None;
+                view.sync_history_popup_window_from_cached_parent(cx);
+                if let Err(error) = view.attach_history_session(
+                    &session_id,
+                    super::history_attachment::AcpHistoryAttachMode::Summary,
+                    cx,
+                ) {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_history_popup_attach_failed",
+                        session_id = %session_id,
+                        error = %error,
+                    );
+                }
+                cx.notify();
+            });
+        }
+        close_history_popup_window(cx);
+    }
+
+    /// Alternate action (Cmd+Enter): load full transcript into ACP thread.
+    fn load_transcript(&self, entry: &AcpHistoryEntry, cx: &mut App) {
         if let Some(view) = self.source_view.upgrade() {
             let entry = entry.clone();
             view.update(cx, |view, cx| {
                 view.select_history_from_popup(&entry, cx);
             });
-        } else {
-            close_history_popup_window(cx);
         }
+        close_history_popup_window(cx);
+    }
+
+    fn navigate(&mut self, delta: i32, cx: &mut Context<Self>) {
+        if self.snapshot.entries.is_empty() {
+            return;
+        }
+        let len = self.snapshot.entries.len();
+        let idx = self.snapshot.selected_index;
+        self.snapshot.selected_index = if delta < 0 {
+            idx.saturating_sub((-delta) as usize)
+        } else {
+            (idx + delta as usize).min(len.saturating_sub(1))
+        };
+        cx.notify();
     }
 }
 
@@ -260,6 +299,39 @@ impl Render for AcpHistoryPopupWindow {
         div()
             .track_focus(&self.focus_handle)
             .id("acp-history-popup")
+            .on_key_down(
+                cx.listener(|this, event: &gpui::KeyDownEvent, _window, cx| {
+                    let key = event.keystroke.key.as_str();
+                    let has_cmd = event.keystroke.modifiers.platform;
+
+                    if crate::ui_foundation::is_key_up(key) {
+                        this.navigate(-1, cx);
+                        cx.stop_propagation();
+                    } else if crate::ui_foundation::is_key_down(key) {
+                        this.navigate(1, cx);
+                        cx.stop_propagation();
+                    } else if crate::ui_foundation::is_key_enter(key) {
+                        if let Some(entry) = this
+                            .snapshot
+                            .entries
+                            .get(this.snapshot.selected_index)
+                            .cloned()
+                        {
+                            if has_cmd {
+                                this.load_transcript(&entry, cx);
+                            } else {
+                                this.attach_summary(&entry, cx);
+                            }
+                        }
+                        cx.stop_propagation();
+                    } else if crate::ui_foundation::is_key_escape(key) {
+                        close_history_popup_window(cx);
+                        cx.stop_propagation();
+                    } else {
+                        cx.propagate();
+                    }
+                }),
+            )
             .w_full()
             .h_full()
             .px(px(HISTORY_POPUP_SIDE_MARGIN))
@@ -338,7 +410,7 @@ impl Render for AcpHistoryPopupWindow {
                                         .when(is_selected, |d| d.bg(selected_bg))
                                         .when(!is_selected, |d| d.hover(|d| d.bg(hover_bg)))
                                         .on_click(cx.listener(move |this, _event, _window, cx| {
-                                            this.select_entry(&entry_clone, cx);
+                                            this.attach_summary(&entry_clone, cx);
                                         }))
                                         .child(
                                             div()
@@ -365,7 +437,7 @@ impl Render for AcpHistoryPopupWindow {
                                                         .overflow_hidden()
                                                         .text_ellipsis()
                                                         .whitespace_nowrap()
-                                                        .child(entry.first_message.clone()),
+                                                        .child(entry.title_display().to_string()),
                                                 )
                                                 .child(
                                                     div()
@@ -391,7 +463,8 @@ impl Render for AcpHistoryPopupWindow {
                     ))
                     .child(div().w_full().child(crate::components::HintStrip::new(vec![
                         "↑↓ Navigate".into(),
-                        "↵ Load".into(),
+                        "↵ Attach Summary".into(),
+                        "⌘↵ Load Transcript".into(),
                         "Esc Close".into(),
                     ]))),
             )
@@ -518,12 +591,14 @@ mod tests {
                     first_message: "First".to_string(),
                     message_count: 3,
                     session_id: "one".to_string(),
+                    ..Default::default()
                 },
                 AcpHistoryEntry {
                     timestamp: "2026-04-04T12:00:00Z".to_string(),
                     first_message: "Second".to_string(),
                     message_count: 5,
                     session_id: "two".to_string(),
+                    ..Default::default()
                 },
             ],
         };
@@ -541,6 +616,7 @@ mod tests {
                 first_message: "First".to_string(),
                 message_count: 3,
                 session_id: "one".to_string(),
+                ..Default::default()
             }],
         };
         let parent = gpui::Bounds {

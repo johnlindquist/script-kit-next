@@ -15,6 +15,8 @@ pub enum PortalKind {
     FileSearch,
     /// Open the visual clipboard history browser.
     ClipboardHistory,
+    /// Open the ACP conversation history popup (prefiltered by typed query).
+    AcpHistory,
 }
 
 /// The kind of item in the context picker.

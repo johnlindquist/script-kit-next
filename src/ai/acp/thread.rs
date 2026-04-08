@@ -1106,20 +1106,16 @@ impl AcpThread {
                 }
                 changed |= self.set_status(AcpThreadStatus::Idle);
 
-                // Save conversation summary + full messages to history
-                if let Some(first_user_msg) = self
+                // Save conversation summary + full messages to history.
+                // Build a rich index entry from the full conversation so
+                // search_history() can match on later transcript content.
+                if self
                     .messages
                     .iter()
-                    .find(|m| matches!(m.role, AcpThreadMessageRole::User))
+                    .any(|m| matches!(m.role, AcpThreadMessageRole::User))
                 {
                     let timestamp = chrono::Utc::now().to_rfc3339();
-                    super::history::save_history_entry(&super::history::AcpHistoryEntry {
-                        timestamp: timestamp.clone(),
-                        first_message: first_user_msg.body.chars().take(100).collect(),
-                        message_count: self.messages.len(),
-                        session_id: self.ui_thread_id.clone(),
-                    });
-                    super::history::save_conversation(&super::history::SavedConversation {
+                    let conversation = super::history::SavedConversation {
                         session_id: self.ui_thread_id.clone(),
                         timestamp,
                         messages: self
@@ -1130,7 +1126,20 @@ impl AcpThread {
                                 body: m.body.to_string(),
                             })
                             .collect(),
-                    });
+                    };
+                    super::history::save_conversation(&conversation);
+
+                    if let Some(entry) = super::history::build_history_entry(&conversation) {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_history_index_entry_built",
+                            session_id = %entry.session_id,
+                            title = %entry.title_display(),
+                            preview_len = entry.preview.len(),
+                            message_count = entry.message_count,
+                        );
+                        super::history::save_history_entry(&entry);
+                    }
                 }
             }
             AcpEvent::SetupRequired {

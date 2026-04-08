@@ -161,17 +161,17 @@ fn context_picker_query_filters_irrelevant_builtins() {
 fn context_picker_builtins_grouped_before_files() {
     let items = build_picker_items(ContextPickerTrigger::Mention, "con");
 
-    let mut seen_non_builtin = false;
+    let mut seen_non_system = false;
     for item in &items {
         match &item.kind {
-            ContextPickerItemKind::BuiltIn(_) => {
+            ContextPickerItemKind::BuiltIn(_) | ContextPickerItemKind::Portal(_) => {
                 assert!(
-                    !seen_non_builtin,
-                    "Built-in items must appear before file/folder items"
+                    !seen_non_system,
+                    "Built-in/portal items must appear before file/folder items"
                 );
             }
             _ => {
-                seen_non_builtin = true;
+                seen_non_system = true;
             }
         }
     }

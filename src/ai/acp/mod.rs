@@ -22,6 +22,7 @@ pub(crate) mod context;
 pub(crate) mod events;
 pub(crate) mod handlers;
 pub(crate) mod history;
+pub(crate) mod history_attachment;
 pub(crate) mod history_popup;
 pub(crate) mod model_selector_popup;
 pub(crate) mod permission_broker;
