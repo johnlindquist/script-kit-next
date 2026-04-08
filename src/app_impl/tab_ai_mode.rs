@@ -810,11 +810,11 @@ impl ScriptListApp {
             &request.source_view,
             pending_script_list_trigger,
         );
-        let use_ask_anything_fallback = should_stage_focused_part
-            && self.should_use_tab_ai_ask_anything_fallback(
-                &request.source_view,
-                &request.ui_snapshot,
-            );
+        let use_ask_anything_fallback = self.should_use_tab_ai_ask_anything_fallback(
+            &request.source_view,
+            &request.ui_snapshot,
+        );
+        let use_ask_anything_fallback = should_stage_focused_part && use_ask_anything_fallback;
 
         // Explicit AI commands (screen, focused window, selected text, browser tab)
         // must force ambient capture even when the source surface has a focused item.
@@ -829,10 +829,9 @@ impl ScriptListApp {
             );
         }
 
-        let focused_part = if !should_stage_focused_part
-            || use_ask_anything_fallback
-            || explicit_ambient_chip_label.is_some()
-        {
+        let focused_part = if use_ask_anything_fallback || explicit_ambient_chip_label.is_some() {
+            None
+        } else if !should_stage_focused_part {
             None
         } else {
             self.build_tab_ai_focused_part_for_view(&request.source_view, &request.ui_snapshot)
@@ -986,6 +985,33 @@ impl ScriptListApp {
             .map(|s| s.to_string())
     }
 
+    /// Build the ACP composer text for the first render of a new launch.
+    ///
+    /// ScriptList-triggered `@` and `/` routes prefill the raw trigger so the
+    /// ACP handoff never paints an empty composer before the picker opens.
+    fn tab_ai_acp_initial_input_for_launch(
+        prompt_type: &str,
+        effective_intent: Option<&str>,
+        pending_script_list_trigger: Option<char>,
+        force_acp_surface: bool,
+    ) -> Option<String> {
+        if let Some(intent) = effective_intent {
+            if force_acp_surface {
+                return Some(intent.to_string());
+            }
+
+            return Some(
+                crate::ai::harness::build_tab_ai_acp_initial_input_for_prompt(prompt_type, intent)
+                    .text,
+            );
+        }
+
+        match (prompt_type, pending_script_list_trigger) {
+            ("ScriptList", Some(trigger @ ('/' | '@'))) => Some(trigger.to_string()),
+            _ => None,
+        }
+    }
+
     /// Return a chip label for entry modes that must always use ambient capture,
     /// even if the source view has a resolvable focused target.
     fn tab_ai_explicit_ambient_chip_label(
@@ -1099,6 +1125,7 @@ impl ScriptListApp {
         let open_started_at = std::time::Instant::now();
         let source_view = request.source_view.clone();
         let had_harness_session = self.tab_ai_harness.is_some();
+        let pending_script_list_trigger = self.tab_ai_harness_script_list_trigger;
 
         // Compute canonical effective intent once, matching PTY path's normalization.
         let effective_intent = Self::tab_ai_effective_submission_intent(&request);
@@ -1108,38 +1135,47 @@ impl ScriptListApp {
         // verification contract as the PTY submission path.
         // When force_acp_surface is set (Auto Submit fallback), use the raw
         // intent without script-authoring guidance — the query may be general.
-        let acp_initial_input = effective_intent.clone().map(|intent| {
-            if force_acp_surface {
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "tab_ai_acp_initial_input_built",
-                    prompt_type = %request.ui_snapshot.prompt_type,
-                    guidance_appended = false,
-                    forced_by_script_list_submit = false,
-                    force_acp_surface = true,
-                );
-                intent
-            } else {
-                let initial_input =
-                    crate::ai::harness::build_tab_ai_acp_initial_input_for_prompt(
+        let acp_initial_input = effective_intent
+            .clone()
+            .map(|intent| {
+                if force_acp_surface {
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "tab_ai_acp_initial_input_built",
+                        prompt_type = %request.ui_snapshot.prompt_type,
+                        guidance_appended = false,
+                        forced_by_script_list_submit = false,
+                        force_acp_surface = true,
+                    );
+                    intent
+                } else {
+                    let initial_input = crate::ai::harness::build_tab_ai_acp_initial_input_for_prompt(
                         &request.ui_snapshot.prompt_type,
                         &intent,
                     );
 
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "tab_ai_acp_initial_input_built",
-                    prompt_type = %request.ui_snapshot.prompt_type,
-                    guidance_appended = initial_input.guidance_appended,
-                    forced_by_script_list_submit = initial_input.forced_by_script_list_submit,
-                    includes_script_authoring_skill = initial_input.includes_script_authoring_skill,
-                    includes_bun_build_verification = initial_input.includes_bun_build_verification,
-                    includes_bun_execute_verification = initial_input.includes_bun_execute_verification,
-                );
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "tab_ai_acp_initial_input_built",
+                        prompt_type = %request.ui_snapshot.prompt_type,
+                        guidance_appended = initial_input.guidance_appended,
+                        forced_by_script_list_submit = initial_input.forced_by_script_list_submit,
+                        includes_script_authoring_skill = initial_input.includes_script_authoring_skill,
+                        includes_bun_build_verification = initial_input.includes_bun_build_verification,
+                        includes_bun_execute_verification = initial_input.includes_bun_execute_verification,
+                    );
 
-                initial_input.text
-            }
-        });
+                    initial_input.text
+                }
+            })
+            .or_else(|| {
+                Self::tab_ai_acp_initial_input_for_launch(
+                    &request.ui_snapshot.prompt_type,
+                    None,
+                    pending_script_list_trigger,
+                    force_acp_surface,
+                )
+            });
 
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -1147,6 +1183,8 @@ impl ScriptListApp {
             auto_submit,
             has_entry_intent = request.entry_intent.is_some(),
             had_harness_session,
+            pending_script_list_trigger = ?pending_script_list_trigger,
+            prefilled_len = acp_initial_input.as_ref().map(|text| text.len()).unwrap_or(0),
         );
 
         // --- Permission broker + ACP connection ---
@@ -4819,6 +4857,66 @@ mod tests {
             },
             Some('@'),
         ));
+    }
+
+    #[test]
+    fn acp_initial_input_prefills_script_list_triggers_without_intent() {
+        assert_eq!(
+            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+                "ScriptList",
+                None,
+                Some('@'),
+                false,
+            )
+            .as_deref(),
+            Some("@")
+        );
+        assert_eq!(
+            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+                "ScriptList",
+                None,
+                Some('/'),
+                false,
+            )
+            .as_deref(),
+            Some("/")
+        );
+    }
+
+    #[test]
+    fn acp_initial_input_does_not_prefill_non_script_list_triggers() {
+        assert_eq!(
+            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+                "ThemeChooser",
+                None,
+                Some('@'),
+                false,
+            ),
+            None
+        );
+        assert_eq!(
+            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+                "ScriptList",
+                None,
+                Some('>'),
+                false,
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn acp_initial_input_prefers_effective_intent_over_script_list_trigger() {
+        assert_eq!(
+            ScriptListApp::tab_ai_acp_initial_input_for_launch(
+                "ScriptList",
+                Some("explain this code"),
+                Some('@'),
+                true,
+            )
+            .as_deref(),
+            Some("explain this code")
+        );
     }
 
     #[test]
