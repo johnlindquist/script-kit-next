@@ -1259,9 +1259,17 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/choose-theme",
-            "Choose Theme",
-            "Open the theme picker and apply a color theme with live preview",
-            vec!["theme", "appearance", "color", "dark", "light", "scheme"],
+            "Theme Designer",
+            "Design your color theme with live preview",
+            vec![
+                "theme",
+                "appearance",
+                "color",
+                "dark",
+                "light",
+                "scheme",
+                "designer",
+            ],
             BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
             "palette",
         ));
