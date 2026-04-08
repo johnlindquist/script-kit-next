@@ -68,6 +68,8 @@ fi
 ```
 The session wrapper manages the named pipe, forwarder process, and PID tracking.
 Sessions are reusable across shells — no `exec 3>` / fd 3 trick required.
+`session.sh start` means the app is stdin-ready, not necessarily capture-ready.
+Before screenshot proof, send `{"type":"show"}` and allow a short settle.
 
 **Session commands:**
 ```bash
@@ -283,10 +285,13 @@ bun scripts/agentic/verify-shot.ts --session default \
 `captureTarget` (requested vs actual window ID for identity proof),
 `visionCrops` (structured image check entries). These are the canonical fields for automated parsing.
 
-**Capture identity threading:** When verifying a detached ACP window, pass
-`--capture-window-id N` (from `automation-window.ts resolve`) to prove the
-screenshot came from the same window the state/probe RPCs targeted. The receipt
-exposes `captureTarget.requestedWindowId` and `captureTarget.actualWindowId`.
+**Capture identity threading:** Detached ACP screenshots use the inspected
+native `osWindowId`, not the automation window ID. When `--target-json` is
+present, `verify-shot.ts` auto-lifts `inspection.osWindowId` into the screenshot
+step. An explicit `--capture-window-id` is only an override and must match the
+inspected `osWindowId`. The receipt exposes `captureTarget.requestedWindowId`,
+`captureTarget.actualWindowId`, `captureRouting`, `requestedAutomationWindowId`,
+and `inspectionOsWindowId`.
 
 **Exit codes:** 0 = pass, 1 = assertion failure, 2 = infrastructure error.
 
@@ -308,8 +313,10 @@ This proves the cursor is within the visible window and the viewport bounds are 
 which catches scroll jumps, layout shifts, and cursor-out-of-view regressions.
 
 **Strict capture:** When ACP assertions are present, `verify-shot.ts` requires
-`window.ts` quartz capture with frontmost confirmation. If focus drifts, the
-capture fails instead of silently falling back to a full-screen screenshot.
+`window.ts` quartz capture with frontmost confirmation and the exact inspected
+native window ID. If focus drifts, the inspected `osWindowId` is missing, or the
+captured `windowId` differs from the requested ID, the run fails instead of
+silently falling back to a full-screen screenshot.
 
 **Rule:** The recipe must fail when ACP state contradicts expected picker/caret
 outcome, even if the screenshot capture itself succeeds. State receipt is the
@@ -430,7 +437,7 @@ bash scripts/agentic/session.sh start default
 bun scripts/agentic/index.ts acp-accept --session default --key enter --vision
 # The recipe returns a machine-readable JSON receipt with proofBundle.
 # Parse proofBundle.state, proofBundle.probe, proofBundle.screenshot, proofBundle.visionCrops
-# to verify ACP behavior programmatically. No manual PNG reading required.
+# to verify ACP behavior programmatically, then read the written PNG for final visual confirmation.
 bash scripts/agentic/session.sh stop default
 ```
 
@@ -470,7 +477,8 @@ SURFACE_ID="$(printf '%s' "$RESOLVED" | jq -r '.surfaceId')"
 
 bun scripts/agentic/index.ts acp-accept --session default --key enter \
   --target-json "$TARGET" --surface "$SURFACE_ID" --vision
-WINDOW_ID="$(printf '%s' "$RESOLVED" | jq -r '.automationWindowId')"
+INSPECTED="$(bun scripts/agentic/automation-window.ts inspect --session default --id "$(printf '%s' "$RESOLVED" | jq -r '.automationWindowId')")"
+WINDOW_ID="$(printf '%s' "$INSPECTED" | jq -r '.osWindowId')"
 
 bun scripts/agentic/index.ts acp-accept --session default --key enter \
   --target-json "$TARGET" --surface "$SURFACE_ID" --vision

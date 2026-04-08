@@ -39,6 +39,7 @@
 
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
+                                sync_main_automation_window(None, true, true);
 
                                 // Send RunScript message to be handled
                                 view.handle_prompt_message(PromptMessage::RunScript { path: path.clone() }, ctx);
@@ -117,6 +118,7 @@
 
                                 let focus_handle = view.focus_handle(ctx);
                                 window.focus(&focus_handle, ctx);
+                                sync_main_automation_window(None, true, true);
                             }
                             ExternalCommand::Hide { ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
@@ -141,6 +143,7 @@
                                 }
 
                                 script_kit_gpui::set_main_window_visible(false);
+                                sync_main_automation_window(current_main_automation_bounds(), false, false);
 
                                 // Check if Notes or AI windows are open
                                 let notes_open = notes::is_notes_window_open();

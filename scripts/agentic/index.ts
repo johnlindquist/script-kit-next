@@ -1175,6 +1175,33 @@ async function recipeAcpDetachedAccept(
     osWindowId,
   };
 
+  if (osWindowId == null) {
+    console.error(
+      JSON.stringify({
+        event: "agentic.proof_flow.os_window_id_required",
+        automationWindowId,
+        surfaceId,
+        reason: "detached ACP proof requires osWindowId for exact screenshot routing",
+      })
+    );
+    steps.push({
+      name: "require-os-window-id",
+      status: "fail",
+      output: {
+        error: "detached ACP proof requires osWindowId from inspect output",
+        resolved,
+      },
+      durationMs: 0,
+    });
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "acp-detached-accept",
+      status: "error",
+      steps,
+      summary: "Cannot proceed: detached ACP proof requires osWindowId for exact screenshot routing",
+    };
+  }
+
   // 2. Emit structured identity bundle log on stderr
   console.error(
     JSON.stringify({
@@ -1186,8 +1213,8 @@ async function recipeAcpDetachedAccept(
   );
 
   // 3. Delegate to the standard picker-accept recipe with resolved identity threaded through.
-  //    Prefer osWindowId (native CGWindowID from inspect) for strict capture proof.
-  const captureWindowId = osWindowId ?? automationWindowId ?? undefined;
+  //    Use osWindowId (native CGWindowID from inspect) for strict capture proof.
+  const captureWindowId = osWindowId ?? undefined;
   const acceptResult = await recipeAcpPickerAccept(session, acceptKey, {
     emitVision: opts.emitVision,
     target: targetJson,

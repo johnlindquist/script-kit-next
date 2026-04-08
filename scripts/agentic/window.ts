@@ -568,6 +568,19 @@ async function captureWindow(
       stderrLog("window_capture_screencapture_l_failed", { attempt, windowId, exitCode: code, stderr: stderr.trim() });
     }
 
+    if (exactWindowId && exactWindowId > 0) {
+      if (attempt === retryCount) {
+        throw Object.assign(
+          new Error(
+            `Targeted window capture failed for exact window ID ${exactWindowId} after ${retryCount} attempts`
+          ),
+          { code: "CAPTURE_FAILED" }
+        );
+      }
+      await Bun.sleep(settleMs);
+      continue;
+    }
+
     // Fallback: full-screen capture (non-interactive)
     if (attempt === retryCount) {
       const proc2 = Bun.spawn(["screencapture", "-o", "-x", path], {

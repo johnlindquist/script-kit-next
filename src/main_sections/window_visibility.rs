@@ -5,6 +5,57 @@
 // scattered across hotkey handler, tray menu, stdin commands, and fallback.
 // All show/hide paths should use these helpers for consistency.
 
+fn automation_window_bounds_from_gpui(
+    bounds: gpui::Bounds<gpui::Pixels>,
+) -> crate::protocol::AutomationWindowBounds {
+    crate::protocol::AutomationWindowBounds {
+        x: f32::from(bounds.origin.x) as f64,
+        y: f32::from(bounds.origin.y) as f64,
+        width: f32::from(bounds.size.width) as f64,
+        height: f32::from(bounds.size.height) as f64,
+    }
+}
+
+fn current_main_automation_bounds() -> Option<crate::protocol::AutomationWindowBounds> {
+    crate::platform::get_main_window_bounds().map(|(x, y, width, height)| {
+        crate::protocol::AutomationWindowBounds {
+            x,
+            y,
+            width,
+            height,
+        }
+    })
+}
+
+fn sync_main_automation_window(
+    bounds: Option<crate::protocol::AutomationWindowBounds>,
+    visible: bool,
+    focused: bool,
+) {
+    let Some(handle) = crate::get_main_window_handle() else {
+        tracing::debug!(
+            target: "script_kit::automation",
+            visible,
+            focused,
+            "automation.main_window_sync_skipped_missing_handle"
+        );
+        return;
+    };
+
+    crate::windows::upsert_runtime_window_handle("main", handle);
+    crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+        id: "main".to_string(),
+        kind: crate::protocol::AutomationWindowKind::Main,
+        title: Some("Script Kit".to_string()),
+        focused,
+        visible,
+        semantic_surface: Some("scriptList".to_string()),
+        bounds: bounds.or_else(current_main_automation_bounds),
+        parent_window_id: None,
+        parent_kind: None,
+    });
+}
+
 /// Show the main window with proper positioning, panel configuration, and focus.
 ///
 /// This is the canonical way to show the main window. It:
@@ -237,6 +288,7 @@ fn show_main_window_helper(
                 });
 
                 logging::log("VISIBILITY", "Main window shown and focused");
+                sync_main_automation_window(None, true, true);
             });
         }
     })
@@ -295,6 +347,7 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
 
     // 2. Set visibility state
     set_main_window_visible(false);
+    sync_main_automation_window(current_main_automation_bounds(), false, false);
     crate::footer_popup::close_main_footer_popup(cx);
 
     // 3. Check secondary windows BEFORE the update closure
