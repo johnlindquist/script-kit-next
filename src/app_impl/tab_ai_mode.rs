@@ -67,6 +67,8 @@ impl ScriptListApp {
     ) {
         let app_entity = cx.entity().clone();
         view_entity.update(cx, |view, _cx| {
+            view.set_uses_native_main_window_footer(true);
+
             let actions_app = app_entity.clone();
             view.set_on_toggle_actions(move |window, cx| {
                 actions_app.update(cx, |app, cx| {

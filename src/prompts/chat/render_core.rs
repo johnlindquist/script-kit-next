@@ -26,6 +26,31 @@ impl ChatPrompt {
         gpui::SharedString::from(parts.join(" · "))
     }
 
+    /// Build a `FooterAccessoryConfig` for the native main-window footer.
+    /// Returns `None` in mini mode (mini prompts don't have status text).
+    pub(crate) fn native_footer_accessory(
+        &self,
+    ) -> Option<crate::footer_popup::FooterAccessoryConfig> {
+        if self.mini_mode {
+            return None;
+        }
+        let helper_text = self.footer_status_text().to_string();
+
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "chat_prompt_native_footer_accessory_resolved",
+            helper_text = %helper_text,
+            is_streaming = self.is_streaming(),
+            script_generation_mode = self.script_generation_mode,
+            "Resolved ChatPrompt native footer accessory"
+        );
+
+        Some(
+            crate::footer_popup::FooterAccessoryConfig::new(helper_text)
+                .activity_dot(self.is_streaming()),
+        )
+    }
+
     fn render_mini_hint_strip(&self) -> impl IntoElement {
         let hints = crate::components::universal_prompt_hints();
         crate::components::emit_prompt_hint_audit("prompts::chat::mini", &hints);

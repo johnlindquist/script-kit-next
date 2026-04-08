@@ -204,12 +204,17 @@ mod tests {
         let dispatcher_pos = content
             .find("fn dispatch_main_window_footer_action")
             .expect("dispatch_main_window_footer_action must exist in ui_window.rs");
-        let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 3000)];
+        let dispatcher_section = &content[dispatcher_pos..content.len().min(dispatcher_pos + 5000)];
 
         assert!(
             dispatcher_section.contains("FooterAction::Run")
                 && dispatcher_section.contains("execute_selected"),
             "FooterAction::Run must dispatch to execute_selected()"
+        );
+        assert!(
+            dispatcher_section.contains("FooterAction::Send")
+                && dispatcher_section.contains("trigger_submit_from_host"),
+            "FooterAction::Send must dispatch to trigger_submit_from_host()"
         );
         assert!(
             dispatcher_section.contains("FooterAction::Actions")
@@ -272,8 +277,8 @@ mod tests {
         let handler_section = &content[handler_pos..content.len().min(handler_pos + 1500)];
 
         assert!(
-            handler_section.contains("main_window_footer_config()"),
-            "Native footer handler must check main_window_footer_config() to guard dispatch"
+            handler_section.contains("main_window_footer_surface()"),
+            "Native footer handler must check main_window_footer_surface() to guard dispatch"
         );
         assert!(
             handler_section.contains("is_main_window_visible()"),

@@ -188,6 +188,9 @@ pub(crate) struct AcpChatView {
     /// Queued history resume request — consumed by the ACP open path
     /// to load a saved conversation by session_id.
     pending_history_resume: Option<AcpHistoryResumeRequest>,
+    /// When `true`, the main-window native footer owns this surface's hint
+    /// strip, so the in-panel GPUI toolbar should be suppressed.
+    uses_native_main_window_footer: bool,
     /// Host-owned footer callback for toggling the actions popup.
     on_toggle_actions: Option<AcpFooterActionHandler>,
     /// Host-owned footer callback for closing the ACP surface.
@@ -347,6 +350,31 @@ impl AcpChatView {
         callback: impl Fn(crate::ai::window::context_picker::types::PortalKind, &mut App) + 'static,
     ) {
         self.on_open_portal = Some(std::sync::Arc::new(callback));
+    }
+
+    pub(crate) fn set_uses_native_main_window_footer(&mut self, enabled: bool) {
+        self.uses_native_main_window_footer = enabled;
+    }
+
+    /// Trigger a submit from the host (native footer Send button).
+    pub(crate) fn trigger_submit_from_host(&mut self, cx: &mut Context<Self>) {
+        self.submit_with_expanded_tokens(cx);
+    }
+
+    /// Build a `FooterAccessoryConfig` reflecting the live thread state.
+    pub(crate) fn native_footer_accessory(
+        &self,
+        cx: &App,
+    ) -> crate::footer_popup::FooterAccessoryConfig {
+        let thread = self.live_thread().read(cx);
+        let is_streaming = matches!(thread.status, AcpThreadStatus::Streaming);
+        let model = thread.selected_model_display().to_string();
+        let text = if is_streaming {
+            format!("Streaming \u{00b7} {model}")
+        } else {
+            model
+        };
+        crate::footer_popup::FooterAccessoryConfig::new(text).activity_dot(is_streaming)
     }
 
     /// Register an inline mention token as owned so the mention sync system
@@ -1079,6 +1107,7 @@ impl AcpChatView {
             test_probe: AcpTestProbe::default(),
             pending_retry_request: None,
             pending_history_resume: None,
+            uses_native_main_window_footer: false,
             on_toggle_actions: None,
             on_close_requested: None,
             on_open_history_command: None,
@@ -1126,6 +1155,7 @@ impl AcpChatView {
             test_probe: AcpTestProbe::default(),
             pending_retry_request: None,
             pending_history_resume: None,
+            uses_native_main_window_footer: false,
             on_toggle_actions: None,
             on_close_requested: None,
             on_open_history_command: None,
@@ -2523,7 +2553,16 @@ impl AcpChatView {
             .into_any_element()
     }
 
-    fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_toolbar(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
+        if self.uses_native_main_window_footer {
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "acp_toolbar_suppressed_for_native_footer",
+                "Suppressed ACP GPUI toolbar because the main-window native footer owns this surface"
+            );
+            return div().into_any_element();
+        }
+
         let theme = theme::get_cached_theme();
         let is_streaming = matches!(
             self.live_thread().read(cx).status,
@@ -2618,6 +2657,7 @@ impl AcpChatView {
                 ],
                 hint_text_rgba,
             ))
+            .into_any_element()
     }
 
     fn render_send_button(

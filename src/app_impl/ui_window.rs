@@ -50,6 +50,27 @@ impl ScriptListApp {
             crate::footer_popup::FooterAction::Run => {
                 self.execute_selected(cx);
             }
+            crate::footer_popup::FooterAction::Send => {
+                if let AppView::AcpChatView { entity } = &self.current_view {
+                    let entity = entity.clone();
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "acp_chat_footer_send",
+                        source,
+                        "Dispatching ACP send from native footer"
+                    );
+                    entity.update(cx, |view, cx| {
+                        view.trigger_submit_from_host(cx);
+                    });
+                } else {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "main_window_footer_send_ignored",
+                        view = ?self.current_view,
+                        "Ignored Send footer action outside AcpChatView"
+                    );
+                }
+            }
             crate::footer_popup::FooterAction::Actions => {
                 let handled = self.dispatch_actions_toggle_for_current_view(window, cx, source);
                 tracing::info!(
@@ -95,7 +116,20 @@ impl ScriptListApp {
                     "Closing current footer-owned surface"
                 );
 
-                if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+                if matches!(
+                    self.current_view,
+                    AppView::AcpChatView { .. } | AppView::QuickTerminalView { .. }
+                ) {
+                    let event_name = if matches!(self.current_view, AppView::AcpChatView { .. }) {
+                        "acp_chat_footer_close"
+                    } else {
+                        "quick_terminal_footer_close"
+                    };
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = event_name,
+                        "Closing surface from native footer"
+                    );
                     self.close_tab_ai_harness_terminal_with_window(window, cx);
                 } else {
                     self.go_back_or_close(window, cx);
@@ -272,26 +306,95 @@ impl ScriptListApp {
 
     pub(crate) fn main_window_footer_config(
         &self,
+        cx: &gpui::App,
     ) -> Option<crate::footer_popup::MainWindowFooterConfig> {
         use crate::footer_popup::MainWindowFooterConfig;
 
-        let surface = self.main_window_footer_surface()?;
-        let buttons = self.main_window_footer_buttons_for_current_view();
+        match &self.current_view {
+            AppView::AcpChatView { entity } => {
+                Some(self.acp_main_window_footer_config(entity, cx))
+            }
+            AppView::ChatPrompt { entity, .. } => {
+                Some(self.chat_prompt_main_window_footer_config(entity, cx))
+            }
+            _ => {
+                let surface = self.main_window_footer_surface()?;
+                let buttons = self.main_window_footer_buttons_for_current_view();
+
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "main_window_footer_config_resolved",
+                    view = ?self.current_view,
+                    surface,
+                    button_count = buttons.len(),
+                    "Resolved main-window native footer config"
+                );
+
+                Some(MainWindowFooterConfig::new(surface, buttons))
+            }
+        }
+    }
+
+    fn acp_chat_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
+        use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+        let footer_disabled = self.main_window_footer_buttons_blocked();
+        let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+
+        vec![
+            FooterButtonConfig::new(FooterAction::Send, "↩", "Send").enabled(!footer_disabled),
+            FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                .selected(actions_open)
+                .enabled(!footer_disabled),
+            FooterButtonConfig::new(FooterAction::Close, "⌘W", "Close").enabled(!footer_disabled),
+        ]
+    }
+
+    fn acp_main_window_footer_config(
+        &self,
+        entity: &gpui::Entity<crate::ai::acp::view::AcpChatView>,
+        cx: &gpui::App,
+    ) -> crate::footer_popup::MainWindowFooterConfig {
+        let accessory = entity.read(cx).native_footer_accessory(cx);
 
         tracing::info!(
             target: "script_kit::footer_popup",
-            event = "main_window_footer_config_resolved",
-            view = ?self.current_view,
-            surface,
-            button_count = buttons.len(),
-            "Resolved main-window native footer config"
+            event = "acp_main_window_footer_config_resolved",
+            button_count = 3,
+            accessory_text = %accessory.text,
+            show_activity_dot = accessory.show_activity_dot,
+            "Resolved ACP native footer config"
         );
 
-        Some(MainWindowFooterConfig::new(surface, buttons))
+        crate::footer_popup::MainWindowFooterConfig::new("acp_chat", self.acp_chat_footer_buttons())
+            .with_accessory(accessory)
+    }
+
+    fn chat_prompt_main_window_footer_config(
+        &self,
+        entity: &gpui::Entity<crate::prompts::ChatPrompt>,
+        cx: &gpui::App,
+    ) -> crate::footer_popup::MainWindowFooterConfig {
+        let buttons = self.standard_main_window_footer_buttons();
+        let mut config = crate::footer_popup::MainWindowFooterConfig::new("chat_prompt", buttons);
+
+        if let Some(accessory) = entity.read(cx).native_footer_accessory() {
+            config = config.with_accessory(accessory);
+        }
+
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "chat_prompt_main_window_footer_config_resolved",
+            button_count = config.buttons.len(),
+            has_accessory = config.accessory.is_some(),
+            "Resolved ChatPrompt native footer config"
+        );
+
+        config
     }
 
     pub(crate) fn main_window_uses_native_footer(&self) -> bool {
-        crate::is_main_window_visible() && self.main_window_footer_config().is_some()
+        crate::is_main_window_visible() && self.main_window_footer_surface().is_some()
     }
 
     /// Returns `None` when the native main-window footer owns spacing,
@@ -329,7 +432,7 @@ impl ScriptListApp {
             "Dispatching main-window footer action"
         );
 
-        if self.main_window_footer_config().is_none() || !crate::is_main_window_visible() {
+        if self.main_window_footer_surface().is_none() || !crate::is_main_window_visible() {
             tracing::info!(
                 target: "script_kit::footer_popup",
                 event = "main_window_footer_action_ignored_inactive_surface",
@@ -349,7 +452,7 @@ impl ScriptListApp {
         self.ensure_main_footer_action_listener(window, cx);
 
         let config = if crate::is_main_window_visible() {
-            self.main_window_footer_config()
+            self.main_window_footer_config(&*cx)
         } else {
             None
         };

@@ -31,6 +31,7 @@ const FOOTER_HINT_BUTTON_ID_PREFIX: &str = "script-kit-footer-button-";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FooterAction {
     Run,
+    Send,
     Actions,
     Ai,
     Apply,
@@ -75,14 +76,44 @@ impl FooterAction {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FooterAccessoryConfig {
+    pub text: String,
+    pub show_activity_dot: bool,
+}
+
+impl FooterAccessoryConfig {
+    pub(crate) fn new(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            show_activity_dot: false,
+        }
+    }
+
+    pub(crate) fn activity_dot(mut self, show: bool) -> Self {
+        self.show_activity_dot = show;
+        self
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct MainWindowFooterConfig {
     pub surface: &'static str,
+    pub accessory: Option<FooterAccessoryConfig>,
     pub buttons: Vec<FooterButtonConfig>,
 }
 
 impl MainWindowFooterConfig {
     pub(crate) fn new(surface: &'static str, buttons: Vec<FooterButtonConfig>) -> Self {
-        Self { surface, buttons }
+        Self {
+            surface,
+            accessory: None,
+            buttons,
+        }
+    }
+
+    pub(crate) fn with_accessory(mut self, accessory: FooterAccessoryConfig) -> Self {
+        self.accessory = Some(accessory);
+        self
     }
 }
 
@@ -398,7 +429,12 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
 
         let alpha = crate::window_resize::mini_layout::HINT_TEXT_OPACITY as f64;
         let text_color = ns_color_from_hex_with_alpha(theme.colors.text.primary, alpha);
-        layout_footer_hints(hints_view, text_color, &config.buttons);
+        layout_footer_hints(
+            hints_view,
+            text_color,
+            config.accessory.as_ref(),
+            &config.buttons,
+        );
     }
 
     tracing::info!(
@@ -407,6 +443,7 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         surface = config.surface,
         buttons = ?config.buttons,
         button_count = config.buttons.len(),
+        has_accessory = config.accessory.is_some(),
         width = content_bounds.size.width,
         height = footer_height(),
         dark = is_dark,
@@ -482,7 +519,12 @@ fn footer_hints_frame(width: f64) -> cocoa::foundation::NSRect {
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterButtonConfig]) {
+unsafe fn layout_footer_hints(
+    hints_view: id,
+    text_color: id,
+    accessory: Option<&FooterAccessoryConfig>,
+    buttons: &[FooterButtonConfig],
+) {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
     use objc::{msg_send, sel, sel_impl};
 
@@ -529,6 +571,23 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
         weight: FOOTER_HINT_FONT_WEIGHT_SEMIBOLD
     ];
 
+    // ── Left: optional accessory (activity dot + text) ──────────
+    let accessory_view = accessory.and_then(|cfg| {
+        let view = make_footer_accessory_view(cfg, font, text_color);
+        if view == nil {
+            None
+        } else {
+            Some(view)
+        }
+    });
+    let accessory_width = accessory_view
+        .map(|view| {
+            let frame: NSRect = unsafe { msg_send![view, frame] };
+            frame.size.width
+        })
+        .unwrap_or(0.0);
+
+    // ── Right: button items ─────────────────────────────────────
     let mut items = Vec::new();
     let mut total_item_width = 0.0_f64;
     for (index, button_cfg) in buttons.iter().enumerate() {
@@ -551,17 +610,33 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
         ((total_item_width - gap_width) / items.len() as f64).round()
     };
 
-    let mut total_width = 0.0_f64;
+    let mut button_total_width = 0.0_f64;
     for (index, (item, item_width)) in items.iter().enumerate() {
         let target_width = item_width.max(balanced_floor_width);
         normalize_footer_hint_item_width(*item, target_width);
-        total_width += target_width;
+        button_total_width += target_width;
         if index > 0 {
-            total_width += FOOTER_HINT_ITEM_GAP;
+            button_total_width += FOOTER_HINT_ITEM_GAP;
         }
     }
 
-    let mut x = (hints_bounds.size.width - total_width).max(0.0);
+    // Place accessory on the left edge
+    if let Some(acc_view) = accessory_view {
+        let accessory_frame = NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(accessory_width, hints_bounds.size.height),
+        );
+        let _: () = msg_send![acc_view, setFrame: accessory_frame];
+        let _: () = msg_send![hints_view, addSubview: acc_view];
+    }
+
+    // Place buttons right-aligned, but never overlapping accessory
+    let min_button_x = if accessory_width > 0.0 {
+        accessory_width + FOOTER_HINT_ITEM_GAP
+    } else {
+        0.0
+    };
+    let mut x = (hints_bounds.size.width - button_total_width).max(min_button_x);
     for (item, item_width) in items {
         let target_width = item_width.max(balanced_floor_width);
         let frame = NSRect::new(
@@ -572,6 +647,81 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
         let _: () = msg_send![hints_view, addSubview: item];
         x += target_width + FOOTER_HINT_ITEM_GAP;
     }
+
+    tracing::trace!(
+        target: "script_kit::footer_popup",
+        event = "native_footer_accessory_layout_refreshed",
+        has_accessory = accessory.is_some(),
+        button_count = buttons.len(),
+        accessory_width,
+        button_total_width,
+        "Laid out native footer accessory + buttons"
+    );
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn make_footer_accessory_view(
+    accessory: &FooterAccessoryConfig,
+    font: id,
+    text_color: id,
+) -> id {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    // SAFETY: Creating standard AppKit views on the main thread.
+    let container: id = msg_send![class!(NSView), alloc];
+    let container: id = msg_send![
+        container,
+        initWithFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(0.0, footer_height()))
+    ];
+    if container == nil {
+        return nil;
+    }
+
+    let mut x = 0.0_f64;
+
+    // Optional activity dot
+    if accessory.show_activity_dot {
+        let dot: id = msg_send![class!(NSView), alloc];
+        let dot: id = msg_send![
+            dot,
+            initWithFrame: NSRect::new(NSPoint::new(0.0, 12.0), NSSize::new(6.0, 6.0))
+        ];
+        if dot != nil {
+            let _: () = msg_send![dot, setWantsLayer: YES];
+            let layer: id = msg_send![dot, layer];
+            if layer != nil {
+                let theme = crate::theme::get_cached_theme();
+                let accent = ns_color_from_hex_with_alpha(theme.colors.accent.selected, 0.95);
+                let cg: id = msg_send![accent, CGColor];
+                let _: () = msg_send![layer, setCornerRadius: 3.0_f64];
+                let _: () = msg_send![layer, setBackgroundColor: cg];
+            }
+            let _: () = msg_send![container, addSubview: dot];
+            x += 10.0;
+        }
+    }
+
+    // Label text
+    let label = make_footer_hint_text_field(&accessory.text, font, text_color);
+    if label != nil {
+        let size: NSSize = msg_send![label, fittingSize];
+        let _: () = msg_send![
+            label,
+            setFrame: NSRect::new(
+                NSPoint::new(x, ((footer_height() - size.height) / 2.0).round()),
+                NSSize::new(size.width, size.height)
+            )
+        ];
+        let _: () = msg_send![container, addSubview: label];
+        x += size.width;
+    }
+
+    let _: () = msg_send![
+        container,
+        setFrame: NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(x, footer_height()))
+    ];
+    container
 }
 
 #[cfg(target_os = "macos")]
@@ -803,6 +953,7 @@ fn send_footer_action(action: FooterAction) {
 fn footer_action_key(action: FooterAction) -> &'static str {
     match action {
         FooterAction::Run => "run",
+        FooterAction::Send => "send",
         FooterAction::Actions => "actions",
         FooterAction::Ai => "ai",
         FooterAction::Apply => "apply",
@@ -1279,6 +1430,7 @@ fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
 
     match action {
         FooterAction::Run => sel!(runFooterAction:),
+        FooterAction::Send => sel!(sendFooterAction:),
         FooterAction::Actions => sel!(actionsFooterAction:),
         FooterAction::Ai => sel!(aiFooterAction:),
         FooterAction::Apply => sel!(applyFooterAction:),
@@ -1306,6 +1458,10 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
             footer_run_action as extern "C" fn(&Object, Sel, id),
         );
         decl.add_method(
+            sel!(sendFooterAction:),
+            footer_send_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
             sel!(actionsFooterAction:),
             footer_actions_action as extern "C" fn(&Object, Sel, id),
         );
@@ -1328,6 +1484,11 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
 #[cfg(target_os = "macos")]
 extern "C" fn footer_run_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
     send_footer_action(FooterAction::Run);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_send_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    send_footer_action(FooterAction::Send);
 }
 
 #[cfg(target_os = "macos")]
