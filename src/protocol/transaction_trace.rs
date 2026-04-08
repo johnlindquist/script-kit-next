@@ -89,8 +89,18 @@ pub fn read_latest_transaction_trace(
         if line.trim().is_empty() {
             continue;
         }
-        let trace: TransactionTrace =
-            serde_json::from_str(&line).context("failed to deserialize transaction trace")?;
+        let trace: TransactionTrace = match serde_json::from_str(&line) {
+            Ok(trace) => trace,
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::transaction",
+                    log_path = %path.display(),
+                    %error,
+                    "Skipping malformed transaction trace log entry"
+                );
+                continue;
+            }
+        };
         if request_id.is_none() || request_id == Some(trace.request_id.as_str()) {
             return Ok(Some(trace));
         }

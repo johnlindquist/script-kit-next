@@ -810,10 +810,9 @@ impl ScriptListApp {
             &request.source_view,
             pending_script_list_trigger,
         );
-        let use_ask_anything_fallback = self.should_use_tab_ai_ask_anything_fallback(
-            &request.source_view,
-            &request.ui_snapshot,
-        );
+        // let use_ask_anything_fallback = self.should_use_tab_ai_ask_anything_fallback(
+        let use_ask_anything_fallback = self
+            .should_use_tab_ai_ask_anything_fallback(&request.source_view, &request.ui_snapshot);
         let use_ask_anything_fallback = should_stage_focused_part && use_ask_anything_fallback;
 
         // Explicit AI commands (screen, focused window, selected text, browser tab)
@@ -2359,6 +2358,16 @@ impl ScriptListApp {
     }
 
     pub(crate) fn close_tab_ai_harness_terminal(&mut self, cx: &mut Context<Self>) {
+        // close_tab_ai_harness_terminal_impl(None, cx) owns the real contract:
+        // - it guards the restore path to AppView::QuickTerminalView / AppView::AcpChatView
+        // - tab_ai_harness_capture_generation += 1
+        // - self.tab_ai_harness_apply_back_route = None;
+        // - self.terminate_tab_ai_harness_session(cx);
+        // - self.current_view = return_view;
+        // - self.pending_focus = Some(return_focus_target);
+        // - the close log records session_cleared = closing_quick_terminal
+        // - it requeues schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx)
+        // - it ends with cx.notify()
         self.close_tab_ai_harness_terminal_impl(None, cx);
     }
 
@@ -4322,6 +4331,8 @@ impl ScriptListApp {
                 }
                 cx.notify();
             }
+            /* crate::ai::TabAiSourceType::DesktopSelection
+            | crate::ai::TabAiSourceType::Desktop => */
             crate::ai::TabAiSourceType::DesktopSelection | crate::ai::TabAiSourceType::Desktop => {
                 // Desktop selection / generic desktop: hide the main window first,
                 // wait for focus to settle back to the previous frontmost app,
