@@ -11,7 +11,7 @@ Manage files under `~/.scriptkit` that control launcher behavior, hotkeys, dicta
 
 | File | Purpose | Reload |
 |------|---------|--------|
-| `~/.scriptkit/skills/` | Agent-readable skills | Read at workspace root |
+| `~/.scriptkit/kit/authoring/skills/` | Agent-readable skills | Read from authoring plugin |
 | `~/.scriptkit/kit/config.ts` | Static config: hotkeys, built-ins, Claude Code | Auto-reloads |
 | `~/.scriptkit/kit/settings.json` | Runtime preferences: layout, theme, microphone | Read by runtime |
 | `~/.scriptkit/kit/theme.json` | Theme colors | Auto-reloads |
@@ -74,7 +74,7 @@ Command deeplinks: `scriptkit://commands/{id}`
 
 ## Common Mistakes
 
-- Putting `skills/` under `kit/` instead of at `~/.scriptkit/skills/`
+- Putting skills at the workspace root instead of in `~/.scriptkit/kit/authoring/skills/`
 - Editing `~/.scriptkit/config.ts` instead of `~/.scriptkit/kit/config.ts`
 - Using `command`/`control` instead of `meta`/`ctrl`
 - Putting microphone selection in `config.ts` instead of `settings.json`

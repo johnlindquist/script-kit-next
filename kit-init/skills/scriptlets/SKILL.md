@@ -15,9 +15,9 @@ Do not create new user bundles in built-in kits or example kits.
 
 ## Read These Files In Order
 
-1. `~/.scriptkit/examples/extensions/howto.md`
-2. `~/.scriptkit/examples/extensions/main.md`
-3. `~/.scriptkit/examples/extensions/advanced.md`
+1. `~/.scriptkit/kit/examples/extensions/howto.md`
+2. `~/.scriptkit/kit/examples/extensions/main.md`
+3. `~/.scriptkit/kit/examples/extensions/advanced.md`
 
 ## Canonical Bundle Shape
 

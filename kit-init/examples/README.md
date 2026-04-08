@@ -1,6 +1,6 @@
 # Script Kit Examples
 
-`~/.scriptkit/examples/START_HERE.md` is the canonical one-shot authoring guide.
+`~/.scriptkit/kit/examples/START_HERE.md` is the canonical one-shot authoring guide.
 Use this README for browsing and pattern study after the artifact type is already chosen.
 
 Working examples demonstrating Script Kit patterns. Learn by reading, then create your own in the matching workspace directory:
@@ -13,9 +13,9 @@ Working examples demonstrating Script Kit patterns. Learn by reading, then creat
 
 | Goal | Copy from | Write to | Read next |
 |------|-----------|----------|-----------|
-| New script | `scripts/hello-world.ts` | `~/.scriptkit/kit/main/scripts/<name>.ts` | `~/.scriptkit/skills/script-authoring/SKILL.md` |
-| New extension / scriptlet bundle | `extensions/starter.md` | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/skills/scriptlets/SKILL.md` |
-| New mdflow agent | `agents/review-pr.claude.md` | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/skills/agents/SKILL.md` |
+| New script | `scripts/hello-world.ts` | `~/.scriptkit/kit/main/scripts/<name>.ts` | `~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md` |
+| New extension / scriptlet bundle | `extensions/starter.md` | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md` |
+| New mdflow agent | `agents/review-pr.claude.md` | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/kit/authoring/skills/agents/SKILL.md` |
 
 In this repo, "extension bundle" and "scriptlet bundle" mean the same thing.
 
@@ -59,9 +59,9 @@ Copy patterns from these files into `~/.scriptkit/kit/main/agents/`.
 Copy any example to your workspace:
 
 ```bash
-cp ~/.scriptkit/examples/scripts/hello-world.ts ~/.scriptkit/kit/main/scripts/my-script.ts
-cp ~/.scriptkit/examples/extensions/starter.md ~/.scriptkit/kit/main/extensions/my-bundle.md
-cp ~/.scriptkit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md
+cp ~/.scriptkit/kit/examples/scripts/hello-world.ts ~/.scriptkit/kit/main/scripts/my-script.ts
+cp ~/.scriptkit/kit/examples/extensions/starter.md ~/.scriptkit/kit/main/extensions/my-bundle.md
+cp ~/.scriptkit/kit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md
 ```
 
 Then edit to suit your needs. Script Kit will detect it immediately.

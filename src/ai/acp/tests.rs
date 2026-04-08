@@ -565,11 +565,9 @@ fn acp_history_migration_uses_popup_window_instead_of_inline_layer() {
         "ACP chat view should no longer render the history picker inline"
     );
     assert!(
-        ACP_HISTORY_POPUP_SOURCE.contains("super::popup_window::popup_window_options")
-            && ACP_HISTORY_POPUP_SOURCE
-                .contains("super::popup_window::configure_actions_style_popup_window")
+        ACP_HISTORY_POPUP_SOURCE.contains("WindowKind::PopUp")
             && ACP_HISTORY_POPUP_SOURCE.contains("AcpHistoryPopupWindow"),
-        "ACP history picker should use the shared popup window helper path"
+        "ACP history picker should render through a popup window entity"
     );
 }
 

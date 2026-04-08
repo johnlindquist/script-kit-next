@@ -35,6 +35,8 @@ fn make_script(name: &str, path: &str) -> Arc<Script> {
         shortcut: None,
         typed_metadata: None,
         schema: None,
+        plugin_id: String::new(),
+        plugin_title: None,
         kit_name: None,
         body: None,
     })
@@ -64,6 +66,8 @@ fn make_scriptlet_match() -> ScriptletMatch {
             file_path: None,
             command: None,
             alias: None,
+            plugin_id: String::new(),
+            plugin_title: None,
         }),
         score: 100,
         display_file_path: None,

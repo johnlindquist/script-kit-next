@@ -117,6 +117,8 @@ fn make_scriptlet_with_opts(
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     })
 }
 

@@ -180,6 +180,9 @@ pub mod ocr;
 // Script scheduling with cron expressions and natural language
 pub mod scheduler;
 
+// Plugin inventory — canonical plugin manifest, discovery, and skill indexing
+pub mod plugins;
+
 // Kenv environment setup and initialization
 // Ensures ~/.scriptkit exists with required directories and starter files
 pub mod setup;

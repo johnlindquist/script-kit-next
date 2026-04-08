@@ -396,6 +396,8 @@ fn test_scriptlet_with_all_metadata() {
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     };
 
     assert_eq!(scriptlet.name, "Full Scriptlet");

@@ -1062,6 +1062,8 @@ mod tests {
                 shortcut: None,
                 typed_metadata: None,
                 schema: Some(schema),
+                plugin_id: String::new(),
+                plugin_title: None,
                 kit_name: None,
                 body: None,
             }
@@ -1257,6 +1259,8 @@ mod tests {
                 shortcut: None,
                 typed_metadata: None,
                 schema: None, // No schema!
+                plugin_id: String::new(),
+                plugin_title: None,
                 kit_name: None,
                 body: None,
             };
@@ -1323,6 +1327,8 @@ mod tests {
                 shortcut: None,
                 typed_metadata: None,
                 schema: None,
+                plugin_id: String::new(),
+                plugin_title: None,
                 kit_name: None,
                 body: None,
             }
@@ -1338,6 +1344,8 @@ mod tests {
                 shortcut: None,
                 keyword: None,
                 group: None,
+                plugin_id: String::new(),
+                plugin_title: None,
                 file_path: None,
                 command: None,
                 alias: None,

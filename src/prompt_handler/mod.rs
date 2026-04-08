@@ -1474,6 +1474,8 @@ impl ScriptListApp {
                     shortcut: None,
                     typed_metadata: None,
                     schema: None,
+                    plugin_id: String::new(),
+                    plugin_title: None,
                     kit_name: None,
                     body: None,
                 };

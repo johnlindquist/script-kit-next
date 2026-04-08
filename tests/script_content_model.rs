@@ -25,6 +25,8 @@ fn make_script(name: &str, body: Option<&str>) -> Arc<Script> {
         shortcut: None,
         typed_metadata: None,
         schema: None,
+        plugin_id: String::new(),
+        plugin_title: None,
         kit_name: Some("test".to_string()),
         body: body.map(|s| s.to_string()),
     })

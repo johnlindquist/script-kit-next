@@ -24,7 +24,7 @@ fn with_temp_sk_path<F: FnOnce(&std::path::Path)>(f: F) {
     std::env::remove_var(SK_PATH_ENV);
 }
 
-/// Fresh setup seeds the full root-level agent workspace.
+/// Fresh setup seeds the full plugin-rooted agent workspace.
 #[test]
 fn test_setup_seeds_root_agent_workspace() {
     with_temp_sk_path(|kit_root| {
@@ -49,7 +49,7 @@ fn test_setup_seeds_root_agent_workspace() {
             "Root GUIDE.md must exist"
         );
 
-        // Skills directory with all skills
+        // Skills seeded into authoring plugin
         for skill in &[
             "script-authoring",
             "scriptlets",
@@ -57,39 +57,72 @@ fn test_setup_seeds_root_agent_workspace() {
             "config",
             "troubleshooting",
         ] {
-            let skill_path = kit_root.join("skills").join(skill).join("SKILL.md");
+            let skill_path = kit_root
+                .join("kit")
+                .join("authoring")
+                .join("skills")
+                .join(skill)
+                .join("SKILL.md");
             assert!(
                 skill_path.exists(),
-                "skills/{skill}/SKILL.md must exist at {}",
+                "kit/authoring/skills/{skill}/SKILL.md must exist at {}",
                 skill_path.display()
             );
         }
         assert!(
-            kit_root.join("skills").join("README.md").exists(),
-            "skills/README.md must exist"
+            kit_root
+                .join("kit")
+                .join("authoring")
+                .join("skills")
+                .join("README.md")
+                .exists(),
+            "kit/authoring/skills/README.md must exist"
         );
 
-        // Example scripts
+        // Example scripts seeded into examples plugin
         for example in &[
             "hello-world.ts",
             "choose-from-list.ts",
             "clipboard-transform.ts",
             "path-picker.ts",
         ] {
-            let example_path = kit_root.join("examples").join("scripts").join(example);
+            let example_path = kit_root
+                .join("kit")
+                .join("examples")
+                .join("scripts")
+                .join(example);
             assert!(
                 example_path.exists(),
-                "examples/scripts/{example} must exist at {}",
+                "kit/examples/scripts/{example} must exist at {}",
                 example_path.display()
             );
         }
         assert!(
-            kit_root.join("examples").join("README.md").exists(),
-            "examples/README.md must exist"
+            kit_root
+                .join("kit")
+                .join("examples")
+                .join("README.md")
+                .exists(),
+            "kit/examples/README.md must exist"
         );
 
-        // docs/ directory
-        assert!(kit_root.join("docs").exists(), "docs/ directory must exist");
+        // Plugin manifests exist for main and authoring
+        assert!(
+            kit_root
+                .join("kit")
+                .join("main")
+                .join("plugin.json")
+                .exists(),
+            "kit/main/plugin.json must exist"
+        );
+        assert!(
+            kit_root
+                .join("kit")
+                .join("authoring")
+                .join("plugin.json")
+                .exists(),
+            "kit/authoring/plugin.json must exist"
+        );
 
         // Kit subtree still exists
         assert!(
@@ -124,6 +157,10 @@ fn test_setup_seeds_root_agent_workspace() {
             kit_root.join("kit").join("main").join("agents").exists(),
             "kit/main/agents/ must exist"
         );
+        assert!(
+            kit_root.join("kit").join("main").join("skills").exists(),
+            "kit/main/skills/ must exist"
+        );
 
         // kit/CLAUDE.md and kit/AGENTS.md are redirect stubs
         let kit_claude = fs::read_to_string(kit_root.join("kit").join("CLAUDE.md"))
@@ -143,6 +180,20 @@ fn test_setup_seeds_root_agent_workspace() {
         assert!(
             kit_root.join("sdk").join("kit-sdk.ts").exists(),
             "sdk/kit-sdk.ts must exist"
+        );
+
+        // Loose top-level authoring roots must NOT be seeded
+        assert!(
+            !kit_root.join("skills").exists(),
+            "Loose top-level skills/ must not be seeded"
+        );
+        assert!(
+            !kit_root.join("examples").exists(),
+            "Loose top-level examples/ must not be seeded"
+        );
+        assert!(
+            !kit_root.join("docs").exists(),
+            "Loose top-level docs/ must not be seeded"
         );
     });
 }
@@ -225,7 +276,7 @@ fn test_seeded_skills_do_not_reference_legacy_v1_contract() {
             "require(",
         ];
 
-        // Check all skill files
+        // Check all skill files (now under authoring plugin)
         for skill in &[
             "script-authoring",
             "scriptlets",
@@ -233,31 +284,40 @@ fn test_seeded_skills_do_not_reference_legacy_v1_contract() {
             "config",
             "troubleshooting",
         ] {
-            let skill_path = kit_root.join("skills").join(skill).join("SKILL.md");
+            let skill_path = kit_root
+                .join("kit")
+                .join("authoring")
+                .join("skills")
+                .join(skill)
+                .join("SKILL.md");
             let content = fs::read_to_string(&skill_path)
                 .unwrap_or_else(|_| panic!("Should read {}", skill_path.display()));
             for legacy in &legacy_patterns {
                 assert!(
                     !content.contains(legacy),
-                    "skills/{skill}/SKILL.md must not contain legacy pattern '{legacy}'"
+                    "kit/authoring/skills/{skill}/SKILL.md must not contain legacy pattern '{legacy}'"
                 );
             }
         }
 
-        // Check all example scripts
+        // Check all example scripts (now under examples plugin)
         for example in &[
             "hello-world.ts",
             "choose-from-list.ts",
             "clipboard-transform.ts",
             "path-picker.ts",
         ] {
-            let example_path = kit_root.join("examples").join("scripts").join(example);
+            let example_path = kit_root
+                .join("kit")
+                .join("examples")
+                .join("scripts")
+                .join(example);
             let content = fs::read_to_string(&example_path)
                 .unwrap_or_else(|_| panic!("Should read {}", example_path.display()));
             for legacy in &legacy_patterns {
                 assert!(
                     !content.contains(legacy),
-                    "examples/scripts/{example} must not contain legacy pattern '{legacy}'"
+                    "kit/examples/scripts/{example} must not contain legacy pattern '{legacy}'"
                 );
             }
         }
@@ -348,7 +408,7 @@ fn test_create_script_action_opens_current_scripts_dir() {
 }
 
 /// Every seeded example script must use `@scriptkit/sdk` and `export const metadata`,
-/// use Bun-first patterns (no Node-only APIs), and live under examples/scripts/.
+/// use Bun-first patterns (no Node-only APIs), and live under kit/examples/scripts/.
 #[test]
 fn test_seeded_examples_are_sdk_based_and_bun_first() {
     with_temp_sk_path(|kit_root| {
@@ -361,7 +421,7 @@ fn test_seeded_examples_are_sdk_based_and_bun_first() {
             "path-picker.ts",
         ];
 
-        let examples_dir = kit_root.join("examples").join("scripts");
+        let examples_dir = kit_root.join("kit").join("examples").join("scripts");
 
         for example in &examples {
             let path = examples_dir.join(example);
@@ -413,8 +473,12 @@ fn test_seeded_examples_are_sdk_based_and_bun_first() {
 
         // README must exist alongside the scripts
         assert!(
-            kit_root.join("examples").join("README.md").exists(),
-            "examples/README.md must exist"
+            kit_root
+                .join("kit")
+                .join("examples")
+                .join("README.md")
+                .exists(),
+            "kit/examples/README.md must exist"
         );
     });
 }
@@ -499,11 +563,12 @@ fn test_extensions_howto_matches_current_harness_authoring_contract() {
         let _ = ensure_kit_setup();
         let howto = fs::read_to_string(
             kit_root
+                .join("kit")
                 .join("examples")
                 .join("extensions")
                 .join("howto.md"),
         )
-        .expect("read examples/extensions/howto.md");
+        .expect("read kit/examples/extensions/howto.md");
 
         assert!(howto.contains("~/.scriptkit/kit/main/extensions/"));
         assert!(!howto.contains("YOUR-KIT-NAME"));
@@ -560,22 +625,22 @@ fn test_sdk_reference_example_scriptlet_matches_current_extension_contract() {
 }
 
 /// Fresh setup must seed the full artifact authoring pack: skills, examples for scripts,
-/// extensions, and agents.
+/// extensions, and agents — all under plugin roots.
 #[test]
 fn test_seeded_workspace_has_full_artifact_authoring_pack() {
     with_temp_sk_path(|kit_root| {
         let _ = ensure_kit_setup();
 
         for path in [
-            "skills/script-authoring/SKILL.md",
-            "skills/scriptlets/SKILL.md",
-            "skills/agents/SKILL.md",
-            "examples/scripts/hello-world.ts",
-            "examples/extensions/main.md",
-            "examples/extensions/advanced.md",
-            "examples/extensions/howto.md",
-            "examples/agents/review-pr.claude.md",
-            "examples/agents/plan-feature.i.gemini.md",
+            "kit/authoring/skills/script-authoring/SKILL.md",
+            "kit/authoring/skills/scriptlets/SKILL.md",
+            "kit/authoring/skills/agents/SKILL.md",
+            "kit/examples/scripts/hello-world.ts",
+            "kit/examples/extensions/main.md",
+            "kit/examples/extensions/advanced.md",
+            "kit/examples/extensions/howto.md",
+            "kit/examples/agents/review-pr.claude.md",
+            "kit/examples/agents/plan-feature.i.gemini.md",
         ] {
             assert!(
                 kit_root.join(path).exists(),
@@ -594,19 +659,20 @@ fn test_root_docs_route_scripts_scriptlets_and_agents_to_real_paths() {
         let root_claude = fs::read_to_string(kit_root.join("CLAUDE.md")).expect("read CLAUDE.md");
         let root_agents = fs::read_to_string(kit_root.join("AGENTS.md")).expect("read AGENTS.md");
         let examples_readme =
-            fs::read_to_string(kit_root.join("examples").join("README.md")).expect("read README");
+            fs::read_to_string(kit_root.join("kit").join("examples").join("README.md"))
+                .expect("read kit/examples/README.md");
 
         for content in [&root_claude, &root_agents] {
             for needle in [
                 "~/.scriptkit/kit/main/scripts/",
                 "~/.scriptkit/kit/main/extensions/",
                 "~/.scriptkit/kit/main/agents/",
-                "~/.scriptkit/skills/script-authoring/SKILL.md",
-                "~/.scriptkit/skills/scriptlets/SKILL.md",
-                "~/.scriptkit/skills/agents/SKILL.md",
-                "~/.scriptkit/examples/scripts/",
-                "~/.scriptkit/examples/extensions/",
-                "~/.scriptkit/examples/agents/",
+                "~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md",
+                "~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md",
+                "~/.scriptkit/kit/authoring/skills/agents/SKILL.md",
+                "~/.scriptkit/kit/examples/scripts/",
+                "~/.scriptkit/kit/examples/extensions/",
+                "~/.scriptkit/kit/examples/agents/",
             ] {
                 assert!(content.contains(needle), "doc missing `{needle}`");
             }
@@ -615,7 +681,7 @@ fn test_root_docs_route_scripts_scriptlets_and_agents_to_real_paths() {
         for needle in ["## Scripts", "## Extensions", "## Agents"] {
             assert!(
                 examples_readme.contains(needle),
-                "examples/README.md missing `{needle}` section"
+                "kit/examples/README.md missing `{needle}` section"
             );
         }
     });

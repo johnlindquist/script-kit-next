@@ -18,7 +18,7 @@ Use a script when the request needs Script Kit UI, Bun APIs, file work, HTTP wor
 Copy from: `scripts/hello-world.ts`
 Write to: `~/.scriptkit/kit/main/scripts/<name>.ts`
 
-Then read `~/.scriptkit/skills/script-authoring/SKILL.md`. For scripts, writing the file is not enough. You must syntax-check and run the script in the current Claude Code terminal before you report success.
+Then read `~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md`. For scripts, writing the file is not enough. You must syntax-check and run the script in the current Claude Code terminal before you report success.
 
 Good matches:
 - `make a clipboard cleanup command`
@@ -113,9 +113,9 @@ const url3 = await arg("URL 3");
 ## Copy Commands
 
 ```bash
-cp ~/.scriptkit/examples/scripts/hello-world.ts ~/.scriptkit/kit/main/scripts/my-script.ts
-cp ~/.scriptkit/examples/extensions/starter.md ~/.scriptkit/kit/main/extensions/my-bundle.md
-cp ~/.scriptkit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md
+cp ~/.scriptkit/kit/examples/scripts/hello-world.ts ~/.scriptkit/kit/main/scripts/my-script.ts
+cp ~/.scriptkit/kit/examples/extensions/starter.md ~/.scriptkit/kit/main/extensions/my-bundle.md
+cp ~/.scriptkit/kit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md
 ```
 
 ## Smallest Working Starters

@@ -36,19 +36,41 @@ const WINDOWS_RESERVED_FILENAMES: [&str; 22] = [
     "con", "prn", "aux", "nul", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8",
     "com9", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
 ];
-/// Scripts directory under the active Script Kit workspace.
-pub fn scripts_dir() -> PathBuf {
-    crate::setup::get_kit_path()
-        .join("kit")
-        .join("main")
-        .join("scripts")
+/// Root directory for a given plugin under the active Script Kit workspace.
+pub fn plugin_dir(plugin_id: &str) -> PathBuf {
+    crate::setup::get_kit_path().join("kit").join(plugin_id)
 }
-/// Extensions directory under the active Script Kit workspace.
+/// Scripts directory for a given plugin.
+pub fn scripts_dir_for_plugin(plugin_id: &str) -> PathBuf {
+    plugin_dir(plugin_id).join("scripts")
+}
+/// Extensions directory for a given plugin.
+pub fn extensions_dir_for_plugin(plugin_id: &str) -> PathBuf {
+    plugin_dir(plugin_id).join("extensions")
+}
+/// Agents directory for a given plugin.
+pub fn agents_dir_for_plugin(plugin_id: &str) -> PathBuf {
+    plugin_dir(plugin_id).join("agents")
+}
+/// Skills directory for a given plugin.
+pub fn skills_dir_for_plugin(plugin_id: &str) -> PathBuf {
+    plugin_dir(plugin_id).join("skills")
+}
+/// Scripts directory under the active Script Kit workspace (default: `kit/main/scripts`).
+pub fn scripts_dir() -> PathBuf {
+    scripts_dir_for_plugin("main")
+}
+/// Extensions directory under the active Script Kit workspace (default: `kit/main/extensions`).
 pub fn extensions_dir() -> PathBuf {
-    crate::setup::get_kit_path()
-        .join("kit")
-        .join("main")
-        .join("extensions")
+    extensions_dir_for_plugin("main")
+}
+/// Create a new script in a specific plugin's scripts directory.
+pub fn create_new_script_in_plugin(plugin_id: &str, name: &str) -> Result<PathBuf> {
+    create_new_script_in_dir(name, &scripts_dir_for_plugin(plugin_id))
+}
+/// Create a new extension in a specific plugin's extensions directory.
+pub fn create_new_extension_in_plugin(plugin_id: &str, name: &str) -> Result<PathBuf> {
+    create_new_extension_in_dir(name, &extensions_dir_for_plugin(plugin_id))
 }
 fn validate_sanitized_name(
     original_name: &str,

@@ -24,6 +24,8 @@ fn make_script(name: &str, description: Option<&str>, body: Option<&str>) -> Arc
         shortcut: None,
         typed_metadata: None,
         schema: None,
+        plugin_id: String::new(),
+        plugin_title: None,
         kit_name: Some("test".to_string()),
         body: body.map(|s| s.to_string()),
     })
@@ -327,6 +329,8 @@ fn alias_match_does_not_block_content_snippet_when_name_and_description_do_not_m
         shortcut: None,
         typed_metadata: None,
         schema: None,
+        plugin_id: String::new(),
+        plugin_title: None,
         kit_name: Some("test".to_string()),
         body: Some("const tok = 1;\n".to_string()),
     })];
@@ -355,6 +359,8 @@ fn filename_match_remains_primary_when_body_also_matches() {
         shortcut: None,
         typed_metadata: None,
         schema: None,
+        plugin_id: String::new(),
+        plugin_title: None,
         kit_name: Some("test".to_string()),
         body: Some("import './utility.ts';\n".to_string()),
     })];

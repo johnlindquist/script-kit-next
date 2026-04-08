@@ -76,6 +76,7 @@ mod navigation;
 mod panel;
 mod perf;
 mod platform;
+mod plugins;
 mod prompts;
 mod protocol;
 mod scripts;

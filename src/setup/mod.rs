@@ -408,38 +408,66 @@ pub fn ensure_kit_setup() -> SetupResult {
         };
     }
 
-    // Required directory structure
-    // Note: kit/main/scripts and kit/main/extensions are the default user workspace
-    // All kits live under kit/ for easier version control
+    // Plugin roots: each plugin gets {scripts,extensions,agents,skills} + plugin.json
+    ensure_plugin_root(
+        &kit_dir,
+        "main",
+        "Main",
+        "Default personal plugin",
+        &mut warnings,
+    );
+    ensure_plugin_root(
+        &kit_dir,
+        "cleanshot",
+        "CleanShot X",
+        "Built-in screenshot commands",
+        &mut warnings,
+    );
+    ensure_plugin_root(
+        &kit_dir,
+        "1password",
+        "1Password",
+        "Built-in password-manager commands",
+        &mut warnings,
+    );
+    ensure_plugin_root(
+        &kit_dir,
+        "quicklinks",
+        "Quick Links",
+        "Built-in quick link commands",
+        &mut warnings,
+    );
+    ensure_plugin_root(
+        &kit_dir,
+        "window-management",
+        "Window Management",
+        "Built-in window commands",
+        &mut warnings,
+    );
+    ensure_plugin_root(
+        &kit_dir,
+        "ai-text-tools",
+        "AI Text Tools",
+        "Built-in text tools",
+        &mut warnings,
+    );
+    ensure_plugin_root(
+        &kit_dir,
+        "examples",
+        "Examples",
+        "Built-in examples",
+        &mut warnings,
+    );
+    ensure_plugin_root(
+        &kit_dir,
+        "authoring",
+        "Authoring",
+        "Built-in skills and authoring references",
+        &mut warnings,
+    );
+
+    // Non-plugin infrastructure directories
     let required_dirs = [
-        kit_dir.join("kit").join("main").join("scripts"),
-        kit_dir.join("kit").join("main").join("extensions"),
-        kit_dir.join("kit").join("main").join("agents"),
-        // Built-in CleanShot extension kit
-        kit_dir.join("kit").join("cleanshot").join("extensions"),
-        // Built-in 1Password extension kit
-        kit_dir.join("kit").join("1password").join("extensions"),
-        // Built-in Quick Links extension kit
-        kit_dir.join("kit").join("quicklinks").join("extensions"),
-        // Built-in Window Management extension kit
-        kit_dir
-            .join("kit")
-            .join("window-management")
-            .join("extensions"),
-        // Built-in AI Text Tools extension kit
-        kit_dir.join("kit").join("ai-text-tools").join("extensions"),
-        // Built-in Examples extension kit (scriptlet pattern reference)
-        kit_dir.join("kit").join("examples").join("extensions"),
-        // Root-level agent workspace directories
-        kit_dir.join("skills").join("script-authoring"),
-        kit_dir.join("skills").join("scriptlets"),
-        kit_dir.join("skills").join("config"),
-        kit_dir.join("skills").join("troubleshooting"),
-        kit_dir.join("skills").join("agents"),
-        kit_dir.join("examples").join("scripts"),
-        kit_dir.join("examples").join("extensions"),
-        kit_dir.join("examples").join("agents"),
-        kit_dir.join("docs"),
         // Context bundle directory for Tab AI argv-based launch
         kit_dir.join("context"),
         // Root-level harness temp workspace used by kit://sdk-reference
@@ -677,151 +705,126 @@ pub fn ensure_kit_setup() -> SetupResult {
         "kit/AGENTS.md redirect",
     );
 
-    // App-managed: Skills library (refresh if changed)
+    // App-managed: Skills library — seeded into the authoring plugin (refresh if changed)
+    let authoring_skills = kit_dir.join("kit").join("authoring").join("skills");
     write_string_if_changed(
-        &kit_dir.join("skills").join("README.md"),
+        &authoring_skills.join("README.md"),
         EMBEDDED_SKILLS_README,
         &mut warnings,
-        "skills/README.md",
+        "kit/authoring/skills/README.md",
     );
     write_string_if_changed(
-        &kit_dir
-            .join("skills")
-            .join("script-authoring")
-            .join("SKILL.md"),
+        &authoring_skills.join("script-authoring").join("SKILL.md"),
         EMBEDDED_SKILL_SCRIPT_AUTHORING,
         &mut warnings,
-        "skills/script-authoring/SKILL.md",
+        "kit/authoring/skills/script-authoring/SKILL.md",
     );
     write_string_if_changed(
-        &kit_dir.join("skills").join("scriptlets").join("SKILL.md"),
+        &authoring_skills.join("scriptlets").join("SKILL.md"),
         EMBEDDED_SKILL_SCRIPTLETS,
         &mut warnings,
-        "skills/scriptlets/SKILL.md",
+        "kit/authoring/skills/scriptlets/SKILL.md",
     );
     write_string_if_changed(
-        &kit_dir.join("skills").join("config").join("SKILL.md"),
+        &authoring_skills.join("config").join("SKILL.md"),
         EMBEDDED_SKILL_CONFIG,
         &mut warnings,
-        "skills/config/SKILL.md",
+        "kit/authoring/skills/config/SKILL.md",
     );
     write_string_if_changed(
-        &kit_dir
-            .join("skills")
-            .join("troubleshooting")
-            .join("SKILL.md"),
+        &authoring_skills.join("troubleshooting").join("SKILL.md"),
         EMBEDDED_SKILL_TROUBLESHOOTING,
         &mut warnings,
-        "skills/troubleshooting/SKILL.md",
+        "kit/authoring/skills/troubleshooting/SKILL.md",
     );
     write_string_if_changed(
-        &kit_dir.join("skills").join("agents").join("SKILL.md"),
+        &authoring_skills.join("agents").join("SKILL.md"),
         EMBEDDED_SKILL_AGENTS,
         &mut warnings,
-        "skills/agents/SKILL.md",
+        "kit/authoring/skills/agents/SKILL.md",
     );
 
-    // App-managed: Example scripts (refresh if changed)
+    // App-managed: Example scripts — seeded into the examples plugin (refresh if changed)
+    let examples_plugin = kit_dir.join("kit").join("examples");
     write_string_if_changed(
-        &kit_dir.join("examples").join("README.md"),
+        &examples_plugin.join("README.md"),
         EMBEDDED_EXAMPLES_README,
         &mut warnings,
-        "examples/README.md",
+        "kit/examples/README.md",
     );
     write_string_if_changed(
-        &kit_dir.join("examples").join("START_HERE.md"),
+        &examples_plugin.join("START_HERE.md"),
         EMBEDDED_EXAMPLES_START_HERE,
         &mut warnings,
-        "examples/START_HERE.md",
+        "kit/examples/START_HERE.md",
     );
     write_string_if_changed(
-        &kit_dir
-            .join("examples")
-            .join("scripts")
-            .join("hello-world.ts"),
+        &examples_plugin.join("scripts").join("hello-world.ts"),
         EMBEDDED_EXAMPLE_HELLO_WORLD,
         &mut warnings,
-        "examples/scripts/hello-world.ts",
+        "kit/examples/scripts/hello-world.ts",
     );
     write_string_if_changed(
-        &kit_dir
-            .join("examples")
-            .join("scripts")
-            .join("choose-from-list.ts"),
+        &examples_plugin.join("scripts").join("choose-from-list.ts"),
         EMBEDDED_EXAMPLE_CHOOSE_FROM_LIST,
         &mut warnings,
-        "examples/scripts/choose-from-list.ts",
+        "kit/examples/scripts/choose-from-list.ts",
     );
     write_string_if_changed(
-        &kit_dir
-            .join("examples")
+        &examples_plugin
             .join("scripts")
             .join("clipboard-transform.ts"),
         EMBEDDED_EXAMPLE_CLIPBOARD_TRANSFORM,
         &mut warnings,
-        "examples/scripts/clipboard-transform.ts",
+        "kit/examples/scripts/clipboard-transform.ts",
     );
     write_string_if_changed(
-        &kit_dir
-            .join("examples")
-            .join("scripts")
-            .join("path-picker.ts"),
+        &examples_plugin.join("scripts").join("path-picker.ts"),
         EMBEDDED_EXAMPLE_PATH_PICKER,
         &mut warnings,
-        "examples/scripts/path-picker.ts",
+        "kit/examples/scripts/path-picker.ts",
     );
 
     // App-managed: Example extension references (refresh if changed)
-    // These are copies of the built-in extension bundles for agent discoverability
     write_string_if_changed(
-        &kit_dir.join("examples").join("extensions").join("main.md"),
+        &examples_plugin.join("extensions").join("main.md"),
         EMBEDDED_EXAMPLES_MAIN,
         &mut warnings,
-        "examples/extensions/main.md",
+        "kit/examples/extensions/main.md",
     );
     write_string_if_changed(
-        &kit_dir
-            .join("examples")
-            .join("extensions")
-            .join("advanced.md"),
+        &examples_plugin.join("extensions").join("advanced.md"),
         EMBEDDED_EXAMPLES_ADVANCED,
         &mut warnings,
-        "examples/extensions/advanced.md",
+        "kit/examples/extensions/advanced.md",
     );
     write_string_if_changed(
-        &kit_dir.join("examples").join("extensions").join("howto.md"),
+        &examples_plugin.join("extensions").join("howto.md"),
         EMBEDDED_EXAMPLES_HOWTO,
         &mut warnings,
-        "examples/extensions/howto.md",
+        "kit/examples/extensions/howto.md",
     );
     write_string_if_changed(
-        &kit_dir
-            .join("examples")
-            .join("extensions")
-            .join("starter.md"),
+        &examples_plugin.join("extensions").join("starter.md"),
         EMBEDDED_EXAMPLES_STARTER,
         &mut warnings,
-        "examples/extensions/starter.md",
+        "kit/examples/extensions/starter.md",
     );
 
     // App-managed: Example agents (refresh if changed)
     write_string_if_changed(
-        &kit_dir
-            .join("examples")
-            .join("agents")
-            .join("review-pr.claude.md"),
+        &examples_plugin.join("agents").join("review-pr.claude.md"),
         EMBEDDED_EXAMPLE_AGENT_REVIEW_PR,
         &mut warnings,
-        "examples/agents/review-pr.claude.md",
+        "kit/examples/agents/review-pr.claude.md",
     );
     write_string_if_changed(
-        &kit_dir
-            .join("examples")
+        &examples_plugin
             .join("agents")
             .join("plan-feature.i.gemini.md"),
         EMBEDDED_EXAMPLE_AGENT_PLAN_FEATURE,
         &mut warnings,
-        "examples/agents/plan-feature.i.gemini.md",
+        "kit/examples/agents/plan-feature.i.gemini.md",
     );
 
     // App-managed: .gitignore (refresh if changed)
@@ -968,28 +971,72 @@ fn ensure_dir(path: &Path, warnings: &mut Vec<String>) {
         debug!(path = %path.display(), "Created directory");
     }
 }
-/// Migrate files from legacy `~/.scriptkit/kit/skills/` into root `~/.scriptkit/skills/`.
-/// Existing root files are preserved; conflicts are skipped with a warning.
+/// Ensure a plugin root exists with its standard subdirectories and a `plugin.json` manifest.
+fn ensure_plugin_root(
+    kit_dir: &Path,
+    plugin_id: &str,
+    title: &str,
+    description: &str,
+    warnings: &mut Vec<String>,
+) {
+    let root = kit_dir.join("kit").join(plugin_id);
+    ensure_dir(&root.join("scripts"), warnings);
+    ensure_dir(&root.join("extensions"), warnings);
+    ensure_dir(&root.join("agents"), warnings);
+    ensure_dir(&root.join("skills"), warnings);
+
+    let manifest = format!(
+        "{{\n  \"id\": \"{plugin_id}\",\n  \"title\": \"{title}\",\n  \"description\": \"{description}\"\n}}"
+    );
+    write_string_if_missing(
+        &root.join("plugin.json"),
+        &manifest,
+        warnings,
+        &format!("kit/{plugin_id}/plugin.json"),
+    );
+
+    info!(plugin_id = %plugin_id, "plugin_root_ensured");
+}
+/// Migrate skills from legacy locations into `kit/authoring/skills/`.
+///
+/// Handles two legacy sources:
+/// 1. `~/.scriptkit/kit/skills/` (oldest)
+/// 2. `~/.scriptkit/skills/` (previous root-level layout)
+///
+/// Existing target files are preserved; conflicts are skipped with a warning.
 /// Empty legacy directories are removed after migration.
 fn migrate_legacy_skills_to_workspace_root(kit_dir: &Path, warnings: &mut Vec<String>) {
-    let legacy_skills_dir = kit_dir.join("kit").join("skills");
-    let root_skills_dir = kit_dir.join("skills");
+    let authoring_skills = kit_dir.join("kit").join("authoring").join("skills");
 
-    if !legacy_skills_dir.exists() || !legacy_skills_dir.is_dir() {
-        return;
+    // Migrate from oldest legacy location: kit/skills/ → kit/authoring/skills/
+    let oldest_legacy = kit_dir.join("kit").join("skills");
+    if oldest_legacy.exists() && oldest_legacy.is_dir() {
+        if let Err(error) = fs::create_dir_all(&authoring_skills) {
+            warnings.push(format!(
+                "Failed to create authoring skills directory {}: {}",
+                authoring_skills.display(),
+                error
+            ));
+            return;
+        }
+        merge_move_directory_contents(&oldest_legacy, &authoring_skills, warnings);
+        remove_dir_if_empty(&oldest_legacy, warnings);
     }
 
-    if let Err(error) = fs::create_dir_all(&root_skills_dir) {
-        warnings.push(format!(
-            "Failed to create root skills directory {}: {}",
-            root_skills_dir.display(),
-            error
-        ));
-        return;
+    // Migrate from previous root-level location: skills/ → kit/authoring/skills/
+    let root_skills = kit_dir.join("skills");
+    if root_skills.exists() && root_skills.is_dir() {
+        if let Err(error) = fs::create_dir_all(&authoring_skills) {
+            warnings.push(format!(
+                "Failed to create authoring skills directory {}: {}",
+                authoring_skills.display(),
+                error
+            ));
+            return;
+        }
+        merge_move_directory_contents(&root_skills, &authoring_skills, warnings);
+        remove_dir_if_empty(&root_skills, warnings);
     }
-
-    merge_move_directory_contents(&legacy_skills_dir, &root_skills_dir, warnings);
-    remove_dir_if_empty(&legacy_skills_dir, warnings);
 }
 
 /// Recursively merge-move `src_dir` contents into `dst_dir`.

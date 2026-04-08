@@ -1,19 +1,20 @@
 //! Helpers for discovering locally installed kit directories.
+//!
+//! All kit store plugins are installed into the canonical plugin container
+//! `<kit_path>/kit/`, so they are immediately discoverable by the plugin
+//! system without a separate copy or sync step.
 
 use itertools::Itertools;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Discover installed kits under `~/.scriptkit/kits/`.
+/// Discover installed kit/plugin directories under the canonical plugin
+/// container `<kit_path>/kit/`.
 ///
-/// Each direct subdirectory is treated as an installed kit.
+/// Each direct subdirectory is treated as an installed kit (plugin).
 pub fn discover_installed_kits() -> Vec<PathBuf> {
-    let Some(home_dir) = dirs::home_dir() else {
-        return Vec::new();
-    };
-
-    let kits_root = home_dir.join(".scriptkit").join("kits");
-    discover_installed_kits_at(&kits_root)
+    let plugins_root = crate::plugins::plugins_container_dir();
+    discover_installed_kits_at(&plugins_root)
 }
 
 /// Return the scripts directory for a specific kit.

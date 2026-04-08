@@ -308,6 +308,8 @@ fn bench_get_grouped_results_repeated_calls() {
                 group: None,
                 command: None,
                 alias: None,
+                plugin_id: String::new(),
+                plugin_title: None,
             })
         })
         .collect();

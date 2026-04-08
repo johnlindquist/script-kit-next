@@ -25,6 +25,8 @@ fn test_scriptlet(name: &str, tool: &str, code: &str) -> Scriptlet {
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     }
 }
 
@@ -41,6 +43,8 @@ fn test_scriptlet_with_desc(name: &str, tool: &str, code: &str, desc: &str) -> S
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     }
 }
 
@@ -123,6 +127,8 @@ fn test_scriptlet_new_fields() {
         file_path: Some("/path/to/file.md#test".to_string()),
         command: Some("test".to_string()),
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     };
 
     assert_eq!(scriptlet.group, Some("My Group".to_string()));

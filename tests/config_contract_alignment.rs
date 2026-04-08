@@ -3,11 +3,11 @@
 /// round-trip correctly between config keys, deeplinks, and runtime resolution.
 
 #[test]
-fn config_skill_mentions_root_skills_and_dictation_split() {
+fn config_skill_mentions_authoring_skills_and_dictation_split() {
     let content = include_str!("../kit-init/skills/config/SKILL.md");
     assert!(
-        content.contains("~/.scriptkit/skills/"),
-        "SKILL.md must reference root skills path"
+        content.contains("~/.scriptkit/kit/authoring/skills/"),
+        "SKILL.md must reference authoring plugin skills path"
     );
     assert!(
         content.contains("~/.scriptkit/kit/config.ts"),

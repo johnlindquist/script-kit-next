@@ -6,7 +6,7 @@ Complete reference for AI agents creating Script Kit artifacts: scripts, extensi
 
 ## One-Shot First
 
-Use `~/.scriptkit/examples/START_HERE.md` as the canonical one-shot authoring guide.
+Use `~/.scriptkit/kit/examples/START_HERE.md` as the canonical one-shot authoring guide.
 Open it first when the user wants one new Script Kit artifact in harness mode.
 Use this file only after the artifact type is already chosen and you need deeper SDK reference.
 
@@ -39,14 +39,14 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 
 ## Read Next
 
-- Canonical launchpad → `~/.scriptkit/examples/START_HERE.md`
+- Canonical launchpad → `~/.scriptkit/kit/examples/START_HERE.md`
 - Machine-readable SDK reference → `kit://sdk-reference`
-- Script details → `~/.scriptkit/skills/script-authoring/SKILL.md`
-- Bundle details → `~/.scriptkit/skills/scriptlets/SKILL.md`
-- Agent details → `~/.scriptkit/skills/agents/SKILL.md`
-- Script example → `~/.scriptkit/examples/scripts/hello-world.ts`
-- Bundle starter → `~/.scriptkit/examples/extensions/starter.md`
-- Agent example → `~/.scriptkit/examples/agents/review-pr.claude.md`
+- Script details → `~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md`
+- Bundle details → `~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md`
+- Agent details → `~/.scriptkit/kit/authoring/skills/agents/SKILL.md`
+- Script example → `~/.scriptkit/kit/examples/scripts/hello-world.ts`
+- Bundle starter → `~/.scriptkit/kit/examples/extensions/starter.md`
+- Agent example → `~/.scriptkit/kit/examples/agents/review-pr.claude.md`
 
 ## Artifact-Specific Rules
 
@@ -306,10 +306,10 @@ export default {
 | Theme | `~/.scriptkit/kit/theme.json` |
 | SDK | `~/.scriptkit/sdk/kit-sdk.ts` (do not edit) |
 | Logs | `~/.scriptkit/logs/` |
-| Skills | `~/.scriptkit/skills/` |
-| Examples (scripts) | `~/.scriptkit/examples/scripts/` |
-| Examples (extensions) | `~/.scriptkit/examples/extensions/` |
-| Examples (agents) | `~/.scriptkit/examples/agents/` |
+| Skills | `~/.scriptkit/kit/authoring/skills/` |
+| Examples (scripts) | `~/.scriptkit/kit/examples/scripts/` |
+| Examples (extensions) | `~/.scriptkit/kit/examples/extensions/` |
+| Examples (agents) | `~/.scriptkit/kit/examples/agents/` |
 
 ## Tab AI — Quick Terminal with Flat Context Injection
 
@@ -339,7 +339,7 @@ Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` vi
 - `Submit` without a non-empty intent appends `Await the user's next terminal input.`
 
 **Harness lifecycle:**
-- Each explicit quick-terminal open writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/skills/`, and behaves as a one-shot spawn rendered in `QuickTerminalView`.
+- Each explicit quick-terminal open writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/kit/authoring/skills/`, and behaves as a one-shot spawn rendered in `QuickTerminalView`.
 - Internal silent prewarm may seed the PTY ahead of time, but that is a single-use implementation detail rather than a documented warm multi-turn surface.
 - Recovery — if the harness crashes or exits, the next Tab entry respawns it.
 
