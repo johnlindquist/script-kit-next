@@ -479,13 +479,6 @@ impl ScriptListApp {
     }
 }
 
-/// Describes the source of a file search stream.
-#[derive(Clone, Debug)]
-enum FileSearchStreamSource {
-    Directory { dir: String, show_hidden: bool },
-    Spotlight { query: String },
-}
-
 impl ScriptListApp {
     fn reset_file_search_selection_mode(&mut self) {
         self.file_search_selection_mode = FileSearchSelectionMode::AutoFirst;
@@ -555,14 +548,123 @@ impl ScriptListApp {
             .scroll_to_item(0, ScrollStrategy::Top);
     }
 
-    /// Spawn a streaming file-search task that feeds batched results back
-    /// into `apply_file_search_stream_batch`.  Used by both the directory
-    /// and Spotlight paths so the batch/cancel/resize logic lives in one
-    /// place.
+    /// Spawn a directory-browse task that buffers the full listing before
+    /// publishing one stable snapshot to the UI.
+    fn spawn_file_search_directory_snapshot_task(
+        &mut self,
+        gen: u64,
+        dir: String,
+        show_hidden: bool,
+        presentation: FileSearchPresentation,
+        debounce_ms: u64,
+        cx: &mut Context<Self>,
+    ) {
+        let cancel = crate::file_search::new_cancel_token();
+        self.file_search_cancel = Some(cancel.clone());
+
+        let task = cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(debounce_ms))
+                .await;
+
+            if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                return;
+            }
+
+            let (tx, rx) = std::sync::mpsc::channel();
+
+            std::thread::spawn({
+                let cancel = cancel.clone();
+                move || {
+                    let mut results = Vec::new();
+                    crate::file_search::list_directory_streaming_with_options(
+                        &dir,
+                        cancel.clone(),
+                        false,
+                        show_hidden,
+                        |event| {
+                            if let crate::file_search::SearchEvent::Result(result) = event {
+                                results.push(result);
+                            }
+                        },
+                    );
+
+                    if !cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                        let _ = tx.send(results);
+                    }
+                }
+            });
+
+            let mut snapshot: Option<Vec<crate::file_search::FileResult>> = None;
+
+            while snapshot.is_none() {
+                if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
+
+                match rx.try_recv() {
+                    Ok(results) => snapshot = Some(results),
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(16))
+                            .await;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => return,
+                }
+            }
+
+            let Some(results) = snapshot else {
+                return;
+            };
+
+            let _ = cx.update(|cx| {
+                this.update(cx, |app, cx| {
+                    app.apply_file_search_directory_snapshot(gen, presentation, results, cx);
+                })
+            });
+        });
+
+        self.file_search_debounce_task = Some(task);
+    }
+
+    fn apply_file_search_directory_snapshot(
+        &mut self,
+        gen: u64,
+        presentation: FileSearchPresentation,
+        results: Vec<crate::file_search::FileResult>,
+        cx: &mut Context<Self>,
+    ) {
+        if self.file_search_gen != gen {
+            return;
+        }
+
+        self.file_search_frozen_filter = None;
+        self.update_file_search_results(results);
+        self.restore_file_search_selection_after_results_change(None);
+        self.file_search_loading = false;
+
+        if let AppView::FileSearchView { selected_index, .. } = &self.current_view {
+            if !self.file_search_display_indices.is_empty() {
+                self.file_search_scroll_handle
+                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
+            }
+        }
+
+        Self::resize_file_search_window_after_results_change(
+            presentation,
+            self.file_search_display_indices.len(),
+            true,
+            true,
+        );
+        cx.notify();
+    }
+
+    /// Spawn a streaming Spotlight file-search task that feeds batched
+    /// results back into `apply_file_search_stream_batch`.
     fn spawn_file_search_stream_task(
         &mut self,
         gen: u64,
-        source: FileSearchStreamSource,
+        query: String,
         presentation: FileSearchPresentation,
         debounce_ms: u64,
         query_guard: Option<String>,
@@ -582,31 +684,17 @@ impl ScriptListApp {
 
             std::thread::spawn({
                 let cancel = cancel.clone();
-                let source = source.clone();
-                move || match source {
-                    FileSearchStreamSource::Directory { dir, show_hidden } => {
-                        crate::file_search::list_directory_streaming_with_options(
-                            &dir,
-                            cancel,
-                            false,
-                            show_hidden,
-                            |event| {
-                                let _ = tx.send(event);
-                            },
-                        );
-                    }
-                    FileSearchStreamSource::Spotlight { query } => {
-                        crate::file_search::search_files_streaming(
-                            &query,
-                            None,
-                            crate::file_search::DEFAULT_SEARCH_LIMIT,
-                            cancel,
-                            false,
-                            |event| {
-                                let _ = tx.send(event);
-                            },
-                        );
-                    }
+                move || {
+                    crate::file_search::search_files_streaming(
+                        &query,
+                        None,
+                        crate::file_search::DEFAULT_SEARCH_LIMIT,
+                        cancel,
+                        false,
+                        |event| {
+                            let _ = tx.send(event);
+                        },
+                    );
                 }
             });
 
@@ -762,9 +850,8 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Kick off a new streaming file-search session.  Cancels any
-    /// in-flight work, advances the generation counter, and delegates
-    /// to `spawn_file_search_stream_task`.
+    /// Kick off a new file-search session. Directory navigation waits for a
+    /// full snapshot; Spotlight search continues to stream batches.
     pub(crate) fn restart_file_search_stream_for_query(
         &mut self,
         query: String,
@@ -796,17 +883,12 @@ impl ScriptListApp {
                 );
             }
 
-            self.spawn_file_search_stream_task(
+            self.spawn_file_search_directory_snapshot_task(
                 gen,
-                FileSearchStreamSource::Directory {
-                    dir: parsed.directory,
-                    show_hidden: parsed.show_hidden,
-                },
+                parsed.directory,
+                parsed.show_hidden,
                 presentation,
                 30,
-                None,
-                preserve_old_results_until_first_batch,
-                true,
                 cx,
             );
             cx.notify();
@@ -827,9 +909,7 @@ impl ScriptListApp {
 
         self.spawn_file_search_stream_task(
             gen,
-            FileSearchStreamSource::Spotlight {
-                query: query.clone(),
-            },
+            query.clone(),
             presentation,
             75,
             Some(query),
@@ -937,5 +1017,45 @@ mod tests {
                 view,
             );
         }
+    }
+
+    #[test]
+    fn test_directory_navigation_uses_snapshot_publish_instead_of_stream_batches() {
+        let source = read_filter_input_change_source();
+        let restart_pos = source
+            .find("pub(crate) fn restart_file_search_stream_for_query(")
+            .expect("restart_file_search_stream_for_query must exist");
+        let restart_section = &source[restart_pos..(restart_pos + 2200).min(source.len())];
+
+        assert!(
+            restart_section.contains("self.spawn_file_search_directory_snapshot_task("),
+            "directory navigation must use the snapshot task so results publish once"
+        );
+        assert!(
+            restart_section.contains("self.spawn_file_search_stream_task("),
+            "Spotlight search must keep using the streaming task"
+        );
+    }
+
+    #[test]
+    fn test_directory_snapshot_task_collects_results_before_ui_publish() {
+        let source = read_filter_input_change_source();
+        let helper_pos = source
+            .find("fn spawn_file_search_directory_snapshot_task(")
+            .expect("spawn_file_search_directory_snapshot_task must exist");
+        let helper_section = &source[helper_pos..(helper_pos + 2600).min(source.len())];
+
+        assert!(
+            helper_section.contains("let mut results = Vec::new();"),
+            "directory snapshot task must buffer results off-thread"
+        );
+        assert!(
+            helper_section.contains("list_directory_streaming_with_options"),
+            "directory snapshot task must collect directory entries with cancellation support"
+        );
+        assert!(
+            helper_section.contains("app.apply_file_search_directory_snapshot("),
+            "directory snapshot task must publish the completed snapshot in one UI update"
+        );
     }
 }
