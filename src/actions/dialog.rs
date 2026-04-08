@@ -2098,15 +2098,15 @@ impl ActionsDialog {
     /// Handle a click on a row: first click selects, a second click on the
     /// same mouse-armed row submits, and native double-clicks also submit.
     /// Section headers are ignored.
-    pub fn handle_row_click(
+    pub(crate) fn handle_row_click_with_count(
         &mut self,
         ix: usize,
-        event: &gpui::ClickEvent,
+        click_count: usize,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Option<ActionsDialogActivation> {
         // Ignore clicks on section headers
         if !matches!(self.grouped_items.get(ix), Some(GroupedActionItem::Item(_))) {
-            return;
+            return None;
         }
 
         let was_selected = self.selected_index == ix;
@@ -2115,7 +2115,6 @@ impl ActionsDialog {
             self.select_grouped_item(ix, cx);
         }
 
-        let click_count = event.click_count();
         let should_submit = should_submit_actions_dialog_row_click(was_mouse_armed, click_count);
         self.mouse_armed_row = Some(ix);
 
@@ -2142,8 +2141,19 @@ impl ActionsDialog {
 
         if should_submit {
             self.clear_mouse_submit_arm();
-            let _ = self.activate_selected(cx);
+            return Some(self.activate_selected(cx));
         }
+
+        None
+    }
+
+    pub fn handle_row_click(
+        &mut self,
+        ix: usize,
+        event: &gpui::ClickEvent,
+        cx: &mut Context<Self>,
+    ) -> Option<ActionsDialogActivation> {
+        self.handle_row_click_with_count(ix, event.click_count(), cx)
     }
 
     /// Create box shadow for the overlay popup
@@ -2879,10 +2889,24 @@ impl Render for ActionsDialog {
                                             })
                                             .on_click({
                                                 let entity = entity.clone();
-                                                move |event, _window, cx| {
-                                                    entity.update(cx, |this, cx| {
-                                                        this.handle_row_click(ix, event, cx);
+                                                move |event, window, cx| {
+                                                    let activation = entity.update(cx, |this, cx| {
+                                                        this.handle_row_click(ix, event, cx)
                                                     });
+                                                    if matches!(
+                                                        activation,
+                                                        Some(ActionsDialogActivation::DrillDownPushed { .. })
+                                                    ) && crate::actions::is_actions_window(window)
+                                                    {
+                                                        let dialog = entity.clone();
+                                                        window.defer(cx, move |window, cx| {
+                                                            super::window::resize_actions_window_direct(
+                                                                window,
+                                                                cx,
+                                                                &dialog,
+                                                            );
+                                                        });
+                                                    }
                                                 }
                                             });
 
@@ -3996,6 +4020,7 @@ mod actions_dialog_spec_tests {
 #[cfg(test)]
 mod actions_dialog_click_contract_tests {
     use super::should_submit_actions_dialog_row_click;
+    use std::fs;
 
     #[test]
     fn actions_dialog_requires_second_single_click_after_mouse_selection() {
@@ -4007,5 +4032,20 @@ mod actions_dialog_click_contract_tests {
     fn actions_dialog_still_submits_on_native_double_click() {
         assert!(should_submit_actions_dialog_row_click(false, 2));
         assert!(should_submit_actions_dialog_row_click(false, 3));
+    }
+
+    #[test]
+    fn actions_dialog_row_click_resizes_detached_window_after_drill_down() {
+        let source = fs::read_to_string("src/actions/dialog.rs")
+            .expect("Failed to read src/actions/dialog.rs");
+
+        assert!(
+            source.contains("crate::actions::is_actions_window(window)"),
+            "row click handler must detect detached actions window context"
+        );
+        assert!(
+            source.contains("super::window::resize_actions_window_direct("),
+            "detached row click drill-down must resize the actions window"
+        );
     }
 }
