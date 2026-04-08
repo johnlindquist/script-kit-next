@@ -3,11 +3,12 @@
 `~/.scriptkit/kit/examples/START_HERE.md` is the canonical one-shot authoring guide.
 Use this README for browsing and pattern study after the artifact type is already chosen.
 
-Working examples demonstrating Script Kit patterns. Learn by reading, then create your own in the matching workspace directory:
+Working examples demonstrating Script Kit patterns. Plugins are the package boundary. Learn by reading, then create your own in the matching workspace directory:
 
 - scripts → `~/.scriptkit/kit/main/scripts/`
 - extension / scriptlet bundles → `~/.scriptkit/kit/main/extensions/`
-- mdflow agents → `~/.scriptkit/kit/main/agents/`
+- skills (preferred reusable AI unit) → `~/.scriptkit/kit/main/skills/<name>/SKILL.md`
+- mdflow agents (compatibility) → `~/.scriptkit/kit/main/agents/`
 
 ## Start Here
 
@@ -15,7 +16,8 @@ Working examples demonstrating Script Kit patterns. Learn by reading, then creat
 |------|-----------|----------|-----------|
 | New script | `scripts/hello-world.ts` | `~/.scriptkit/kit/main/scripts/<name>.ts` | `~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md` |
 | New extension / scriptlet bundle | `extensions/starter.md` | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md` |
-| New mdflow agent | `agents/review-pr.claude.md` | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/kit/authoring/skills/agents/SKILL.md` |
+| New skill (preferred AI unit) | n/a | `~/.scriptkit/kit/main/skills/<name>/SKILL.md` | `~/.scriptkit/kit/authoring/skills/README.md` |
+| New mdflow agent (compatibility) | `agents/review-pr.claude.md` | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/kit/authoring/skills/agents/SKILL.md` |
 
 In this repo, "extension bundle" and "scriptlet bundle" mean the same thing.
 
@@ -43,9 +45,9 @@ Reference markdown bundles copied from the built-in examples kit.
 
 Copy patterns from these files into `~/.scriptkit/kit/main/extensions/`.
 
-## Agents (`agents/`)
+## Agents (Compatibility) (`agents/`)
 
-Reference mdflow agent files.
+Reference mdflow agent files. For new reusable AI work, prefer creating a skill (`~/.scriptkit/kit/main/skills/<name>/SKILL.md`) instead — skills are the preferred reusable AI unit and appear as first-class main-menu items.
 
 | File | Pattern Demonstrated |
 |------|---------------------|
@@ -61,7 +63,8 @@ Copy any example to your workspace:
 ```bash
 cp ~/.scriptkit/kit/examples/scripts/hello-world.ts ~/.scriptkit/kit/main/scripts/my-script.ts
 cp ~/.scriptkit/kit/examples/extensions/starter.md ~/.scriptkit/kit/main/extensions/my-bundle.md
-cp ~/.scriptkit/kit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md
+mkdir -p ~/.scriptkit/kit/main/skills/my-skill  # skills are the preferred reusable AI unit
+cp ~/.scriptkit/kit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md  # compatibility
 ```
 
 Then edit to suit your needs. Script Kit will detect it immediately.

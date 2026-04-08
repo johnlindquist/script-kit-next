@@ -21,9 +21,15 @@ Use this plain-text route first:
 - Use for snippets, text expansion, quick shell commands, or grouped helpers
 - Write to `~/.scriptkit/kit/main/extensions/<name>.md`
 
-### mdflow agent
-- Use for reusable backend-specific prompt or automation
+### Skill (preferred reusable AI unit)
+- Use for reusable AI instructions that open ACP Chat when selected from the main menu
+- Write to `~/.scriptkit/kit/main/skills/<name>/SKILL.md`
+- Skills are the preferred way to package reusable AI behavior — plugins are the package boundary
+
+### mdflow agent (compatibility)
+- Use only when you need a specific backend suffix or legacy mdflow features
 - Write to `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
+- For new reusable AI work, prefer creating a skill instead
 
 Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact.
 
@@ -31,7 +37,8 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 
 - Create exactly one artifact per request.
 - Save runnable user files only under `~/.scriptkit/kit/main/`.
-- Do not create a `.ts` script when the request is really a bundle or agent.
+- Do not create a `.ts` script when the request is really a bundle, skill, or agent.
+- For new reusable AI work, create a skill (`kit/main/skills/<name>/SKILL.md`), not an agent.
 - For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
 - Agent files do not use `export const metadata`; use underscore-prefixed `_sk_*` keys.
 - Choose the backend suffix deliberately: `.claude.md`, `.gemini.md`, `.codex.md`, `.copilot.md`, or `.i.gemini.md`.
@@ -42,7 +49,8 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 - Machine-readable SDK reference → `kit://sdk-reference`
 - Script details → `~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md`
 - Bundle details → `~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md`
-- Agent details → `~/.scriptkit/kit/authoring/skills/agents/SKILL.md`
+- Skills overview → `~/.scriptkit/kit/authoring/skills/README.md`
+- Agent details (compatibility) → `~/.scriptkit/kit/authoring/skills/agents/SKILL.md`
 - Script example → `~/.scriptkit/kit/examples/scripts/hello-world.ts`
 - Bundle starter → `~/.scriptkit/kit/examples/extensions/starter.md`
 - Agent example → `~/.scriptkit/kit/examples/agents/review-pr.claude.md`
@@ -59,8 +67,8 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 │   │   ├── plugin.json            ← plugin manifest
 │   │   ├── scripts/               ← PUT NEW SCRIPTS HERE
 │   │   ├── extensions/            ← markdown scriptlet bundles
-│   │   ├── agents/                ← AI agent definitions
-│   │   └── skills/
+│   │   ├── skills/                ← AI skills (preferred reusable AI unit)
+│   │   └── agents/                ← legacy agent definitions (compatibility)
 │   ├── authoring/
 │   │   ├── plugin.json
 │   │   └── skills/                ← agent skills (read these!)
@@ -99,11 +107,19 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 - Use `import "@scriptkit/sdk";` only inside `tool:<name>` fences, as the first line of that fence
 - Do not put `export const metadata` at the top of the markdown file
 
-### mdflow Agent Rules
+### Skill Rules (Preferred Reusable AI Unit)
+- Create a directory under `kit/main/skills/<name>/`
+- Add a `SKILL.md` file with YAML frontmatter (`name`, `description`)
+- Skills appear in the main menu and always open ACP Chat when selected
+- Plugins are the package boundary — each plugin owns its own skills
+- Prefer skills over agents for any new reusable AI work
+
+### mdflow Agent Rules (Compatibility)
 - Save to `kit/main/agents/<name>.<backend>.md`
 - Use underscore-prefixed `_sk_*` metadata keys
 - Do not use `export const metadata`
 - Do not add `import "@scriptkit/sdk"` to the markdown file
+- For new reusable AI work, prefer creating a skill instead
 
 ## Avoid These Mistakes
 
@@ -111,10 +127,12 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 - Do not put scripts in `extensions/` or `agents/`
 - Do not put bundles in `scripts/`
 - Do not put agents in `scripts/` or `extensions/`
+- Do not put skills in `scripts/` or `extensions/` — skills are `SKILL.md` directories under `skills/`
+- Do not create new agents when a skill would work — agents are a compatibility path
 - Do not use CommonJS or the old v1 SDK package
 - Do not edit `sdk/`
 
-The Core SDK examples below apply to `.ts` scripts and `tool:<name>` scriptlets. They do not apply to mdflow agent markdown files.
+The Core SDK examples below apply to `.ts` scripts and `tool:<name>` scriptlets. They do not apply to skills or mdflow agent markdown files.
 
 ## Core SDK Functions
 

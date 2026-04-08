@@ -106,9 +106,10 @@ if (files.length === 0) {
 |------|---------|
 | `~/.scriptkit/kit/main/scripts/` | Your scripts |
 | `~/.scriptkit/kit/main/extensions/` | Your extensions |
-| `~/.scriptkit/kit/main/agents/` | Your AI agent definitions |
+| `~/.scriptkit/kit/main/skills/` | Your AI skills (preferred reusable AI unit) |
+| `~/.scriptkit/kit/main/agents/` | Legacy AI agent definitions (compatibility) |
 | `~/.scriptkit/kit/config.ts` | Configuration |
 | `~/.scriptkit/kit/theme.json` | Theme customization |
 | `~/.scriptkit/sdk/` | SDK (managed by app) |
-| `~/.scriptkit/kit/AGENTS.md` | This guide (for AI agents) |
-| `~/.scriptkit/kit/CLAUDE.md` | Claude-specific instructions |
+| `~/.scriptkit/CLAUDE.md` | Agent instructions (workspace root) |
+| `~/.scriptkit/AGENTS.md` | SDK reference (workspace root) |
