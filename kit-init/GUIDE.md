@@ -768,7 +768,7 @@ Return:
 3. tests to add
 ```
 
-For more patterns, read `~/.scriptkit/examples/agents/`.
+For more patterns, read `~/.scriptkit/kit/examples/agents/`.
 
 ---
 
@@ -894,7 +894,7 @@ Common key codes:
 
 ### Common Mistakes
 
-- Putting `skills/` under `kit/` instead of at `~/.scriptkit/skills/`
+- Putting skills at the workspace root instead of in `~/.scriptkit/kit/authoring/skills/`
 - Editing `~/.scriptkit/config.ts` instead of `~/.scriptkit/kit/config.ts`
 - Using `command` / `control` instead of `meta` / `ctrl`
 - Putting dictation microphone selection in `config.ts` instead of `kit/settings.json`

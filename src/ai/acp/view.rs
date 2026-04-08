@@ -540,13 +540,34 @@ impl AcpChatView {
     ) -> Option<crate::ai::acp::history_popup::AcpHistoryPopupSnapshot> {
         let (selected_index, filter, all_entries) = self.history_menu.as_ref()?;
         let entries = if filter.is_empty() {
-            all_entries.clone()
+            all_entries
+                .iter()
+                .cloned()
+                .map(|entry| {
+                    crate::ai::acp::history_popup::AcpHistoryPopupEntry::from_hit(
+                        super::history::AcpHistorySearchHit {
+                            entry,
+                            score: 0,
+                            matched_field: super::history::AcpHistorySearchField::Title,
+                        },
+                    )
+                })
+                .collect::<Vec<_>>()
         } else {
             let query = filter.to_lowercase();
             all_entries
                 .iter()
                 .filter(|entry| entry.first_message.to_lowercase().contains(&query))
                 .cloned()
+                .map(|entry| {
+                    crate::ai::acp::history_popup::AcpHistoryPopupEntry::from_hit(
+                        super::history::AcpHistorySearchHit {
+                            entry,
+                            score: 0,
+                            matched_field: super::history::AcpHistorySearchField::Title,
+                        },
+                    )
+                })
                 .collect::<Vec<_>>()
         };
         let selected_index = if entries.is_empty() {

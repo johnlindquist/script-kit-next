@@ -370,7 +370,7 @@ const HARNESS_MOD_SOURCE: &str = include_str!("../src/ai/harness/mod.rs");
 #[test]
 fn launchpad_requires_reading_script_authoring_skill() {
     assert!(
-        LAUNCHPAD_SOURCE.contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
+        LAUNCHPAD_SOURCE.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"),
         "START_HERE.md must route agents to the script-authoring skill for verification guidance"
     );
 }
@@ -480,7 +480,7 @@ fn harness_submission_builder_appends_guidance_for_script_list_submit() {
         "PTY submission builder must call the shared appendix builder"
     );
     assert!(
-        builder_body.contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
+        builder_body.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"),
         "PTY submission builder must log whether guidance references the script-authoring skill"
     );
 }
@@ -551,7 +551,7 @@ fn authoring_submission_includes_all_verification_markers() {
         "authoring submission must include the guidance block"
     );
     assert!(
-        submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
+        submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"),
         "authoring submission must reference the script-authoring skill"
     );
     assert!(

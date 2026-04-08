@@ -192,7 +192,7 @@ mod tests {
                 );
                 assert!(
                     text.text
-                        .contains("~/.scriptkit/skills/script-authoring/SKILL.md"),
+                        .contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"),
                     "guidance must reference the script-authoring skill"
                 );
             }

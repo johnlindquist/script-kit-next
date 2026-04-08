@@ -191,39 +191,16 @@ impl ScriptListApp {
             result.clone_url.clone()
         };
 
-        let name = Self::kit_store_derive_name(&repo_url)?;
-        let kits_root = script_kit_gpui::setup::get_kit_path().join("kits");
-        std::fs::create_dir_all(&kits_root)
-            .map_err(|error| format!("Failed to create kits directory: {}", error))?;
-        let install_path = kits_root.join(&name);
-        if install_path.exists() {
-            return Err(format!(
-                "Kit '{}' is already installed at {}",
-                name,
-                install_path.display()
-            ));
-        }
-
-        let clone_output = Command::new("git")
-            .arg("clone")
-            .arg(&repo_url)
-            .arg(&install_path)
-            .output()
-            .map_err(|error| format!("Failed to run git clone: {}", error))?;
-        if !clone_output.status.success() {
-            return Err(Self::kit_store_git_error(
-                "git clone",
-                clone_output.status,
-                &clone_output.stderr,
-            ));
-        }
+        // Delegate clone + plugin.json synthesis to git_ops, which installs
+        // directly into the canonical plugin root (`<kit_path>/kit/<plugin-id>/`).
+        let (plugin_id, install_path) = script_kit_gpui::kit_store::git_ops::install_kit(&repo_url)?;
 
         let git_hash = Self::kit_store_git_hash(&install_path)?;
         let mut kits = Self::kit_store_list_installed();
-        kits.retain(|kit| kit.name != name);
+        kits.retain(|kit| kit.name != plugin_id);
 
         let installed = script_kit_gpui::kit_store::InstalledKit {
-            name,
+            name: plugin_id,
             path: install_path,
             repo_url,
             git_hash,
@@ -232,7 +209,7 @@ impl ScriptListApp {
         kits.push(installed.clone());
 
         script_kit_gpui::kit_store::storage::save_kit_registry(&kits)
-            .map_err(|error| format!("Failed to update kit registry: {}", error))?;
+            .map_err(|error| format!("Failed to update plugin registry: {}", error))?;
 
         Ok(installed)
     }
@@ -308,12 +285,13 @@ impl ScriptListApp {
             let _ = this.update(cx, |this, cx| match result {
                 Ok(installed) => {
                     tracing::info!(
-                        kit_name = %installed.name,
-                        "Kit installed successfully"
+                        plugin_id = %installed.name,
+                        install_path = %installed.path.display(),
+                        "plugin_store_installed"
                     );
                     this.toast_manager.push(
                         components::toast::Toast::success(
-                            format!("Installed kit '{}'", installed.name),
+                            format!("Installed plugin '{}'", installed.name),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_SUCCESS_MS)),
@@ -323,11 +301,11 @@ impl ScriptListApp {
                 Err(error) => {
                     tracing::warn!(
                         error = %error,
-                        "Kit install failed"
+                        "plugin_store_install_failed"
                     );
                     this.toast_manager.push(
                         components::toast::Toast::error(
-                            format!("Failed to install kit: {}", error),
+                            format!("Failed to install plugin: {}", error),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_ERROR_MS)),
@@ -359,10 +337,10 @@ impl ScriptListApp {
                 .await;
             let _ = this.update(cx, |this, cx| match result {
                 Ok(()) => {
-                    tracing::info!(kit_name = %kit_name, "Kit updated successfully");
+                    tracing::info!(plugin_id = %kit_name, "plugin_store_updated");
                     this.toast_manager.push(
                         components::toast::Toast::success(
-                            format!("Updated kit '{}'", kit_name),
+                            format!("Updated plugin '{}'", kit_name),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_SUCCESS_MS)),
@@ -370,7 +348,7 @@ impl ScriptListApp {
                     this.kit_store_refresh_installed_view(cx);
                 }
                 Err(error) => {
-                    tracing::warn!(kit_name = %kit_name, error = %error, "Kit update failed");
+                    tracing::warn!(plugin_id = %kit_name, error = %error, "plugin_store_update_failed");
                     this.toast_manager.push(
                         components::toast::Toast::error(
                             format!("Failed to update '{}': {}", kit_name, error),
@@ -396,10 +374,10 @@ impl ScriptListApp {
                 .await;
             let _ = this.update(cx, |this, cx| match result {
                 Ok(()) => {
-                    tracing::info!(kit_name = %kit_name, "Kit removed successfully");
+                    tracing::info!(plugin_id = %kit_name, "plugin_store_removed");
                     this.toast_manager.push(
                         components::toast::Toast::success(
-                            format!("Removed kit '{}'", kit_name),
+                            format!("Removed plugin '{}'", kit_name),
                             &this.theme,
                         )
                         .duration_ms(Some(TOAST_SUCCESS_MS)),
@@ -407,7 +385,7 @@ impl ScriptListApp {
                     this.kit_store_refresh_installed_view(cx);
                 }
                 Err(error) => {
-                    tracing::warn!(kit_name = %kit_name, error = %error, "Kit remove failed");
+                    tracing::warn!(plugin_id = %kit_name, error = %error, "plugin_store_remove_failed");
                     this.toast_manager.push(
                         components::toast::Toast::error(
                             format!("Failed to remove '{}': {}", kit_name, error),
