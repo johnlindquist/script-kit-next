@@ -41,6 +41,7 @@ pub(crate) struct FooterButtonConfig {
     pub key: &'static str,
     pub label: &'static str,
     pub selected: bool,
+    pub enabled: bool,
 }
 
 impl FooterButtonConfig {
@@ -50,11 +51,17 @@ impl FooterButtonConfig {
             key,
             label,
             selected: false,
+            enabled: true,
         }
     }
 
     pub(crate) fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
+        self
+    }
+
+    pub(crate) fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
         self
     }
 }
@@ -493,30 +500,99 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
     ];
 
     let mut items = Vec::new();
-    let mut total_width = 0.0_f64;
+    let mut total_item_width = 0.0_f64;
     for (index, button_cfg) in buttons.iter().enumerate() {
         let item = make_footer_hint_item(button_cfg, font, text_color);
         if item == nil {
             continue;
         }
         let item_frame: NSRect = msg_send![item, frame];
-        total_width += item_frame.size.width;
+        total_item_width += item_frame.size.width;
         if index > 0 {
-            total_width += FOOTER_HINT_ITEM_GAP;
+            total_item_width += FOOTER_HINT_ITEM_GAP;
         }
         items.push((item, item_frame.size.width));
     }
 
+    let balanced_floor_width = if items.is_empty() {
+        0.0
+    } else {
+        let gap_width = FOOTER_HINT_ITEM_GAP * (items.len().saturating_sub(1) as f64);
+        ((total_item_width - gap_width) / items.len() as f64).round()
+    };
+
+    let mut total_width = 0.0_f64;
+    for (index, (item, item_width)) in items.iter().enumerate() {
+        let target_width = item_width.max(balanced_floor_width);
+        normalize_footer_hint_item_width(*item, target_width);
+        total_width += target_width;
+        if index > 0 {
+            total_width += FOOTER_HINT_ITEM_GAP;
+        }
+    }
+
     let mut x = (hints_bounds.size.width - total_width).max(0.0);
-    for (item, width) in items {
+    for (item, item_width) in items {
+        let target_width = item_width.max(balanced_floor_width);
         let frame = NSRect::new(
             NSPoint::new(x, 0.0),
-            NSSize::new(width, hints_bounds.size.height),
+            NSSize::new(target_width, hints_bounds.size.height),
         );
         let _: () = msg_send![item, setFrame: frame];
         let _: () = msg_send![hints_view, addSubview: item];
-        x += width + FOOTER_HINT_ITEM_GAP;
+        x += target_width + FOOTER_HINT_ITEM_GAP;
     }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn normalize_footer_hint_item_width(item: id, target_width: f64) {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    if item == nil {
+        return;
+    }
+
+    let item_frame: NSRect = msg_send![item, frame];
+    let width_delta = target_width - item_frame.size.width;
+    if width_delta <= 0.0 {
+        return;
+    }
+
+    let content_offset = (width_delta / 2.0).round();
+    let subviews: id = msg_send![item, subviews];
+    if subviews != nil {
+        let count: usize = msg_send![subviews, count];
+        for index in 0..count {
+            let child: id = msg_send![subviews, objectAtIndex: index];
+            if child == nil {
+                continue;
+            }
+
+            let child_frame: NSRect = msg_send![child, frame];
+            let is_button: cocoa::base::BOOL = msg_send![child, isKindOfClass: class!(NSButton)];
+            let new_frame = if is_button == YES {
+                NSRect::new(
+                    NSPoint::new(0.0, child_frame.origin.y),
+                    NSSize::new(target_width, child_frame.size.height),
+                )
+            } else {
+                NSRect::new(
+                    NSPoint::new(child_frame.origin.x + content_offset, child_frame.origin.y),
+                    child_frame.size,
+                )
+            };
+            let _: () = msg_send![child, setFrame: new_frame];
+        }
+    }
+
+    let _: () = msg_send![
+        item,
+        setFrame: NSRect::new(
+            item_frame.origin,
+            NSSize::new(target_width, item_frame.size.height)
+        )
+    ];
 }
 
 #[cfg(target_os = "macos")]
@@ -607,10 +683,11 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
         let _: () = msg_send![button, setBezelStyle: 0usize];
         let _: () = msg_send![button, setButtonType: 0usize];
         let _: () = msg_send![button, setTransparent: YES];
+        let _: () = msg_send![button, setEnabled: if button_cfg.enabled { YES } else { NO }];
         let _: () = msg_send![button, setTarget: footer_action_target()];
         let _: () = msg_send![button, setAction: footer_action_selector(button_cfg.action)];
 
-        // Store _selected and _isActionsButton for mouse exit behavior.
+        // Store button state for hover/cursor behavior and selected restoration.
         let is_actions = matches!(button_cfg.action, FooterAction::Actions);
         if let Some(obj) = button.as_mut() {
             obj.set_ivar::<cocoa::base::BOOL>(
@@ -620,6 +697,10 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
             obj.set_ivar::<cocoa::base::BOOL>(
                 "_selected",
                 if button_cfg.selected { YES } else { NO },
+            );
+            obj.set_ivar::<cocoa::base::BOOL>(
+                "_enabled",
+                if button_cfg.enabled { YES } else { NO },
             );
         }
     }
@@ -769,6 +850,7 @@ fn footer_button_class() -> *const objc::runtime::Class {
             decl.add_ivar::<usize>("_selectedCGColor");
             decl.add_ivar::<cocoa::base::BOOL>("_isActionsButton");
             decl.add_ivar::<cocoa::base::BOOL>("_selected");
+            decl.add_ivar::<cocoa::base::BOOL>("_enabled");
             decl.add_method(
                 sel!(acceptsFirstMouse:),
                 footer_button_accepts_first_mouse
@@ -802,10 +884,16 @@ fn footer_button_class() -> *const objc::runtime::Class {
 
 #[cfg(target_os = "macos")]
 extern "C" fn footer_button_accepts_first_mouse(
-    _this: &objc::runtime::Object,
+    this: &objc::runtime::Object,
     _: objc::runtime::Sel,
     _: id,
 ) -> cocoa::base::BOOL {
+    // SAFETY: `this` is a live instance of our registered NSButton subclass,
+    // so reading the `_enabled` ivar is valid for the duration of this call.
+    let enabled: cocoa::base::BOOL = unsafe { *this.get_ivar::<cocoa::base::BOOL>("_enabled") };
+    if enabled != YES {
+        return NO;
+    }
     tracing::debug!(
         target: "script_kit::footer_popup",
         event = "native_footer_button_accepts_first_mouse",
@@ -832,6 +920,10 @@ extern "C" fn footer_button_reset_cursor_rects(
     // SAFETY: `this` is a live NSButton subclass. We add a cursor rect covering
     // the full button bounds so the pointing-hand cursor appears on hover.
     unsafe {
+        let enabled: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_enabled");
+        if enabled != YES {
+            return;
+        }
         let bounds: cocoa::foundation::NSRect = msg_send![this, bounds];
         let cursor: id = msg_send![class!(NSCursor), pointingHandCursor];
         let _: () = msg_send![this, addCursorRect:bounds cursor:cursor];
@@ -890,6 +982,10 @@ extern "C" fn footer_button_mouse_entered(
     // SAFETY: Set hover background on the parent container's layer.
     // Recompute color from theme each time to avoid dangling CGColor pointers.
     unsafe {
+        let enabled: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_enabled");
+        if enabled != YES {
+            return;
+        }
         let is_actions: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_isActionsButton");
         tracing::debug!(
             target: "script_kit::footer_popup",
@@ -908,7 +1004,7 @@ extern "C" fn footer_button_mouse_entered(
         }
         let theme = crate::theme::get_cached_theme();
         let chrome = crate::theme::AppChromeColors::from_theme(&theme);
-        let hover_ns: id = ns_color_from_rgba(chrome.hover_rgba);
+        let hover_ns: id = ns_color_from_rgba(chrome.selection_rgba);
         if hover_ns != nil {
             let cg: id = msg_send![hover_ns, CGColor];
             if cg != nil {
