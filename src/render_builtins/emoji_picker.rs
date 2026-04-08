@@ -394,12 +394,38 @@ impl ScriptListApp {
             ),
         );
 
-        crate::components::render_minimal_list_prompt_scaffold(
-            header,
-            content,
+        let gpui_footer = crate::components::render_simple_hint_strip(
             crate::components::universal_prompt_hints(),
             None,
-        )
+        );
+        let footer = self.main_window_footer_slot(gpui_footer);
+
+        div()
+            .w_full()
+            .h_full()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .w_full()
+                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(header),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .w_full()
+                    .overflow_hidden()
+                    .child(content),
+            )
+            .when_some(footer, |d, f| d.child(f))
         .rounded(px(design_visual.radius_lg))
         .text_color(rgb(text_primary))
         .font_family(design_typography.font_family)
@@ -413,11 +439,15 @@ impl ScriptListApp {
 #[cfg(test)]
 mod emoji_picker_chrome_audit {
     #[test]
-    fn emoji_picker_uses_minimal_chrome_footer() {
+    fn emoji_picker_uses_native_footer_slot() {
         let source = include_str!("emoji_picker.rs");
         assert!(
-            source.contains("render_minimal_list_prompt_scaffold("),
-            "emoji_picker should use render_minimal_list_prompt_scaffold"
+            source.contains("main_window_footer_slot("),
+            "emoji_picker should route its GPUI footer through main_window_footer_slot"
+        );
+        assert!(
+            source.contains("render_simple_hint_strip("),
+            "emoji_picker should build its hint strip via render_simple_hint_strip"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(

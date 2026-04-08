@@ -191,327 +191,6 @@ impl ScriptListApp {
             .into_any_element()
     }
 
-    fn render_theme_chooser_surface_card(
-        title: &'static str,
-        bg_rgba: u32,
-        border_rgba: u32,
-        text_hex: u32,
-        muted_hex: u32,
-        accent_hex: u32,
-    ) -> AnyElement {
-        div()
-            .min_w(px(116.0))
-            .flex_1()
-            .rounded(px(8.0))
-            .border_1()
-            .border_color(rgba(border_rgba))
-            .bg(rgba(bg_rgba))
-            .p(px(8.0))
-            .flex()
-            .flex_col()
-            .gap(px(6.0))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(muted_hex))
-                    .child(title),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(text_hex))
-                    .child("Preview Text"),
-            )
-            .child(
-                div()
-                    .w(px(44.0))
-                    .h(px(6.0))
-                    .rounded(px(3.0))
-                    .bg(rgb(accent_hex)),
-            )
-            .into_any_element()
-    }
-
-    fn render_theme_chooser_surface_lab(
-        &self,
-        chrome: &theme::AppChromeColors,
-    ) -> AnyElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(6.0))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(chrome.text_muted_hex))
-                    .child("Surface Lab"),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(px(8.0))
-                    .flex_wrap()
-                    .child(Self::render_theme_chooser_surface_card(
-                        "Window",
-                        chrome.window_surface_rgba,
-                        chrome.border_rgba,
-                        chrome.text_primary_hex,
-                        chrome.text_muted_hex,
-                        chrome.accent_hex,
-                    ))
-                    .child(Self::render_theme_chooser_surface_card(
-                        "Preview",
-                        chrome.preview_surface_rgba,
-                        chrome.border_rgba,
-                        chrome.text_primary_hex,
-                        chrome.text_muted_hex,
-                        chrome.accent_hex,
-                    ))
-                    .child(Self::render_theme_chooser_surface_card(
-                        "Panel",
-                        chrome.panel_surface_rgba,
-                        chrome.border_rgba,
-                        chrome.text_primary_hex,
-                        chrome.text_muted_hex,
-                        chrome.accent_hex,
-                    ))
-                    .child(Self::render_theme_chooser_surface_card(
-                        "Input",
-                        chrome.input_active_rgba,
-                        chrome.border_rgba,
-                        chrome.text_primary_hex,
-                        chrome.text_muted_hex,
-                        chrome.accent_hex,
-                    ))
-                    .child(Self::render_theme_chooser_surface_card(
-                        "Log",
-                        chrome.log_panel_surface_rgba,
-                        chrome.border_rgba,
-                        chrome.text_primary_hex,
-                        chrome.text_muted_hex,
-                        chrome.accent_hex,
-                    ))
-                    .child(Self::render_theme_chooser_surface_card(
-                        "Dialog",
-                        chrome.dialog_surface_rgba,
-                        chrome.border_rgba,
-                        chrome.text_primary_hex,
-                        chrome.text_muted_hex,
-                        chrome.accent_hex,
-                    )),
-            )
-            .into_any_element()
-    }
-
-    fn render_theme_chooser_prompt_lab(
-        &self,
-        chrome: &theme::AppChromeColors,
-    ) -> AnyElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(6.0))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(chrome.text_muted_hex))
-                    .child("Prompt Lab"),
-            )
-            .child(
-                div()
-                    .px(px(10.0))
-                    .py(px(10.0))
-                    .rounded(px(10.0))
-                    .border_1()
-                    .border_color(rgba(chrome.divider_rgba))
-                    .bg(rgba(chrome.panel_surface_rgba))
-                    .flex()
-                    .flex_col()
-                    .gap(px(8.0))
-                    .child(Self::render_theme_chooser_prompt_lab_field(
-                        "Project Name",
-                        "Ship theme polish",
-                        chrome.badge_bg_rgba,
-                        chrome.badge_border_rgba,
-                        chrome.text_primary_hex,
-                        chrome.text_secondary_hex,
-                    ))
-                    .child(Self::render_theme_chooser_prompt_lab_field(
-                        "Focused Field",
-                        "Dark / Light / Auto",
-                        chrome.input_active_rgba,
-                        chrome.border_rgba,
-                        chrome.text_primary_hex,
-                        chrome.text_secondary_hex,
-                    ))
-                    .child(Self::render_theme_chooser_prompt_lab_checkbox(
-                        "Use vibrancy blur",
-                        false,
-                        chrome,
-                    ))
-                    .child(Self::render_theme_chooser_prompt_lab_checkbox(
-                        "Enable dark mode",
-                        true,
-                        chrome,
-                    )),
-            )
-            .into_any_element()
-    }
-
-    fn render_theme_chooser_prompt_lab_field(
-        label: &'static str,
-        value: &'static str,
-        surface_rgba: u32,
-        border_rgba: u32,
-        text_hex: u32,
-        secondary_text_hex: u32,
-    ) -> AnyElement {
-        div()
-            .flex()
-            .flex_col()
-            .gap(px(4.0))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(secondary_text_hex))
-                    .child(label),
-            )
-            .child(
-                div()
-                    .h(px(30.0))
-                    .px(px(10.0))
-                    .rounded(px(8.0))
-                    .border_1()
-                    .border_color(rgba(border_rgba))
-                    .bg(rgba(surface_rgba))
-                    .flex()
-                    .items_center()
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_hex))
-                            .child(value),
-                    ),
-            )
-            .into_any_element()
-    }
-
-    fn render_theme_chooser_prompt_lab_checkbox(
-        label: &'static str,
-        checked: bool,
-        chrome: &theme::AppChromeColors,
-    ) -> AnyElement {
-        let box_bg = if checked {
-            chrome.accent_badge_bg_rgba
-        } else {
-            chrome.badge_bg_rgba
-        };
-        let box_border = if checked {
-            chrome.accent_badge_border_rgba
-        } else {
-            chrome.badge_border_rgba
-        };
-        let box_text = if checked {
-            chrome.accent_badge_text_hex
-        } else {
-            chrome.text_secondary_hex
-        };
-
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(8.0))
-            .child(
-                div()
-                    .w(px(16.0))
-                    .h(px(16.0))
-                    .rounded(px(4.0))
-                    .border_1()
-                    .border_color(rgba(box_border))
-                    .bg(rgba(box_bg))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(box_text))
-                            .child(if checked { "\u{2713}" } else { "" }),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(chrome.text_primary_hex))
-                    .child(label),
-            )
-            .into_any_element()
-    }
-
-    fn render_theme_chooser_contrast_row(
-        sample: &ThemeChooserContrastRow,
-        chrome: &theme::AppChromeColors,
-    ) -> AnyElement {
-        let status_bg = if sample.passes {
-            rgba(chrome.accent_badge_bg_rgba)
-        } else {
-            rgba(chrome.hover_rgba)
-        };
-        let status_text = if sample.passes { "Pass" } else { "Fix" };
-        let status_text_hex = if sample.passes {
-            chrome.accent_badge_text_hex
-        } else {
-            chrome.text_primary_hex
-        };
-
-        div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_between()
-            .gap(px(8.0))
-            .px(px(8.0))
-            .py(px(6.0))
-            .rounded(px(6.0))
-            .bg(rgba(chrome.badge_bg_rgba))
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.0))
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(chrome.text_primary_hex))
-                            .child(sample.label.clone()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(chrome.text_muted_hex))
-                            .child(format!(
-                                "{:.2}:1 minimum {:.1}:1",
-                                sample.ratio, sample.minimum
-                            )),
-                    ),
-            )
-            .child(
-                div()
-                    .px(px(6.0))
-                    .py(px(3.0))
-                    .rounded(px(4.0))
-                    .bg(status_bg)
-                    .text_xs()
-                    .text_color(rgb(status_text_hex))
-                    .child(status_text),
-            )
-            .into_any_element()
-    }
-
     /// Helper: compute filtered preset indices from a filter string
     fn theme_chooser_filtered_indices(filter: &str) -> Vec<usize> {
         theme::presets::filtered_preset_indices_cached(filter)
@@ -584,25 +263,6 @@ impl ScriptListApp {
         cx.notify();
     }
 
-    /// Apply a theme AND persist to disk (auto-save on click).
-    /// Does NOT update `theme_before_chooser` — that stays as the entry
-    /// snapshot so Escape can undo all click-saves.
-    fn apply_and_persist_theme(
-        &mut self,
-        next_theme: crate::theme::Theme,
-        reason: &'static str,
-        cx: &mut Context<Self>,
-    ) {
-        self.apply_theme_chooser_theme(next_theme, reason, cx);
-        if let Err(e) = crate::theme::service::persist_theme_and_sync_all_windows(
-            cx,
-            self.theme.as_ref(),
-            reason,
-        ) {
-            tracing::warn!(error = %e, "theme_chooser_auto_save_failed");
-        }
-    }
-
     /// Clone-and-mutate convenience: clones the current theme, applies a
     /// mutation closure, then routes through the unified preview pipeline.
     fn mutate_theme_chooser_theme(
@@ -651,23 +311,6 @@ impl ScriptListApp {
         self.apply_theme_chooser_theme(next_theme, reason, cx);
     }
 
-    /// Preview a preset AND persist to disk (for mouse clicks).
-    fn preview_and_persist_theme_chooser_preset(
-        &mut self,
-        filtered_indices: &[usize],
-        filtered_selected_index: usize,
-        reason: &'static str,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(&preset_idx) = filtered_indices.get(filtered_selected_index) else {
-            return;
-        };
-        let next_theme = (*theme::presets::preset_theme_cached(preset_idx)).clone();
-        self.theme_chooser_scroll_handle
-            .scroll_to_item(filtered_selected_index, ScrollStrategy::Nearest);
-        self.apply_and_persist_theme(next_theme, reason, cx);
-    }
-
     /// Accent color palette for theme customization
     const ACCENT_PALETTE: &'static [(u32, &'static str)] = theme::ACCENT_PALETTE;
 
@@ -704,9 +347,9 @@ impl ScriptListApp {
     /// Three-item footer hint strip for the theme chooser
     fn theme_chooser_hint_items() -> Vec<gpui::SharedString> {
         vec![
-            gpui::SharedString::from("↵ Done"),
+            gpui::SharedString::from("↵ Apply"),
             gpui::SharedString::from("⌘J Remix"),
-            gpui::SharedString::from("Esc Undo"),
+            gpui::SharedString::from("Esc Back"),
         ]
     }
 
@@ -912,32 +555,21 @@ impl ScriptListApp {
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
-                // Escape: clear filter first if present, otherwise undo all changes and close
+                // Escape: clear filter first if present, otherwise restore original and close
                 if is_key_escape(key) && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
-                        // No filter to clear — restore original theme, persist the undo, and go back
+                        // No filter to clear — restore original theme and go back
                         if let Some(original) = this.theme_before_chooser.take() {
-                            this.restore_theme_chooser_theme(original, "theme_chooser_escape_undo", cx);
-                            // Persist the restored theme so click-saves are undone on disk
-                            let _ = crate::theme::service::persist_theme_and_sync_all_windows(
-                                cx,
-                                this.theme.as_ref(),
-                                "theme_chooser_escape_undo_persist",
-                            );
+                            this.restore_theme_chooser_theme(original, "theme_chooser_escape_restore", cx);
                         }
                         this.go_back_or_close(window, cx);
                     }
                     return;
                 }
-                // Cmd+W: undo all changes and close window
+                // Cmd+W: restore and close window
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     if let Some(original) = this.theme_before_chooser.take() {
-                        this.restore_theme_chooser_theme(original, "theme_chooser_close_undo", cx);
-                        let _ = crate::theme::service::persist_theme_and_sync_all_windows(
-                            cx,
-                            this.theme.as_ref(),
-                            "theme_chooser_close_undo_persist",
-                        );
+                        this.restore_theme_chooser_theme(original, "theme_chooser_close_restore", cx);
                     }
                     this.close_and_reset_window(cx);
                     return;
@@ -1050,18 +682,24 @@ impl ScriptListApp {
                     }
                     return;
                 }
-                // Enter: persist current theme and close the chooser
+                // Enter: apply (persist) the current theme but stay in the chooser
                 if is_key_enter(key) {
-                    // Persist any keyboard-previewed (unsaved) changes
-                    if let Err(e) = crate::theme::service::persist_theme_and_sync_all_windows(
+                    this.theme_before_chooser = None;
+                    match crate::theme::service::persist_theme_and_sync_all_windows(
                         cx,
                         this.theme.as_ref(),
-                        "theme_chooser_done",
+                        "theme_chooser_apply",
                     ) {
-                        tracing::warn!(error = %e, "theme_chooser_done_persist_failed");
+                        Ok(applied_theme) => {
+                            this.theme = std::sync::Arc::new(applied_theme);
+                            // Snapshot the newly persisted theme so Escape won't revert it
+                            this.theme_before_chooser = Some(this.theme.clone());
+                        }
+                        Err(e) => {
+                            logging::log("ERROR", &format!("Failed to save theme: {}", e));
+                        }
                     }
-                    this.theme_before_chooser = None;
-                    this.go_back_or_close(window, cx);
+                    cx.notify();
                     return;
                 }
 
@@ -1213,10 +851,10 @@ impl ScriptListApp {
                                         {
                                             *selected_index = ix;
                                         }
-                                        this.preview_and_persist_theme_chooser_preset(
+                                        this.preview_theme_chooser_preset(
                                             &indices,
                                             ix,
-                                            "theme_chooser_mouse_click",
+                                            "theme_chooser_mouse_preview",
                                             cx,
                                         );
                                     });
@@ -1355,7 +993,7 @@ impl ScriptListApp {
                                     modified.colors.accent.selected = color;
                                     modified.colors.text.on_accent =
                                         best_contrast_of_two(color, 0xFFFFFF, swatch_bg_main);
-                                    this.apply_and_persist_theme(modified, "theme_chooser_accent_click", cx);
+                                    this.apply_theme_chooser_theme(modified, "theme_chooser_accent_click", cx);
                                 });
                             }
                         },
@@ -1401,7 +1039,7 @@ impl ScriptListApp {
                             if let Some(app) = click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), value);
-                                    this.apply_and_persist_theme(modified, "theme_chooser_opacity_click", cx);
+                                    this.apply_theme_chooser_theme(modified, "theme_chooser_opacity_click", cx);
                                 });
                             }
                         },
@@ -1435,7 +1073,7 @@ impl ScriptListApp {
                             if let Some(ref mut vibrancy) = modified.vibrancy {
                                 vibrancy.enabled = !vibrancy.enabled;
                             }
-                            this.apply_and_persist_theme(modified, "theme_chooser_vibrancy_click", cx);
+                            this.apply_theme_chooser_theme(modified, "theme_chooser_vibrancy_click", cx);
                         });
                     }
                 },
@@ -1515,7 +1153,7 @@ impl ScriptListApp {
                                     if let Some(ref mut vibrancy) = modified.vibrancy {
                                         vibrancy.material = material;
                                     }
-                                    this.apply_and_persist_theme(modified, "theme_chooser_material_click", cx);
+                                    this.apply_theme_chooser_theme(modified, "theme_chooser_material_click", cx);
                                 });
                             }
                         },
@@ -1571,7 +1209,7 @@ impl ScriptListApp {
                                             ..Default::default()
                                         });
                                     }
-                                    this.apply_and_persist_theme(modified, "theme_chooser_font_size_click", cx);
+                                    this.apply_theme_chooser_theme(modified, "theme_chooser_font_size_click", cx);
                                 });
                             }
                         },
@@ -1615,7 +1253,7 @@ impl ScriptListApp {
                                 ref selected_index, ..
                             } = this.current_view
                             {
-                                this.preview_and_persist_theme_chooser_preset(
+                                this.preview_theme_chooser_preset(
                                     &filtered,
                                     *selected_index,
                                     "theme_chooser_reset_click",
@@ -1655,7 +1293,7 @@ impl ScriptListApp {
                                 this.theme.as_ref(),
                                 theme_chooser_remix_seed(),
                             );
-                            this.apply_and_persist_theme(
+                            this.apply_theme_chooser_theme(
                                 remixed,
                                 "theme_chooser_surprise_me",
                                 cx,
@@ -1845,37 +1483,19 @@ impl ScriptListApp {
                     .child(Self::render_theme_chooser_semantic_chip("Warn", warning_chip))
                     .child(Self::render_theme_chooser_semantic_chip("Info", info_chip)),
             )
-            // ── Surface Lab ─────────────────────────────────────────
-            .child(self.render_theme_chooser_surface_lab(&chrome))
-            // ── Prompt Lab ─────────────────────────────────────────
-            .child(self.render_theme_chooser_prompt_lab(&chrome))
-            // ── Contrast audit ──────────────────────────────────────
+            // ── Contrast audit (summary only) ────────────────────────
             .child({
                 let contrast_snapshot = cached_theme_chooser_contrast_snapshot(&self.theme);
-
                 div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(preview_section_gap))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_muted))
-                            .child(format!(
-                                "Contrast {}/{} pass · worst {} {:.2}:1",
-                                contrast_snapshot.passing,
-                                contrast_snapshot.total,
-                                contrast_snapshot.worst_label,
-                                contrast_snapshot.worst_ratio,
-                            )),
-                    )
-                    .children(
-                        contrast_snapshot
-                            .rows
-                            .iter()
-                            .map(|row| Self::render_theme_chooser_contrast_row(row, &chrome))
-                            .collect::<Vec<_>>(),
-                    )
+                    .text_xs()
+                    .text_color(rgb(text_muted))
+                    .child(format!(
+                        "Contrast {}/{} pass · worst {} {:.2}:1",
+                        contrast_snapshot.passing,
+                        contrast_snapshot.total,
+                        contrast_snapshot.worst_label,
+                        contrast_snapshot.worst_ratio,
+                    ))
             })
             // ── Launcher-style live preview (spacing-only separation per spec) ──
             .child(div().h(px(1.0)).bg(divider_bg))
@@ -1968,12 +1588,12 @@ mod theme_chooser_chrome_audit {
             "theme_chooser should use render_simple_hint_strip"
         );
         assert!(
-            source.contains(r#"SharedString::from("↵ Done")"#),
-            "theme_chooser should use truthful '↵ Done' footer label"
+            source.contains(r#"SharedString::from("↵ Apply")"#),
+            "theme_chooser should use truthful '↵ Apply' footer label"
         );
         assert!(
-            source.contains(r#"SharedString::from("Esc Undo")"#),
-            "theme_chooser should use 'Esc Undo' footer label"
+            source.contains(r#"SharedString::from("Esc Back")"#),
+            "theme_chooser should use 'Esc Back' footer label"
         );
         assert!(
             source.contains(r#"SharedString::from("⌘J Remix")"#),

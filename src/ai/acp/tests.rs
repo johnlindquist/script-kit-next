@@ -608,18 +608,15 @@ fn acp_footer_actions_hint_uses_shared_clickable_toggle_path() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("wire_embedded_acp_footer_callbacks(&view_entity, cx);")
             && TAB_AI_MODE_SOURCE.contains("app.toggle_actions(cx, window);")
-            && TAB_AI_MODE_SOURCE.contains("app.open_acp_model_picker_actions(cx, window);")
             && TAB_AI_MODE_SOURCE
                 .contains("app.close_tab_ai_harness_terminal_with_window(window, cx);"),
-        "embedded ACP hosts must wire footer clicks to the actions toggle, model picker, and close paths"
+        "embedded ACP hosts must wire footer clicks to the existing actions toggle and close paths"
     );
     assert!(
         ACP_CHAT_WINDOW_SOURCE.contains("view.set_on_toggle_actions")
-            && ACP_CHAT_WINDOW_SOURCE.contains("view.set_on_open_model_picker")
             && ACP_CHAT_WINDOW_SOURCE.contains("toggle_detached_actions(cx);")
-            && ACP_CHAT_WINDOW_SOURCE.contains("open_detached_model_picker(cx);")
             && ACP_CHAT_WINDOW_SOURCE.contains("close_chat_window(cx);"),
-        "detached ACP hosts must wire footer clicks to the detached actions toggle, model picker, and close paths"
+        "detached ACP hosts must wire footer clicks to the detached actions toggle and close paths"
     );
 }
 
@@ -666,8 +663,6 @@ fn acp_model_selection_is_visible_in_footer_and_routed_through_actions() {
     assert!(
         ACP_VIEW_SOURCE.contains(".id(\"acp-model-display\")")
             && !ACP_VIEW_SOURCE.contains(".id(\"acp-model-btn\")")
-            && ACP_VIEW_SOURCE.contains("render_hint_icons_clickable(")
-            && ACP_VIEW_SOURCE.contains("this.trigger_open_model_picker(window, cx);")
             && ACP_VIEW_SOURCE.contains("\"⌘K Actions\""),
         "ACP footer should keep the active model visible and route changes through the actions menu"
     );

@@ -385,18 +385,24 @@ impl ScriptListApp {
             // Terminal-specific footer: advertise the route-aware paste-back
             // action plus close while the PTY keeps full control of plain
             // Escape and unhandled keys.
-            .child(render_terminal_prompt_hint_strip(
-                if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
-                    self.tab_ai_harness_apply_back_route.as_ref()
-                } else {
-                    None
-                },
-                if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
-                    self.tab_ai_harness_return_view.as_ref()
-                } else {
-                    None
-                },
-            ))
+            // When the native main-window footer is active, suppress the GPUI hint strip.
+            .when_some(
+                self.main_window_footer_slot(
+                    render_terminal_prompt_hint_strip(
+                        if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+                            self.tab_ai_harness_apply_back_route.as_ref()
+                        } else {
+                            None
+                        },
+                        if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+                            self.tab_ai_harness_return_view.as_ref()
+                        } else {
+                            None
+                        },
+                    ),
+                ),
+                |d, footer| d.child(footer),
+            )
             // Actions dialog overlay
             .when_some(
                 render_actions_backdrop_bottom_anchored(
