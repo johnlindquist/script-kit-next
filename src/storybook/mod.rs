@@ -86,8 +86,8 @@ pub use mini_ai_chat_variations::{
     SPECS as MINI_AI_CHAT_VARIATION_SPECS,
 };
 pub use registry::{
-    all_categories, all_stories, first_story_with_multiple_variants, stories_by_category,
-    stories_by_surface, StoryEntry,
+    all_categories, all_stories, first_story_with_multiple_variants, shell_story_ids,
+    stories_by_category, stories_by_surface, StoryEntry,
 };
 pub(crate) use selection::selection_store_path;
 pub use selection::{

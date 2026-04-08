@@ -37,6 +37,14 @@ pub fn stories_by_surface(surface: StorySurface) -> Vec<&'static StoryEntry> {
         .collect()
 }
 
+/// Return shell-story IDs in registration order for screenshot automation.
+pub fn shell_story_ids() -> Vec<&'static str> {
+    stories_by_surface(StorySurface::Shell)
+        .into_iter()
+        .map(|entry| entry.story.id())
+        .collect()
+}
+
 /// Pick a deterministic startup story for compare mode.
 /// Returns the first story whose `variants().len() > 1`, or `None`.
 pub fn first_story_with_multiple_variants() -> Option<&'static StoryEntry> {
@@ -53,7 +61,7 @@ pub fn all_categories() -> Vec<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{first_story_with_multiple_variants, stories_by_surface};
+    use super::{first_story_with_multiple_variants, shell_story_ids, stories_by_surface};
     use crate::storybook::StorySurface;
 
     #[test]
@@ -98,6 +106,37 @@ mod tests {
                 .any(|entry| entry.story.variants().len() > 1),
             "Input surface should expose at least one compare-ready story"
         );
+    }
+
+    #[test]
+    fn shell_story_ids_contains_both_playgrounds() {
+        let ids = shell_story_ids();
+        assert!(
+            ids.contains(&"confirm-popup-playground"),
+            "shell_story_ids should contain confirm-popup-playground"
+        );
+        assert!(
+            ids.contains(&"context-picker-popup-playground"),
+            "shell_story_ids should contain context-picker-popup-playground"
+        );
+    }
+
+    #[test]
+    fn shell_stories_are_contiguous_in_registration_order() {
+        let ids = shell_story_ids();
+        assert!(ids.len() >= 2, "Expected at least 2 shell stories");
+        // Both should be present and adjacent since they're registered as a block
+        let confirm_pos = ids.iter().position(|&id| id == "confirm-popup-playground");
+        let picker_pos = ids
+            .iter()
+            .position(|&id| id == "context-picker-popup-playground");
+        if let (Some(c), Some(p)) = (confirm_pos, picker_pos) {
+            assert_eq!(
+                p,
+                c + 1,
+                "context-picker should immediately follow confirm in shell story order"
+            );
+        }
     }
 
     #[test]
