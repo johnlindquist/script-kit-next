@@ -193,6 +193,16 @@ pub struct WindowMatch {
     pub score: i32,
 }
 
+/// Represents a scored match result for a plugin-owned skill.
+/// Skills always open ACP Chat when selected from the main menu.
+#[derive(Clone, Debug)]
+pub struct SkillMatch {
+    pub skill: Arc<crate::plugins::PluginSkill>,
+    pub score: i32,
+    /// Indices of matched characters for UI highlighting
+    pub match_indices: MatchIndices,
+}
+
 /// Represents a scored match result for fuzzy search on agents
 /// Uses Arc<Agent> for cheap cloning during filter operations
 #[derive(Clone, Debug)]
@@ -217,12 +227,14 @@ pub struct FallbackMatch {
     pub score: i32,
 }
 
-/// Unified search result that can be a Script, Scriptlet, BuiltIn, App, Window, Agent, or Fallback
+/// Unified search result that can be a Script, Scriptlet, Skill, BuiltIn, App, Window, Agent, or Fallback
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum SearchResult {
     Script(ScriptMatch),
     Scriptlet(ScriptletMatch),
+    /// Plugin-owned skill that always opens ACP Chat when selected
+    Skill(SkillMatch),
     BuiltIn(BuiltInMatch),
     App(AppMatch),
     Window(WindowMatch),
@@ -237,6 +249,7 @@ impl SearchResult {
         match self {
             SearchResult::Script(sm) => &sm.script.name,
             SearchResult::Scriptlet(sm) => &sm.scriptlet.name,
+            SearchResult::Skill(sm) => &sm.skill.title,
             SearchResult::BuiltIn(bm) => &bm.entry.name,
             SearchResult::App(am) => &am.app.name,
             SearchResult::Window(wm) => &wm.window.title,
@@ -250,6 +263,13 @@ impl SearchResult {
         match self {
             SearchResult::Script(sm) => sm.script.description.as_deref(),
             SearchResult::Scriptlet(sm) => sm.scriptlet.description.as_deref(),
+            SearchResult::Skill(sm) => {
+                if sm.skill.description.is_empty() {
+                    None
+                } else {
+                    Some(&sm.skill.description)
+                }
+            }
             SearchResult::BuiltIn(bm) => Some(&bm.entry.description),
             SearchResult::App(am) => am.app.path.to_str(),
             SearchResult::Window(wm) => Some(&wm.window.app),
@@ -263,6 +283,7 @@ impl SearchResult {
         match self {
             SearchResult::Script(sm) => sm.score,
             SearchResult::Scriptlet(sm) => sm.score,
+            SearchResult::Skill(sm) => sm.score,
             SearchResult::BuiltIn(bm) => bm.score,
             SearchResult::App(am) => am.score,
             SearchResult::Window(wm) => wm.score,
@@ -276,6 +297,7 @@ impl SearchResult {
         match self {
             SearchResult::Script(_) => "Script",
             SearchResult::Scriptlet(_) => "Snippet",
+            SearchResult::Skill(_) => "Skill",
             SearchResult::BuiltIn(_) => "Built-in",
             SearchResult::App(_) => "App",
             SearchResult::Window(_) => "Window",
@@ -291,6 +313,7 @@ impl SearchResult {
         match self {
             SearchResult::Script(_) => ("Script", 0x3B82F6), // Blue-500 (saturated for vibrancy)
             SearchResult::Scriptlet(_) => ("Snippet", 0x8B5CF6), // Violet-500
+            SearchResult::Skill(_) => ("Skill", 0xFBBF24),   // Gold-400 (matches brand accent)
             SearchResult::BuiltIn(_) => ("Command", 0x34D399), // Emerald-400
             SearchResult::App(_) => ("App", 0xF59E0B),       // Amber-500
             SearchResult::Window(_) => ("Window", 0xEC4899), // Pink-500
@@ -301,7 +324,7 @@ impl SearchResult {
 
     /// Get the plugin/source name for this result (used during search to show origin).
     ///
-    /// Resolves to the owning plugin title (or id) for scripts and scriptlets.
+    /// Resolves to the owning plugin title (or id) for scripts, scriptlets, and skills.
     /// Returns None for items without a meaningful source (built-ins, apps, etc.)
     pub fn source_name(&self) -> Option<&str> {
         match self {
@@ -325,6 +348,13 @@ impl SearchResult {
                         Some(sm.scriptlet.plugin_id.as_str())
                     })
             }
+            SearchResult::Skill(sm) => {
+                if sm.skill.plugin_title.is_empty() {
+                    Some(&sm.skill.plugin_id)
+                } else {
+                    Some(&sm.skill.plugin_title)
+                }
+            }
             SearchResult::Agent(am) => am.agent.kit.as_deref(),
             _ => None,
         }
@@ -338,6 +368,7 @@ impl SearchResult {
     ///    - Scripts → "Run Script"
     ///    - Commands/Built-ins → "Run Command"
     ///    - Scriptlets/Snippets → "Paste Snippet"
+    ///    - Skills → "Open Skill"
     ///    - Apps → "Launch App"
     ///    - Windows → "Switch to Window"
     ///    - Agents → "Run Agent"
@@ -364,6 +395,7 @@ impl SearchResult {
                     _ => "Run Snippet",
                 }
             }
+            SearchResult::Skill(_) => "Open Skill",
             SearchResult::BuiltIn(_) => "Run Command",
             SearchResult::App(_) => "Launch App",
             SearchResult::Window(_) => "Switch to Window",

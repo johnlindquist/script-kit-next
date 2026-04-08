@@ -177,7 +177,8 @@ impl ScriptListApp {
             }
 
             if let Some(result) = flat_results.get(idx).cloned() {
-                // Record frecency usage before executing (unless excluded)
+                // Record frecency usage before executing (unless excluded).
+                // Skills and scriptlets use plugin-qualified keys.
                 let frecency_path: Option<String> = match &result {
                     scripts::SearchResult::Script(sm) => {
                         Some(sm.script.path.to_string_lossy().to_string())
@@ -195,7 +196,16 @@ impl ScriptListApp {
                         }
                     }
                     scripts::SearchResult::Scriptlet(sm) => {
-                        Some(format!("scriptlet:{}", sm.scriptlet.name))
+                        Some(format!(
+                            "scriptlet:{}:{}",
+                            sm.scriptlet.plugin_id, sm.scriptlet.name
+                        ))
+                    }
+                    scripts::SearchResult::Skill(sm) => {
+                        Some(format!(
+                            "skill:{}:{}",
+                            sm.skill.plugin_id, sm.skill.skill_id
+                        ))
                     }
                     scripts::SearchResult::Window(wm) => {
                         Some(format!("window:{}:{}", wm.window.app, wm.window.title))
@@ -239,6 +249,16 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::Window(window_match) => {
                         self.execute_window_focus(&window_match.window, cx);
+                    }
+                    scripts::SearchResult::Skill(skill_match) => {
+                        // Skills always open ACP Chat with the selected skill staged
+                        tracing::info!(
+                            plugin_id = %skill_match.skill.plugin_id,
+                            skill_id = %skill_match.skill.skill_id,
+                            path = %skill_match.skill.path.display(),
+                            "acp_skill_launch_requested"
+                        );
+                        self.open_acp_with_selected_skill(&skill_match.skill, cx);
                     }
                     scripts::SearchResult::Agent(agent_match) => {
                         // TODO: Implement agent execution via mdflow

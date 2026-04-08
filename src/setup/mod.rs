@@ -90,9 +90,9 @@ const EMBEDDED_EXAMPLE_PATH_PICKER: &str =
 const EMBEDDED_EXAMPLES_README: &str = include_str!("../../kit-init/examples/README.md");
 /// Examples START_HERE launchpad
 const EMBEDDED_EXAMPLES_START_HERE: &str = include_str!("../../kit-init/examples/START_HERE.md");
-/// Skill: agent authoring
+/// Skill: agent authoring (compatibility — skills are now the preferred reusable AI unit)
 const EMBEDDED_SKILL_AGENTS: &str = include_str!("../../kit-init/skills/agents/SKILL.md");
-/// Default ACP agent catalog (seeded on first run)
+/// Default ACP agent catalog (seeded on first run — provider/catalog selection, not plugin skills)
 const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
   "schemaVersion": 1,
   "agents": [
@@ -106,10 +106,10 @@ const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
     }
   ]
 }"#;
-/// Example agent: review-pr
+/// Example agent: review-pr (compatibility — prefer plugin skills for new AI artifacts)
 const EMBEDDED_EXAMPLE_AGENT_REVIEW_PR: &str =
     include_str!("../../kit-init/examples/agents/review-pr.claude.md");
-/// Example agent: plan-feature
+/// Example agent: plan-feature (compatibility — prefer plugin skills for new AI artifacts)
 const EMBEDDED_EXAMPLE_AGENT_PLAN_FEATURE: &str =
     include_str!("../../kit-init/examples/agents/plan-feature.i.gemini.md");
 // --- merged from part_001.rs ---

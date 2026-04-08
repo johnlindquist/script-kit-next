@@ -64,7 +64,7 @@ fn shortcut_actions_reject_window_items() {
     let block = &content[shortcut_pos..content.len().min(shortcut_pos + 5000)];
 
     assert!(
-        block.contains("Window shortcuts not supported"),
+        block.contains("Shortcuts not supported for this item type"),
         "Shortcut actions should reject Window items with clear error message"
     );
 }
@@ -184,7 +184,7 @@ fn alias_actions_reject_window_items() {
     let block = &content[alias_pos..content.len().min(alias_pos + 5000)];
 
     assert!(
-        block.contains("Window aliases not supported"),
+        block.contains("Aliases not supported for this item type"),
         "Alias actions should reject Window items with clear error message"
     );
 }

@@ -9,6 +9,8 @@ struct ScriptListApp {
     scripts: Vec<std::sync::Arc<scripts::Script>>,
     /// H1 Optimization: Arc-wrapped scriptlets for cheap cloning during filter operations
     scriptlets: Vec<std::sync::Arc<scripts::Scriptlet>>,
+    /// Plugin-owned skills for main-menu search and ACP skill launch
+    skills: Vec<std::sync::Arc<crate::plugins::PluginSkill>>,
     builtin_entries: Vec<builtins::BuiltInEntry>,
     /// Cached list of installed applications for main search and AppLauncherView
     apps: Vec<app_launcher::AppInfo>,

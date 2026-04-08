@@ -3,14 +3,16 @@ use std::sync::Arc;
 
 use crate::app_launcher::AppInfo;
 use crate::builtins::BuiltInEntry;
+use crate::plugins::PluginSkill;
 use crate::window_control::WindowInfo;
 
 use super::super::types::{Script, Scriptlet, SearchResult};
 use super::{
     app_passes_prefix_filter, builtin_passes_prefix_filter, fuzzy_search_apps,
-    fuzzy_search_builtins, fuzzy_search_scriptlets, fuzzy_search_scripts, fuzzy_search_windows,
-    parse_query_prefix, script_passes_prefix_filter, scriptlet_passes_prefix_filter,
-    should_search_scriptlets, should_search_scripts, window_passes_prefix_filter,
+    fuzzy_search_builtins, fuzzy_search_scriptlets, fuzzy_search_scripts, fuzzy_search_skills,
+    fuzzy_search_windows, parse_query_prefix, script_passes_prefix_filter,
+    scriptlet_passes_prefix_filter, should_search_scriptlets, should_search_scripts,
+    window_passes_prefix_filter,
 };
 
 #[inline]
@@ -21,8 +23,9 @@ fn result_type_order(r: &SearchResult) -> i32 {
         SearchResult::Window(_) => 2,  // Windows third
         SearchResult::Script(_) => 3,
         SearchResult::Scriptlet(_) => 4,
-        SearchResult::Agent(_) => 5,
-        SearchResult::Fallback(_) => 6, // Fallbacks always last
+        SearchResult::Skill(_) => 5, // Skills after scriptlets, before agents
+        SearchResult::Agent(_) => 6,
+        SearchResult::Fallback(_) => 7, // Fallbacks always last
     }
 }
 
@@ -54,7 +57,7 @@ pub fn fuzzy_search_unified_with_builtins(
     fuzzy_search_unified_all(scripts, scriptlets, builtins, &[], query)
 }
 
-/// Perform unified fuzzy search across scripts, scriptlets, built-ins, and apps
+/// Perform unified fuzzy search across scripts, scriptlets, skills, built-ins, and apps
 /// Returns combined and ranked results sorted by relevance
 /// Built-ins appear at the TOP of results (before scripts) when scores are equal
 /// Apps appear after built-ins but before scripts when scores are equal
@@ -65,6 +68,18 @@ pub fn fuzzy_search_unified_all(
     scriptlets: &[Arc<Scriptlet>],
     builtins: &[BuiltInEntry],
     apps: &[AppInfo],
+    query: &str,
+) -> Vec<SearchResult> {
+    fuzzy_search_unified_all_with_skills(scripts, scriptlets, builtins, apps, &[], query)
+}
+
+/// Perform unified fuzzy search including plugin skills.
+pub fn fuzzy_search_unified_all_with_skills(
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
+    builtins: &[BuiltInEntry],
+    apps: &[AppInfo],
+    skills: &[Arc<PluginSkill>],
     query: &str,
 ) -> Vec<SearchResult> {
     use crate::logging;
@@ -124,37 +139,50 @@ pub fn fuzzy_search_unified_all(
     }
     let scriptlets_elapsed = scriptlets_start.elapsed();
 
+    // Search plugin skills (always included, not affected by prefix filters)
+    let skills_start = std::time::Instant::now();
+    if !skills.is_empty() {
+        let skill_matches = fuzzy_search_skills(skills, search_query);
+        for sm in skill_matches {
+            tracing::info!(
+                plugin_id = %sm.skill.plugin_id,
+                skill_id = %sm.skill.skill_id,
+                score = sm.score,
+                "main_menu_skill_ranked"
+            );
+            results.push(SearchResult::Skill(sm));
+        }
+    }
+    let skills_elapsed = skills_start.elapsed();
+
     // Log search timing breakdown
     if !query.is_empty() {
         logging::log(
             "FILTER_PERF",
             &format!(
-                "[SEARCH_BREAKDOWN] '{}': builtins={:.2}ms apps={:.2}ms scripts={:.2}ms scriptlets={:.2}ms",
+                "[SEARCH_BREAKDOWN] '{}': builtins={:.2}ms apps={:.2}ms scripts={:.2}ms scriptlets={:.2}ms skills={:.2}ms",
                 query,
                 builtin_elapsed.as_secs_f64() * 1000.0,
                 apps_elapsed.as_secs_f64() * 1000.0,
                 scripts_elapsed.as_secs_f64() * 1000.0,
-                scriptlets_elapsed.as_secs_f64() * 1000.0
+                scriptlets_elapsed.as_secs_f64() * 1000.0,
+                skills_elapsed.as_secs_f64() * 1000.0,
             ),
         );
     }
 
-    // Sort by score (highest first), then by type (builtins first, apps, windows, scripts, scriptlets, agents), then by name
+    // Sort by score (highest first), then by type order, then by name
     let sort_start = std::time::Instant::now();
-    results.sort_by(|a, b| {
-        match b.score().cmp(&a.score()) {
-            Ordering::Equal => {
-                // Prefer builtins over apps over windows over scripts over scriptlets over agents when scores are equal
-                // Fallbacks always sort last (they have their own ordering by priority)
-                let type_order_a = result_type_order(a);
-                let type_order_b = result_type_order(b);
-                match type_order_a.cmp(&type_order_b) {
-                    Ordering::Equal => a.name().cmp(b.name()),
-                    other => other,
-                }
+    results.sort_by(|a, b| match b.score().cmp(&a.score()) {
+        Ordering::Equal => {
+            let type_order_a = result_type_order(a);
+            let type_order_b = result_type_order(b);
+            match type_order_a.cmp(&type_order_b) {
+                Ordering::Equal => a.name().cmp(b.name()),
+                other => other,
             }
-            other => other,
         }
+        other => other,
     });
 
     // Log sort and total timing

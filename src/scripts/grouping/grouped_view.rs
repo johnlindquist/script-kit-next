@@ -32,14 +32,21 @@ pub(super) fn build_grouped_view_results(
         .map(|(path, _): &(String, f64)| path.clone())
         .collect();
 
-    // Map each result to its frecency score (if any)
-    // We need to get the path for each result type
+    // Map each result to its frecency key.
+    // Skills and scriptlets use plugin-qualified keys.
     let get_result_path = |result: &SearchResult| -> Option<String> {
         match result {
             SearchResult::Script(sm) => Some(sm.script.path.to_string_lossy().to_string()),
             SearchResult::App(am) => Some(am.app.path.to_string_lossy().to_string()),
             SearchResult::BuiltIn(bm) => Some(format!("builtin:{}", bm.entry.id)),
-            SearchResult::Scriptlet(sm) => Some(format!("scriptlet:{}", sm.scriptlet.name)),
+            SearchResult::Scriptlet(sm) => Some(format!(
+                "scriptlet:{}:{}",
+                sm.scriptlet.plugin_id, sm.scriptlet.name
+            )),
+            SearchResult::Skill(sm) => Some(format!(
+                "skill:{}:{}",
+                sm.skill.plugin_id, sm.skill.skill_id
+            )),
             SearchResult::Window(wm) => {
                 Some(format!("window:{}:{}", wm.window.app, wm.window.title))
             }
@@ -49,11 +56,19 @@ pub(super) fn build_grouped_view_results(
         }
     };
 
-    // Helper to get kit name from a result (scripts, scriptlets, and agents)
+    // Helper to get plugin/kit name for grouping (scripts, scriptlets, skills, and agents)
     let get_kit_name = |result: &SearchResult| -> Option<String> {
         match result {
             SearchResult::Script(sm) => sm.script.kit_name.clone(),
-            SearchResult::Scriptlet(sm) => sm.scriptlet.group.clone(),
+            SearchResult::Scriptlet(sm) => {
+                // Use plugin_id for grouping when available, fall back to group
+                if sm.scriptlet.plugin_id.is_empty() {
+                    sm.scriptlet.group.clone()
+                } else {
+                    Some(sm.scriptlet.plugin_id.clone())
+                }
+            }
+            SearchResult::Skill(sm) => Some(sm.skill.plugin_id.clone()),
             SearchResult::Agent(am) => am.agent.kit.clone(),
             _ => None,
         }
@@ -85,12 +100,13 @@ pub(super) fn build_grouped_view_results(
             if score >= min_score && suggested_paths.contains(&path) && !is_excluded_builtin {
                 suggested_indices.push((idx, score));
             } else {
-                // Categorize by kit (for scripts/scriptlets/agents) or by type (for others)
+                // Categorize by kit (for scripts/scriptlets/skills/agents) or by type (for others)
                 match result {
                     SearchResult::Script(_)
                     | SearchResult::Scriptlet(_)
+                    | SearchResult::Skill(_)
                     | SearchResult::Agent(_) => {
-                        // Group by kit name (default to "main" if no kit specified)
+                        // Group by kit/plugin name (default to "main" if no kit specified)
                         let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
                         kit_indices.entry(kit).or_default().push(idx);
                     }
@@ -105,7 +121,10 @@ pub(super) fn build_grouped_view_results(
         } else {
             // If no path, categorize by type (shouldn't happen, but handle gracefully)
             match result {
-                SearchResult::Script(_) | SearchResult::Scriptlet(_) | SearchResult::Agent(_) => {
+                SearchResult::Script(_)
+                | SearchResult::Scriptlet(_)
+                | SearchResult::Skill(_)
+                | SearchResult::Agent(_) => {
                     let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
                     kit_indices.entry(kit).or_default().push(idx);
                 }

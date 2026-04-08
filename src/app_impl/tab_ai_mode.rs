@@ -149,6 +149,46 @@ impl ScriptListApp {
         );
     }
 
+    /// Open ACP Chat with a selected plugin skill staged as context.
+    ///
+    /// The skill's SKILL.md content is read and staged as the initial prompt
+    /// context, with a deterministic initial input referencing the skill.
+    /// This keeps `selected_agent`/provider logic untouched.
+    pub(crate) fn open_acp_with_selected_skill(
+        &mut self,
+        skill: &crate::plugins::PluginSkill,
+        cx: &mut Context<Self>,
+    ) {
+        // Read the skill document for context staging
+        let skill_content = std::fs::read_to_string(&skill.path).unwrap_or_default();
+
+        // Build a deterministic initial input that tells the ACP agent
+        // which skill to use for this session
+        let initial_input = if skill_content.is_empty() {
+            format!(
+                "Use the skill \"{}\" from plugin \"{}\" for this session.",
+                skill.title, skill.plugin_title
+            )
+        } else {
+            format!(
+                "Use the attached skill \"{}\" from plugin \"{}\" for this session.\n\n<skill path=\"{}\">\n{}\n</skill>",
+                skill.title,
+                skill.plugin_title,
+                skill.path.display(),
+                skill_content
+            )
+        };
+
+        tracing::info!(
+            plugin_id = %skill.plugin_id,
+            skill_id = %skill.skill_id,
+            content_len = skill_content.len(),
+            "acp_skill_context_staged"
+        );
+
+        self.open_tab_ai_acp_with_entry_intent(Some(initial_input), cx);
+    }
+
     pub(crate) fn open_tab_ai_acp_with_slash_picker(
         &mut self,
         window: &mut Window,
@@ -2686,6 +2726,7 @@ impl ScriptListApp {
             scripts::SearchResult::App(_) => "app",
             scripts::SearchResult::Window(_) => "window",
             scripts::SearchResult::Agent(_) => "agent",
+            scripts::SearchResult::Skill(_) => "skill",
             scripts::SearchResult::Fallback(_) => "fallback",
         };
         let metadata = match result {
@@ -2719,6 +2760,13 @@ impl ScriptListApp {
                 "name": m.agent.name,
                 "path": m.agent.path.to_string_lossy(),
                 "description": m.agent.description,
+            }),
+            scripts::SearchResult::Skill(m) => serde_json::json!({
+                "pluginId": m.skill.plugin_id,
+                "skillId": m.skill.skill_id,
+                "title": m.skill.title,
+                "description": m.skill.description,
+                "path": m.skill.path.to_string_lossy(),
             }),
             scripts::SearchResult::Fallback(m) => serde_json::json!({
                 "name": m.fallback.name(),

@@ -212,6 +212,20 @@ pub fn render_design_item(
                         Some(IconKind::Svg("File".to_string())),
                     )
                 }
+                SearchResult::Skill(sm) => {
+                    // Skills use a star icon (gold accent theme)
+                    let description = if sm.skill.description.is_empty() {
+                        Some(format!("{} skill", sm.skill.plugin_title))
+                    } else {
+                        Some(sm.skill.description.clone())
+                    };
+                    (
+                        sm.skill.title.clone(),
+                        description,
+                        None,
+                        Some(IconKind::Svg("StarFilled".to_string())),
+                    )
+                }
                 SearchResult::Agent(am) => {
                     // Agents use backend-specific icons, with backend label in description
                     let icon_name = am

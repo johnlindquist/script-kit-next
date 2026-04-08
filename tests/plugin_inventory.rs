@@ -200,6 +200,98 @@ fn skills_records_plugin_id_on_every_skill() {
     assert_eq!(skills[1].skill_id, "s2");
 }
 
+// ── Skill metadata parsing ──────────────────────────────────────────
+
+#[test]
+fn skills_parse_title_from_frontmatter() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let container = tmp.path().join("kit");
+    let plugin = container.join("authoring");
+    let skill = plugin.join("skills").join("scriptlets");
+    fs::create_dir_all(&skill).expect("mkdir");
+    fs::write(
+        skill.join("SKILL.md"),
+        "---\ntitle: Scriptlet Authoring\ndescription: Create markdown extension bundles\n---\n# Body",
+    )
+    .expect("write");
+    let manifest = r#"{"id":"authoring","title":"Authoring"}"#;
+    fs::write(plugin.join("plugin.json"), manifest).expect("write");
+
+    let index = discover_plugins_in(&container).expect("discover");
+    let skills = discover_plugin_skills(&index).expect("skills");
+    assert_eq!(skills.len(), 1);
+    assert_eq!(skills[0].title, "Scriptlet Authoring");
+    assert_eq!(skills[0].description, "Create markdown extension bundles");
+    assert_eq!(skills[0].plugin_title, "Authoring");
+    assert_eq!(skills[0].plugin_id, "authoring");
+}
+
+#[test]
+fn skills_title_falls_back_to_h1_then_slug() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let container = tmp.path().join("kit");
+
+    // Skill with H1 but no frontmatter title
+    let plugin_a = container.join("alpha");
+    let skill_a = plugin_a.join("skills").join("review");
+    fs::create_dir_all(&skill_a).expect("mkdir");
+    fs::write(skill_a.join("SKILL.md"), "# Code Review\nBody text").expect("write");
+    let m_a = r#"{"id":"alpha","title":"Alpha"}"#;
+    fs::write(plugin_a.join("plugin.json"), m_a).expect("write");
+
+    // Skill with no frontmatter and no H1 — falls back to slug
+    let plugin_b = container.join("beta");
+    let skill_b = plugin_b.join("skills").join("bare-slug");
+    fs::create_dir_all(&skill_b).expect("mkdir");
+    fs::write(skill_b.join("SKILL.md"), "Just text, no heading").expect("write");
+    let m_b = r#"{"id":"beta","title":"Beta"}"#;
+    fs::write(plugin_b.join("plugin.json"), m_b).expect("write");
+
+    let index = discover_plugins_in(&container).expect("discover");
+    let skills = discover_plugin_skills(&index).expect("skills");
+    assert_eq!(skills.len(), 2);
+
+    // alpha/review: title from H1
+    assert_eq!(skills[0].plugin_id, "alpha");
+    assert_eq!(skills[0].title, "Code Review");
+
+    // beta/bare-slug: title falls back to skill_id
+    assert_eq!(skills[1].plugin_id, "beta");
+    assert_eq!(skills[1].title, "bare-slug");
+}
+
+#[test]
+fn skills_duplicate_slugs_across_plugins_preserved() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let container = tmp.path().join("kit");
+
+    // Two plugins both define a "review" skill
+    for pid in &["alpha", "beta"] {
+        let plugin = container.join(pid);
+        let skill = plugin.join("skills").join("review");
+        fs::create_dir_all(&skill).expect("mkdir");
+        fs::write(
+            skill.join("SKILL.md"),
+            format!("---\ntitle: {pid} Review\n---\n# Body"),
+        )
+        .expect("write");
+        let m = format!(r#"{{"id":"{pid}","title":"{pid}"}}"#);
+        fs::write(plugin.join("plugin.json"), m).expect("write");
+    }
+
+    let index = discover_plugins_in(&container).expect("discover");
+    let skills = discover_plugin_skills(&index).expect("skills");
+
+    // Both skills must be preserved — no dedup by bare skill_id
+    assert_eq!(skills.len(), 2, "duplicate skill slugs must not collapse");
+    assert_eq!(skills[0].plugin_id, "alpha");
+    assert_eq!(skills[0].skill_id, "review");
+    assert_eq!(skills[0].title, "alpha Review");
+    assert_eq!(skills[1].plugin_id, "beta");
+    assert_eq!(skills[1].skill_id, "review");
+    assert_eq!(skills[1].title, "beta Review");
+}
+
 // ── PluginIndex default ─────────────────────────────────────────────
 
 #[test]
