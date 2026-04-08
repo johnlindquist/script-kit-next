@@ -496,6 +496,7 @@ Detailed guidance lives in `.claude/skills/` — load only when relevant:
 - GPUI docs: https://docs.rs/gpui/latest/gpui/
 - Zed source: https://github.com/zed-industries/zed/tree/main/crates/gpui
 - Protocol reference: `docs/PROTOCOL.md`
+- Vibrancy & blur guide: [`.vibrancy.md`](.vibrancy.md) — NSVisualEffectView architecture, footer blur, event passthrough, hover blocking, and lessons learned. **Read before touching any overlay, footer, or blur code.**
 
 ## Design Context
 
