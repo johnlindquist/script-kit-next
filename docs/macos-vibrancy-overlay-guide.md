@@ -228,9 +228,25 @@ unsafe fn refresh_main_footer_host(ns_window: id) {
 
 ## Event Passthrough and Interaction Patterns
 
-### Footer background should swallow clicks but not steal the whole interaction model
+### The Three-Piece Architecture (NON-NEGOTIABLE)
 
-The footer host should only allow real button subviews to win hit-testing. Background hits should be swallowed by the footer view itself.
+The native footer requires three pieces working together. **Do not change any one independently.**
+
+1. **Native NSVisualEffectView** in front (`NSSortFront`) with `WithinWindow` blending — provides real blur
+2. **`hitTest:` returns `nil`** for non-button areas — critical for scroll passthrough
+3. **`deferred()` transparent GPUI hitbox** — blocks GPUI hover without rendering into Metal
+
+### Why each piece exists
+
+| Piece | What happens if removed | What happens if changed wrong |
+| --- | --- | --- |
+| Native footer | No blur — GPUI has no per-element backdrop blur | N/A |
+| hitTest: nil | hitTest: self breaks scroll EVERYWHERE (not just footer zone) | Returning self makes the footer first responder for all events in its 30px region |
+| deferred hitbox | GPUI delivers hover to list items behind the footer | A visible div hides the blur; `.relative()` on parent breaks scroll |
+
+### hitTest: returns nil for non-button areas, buttons for button areas
+
+**CRITICAL**: Returning `self` from hitTest breaks scroll everywhere. Returning `nil` lets all events pass through to the GPUI Metal view. Buttons still receive clicks because hitTest returns the button when the point is over one.
 
 ```rs
 #[cfg(target_os = "macos")]
@@ -260,14 +276,40 @@ extern "C" fn footer_hit_test(
         let hit: id = msg_send![super(this_id, class!(NSVisualEffectView)), hitTest: point];
         let button = nearest_footer_button(hit);
         if button != nil {
-            return button;
+            return button;  // Buttons receive clicks
         }
-        this_id
+        nil  // Everything else passes through — DO NOT return self
     }
 }
 ```
 
-### Scroll must pass through to the GPUI content behind the footer
+### GPUI hover blocking via deferred transparent hitbox
+
+GPUI's hover is computed from a pre-rendered hit test (`window.rs:860-882`), NOT from event propagation. `stop_propagation()` does NOT prevent hover. The only way to block hover is `HitboxBehavior::BlockMouseExceptScroll`.
+
+A GPUI div with `block_mouse_except_scroll()` and NO background/border/shadow **paints nothing into the Metal layer** (confirmed by reading `Style::paint()` in `vendor/gpui/src/style.rs:645-700`). It only inserts a hitbox during prepaint.
+
+`deferred()` ensures the hitbox is appended LAST to GPUI's hitbox list. Since `hit_test()` iterates in reverse order, this hitbox is checked FIRST, and `BlockMouseExceptScroll` sets `hover_hitbox_count` to exclude all elements behind it from hover.
+
+```rs
+// In render_script_list mini mode, as a child of main_div:
+main_div = main_div.child(gpui::deferred(
+    div()
+        .absolute()
+        .bottom_0()
+        .left_0()
+        .w_full()
+        .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+        .block_mouse_except_scroll(),
+));
+```
+
+**DO NOT** add `.relative()` to `main_div` — this breaks scroll.
+**DO NOT** use a flex-child div for the blocker — it takes layout space and renders into Metal, hiding the blur.
+
+### Scroll passthrough
+
+With `hitTest:` returning `nil`, scroll events go directly to GPUI's Metal view — no forwarding needed. The `footer_scroll_wheel` override exists as a safety net but is rarely called:
 
 ```rs
 #[cfg(target_os = "macos")]
@@ -281,7 +323,13 @@ extern "C" fn footer_scroll_wheel(this: &objc::runtime::Object, _: objc::runtime
 }
 ```
 
-### Footer buttons need native AppKit hover tracking
+### Footer buttons need per-button NSTrackingArea (not effect-view-level)
+
+GPUI intercepts `mouseMoved:` events at the GPUIView level (`vendor/gpui_macos/src/window.rs:2002`). Tracking areas on the footer effect view never fire. Each button must have its own tracking area via `updateTrackingAreas` override.
+
+**Buttons are recreated every ~0.5s** by `layout_footer_hints`. To avoid use-after-free crashes:
+1. Remove all tracking areas from buttons BEFORE removing them from the view hierarchy
+2. Do NOT store CGColor pointers in ivars — recompute from theme in each `mouseEntered:`/`mouseExited:` callback
 
 ```rs
 #[cfg(target_os = "macos")]
@@ -292,6 +340,7 @@ extern "C" fn footer_button_update_tracking_areas(
     unsafe {
         let this_id = this as *const _ as id;
         let _: () = msg_send![super(this_id, class!(NSButton)), updateTrackingAreas];
+        // Remove old tracking areas
         let existing: id = msg_send![this, trackingAreas];
         if existing != nil {
             let count: usize = msg_send![existing, count];
@@ -300,6 +349,7 @@ extern "C" fn footer_button_update_tracking_areas(
                 let _: () = msg_send![this, removeTrackingArea: area];
             }
         }
+        // Add fresh tracking area
         let opts: usize = 0x01 /* MouseEnteredAndExited */ | 0x80 /* ActiveAlways */ | 0x20 /* InVisibleRect */;
         let bounds: cocoa::foundation::NSRect = msg_send![this, bounds];
         let area: id = msg_send![class!(NSTrackingArea), alloc];
@@ -315,7 +365,54 @@ extern "C" fn footer_button_update_tracking_areas(
         }
     }
 }
+
+// mouseEntered: recomputes color from theme (no ivar pointers)
+extern "C" fn footer_button_mouse_entered(this: &objc::runtime::Object, _: Sel, _event: id) {
+    unsafe {
+        let superview: id = msg_send![this, superview];
+        if superview == nil { return; }
+        let layer: id = msg_send![superview, layer];
+        if layer == nil { return; }
+        let theme = crate::theme::get_cached_theme();
+        let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+        let hover_ns: id = ns_color_from_rgba(chrome.hover_rgba);
+        if hover_ns != nil {
+            let cg: id = msg_send![hover_ns, CGColor];
+            if cg != nil {
+                let _: () = msg_send![layer, setBackgroundColor: cg];
+            }
+        }
+    }
+}
 ```
+
+## Lessons Learned (Failure Modes)
+
+These are real failures encountered during development. Each cost significant debugging time.
+
+### hitTest: self breaks scroll (not just in the footer)
+
+Returning `self` from the footer's `hitTest:` for non-button areas makes the footer the first responder for ALL events in its 30px strip. Even though `scrollWheel:` forwards to `nextResponder`, this breaks GPUI's scroll handling entirely — scroll stops working everywhere, not just in the footer zone.
+
+### stop_propagation does NOT prevent GPUI hover
+
+GPUI hover is computed during the Capture phase from a pre-rendered hit test (`window.rs:860-882`), BEFORE event listeners run. `cx.stop_propagation()` only stops event bubbling, which happens AFTER hover state is already updated. The only mechanism that prevents hover is `HitboxBehavior::BlockMouseExceptScroll` (or `BlockMouse`).
+
+### Any GPUI div with layout space hides the native blur
+
+The Metal layer renders ALL GPUI elements that participate in layout. Even a div with no `.bg()` can paint over the native NSVisualEffectView if it occupies layout space (flex child, fixed height). Only absolutely positioned divs with no visual properties avoid Metal rendering.
+
+### .relative() on the list parent breaks scroll
+
+Adding `.relative()` (CSS `position: relative`) to the main flex container changes Taffy's layout algorithm in a way that breaks GPUI list scrolling. The deferred absolute hitbox works without `.relative()` because it positions relative to the window root.
+
+### CGColor ivar pointers dangle after button recreation
+
+Buttons are recreated every ~0.5s by `layout_footer_hints`. CGColor pointers stored as ivars become dangling when the NSColor that created them is released. Always recompute colors from the live theme in `mouseEntered:`/`mouseExited:`.
+
+### GPUI intercepts mouseMoved at the GPUIView level
+
+GPUI's GPUIView has its own NSTrackingArea with `NSTrackingMouseMoved | NSTrackingActiveAlways`. The `handle_view_event` function at `vendor/gpui_macos/src/window.rs:2002` intercepts all mouseMoved events before they reach native subviews. Per-button tracking areas with `NSTrackingMouseEnteredAndExited` (NOT mouseMoved) bypass this because they're a different event type.
 
 ### Child popups should not visually demote the parent panel
 
@@ -433,7 +530,7 @@ If you skip caller-side attachment, you can keep the blur and still lose the
 | Input | Expected decision |
 | --- | --- |
 | "A detached popup that should stay above the launcher but not steal key focus." | Use the actions-popup family: `WindowBackgroundAppearance::Blurred` + shared popup vibrancy config + `setBecomesKeyOnlyIfNeeded:true` + `orderFrontRegardless`. |
-| "A footer strip inside the main launcher that needs hoverable buttons but should not block list scrolling." | Use the native in-window footer host with `WithinWindow` blending, custom hit-testing, swallowed background mouse, and forwarded scroll-wheel events. |
+| "A footer strip inside the main launcher that needs hoverable buttons but should not block list scrolling." | Use the three-piece architecture: native in-window footer with `WithinWindow` blending + `hitTest: nil` for non-button areas + `deferred()` transparent GPUI hitbox with `block_mouse_except_scroll()`. See "The Three-Piece Architecture" section. |
 | "A flush confirm dialog attached to the bottom edge of the launcher." | Reuse the actions-popup blur path, then remove rounded corners and disable the shadow. |
 | "A dense slash or mention picker inside ACP chat that should feel attached, not floating." | Use `configure_inline_dropdown_popup_window()`, keep the shared popup blur path, attach it as a native child window, and disable shadow. |
 | "A compact dictation pill that must appear without flashing the hidden launcher." | Create a hidden `WindowKind::PopUp`, configure vibrancy after creation, then surface only that window with `orderFrontRegardless` and optionally `makeKeyWindow`. |
@@ -454,8 +551,22 @@ Use this checklist before declaring a new overlay pattern "native enough".
 - Background clicks on footer glass do not trigger unintended actions.
 - Real footer buttons still receive hover, pointer cursor, and click events.
 - Scroll over the footer still moves the GPUI list behind it.
+- **Scroll works everywhere on the list** (not just above the footer).
+- GPUI list items behind the footer do NOT show hover highlight.
 - Clicking child popups does not visually demote the parent launcher panel.
 - Flush confirm overlays have no shadow and no rounded corners.
+
+### Footer-specific regression tests
+
+These are the exact failure modes encountered during development. Test each one:
+
+1. **Scroll**: Mouse wheel scrolls the list when hovering over any part of the window, including the footer zone.
+2. **Blur visible**: The native footer shows frosted glass blur — list items are visible but blurred behind it.
+3. **Hover blocked**: Moving the mouse over the footer zone does NOT highlight list items behind it.
+4. **Button hover**: Moving the mouse over a footer button shows a hover highlight on the button container.
+5. **Pointer cursor**: The mouse cursor changes to a pointing hand over footer buttons.
+6. **Actions toggle**: Pressing ⌘K shows the Actions button with a persistent selected background.
+7. **No crash**: Moving the mouse rapidly over footer buttons does not crash the app.
 
 ### Source-of-truth commands
 
@@ -465,6 +576,8 @@ rg "swizzle_gpui_blurred_view|patched_update_layer" src
 rg "setBlendingMode: 0isize|setBlendingMode: 1isize" src
 rg "setBecomesKeyOnlyIfNeeded: true|orderFrontRegardless" src
 rg "FooterAction::Run|FooterAction::Actions|FooterAction::Ai" src tests
+rg "block_mouse_except_scroll|deferred" src/render_script_list
+rg "hitTest.*nil|hitTest.*this_id" src/footer_popup.rs
 ```
 
 ### Historical Note
