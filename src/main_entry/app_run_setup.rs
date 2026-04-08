@@ -1099,55 +1099,6 @@ app.run(move |cx: &mut App| {
             logging::log("VISIBILITY", "Show window listener exiting (channel closed)");
         }).detach();
 
-        let app_entity_for_footer = app_entity.clone();
-        let window_for_footer = window;
-        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
-            tracing::info!(
-                target: "script_kit::footer_popup",
-                event = "native_footer_listener_started",
-                "Main footer action listener started"
-            );
-            let (_, rx) = crate::footer_popup::footer_action_channel();
-            while let Ok(action) = rx.recv().await {
-                let action_name = match action {
-                    crate::footer_popup::FooterAction::Run => "run",
-                    crate::footer_popup::FooterAction::Actions => "actions",
-                    crate::footer_popup::FooterAction::Ai => "ai",
-                };
-                let app_entity_inner = app_entity_for_footer.clone();
-                let window_inner = window_for_footer;
-                cx.update(move |cx: &mut gpui::App| {
-                    let _ = window_inner.update(cx, |_root, win, root_cx| {
-                        app_entity_inner.update(root_cx, |view, ctx| {
-                            tracing::info!(
-                                target: "script_kit::footer_popup",
-                                event = "native_footer_action_received",
-                                action = action_name,
-                                show_actions_popup = view.show_actions_popup,
-                                "Dispatching native footer action"
-                            );
-                            match action {
-                                crate::footer_popup::FooterAction::Run => {
-                                    view.execute_selected(ctx)
-                                }
-                                crate::footer_popup::FooterAction::Actions => {
-                                    view.toggle_actions(ctx, win)
-                                }
-                                crate::footer_popup::FooterAction::Ai => {
-                                    view.open_tab_ai_chat(ctx)
-                                }
-                            }
-                        });
-                    });
-                });
-            }
-            tracing::info!(
-                target: "script_kit::footer_popup",
-                event = "native_footer_listener_exiting",
-                "Main footer action listener exiting"
-            );
-        }).detach();
-
         // Note: Appearance watching is now handled by GPUI's observe_window_appearance
         // (set up during window creation above), replacing the custom AppearanceWatcher.
 

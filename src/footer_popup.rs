@@ -33,6 +33,8 @@ pub(crate) enum FooterAction {
     Run,
     Actions,
     Ai,
+    Close,
+    Apply,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -775,6 +777,8 @@ fn footer_action_key(action: FooterAction) -> &'static str {
         FooterAction::Run => "run",
         FooterAction::Actions => "actions",
         FooterAction::Ai => "ai",
+        FooterAction::Close => "close",
+        FooterAction::Apply => "apply",
     }
 }
 
@@ -1244,6 +1248,8 @@ fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
         FooterAction::Run => sel!(runFooterAction:),
         FooterAction::Actions => sel!(actionsFooterAction:),
         FooterAction::Ai => sel!(aiFooterAction:),
+        FooterAction::Close => sel!(closeFooterAction:),
+        FooterAction::Apply => sel!(applyFooterAction:),
     }
 }
 
@@ -1274,6 +1280,14 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
             sel!(aiFooterAction:),
             footer_ai_action as extern "C" fn(&Object, Sel, id),
         );
+        decl.add_method(
+            sel!(closeFooterAction:),
+            footer_close_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(applyFooterAction:),
+            footer_apply_action as extern "C" fn(&Object, Sel, id),
+        );
         decl.register() as *const _ as usize
     }) as *const objc::runtime::Class
 }
@@ -1291,4 +1305,14 @@ extern "C" fn footer_actions_action(_this: &objc::runtime::Object, _: objc::runt
 #[cfg(target_os = "macos")]
 extern "C" fn footer_ai_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
     send_footer_action(FooterAction::Ai);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_close_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    send_footer_action(FooterAction::Close);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_apply_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    send_footer_action(FooterAction::Apply);
 }
