@@ -200,7 +200,11 @@ impl ScriptListApp {
         self.dispatch_main_window_footer_action(action, window, cx, "native_footer");
     }
 
-    pub(crate) fn sync_main_footer_popup(&self, window: &mut gpui::Window, cx: &mut Context<Self>) {
+    pub(crate) fn sync_main_footer_popup(
+        &self,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
         self.ensure_main_footer_action_listener(window, cx);
 
         let config = if crate::is_main_window_visible() {
