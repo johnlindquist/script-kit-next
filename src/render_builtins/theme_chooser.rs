@@ -353,9 +353,9 @@ impl ScriptListApp {
     /// Opacity presets for quick selection
     const OPACITY_PRESETS: &'static [(f32, &'static str)] = &[
         (0.10, "10%"),
-        (0.30, "30%"),
+        (0.25, "25%"),
         (0.50, "50%"),
-        (0.80, "80%"),
+        (0.75, "75%"),
         (1.00, "100%"),
     ];
 

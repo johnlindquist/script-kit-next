@@ -1495,7 +1495,7 @@ impl ScriptListApp {
                 filter: String::new(),
                 selected_index: start_index,
             },
-            "Search themes...",
+            "Search themes or paste #hex...",
             cx,
         );
 

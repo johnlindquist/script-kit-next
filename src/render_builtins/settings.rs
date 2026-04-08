@@ -19,8 +19,8 @@ enum SettingsAction {
 fn get_settings_items() -> Vec<SettingsItem> {
     let mut items = vec![
         SettingsItem {
-            name: "Choose Theme",
-            description: "Browse and apply a color theme with live preview",
+            name: "Theme Designer",
+            description: "Design your color theme with live preview",
             icon: "🎨",
             action: SettingsAction::ChooseTheme,
         },
