@@ -22,6 +22,8 @@ fn fixture_scripts() -> Vec<Arc<Script>> {
             shortcut: Some("opt h".into()),
             typed_metadata: None,
             schema: None,
+            plugin_id: String::new(),
+            plugin_title: None,
             kit_name: Some("main".into()),
             body: None,
         }),
@@ -35,6 +37,8 @@ fn fixture_scripts() -> Vec<Arc<Script>> {
             shortcut: None,
             typed_metadata: None,
             schema: None,
+            plugin_id: String::new(),
+            plugin_title: None,
             kit_name: None,
             body: None,
         }),
@@ -54,6 +58,8 @@ fn fixture_scriptlets() -> Vec<Arc<Scriptlet>> {
             file_path: Some("/tmp/test-scriptkit/kit/main/extensions/urls.md#open-github".into()),
             command: Some("open-github".into()),
             alias: None,
+            plugin_id: String::new(),
+            plugin_title: None,
         }),
         Arc::new(Scriptlet {
             name: "Paste Greeting".into(),
@@ -66,6 +72,8 @@ fn fixture_scriptlets() -> Vec<Arc<Scriptlet>> {
             file_path: None,
             command: None,
             alias: None,
+            plugin_id: String::new(),
+            plugin_title: None,
         }),
     ]
 }

@@ -401,6 +401,8 @@ fn test_resolve_tool_badge_hidden_during_filtering_for_scriptlets() {
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     };
     let result = make_scriptlet_search_result(scriptlet);
 
@@ -420,6 +422,8 @@ fn test_resolve_tool_badge_kept_when_not_filtering_for_scriptlets() {
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     };
     let result = make_scriptlet_search_result(scriptlet);
 
@@ -637,6 +641,8 @@ fn test_scriptlet_hint_group_shown() {
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     };
     assert_eq!(
         grouped_view_hint_for_scriptlet(&sl),
@@ -658,6 +664,8 @@ fn test_scriptlet_hint_main_group_hidden() {
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     };
     assert_eq!(grouped_view_hint_for_scriptlet(&sl), None);
 }
@@ -722,6 +730,8 @@ fn make_test_scriptlet(name: &str, code: &str, tool: &str) -> crate::scripts::Sc
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     }
 }
 

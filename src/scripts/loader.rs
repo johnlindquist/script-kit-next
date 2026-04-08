@@ -3,11 +3,10 @@
 //! This module provides functions for loading scripts from the
 //! ~/.scriptkit/*/scripts/ directories.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
-use glob::glob;
 use rayon::prelude::*;
 
 use crate::setup::get_kit_path;
@@ -16,40 +15,56 @@ use super::metadata::extract_metadata_full;
 use super::scriptlet_loader::extract_kit_from_path;
 use super::types::Script;
 
-/// Reads scripts from ~/.scriptkit/*/scripts/ directories
-/// Returns a sorted list of Arc-wrapped Script structs for .ts and .js files
-/// Returns empty vec if directory doesn't exist or is inaccessible
+/// Reads scripts from all discovered plugin roots.
+///
+/// Consumes `discover_plugins()` so every loaded script carries explicit
+/// `plugin_id` and `plugin_title` from the owning plugin manifest.
+///
+/// Returns a sorted list of Arc-wrapped Script structs for .ts and .js files.
+/// Returns empty vec if no plugins or scripts are found.
 ///
 /// H1 Optimization: Returns Arc<Script> to avoid expensive clones during filter operations.
-/// Uses rayon for parallel file scanning across kit directories.
+/// Uses rayon for parallel file scanning across plugin directories.
 #[instrument(level = "debug", skip_all)]
 pub fn read_scripts() -> Vec<Arc<Script>> {
-    let kit_path = get_kit_path();
-
-    // Glob pattern to find scripts in all kits (under kit/ subdirectory)
-    let pattern = kit_path.join("kit/*/scripts");
-    let pattern_str = pattern.to_string_lossy().to_string();
-
-    // Find all kit script directories
-    let script_dirs: Vec<PathBuf> = match glob(&pattern_str) {
-        Ok(paths) => paths.filter_map(|p| p.ok()).collect(),
-        Err(e) => {
-            warn!(error = %e, pattern = %pattern_str, "Failed to glob script directories");
-            return vec![];
+    let index = match crate::plugins::discover_plugins() {
+        Ok(index) => index,
+        Err(error) => {
+            warn!(error = %error, "Failed to discover plugins for script loading");
+            return Vec::new();
         }
     };
 
-    if script_dirs.is_empty() {
-        debug!(pattern = %pattern_str, "No script directories found");
+    if index.plugins.is_empty() {
+        debug!("No plugins discovered — no scripts to load");
         return vec![];
     }
 
+    let kit_path = get_kit_path();
     let load_started = std::time::Instant::now();
 
-    // Read scripts from each kit's scripts directory in parallel
-    let mut scripts: Vec<Arc<Script>> = script_dirs
+    // Read scripts from each plugin's scripts directory in parallel
+    let mut scripts: Vec<Arc<Script>> = index
+        .plugins
         .par_iter()
-        .flat_map_iter(|scripts_dir| read_scripts_from_dir(scripts_dir.as_path(), &kit_path))
+        .flat_map_iter(|plugin| {
+            let scripts_dir = plugin.root.join("scripts");
+            info!(
+                plugin_id = %plugin.id,
+                path = %scripts_dir.display(),
+                "plugin_scripts_loading"
+            );
+            read_scripts_from_dir(&scripts_dir, &kit_path)
+                .into_iter()
+                .map(|script| {
+                    Arc::new(Script {
+                        plugin_id: plugin.id.clone(),
+                        plugin_title: Some(plugin.manifest.title.clone()),
+                        kit_name: Some(plugin.id.clone()),
+                        ..(*script).clone()
+                    })
+                })
+        })
         .collect();
 
     // Sort by name for deterministic ordering
@@ -58,18 +73,18 @@ pub fn read_scripts() -> Vec<Arc<Script>> {
     crate::logging::log(
         "FILTER_PERF",
         &format!(
-            "[SCRIPT_BODY_INDEX] scripts={} dirs={} parallel=true elapsed_ms={:.2}",
+            "[SCRIPT_BODY_INDEX] scripts={} plugins={} parallel=true elapsed_ms={:.2}",
             scripts.len(),
-            script_dirs.len(),
+            index.plugins.len(),
             load_started.elapsed().as_secs_f64() * 1000.0
         ),
     );
 
     debug!(
         count = scripts.len(),
-        dirs = script_dirs.len(),
+        plugins = index.plugins.len(),
         elapsed_ms = load_started.elapsed().as_secs_f64() * 1000.0,
-        "Loaded scripts from all kits with parallel body indexing"
+        "Loaded scripts from all plugins with parallel body indexing"
     );
     scripts
 }
@@ -150,6 +165,8 @@ fn load_script_entry(entry: std::fs::DirEntry, kit_path: &Path) -> Option<Arc<Sc
         shortcut: script_metadata.shortcut,
         typed_metadata,
         schema,
+        plugin_id: String::new(),
+        plugin_title: None,
         kit_name,
         body,
     }))
@@ -159,6 +176,7 @@ fn load_script_entry(entry: std::fs::DirEntry, kit_path: &Path) -> Option<Arc<Sc
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn unique_test_dir(label: &str) -> PathBuf {

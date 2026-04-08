@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 use glob::glob;
 
@@ -121,10 +121,12 @@ pub fn read_scriptlets() -> Vec<Arc<Scriptlet>> {
     scriptlets
 }
 
-/// Load scriptlets from markdown files using the comprehensive parser
+/// Load scriptlets from markdown files using the comprehensive parser.
 ///
-/// Globs:
-/// - ~/.scriptkit/kit/*/extensions/*.md (all kits)
+/// Consumes `discover_plugins()` so every loaded scriptlet carries explicit
+/// `plugin_id` and `plugin_title` from the owning plugin manifest.
+///
+/// Scans `<plugin_root>/extensions/*.md` for each discovered plugin.
 ///
 /// Uses `crate::scriptlets::parse_markdown_as_scriptlets` for parsing.
 /// Returns Arc-wrapped scriptlets sorted by group then by name.
@@ -132,82 +134,85 @@ pub fn read_scriptlets() -> Vec<Arc<Scriptlet>> {
 /// H1 Optimization: Returns Arc<Scriptlet> to avoid expensive clones during filter operations.
 #[instrument(level = "debug", skip_all)]
 pub fn load_scriptlets() -> Vec<Arc<Scriptlet>> {
-    let kit_path = get_kit_path();
+    let index = match crate::plugins::discover_plugins() {
+        Ok(index) => index,
+        Err(error) => {
+            warn!(error = %error, "Failed to discover plugins for scriptlet loading");
+            return Vec::new();
+        }
+    };
 
     let mut scriptlets = Vec::new();
 
-    // Glob pattern to search all kits (under kit/ subdirectory)
-    let patterns = [kit_path.join("kit/*/extensions/*.md")];
+    for plugin in &index.plugins {
+        let extensions_dir = plugin.root.join("extensions");
+        if !extensions_dir.exists() {
+            continue;
+        }
 
-    for pattern in patterns {
+        let pattern = extensions_dir.join("*.md");
         let pattern_str = pattern.to_string_lossy().to_string();
-        debug!(pattern = %pattern_str, "Globbing for scriptlet files");
+
+        info!(
+            plugin_id = %plugin.id,
+            path = %extensions_dir.display(),
+            "plugin_extension_loading"
+        );
 
         match glob(&pattern_str) {
             Ok(paths) => {
-                for entry in paths {
-                    match entry {
-                        Ok(path) => {
-                            // Skip companion .actions.md files (they define shared actions
-                            // with {{content}} templates, not standalone scriptlets)
-                            if is_actions_file(&path) {
-                                debug!(path = %path.display(), "Skipping .actions.md file");
-                                continue;
-                            }
+                for entry in paths.flatten() {
+                    // Skip companion .actions.md files (they define shared actions
+                    // with {{content}} templates, not standalone scriptlets)
+                    if is_actions_file(&entry) {
+                        debug!(path = %entry.display(), "Skipping .actions.md file");
+                        continue;
+                    }
 
-                            debug!(path = %path.display(), "Parsing scriptlet file");
+                    debug!(path = %entry.display(), "Parsing scriptlet file");
 
-                            // Determine kit from path
-                            let kit = extract_kit_from_path(&path, &kit_path);
+                    match fs::read_to_string(&entry) {
+                        Ok(content) => {
+                            let path_str = entry.to_string_lossy().to_string();
+                            let parsed = scriptlet_parser::parse_markdown_as_scriptlets(
+                                &content,
+                                Some(&path_str),
+                            );
 
-                            match fs::read_to_string(&path) {
-                                Ok(content) => {
-                                    let path_str = path.to_string_lossy().to_string();
-                                    let parsed = scriptlet_parser::parse_markdown_as_scriptlets(
-                                        &content,
-                                        Some(&path_str),
-                                    );
+                            for parsed_scriptlet in parsed {
+                                let file_path =
+                                    build_scriptlet_file_path(&entry, &parsed_scriptlet.command);
 
-                                    // Convert parsed scriptlets to our Scriptlet format
-                                    for parsed_scriptlet in parsed {
-                                        let file_path = build_scriptlet_file_path(
-                                            &path,
-                                            &parsed_scriptlet.command,
-                                        );
-
-                                        scriptlets.push(Arc::new(Scriptlet {
-                                            name: parsed_scriptlet.name,
-                                            description: parsed_scriptlet.metadata.description,
-                                            code: parsed_scriptlet.scriptlet_content,
-                                            tool: parsed_scriptlet.tool,
-                                            shortcut: parsed_scriptlet.metadata.shortcut,
-                                            keyword: parsed_scriptlet
-                                                .typed_metadata
-                                                .as_ref()
-                                                .and_then(|t| t.keyword.clone())
-                                                .or(parsed_scriptlet.metadata.keyword.clone()),
-                                            group: if parsed_scriptlet.group.is_empty() {
-                                                kit.clone()
-                                            } else {
-                                                Some(parsed_scriptlet.group)
-                                            },
-                                            file_path: Some(file_path),
-                                            command: Some(parsed_scriptlet.command),
-                                            alias: parsed_scriptlet.metadata.alias,
-                                        }));
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!(
-                                        error = %e,
-                                        path = %path.display(),
-                                        "Failed to read scriptlet file"
-                                    );
-                                }
+                                scriptlets.push(Arc::new(Scriptlet {
+                                    name: parsed_scriptlet.name,
+                                    description: parsed_scriptlet.metadata.description,
+                                    code: parsed_scriptlet.scriptlet_content,
+                                    tool: parsed_scriptlet.tool,
+                                    shortcut: parsed_scriptlet.metadata.shortcut,
+                                    keyword: parsed_scriptlet
+                                        .typed_metadata
+                                        .as_ref()
+                                        .and_then(|t| t.keyword.clone())
+                                        .or(parsed_scriptlet.metadata.keyword.clone()),
+                                    group: if parsed_scriptlet.group.is_empty() {
+                                        None
+                                    } else {
+                                        Some(parsed_scriptlet.group)
+                                    },
+                                    plugin_id: plugin.id.clone(),
+                                    plugin_title: Some(plugin.manifest.title.clone()),
+                                    file_path: Some(file_path),
+                                    command: Some(parsed_scriptlet.command),
+                                    alias: parsed_scriptlet.metadata.alias,
+                                }));
                             }
                         }
                         Err(e) => {
-                            warn!(error = %e, "Failed to process glob entry");
+                            warn!(
+                                error = %e,
+                                path = %entry.display(),
+                                "Failed to read scriptlet file"
+                            );
                         }
                     }
                 }
@@ -233,7 +238,11 @@ pub fn load_scriptlets() -> Vec<Arc<Scriptlet>> {
         (None, None) => a.name.cmp(&b.name),
     });
 
-    debug!(count = scriptlets.len(), "Loaded scriptlets via parser");
+    debug!(
+        count = scriptlets.len(),
+        plugins = index.plugins.len(),
+        "Loaded scriptlets from all plugins via parser"
+    );
     scriptlets
 }
 
@@ -293,7 +302,7 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
         return vec![];
     }
 
-    // Get kit path for kit extraction
+    // Get kit path for plugin resolution
     let kit_path = get_kit_path();
 
     // Read file content
@@ -312,8 +321,9 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
     let path_str = path.to_string_lossy().to_string();
     let parsed = scriptlet_parser::parse_markdown_as_scriptlets(&content, Some(&path_str));
 
-    // Determine kit from path
-    let kit = extract_kit_from_path(path, &kit_path);
+    // Resolve plugin identity from the file path.
+    // Path structure: <kit_path>/kit/<plugin_id>/extensions/<file>.md
+    let (plugin_id, plugin_title) = resolve_plugin_from_path(path, &kit_path);
 
     // Convert parsed scriptlets to our Arc-wrapped Scriptlet format
     let scriptlets: Vec<Arc<Scriptlet>> = parsed
@@ -333,10 +343,12 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
                     .and_then(|t| t.keyword.clone())
                     .or(parsed_scriptlet.metadata.keyword.clone()),
                 group: if parsed_scriptlet.group.is_empty() {
-                    kit.clone()
+                    None
                 } else {
                     Some(parsed_scriptlet.group)
                 },
+                plugin_id: plugin_id.clone(),
+                plugin_title: plugin_title.clone(),
                 file_path: Some(file_path),
                 command: Some(parsed_scriptlet.command),
                 alias: parsed_scriptlet.metadata.alias,
@@ -351,4 +363,27 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
     );
 
     scriptlets
+}
+
+/// Resolve plugin identity from a file path under the plugins container.
+///
+/// Path structure: `<kit_path>/kit/<plugin_id>/extensions/<file>.md`
+/// Returns `(plugin_id, plugin_title)` — reads the manifest if possible.
+fn resolve_plugin_from_path(path: &Path, kit_path: &Path) -> (String, Option<String>) {
+    let container = kit_path.join("kit");
+    let container_str = format!("{}/", container.display());
+    let path_str = path.to_string_lossy();
+
+    if let Some(relative) = path_str.strip_prefix(&container_str) {
+        if let Some(plugin_id) = relative.split('/').next() {
+            let plugin_root = container.join(plugin_id);
+            let title = crate::plugins::read_plugin_manifest(&plugin_root)
+                .ok()
+                .map(|m| m.title)
+                .filter(|t| !t.is_empty());
+            return (plugin_id.to_string(), title);
+        }
+    }
+
+    (String::new(), None)
 }

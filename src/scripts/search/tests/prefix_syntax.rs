@@ -182,6 +182,8 @@ fn test_scriptlet_passes_group_filter() {
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     };
 
     let parsed = parse_query_prefix("group:dev");
@@ -201,6 +203,8 @@ fn test_scriptlet_passes_tool_filter() {
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     };
 
     let parsed = parse_query_prefix("tool:bash");
@@ -234,6 +238,8 @@ fn test_type_filter_script_excludes_scriptlets() {
         file_path: None,
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     };
     assert!(!scriptlet_passes_prefix_filter(&scriptlet, &parsed));
 }
