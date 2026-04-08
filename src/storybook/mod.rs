@@ -24,6 +24,7 @@ mod layout;
 pub mod main_menu_variations;
 pub mod mini_ai_chat_presenter;
 pub mod mini_ai_chat_variations;
+pub(crate) mod playground_overlay_metrics;
 mod registry;
 mod selection;
 mod story;
@@ -49,6 +50,7 @@ pub use confirm_popup_playground::{
 pub use context_picker_popup_playground::{
     context_picker_popup_playground_story_variants,
     render_context_picker_popup_playground_story_preview, ContextPickerPopupPlaygroundId,
+    ContextPickerPopupSceneState, ContextPickerPopupTrigger,
 };
 pub use diagnostics::{
     build_story_catalog_snapshot, load_story_catalog_snapshot, StoryCatalogEntry,

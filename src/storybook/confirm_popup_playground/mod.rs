@@ -9,8 +9,9 @@ use gpui::*;
 use crate::components::prompt_footer::{PromptFooter, PromptFooterColors};
 use crate::list_item::FONT_MONO;
 use crate::storybook::{
-    config_from_storybook_footer_selection_value, FooterVariationId, IntegratedOverlayAnchor,
-    IntegratedOverlayPlacement, IntegratedSurfaceShell, IntegratedSurfaceShellConfig, StoryVariant,
+    config_from_storybook_footer_selection_value,
+    playground_overlay_metrics::confirm_playground_overlay_metrics, FooterVariationId,
+    IntegratedSurfaceShell, IntegratedSurfaceShellConfig, StoryVariant,
 };
 use crate::theme::{get_cached_theme, AppChromeColors};
 use crate::ui_foundation::HexColorExt;
@@ -139,27 +140,34 @@ pub fn render_confirm_popup_playground_story_preview(stable_id: &str) -> AnyElem
         .copied()
         .unwrap_or(SPECS[0]);
 
+    let shell = IntegratedSurfaceShellConfig {
+        width: 560.0,
+        height: 320.0,
+        ..Default::default()
+    };
+
+    let metrics = confirm_playground_overlay_metrics(shell);
+
     tracing::info!(
-        event = "confirm_popup_playground_rendered",
+        event = "confirm_popup_playground_state_built",
         variant_id = spec.id.as_str(),
         danger = spec.is_danger,
-        "Rendered confirm popup playground preview"
+        "Built confirm popup playground state"
     );
 
-    IntegratedSurfaceShell::new(
-        IntegratedSurfaceShellConfig {
-            width: 560.0,
-            height: 320.0,
-            ..Default::default()
-        },
-        render_launcher_body(),
-    )
-    .footer(render_footer(spec.footer_variant))
-    .overlay(
-        IntegratedOverlayPlacement::new(IntegratedOverlayAnchor::Footer, 120.0, 150.0, 320.0),
-        render_confirm_panel(spec),
-    )
-    .into_any_element()
+    tracing::info!(
+        event = "confirm_popup_playground_overlay_wired",
+        variant_id = spec.id.as_str(),
+        overlay_left = metrics.placement.left,
+        overlay_top = metrics.placement.top,
+        overlay_width = metrics.placement.width,
+        "Wired confirm playground overlay through shared metrics"
+    );
+
+    IntegratedSurfaceShell::new(shell, render_launcher_body())
+        .footer(render_footer(spec.footer_variant))
+        .overlay(metrics.placement, render_confirm_panel(spec))
+        .into_any_element()
 }
 
 // ---------------------------------------------------------------------------
