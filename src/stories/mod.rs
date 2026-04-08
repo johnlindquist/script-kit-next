@@ -91,6 +91,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         // Components
         StoryEntry::new(Box::new(ButtonStory)),
         StoryEntry::new(Box::new(ConfirmDialogVariationsStory)),
+        StoryEntry::new(Box::new(ConfirmPopupPlaygroundStory)),
         StoryEntry::new(Box::new(ConfirmPositionVariationsStory)),
         StoryEntry::new(Box::new(ContextIndicatorVariationsStory)),
         StoryEntry::new(Box::new(ToastStory)),
@@ -122,10 +123,8 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(EnvPromptStory)),
         StoryEntry::new(Box::new(PathPromptStory)),
         StoryEntry::new(Box::new(SelectPromptStory)),
-        // Integrated Surfaces (shell-family block)
-        StoryEntry::new(Box::new(ConfirmPopupPlaygroundStory)),
-        StoryEntry::new(Box::new(ContextPickerPopupPlaygroundStory)),
         // AI Chat
+        StoryEntry::new(Box::new(ContextPickerPopupPlaygroundStory)),
         StoryEntry::new(Box::new(AutocompleteDescriptionTreatmentsStory)),
         StoryEntry::new(Box::new(AtMentionPickerVariationsStory)),
         StoryEntry::new(Box::new(SlashCommandMenuVariationsStory)),

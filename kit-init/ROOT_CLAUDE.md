@@ -5,7 +5,7 @@ Script Kit is a **Rust (GPUI) + Bun** launcher — NOT the old Electron/Node.js 
 
 ## One-Shot First
 
-Use `~/.scriptkit/examples/START_HERE.md` as the canonical one-shot authoring guide.
+Use `~/.scriptkit/kit/examples/START_HERE.md` as the canonical one-shot authoring guide.
 Open it first when the user wants one new Script Kit artifact in harness mode.
 Use the rest of this file for workspace rules and Tab AI runtime contract after the artifact type is already chosen.
 
@@ -38,14 +38,14 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 
 ## Read Next
 
-- Canonical launchpad → `~/.scriptkit/examples/START_HERE.md`
+- Canonical launchpad → `~/.scriptkit/kit/examples/START_HERE.md`
 - Machine-readable SDK reference → `kit://sdk-reference`
-- Script details → `~/.scriptkit/skills/script-authoring/SKILL.md`
-- Bundle details → `~/.scriptkit/skills/scriptlets/SKILL.md`
-- Agent details → `~/.scriptkit/skills/agents/SKILL.md`
-- Script example → `~/.scriptkit/examples/scripts/hello-world.ts`
-- Bundle starter → `~/.scriptkit/examples/extensions/starter.md`
-- Agent example → `~/.scriptkit/examples/agents/review-pr.claude.md`
+- Script details → `~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md`
+- Bundle details → `~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md`
+- Agent details → `~/.scriptkit/kit/authoring/skills/agents/SKILL.md`
+- Script example → `~/.scriptkit/kit/examples/scripts/hello-world.ts`
+- Bundle starter → `~/.scriptkit/kit/examples/extensions/starter.md`
+- Agent example → `~/.scriptkit/kit/examples/agents/review-pr.claude.md`
 
 ## Directory Layout
 
@@ -54,21 +54,26 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 ├── CLAUDE.md                      ← this file
 ├── AGENTS.md                      ← SDK reference for all agents
 ├── GUIDE.md                       ← comprehensive user guide
-├── skills/                        ← agent skills (read these!)
-│   ├── script-authoring/SKILL.md
-│   ├── scriptlets/SKILL.md
-│   ├── agents/SKILL.md
-│   ├── config/SKILL.md
-│   └── troubleshooting/SKILL.md
-├── examples/
-│   ├── scripts/                   ← runnable .ts examples
-│   ├── extensions/                ← built-in scriptlet bundles
-│   └── agents/                    ← mdflow agent examples
 ├── kit/                           ← user workspace (version-controllable)
 │   ├── main/
+│   │   ├── plugin.json            ← plugin manifest
 │   │   ├── scripts/               ← PUT NEW SCRIPTS HERE
 │   │   ├── extensions/            ← markdown scriptlet bundles
-│   │   └── agents/                ← AI agent definitions
+│   │   ├── agents/                ← AI agent definitions
+│   │   └── skills/
+│   ├── authoring/
+│   │   ├── plugin.json
+│   │   └── skills/                ← agent skills (read these!)
+│   │       ├── script-authoring/SKILL.md
+│   │       ├── scriptlets/SKILL.md
+│   │       ├── agents/SKILL.md
+│   │       ├── config/SKILL.md
+│   │       └── troubleshooting/SKILL.md
+│   ├── examples/
+│   │   ├── plugin.json
+│   │   ├── scripts/               ← runnable .ts examples
+│   │   ├── extensions/            ← built-in scriptlet bundles
+│   │   └── agents/                ← mdflow agent examples
 │   ├── config.ts                  ← user configuration
 │   ├── theme.json                 ← theme colors
 │   ├── package.json               ← enables top-level await
@@ -155,7 +160,7 @@ await notify("Task complete!");
 
 ## Skills
 
-Read `skills/` for detailed guidance on:
+Read `kit/authoring/skills/` for detailed guidance on:
 - **script-authoring** — creating and structuring scripts
 - **scriptlets** — markdown extension bundles with embedded commands
 - **agents** — mdflow-backed agent files
@@ -164,7 +169,7 @@ Read `skills/` for detailed guidance on:
 
 ## Examples
 
-See `examples/scripts/` for working examples:
+See `kit/examples/scripts/` for working examples:
 - `hello-world.ts` — basic prompt and display
 - `choose-from-list.ts` — rich choices with preview
 - `clipboard-transform.ts` — clipboard read/transform/write
@@ -209,7 +214,7 @@ Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` vi
 - The richer `tab_ai()` profile with screenshots is reserved for a future Claude-specific SDK path.
 
 **Harness lifecycle:**
-- Each explicit quick-terminal open writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/skills/`, and behaves as a one-shot spawn rendered in `QuickTerminalView`.
+- Each explicit quick-terminal open writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/kit/authoring/skills/`, and behaves as a one-shot spawn rendered in `QuickTerminalView`.
 - Internal silent prewarm may seed the PTY ahead of time, but that is a single-use implementation detail rather than a documented warm multi-turn surface.
 - Recovery — if the harness crashes or exits, the next Tab entry respawns it.
 

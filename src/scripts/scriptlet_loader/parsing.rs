@@ -165,6 +165,8 @@ pub(crate) fn parse_scriptlet_section(
             .or_else(|| html_metadata.get("shortcut").cloned()),
         keyword,
         group: None,
+        plugin_id: String::new(),
+        plugin_title: None,
         file_path,
         command: Some(command),
         alias: typed_metadata

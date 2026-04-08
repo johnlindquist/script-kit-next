@@ -192,6 +192,8 @@ fn test_fuzzy_search_scriptlets_by_file_path() {
             file_path: Some("/path/to/urls.md#open-github".to_string()),
             command: Some("open-github".to_string()),
             alias: None,
+            plugin_id: String::new(),
+            plugin_title: None,
         },
         Scriptlet {
             name: "Copy Text".to_string(),
@@ -204,6 +206,8 @@ fn test_fuzzy_search_scriptlets_by_file_path() {
             file_path: Some("/path/to/clipboard.md#copy-text".to_string()),
             command: Some("copy-text".to_string()),
             alias: None,
+            plugin_id: String::new(),
+            plugin_title: None,
         },
     ]);
 
@@ -226,6 +230,8 @@ fn test_fuzzy_search_scriptlets_by_anchor() {
             file_path: Some("/path/to/file.md#open-github".to_string()),
             command: Some("open-github".to_string()),
             alias: None,
+            plugin_id: String::new(),
+            plugin_title: None,
         },
         Scriptlet {
             name: "Close Tab".to_string(),
@@ -238,6 +244,8 @@ fn test_fuzzy_search_scriptlets_by_anchor() {
             file_path: Some("/path/to/file.md#close-tab".to_string()),
             command: Some("close-tab".to_string()),
             alias: None,
+            plugin_id: String::new(),
+            plugin_title: None,
         },
     ]);
 
@@ -260,6 +268,8 @@ fn test_fuzzy_search_scriptlets_display_file_path() {
         file_path: Some("/home/user/.scriptkit/scriptlets/urls.md#test-slug".to_string()),
         command: Some("test-slug".to_string()),
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     }]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "");
@@ -284,6 +294,8 @@ fn test_fuzzy_search_scriptlets_match_indices() {
         file_path: Some("/path/urls.md#test".to_string()),
         command: None,
         alias: None,
+        plugin_id: String::new(),
+        plugin_title: None,
     }]);
 
     let results = fuzzy_search_scriptlets(&scriptlets, "url");

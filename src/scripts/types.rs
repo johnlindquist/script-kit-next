@@ -29,6 +29,10 @@ pub struct Script {
     pub typed_metadata: Option<TypedMetadata>,
     /// Schema definition from `schema = { ... }` declaration in script
     pub schema: Option<Schema>,
+    /// Plugin that owns this script (e.g., "main", "cleanshot", "tools")
+    pub plugin_id: String,
+    /// Human-readable plugin title for display (e.g., "Main", "CleanShot X")
+    pub plugin_title: Option<String>,
     /// Kit name extracted from path (e.g., "main", "cleanshot")
     /// Used for grouping scripts by their source kit in the main menu
     pub kit_name: Option<String>,
@@ -48,6 +52,10 @@ pub struct Scriptlet {
     pub keyword: Option<String>,
     /// Group name from H1 header (e.g., "Productivity", "Development")
     pub group: Option<String>,
+    /// Plugin that owns this scriptlet (e.g., "main", "cleanshot", "tools")
+    pub plugin_id: String,
+    /// Human-readable plugin title for display (e.g., "Main", "CleanShot X")
+    pub plugin_title: Option<String>,
     /// Source file path with anchor for execution (e.g., "/path/to/file.md#slug")
     pub file_path: Option<String>,
     /// Command slug for execution
@@ -291,12 +299,32 @@ impl SearchResult {
         }
     }
 
-    /// Get the kit/source name for this result (used during search to show origin)
+    /// Get the plugin/source name for this result (used during search to show origin).
+    ///
+    /// Resolves to the owning plugin title (or id) for scripts and scriptlets.
     /// Returns None for items without a meaningful source (built-ins, apps, etc.)
     pub fn source_name(&self) -> Option<&str> {
         match self {
-            SearchResult::Script(sm) => sm.script.kit_name.as_deref(),
-            SearchResult::Scriptlet(sm) => sm.scriptlet.group.as_deref(),
+            SearchResult::Script(sm) => {
+                sm.script
+                    .plugin_title
+                    .as_deref()
+                    .or(if sm.script.plugin_id.is_empty() {
+                        sm.script.kit_name.as_deref()
+                    } else {
+                        Some(sm.script.plugin_id.as_str())
+                    })
+            }
+            SearchResult::Scriptlet(sm) => {
+                sm.scriptlet
+                    .plugin_title
+                    .as_deref()
+                    .or(if sm.scriptlet.plugin_id.is_empty() {
+                        sm.scriptlet.group.as_deref()
+                    } else {
+                        Some(sm.scriptlet.plugin_id.as_str())
+                    })
+            }
             SearchResult::Agent(am) => am.agent.kit.as_deref(),
             _ => None,
         }

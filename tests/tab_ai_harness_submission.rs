@@ -770,8 +770,8 @@ fn submit_with_scriptlet_authoring_intent_includes_artifact_authoring_guidance()
 
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
     assert!(submission.contains("~/.scriptkit/kit/main/extensions/<name>.md"));
-    assert!(submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"));
-    assert!(submission.contains("~/.scriptkit/examples/extensions/"));
+    assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/kit/examples/extensions/"));
     assert!(submission.contains("User intent:\nCreate a scriptlet bundle that copies today's date"));
 }
 
@@ -789,7 +789,7 @@ fn submit_with_agent_authoring_intent_includes_agent_destination() {
     .expect("submission should build");
 
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
-    assert!(submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
     assert!(submission.contains("User intent:\nCreate an mdflow agent that reviews staged changes"));
 }
 
@@ -898,7 +898,7 @@ fn script_authoring_submission_includes_bun_verification_contract() {
     )
     .expect("submission should build");
 
-    assert!(submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
     assert!(submission.contains(
         "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
     ));
@@ -943,7 +943,7 @@ fn script_list_submit_with_bare_generation_query_includes_script_verification_co
     .expect("submission should build");
 
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
-    assert!(submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
     assert!(submission.contains(
         "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
     ));

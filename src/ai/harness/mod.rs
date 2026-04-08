@@ -903,7 +903,8 @@ fn should_force_artifact_guidance_for_script_list_submit(
 // Verification-marker constants and detection
 // ---------------------------------------------------------------------------
 
-pub const SCRIPT_AUTHORING_SKILL_MARKER: &str = "~/.scriptkit/skills/script-authoring/SKILL.md";
+pub const SCRIPT_AUTHORING_SKILL_MARKER: &str =
+    "~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md";
 pub const BUN_BUILD_VERIFICATION_MARKER: &str =
     "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs";
 pub const BUN_EXECUTE_VERIFICATION_MARKER: &str =
@@ -1237,7 +1238,7 @@ pub fn build_tab_ai_harness_submission(
         effective_intent,
         mode,
     ) {
-        // Source-contract audit anchor: ~/.scriptkit/skills/script-authoring/SKILL.md
+        // Source-contract audit anchor: ~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md
         tracing::info!(
             event = "tab_ai_artifact_authoring_guidance_appended",
             script_authoring_skill_path = SCRIPT_AUTHORING_SKILL_MARKER,
@@ -2353,7 +2354,7 @@ mod tests {
         .expect("submission");
 
         assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
-        assert!(submission.contains("~/.scriptkit/skills/script-authoring/SKILL.md"));
+        assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
         assert!(submission.contains(
             "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
         ));

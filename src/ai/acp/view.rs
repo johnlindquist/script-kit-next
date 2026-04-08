@@ -540,13 +540,34 @@ impl AcpChatView {
     ) -> Option<crate::ai::acp::history_popup::AcpHistoryPopupSnapshot> {
         let (selected_index, filter, all_entries) = self.history_menu.as_ref()?;
         let entries = if filter.is_empty() {
-            all_entries.clone()
+            all_entries
+                .iter()
+                .cloned()
+                .map(|entry| {
+                    crate::ai::acp::history_popup::AcpHistoryPopupEntry::from_hit(
+                        super::history::AcpHistorySearchHit {
+                            entry,
+                            score: 0,
+                            matched_field: super::history::AcpHistorySearchField::Title,
+                        },
+                    )
+                })
+                .collect::<Vec<_>>()
         } else {
             let query = filter.to_lowercase();
             all_entries
                 .iter()
                 .filter(|entry| entry.first_message.to_lowercase().contains(&query))
                 .cloned()
+                .map(|entry| {
+                    crate::ai::acp::history_popup::AcpHistoryPopupEntry::from_hit(
+                        super::history::AcpHistorySearchHit {
+                            entry,
+                            score: 0,
+                            matched_field: super::history::AcpHistorySearchField::Title,
+                        },
+                    )
+                })
                 .collect::<Vec<_>>()
         };
         let selected_index = if entries.is_empty() {
@@ -1193,8 +1214,11 @@ impl AcpChatView {
         }
     }
 
-    /// Scan ~/.scriptkit/skills/ for skill directories, combine with
+    /// Scan plugin skill directories for slash command candidates, combine with
     /// built-in Claude Code commands. Returns (name, description) tuples.
+    ///
+    /// Uses `discover_plugin_skills()` so skill enumeration is routed through
+    /// plugin ownership instead of hand-scanning `kit/*/skills/`.
     fn discover_slash_commands() -> Vec<(String, String)> {
         let mut commands: Vec<(String, String)> = Self::DEFAULT_SLASH_COMMANDS
             .iter()
@@ -1204,16 +1228,30 @@ impl AcpChatView {
         let mut seen: std::collections::HashSet<String> =
             commands.iter().map(|(name, _)| name.clone()).collect();
 
-        // Scan both skills directories for SKILL.md entries.
-        let dirs = [
-            crate::setup::get_kit_path().join("skills"),
-            crate::setup::get_kit_path().join(".claude").join("skills"),
-        ];
+        // Discover skills from all plugin roots via the canonical plugin index.
+        if let Ok(index) = crate::plugins::discover_plugins() {
+            if let Ok(skills) = crate::plugins::discover_plugin_skills(&index) {
+                for skill in &skills {
+                    if seen.contains(&skill.skill_id) {
+                        continue;
+                    }
 
-        for dir in &dirs {
-            let Ok(entries) = std::fs::read_dir(dir) else {
-                continue;
-            };
+                    // Parse description from YAML frontmatter
+                    let desc = std::fs::read_to_string(&skill.path)
+                        .ok()
+                        .and_then(|content| parse_skill_description(&content))
+                        .unwrap_or_default();
+
+                    seen.insert(skill.skill_id.clone());
+                    commands.push((skill.skill_id.clone(), desc));
+                }
+            }
+        }
+
+        // Also scan .claude/skills for user-level Claude Code skills
+        let kit_path = crate::setup::get_kit_path();
+        let claude_skills_dir = kit_path.join(".claude").join("skills");
+        if let Ok(entries) = std::fs::read_dir(&claude_skills_dir) {
             for entry in entries.flatten() {
                 let skill_md = entry.path().join("SKILL.md");
                 if !skill_md.exists() {
@@ -1226,7 +1264,6 @@ impl AcpChatView {
                     continue;
                 }
 
-                // Parse description from YAML frontmatter
                 let desc = std::fs::read_to_string(&skill_md)
                     .ok()
                     .and_then(|content| parse_skill_description(&content))
