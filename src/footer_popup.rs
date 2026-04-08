@@ -33,6 +33,8 @@ pub(crate) enum FooterAction {
     Run,
     Actions,
     Ai,
+    Apply,
+    Close,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,6 +85,21 @@ static FOOTER_ACTION_CHANNEL: std::sync::LazyLock<(
     async_channel::Receiver<FooterAction>,
 )> = std::sync::LazyLock::new(|| async_channel::bounded(32));
 
+static ACTIVE_MAIN_WINDOW_FOOTER_SURFACE: std::sync::Mutex<Option<&'static str>> =
+    std::sync::Mutex::new(None);
+
+fn set_active_main_window_footer_surface(surface: Option<&'static str>) {
+    *ACTIVE_MAIN_WINDOW_FOOTER_SURFACE
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner()) = surface;
+}
+
+pub(crate) fn active_main_window_footer_surface() -> Option<&'static str> {
+    *ACTIVE_MAIN_WINDOW_FOOTER_SURFACE
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner())
+}
+
 pub(crate) fn footer_action_channel() -> &'static (
     async_channel::Sender<FooterAction>,
     async_channel::Receiver<FooterAction>,
@@ -95,6 +112,8 @@ pub(crate) fn sync_main_footer_popup(
     config: Option<&MainWindowFooterConfig>,
     _cx: &mut App,
 ) {
+    set_active_main_window_footer_surface(config.map(|cfg| cfg.surface));
+
     #[cfg(target_os = "macos")]
     {
         let Some(ns_window) = main_window_ns_window(window) else {
@@ -127,6 +146,8 @@ pub(crate) fn notify_main_footer_popup(
     config: Option<&MainWindowFooterConfig>,
     _cx: &mut App,
 ) {
+    set_active_main_window_footer_surface(config.map(|cfg| cfg.surface));
+
     #[cfg(target_os = "macos")]
     {
         let Some(ns_window) = main_window_ns_window(window) else {
@@ -147,6 +168,8 @@ pub(crate) fn notify_main_footer_popup(
 }
 
 pub(crate) fn close_main_footer_popup(cx: &mut App) {
+    set_active_main_window_footer_surface(None);
+
     let Some(window_handle) = crate::get_main_window_handle() else {
         return;
     };
@@ -775,6 +798,8 @@ fn footer_action_key(action: FooterAction) -> &'static str {
         FooterAction::Run => "run",
         FooterAction::Actions => "actions",
         FooterAction::Ai => "ai",
+        FooterAction::Apply => "apply",
+        FooterAction::Close => "close",
     }
 }
 
@@ -1244,6 +1269,8 @@ fn footer_action_selector(action: FooterAction) -> objc::runtime::Sel {
         FooterAction::Run => sel!(runFooterAction:),
         FooterAction::Actions => sel!(actionsFooterAction:),
         FooterAction::Ai => sel!(aiFooterAction:),
+        FooterAction::Apply => sel!(applyFooterAction:),
+        FooterAction::Close => sel!(closeFooterAction:),
     }
 }
 
@@ -1274,6 +1301,14 @@ fn footer_action_target_class() -> *const objc::runtime::Class {
             sel!(aiFooterAction:),
             footer_ai_action as extern "C" fn(&Object, Sel, id),
         );
+        decl.add_method(
+            sel!(applyFooterAction:),
+            footer_apply_action as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(closeFooterAction:),
+            footer_close_action as extern "C" fn(&Object, Sel, id),
+        );
         decl.register() as *const _ as usize
     }) as *const objc::runtime::Class
 }
@@ -1291,4 +1326,14 @@ extern "C" fn footer_actions_action(_this: &objc::runtime::Object, _: objc::runt
 #[cfg(target_os = "macos")]
 extern "C" fn footer_ai_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
     send_footer_action(FooterAction::Ai);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_apply_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    send_footer_action(FooterAction::Apply);
+}
+
+#[cfg(target_os = "macos")]
+extern "C" fn footer_close_action(_this: &objc::runtime::Object, _: objc::runtime::Sel, _: id) {
+    send_footer_action(FooterAction::Close);
 }

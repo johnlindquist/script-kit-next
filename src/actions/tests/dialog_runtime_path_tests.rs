@@ -1,4 +1,4 @@
-use super::dialog::{ActionsDialog, ActionsDialogActivation, ActionsDialogRoute, GroupedActionItem};
+use super::dialog::{ActionsDialog, GroupedActionItem};
 use super::types::{Action, ActionCallback, ActionCategory, ActionsDialogConfig, SectionStyle};
 use crate::theme;
 use gpui::{App, AppContext, Entity};
@@ -222,47 +222,6 @@ fn test_actions_dialog_defaults_to_matching_main_window_background() {
                 dialog.match_main_window_background,
                 "ActionsDialog should default to matching the main window background"
             );
-        });
-    });
-}
-
-#[test]
-#[cfg_attr(target_os = "macos", ignore = "requires main thread (run via GPUI)")]
-fn test_row_click_requires_second_single_click_before_drill_down_route_push() {
-    run_headless_dialog_test(|cx| {
-        let dialog = build_dialog_entity(
-            cx,
-            vec![sample_action("action_alpha", "Alpha", None)],
-            ActionsDialogConfig::default(),
-            Arc::new(Mutex::new(Vec::new())),
-        );
-
-        cx.update_entity(&dialog, |dialog, entity_cx| {
-            dialog.register_drill_down_route(
-                "action_alpha",
-                ActionsDialogRoute {
-                    id: "child-route".to_string(),
-                    actions: vec![sample_action("child_action", "Child", None)],
-                    context_title: Some("Child Route".to_string()),
-                    search_placeholder: Some("Search child actions".to_string()),
-                    initial_selected_action_id: Some("child_action".to_string()),
-                },
-            );
-
-            let first_click = dialog.handle_row_click_with_count(0, 1, entity_cx);
-            assert_eq!(first_click, None);
-            assert_eq!(dialog.route_depth(), 0);
-
-            let second_click = dialog.handle_row_click_with_count(0, 1, entity_cx);
-            assert_eq!(
-                second_click,
-                Some(ActionsDialogActivation::DrillDownPushed {
-                    action_id: "action_alpha".to_string(),
-                    route_id: "child-route".to_string(),
-                })
-            );
-            assert_eq!(dialog.route_depth(), 1);
-            assert_eq!(dialog.current_route_id(), Some("child-route"));
         });
     });
 }

@@ -398,6 +398,38 @@ impl Render for ScriptListApp {
             AppView::AcpChatView { entity } => entity.into_any_element(),
         };
 
+        // When the native main-window footer owns spacing, wrap content with a
+        // bottom spacer so views don't sit underneath the NSVisualEffectView.
+        // This is the single injection point — individual renderers no longer
+        // need to add their own spacer.
+        let main_content: AnyElement = if self.main_window_uses_native_footer() {
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_spacer_injected",
+                view = ?self.current_view,
+                "Injected top-level spacer for native main-window footer"
+            );
+            div()
+                .w_full()
+                .h_full()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .w_full()
+                        .flex_1()
+                        .min_h(px(0.))
+                        .overflow_hidden()
+                        .child(main_content),
+                )
+                .child(
+                    crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(),
+                )
+                .into_any_element()
+        } else {
+            main_content
+        };
+
         // Wrap content in a container that can have the debug grid overlay
         let window_bounds = window.bounds();
         let window_size = gpui::size(window_bounds.size.width, window_bounds.size.height);

@@ -33,6 +33,19 @@ impl ChatPrompt {
     }
 
     fn render_footer(&self, _cx: &mut Context<Self>) -> AnyElement {
+        if matches!(
+            crate::footer_popup::active_main_window_footer_surface(),
+            Some("chat_prompt")
+        ) {
+            tracing::info!(
+                target: "script_kit::prompt_chrome",
+                event = "chat_footer_suppressed_for_native_footer",
+                mini_mode = self.mini_mode,
+                "Suppressed internal GPUI chat footer because native main-window footer is active"
+            );
+            return div().into_any_element();
+        }
+
         if self.mini_mode {
             return self.render_mini_hint_strip().into_any_element();
         }
@@ -504,6 +517,14 @@ mod chat_footer_hint_strip_tests {
 
     #[test]
     fn test_chat_footer_uses_hint_strip_for_both_modes() {
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("active_main_window_footer_surface()"),
+            "Chat footer should check for active native footer surface"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("chat_footer_suppressed_for_native_footer"),
+            "Chat footer should log when suppressed for native footer"
+        );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("render_mini_hint_strip"),
             "Chat should have a mini hint strip renderer"

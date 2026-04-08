@@ -13,14 +13,18 @@
 fn arg_prompt_uses_shared_minimal_list_shell() {
     let source = include_str!("../src/render_prompts/arg/render.rs");
     assert!(
-        source.contains("render_minimal_list_prompt_shell("),
-        "arg prompt should delegate layout to the shared minimal list prompt shell"
+        source.contains("render_minimal_list_prompt_shell_with_footer("),
+        "arg prompt should delegate layout to the footer-aware shared minimal list prompt shell"
+    );
+    assert!(
+        source.contains("main_window_footer_slot("),
+        "arg prompt should route its GPUI footer through main_window_footer_slot"
     );
     assert!(
         !source.contains("ALPHA_DIVIDER"),
         "arg prompt should not use inline ALPHA_DIVIDER constant for its list divider"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"arg\",\"shell\":\"minimal_list\",\"status\":\"pass\"}}");
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"arg\",\"shell\":\"minimal_list_with_footer\",\"status\":\"pass\"}}");
 }
 
 #[test]
@@ -70,10 +74,14 @@ fn emoji_picker_no_longer_uses_prompt_footer() {
         "emoji picker should use hint strip, not PromptFooter"
     );
     assert!(
-        source.contains("render_minimal_list_prompt_scaffold("),
-        "emoji picker should use the shared minimal list prompt scaffold"
+        source.contains("main_window_footer_slot("),
+        "emoji picker should route its GPUI footer through main_window_footer_slot"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"emoji_picker\",\"shell\":\"minimal_scaffold\",\"status\":\"pass\"}}");
+    assert!(
+        source.contains("render_simple_hint_strip("),
+        "emoji picker should build its hint strip via render_simple_hint_strip"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"emoji_picker\",\"shell\":\"native_footer_slot\",\"status\":\"pass\"}}");
 }
 
 #[test]

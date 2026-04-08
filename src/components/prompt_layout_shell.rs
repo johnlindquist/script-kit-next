@@ -1636,8 +1636,12 @@ mod prompt_layout_shell_tests {
     fn arg_prompt_uses_shared_minimal_list_prompt_shell() {
         let source = include_str!("../render_prompts/arg/render.rs");
         assert!(
-            source.contains("render_minimal_list_prompt_shell("),
-            "arg prompt should use the shared minimal list prompt shell"
+            source.contains("render_minimal_list_prompt_shell_with_footer("),
+            "arg prompt should use the footer-aware shared minimal list prompt shell"
+        );
+        assert!(
+            source.contains("main_window_footer_slot("),
+            "arg prompt should route its GPUI footer through main_window_footer_slot"
         );
     }
 
@@ -1667,8 +1671,10 @@ mod prompt_layout_shell_tests {
         ] {
             assert!(
                 source.contains("render_minimal_list_prompt_scaffold(")
-                    || source.contains("render_minimal_list_prompt_shell("),
-                "{label} should use the shared minimal list prompt scaffold or shell"
+                    || source.contains("render_minimal_list_prompt_shell(")
+                    || source.contains("render_minimal_list_prompt_shell_with_footer(")
+                    || source.contains("main_window_footer_slot("),
+                "{label} should use the shared minimal list prompt scaffold, shell, or native footer slot"
             );
             let legacy = ["PromptFooter", "::new("].concat();
             let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
