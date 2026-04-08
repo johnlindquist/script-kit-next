@@ -210,9 +210,8 @@ impl ScriptListApp {
                     scripts::SearchResult::Window(wm) => {
                         Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                     }
-                    scripts::SearchResult::Agent(am) => {
-                        Some(format!("agent:{}", am.agent.path.to_string_lossy()))
-                    }
+                    // Suppressed: agents don't track frecency in the launcher
+                    scripts::SearchResult::Agent(_) => None,
                     // Fallbacks don't track frecency - they're utility commands
                     scripts::SearchResult::Fallback(_) => None,
                 };
@@ -261,11 +260,15 @@ impl ScriptListApp {
                         self.open_acp_with_selected_skill(&skill_match.skill, cx);
                     }
                     scripts::SearchResult::Agent(agent_match) => {
-                        // TODO: Implement agent execution via mdflow
-                        self.last_output = Some(SharedString::from(format!(
-                            "Agent execution not yet implemented: {}",
-                            agent_match.agent.name
-                        )));
+                        // Suppressed: agents are not launchable from the main menu.
+                        // Skills replace agents as the first-class reusable AI artifact.
+                        // ACP agent catalog/provider selection remains in src/ai/acp/.
+                        tracing::info!(
+                            event = "legacy_agent_result_suppressed",
+                            agent_name = %agent_match.agent.name,
+                            agent_path = %agent_match.agent.path.display(),
+                            "Agent execution suppressed in main menu — use skills or ACP Chat"
+                        );
                     }
                     scripts::SearchResult::Fallback(fallback_match) => {
                         // Execute the fallback with the current filter text as input

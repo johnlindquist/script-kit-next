@@ -34,6 +34,7 @@ pub(super) fn build_grouped_view_results(
 
     // Map each result to its frecency key.
     // Skills and scriptlets use plugin-qualified keys.
+    // Agents are suppressed — they return None so they are skipped from frecency and grouping.
     let get_result_path = |result: &SearchResult| -> Option<String> {
         match result {
             SearchResult::Script(sm) => Some(sm.script.path.to_string_lossy().to_string()),
@@ -50,13 +51,15 @@ pub(super) fn build_grouped_view_results(
             SearchResult::Window(wm) => {
                 Some(format!("window:{}:{}", wm.window.app, wm.window.title))
             }
-            SearchResult::Agent(am) => Some(format!("agent:{}", am.agent.path.to_string_lossy())),
+            // Suppressed: agents are not top-level launcher artifacts
+            SearchResult::Agent(_) => None,
             // Fallbacks don't have paths - they're only shown in search mode, not grouped view
             SearchResult::Fallback(_) => None,
         }
     };
 
-    // Helper to get plugin/kit name for grouping (scripts, scriptlets, skills, and agents)
+    // Helper to get plugin/kit name for grouping (scripts, scriptlets, and skills)
+    // Agents are suppressed from grouping — they are not top-level launcher artifacts.
     let get_kit_name = |result: &SearchResult| -> Option<String> {
         match result {
             SearchResult::Script(sm) => sm.script.kit_name.clone(),
@@ -69,7 +72,8 @@ pub(super) fn build_grouped_view_results(
                 }
             }
             SearchResult::Skill(sm) => Some(sm.skill.plugin_id.clone()),
-            SearchResult::Agent(am) => am.agent.kit.clone(),
+            // Suppressed: agents are not grouped in the launcher
+            SearchResult::Agent(_) => None,
             _ => None,
         }
     };
@@ -100,12 +104,11 @@ pub(super) fn build_grouped_view_results(
             if score >= min_score && suggested_paths.contains(&path) && !is_excluded_builtin {
                 suggested_indices.push((idx, score));
             } else {
-                // Categorize by kit (for scripts/scriptlets/skills/agents) or by type (for others)
+                // Categorize by kit (for scripts/scriptlets/skills) or by type (for others)
                 match result {
                     SearchResult::Script(_)
                     | SearchResult::Scriptlet(_)
-                    | SearchResult::Skill(_)
-                    | SearchResult::Agent(_) => {
+                    | SearchResult::Skill(_) => {
                         // Group by kit/plugin name (default to "main" if no kit specified)
                         let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
                         kit_indices.entry(kit).or_default().push(idx);
@@ -114,6 +117,14 @@ pub(super) fn build_grouped_view_results(
                         commands_indices.push(idx)
                     }
                     SearchResult::App(_) => apps_indices.push(idx),
+                    // Suppressed: agents are not top-level launcher artifacts
+                    SearchResult::Agent(_) => {
+                        tracing::info!(
+                            event = "legacy_agent_result_suppressed",
+                            agent_name = result.name(),
+                            "Agent result skipped in grouped view"
+                        );
+                    }
                     // Fallbacks should never appear in grouped view - they're search-mode only
                     SearchResult::Fallback(_) => {}
                 }
@@ -121,15 +132,14 @@ pub(super) fn build_grouped_view_results(
         } else {
             // If no path, categorize by type (shouldn't happen, but handle gracefully)
             match result {
-                SearchResult::Script(_)
-                | SearchResult::Scriptlet(_)
-                | SearchResult::Skill(_)
-                | SearchResult::Agent(_) => {
+                SearchResult::Script(_) | SearchResult::Scriptlet(_) | SearchResult::Skill(_) => {
                     let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
                     kit_indices.entry(kit).or_default().push(idx);
                 }
                 SearchResult::BuiltIn(_) | SearchResult::Window(_) => commands_indices.push(idx),
                 SearchResult::App(_) => apps_indices.push(idx),
+                // Suppressed: agents are not top-level launcher artifacts
+                SearchResult::Agent(_) => {}
                 // Fallbacks should never appear in grouped view - they're search-mode only
                 SearchResult::Fallback(_) => {}
             }
@@ -266,7 +276,7 @@ pub(super) fn build_grouped_view_results(
         }
     }
 
-    // Note: Agents are now grouped by kit, no separate AGENTS section
+    // Note: Agents are suppressed from the grouped view; skills replace them
 
     // Calculate kit counts for logging
     let kit_count: usize = kit_indices.values().map(|v| v.len()).sum();
@@ -278,7 +288,7 @@ pub(super) fn build_grouped_view_results(
         commands_count = commands_indices.len(),
         apps_count = apps_indices.len(),
         total_grouped = grouped.len(),
-        "Grouped view: created kit-based sections (scripts, scriptlets, agents grouped by kit)"
+        "Grouped view: created kit-based sections (scripts, scriptlets, skills grouped by kit)"
     );
 
     (grouped, results)

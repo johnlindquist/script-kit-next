@@ -171,6 +171,31 @@ pub fn fuzzy_search_unified_all_with_skills(
         );
     }
 
+    // Suppress legacy Agent results from the launcher pipeline.
+    // Agent artifacts are handled inside ACP internals, not the main menu.
+    // Skills replace agents as the first-class reusable AI artifact.
+    let pre_suppress_len = results.len();
+    results.retain(|r| {
+        if r.is_suppressed_agent() {
+            tracing::info!(
+                event = "legacy_agent_result_suppressed",
+                agent_name = r.name(),
+                "Agent result filtered from launcher search pipeline"
+            );
+            false
+        } else {
+            true
+        }
+    });
+    let suppressed_count = pre_suppress_len - results.len();
+    if suppressed_count > 0 {
+        tracing::info!(
+            suppressed_count,
+            event = "legacy_agent_results_filtered",
+            "Filtered legacy agent results from launcher pipeline"
+        );
+    }
+
     // Sort by score (highest first), then by type order, then by name
     let sort_start = std::time::Instant::now();
     results.sort_by(|a, b| match b.score().cmp(&a.score()) {
@@ -271,21 +296,32 @@ pub fn fuzzy_search_unified_with_windows(
         }
     }
 
-    // Sort by score (highest first), then by type (builtins first, apps, windows, scripts, scriptlets, agents), then by name
-    // Fallbacks always sort last (they have their own ordering by priority)
-    results.sort_by(|a, b| {
-        match b.score().cmp(&a.score()) {
-            Ordering::Equal => {
-                // Prefer builtins over apps over windows over scripts over scriptlets over agents when scores are equal
-                let type_order_a = result_type_order(a);
-                let type_order_b = result_type_order(b);
-                match type_order_a.cmp(&type_order_b) {
-                    Ordering::Equal => a.name().cmp(b.name()),
-                    other => other,
-                }
-            }
-            other => other,
+    // Suppress legacy Agent results (defensive — same as primary search path)
+    results.retain(|r| {
+        if r.is_suppressed_agent() {
+            tracing::info!(
+                event = "legacy_agent_result_suppressed",
+                agent_name = r.name(),
+                "Agent result filtered from window search pipeline"
+            );
+            false
+        } else {
+            true
         }
+    });
+
+    // Sort by score (highest first), then by type (builtins first, apps, windows, scripts, scriptlets), then by name
+    // Fallbacks always sort last (they have their own ordering by priority)
+    results.sort_by(|a, b| match b.score().cmp(&a.score()) {
+        Ordering::Equal => {
+            let type_order_a = result_type_order(a);
+            let type_order_b = result_type_order(b);
+            match type_order_a.cmp(&type_order_b) {
+                Ordering::Equal => a.name().cmp(b.name()),
+                other => other,
+            }
+        }
+        other => other,
     });
 
     results

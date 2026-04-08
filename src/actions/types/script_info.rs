@@ -80,8 +80,10 @@ pub struct ScriptInfo {
     /// Used by "Reset Ranking" to know which frecency entry to remove.
     /// When `is_suggested` is true, this should be a non-empty path.
     pub frecency_path: Option<String>,
-    /// Whether this is an agent file (.claude.md or similar)
-    /// Agents have their own actions (Edit Agent, Copy Content, etc.)
+    /// Whether this is an agent file (.claude.md or similar).
+    /// Retained for ACP internals and action dialog compatibility.
+    /// Agents are suppressed from the main-menu launcher pipeline;
+    /// skills replace them as the first-class reusable AI artifact.
     pub is_agent: bool,
     /// Whether this is a macOS application (.app bundle)
     /// Apps have their own actions (Show in Finder, Quit, Copy Bundle ID, etc.)

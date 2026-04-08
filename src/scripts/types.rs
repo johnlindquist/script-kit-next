@@ -238,9 +238,21 @@ pub enum SearchResult {
     BuiltIn(BuiltInMatch),
     App(AppMatch),
     Window(WindowMatch),
+    /// Legacy agent artifact — suppressed from the launcher pipeline.
+    /// Agent results are actively filtered out of search/grouping/selection.
+    /// ACP agent catalog and provider selection remain intact in `src/ai/acp/`.
+    /// Kept as a variant for compilation compatibility; never yielded to the UI.
     Agent(AgentMatch),
     /// Fallback command from "Use with..." section (shown at bottom of search results)
     Fallback(FallbackMatch),
+}
+
+impl SearchResult {
+    /// Returns true if this result is a legacy Agent variant that should be
+    /// suppressed from the launcher pipeline.
+    pub fn is_suppressed_agent(&self) -> bool {
+        matches!(self, SearchResult::Agent(_))
+    }
 }
 
 impl SearchResult {
@@ -399,7 +411,10 @@ impl SearchResult {
             SearchResult::BuiltIn(_) => "Run Command",
             SearchResult::App(_) => "Launch App",
             SearchResult::Window(_) => "Switch to Window",
-            SearchResult::Agent(_) => "Run Agent",
+            SearchResult::Agent(_) => {
+                // Suppressed: agents are not launchable from the main menu
+                "Agent (suppressed)"
+            }
             SearchResult::Fallback(fm) => {
                 // Fallbacks use their action type
                 if fm.fallback.is_builtin() {

@@ -39,9 +39,8 @@ pub(super) fn build_search_mode_results(
                 SearchResult::Window(wm) => {
                     Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                 }
-                SearchResult::Agent(am) => {
-                    Some(format!("agent:{}", am.agent.path.to_string_lossy()))
-                }
+                // Suppressed: agents don't participate in search-mode frecency
+                SearchResult::Agent(_) => None,
                 SearchResult::Fallback(_) => None,
             }
         };
