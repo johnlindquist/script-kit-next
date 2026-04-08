@@ -19,11 +19,11 @@ impl Story for ConfirmPopupPlaygroundStory {
     }
 
     fn category(&self) -> &'static str {
-        "Layouts"
+        "Integrated Surfaces"
     }
 
     fn surface(&self) -> StorySurface {
-        StorySurface::MainMenu
+        StorySurface::Shell
     }
 
     fn render(&self) -> gpui::AnyElement {
@@ -41,6 +41,13 @@ impl Story for ConfirmPopupPlaygroundStory {
     }
 
     fn render_variant(&self, variant: &StoryVariant) -> gpui::AnyElement {
+        tracing::info!(
+            event = "storybook_shell_story_rendered",
+            story_id = self.id(),
+            variant_id = %variant.stable_id(),
+            surface = self.surface().label(),
+            "Rendered shell story variant"
+        );
         render_confirm_popup_playground_story_preview(&variant.stable_id())
     }
 
@@ -57,7 +64,7 @@ mod tests {
     #[test]
     fn confirm_popup_playground_story_is_compare_ready() {
         let story = ConfirmPopupPlaygroundStory;
-        assert_eq!(story.surface(), StorySurface::MainMenu);
+        assert_eq!(story.surface(), StorySurface::Shell);
         assert!(story.variants().len() > 1);
     }
 }
