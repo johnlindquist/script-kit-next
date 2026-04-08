@@ -196,6 +196,9 @@ pub(crate) struct AcpChatView {
     on_open_history_command: Option<AcpFooterActionHandler>,
     /// Host-owned callback for opening a full built-in view as an attachment portal.
     on_open_portal: Option<AcpPortalHandler>,
+    /// Stashed query text from the `@history` trigger, consumed once by the
+    /// portal opener to prefilter the history popup.
+    pending_history_portal_query: Option<String>,
 }
 
 /// Bounded ring buffer for ACP test probe events.
@@ -772,6 +775,61 @@ impl AcpChatView {
         cx.notify();
     }
 
+    /// Attach a prior conversation as a context chip via the existing file attachment path.
+    pub(crate) fn attach_history_session(
+        &mut self,
+        session_id: &str,
+        mode: super::history_attachment::AcpHistoryAttachMode,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let (path, label) = super::history_attachment::write_history_attachment(session_id, mode)?;
+        let display_path = path.to_string_lossy().to_string();
+
+        self.live_thread().update(cx, |thread, cx| {
+            thread.add_context_part(
+                AiContextPart::FilePath {
+                    path: display_path.clone(),
+                    label: label.clone(),
+                },
+                cx,
+            );
+        });
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_history_attachment_added",
+            session_id = %session_id,
+            mode = ?mode,
+            path = %display_path,
+            label = %label,
+        );
+
+        cx.notify();
+        Ok(())
+    }
+
+    /// Take the pending history portal query (consumed once by the portal opener).
+    pub(crate) fn take_pending_history_portal_query(&mut self) -> Option<String> {
+        self.pending_history_portal_query.take()
+    }
+
+    /// Open the history popup pre-seeded with search hits from the portal.
+    pub(crate) fn open_history_portal_with_entries(
+        &mut self,
+        query: String,
+        hits: Vec<super::history::AcpHistorySearchHit>,
+        cx: &mut Context<Self>,
+    ) {
+        let entries: Vec<super::history::AcpHistoryEntry> =
+            hits.into_iter().map(|h| h.entry).collect();
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+        self.mention_session = None;
+        self.history_menu = Some((0, query, entries));
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
+    }
+
     fn toggle_history_popup_from_cached_parent(&mut self, cx: &mut Context<Self>) {
         if self.history_menu.is_some() {
             self.history_menu = None;
@@ -1083,6 +1141,7 @@ impl AcpChatView {
             on_close_requested: None,
             on_open_history_command: None,
             on_open_portal: None,
+            pending_history_portal_query: None,
         }
     }
 
@@ -1130,6 +1189,7 @@ impl AcpChatView {
             on_close_requested: None,
             on_open_history_command: None,
             on_open_portal: None,
+            pending_history_portal_query: None,
         }
     }
 
@@ -3038,6 +3098,25 @@ impl AcpChatView {
             }
             ContextPickerItemKind::SlashCommand(_) => return,
             ContextPickerItemKind::Portal(portal_kind) => {
+                // For AcpHistory portals, stash the remaining input text as the
+                // prefilter query before clearing the trigger text.
+                if *portal_kind == crate::ai::window::context_picker::types::PortalKind::AcpHistory
+                {
+                    let current_text = self.live_thread().read(cx).input.text().to_string();
+                    let remaining = Self::replace_text_in_char_range(
+                        &current_text,
+                        session.trigger_range.clone(),
+                        "",
+                    );
+                    let query = remaining.trim().to_string();
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_history_portal_query_staged",
+                        query = %query,
+                    );
+                    self.pending_history_portal_query = Some(query);
+                }
+
                 // Remove the trigger text (@file, @clip, etc.) from the input
                 // before opening the portal so it doesn't linger on return.
                 let current_text = self.live_thread().read(cx).input.text().to_string();

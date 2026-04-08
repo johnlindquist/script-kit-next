@@ -70,6 +70,37 @@ impl ScriptListApp {
                     cx,
                 );
             }
+            PortalKind::AcpHistory => {
+                // AcpHistory opens the floating history popup instead of
+                // switching the full view. Undo the portal state we just set
+                // since this path does not use the view-switch flow.
+                self.attachment_portal_return_view = None;
+                self.attachment_portal_return_focus_target = None;
+
+                if let AppView::AcpChatView { entity } = &self.current_view {
+                    let chat = entity.clone();
+                    let query = chat.update(cx, |view, _cx| {
+                        view.take_pending_history_portal_query()
+                            .unwrap_or_default()
+                    });
+
+                    let hits =
+                        crate::ai::acp::history::search_history(&query, 12);
+
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_history_portal_opened",
+                        query = %query,
+                        hit_count = hits.len(),
+                    );
+
+                    // Open the history popup on the ACP chat view, pre-seeded
+                    // with search results for the stashed query.
+                    chat.update(cx, |view, cx| {
+                        view.open_history_portal_with_entries(query, hits, cx);
+                    });
+                }
+            }
         }
 
         cx.notify();

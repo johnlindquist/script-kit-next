@@ -1326,12 +1326,14 @@ fn delete_conversation_removes_file_and_rewrites_index() {
         first_message: "hello from A".to_string(),
         message_count: 3,
         session_id: "session-a".to_string(),
+        ..Default::default()
     };
     let entry_b = AcpHistoryEntry {
         timestamp: "2026-04-05T11:00:00Z".to_string(),
         first_message: "hello from B".to_string(),
         message_count: 5,
         session_id: "session-b".to_string(),
+        ..Default::default()
     };
 
     // Write index entries
@@ -1393,6 +1395,7 @@ fn delete_conversation_is_idempotent_for_missing_session() {
         first_message: "test".to_string(),
         message_count: 1,
         session_id: "nonexistent-session".to_string(),
+        ..Default::default()
     };
     let json = serde_json::to_string(&entry).expect("serialize");
     let parsed: super::history::AcpHistoryEntry = serde_json::from_str(&json).expect("deserialize");

@@ -835,7 +835,15 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
             label: "Browse Clipboard\u{2026}",
             description: "Browse clipboard history with previews",
             meta: "@clipboard",
-            match_terms: &["clipboard", "clip", "history", "paste"],
+            match_terms: &["clipboard", "clip", "paste"],
+        },
+        PortalDef {
+            kind: PortalKind::AcpHistory,
+            id: "portal:acp_history",
+            label: "Browse History\u{2026}",
+            description: "Search prior ACP conversations",
+            meta: "@history",
+            match_terms: &["history", "conversation", "chat", "resume", "reuse"],
         },
     ];
 

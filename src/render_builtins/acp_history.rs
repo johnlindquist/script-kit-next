@@ -21,30 +21,17 @@ impl ScriptListApp {
         let text_dimmed = self.theme.colors.text.dimmed;
         let text_muted = self.theme.colors.text.muted;
 
-        // Load history entries on each render (small JSONL, fast)
+        // Load history entries via the shared search model (small JSONL, fast).
         let all_entries = crate::ai::acp::history::load_history();
-
-        // Filter
-        let filtered_entries: Vec<(usize, &crate::ai::acp::history::AcpHistoryEntry)> =
-            if filter.is_empty() {
-                all_entries.iter().enumerate().collect()
-            } else {
-                let filter_lower = filter.to_lowercase();
-                all_entries
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, e)| {
-                        e.first_message.to_lowercase().contains(&filter_lower)
-                            || e.timestamp.to_lowercase().contains(&filter_lower)
-                    })
-                    .collect()
-            };
+        let hits = crate::ai::acp::history::search_history(&filter, 100);
+        let filtered_entries: Vec<crate::ai::acp::history::AcpHistoryEntry> =
+            hits.into_iter().map(|h| h.entry).collect();
         let filtered_len = filtered_entries.len();
 
         // Load preview for selected entry
         let selected_session_id = filtered_entries
             .get(selected_index)
-            .map(|(_, e)| e.session_id.clone());
+            .map(|e| e.session_id.clone());
         let preview_conversation = selected_session_id
             .as_deref()
             .and_then(crate::ai::acp::history::load_conversation);
@@ -113,22 +100,10 @@ impl ScriptListApp {
                     return;
                 };
 
-                // Recompute filtered list
-                let entries = crate::ai::acp::history::load_history();
-                let filtered: Vec<(usize, &crate::ai::acp::history::AcpHistoryEntry)> =
-                    if current_filter.is_empty() {
-                        entries.iter().enumerate().collect()
-                    } else {
-                        let fl = current_filter.to_lowercase();
-                        entries
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, e)| {
-                                e.first_message.to_lowercase().contains(&fl)
-                                    || e.timestamp.to_lowercase().contains(&fl)
-                            })
-                            .collect()
-                    };
+                // Recompute filtered list via the shared search model.
+                let hits = crate::ai::acp::history::search_history(&current_filter, 100);
+                let filtered: Vec<crate::ai::acp::history::AcpHistoryEntry> =
+                    hits.into_iter().map(|h| h.entry).collect();
                 let current_filtered_len = filtered.len();
 
                 if is_key_up(key) {
@@ -155,18 +130,34 @@ impl ScriptListApp {
                         cx.notify();
                     }
                     cx.stop_propagation();
+                } else if has_cmd && is_key_enter(key) {
+                    // Cmd+Enter: attach summary as context chip to ACP
+                    if let Some(entry) = filtered.get(current_selected) {
+                        if let Err(error) = this.attach_acp_history_to_chat_from_browser(
+                            &entry.session_id,
+                            window,
+                            cx,
+                        ) {
+                            tracing::warn!(
+                                event = "acp_history_browser_attach_failed",
+                                session_id = %entry.session_id,
+                                error = %error,
+                            );
+                        }
+                    }
+                    cx.stop_propagation();
                 } else if is_key_enter(key) {
-                    // Resume: load the selected conversation into ACP chat
-                    if let Some((_, entry)) = filtered.get(current_selected) {
+                    // Enter: load full transcript into ACP chat
+                    if let Some(entry) = filtered.get(current_selected) {
                         let session_id = entry.session_id.clone();
-                        let first_message = entry.first_message.clone();
+                        let title = entry.title_display().to_string();
                         tracing::info!(
-                            event = "acp_history_item_resumed",
+                            event = "acp_history_browser_transcript_loaded",
                             session_id = %session_id,
                         );
                         this.resume_acp_conversation_from_history(
                             &session_id,
-                            &first_message,
+                            &title,
                             window,
                             cx,
                         );
@@ -174,7 +165,7 @@ impl ScriptListApp {
                     cx.stop_propagation();
                 } else if key.eq_ignore_ascii_case("backspace") && has_cmd {
                     // Cmd+Backspace: delete selected conversation
-                    if let Some((_, entry)) = filtered.get(current_selected) {
+                    if let Some(entry) = filtered.get(current_selected) {
                         let session_id = entry.session_id.clone();
                         if let Err(e) = crate::ai::acp::history::delete_conversation(&session_id) {
                             tracing::warn!(
@@ -223,13 +214,8 @@ impl ScriptListApp {
                 })
                 .into_any_element()
         } else {
-            let entries_for_closure: Vec<(
-                usize,
-                crate::ai::acp::history::AcpHistoryEntry,
-            )> = filtered_entries
-                .iter()
-                .map(|(i, e)| (*i, (*e).clone()))
-                .collect();
+            let entries_for_closure: Vec<crate::ai::acp::history::AcpHistoryEntry> =
+                filtered_entries.clone();
             let selected = selected_index;
 
             div()
@@ -241,19 +227,15 @@ impl ScriptListApp {
                 .track_scroll(&self.acp_history_scroll_handle)
                 .overflow_y_scrollbar()
                 .children(entries_for_closure.into_iter().enumerate().map(
-                    move |(display_ix, (_original_ix, entry))| {
+                    move |(display_ix, entry)| {
                         let is_selected = display_ix == selected;
 
-                        // Truncate first message for display
-                        let name = if entry.first_message.len() > 80 {
-                            format!("{}…", &entry.first_message[..80])
-                        } else {
-                            entry.first_message.clone()
-                        };
-
+                        let name = entry.title_display().to_string();
                         let description = format!(
-                            "{} messages · {}",
-                            entry.message_count, entry.timestamp
+                            "{} \u{00b7} {} messages \u{00b7} {}",
+                            entry.preview_display(),
+                            entry.message_count,
+                            entry.timestamp,
                         );
 
                         let item = ListItem::new(name, list_colors)
@@ -363,7 +345,8 @@ impl ScriptListApp {
             .child(list_element);
 
         let hints: Vec<SharedString> = vec![
-            "↵ Resume".into(),
+            "↵ Load Transcript".into(),
+            "⌘↵ Attach Summary".into(),
             "⌘⌫ Delete".into(),
             "Esc Back".into(),
         ];
@@ -423,6 +406,40 @@ impl ScriptListApp {
             }
         }
     }
+
+    /// Attach a history conversation summary as a context chip to the ACP chat
+    /// (Cmd+Enter in the browser). Opens ACP if not already open.
+    fn attach_acp_history_to_chat_from_browser(
+        &mut self,
+        session_id: &str,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        self.open_tab_ai_acp_with_entry_intent(None, cx);
+
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            let sid = session_id.to_string();
+            entity.update(cx, |chat_view, cx| {
+                if let Err(error) = chat_view.attach_history_session(
+                    &sid,
+                    crate::ai::acp::history_attachment::AcpHistoryAttachMode::Summary,
+                    cx,
+                ) {
+                    tracing::warn!(
+                        event = "acp_history_browser_attach_write_failed",
+                        session_id = %sid,
+                        error = %error,
+                    );
+                }
+            });
+        }
+
+        tracing::info!(
+            event = "acp_history_browser_attach_selected",
+            session_id = %session_id,
+        );
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -438,6 +455,23 @@ mod acp_history_scroll_contract {
         assert!(
             SOURCE.contains("this.acp_history_scroll_handle"),
             "ACP history keyboard navigation should scroll the selected row into view"
+        );
+    }
+
+    #[test]
+    fn acp_history_uses_shared_search_and_explicit_verbs() {
+        assert!(
+            SOURCE.contains("search_history(&filter, 100)")
+                || SOURCE.contains("search_history(&current_filter, 100)"),
+            "ACP history browser must use the shared search_history function"
+        );
+        assert!(
+            SOURCE.contains("\"↵ Load Transcript\""),
+            "ACP history Enter hint must say 'Load Transcript'"
+        );
+        assert!(
+            SOURCE.contains("\"⌘↵ Attach Summary\""),
+            "ACP history Cmd+Enter hint must say 'Attach Summary'"
         );
     }
 }
