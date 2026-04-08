@@ -13,8 +13,9 @@ use crate::components::inline_dropdown::{
 use crate::components::prompt_footer::{PromptFooter, PromptFooterColors};
 use crate::list_item::FONT_MONO;
 use crate::storybook::{
-    config_from_storybook_footer_selection_value, FooterVariationId, IntegratedOverlayAnchor,
-    IntegratedOverlayPlacement, IntegratedSurfaceShell, IntegratedSurfaceShellConfig, StoryVariant,
+    config_from_storybook_footer_selection_value,
+    playground_overlay_metrics::context_picker_playground_overlay_metrics, FooterVariationId,
+    IntegratedSurfaceShell, IntegratedSurfaceShellConfig, StoryVariant,
 };
 use crate::theme::get_cached_theme;
 use crate::ui_foundation::HexColorExt;
@@ -78,7 +79,7 @@ impl ContextPickerPopupPlaygroundId {
 }
 
 // ---------------------------------------------------------------------------
-// Trigger & Spec
+// Trigger, Scene State & Spec
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,9 +89,29 @@ pub enum ContextPickerPopupTrigger {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContextPickerPopupSceneState {
+    Results,
+    Loading,
+    Empty,
+    Error,
+}
+
+impl ContextPickerPopupSceneState {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Results => "results",
+            Self::Loading => "loading",
+            Self::Empty => "empty",
+            Self::Error => "error",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ContextPickerPopupPlaygroundSpec {
     pub id: ContextPickerPopupPlaygroundId,
     pub trigger: ContextPickerPopupTrigger,
+    pub state: ContextPickerPopupSceneState,
     pub query: &'static str,
     pub show_sections: bool,
     pub show_synopsis: bool,
@@ -179,6 +200,7 @@ const SPECS: [ContextPickerPopupPlaygroundSpec; 4] = [
     ContextPickerPopupPlaygroundSpec {
         id: ContextPickerPopupPlaygroundId::MentionDense,
         trigger: ContextPickerPopupTrigger::Mention,
+        state: ContextPickerPopupSceneState::Results,
         query: "scr",
         show_sections: false,
         show_synopsis: true,
@@ -186,6 +208,7 @@ const SPECS: [ContextPickerPopupPlaygroundSpec; 4] = [
     ContextPickerPopupPlaygroundSpec {
         id: ContextPickerPopupPlaygroundId::MentionGrouped,
         trigger: ContextPickerPopupTrigger::Mention,
+        state: ContextPickerPopupSceneState::Results,
         query: "git",
         show_sections: true,
         show_synopsis: true,
@@ -193,6 +216,7 @@ const SPECS: [ContextPickerPopupPlaygroundSpec; 4] = [
     ContextPickerPopupPlaygroundSpec {
         id: ContextPickerPopupPlaygroundId::SlashDense,
         trigger: ContextPickerPopupTrigger::Slash,
+        state: ContextPickerPopupSceneState::Results,
         query: "con",
         show_sections: false,
         show_synopsis: true,
@@ -200,6 +224,7 @@ const SPECS: [ContextPickerPopupPlaygroundSpec; 4] = [
     ContextPickerPopupPlaygroundSpec {
         id: ContextPickerPopupPlaygroundId::SlashGrouped,
         trigger: ContextPickerPopupTrigger::Slash,
+        state: ContextPickerPopupSceneState::Results,
         query: "bro",
         show_sections: true,
         show_synopsis: true,
@@ -229,36 +254,50 @@ pub fn render_context_picker_popup_playground_story_preview(stable_id: &str) -> 
         .copied()
         .unwrap_or(SPECS[0]);
 
+    let shell = IntegratedSurfaceShellConfig {
+        width: 560.0,
+        height: 300.0,
+        ..Default::default()
+    };
+
+    let labels: Vec<&str> = rows_for_trigger(spec.trigger)
+        .iter()
+        .map(|row| row.label)
+        .collect();
+
+    let metrics = context_picker_playground_overlay_metrics(
+        shell,
+        spec.trigger,
+        spec.state,
+        spec.show_synopsis,
+        labels.iter().copied(),
+    );
+
     tracing::info!(
-        event = "context_picker_popup_playground_rendered",
+        event = "context_picker_popup_playground_state_built",
         variant_id = spec.id.as_str(),
         trigger = match spec.trigger {
             ContextPickerPopupTrigger::Mention => "mention",
             ContextPickerPopupTrigger::Slash => "slash",
         },
+        state = spec.state.as_str(),
         grouped = spec.show_sections,
-        "Rendered context picker popup playground preview"
+        "Built context picker popup playground state"
     );
 
-    IntegratedSurfaceShell::new(
-        IntegratedSurfaceShellConfig {
-            width: 560.0,
-            height: 300.0,
-            ..Default::default()
-        },
-        render_chat_body(spec),
-    )
-    .footer(render_footer())
-    .overlay(
-        IntegratedOverlayPlacement::new(
-            IntegratedOverlayAnchor::Composer,
-            overlay_left(spec.trigger),
-            118.0,
-            340.0,
-        ),
-        render_dropdown(spec),
-    )
-    .into_any_element()
+    tracing::info!(
+        event = "context_picker_popup_playground_overlay_wired",
+        variant_id = spec.id.as_str(),
+        overlay_left = metrics.placement.left,
+        overlay_top = metrics.placement.top,
+        overlay_width = metrics.placement.width,
+        "Wired context-picker playground overlay through shared metrics"
+    );
+
+    IntegratedSurfaceShell::new(shell, render_chat_body(spec))
+        .footer(render_footer())
+        .overlay(metrics.placement, render_dropdown(spec))
+        .into_any_element()
 }
 
 // ---------------------------------------------------------------------------
@@ -417,13 +456,6 @@ fn rows_for_trigger(trigger: ContextPickerPopupTrigger) -> &'static [PickerRow] 
     match trigger {
         ContextPickerPopupTrigger::Mention => &MENTION_ROWS,
         ContextPickerPopupTrigger::Slash => &SLASH_ROWS,
-    }
-}
-
-fn overlay_left(trigger: ContextPickerPopupTrigger) -> f32 {
-    match trigger {
-        ContextPickerPopupTrigger::Mention => 92.0,
-        ContextPickerPopupTrigger::Slash => 76.0,
     }
 }
 
