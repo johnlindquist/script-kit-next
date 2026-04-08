@@ -8,6 +8,9 @@ use crate::ai::context_picker_row::CONTEXT_PICKER_ROW_HEIGHT;
 #[cfg(target_os = "macos")]
 use objc::{msg_send, sel, sel_impl};
 
+#[cfg(target_os = "macos")]
+use cocoa::foundation::{NSPoint, NSRect, NSSize};
+
 pub(crate) const DENSE_PICKER_MAX_VISIBLE_ROWS: usize = 8;
 pub(crate) const DENSE_PICKER_VERTICAL_PADDING: f32 = 4.0;
 pub(crate) const DENSE_PICKER_EMPTY_HEIGHT: f32 = 56.0;
@@ -150,34 +153,46 @@ pub(crate) fn configure_popup_window<T: 'static>(
 }
 
 #[cfg(target_os = "macos")]
-pub(crate) fn flipped_ns_window_y(bounds: Bounds<Pixels>, primary_height: f64) -> f64 {
-    primary_height - f32::from(bounds.origin.y) as f64 - f32::from(bounds.size.height) as f64
+fn ns_window_frame_from_screen_relative_bounds(
+    bounds: Bounds<Pixels>,
+    screen_frame: NSRect,
+) -> NSRect {
+    NSRect::new(
+        NSPoint::new(
+            screen_frame.origin.x + f32::from(bounds.origin.x) as f64,
+            screen_frame.origin.y + screen_frame.size.height
+                - f32::from(bounds.origin.y) as f64
+                - f32::from(bounds.size.height) as f64,
+        ),
+        NSSize::new(
+            f32::from(bounds.size.width) as f64,
+            f32::from(bounds.size.height) as f64,
+        ),
+    )
 }
 
 #[cfg(target_os = "macos")]
 pub(crate) fn set_popup_window_bounds(window: &mut Window, bounds: Bounds<Pixels>, cx: &mut App) {
     if let Some(ns_window) = popup_ns_window(window) {
         // SAFETY: `ns_window` comes from a live GPUI popup window on the AppKit
-        // main thread. Coordinates are converted from GPUI's screen-relative
-        // top-left origin into the bottom-left origin NSWindow expects.
+        // main thread. GPUI `window.bounds()` is screen-relative, so we resolve
+        // the popup's current NSScreen and convert back into that screen's
+        // AppKit coordinate space before calling `setFrame`.
         unsafe {
             use cocoa::appkit::NSScreen;
             use cocoa::base::nil;
 
-            let screens: cocoa::base::id = NSScreen::screens(nil);
-            let primary_screen: cocoa::base::id = msg_send![screens, objectAtIndex: 0u64];
-            let primary_frame: cocoa::foundation::NSRect = msg_send![primary_screen, frame];
-            let primary_height = primary_frame.size.height;
-            let target_frame = cocoa::foundation::NSRect::new(
-                cocoa::foundation::NSPoint::new(
-                    f32::from(bounds.origin.x) as f64,
-                    flipped_ns_window_y(bounds, primary_height),
-                ),
-                cocoa::foundation::NSSize::new(
-                    f32::from(bounds.size.width) as f64,
-                    f32::from(bounds.size.height) as f64,
-                ),
-            );
+            let screen: cocoa::base::id = msg_send![ns_window, screen];
+            let screen_frame = if screen != nil {
+                let frame: NSRect = msg_send![screen, frame];
+                frame
+            } else {
+                let screens: cocoa::base::id = NSScreen::screens(nil);
+                let primary_screen: cocoa::base::id = msg_send![screens, objectAtIndex: 0u64];
+                let frame: NSRect = msg_send![primary_screen, frame];
+                frame
+            };
+            let target_frame = ns_window_frame_from_screen_relative_bounds(bounds, screen_frame);
             let _: () = msg_send![
                 ns_window,
                 setFrame: target_frame
@@ -304,5 +319,25 @@ mod tests {
         assert_eq!(f32::from(bounds.origin.y), 56.0);
         assert_eq!(f32::from(bounds.size.width), 200.0);
         assert_eq!(f32::from(bounds.size.height), 80.0);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn screen_relative_bounds_convert_to_nswindow_frame_on_secondary_display() {
+        let bounds = gpui::Bounds {
+            origin: gpui::point(gpui::px(24.0), gpui::px(60.0)),
+            size: gpui::size(gpui::px(320.0), gpui::px(84.0)),
+        };
+        let screen_frame = cocoa::foundation::NSRect::new(
+            cocoa::foundation::NSPoint::new(1440.0, 0.0),
+            cocoa::foundation::NSSize::new(1920.0, 1200.0),
+        );
+
+        let frame = super::ns_window_frame_from_screen_relative_bounds(bounds, screen_frame);
+
+        assert_eq!(frame.origin.x, 1464.0);
+        assert_eq!(frame.origin.y, 1056.0);
+        assert_eq!(frame.size.width, 320.0);
+        assert_eq!(frame.size.height, 84.0);
     }
 }
