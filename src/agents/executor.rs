@@ -500,8 +500,7 @@ pub fn build_terminal_command(agent: &Agent) -> Result<(String, Vec<String>)> {
             agent.path.display()
         )
     })?;
-    let mdflow_cmd =
-        get_mdflow_command().context("mdflow command not found in PATH or kit node_modules")?;
+    let mdflow_cmd = get_mdflow_command().unwrap_or("mdflow");
     let args = vec![canonical_agent_path.to_string_lossy().to_string()];
 
     // For interactive terminal, don't add --_quiet or --raw

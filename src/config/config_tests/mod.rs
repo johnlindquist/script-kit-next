@@ -1847,6 +1847,11 @@ fn normalize_builtin_identifier_strips_prefixes() {
 /// the expected hotkey and `bun_path` values come back.
 #[test]
 fn test_load_config_direct_import_reads_real_config_ts() {
+    if which::which("bun").is_err() {
+        eprintln!("skipping config direct-import test because bun is not installed");
+        return;
+    }
+
     let _lock = crate::test_utils::SK_PATH_TEST_LOCK
         .get_or_init(|| std::sync::Mutex::new(()))
         .lock()
@@ -1894,6 +1899,11 @@ export default {
 /// serve stale config between launches.
 #[test]
 fn test_load_config_reloads_updated_config_ts() {
+    if which::which("bun").is_err() {
+        eprintln!("skipping config reload test because bun is not installed");
+        return;
+    }
+
     let _lock = crate::test_utils::SK_PATH_TEST_LOCK
         .get_or_init(|| std::sync::Mutex::new(()))
         .lock()

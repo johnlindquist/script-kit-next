@@ -3010,16 +3010,36 @@ mod tests {
 
     #[test]
     fn legacy_claude_provider_remains_default_without_acp_opt_in() {
+        #[cfg(unix)]
+        use std::os::unix::fs::PermissionsExt;
+
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let claude_path = temp_dir.path().join("fake-claude");
+        std::fs::write(
+            &claude_path,
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo fake-claude 0.0.0\n  exit 0\nfi\nexit 1\n",
+        )
+        .expect("write fake claude binary");
+        #[cfg(unix)]
+        {
+            let mut permissions = std::fs::metadata(&claude_path)
+                .expect("read fake claude metadata")
+                .permissions();
+            permissions.set_mode(0o755);
+            std::fs::set_permissions(&claude_path, permissions)
+                .expect("mark fake claude binary executable");
+        }
+
         let orig = std::env::var("SCRIPT_KIT_ACP_CLAUDE_CODE").ok();
         std::env::remove_var("SCRIPT_KIT_ACP_CLAUDE_CODE");
+        let mut config = crate::config::Config::default();
+        config.claude_code = Some(crate::config::ClaudeCodeConfig {
+            enabled: true,
+            path: Some(claude_path.to_string_lossy().into_owned()),
+            ..Default::default()
+        });
 
-        let orig_enabled = std::env::var("SCRIPT_KIT_CLAUDE_CODE_ENABLED").ok();
-        std::env::set_var("SCRIPT_KIT_CLAUDE_CODE_ENABLED", "1");
-
-        let orig_path = std::env::var("SCRIPT_KIT_CLAUDE_CODE_PATH").ok();
-        std::env::set_var("SCRIPT_KIT_CLAUDE_CODE_PATH", "sh");
-
-        let registry = ProviderRegistry::from_environment();
+        let registry = ProviderRegistry::from_environment_with_config(Some(&config));
 
         assert!(
             registry.get_provider("claude_code").is_some(),
@@ -3034,16 +3054,6 @@ mod tests {
             std::env::set_var("SCRIPT_KIT_ACP_CLAUDE_CODE", v);
         } else {
             std::env::remove_var("SCRIPT_KIT_ACP_CLAUDE_CODE");
-        }
-        if let Some(v) = orig_enabled {
-            std::env::set_var("SCRIPT_KIT_CLAUDE_CODE_ENABLED", v);
-        } else {
-            std::env::remove_var("SCRIPT_KIT_CLAUDE_CODE_ENABLED");
-        }
-        if let Some(v) = orig_path {
-            std::env::set_var("SCRIPT_KIT_CLAUDE_CODE_PATH", v);
-        } else {
-            std::env::remove_var("SCRIPT_KIT_CLAUDE_CODE_PATH");
         }
     }
 
