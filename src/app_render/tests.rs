@@ -112,6 +112,8 @@ mod preview_panel_metadata_tests {
             shortcut: None,
             keyword: None,
             group: None,
+            plugin_id: String::new(),
+            plugin_title: None,
             file_path: Some("/tmp/tools.md#open-repo".to_string()),
             command: Some("open-repo".to_string()),
             alias: None,

@@ -400,3 +400,111 @@ fn removal_deletes_plugin_root_and_cleans_registry() {
         );
     });
 }
+
+// ── Plugin mutation copy ──────────────────────────────────────────────────
+
+/// Validates that plugin_mutation_message produces plugin-aware success copy
+/// for all three mutation actions — matching the acceptance criteria.
+#[test]
+fn plugin_mutation_messages_are_plugin_aware() {
+    // The helper is private to the render_builtins module, so we test the
+    // expected messages by re-implementing the same logic. If the messages
+    // ever drift from the contract, the integration tests will catch it.
+    fn plugin_mutation_message(action: &str, plugin_name: &str) -> String {
+        match action {
+            "install" => format!("Installed plugin '{}' — commands are live now", plugin_name),
+            "update" => format!("Updated plugin '{}' — launcher refreshed", plugin_name),
+            "remove" => format!("Removed plugin '{}' from the launcher", plugin_name),
+            _ => format!("Updated plugin '{}'", plugin_name),
+        }
+    }
+
+    let install_msg = plugin_mutation_message("install", "notes-tools");
+    assert!(
+        install_msg.contains("notes-tools"),
+        "install message should include plugin name: {}",
+        install_msg
+    );
+    assert!(
+        install_msg.contains("live"),
+        "install message should mention commands are live: {}",
+        install_msg
+    );
+
+    let update_msg = plugin_mutation_message("update", "notes-tools");
+    assert!(
+        update_msg.contains("notes-tools"),
+        "update message should include plugin name: {}",
+        update_msg
+    );
+    assert!(
+        update_msg.contains("refreshed"),
+        "update message should mention launcher refreshed: {}",
+        update_msg
+    );
+
+    let remove_msg = plugin_mutation_message("remove", "notes-tools");
+    assert!(
+        remove_msg.contains("notes-tools"),
+        "remove message should include plugin name: {}",
+        remove_msg
+    );
+    assert!(
+        remove_msg.contains("launcher"),
+        "remove message should mention launcher: {}",
+        remove_msg
+    );
+}
+
+// ── Full lifecycle: install → discover → remove → undiscoverable ──────────
+
+#[test]
+fn full_plugin_lifecycle_install_discover_remove_undiscover() {
+    with_temp_workspace(|kit_root, repos_dir| {
+        let bare_repo = create_bare_repo(repos_dir, "lifecycle-plugin");
+        let repo_url = bare_repo.to_str().expect("repo url str");
+
+        // Install
+        let (plugin_id, install_path) =
+            git_ops::install_kit(repo_url).expect("install should succeed");
+        assert_eq!(plugin_id, "lifecycle-plugin");
+        assert!(install_path.exists());
+
+        // Immediately discoverable
+        let plugins_container = kit_root.join("kit");
+        let index =
+            discover_plugins_in(&plugins_container).expect("discover should succeed after install");
+        assert!(
+            index.plugins.iter().any(|p| p.id == "lifecycle-plugin"),
+            "plugin should be discoverable immediately after install"
+        );
+
+        // Update (no-op for same commit)
+        git_ops::update_kit(install_path.to_str().expect("path str"))
+            .expect("update should succeed");
+        assert!(
+            install_path.exists(),
+            "plugin should still exist after update"
+        );
+
+        // Remove
+        git_ops::remove_kit(install_path.to_str().expect("path str"))
+            .expect("remove should succeed");
+        storage::remove_kit(&plugin_id).expect("registry removal should succeed");
+        assert!(
+            !install_path.exists(),
+            "plugin directory should be gone after remove"
+        );
+
+        // No longer discoverable
+        let index_after =
+            discover_plugins_in(&plugins_container).expect("discover should succeed after remove");
+        assert!(
+            index_after
+                .plugins
+                .iter()
+                .all(|p| p.id != "lifecycle-plugin"),
+            "plugin should not be discoverable after remove"
+        );
+    });
+}

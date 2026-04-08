@@ -579,9 +579,10 @@ fn test_extensions_howto_matches_current_harness_authoring_contract() {
     });
 }
 
-/// MCP resource descriptions for scripts:// and kit://scripts must reference kit/main/scripts.
+/// MCP resource descriptions for scripts:// and kit://scripts must reference plugin-scoped
+/// discovery and mention kit/main as the default personal plugin.
 #[test]
-fn test_resource_definitions_use_kit_main_scripts_path() {
+fn test_resource_definitions_use_plugin_scoped_discovery() {
     use script_kit_gpui::mcp_resources::get_resource_definitions;
 
     let resources = get_resource_definitions();
@@ -593,13 +594,44 @@ fn test_resource_definitions_use_kit_main_scripts_path() {
         let description = resource.description.clone().unwrap_or_default();
         assert!(
             description.contains("kit/main/scripts"),
-            "{uri} description must mention kit/main/scripts: {description}"
+            "{uri} description must mention kit/main/scripts as the default personal plugin: {description}"
+        );
+        assert!(
+            description.contains("plugin"),
+            "{uri} description must mention plugin-scoped discovery: {description}"
         );
         assert!(
             !description.contains("~/.scriptkit/scripts/"),
             "{uri} description must not mention the legacy scripts root: {description}"
         );
     }
+}
+
+/// kit://sdk-reference script_directory must reference plugin-scoped discovery.
+#[test]
+fn test_sdk_reference_script_directory_mentions_plugin_discovery() {
+    use script_kit_gpui::mcp_resources::{self, SdkReferenceDocument};
+
+    let content = mcp_resources::read_resource("kit://sdk-reference", &[], &[], None)
+        .expect("kit://sdk-reference should resolve");
+    let doc: SdkReferenceDocument =
+        serde_json::from_str(&content.text).expect("valid JSON document");
+
+    assert!(
+        doc.script_directory.contains("kit/main/scripts"),
+        "script_directory must mention kit/main/scripts: {}",
+        doc.script_directory
+    );
+    assert!(
+        doc.script_directory.contains("plugin"),
+        "script_directory must mention plugin-scoped discovery: {}",
+        doc.script_directory
+    );
+    assert!(
+        doc.scriptlet_pattern.contains("kit/*/extensions/"),
+        "scriptlet_pattern must use plugin-scoped glob: {}",
+        doc.scriptlet_pattern
+    );
 }
 
 /// kit://sdk-reference example scriptlet must follow current extension contract.
