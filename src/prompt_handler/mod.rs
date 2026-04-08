@@ -20,6 +20,178 @@ fn should_restore_main_window_after_script_exit(
     script_hid_window && keep_tab_ai_save_offer_open
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ScriptErrorAcpContextBundle {
+    script_snapshot_path: String,
+    script_snapshot_label: String,
+    error_report_path: String,
+    error_report_label: String,
+}
+
+fn sanitize_script_error_context_name(value: &str, fallback: &str) -> String {
+    let sanitized = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '.' | '-' | '_') {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('-')
+        .to_string();
+
+    if sanitized.is_empty() {
+        fallback.to_string()
+    } else {
+        sanitized
+    }
+}
+
+fn build_script_error_acp_prompt(
+    script_path: &str,
+    error_message: &str,
+    exit_code: Option<i32>,
+    suggestions: &[String],
+) -> String {
+    let script_name = std::path::Path::new(script_path)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("script");
+
+    let mut prompt = format!(
+        "The script `{script_name}` just failed when I ran it. Use the attached script snapshot and error report as context, diagnose the root cause, fix it, and verify the fix by rerunning the script or giving the exact verification result.\n\nError summary: {error_message}"
+    );
+
+    if let Some(code) = exit_code {
+        prompt.push_str(&format!("\nExit code: {code}"));
+    }
+
+    if !suggestions.is_empty() {
+        prompt.push_str("\nSuggested clues:");
+        for suggestion in suggestions {
+            prompt.push_str(&format!("\n- {suggestion}"));
+        }
+    }
+
+    prompt
+}
+
+fn build_script_error_report_markdown(
+    script_path: &str,
+    error_message: &str,
+    stderr_output: Option<&str>,
+    exit_code: Option<i32>,
+    stack_trace: Option<&str>,
+    suggestions: &[String],
+) -> String {
+    let mut report = format!(
+        "# Script Failure Report\n\n## Script Path\n`{script_path}`\n\n## Error Summary\n{error_message}\n"
+    );
+
+    if let Some(code) = exit_code {
+        report.push_str(&format!("\n## Exit Code\n`{code}`\n"));
+    }
+
+    if !suggestions.is_empty() {
+        report.push_str("\n## Suggestions\n");
+        for suggestion in suggestions {
+            report.push_str(&format!("- {suggestion}\n"));
+        }
+    }
+
+    if let Some(stderr) = stderr_output {
+        report.push_str("\n## Stderr\n```text\n");
+        report.push_str(stderr);
+        if !stderr.ends_with('\n') {
+            report.push('\n');
+        }
+        report.push_str("```\n");
+    }
+
+    if let Some(trace) = stack_trace {
+        report.push_str("\n## Stack Trace\n```text\n");
+        report.push_str(trace);
+        if !trace.ends_with('\n') {
+            report.push('\n');
+        }
+        report.push_str("```\n");
+    }
+
+    report
+}
+
+fn persist_script_error_acp_context_bundle_in_dir(
+    root_dir: &std::path::Path,
+    script_path: &str,
+    error_message: &str,
+    stderr_output: Option<&str>,
+    exit_code: Option<i32>,
+    stack_trace: Option<&str>,
+    suggestions: &[String],
+) -> Result<ScriptErrorAcpContextBundle, String> {
+    let bundle_dir = root_dir.join(uuid::Uuid::new_v4().to_string());
+    std::fs::create_dir_all(&bundle_dir).map_err(|error| {
+        format!(
+            "failed to create script-error ACP context directory '{}': {error}",
+            bundle_dir.display()
+        )
+    })?;
+
+    let source_path = std::path::Path::new(script_path);
+    let script_snapshot_label = source_path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .map(|value| sanitize_script_error_context_name(value, "script.ts"))
+        .unwrap_or_else(|| "script.ts".to_string());
+    let script_snapshot_path = bundle_dir.join(&script_snapshot_label);
+
+    let script_snapshot_contents = match std::fs::read_to_string(source_path) {
+        Ok(contents) => contents,
+        Err(error) => format!(
+            "// Script snapshot unavailable\n// Original path: {script_path}\n// Read error: {error}\n"
+        ),
+    };
+
+    std::fs::write(&script_snapshot_path, script_snapshot_contents).map_err(|error| {
+        format!(
+            "failed to write script snapshot '{}': {error}",
+            script_snapshot_path.display()
+        )
+    })?;
+
+    let script_stem = source_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .map(|value| sanitize_script_error_context_name(value, "script"))
+        .unwrap_or_else(|| "script".to_string());
+    let error_report_label = format!("{script_stem}-error-report.md");
+    let error_report_path = bundle_dir.join(&error_report_label);
+    let error_report = build_script_error_report_markdown(
+        script_path,
+        error_message,
+        stderr_output,
+        exit_code,
+        stack_trace,
+        suggestions,
+    );
+
+    std::fs::write(&error_report_path, error_report).map_err(|error| {
+        format!(
+            "failed to write script error report '{}': {error}",
+            error_report_path.display()
+        )
+    })?;
+
+    Ok(ScriptErrorAcpContextBundle {
+        script_snapshot_path: script_snapshot_path.to_string_lossy().into_owned(),
+        script_snapshot_label,
+        error_report_path: error_report_path.to_string_lossy().into_owned(),
+        error_report_label,
+    })
+}
+
 /// Resolve an automation window target and reject non-main windows.
 ///
 /// Main-window-only executors (getElements, waitFor, batch) call this
@@ -590,6 +762,143 @@ impl ScriptListApp {
         }
     }
 
+    fn script_error_acp_view_entity(
+        &self,
+    ) -> Option<gpui::Entity<crate::ai::acp::AcpChatView>> {
+        crate::ai::acp::chat_window::get_detached_acp_view_entity().or_else(|| {
+            if let AppView::AcpChatView { entity } = &self.current_view {
+                Some(entity.clone())
+            } else {
+                None
+            }
+        })
+    }
+
+    fn ensure_script_error_acp_view(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Option<gpui::Entity<crate::ai::acp::AcpChatView>> {
+        if let Some(entity) = self.script_error_acp_view_entity() {
+            return Some(entity);
+        }
+
+        self.open_tab_ai_acp_with_entry_intent(None, cx);
+        self.script_error_acp_view_entity()
+    }
+
+    fn route_script_error_to_acp(
+        &mut self,
+        script_path: &str,
+        error_message: &str,
+        stderr_output: Option<&str>,
+        exit_code: Option<i32>,
+        stack_trace: Option<&str>,
+        suggestions: &[String],
+        cx: &mut Context<Self>,
+    ) {
+        let context_root = crate::setup::get_kit_path()
+            .join("acp")
+            .join("script-error-context");
+        let bundle = match persist_script_error_acp_context_bundle_in_dir(
+            &context_root,
+            script_path,
+            error_message,
+            stderr_output,
+            exit_code,
+            stack_trace,
+            suggestions,
+        ) {
+            Ok(bundle) => bundle,
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "script_error_acp_context_bundle_failed",
+                    script_path = %script_path,
+                    error = %error,
+                );
+                return;
+            }
+        };
+
+        let Some(view_entity) = self.ensure_script_error_acp_view(cx) else {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "script_error_acp_view_unavailable",
+                script_path = %script_path,
+            );
+            return;
+        };
+
+        let prompt =
+            build_script_error_acp_prompt(script_path, error_message, exit_code, suggestions);
+        if let Err(error) = Self::stage_script_error_context_on_acp_view(
+            view_entity,
+            bundle,
+            prompt,
+            cx,
+        ) {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "script_error_acp_stage_failed",
+                script_path = %script_path,
+                error = %error,
+            );
+        }
+    }
+
+    fn stage_script_error_context_on_acp_view(
+        view_entity: gpui::Entity<crate::ai::acp::AcpChatView>,
+        bundle: ScriptErrorAcpContextBundle,
+        prompt: String,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let script_part = crate::ai::AiContextPart::FilePath {
+            path: bundle.script_snapshot_path.clone(),
+            label: bundle.script_snapshot_label.clone(),
+        };
+        let report_part = crate::ai::AiContextPart::FilePath {
+            path: bundle.error_report_path.clone(),
+            label: bundle.error_report_label.clone(),
+        };
+        let parts = vec![script_part, report_part];
+        let mention_tokens = parts
+            .iter()
+            .filter_map(crate::ai::context_mentions::part_to_inline_token)
+            .collect::<Vec<_>>();
+        let composer_text = if mention_tokens.is_empty() {
+            prompt
+        } else {
+            format!("{}\n\n{}", mention_tokens.join(" "), prompt)
+        };
+
+        let mut stage_result: Result<(), String> = Ok(());
+        view_entity.update(cx, |view, cx| {
+            let Some(thread_entity) = view.thread() else {
+                stage_result = Err("ACP chat is in setup mode".to_string());
+                return;
+            };
+
+            for part in &parts {
+                if let Some(token) = crate::ai::context_mentions::part_to_inline_token(part) {
+                    view.register_typed_alias(token.clone(), part.clone());
+                    view.register_inline_owned_token(token);
+                }
+            }
+
+            thread_entity.update(cx, |thread, cx| {
+                for part in &parts {
+                    thread.add_context_part(part.clone(), cx);
+                }
+                thread.set_input(composer_text.clone(), cx);
+                if let Err(error) = thread.submit_input(cx) {
+                    stage_result = Err(error);
+                }
+            });
+        });
+
+        stage_result
+    }
+
     fn show_prompt_coming_soon_toast(&mut self, prompt_name: &str, cx: &mut Context<Self>) {
         let toast = Toast::warning(prompt_coming_soon_warning(prompt_name), &self.theme)
             .duration_ms(Some(TOAST_WARNING_MS));
@@ -991,21 +1300,41 @@ impl ScriptListApp {
                 );
 
                 let keep_tab_ai_save_offer_open = self.tab_ai_save_offer_state.is_some();
+                let keep_acp_chat_open =
+                    matches!(self.current_view, AppView::AcpChatView { .. });
 
                 if keep_tab_ai_save_offer_open {
                     tracing::info!(
                         category = "VISIBILITY",
                         keep_tab_ai_save_offer_open,
+                        keep_acp_chat_open,
                         "Tab AI active after script exit - preserving view"
                     );
 
                     if should_restore_main_window_after_script_exit(
                         script_hid_window,
-                        keep_tab_ai_save_offer_open,
+                        true,
                     ) {
                         tracing::info!(
                             category = "VISIBILITY",
-                            "Script had hidden window - requesting show for Tab AI"
+                            "Script had hidden window - requesting show for follow-up UI"
+                        );
+                        script_kit_gpui::request_show_main_window();
+                    }
+
+                    return;
+                } else if keep_acp_chat_open {
+                    tracing::info!(
+                        category = "VISIBILITY",
+                        keep_tab_ai_save_offer_open,
+                        keep_acp_chat_open,
+                        "Tab AI active after script exit - preserving view"
+                    );
+
+                    if should_restore_main_window_after_script_exit(script_hid_window, true) {
+                        tracing::info!(
+                            category = "VISIBILITY",
+                            "Script had hidden window - requesting show for follow-up UI"
                         );
                         script_kit_gpui::request_show_main_window();
                     }
@@ -1241,6 +1570,16 @@ impl ScriptListApp {
                     script_path = %script_path,
                     toast_id = %toast_id,
                     "Toast created for script error"
+                );
+
+                self.route_script_error_to_acp(
+                    &script_path,
+                    &error_message,
+                    stderr_output.as_deref(),
+                    exit_code,
+                    stack_trace.as_deref(),
+                    &suggestions,
+                    cx,
                 );
 
                 // Complete pending Tab AI execution on failure.
@@ -6409,5 +6748,71 @@ mod prompt_handler_message_tests {
             resolve_ai_start_chat_provider(&registry, "claude-3-5-sonnet-20241022"),
             None
         );
+    }
+
+    #[test]
+    fn test_build_script_error_acp_prompt_includes_fix_and_verification_guidance() {
+        let prompt = build_script_error_acp_prompt(
+            "/tmp/failing-script.ts",
+            "ReferenceError: foo is not defined",
+            Some(1),
+            &["Check the missing symbol".to_string()],
+        );
+
+        assert!(prompt.contains("failing-script.ts"));
+        assert!(prompt.contains("fix it"));
+        assert!(prompt.contains("verify the fix"));
+        assert!(prompt.contains("Exit code: 1"));
+        assert!(prompt.contains("Check the missing symbol"));
+    }
+
+    #[test]
+    fn test_build_script_error_report_markdown_includes_all_available_sections() {
+        let report = build_script_error_report_markdown(
+            "/tmp/failing-script.ts",
+            "ReferenceError: foo is not defined",
+            Some("stderr line 1\nstderr line 2"),
+            Some(1),
+            Some("stack line 1\nstack line 2"),
+            &["Check the missing symbol".to_string()],
+        );
+
+        assert!(report.contains("# Script Failure Report"));
+        assert!(report.contains("## Script Path"));
+        assert!(report.contains("## Error Summary"));
+        assert!(report.contains("## Exit Code"));
+        assert!(report.contains("## Suggestions"));
+        assert!(report.contains("## Stderr"));
+        assert!(report.contains("## Stack Trace"));
+    }
+
+    #[test]
+    fn test_persist_script_error_acp_context_bundle_writes_snapshot_and_report() {
+        let temp_dir = tempfile::tempdir().expect("create temp dir");
+        let script_path = temp_dir.path().join("failing-script.ts");
+        std::fs::write(&script_path, "throw new Error('boom');").expect("write script");
+
+        let bundle = persist_script_error_acp_context_bundle_in_dir(
+            temp_dir.path(),
+            script_path.to_str().expect("utf8 path"),
+            "ReferenceError: foo is not defined",
+            Some("stderr output"),
+            Some(1),
+            Some("stack trace"),
+            &["Check the missing symbol".to_string()],
+        )
+        .expect("persist ACP context bundle");
+
+        let script_snapshot =
+            std::fs::read_to_string(&bundle.script_snapshot_path).expect("read script snapshot");
+        let error_report =
+            std::fs::read_to_string(&bundle.error_report_path).expect("read error report");
+
+        assert_eq!(bundle.script_snapshot_label, "failing-script.ts");
+        assert_eq!(bundle.error_report_label, "failing-script-error-report.md");
+        assert_eq!(script_snapshot, "throw new Error('boom');");
+        assert!(error_report.contains("ReferenceError: foo is not defined"));
+        assert!(error_report.contains("stderr output"));
+        assert!(error_report.contains("stack trace"));
     }
 }

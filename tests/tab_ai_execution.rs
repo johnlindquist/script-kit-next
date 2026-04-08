@@ -456,6 +456,10 @@ fn prompt_handler_completes_tab_ai_on_script_error() {
         PROMPT_HANDLER_SOURCE.contains("complete_tab_ai_execution(false,"),
         "ScriptError handler must complete failed Tab AI runs"
     );
+    assert!(
+        PROMPT_HANDLER_SOURCE.contains("self.route_script_error_to_acp("),
+        "ScriptError handler must hand failed scripts off to ACP"
+    );
 }
 
 #[test]
