@@ -409,37 +409,48 @@ pub fn toggle_detached_actions(cx: &mut App) {
             let _ = action_tx.try_send(action_id);
         });
 
-    // Build agent context from the view entity (mirrors actions_toggle.rs pattern)
-    let acp_agent_context: Option<(Option<String>, Vec<crate::ai::acp::AcpAgentCatalogEntry>)> =
-        view_weak.as_ref().and_then(|weak| {
-            weak.upgrade().map(|entity| {
-                let view = entity.read(cx);
-                match &view.session {
-                    crate::ai::acp::AcpChatSession::Setup(state) => (
-                        state
-                            .selected_agent
-                            .as_ref()
-                            .map(|agent| agent.id.to_string()),
-                        state.catalog_entries.clone(),
-                    ),
-                    crate::ai::acp::AcpChatSession::Live(thread) => {
-                        let thread = thread.read(cx);
-                        (
-                            thread.selected_agent_id().map(str::to_string),
-                            thread.available_agents().to_vec(),
-                        )
-                    }
+    // Build ACP action context from the view entity (mirrors actions_toggle.rs pattern)
+    #[allow(clippy::type_complexity)]
+    let acp_context: Option<(
+        Option<String>,
+        Vec<crate::ai::acp::AcpAgentCatalogEntry>,
+        Option<String>,
+        Vec<crate::ai::acp::config::AcpModelEntry>,
+    )> = view_weak.as_ref().and_then(|weak| {
+        weak.upgrade().map(|entity| {
+            let view = entity.read(cx);
+            match &view.session {
+                crate::ai::acp::AcpChatSession::Setup(state) => (
+                    state
+                        .selected_agent
+                        .as_ref()
+                        .map(|agent| agent.id.to_string()),
+                    state.catalog_entries.clone(),
+                    None,
+                    Vec::new(),
+                ),
+                crate::ai::acp::AcpChatSession::Live(thread) => {
+                    let thread = thread.read(cx);
+                    (
+                        thread.selected_agent_id().map(str::to_string),
+                        thread.available_agents().to_vec(),
+                        thread.selected_model_id().map(str::to_string),
+                        thread.available_models().to_vec(),
+                    )
                 }
-            })
-        });
+            }
+        })
+    });
 
-    let (selected_agent_id, catalog_entries) =
-        acp_agent_context.unwrap_or_else(|| (None, Vec::new()));
+    let (selected_agent_id, catalog_entries, selected_model_id, available_models) =
+        acp_context.unwrap_or_else(|| (None, Vec::new(), None, Vec::new()));
 
     // Create the dialog entity using the host-aware route builder
     let root_actions_len = crate::actions::get_acp_chat_root_route_for_host(
         &catalog_entries,
         selected_agent_id.as_deref(),
+        &available_models,
+        selected_model_id.as_deref(),
         crate::actions::AcpActionsDialogHost::Detached,
     )
     .actions
@@ -450,8 +461,12 @@ pub fn toggle_detached_actions(cx: &mut App) {
         let mut dialog = ActionsDialog::with_acp_chat_for_host(
             focus_handle,
             callback,
-            &catalog_entries,
-            selected_agent_id.as_deref(),
+            crate::actions::AcpActionsDialogContext {
+                catalog_entries: &catalog_entries,
+                selected_agent_id: selected_agent_id.as_deref(),
+                available_models: &available_models,
+                selected_model_id: selected_model_id.as_deref(),
+            },
             theme_arc,
             crate::actions::AcpActionsDialogHost::Detached,
         );
@@ -550,6 +565,23 @@ fn dispatch_detached_action_checked(
 /// Handles the subset of ACP chat actions that make sense in the detached
 /// window context (copy, scroll, expand/collapse, close, reattach, etc.).
 fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &str, cx: &mut App) {
+    if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
+        if let Some(entity) = entity_weak.upgrade() {
+            entity.update(cx, |chat, cx| {
+                if let Some(thread) = chat.thread() {
+                    thread.update(cx, |thread, cx| {
+                        thread.select_model(model_id, cx);
+                    });
+                }
+            });
+            tracing::info!(
+                event = "detached_action_switch_model",
+                model_id = %model_id,
+            );
+        }
+        return;
+    }
+
     match action_id {
         "acp_copy_last_response" => {
             if let Some(entity) = entity_weak.upgrade() {

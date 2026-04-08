@@ -2578,45 +2578,20 @@ impl AcpChatView {
                                 ),
                         )
                     })
-                    // Model selector button
+                    // Active model label
                     .child({
                         let model_display = self
                             .live_thread()
                             .read(cx)
                             .selected_model_display()
                             .to_string();
-                        let is_open = self.model_selector_open;
-                        let chevron = if is_open { "\u{25B4}" } else { "\u{25BE}" }; // ▴ / ▾
                         div()
-                            .id("acp-model-btn")
+                            .id("acp-model-display")
                             .flex()
                             .items_center()
-                            .gap(px(4.0))
-                            .cursor_pointer()
                             .text_xs()
-                            .text_color(if is_open {
-                                rgb(theme.colors.accent.selected)
-                            } else {
-                                rgba(hint_text_rgba)
-                            })
-                            .hover(|d| d.text_color(rgb(theme.colors.text.primary)))
-                            .on_click(cx.listener(|this, _event, window, cx| {
-                                this.cache_popup_parent_window(window, cx);
-                                let next_open = !this.model_selector_open;
-                                this.attach_menu_open = false;
-                                this.mention_session = None;
-                                this.history_menu = None;
-                                this.model_selector_open = next_open;
-                                if next_open {
-                                    this.reset_model_selector_selection(cx);
-                                }
-                                this.sync_mention_popup_window_from_cached_parent(cx);
-                                this.sync_history_popup_window_from_cached_parent(cx);
-                                this.sync_model_selector_popup_window_from_cached_parent(cx);
-                                cx.notify();
-                            }))
+                            .text_color(rgba(hint_text_rgba))
                             .child(model_display)
-                            .child(chevron)
                     }),
             )
             // ── Right: clickable hint strip (matches main menu behavior) ──

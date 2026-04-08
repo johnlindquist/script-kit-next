@@ -648,7 +648,8 @@ fn acp_root_route_initial_selection_is_change_agent() {
     };
 
     let entries = vec![];
-    let route = get_acp_chat_root_route(&entries, None);
+    let models = vec![];
+    let route = get_acp_chat_root_route(&entries, None, &models, None);
 
     assert_eq!(
         route.initial_selected_action_id.as_deref(),

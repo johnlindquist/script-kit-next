@@ -452,10 +452,10 @@ fn acp_actions_window_close_path_restores_acp_host_focus() {
     let toggle_actions = &ACTIONS_TOGGLE_SOURCE[toggle_actions_start..toggle_actions_end];
 
     assert!(
-        toggle_actions.contains("let host = if is_acp_chat {")
-            && toggle_actions.contains("ActionsDialogHost::AcpChat")
-            && toggle_actions.contains("ActionsDialogHost::MainList"),
-        "toggle_actions must derive the actions host from whether ACP chat is active"
+        toggle_actions.contains("self.actions_dialog_host_for_current_view()")
+            && ACTIONS_TOGGLE_SOURCE.contains("ActionsDialogHost::AcpChat")
+            && ACTIONS_TOGGLE_SOURCE.contains("ActionsDialogHost::MainList"),
+        "toggle_actions must derive the actions host from the current view"
     );
     assert!(
         toggle_actions.contains("self.close_actions_popup(host, window, cx);"),
@@ -659,13 +659,12 @@ fn acp_composer_stays_width_wrapped_without_explicit_newline() {
 }
 
 #[test]
-fn acp_model_selector_button_and_selection_sync_popup_window() {
+fn acp_model_selection_is_visible_in_footer_and_routed_through_actions() {
     assert!(
-        ACP_VIEW_SOURCE.contains("this.cache_popup_parent_window(window, cx);")
-            && ACP_VIEW_SOURCE
-                .contains("this.sync_model_selector_popup_window_from_cached_parent(cx);")
-            && ACP_VIEW_SOURCE.contains("pub(crate) fn select_model_from_popup"),
-        "model selector interactions should open and close through the detached popup window"
+        ACP_VIEW_SOURCE.contains(".id(\"acp-model-display\")")
+            && !ACP_VIEW_SOURCE.contains(".id(\"acp-model-btn\")")
+            && ACP_VIEW_SOURCE.contains("\"⌘K Actions\""),
+        "ACP footer should keep the active model visible and route changes through the actions menu"
     );
 }
 
