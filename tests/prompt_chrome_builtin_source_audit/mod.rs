@@ -338,6 +338,19 @@ fn footer_popup_accepts_config_driven_refresh() {
 }
 
 #[test]
+fn footer_popup_uses_subtle_hover_for_native_footer_buttons() {
+    assert!(
+        FOOTER_POPUP_SOURCE.contains("let hover_ns: id = ns_color_from_rgba(chrome.hover_rgba);"),
+        "native footer hover should use chrome.hover_rgba so the blur stays subtle"
+    );
+    assert!(
+        FOOTER_POPUP_SOURCE
+            .contains("let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);"),
+        "native footer selected state should still restore chrome.selection_rgba"
+    );
+}
+
+#[test]
 fn script_list_routes_footer_through_native_slot() {
     let source = include_str!("../../src/render_script_list/mod.rs");
     assert!(
