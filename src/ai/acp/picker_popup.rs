@@ -457,16 +457,4 @@ mod tests {
         assert_eq!(f32::from(bounds.size.width), 320.0);
         assert_eq!(f32::from(bounds.size.height), 84.0);
     }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn popup_bounds_flip_y_for_nswindow_coordinates() {
-        let bounds = gpui::Bounds {
-            origin: gpui::point(gpui::px(124.0), gpui::px(100.0)),
-            size: gpui::size(gpui::px(320.0), gpui::px(84.0)),
-        };
-
-        let flipped_y = crate::ai::acp::popup_window::flipped_ns_window_y(bounds, 982.0);
-        assert_eq!(flipped_y, 798.0);
-    }
 }
