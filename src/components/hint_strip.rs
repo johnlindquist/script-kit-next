@@ -745,19 +745,26 @@ pub fn render_hint_icons_hsla(hints: &[&str], color: gpui::Hsla) -> AnyElement {
 
 /// A hint label paired with an optional click handler for [`render_hint_icons_clickable`].
 pub struct ClickableHint {
-    pub label: &'static str,
+    pub id: Option<SharedString>,
+    pub label: SharedString,
     pub on_click: Option<HintClickHandler>,
 }
 
 impl ClickableHint {
     pub fn new(
-        label: &'static str,
+        label: impl Into<SharedString>,
         on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     ) -> Self {
         Self {
-            label,
+            id: None,
+            label: label.into(),
             on_click: Some(Rc::new(on_click)),
         }
+    }
+
+    pub fn id(mut self, id: impl Into<SharedString>) -> Self {
+        self.id = Some(id.into());
+        self
     }
 }
 
@@ -778,11 +785,14 @@ pub fn render_hint_icons_clickable(hints: Vec<ClickableHint>, text_rgba: u32) ->
         .gap(px(HINT_STRIP_CONTENT_GAP));
 
     for (i, hint) in hints.into_iter().enumerate() {
-        let element = parse_hint(hint.label);
+        let element = parse_hint(hint.label.as_ref());
         let hint_content = render_hint_element_hsla(element, color);
+        let button_id = hint
+            .id
+            .unwrap_or_else(|| SharedString::from(format!("hint-click-{i}")));
 
         let mut button = div()
-            .id(SharedString::from(format!("hint-click-{i}")))
+            .id(button_id)
             .cursor_pointer()
             .px(px(HINT_BUTTON_PADDING_X))
             .py(px(HINT_BUTTON_PADDING_Y))
