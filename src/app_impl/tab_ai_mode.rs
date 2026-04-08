@@ -74,6 +74,13 @@ impl ScriptListApp {
                 });
             });
 
+            let model_picker_app = app_entity.clone();
+            view.set_on_open_model_picker(move |window, cx| {
+                model_picker_app.update(cx, |app, cx| {
+                    app.open_acp_model_picker_actions(cx, window);
+                });
+            });
+
             let close_app = app_entity.clone();
             view.set_on_close_requested(move |window, cx| {
                 close_app.update(cx, |app, cx| {
