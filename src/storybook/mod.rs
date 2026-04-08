@@ -66,8 +66,8 @@ pub use input_variations::{
     input_variation_specs, render_input_story_preview, InputVariationId, InputVariationSpec,
 };
 pub use integrated_surface_shell::{
-    IntegratedOverlayAnchor, IntegratedOverlayPlacement, IntegratedSurfaceShell,
-    IntegratedSurfaceShellConfig,
+    IntegratedOverlayAnchor, IntegratedOverlayPlacement, IntegratedOverlayState,
+    IntegratedSurfaceShell, IntegratedSurfaceShellConfig,
 };
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use main_menu_variations::{

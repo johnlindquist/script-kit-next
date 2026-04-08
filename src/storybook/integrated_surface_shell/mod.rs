@@ -6,5 +6,6 @@ mod types;
 
 pub use component::IntegratedSurfaceShell;
 pub use types::{
-    IntegratedOverlayAnchor, IntegratedOverlayPlacement, IntegratedSurfaceShellConfig,
+    IntegratedOverlayAnchor, IntegratedOverlayPlacement, IntegratedOverlayState,
+    IntegratedSurfaceShellConfig,
 };
