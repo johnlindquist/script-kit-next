@@ -139,19 +139,20 @@ impl ScriptListApp {
         let footer_disabled = self.main_window_footer_buttons_blocked();
         let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
 
-        let mut buttons =
-            vec![FooterButtonConfig::new(FooterAction::Run, "↵", "Run").enabled(!footer_disabled)];
+        let mut buttons = vec![
+            FooterButtonConfig::new(FooterAction::Run, "↵", "Run").enabled(!footer_disabled),
+            FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "AI").enabled(!footer_disabled),
+        ];
 
-        if self.current_view_supports_shared_actions() {
+        if self.current_view_supports_shared_actions()
+            || matches!(self.current_view, AppView::PathPrompt { .. })
+        {
             buttons.push(
                 FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
                     .selected(actions_open)
                     .enabled(!footer_disabled),
             );
         }
-
-        buttons
-            .push(FooterButtonConfig::new(FooterAction::Ai, "⇥", "AI").enabled(!footer_disabled));
         buttons
     }
 
@@ -175,60 +176,42 @@ impl ScriptListApp {
             AppView::WebcamView { .. } => Some("webcam_prompt"),
             AppView::NamingPrompt { .. } => Some("naming_prompt"),
             AppView::CreationFeedback { .. } => Some("creation_feedback"),
-            AppView::ChatPrompt { .. } => Some("chat_prompt"),
-            AppView::QuickTerminalView { .. } => Some("quick_terminal"),
             AppView::ArgPrompt { .. } => Some("arg_prompt"),
             AppView::EmojiPickerView { .. } => Some("emoji_picker"),
             AppView::AcpHistoryView { .. } => Some("acp_history"),
             AppView::AcpChatView { .. } => Some("acp_chat"),
+            AppView::ChatPrompt { .. } => Some("chat_prompt"),
+            AppView::TermPrompt { .. } => Some("term_prompt"),
+            AppView::PathPrompt { .. } => Some("path_prompt"),
+            AppView::AppLauncherView { .. } => Some("app_launcher"),
+            AppView::WindowSwitcherView { .. } => Some("window_switcher"),
+            AppView::DesignGalleryView { .. } => Some("design_gallery"),
+            AppView::ScratchPadView { .. } => Some("scratch_pad"),
+            AppView::ThemeChooserView { .. } => Some("theme_chooser"),
+            AppView::BrowseKitsView { .. } => Some("browse_kits"),
+            AppView::InstalledKitsView { .. } => Some("installed_kits"),
+            AppView::ProcessManagerView { .. } => Some("process_manager"),
+            AppView::CurrentAppCommandsView { .. } => Some("current_app_commands"),
+            AppView::SearchAiPresetsView { .. } => Some("search_ai_presets"),
+            AppView::CreateAiPresetView { .. } => Some("create_ai_preset"),
+            AppView::SettingsView { .. } => Some("settings"),
+            AppView::FavoritesBrowseView { .. } => Some("favorites"),
             _ => None,
         }
-    }
-
-    fn quick_terminal_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
-        use crate::footer_popup::{FooterAction, FooterButtonConfig};
-
-        let footer_disabled = self.main_window_footer_buttons_blocked();
-        let enabled = !footer_disabled;
-        let can_apply = self.tab_ai_harness_apply_back_route.is_some()
-            && self.tab_ai_harness_return_view.is_some();
-
-        let mut buttons = Vec::new();
-        if can_apply {
-            buttons.push(
-                FooterButtonConfig::new(FooterAction::Apply, "⌘↩", "Apply").enabled(enabled),
-            );
-        }
-        buttons.push(FooterButtonConfig::new(FooterAction::Close, "⌘W", "Close").enabled(enabled));
-
-        tracing::info!(
-            target: "script_kit::footer_popup",
-            event = "quick_terminal_footer_buttons_resolved",
-            can_apply,
-            footer_disabled,
-            button_count = buttons.len(),
-            "Resolved quick-terminal native footer buttons"
-        );
-        buttons
     }
 
     fn main_window_footer_buttons_for_current_view(
         &self,
     ) -> Vec<crate::footer_popup::FooterButtonConfig> {
-        match &self.current_view {
-            AppView::QuickTerminalView { .. } => self.quick_terminal_footer_buttons(),
-            _ => {
-                let buttons = self.standard_main_window_footer_buttons();
-                tracing::info!(
-                    target: "script_kit::footer_popup",
-                    event = "main_window_footer_buttons_resolved",
-                    view = ?self.current_view,
-                    button_count = buttons.len(),
-                    "Resolved main-window native footer buttons"
-                );
-                buttons
-            }
-        }
+        let buttons = self.standard_main_window_footer_buttons();
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "main_window_footer_buttons_resolved",
+            view = ?self.current_view,
+            button_count = buttons.len(),
+            "Resolved main-window native footer buttons"
+        );
+        buttons
     }
 
     pub(crate) fn main_window_footer_config(
@@ -255,20 +238,14 @@ impl ScriptListApp {
         crate::is_main_window_visible() && self.main_window_footer_config().is_some()
     }
 
-    /// Returns `None` when the native main-window footer owns spacing,
-    /// suppressing any per-view GPUI footer. Otherwise returns the GPUI footer as-is.
+    /// When the native main-window footer is active, replace the GPUI footer
+    /// with a transparent spacer so content stays clear of the AppKit footer.
     pub(crate) fn main_window_footer_slot(
         &self,
         gpui_footer: gpui::AnyElement,
     ) -> Option<gpui::AnyElement> {
         if self.main_window_uses_native_footer() {
-            tracing::debug!(
-                target: "script_kit::footer_popup",
-                event = "main_window_footer_slot_suppressed",
-                view = ?self.current_view,
-                "Suppressed per-view GPUI footer because native main-window footer owns spacing"
-            );
-            None
+            Some(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
         } else {
             Some(gpui_footer)
         }
@@ -309,11 +286,16 @@ impl ScriptListApp {
     pub(crate) fn sync_main_footer_popup(&self, window: &mut gpui::Window, cx: &mut Context<Self>) {
         self.ensure_main_footer_action_listener(window, cx);
 
-        let config = if crate::is_main_window_visible() {
+        let mut config = if crate::is_main_window_visible() {
             self.main_window_footer_config()
         } else {
             None
         };
+
+        // Enrich with ACP streaming/model info when on the ACP chat view.
+        if let Some(ref mut cfg) = config {
+            self.enrich_footer_config_with_acp_info(cfg, cx);
+        }
 
         tracing::info!(
             target: "script_kit::footer_popup",
@@ -326,6 +308,26 @@ impl ScriptListApp {
         );
 
         crate::footer_popup::sync_main_footer_popup(window, config.as_ref(), &mut *cx);
+    }
+
+    pub(crate) fn enrich_footer_config_with_acp_info(
+        &self,
+        config: &mut crate::footer_popup::MainWindowFooterConfig,
+        cx: &gpui::App,
+    ) {
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            let view = entity.read(cx);
+            if !view.is_setup_mode() {
+                let thread = view.live_thread().read(cx);
+                config.left_info = Some(crate::footer_popup::FooterLeftInfo {
+                    is_streaming: matches!(
+                        thread.status,
+                        crate::ai::acp::thread::AcpThreadStatus::Streaming
+                    ),
+                    model_name: thread.selected_model_display().to_string(),
+                });
+            }
+        }
     }
 
     pub(crate) fn toggle_logs(&mut self, cx: &mut Context<Self>) {

@@ -3041,8 +3041,8 @@ impl Render for ActionsDialog {
         let footer_container = if self.config.show_footer {
             Some(div().w_full().child(crate::components::HintStrip::new(vec![
                 "↵ Run".into(),
+                "⌘↵ AI".into(),
                 "⌘K Actions".into(),
-                "Tab AI".into(),
             ])))
         } else {
             None
@@ -3619,7 +3619,7 @@ mod tests {
     // ── Chrome contract tests (.impeccable.md) ──────────────────────────
 
     /// The live dialog footer must render exactly three hint-strip keys:
-    /// `↵ Run`, `⌘K Actions`, `Tab AI`.
+    /// `↵ Run`, `⌘↵ AI`, `⌘K Actions`.
     #[test]
     fn actions_dialog_footer_matches_three_key_contract() {
         let audit = ActionsDialogChromeAudit::from_live_defaults();

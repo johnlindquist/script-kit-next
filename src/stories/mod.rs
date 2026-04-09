@@ -6,6 +6,7 @@
 mod actions_mini_variations;
 mod actions_window_stories;
 mod arg_prompt_stories;
+mod ask_ai_tab_variations;
 mod at_mention_picker_variations;
 mod autocomplete_description_treatments;
 mod button_stories;
@@ -48,6 +49,7 @@ use std::sync::LazyLock;
 pub use actions_mini_variations::ActionsMiniVariationsStory;
 pub use actions_window_stories::ActionsWindowStory;
 pub use arg_prompt_stories::ArgPromptStory;
+pub use ask_ai_tab_variations::AskAiTabVariationsStory;
 pub use at_mention_picker_variations::AtMentionPickerVariationsStory;
 pub use autocomplete_description_treatments::AutocompleteDescriptionTreatmentsStory;
 pub use button_stories::ButtonStory;
@@ -89,6 +91,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         // Foundation
         StoryEntry::new(Box::new(DesignTokenStory)),
         // Components
+        StoryEntry::new(Box::new(AskAiTabVariationsStory)),
         StoryEntry::new(Box::new(ButtonStory)),
         StoryEntry::new(Box::new(ConfirmDialogVariationsStory)),
         StoryEntry::new(Box::new(ConfirmPopupPlaygroundStory)),

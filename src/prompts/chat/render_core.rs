@@ -43,7 +43,8 @@ impl ChatPrompt {
                 mini_mode = self.mini_mode,
                 "Suppressed internal GPUI chat footer because native main-window footer is active"
             );
-            return div().into_any_element();
+            return crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(
+            );
         }
 
         if self.mini_mode {

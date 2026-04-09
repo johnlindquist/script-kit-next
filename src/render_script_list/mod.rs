@@ -2,7 +2,7 @@
 // This file is included via include!() macro in main.rs
 use crate::ui_foundation::{
     is_key_down as sk_is_key_down, is_key_enter as sk_is_key_enter,
-    is_key_escape as sk_is_key_escape, is_key_tab as sk_is_key_tab, is_key_up as sk_is_key_up,
+    is_key_escape as sk_is_key_escape, is_key_up as sk_is_key_up,
 };
 
 // --- merged from part_000.rs ---
@@ -302,7 +302,7 @@ impl ScriptListApp {
                         div()
                             .text_xs()
                             .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_HINT))
-                            .child("Try a different search term or press Tab to ask AI"),
+                            .child("Try a different search term or press ⌘↵ to ask AI"),
                     )
                     // Search tips: help users discover advanced search features
                     .child(
@@ -821,6 +821,17 @@ impl ScriptListApp {
                 // which fires before the Input component can consume them. This allows
                 // input history navigation + list navigation to work correctly.
                 match key_str {
+                    key
+                        if sk_is_key_enter(key)
+                            && event.keystroke.modifiers.platform
+                            && !event.keystroke.modifiers.shift
+                            && !event.keystroke.modifiers.alt
+                            && !event.keystroke.modifiers.control =>
+                    {
+                        if this.try_route_global_cmd_enter_to_acp_context_capture(cx) {
+                            cx.stop_propagation();
+                        }
+                    }
                     key if sk_is_key_enter(key) => {
                         if !this.gpui_input_focused {
                             this.execute_selected(cx);
@@ -834,13 +845,6 @@ impl ScriptListApp {
                             // Filter is empty - close window
                             this.close_and_reset_window(cx);
                         }
-                    }
-                    // Tab key: consumed by intercept_keystrokes in startup_new_tab.rs.
-                    // This fallback only fires if the interceptor somehow misses;
-                    // route to Tab AI quick terminal (harness surface).
-                    key if sk_is_key_tab(key) => {
-                        this.open_tab_ai_chat(cx);
-                        cx.stop_propagation();
                     }
                     _ => {}
                 }
@@ -928,7 +932,7 @@ impl ScriptListApp {
                                         .focus_bordered(false),
                                 ),
                             )
-                            // "Ask AI [Tab]" keyboard hint - styled as non-clickable to match behavior
+                            // "Ask AI [⌘↵]" keyboard hint - styled as non-clickable to match behavior
                             .when(!is_mini, |d| {
                                 d.child(
                                     div()
@@ -949,7 +953,7 @@ impl ScriptListApp {
                                                 .text_color(rgb(chrome.accent_badge_text_hex))
                                                 .child("Ask AI"),
                                         )
-                                        // "Tab" badge - grey background via chrome contract (no border)
+                                        // "⌘↵" badge - grey background via chrome contract (no border)
                                         .child(
                                             div()
                                                 .px(px(TAB_BADGE_PADDING_X))
@@ -958,7 +962,7 @@ impl ScriptListApp {
                                                 .bg(rgba(chrome.badge_bg_rgba))
                                                 .text_xs()
                                                 .text_color(rgb(chrome.badge_text_hex))
-                                                .child("Tab"),
+                                                .child("⌘↵"),
                                         ),
                                 )
                             }),
@@ -1108,7 +1112,7 @@ impl ScriptListApp {
             main_div = main_div.child(content_row);
         }
 
-        // Footer: Universal three-key hint strip — ↵ Run · ⌘K Actions · Tab AI
+        // Footer: Universal three-key hint strip — ↵ Run · ⌘K Actions · ⌘↵ AI
         {
             let hints = crate::components::universal_prompt_hints();
             crate::components::emit_prompt_hint_audit("render_script_list::full", &hints);

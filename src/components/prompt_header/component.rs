@@ -314,9 +314,9 @@ impl PromptHeader {
             )
     }
 
-    /// Render the "Ask AI" hint with Tab badge (Raycast-style)
+    /// Render the "Ask AI" hint with a Cmd+Enter badge (Raycast-style)
     ///
-    /// Displays: "Ask AI [Tab]" where Tab is in a subtle bordered badge
+    /// Displays: "Ask AI [⌘↵]" where the shortcut is in a subtle bordered badge
     fn render_ask_ai_hint(&self) -> impl IntoElement {
         let colors = self.colors;
         let transparent_bg = 0x00000000;
@@ -346,7 +346,7 @@ impl PromptHeader {
                     })
                     .child("Ask AI"),
             )
-            // "Tab" badge button - ghost/transparent style with border
+            // "⌘↵" badge button - ghost/transparent style with border
             .child(
                 div()
                     .id("tab-badge-btn")
@@ -368,7 +368,7 @@ impl PromptHeader {
                             .bg(rgba(colors.hover_overlay))
                             .text_color(colors.text_primary.to_rgb())
                     })
-                    .child("Tab"),
+                    .child("⌘↵"),
             )
     }
 
@@ -443,7 +443,7 @@ impl RenderOnce for PromptHeader {
             // Search input area
             .child(self.render_input_area());
 
-        // "Ask AI [Tab]" hint (conditionally rendered before buttons)
+        // "Ask AI [⌘↵]" hint (conditionally rendered before buttons)
         if show_ask_ai_hint {
             header = header.child(self.render_ask_ai_hint());
         }

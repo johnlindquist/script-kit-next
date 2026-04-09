@@ -21,8 +21,9 @@ use crate::config::SuggestedConfig;
 use crate::frecency::FrecencyStore;
 use crate::list_item::GroupedListItem;
 use crate::menu_bar::MenuBarItem;
+use crate::plugins::PluginSkill;
 
-use super::search::fuzzy_search_unified_all;
+use super::search::fuzzy_search_unified_all_with_skills;
 use super::types::{Script, Scriptlet, SearchResult};
 
 mod grouped_view;
@@ -59,6 +60,7 @@ pub fn get_grouped_results(
     scriptlets: &[Arc<Scriptlet>],
     builtins: &[BuiltInEntry],
     apps: &[AppInfo],
+    skills: &[Arc<PluginSkill>],
     frecency_store: &FrecencyStore,
     filter_text: &str,
     suggested_config: &SuggestedConfig,
@@ -78,7 +80,14 @@ pub fn get_grouped_results(
         builtins
     };
 
-    let results = fuzzy_search_unified_all(scripts, scriptlets, builtins_to_use, apps, filter_text);
+    let results = fuzzy_search_unified_all_with_skills(
+        scripts,
+        scriptlets,
+        builtins_to_use,
+        apps,
+        skills,
+        filter_text,
+    );
 
     if !filter_text.is_empty() {
         return search_mode::build_search_mode_results(

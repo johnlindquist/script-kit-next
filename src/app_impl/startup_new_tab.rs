@@ -1,6 +1,6 @@
-        // Add Tab key interceptor for "Ask AI" feature and file search directory navigation
-        // This fires BEFORE normal key handling, allowing us to intercept Tab
-        // even when the Input component has focus
+        // Add global AI-entry and Tab-behavior interception. This fires BEFORE
+        // normal key handling so launcher surfaces can claim Cmd+Enter and
+        // views with local Tab ownership can keep it.
         let app_entity_for_tab = cx.entity().downgrade();
         let tab_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_tab;
@@ -19,6 +19,11 @@
                 let key = event.keystroke.key.as_str();
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;
+                let is_global_ai_chord = crate::ui_foundation::is_key_enter(key)
+                    && event.keystroke.modifiers.platform
+                    && !has_shift
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.control;
 
                 if confirm::consume_main_window_key_while_confirm_open(
                     key,
@@ -26,6 +31,17 @@
                     cx,
                 ) {
                     cx.stop_propagation();
+                    return;
+                }
+
+                if is_global_ai_chord {
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if this.try_route_global_cmd_enter_to_acp_context_capture(cx) {
+                                cx.stop_propagation();
+                            }
+                        });
+                    }
                     return;
                 }
 
@@ -37,16 +53,16 @@
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            // File search: plain Tab captures focused context into ACP,
-                            // Shift+Tab still navigates up one directory level.
+                            // File search keeps Shift+Tab for parent-directory
+                            // navigation and leaves plain Tab local.
                             if matches!(this.current_view, AppView::FileSearchView { .. }) {
-                                cx.stop_propagation();
-
                                 if this.show_actions_popup {
+                                    cx.stop_propagation();
                                     return;
                                 }
 
                                 if has_shift {
+                                    cx.stop_propagation();
                                     let current_query = match &this.current_view {
                                         AppView::FileSearchView { query, .. } => query.clone(),
                                         _ => String::new(),
@@ -87,14 +103,12 @@
                                             ),
                                         );
                                     }
-                                } else {
-                                    let _ = this.try_route_plain_tab_to_acp_context_capture(cx);
                                 }
                                 return;
                             }
 
-                            // ChatPrompt: plain Tab opens ACP with focused/input context,
-                            // Shift+Tab keeps local setup back-tab behavior.
+                            // ChatPrompt keeps Shift+Tab for local setup
+                            // navigation and leaves plain Tab local.
                             if matches!(this.current_view, AppView::ChatPrompt { .. }) {
                                 if has_shift {
                                     if let AppView::ChatPrompt { entity, .. } = &this.current_view {
@@ -106,34 +120,11 @@
                                             return;
                                         }
                                     }
-                                } else if this.try_route_plain_tab_to_acp_context_capture(cx) {
-                                    cx.stop_propagation();
-                                    return;
                                 }
                             }
 
-                            // Shift+Tab in ScriptList: route typed query through the
-                            // quick-submit planner so the harness gets intelligent
-                            // classification, synthesized intent, and the right
-                            // capture kind — not just a raw string paste.
-                            if has_shift
-                                && matches!(this.current_view, AppView::ScriptList)
-                                && !this.filter_text.is_empty()
-                                && !this.show_actions_popup
-                            {
-                                let query = this.filter_text.clone();
-                                this.submit_to_current_or_new_tab_ai_harness_from_text(
-                                    query,
-                                    crate::ai::TabAiQuickSubmitSource::ShiftTab,
-                                    cx,
-                                );
-                                cx.stop_propagation();
-                                return;
-                            }
-
                             // Consume Tab/Shift+Tab while the ACP chat is
-                            // open so the universal Tab AI fallback does not
-                            // spawn a second ACP session on top of this one.
+                            // open so the surface keeps local tab ownership.
                             if let AppView::AcpChatView { entity, .. } = &this.current_view {
                                 let handled = entity.update(cx, |chat, cx| {
                                     chat.handle_tab_key(has_shift, cx)
@@ -189,12 +180,6 @@
                                 cx.stop_propagation();
                                 return;
                             }
-
-                            // Universal Tab AI: route any remaining non-AI surface into ACP
-                            if !has_shift && this.try_route_plain_tab_to_acp_context_capture(cx) {
-                                cx.stop_propagation();
-                                return;
-                            }
                         });
                     }
                 }
@@ -202,12 +187,12 @@
         });
         app.gpui_input_subscriptions.push(tab_interceptor);
 
-        // Prewarm the ACP agent config on a background thread so Tab presses
-        // never block on bun transpile of ~/.scriptkit/kit/config.ts.
+        // Prewarm the ACP agent config on a background thread so AI-entry
+        // shortcuts do not block on bun transpile of ~/.scriptkit/kit/config.ts.
         crate::ai::acp::prewarm_agent_config();
 
-        // Prewarm the Tab AI harness asynchronously so the first Tab press
-        // reuses a live PTY instead of paying spawn cost.  Runs once, silently.
+        // Prewarm the Tab AI harness asynchronously so the first AI-entry
+        // shortcut reuses a live PTY instead of paying spawn cost. Runs once, silently.
         let app_entity_for_tab_ai_warm = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
             cx.background_executor()

@@ -81,6 +81,13 @@ impl ScriptListApp {
                 });
             });
 
+            let history_app = app_entity.clone();
+            view.set_on_open_history_command(move |window, cx| {
+                history_app.update(cx, |app, cx| {
+                    app.open_embedded_acp_history_popup(window, cx);
+                });
+            });
+
             let portal_app = app_entity.clone();
             view.set_on_open_portal(move |kind, cx| {
                 portal_app.update(cx, |app, cx| {
@@ -665,21 +672,48 @@ impl ScriptListApp {
         (focused_target, visible_targets)
     }
 
-    /// Route a plain Tab press from the current non-AI source surface into ACP.
+    /// Returns `true` when the current view should treat global `Cmd+Enter`
+    /// as launcher-style "send this context to AI".
+    fn supports_global_cmd_enter_ai_entry(view: &AppView) -> bool {
+        matches!(
+            view,
+            AppView::ScriptList
+                | AppView::ClipboardHistoryView { .. }
+                | AppView::AppLauncherView { .. }
+                | AppView::WindowSwitcherView { .. }
+                | AppView::DesignGalleryView { .. }
+                | AppView::ThemeChooserView { .. }
+                | AppView::EmojiPickerView { .. }
+                | AppView::BrowseKitsView { .. }
+                | AppView::InstalledKitsView { .. }
+                | AppView::ProcessManagerView { .. }
+                | AppView::SearchAiPresetsView { .. }
+                | AppView::CreateAiPresetView { .. }
+                | AppView::SettingsView { .. }
+                | AppView::FavoritesBrowseView { .. }
+                | AppView::CurrentAppCommandsView { .. }
+        )
+    }
+
+    /// Route a launcher-style `Cmd+Enter` press from the current non-AI source
+    /// surface into ACP.
     ///
-    /// Returns `true` when the Tab press was consumed and ACP launch began.
-    pub(crate) fn try_route_plain_tab_to_acp_context_capture(
+    /// Returns `true` when the keypress was consumed and ACP launch began.
+    pub(crate) fn try_route_global_cmd_enter_to_acp_context_capture(
         &mut self,
         cx: &mut Context<Self>,
     ) -> bool {
         if self.show_actions_popup || self.tab_ai_save_offer_state.is_some() {
             return false;
         }
+        if !Self::supports_global_cmd_enter_ai_entry(&self.current_view) {
+            return false;
+        }
 
         let source_view = self.app_view_name();
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "tab_ai_plain_tab_routed_to_acp",
+            event = "tab_ai_global_cmd_enter_routed_to_acp",
             source_view = %source_view,
         );
 
@@ -1146,6 +1180,24 @@ impl ScriptListApp {
             return None;
         };
         entity.update(cx, |view, _cx| view.take_retry_request())
+    }
+
+    pub(crate) fn open_embedded_acp_history_popup(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let AppView::AcpChatView { entity } = &self.current_view else {
+            return false;
+        };
+
+        let parent_handle = window.window_handle();
+        let parent_bounds = window.bounds();
+        let display_id = window.display(cx).map(|display| display.id());
+        entity.update(cx, |view, cx| {
+            view.open_history_popup_from_host(parent_handle, parent_bounds, display_id, cx);
+        });
+        true
     }
 
     /// **Contract:** `AppView::AcpChatView` and `cx.notify()` happen

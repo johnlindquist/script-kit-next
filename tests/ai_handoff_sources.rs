@@ -139,22 +139,25 @@ fn builtin_execution_does_not_inline_ai_open_in_chat_arm() {
 }
 
 #[test]
-fn script_list_tab_fallback_routes_to_tab_ai_overlay() {
+fn script_list_cmd_enter_fallback_routes_to_tab_ai_overlay() {
     let render_source = read_source("src/render_script_list/mod.rs");
-    let tab_block = slice_from(&render_source, "key if sk_is_key_tab(key) => {");
+    let tab_block = slice_from(
+        &render_source,
+        "if this.try_route_global_cmd_enter_to_acp_context_capture(cx) {",
+    );
 
-    // Tab fallback must route to Tab AI chat (full-view), not the old inline AI chat
+    // Cmd+Enter fallback must route to Tab AI chat, not the old inline AI chat.
     assert!(
-        tab_block.contains("open_tab_ai_chat(cx)"),
-        "ScriptList Tab fallback must route to Tab AI chat"
+        tab_block.contains("try_route_global_cmd_enter_to_acp_context_capture"),
+        "ScriptList Cmd+Enter fallback must route to the shared AI-entry helper"
     );
     assert!(
         !tab_block.contains("open_ai_chat_from_main_window_query"),
-        "ScriptList Tab fallback must not use the old inline AI chat path"
+        "ScriptList Cmd+Enter fallback must not use the old inline AI chat path"
     );
     assert!(
         !tab_block.contains("ai::open_ai_window(") && !tab_block.contains("ai::set_ai_input("),
-        "ScriptList Tab fallback must not open AI inline before hiding the main window"
+        "ScriptList Cmd+Enter fallback must not open AI inline before hiding the main window"
     );
 }
 

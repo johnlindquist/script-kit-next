@@ -15,6 +15,7 @@ pub(crate) enum MainWindowPreflightActionKind {
     SwitchWindow,
     RunAgent,
     RunFallback,
+    OpenSkill,
     AskAi,
 }
 

@@ -6096,7 +6096,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
         let config = CommandBarConfig::ai_style();
         assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
         assert!(config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     #[test]
@@ -6104,7 +6104,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
         let config = CommandBarConfig::main_menu_style();
         assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
         assert!(!config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     // --- merged from part_04.rs ---
@@ -6120,7 +6120,7 @@ mod from_dialog_builtin_action_validation_tests_24 {
         let config = CommandBarConfig::notes_style();
         assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
         assert!(config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     // ============================================================
@@ -11779,28 +11779,28 @@ mod from_dialog_builtin_action_validation_tests_29 {
     fn cat29_25_ai_style_has_icons_and_footer() {
         let config = CommandBarConfig::ai_style();
         assert!(config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     #[test]
     fn cat29_25_main_menu_no_icons_no_footer() {
         let config = CommandBarConfig::main_menu_style();
         assert!(!config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     #[test]
     fn cat29_25_notes_style_has_icons_and_footer() {
         let config = CommandBarConfig::notes_style();
         assert!(config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     #[test]
     fn cat29_25_no_search_no_icons_no_footer() {
         let config = CommandBarConfig::no_search();
         assert!(!config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     // =============================================================================

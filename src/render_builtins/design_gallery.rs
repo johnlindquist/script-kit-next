@@ -474,7 +474,12 @@ impl ScriptListApp {
                     .child(list_element),
             )
             // Footer
-            .child(
+            .child(if matches!(
+                crate::footer_popup::active_main_window_footer_surface(),
+                Some("design_gallery")
+            ) {
+                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
+            } else {
                 div()
                     .id("design-gallery-footer-tooltip")
                     .tooltip(|window, cx| {
@@ -492,8 +497,9 @@ impl ScriptListApp {
                             .primary_shortcut("↵")
                             .show_secondary(false),
                         PromptFooterColors::from_theme(&self.theme),
-                    )),
-            )
+                    ))
+                    .into_any_element()
+            })
             .into_any_element()
     }
 }

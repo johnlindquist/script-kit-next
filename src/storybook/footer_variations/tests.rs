@@ -180,7 +180,7 @@ fn scriptkit_branded_storybook_footer_selection_enables_helper_and_info() {
     assert!(config.show_secondary);
     assert!(config.show_info_label);
     assert_eq!(config.primary_label, "Run Script");
-    assert_eq!(config.helper_text.as_deref(), Some("Tab AI"));
+    assert_eq!(config.helper_text.as_deref(), Some("⌘↵ AI"));
     assert_eq!(config.info_label.as_deref(), Some("Built-in"));
 }
 

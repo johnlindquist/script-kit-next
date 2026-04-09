@@ -12,6 +12,7 @@ mod paths;
 mod prefix_filters;
 mod scriptlets;
 mod scripts;
+mod skills;
 mod unified;
 mod windows;
 
@@ -21,7 +22,10 @@ pub use highlight::compute_match_indices_for_result;
 pub use nucleo::NucleoCtx;
 pub use scriptlets::fuzzy_search_scriptlets;
 pub use scripts::fuzzy_search_scripts;
-pub use unified::{fuzzy_search_unified, fuzzy_search_unified_all};
+pub use skills::fuzzy_search_skills;
+pub use unified::{
+    fuzzy_search_unified, fuzzy_search_unified_all, fuzzy_search_unified_all_with_skills,
+};
 #[cfg(test)]
 pub use unified::{fuzzy_search_unified_with_builtins, fuzzy_search_unified_with_windows};
 pub use windows::fuzzy_search_windows;

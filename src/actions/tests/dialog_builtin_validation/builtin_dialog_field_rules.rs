@@ -13022,7 +13022,7 @@ mod from_dialog_builtin_action_validation_tests_17 {
         #[test]
         fn cat23_notes_style_footer_enabled() {
             let config = CommandBarConfig::notes_style();
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         #[test]
@@ -14672,7 +14672,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat19_main_menu_no_footer() {
             let config = CommandBarConfig::main_menu_style();
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         // =========================================================================
@@ -14706,7 +14706,7 @@ mod from_dialog_builtin_action_validation_tests_18 {
         #[test]
         fn cat20_ai_style_footer_enabled() {
             let config = CommandBarConfig::ai_style();
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         // =========================================================================
@@ -18282,7 +18282,7 @@ mod from_dialog_builtin_action_validation_tests_20 {
                 SectionStyle::Headers
             ));
             assert!(config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         // =========================================================================

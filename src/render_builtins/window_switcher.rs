@@ -362,15 +362,47 @@ impl ScriptListApp {
                     .child(actions_panel),
             );
 
-        crate::components::render_minimal_list_prompt_scaffold(
-            header,
-            content,
-            vec![
-                gpui::SharedString::from("↵ Switch"),
-                gpui::SharedString::from("Esc Back"),
-            ],
-            None,
-        )
+        let footer = if matches!(
+            crate::footer_popup::active_main_window_footer_surface(),
+            Some("window_switcher")
+        ) {
+            crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
+        } else {
+            crate::components::render_simple_hint_strip(
+                vec![
+                    gpui::SharedString::from("↵ Switch"),
+                    gpui::SharedString::from("Esc Back"),
+                ],
+                None,
+            )
+        };
+
+        div()
+            .w_full()
+            .h_full()
+            .flex()
+            .flex_col()
+            .child(
+                div()
+                    .w_full()
+                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(header),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .w_full()
+                    .overflow_hidden()
+                    .child(content),
+            )
+            .child(footer)
         .rounded(px(design_visual.radius_lg))
         .text_color(rgb(text_primary))
         .font_family(design_typography.font_family)

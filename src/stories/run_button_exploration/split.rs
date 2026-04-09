@@ -2589,7 +2589,7 @@ fn render_alt_status_bar(colors: PromptHeaderColors) -> impl IntoElement {
                     div()
                         .text_xs()
                         .text_color(colors.text_dimmed.to_rgb())
-                        .child("↵ Run • Tab AI • ⌘K Actions"),
+                        .child("↵ Run • ⌘↵ AI • ⌘K Actions"),
                 )
                 .child(
                     div()

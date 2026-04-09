@@ -837,15 +837,23 @@ impl ScriptListApp {
                             .child(list_scrollbar),
                     ),
             )
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
-                    .primary_label("Install")
-                    .primary_shortcut("↵")
-                    .show_secondary(true)
-                    .secondary_label("Back")
-                    .secondary_shortcut("esc"),
-                PromptFooterColors::from_theme(&self.theme),
-            ))
+            .child(if matches!(
+                crate::footer_popup::active_main_window_footer_surface(),
+                Some("browse_kits")
+            ) {
+                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
+            } else {
+                PromptFooter::new(
+                    PromptFooterConfig::new()
+                        .primary_label("Install")
+                        .primary_shortcut("↵")
+                        .show_secondary(true)
+                        .secondary_label("Back")
+                        .secondary_shortcut("esc"),
+                    PromptFooterColors::from_theme(&self.theme),
+                )
+                .into_any_element()
+            })
             .into_any_element()
     }
 
@@ -1151,15 +1159,23 @@ impl ScriptListApp {
                             .child(list_scrollbar),
                     ),
             )
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
-                    .primary_label("Update")
-                    .primary_shortcut("↵")
-                    .show_secondary(true)
-                    .secondary_label("Remove")
-                    .secondary_shortcut("⌫"),
-                PromptFooterColors::from_theme(&self.theme),
-            ))
+            .child(if matches!(
+                crate::footer_popup::active_main_window_footer_surface(),
+                Some("installed_kits")
+            ) {
+                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
+            } else {
+                PromptFooter::new(
+                    PromptFooterConfig::new()
+                        .primary_label("Update")
+                        .primary_shortcut("↵")
+                        .show_secondary(true)
+                        .secondary_label("Remove")
+                        .secondary_shortcut("⌫"),
+                    PromptFooterColors::from_theme(&self.theme),
+                )
+                .into_any_element()
+            })
             .into_any_element()
     }
 }

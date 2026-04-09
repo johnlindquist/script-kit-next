@@ -44,6 +44,7 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::Script(m)) => Ok(m.script.path.clone()),
         Some(SearchResult::App(m)) => Ok(m.app.path.clone()),
         Some(SearchResult::Agent(m)) => Ok(m.agent.path.clone()),
+        Some(SearchResult::Skill(m)) => Ok(m.skill.path.clone()),
         Some(SearchResult::Scriptlet(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot reveal scriptlets in Finder"),
         )),
@@ -68,6 +69,7 @@ pub fn extract_path_for_copy(
         Some(SearchResult::Script(m)) => Ok(m.script.path.clone()),
         Some(SearchResult::App(m)) => Ok(m.app.path.clone()),
         Some(SearchResult::Agent(m)) => Ok(m.agent.path.clone()),
+        Some(SearchResult::Skill(m)) => Ok(m.skill.path.clone()),
         Some(SearchResult::Scriptlet(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot copy scriptlet path"),
         )),
@@ -85,7 +87,7 @@ pub fn extract_path_for_copy(
 
 /// Extract the filesystem path from a SearchResult for edit operations.
 ///
-/// Supports: Script, Agent
+/// Supports: Script, Skill, Agent
 /// Not supported: Scriptlet, BuiltIn, App, Window, Fallback
 pub fn extract_path_for_edit(
     result: Option<&SearchResult>,
@@ -94,6 +96,7 @@ pub fn extract_path_for_edit(
         None => Err(PathExtractionError::NoSelection),
         Some(SearchResult::Script(m)) => Ok(m.script.path.clone()),
         Some(SearchResult::Agent(m)) => Ok(m.agent.path.clone()),
+        Some(SearchResult::Skill(m)) => Ok(m.skill.path.clone()),
         Some(SearchResult::Scriptlet(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit scriptlets"),
         )),

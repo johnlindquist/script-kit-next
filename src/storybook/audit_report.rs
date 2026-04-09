@@ -309,7 +309,7 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
             if has_legacy_non_canonical_hints {
                 findings.push(warning(
                     "non-universal footer hints",
-                    "File Search mini mode still advertises `⌘↵ Ask AI` and/or `⇥ Navigate` instead of the canonical `⌘K Actions`, `Tab AI` slots.",
+                    "File Search mini mode still advertises `⌘↵ Ask AI` and/or `⇥ Navigate` instead of the canonical `⌘K Actions`, `⌘↵ AI` slots.",
                     vec![FILE_SEARCH_LIVE_FILE.to_string()],
                 ));
             }
@@ -323,7 +323,7 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
             }
 
             // Contextual primary label (`↵ Open` / `↵ Browse`) paired with
-            // `⌘K Actions` + `Tab AI` is an accepted three-key variant.
+            // `⌘K Actions` + `⌘↵ AI` is an accepted three-key variant.
             let has_contextual_primary = contains_any(
                 &combined,
                 &[
@@ -334,12 +334,12 @@ fn audit_surface(spec: SurfaceSpec, repo_root: &Path) -> Result<AuditSurfaceResu
                 ],
             );
             let has_canonical_actions_and_ai =
-                combined.contains("K Actions") && combined.contains("Tab AI");
+                combined.contains("K Actions") && combined.contains("↵ AI");
 
             if has_contextual_primary && has_canonical_actions_and_ai && has_runtime_hint_audit {
                 findings.push(info(
                     "contextual primary label follows three-key pattern",
-                    "File Search uses `↵ Open` / `↵ Browse` as the primary action label instead of `↵ Run`, paired with canonical `⌘K Actions` and `Tab AI`. This is an accepted contextual variant of the three-key footer pattern.",
+                    "File Search uses `↵ Open` / `↵ Browse` as the primary action label instead of `↵ Run`, paired with canonical `⌘K Actions` and `⌘↵ AI`. This is an accepted contextual variant of the three-key footer pattern.",
                     vec![FILE_SEARCH_LIVE_FILE.to_string()],
                 ));
             }
@@ -707,7 +707,7 @@ fn audit_workflow_affordance_surface(
 
             let has_three_key_footer = combined.contains("\"↵ Run\"")
                 && combined.contains("\"⌘K Actions\"")
-                && combined.contains("\"Tab AI\"");
+                && combined.contains("\"⌘↵ AI\"");
 
             if has_runtime_contract && has_three_key_footer {
                 findings.push(info(
@@ -781,7 +781,7 @@ fn audit_workflow_affordance_surface(
             } else if !has_hint_audit || !has_universal_hints {
                 findings.push(warning(
                     "file search mini footer is not provably universal",
-                    "File Search should keep its mini mode on the canonical `↵ Run`, `⌘K Actions`, `Tab AI` footer and emit `emit_prompt_hint_audit(\"file_search\", ...)`, otherwise the workflow report cannot prove shortcut parity.",
+                    "File Search should keep its mini mode on the canonical `↵ Run`, `⌘K Actions`, `⌘↵ AI` footer and emit `emit_prompt_hint_audit(\"file_search\", ...)`, otherwise the workflow report cannot prove shortcut parity.",
                     vec![FILE_SEARCH_LIVE_FILE.to_string()],
                 ));
             } else {

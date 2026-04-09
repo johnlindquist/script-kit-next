@@ -1286,7 +1286,7 @@ fn command_bar_default_config() {
     assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Bottom);
     assert!(!config.dialog_config.show_icons);
-    assert!(!config.dialog_config.show_footer);
+    assert!(config.dialog_config.show_footer);
     assert!(config.close_on_select);
     assert!(config.close_on_click_outside);
     assert!(config.close_on_escape);
@@ -1299,7 +1299,7 @@ fn command_bar_ai_style() {
     assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
     assert!(config.dialog_config.show_icons);
-    assert!(!config.dialog_config.show_footer);
+    assert!(config.dialog_config.show_footer);
 }
 
 #[test]
@@ -1309,7 +1309,7 @@ fn command_bar_notes_style() {
     assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
     assert!(config.dialog_config.show_icons);
-    assert!(!config.dialog_config.show_footer);
+    assert!(config.dialog_config.show_footer);
 }
 
 #[test]
@@ -1324,7 +1324,7 @@ fn command_bar_main_menu_style() {
     assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
     assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert!(!config.dialog_config.show_icons);
-    assert!(!config.dialog_config.show_footer);
+    assert!(config.dialog_config.show_footer);
 }
 
 // =========================================================================
@@ -1709,7 +1709,7 @@ fn actions_dialog_config_default() {
     assert_eq!(config.section_style, SectionStyle::Headers);
     assert_eq!(config.anchor, AnchorPosition::Bottom);
     assert!(!config.show_icons);
-    assert!(!config.show_footer);
+    assert!(config.show_footer);
 }
 
 // =========================================================================

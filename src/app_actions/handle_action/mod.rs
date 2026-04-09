@@ -1202,16 +1202,17 @@ impl ScriptListApp {
                 }
             }
             "acp_show_history" => {
-                // Open the dedicated ACP History builtin view
-                tracing::info!(event = "acp_history_action_invoked", action = "openHistoryCommand");
-                self.open_builtin_filterable_view(
-                    AppView::AcpHistoryView {
-                        filter: String::new(),
-                        selected_index: 0,
-                    },
-                    "Search conversation history...",
-                    cx,
-                );
+                tracing::info!(event = "acp_history_action_invoked", action = "openHistory");
+                if !self.open_embedded_acp_history_popup(window, cx) {
+                    self.open_builtin_filterable_view(
+                        AppView::AcpHistoryView {
+                            filter: String::new(),
+                            selected_index: 0,
+                        },
+                        "Search conversation history...",
+                        cx,
+                    );
+                }
                 let mut outcome = DispatchOutcome::success();
                 outcome.user_message = Some("Opened conversation history".to_string());
                 outcome

@@ -763,12 +763,23 @@ mod tests {
 
     #[test]
     fn test_actions_window_dynamic_height_matches_single_row_when_empty() {
-        let empty_height = actions_window_dynamic_height(0, 0, false, false);
-        let single_row_height = actions_window_dynamic_height(1, 0, false, false);
+        let empty_height = actions_window_dynamic_height(0, 0, false, false, false);
+        let single_row_height = actions_window_dynamic_height(1, 0, false, false, false);
 
         assert!(
             (empty_height - single_row_height).abs() < 0.001,
             "empty_height={empty_height}, single_row_height={single_row_height}"
+        );
+    }
+
+    #[test]
+    fn test_actions_window_dynamic_height_includes_footer_height() {
+        let without_footer = actions_window_dynamic_height(3, 1, false, true, false);
+        let with_footer = actions_window_dynamic_height(3, 1, false, true, true);
+
+        assert!(
+            (with_footer - without_footer - 32.0).abs() < 0.001,
+            "without_footer={without_footer}, with_footer={with_footer}"
         );
     }
 }
@@ -779,14 +790,21 @@ fn actions_window_dynamic_height(
     section_header_count: usize,
     hide_search: bool,
     has_header: bool,
+    show_footer: bool,
 ) -> f32 {
     const POPUP_BORDER_HEIGHT: f32 = 2.0;
+    const POPUP_FOOTER_HEIGHT: f32 = 32.0;
     let search_box_height = if hide_search {
         0.0
     } else {
         SEARCH_INPUT_HEIGHT
     };
     let header_height = if has_header { HEADER_HEIGHT } else { 0.0 };
+    let footer_height = if show_footer {
+        POPUP_FOOTER_HEIGHT
+    } else {
+        0.0
+    };
     let section_headers_height = section_header_count as f32 * SECTION_HEADER_HEIGHT;
     let min_items_height = if num_actions == 0 {
         ACTION_ITEM_HEIGHT
@@ -795,9 +813,9 @@ fn actions_window_dynamic_height(
     };
     let items_height = (num_actions as f32 * ACTION_ITEM_HEIGHT + section_headers_height)
         .max(min_items_height)
-        .min(POPUP_MAX_HEIGHT - search_box_height - header_height);
+        .min(POPUP_MAX_HEIGHT - search_box_height - header_height - footer_height);
     let border_height = POPUP_BORDER_HEIGHT;
-    items_height + search_box_height + header_height + border_height
+    items_height + search_box_height + header_height + footer_height + border_height
 }
 
 #[inline]
@@ -805,6 +823,7 @@ fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
     let num_actions = dialog.filtered_actions.len();
     let hide_search = dialog.hide_search;
     let has_header = dialog.config.show_context_header && dialog.context_title.is_some();
+    let show_footer = dialog.config.show_footer;
 
     let section_header_count = if dialog.config.section_style == SectionStyle::Headers {
         count_section_headers(&dialog.actions, &dialog.filtered_actions)
@@ -812,7 +831,13 @@ fn compute_popup_height(dialog: &ActionsDialog) -> f32 {
         0
     };
 
-    actions_window_dynamic_height(num_actions, section_header_count, hide_search, has_header)
+    actions_window_dynamic_height(
+        num_actions,
+        section_header_count,
+        hide_search,
+        has_header,
+        show_footer,
+    )
 }
 
 /// Compute the origin point for the actions popup window.

@@ -762,6 +762,26 @@ fn acp_history_popup_window_supports_actions_style_search_and_keyboard_navigatio
 }
 
 #[test]
+fn acp_history_enter_resumes_selected_chat() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("if !modifiers.shift && !modifiers.platform {")
+            && ACP_VIEW_SOURCE.contains("self.select_history_from_popup(&entry, cx);"),
+        "plain Enter in ACP history should resume the selected conversation in the ACP thread"
+    );
+    assert!(
+        ACP_HISTORY_POPUP_SOURCE.contains("if has_shift {")
+            && ACP_HISTORY_POPUP_SOURCE.contains("this.attach_transcript(&entry, cx);")
+            && ACP_HISTORY_POPUP_SOURCE.contains("} else if has_cmd {")
+            && ACP_HISTORY_POPUP_SOURCE.contains("this.attach_summary(&entry, cx);")
+            && ACP_HISTORY_POPUP_SOURCE.contains("} else {")
+            && ACP_HISTORY_POPUP_SOURCE.contains("this.resume_session(&entry, cx);")
+            && ACP_HISTORY_POPUP_SOURCE.contains("\"\\u{21B5} Resume\".into(),")
+            && ACP_HISTORY_POPUP_SOURCE.contains("\"\\u{2318}\\u{21B5} Attach Summary\".into(),"),
+        "ACP history popup should advertise and honor Enter-to-resume while keeping modifier-based attach actions"
+    );
+}
+
+#[test]
 fn acp_history_runtime_shortcuts_route_to_dedicated_command() {
     assert!(
         APP_RUN_SETUP_SOURCE.contains("view.handle_action(\"acp_show_history\"")

@@ -10,6 +10,7 @@ Verify code changes by observing the running app. Build, start via named pipe, i
 ## When to Use
 
 - After implementing any UI, protocol, or behavior change
+- For routine UI and behavior work, this is the default smoke test
 - When Oracle's autonomous verification says "Run the agentic-testing skill"
 - Before marking a task as complete
 - Especially after changes to: prompts, views, keyboard handlers, ACP chat, actions dialog

@@ -172,7 +172,12 @@ impl ScriptListApp {
                     .h(px(1.))
                     .bg(rgb(self.theme.colors.ui.border)),
             )
-            .child(
+            .child(if matches!(
+                crate::footer_popup::active_main_window_footer_surface(),
+                Some("favorites")
+            ) {
+                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
+            } else {
                 div()
                     .w_full()
                     .px(px(design_spacing.padding_lg))
@@ -181,8 +186,9 @@ impl ScriptListApp {
                     .text_color(rgb(text_muted))
                     .child(
                         "Enter: run \u{00b7} U: move up \u{00b7} J: move down \u{00b7} D: remove \u{00b7} Esc: back",
-                    ),
-            )
+                    )
+                    .into_any_element()
+            })
             .into_any_element()
     }
 

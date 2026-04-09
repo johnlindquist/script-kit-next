@@ -936,7 +936,7 @@ fn render_variation_20(colors: PromptHeaderColors) -> impl IntoElement {
 // HELPER COMPONENTS
 // ============================================================================
 
-/// Render the "Ask AI [Tab]" hint
+/// Render the "Ask AI [⌘↵]" hint
 fn render_ask_ai_hint(colors: PromptHeaderColors) -> Div {
     div()
         .flex()

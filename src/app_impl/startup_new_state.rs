@@ -10,9 +10,18 @@
         let (inline_chat_continue_tx, inline_chat_continue_rx) = mpsc::sync_channel(4);
         let (inline_chat_configure_tx, inline_chat_configure_rx) = mpsc::sync_channel(4);
         let (inline_chat_claude_code_tx, inline_chat_claude_code_rx) = mpsc::sync_channel(4);
+        // Discover plugin skills for main-menu search
+        let plugin_skills: Vec<std::sync::Arc<crate::plugins::PluginSkill>> = {
+            let skills = crate::plugins::discover_plugins()
+                .and_then(|index| crate::plugins::discover_plugin_skills(&index))
+                .unwrap_or_default();
+            skills.into_iter().map(std::sync::Arc::new).collect()
+        };
+
         let mut app = ScriptListApp {
             scripts,
             scriptlets,
+            skills: plugin_skills,
             builtin_entries,
             apps,
             // P0 FIX: Cached data for builtin views (avoids cloning per frame)

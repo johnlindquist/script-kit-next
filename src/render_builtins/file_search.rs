@@ -1147,24 +1147,24 @@ impl ScriptListApp {
             };
             vec![
                 primary.into(),
+                "⌘↵ AI".into(),
                 "\u{2318}K Actions".into(),
-                "Tab AI".into(),
             ]
         } else if self.file_search_current_dir.is_some() {
             vec![
                 "\u{21b5} Browse".into(),
+                "⌘↵ AI".into(),
                 "\u{2318}K Actions".into(),
-                "Tab AI".into(),
             ]
         } else if is_loading {
-            vec!["Searching".into(), "\u{2318}F Focus".into(), "Tab AI".into()]
+            vec!["⌘↵ AI".into(), "Searching".into(), "\u{2318}F Focus".into()]
         } else {
             let primary = if is_directory_query {
                 "\u{21b5} Browse"
             } else {
                 "\u{21b5} Run"
             };
-            vec![primary.into(), "\u{2318}F Focus".into(), "Tab AI".into()]
+            vec![primary.into(), "⌘↵ AI".into(), "\u{2318}F Focus".into()]
         };
 
 

@@ -322,6 +322,8 @@ enum ActionsDialogHost {
     EmojiPicker,
     /// Actions in app launcher (restore focus to app launcher input)
     AppLauncher,
+    /// Actions in built-in list and gallery surfaces (restore focus to main filter)
+    BuiltinList,
     /// Actions in webcam prompt (restore focus to None - webcam has no input)
     WebcamPrompt,
     /// Actions in ACP chat (restore focus to ACP chat input)

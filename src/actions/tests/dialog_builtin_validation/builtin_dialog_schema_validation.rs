@@ -2795,7 +2795,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             SectionStyle::Headers
         ));
         assert!(config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     #[test]
@@ -2810,7 +2810,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             SectionStyle::Headers
         ));
         assert!(!config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
 
     #[test]
@@ -2825,7 +2825,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             SectionStyle::Headers
         ));
         assert!(config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     #[test]
@@ -4845,7 +4845,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "notes_style should show icons"
         );
         assert!(
-            !config.dialog_config.show_footer,
+            config.dialog_config.show_footer,
             "notes_style should not show footer"
         );
         assert!(config.close_on_escape);
@@ -9283,7 +9283,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
             assert!(config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
             assert!(config.close_on_select);
             assert!(config.close_on_escape);
             assert!(config.close_on_click_outside);
@@ -9296,7 +9296,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert_eq!(config.dialog_config.anchor, AnchorPosition::Bottom);
             assert!(!config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
 
         #[test]
@@ -9314,7 +9314,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
             assert!(config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         #[test]
@@ -11769,7 +11769,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         #[test]
@@ -11778,7 +11778,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(!config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         #[test]
@@ -11793,7 +11793,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         // =========================================================================
@@ -14057,7 +14057,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 crate::actions::types::SearchPosition::Top
             );
             assert!(config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         // ============================================================
@@ -16439,7 +16439,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             );
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         #[test]
@@ -16451,7 +16451,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             );
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(!config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         #[test]
@@ -17881,7 +17881,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         #[test]
@@ -17890,7 +17890,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(!config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         #[test]
@@ -17905,7 +17905,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(config.dialog_config.show_icons);
-            assert!(!config.dialog_config.show_footer);
+            assert!(config.dialog_config.show_footer);
         }
     
         // ============================================================
@@ -19078,7 +19078,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(config.section_style, SectionStyle::Headers);
             assert_eq!(config.anchor, AnchorPosition::Bottom);
             assert!(!config.show_icons);
-            assert!(!config.show_footer);
+            assert!(config.show_footer);
         }
     
         #[test]
@@ -20619,7 +20619,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
         #[test]
         fn actions_dialog_config_default_no_footer() {
             let config = ActionsDialogConfig::default();
-            assert!(!config.show_footer);
+            assert!(config.show_footer);
         }
     
         // ========================================

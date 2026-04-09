@@ -68,10 +68,10 @@ fn open_tab_ai_chat_does_not_create_tab_ai_chat_entity() {
 }
 
 #[test]
-fn startup_routes_tab_into_harness_terminal() {
+fn startup_routes_cmd_enter_into_harness_terminal() {
     assert!(
-        TAB_SOURCE.contains("try_route_plain_tab_to_acp_context_capture"),
-        "startup.rs must route plain Tab through the ACP context-capture entry point"
+        TAB_SOURCE.contains("try_route_global_cmd_enter_to_acp_context_capture"),
+        "startup.rs must route Cmd+Enter through the ACP context-capture entry point"
     );
     assert!(
         !TAB_SOURCE.contains("open_tab_ai_overlay"),
@@ -122,87 +122,35 @@ fn tab_ai_uses_persistent_harness_session_state() {
 // =========================================================================
 
 #[test]
-fn tab_ai_routing_preserves_file_search_tab() {
+fn cmd_enter_routing_preserves_file_search_local_ownership() {
     let file_search_pos = TAB_SOURCE
         .find("AppView::FileSearchView")
         .expect("FileSearch Tab handling must exist");
     let chat_pos = TAB_SOURCE
-        .find("try_route_plain_tab_to_acp_context_capture")
-        .expect("plain Tab ACP route must exist");
+        .find("try_route_global_cmd_enter_to_acp_context_capture")
+        .expect("global Cmd+Enter ACP route must exist");
 
     assert!(
         file_search_pos < chat_pos,
-        "FileSearch Tab handler must come before universal Tab AI route"
+        "FileSearch local handling must come before global Cmd+Enter AI routing"
     );
 }
 
 #[test]
-fn tab_ai_routing_preserves_chat_prompt_tab() {
+fn tab_ai_routing_preserves_chat_prompt_tab_setup_only() {
     assert!(
         TAB_SOURCE.contains("if matches!(this.current_view, AppView::ChatPrompt { .. }) {")
-            && TAB_SOURCE.contains("event = \"tab_ai_chat_prompt_plain_tab_to_acp\"")
-            && TAB_SOURCE.contains("if this.try_route_plain_tab_to_acp_context_capture(cx) {"),
-        "ChatPrompt Tab handling must keep its dedicated ACP capture path",
+            && TAB_SOURCE.contains("chat.handle_setup_key(\"tab\", true, cx)")
+            && !TAB_SOURCE.contains("tab_ai_chat_prompt_plain_tab_to_acp"),
+        "ChatPrompt Tab handling must keep only its local setup/back-tab path",
     );
 }
 
 #[test]
-fn tab_ai_routing_shift_tab_routes_through_harness() {
+fn tab_ai_routing_removes_script_list_shift_tab_quick_submit() {
     assert!(
-        TAB_SOURCE.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
-        "Shift+Tab must route typed queries through the quick-submit planner"
-    );
-    assert!(
-        !TAB_SOURCE.contains("dispatch_ai_script_generation_from_query(query, cx)"),
-        "Shift+Tab must not use the legacy script generation bypass"
-    );
-
-    assert!(
-        TAB_SOURCE.contains("if has_shift\n                                && matches!(this.current_view, AppView::ScriptList)")
-            && TAB_SOURCE.contains("crate::ai::TabAiQuickSubmitSource::ShiftTab"),
-        "Shift+Tab must keep the dedicated ScriptList quick-submit harness route",
-    );
-}
-
-// =========================================================================
-// Shift+Tab ScriptList routing: both startup interceptors
-// =========================================================================
-
-/// Assert that a startup interceptor file gates the Shift+Tab ScriptList
-/// path on the expected preconditions and routes through the harness
-/// entry-intent path (not the legacy inline script-generation dispatch).
-fn assert_shift_tab_script_list_routes_query_to_harness_entry_intent(source: &str, label: &str) {
-    assert!(
-        source.contains("has_shift")
-            && source.contains("matches!(this.current_view, AppView::ScriptList)")
-            && source.contains("!this.filter_text.is_empty()")
-            && source.contains("!this.show_actions_popup"),
-        "{label} must guard the Shift+Tab ScriptList path with the expected preconditions",
-    );
-    assert!(
-        source.contains("let query = this.filter_text.clone();"),
-        "{label} must clone the ScriptList filter text before routing",
-    );
-    assert!(
-        source.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
-        "{label} must route the typed query through the quick-submit planner",
-    );
-    assert!(
-        !source.contains("dispatch_ai_script_generation_from_query(query, cx);"),
-        "{label} must not call the legacy inline script-generation path anymore",
-    );
-}
-
-#[test]
-fn startup_shift_tab_script_list_routes_query_to_harness_entry_intent() {
-    assert_shift_tab_script_list_routes_query_to_harness_entry_intent(TAB_SOURCE, "startup.rs");
-}
-
-#[test]
-fn startup_new_tab_shift_tab_script_list_routes_query_to_harness_entry_intent() {
-    assert_shift_tab_script_list_routes_query_to_harness_entry_intent(
-        TAB_NEW_SOURCE,
-        "startup_new_tab.rs",
+        !TAB_SOURCE.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+        "Shift+Tab must no longer route typed ScriptList queries through the quick-submit planner"
     );
 }
 
@@ -718,42 +666,38 @@ fn render_impl_renders_tab_ai_save_offer_overlay() {
 }
 
 // =========================================================================
-// ScriptList fallback routes through open_tab_ai_chat (harness terminal)
+// ScriptList fallback routes through the shared Cmd+Enter AI helper
 // =========================================================================
 
 #[test]
-fn script_list_tab_fallback_routes_to_open_tab_ai_chat() {
+fn script_list_cmd_enter_fallback_routes_to_open_tab_ai_chat() {
     assert!(
-        SCRIPT_LIST_SOURCE.contains("open_tab_ai_chat(cx)"),
-        "ScriptList Tab fallback must route to open_tab_ai_chat"
+        SCRIPT_LIST_SOURCE.contains("try_route_global_cmd_enter_to_acp_context_capture(cx)"),
+        "ScriptList Cmd+Enter fallback must route through the shared AI helper"
     );
     assert!(
         !SCRIPT_LIST_SOURCE.contains("open_tab_ai_overlay"),
-        "ScriptList Tab fallback must not reference the removed overlay"
+        "ScriptList Cmd+Enter fallback must not reference the removed overlay"
     );
     assert!(
         !SCRIPT_LIST_SOURCE.contains("open_ai_chat_from_main_window_query"),
-        "ScriptList Tab fallback must not reopen the old inline AI chat path"
+        "ScriptList Cmd+Enter fallback must not reopen the old inline AI chat path"
     );
 }
 
 // =========================================================================
-// ScriptList fallback comment matches quick-terminal contract
+// ScriptList fallback comment matches Cmd+Enter contract
 // =========================================================================
 
 #[test]
-fn script_list_tab_fallback_comment_matches_quick_terminal_contract() {
+fn script_list_cmd_enter_fallback_comment_matches_shortcut_contract() {
     assert!(
-        SCRIPT_LIST_SOURCE.contains("route to Tab AI quick terminal (harness surface)."),
-        "render_script_list fallback comment must describe the quick terminal harness surface"
+        SCRIPT_LIST_SOURCE.contains("\"Ask AI [⌘↵]\""),
+        "render_script_list header hint should advertise Cmd+Enter"
     );
     assert!(
-        !SCRIPT_LIST_SOURCE.contains("route to Tab AI full-view chat"),
-        "render_script_list fallback comment must not describe the legacy full-view chat"
-    );
-    assert!(
-        SCRIPT_LIST_SOURCE.contains("this.open_tab_ai_chat(cx);"),
-        "render_script_list fallback must still route through open_tab_ai_chat"
+        SCRIPT_LIST_SOURCE.contains("press ⌘↵ to ask AI"),
+        "render_script_list empty state should advertise Cmd+Enter"
     );
 }
 
@@ -1866,7 +1810,7 @@ fn legacy_inline_chat_absent_from_all_changed_harness_surfaces() {
             TERM_RENDER_SOURCE,
         ),
         (
-            "render_script_list/mod.rs (ScriptList Tab fallback)",
+            "render_script_list/mod.rs (ScriptList Cmd+Enter fallback)",
             SCRIPT_LIST_SOURCE,
         ),
         ("app_view_state.rs (view enum)", APP_VIEW_STATE_SOURCE),
@@ -1915,18 +1859,14 @@ fn legacy_tab_ai_chat_not_in_app_state() {
 }
 
 // =========================================================================
-// Intent-aware harness entry: typed Tab queries route through harness
+// ScriptList no longer has a hidden Shift+Tab quick-submit path
 // =========================================================================
 
 #[test]
-fn startup_tab_interceptor_routes_nonempty_script_list_query_into_harness() {
+fn startup_tab_interceptor_no_longer_routes_shift_tab_query_into_harness() {
     assert!(
-        TAB_SOURCE.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
-        "startup.rs must route non-empty ScriptList Shift+Tab queries through the quick-submit planner"
-    );
-    assert!(
-        !TAB_SOURCE.contains("dispatch_ai_script_generation_from_query(query, cx)"),
-        "startup.rs must not keep the legacy Script Kit AI generation Tab bypass"
+        !TAB_SOURCE.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+        "startup.rs must not keep the hidden Shift+Tab quick-submit planner path"
     );
 }
 

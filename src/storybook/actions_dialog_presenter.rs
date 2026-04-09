@@ -158,8 +158,8 @@ pub fn render_actions_dialog_presentation(
     if model.show_footer {
         container = container.child(div().w_full().child(crate::components::HintStrip::new(vec![
             "↵ Run".into(),
+            "⌘↵ AI".into(),
             "⌘K Actions".into(),
-            "Tab AI".into(),
         ])));
     }
 

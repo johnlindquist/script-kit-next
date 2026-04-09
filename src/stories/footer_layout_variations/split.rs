@@ -695,7 +695,7 @@ fn footer_minimal(colors: LayoutColors) -> impl IntoElement {
             div()
                 .text_xs()
                 .text_color(colors.text_muted.to_rgb())
-                .child("↵ Open   ⌘K Actions   Tab AI"),
+                .child("↵ Open   ⌘K Actions   ⌘↵ AI"),
         )
 }
 

@@ -1,6 +1,6 @@
 //! Hint Button Variations — 9 clickable footer hint-strip treatments.
 //!
-//! Each variation renders the canonical three-key footer ("↵ Run", "⌘K Actions", "Tab AI")
+//! Each variation renders the canonical three-key footer ("↵ Run", "⌘K Actions", "⌘↵ AI")
 //! as clickable buttons with different hover/active feedback styles. The base rendering
 //! (SVG icons + text_xs + semibold + hint opacity) stays identical across all variants —
 //! only the interactive feedback layer varies.

@@ -245,6 +245,7 @@ fn test_unified_search_ties_scripts_first() {
         SearchResult::App(_) => panic!("Expected Script first"),
         SearchResult::Window(_) => panic!("Expected Script first"),
         SearchResult::Agent(_) => panic!("Expected Script first"),
+        SearchResult::Skill(_) => panic!("Expected Script first"),
         SearchResult::Fallback(_) => panic!("Expected Script first"),
     }
 }

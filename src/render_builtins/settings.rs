@@ -335,14 +335,21 @@ impl ScriptListApp {
                     .flex_col()
                     .children(list_items),
             )
-            // Footer
-            .child(PromptFooter::new(
-                PromptFooterConfig::new()
-                    .primary_label("Open")
-                    .primary_shortcut("↵")
-                    .show_secondary(false),
-                PromptFooterColors::from_theme(&self.theme),
-            ))
+            .child(if matches!(
+                crate::footer_popup::active_main_window_footer_surface(),
+                Some("settings")
+            ) {
+                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
+            } else {
+                PromptFooter::new(
+                    PromptFooterConfig::new()
+                        .primary_label("Open")
+                        .primary_shortcut("↵")
+                        .show_secondary(false),
+                    PromptFooterColors::from_theme(&self.theme),
+                )
+                .into_any_element()
+            })
             .into_any_element()
     }
 }

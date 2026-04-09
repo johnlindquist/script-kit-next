@@ -475,14 +475,20 @@ impl ScriptListApp {
                     .py(px(design_spacing.padding_xs))
                     .child(list_element),
             )
-            // Footer — minimal hint strip
-            .child(crate::components::render_simple_hint_strip(
-                vec![
-                    gpui::SharedString::from("↵ Stop"),
-                    gpui::SharedString::from("Esc Back"),
-                ],
-                None,
-            ))
+            .child(if matches!(
+                crate::footer_popup::active_main_window_footer_surface(),
+                Some("process_manager")
+            ) {
+                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
+            } else {
+                crate::components::render_simple_hint_strip(
+                    vec![
+                        gpui::SharedString::from("↵ Stop"),
+                        gpui::SharedString::from("Esc Back"),
+                    ],
+                    None,
+                )
+            })
             .into_any_element()
     }
 }

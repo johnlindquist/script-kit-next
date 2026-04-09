@@ -55,17 +55,22 @@ impl ScriptListApp {
             AppView::AcpHistoryView { .. } => {
                 ActionsSupport::SharedDialog(ActionsDialogHost::AcpHistory)
             }
-            // These surfaces do not currently wire the shared actions dialog.
-            // Verify before enabling — some intentionally omit ⌘K (e.g. ThemeChooser).
-            // AppLauncherView does not toggle ⌘K actions (no Cmd+K interceptor arm),
-            // so it must not claim SharedDialog support.
-            AppView::AppLauncherView { .. }
-            | AppView::WindowSwitcherView { .. }
+            AppView::AppLauncherView { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::AppLauncher)
+            }
+            AppView::WindowSwitcherView { .. }
             | AppView::CurrentAppCommandsView { .. }
             | AppView::ProcessManagerView { .. }
             | AppView::ThemeChooserView { .. }
             | AppView::SearchAiPresetsView { .. }
-            | AppView::CreateAiPresetView { .. } => ActionsSupport::None,
+            | AppView::CreateAiPresetView { .. }
+            | AppView::SettingsView { .. }
+            | AppView::FavoritesBrowseView { .. }
+            | AppView::DesignGalleryView { .. }
+            | AppView::BrowseKitsView { .. }
+            | AppView::InstalledKitsView { .. } => {
+                ActionsSupport::SharedDialog(ActionsDialogHost::BuiltinList)
+            }
             _ => ActionsSupport::None,
         }
     }
@@ -358,6 +363,7 @@ impl ScriptListApp {
             | ActionsDialogHost::ClipboardHistory
             | ActionsDialogHost::EmojiPicker
             | ActionsDialogHost::AppLauncher
+            | ActionsDialogHost::BuiltinList
             | ActionsDialogHost::AcpHistory => FocusRequest::main_filter(),
         };
 

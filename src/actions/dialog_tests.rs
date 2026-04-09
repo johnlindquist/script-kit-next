@@ -435,7 +435,7 @@ fn action_config_default_values() {
     assert_eq!(config.section_style, SectionStyle::Headers);
     assert_eq!(config.anchor, super::types::AnchorPosition::Bottom);
     assert!(!config.show_icons);
-    assert!(!config.show_footer);
+    assert!(config.show_footer);
 }
 
 // --- merged from part_02.rs ---
