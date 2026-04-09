@@ -116,7 +116,15 @@ impl StoryBrowser {
         if let Some(pos) = self.stories.iter().position(|s| s.story.id() == story_id) {
             self.selected_index = pos;
             self.reset_variant_selection();
-            tracing::info!(story_id = %story_id, event = "story_selected", "Story selected");
+            let variant_count = self.current_story_variants().len();
+            tracing::info!(
+                event = "story_selected",
+                story_id = %story_id,
+                variant_count,
+                compare_ready = variant_count > 1,
+                adopted_variant_id = self.selection_store.selected_variant(story_id).unwrap_or(""),
+                "Story selected"
+            );
             true
         } else {
             tracing::warn!(story_id = %story_id, event = "story_not_found", "Unknown story ID");
@@ -447,6 +455,95 @@ impl StoryBrowser {
         cx.notify();
     }
 
+    fn sync_selection_to_filtered(&mut self) {
+        let filtered = self.filtered_stories();
+        if filtered.is_empty() {
+            return;
+        }
+
+        let current_story_id = self
+            .stories
+            .get(self.selected_index)
+            .map(|entry| entry.story.id());
+
+        let still_visible = current_story_id
+            .map(|id| filtered.iter().any(|entry| entry.story.id() == id))
+            .unwrap_or(false);
+
+        if still_visible {
+            return;
+        }
+
+        let first_story_id = filtered[0].story.id();
+        if let Some(pos) = self
+            .stories
+            .iter()
+            .position(|entry| entry.story.id() == first_story_id)
+        {
+            self.selected_index = pos;
+            self.reset_variant_selection();
+        }
+    }
+
+    fn append_filter_text(&mut self, text: &str, cx: &mut Context<Self>) {
+        if text.is_empty() {
+            return;
+        }
+        self.filter.push_str(text);
+        self.sync_selection_to_filtered();
+        let filtered_count = self.filtered_stories().len();
+        tracing::info!(
+            event = "story_filter_changed",
+            filter = %self.filter,
+            filtered_count,
+            selected_story_id = self
+                .stories
+                .get(self.selected_index)
+                .map(|entry| entry.story.id())
+                .unwrap_or(""),
+            "Updated story filter"
+        );
+        cx.notify();
+    }
+
+    fn backspace_filter(&mut self, cx: &mut Context<Self>) {
+        if self.filter.is_empty() {
+            return;
+        }
+        self.filter.pop();
+        self.sync_selection_to_filtered();
+        let filtered_count = self.filtered_stories().len();
+        tracing::info!(
+            event = "story_filter_changed",
+            filter = %self.filter,
+            filtered_count,
+            selected_story_id = self
+                .stories
+                .get(self.selected_index)
+                .map(|entry| entry.story.id())
+                .unwrap_or(""),
+            "Updated story filter"
+        );
+        cx.notify();
+    }
+
+    fn clear_filter(&mut self, cx: &mut Context<Self>) {
+        if self.filter.is_empty() {
+            return;
+        }
+        self.filter.clear();
+        tracing::info!(event = "story_filter_cleared", "Cleared story filter");
+        cx.notify();
+    }
+
+    fn key_to_filter_text(key: &str) -> Option<&str> {
+        match key {
+            "space" | "Space" => Some(" "),
+            _ if key.chars().count() == 1 => Some(key),
+            _ => None,
+        }
+    }
+
     fn filtered_stories(&self) -> Vec<&'static StoryEntry> {
         if self.filter.is_empty() {
             self.stories.clone()
@@ -502,8 +599,8 @@ impl StoryBrowser {
             )
             .on_mouse_down(
                 MouseButton::Left,
-                cx.listener(|_this, _event, _window, _cx| {
-                    // TODO: Focus search input and enable text input
+                cx.listener(|this, _event, window, cx| {
+                    window.focus(&this.focus_handle, cx);
                 }),
             )
     }
@@ -553,21 +650,58 @@ impl StoryBrowser {
                             == Some(self.selected_index);
 
                         let story_id = story.story.id();
+                        let variant_count = story.story.variants().len();
+                        let adopted_variant_id = self.selection_store.selected_variant(story_id);
+
+                        let row_secondary = match (variant_count > 1, adopted_variant_id) {
+                            (true, Some(variant_id)) => {
+                                format!("{variant_count} variants · adopted {variant_id}")
+                            }
+                            (true, None) => {
+                                format!("{variant_count} variants · compare ready")
+                            }
+                            (false, Some(variant_id)) => {
+                                format!("adopted {variant_id}")
+                            }
+                            (false, None) => story.story.surface().label().to_string(),
+                        };
 
                         let base = div()
                             .id(ElementId::Name(story_id.into()))
                             .px_3()
                             .py_1()
                             .cursor_pointer()
-                            .text_sm()
                             .rounded_sm()
-                            .child(story.story.name())
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(2.))
+                                    .child(div().text_sm().child(story.story.name()))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(rgb(theme.colors.text.dimmed))
+                                            .child(row_secondary),
+                                    ),
+                            )
                             .on_click(cx.listener(move |this, _event, _window, cx| {
                                 if let Some(pos) =
                                     this.stories.iter().position(|s| s.story.id() == story_id)
                                 {
                                     this.selected_index = pos;
                                     this.reset_variant_selection();
+                                    let vc = this.current_story_variants().len();
+                                    tracing::info!(
+                                        event = "story_selected",
+                                        story_id = %story_id,
+                                        variant_count = vc,
+                                        compare_ready = vc > 1,
+                                        adopted_variant_id = this.selection_store
+                                            .selected_variant(story_id)
+                                            .unwrap_or(""),
+                                        "Story selected"
+                                    );
                                     cx.notify();
                                 }
                             }));
@@ -984,7 +1118,26 @@ impl StoryBrowser {
                 self.move_selection_down(cx);
                 cx.stop_propagation();
             }
-            _ => cx.propagate(),
+            "backspace" | "Backspace" if self.preview_mode == PreviewMode::Single => {
+                self.backspace_filter(cx);
+                cx.stop_propagation();
+            }
+            "escape" | "Escape"
+                if self.preview_mode == PreviewMode::Single && !self.filter.is_empty() =>
+            {
+                self.clear_filter(cx);
+                cx.stop_propagation();
+            }
+            _ => {
+                if self.preview_mode == PreviewMode::Single && !modifiers.platform {
+                    if let Some(text) = Self::key_to_filter_text(key) {
+                        self.append_filter_text(text, cx);
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
+                cx.propagate();
+            }
         }
     }
 
