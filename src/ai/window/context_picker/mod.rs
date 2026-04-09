@@ -566,9 +566,12 @@ impl AiApp {
                     path: path.to_string_lossy().to_string(),
                     label: item.label.to_string(),
                 },
-                ContextPickerItemKind::SlashCommand(_) | ContextPickerItemKind::Portal(_) => {
-                    // SlashCommand and Portal items are ACP-only; the window
-                    // picker should never encounter them, but handle gracefully.
+                ContextPickerItemKind::SlashCommand(_)
+                | ContextPickerItemKind::Portal(_)
+                | ContextPickerItemKind::Inert => {
+                    // SlashCommand, Portal, and Inert items are ACP-only; the
+                    // window picker should never encounter them, but handle
+                    // gracefully.
                     return;
                 }
             };
@@ -892,6 +895,8 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
 
 /// Populate `items` with agent slash command entries (e.g. `/compact`,
 /// `/clear`). Shared by ACP and any future slash-command surface.
+///
+/// Uses bare `(name, description)` pairs — all entries get `Default` payload.
 fn extend_agent_slash_command_items<'a, I>(
     query_lower: &str,
     commands: I,
@@ -899,7 +904,38 @@ fn extend_agent_slash_command_items<'a, I>(
 ) where
     I: IntoIterator<Item = (&'a str, &'a str)>,
 {
-    for (name, description) in commands {
+    use types::SlashCommandPayload;
+    let payloads: Vec<(SlashCommandPayload, String)> = commands
+        .into_iter()
+        .map(|(name, desc)| {
+            (
+                SlashCommandPayload::Default {
+                    name: name.to_string(),
+                },
+                desc.to_string(),
+            )
+        })
+        .collect();
+    extend_agent_slash_command_items_with_payloads(
+        query_lower,
+        payloads.iter().map(|(p, d)| (p, d.as_str())),
+        items,
+    );
+}
+
+/// Populate `items` with source-aware slash command entries.
+///
+/// Each entry carries a `SlashCommandPayload` so duplicate skill slugs
+/// from different plugins produce rows with distinct stable IDs.
+fn extend_agent_slash_command_items_with_payloads<'a, I>(
+    query_lower: &str,
+    commands: I,
+    items: &mut Vec<ContextPickerItem>,
+) where
+    I: IntoIterator<Item = (&'a types::SlashCommandPayload, &'a str)>,
+{
+    for (payload, description) in commands {
+        let name = payload.slash_name();
         let name_lower = name.to_lowercase();
         let score = if query_lower.is_empty() {
             50
@@ -913,7 +949,10 @@ fn extend_agent_slash_command_items<'a, I>(
             continue;
         };
 
-        let meta_str = format!("/{name}");
+        let meta_str = match payload {
+            types::SlashCommandPayload::Default { .. } => format!("/{name}"),
+            _ => format!("/{name} \u{b7} {}", payload.owner_label()),
+        };
         let label_hits = if query_lower.is_empty() {
             Vec::new()
         } else {
@@ -925,12 +964,19 @@ fn extend_agent_slash_command_items<'a, I>(
             match_query_chars_in_display_meta(query_lower, &meta_str).unwrap_or_default()
         };
 
+        tracing::debug!(
+            item_id = %payload.stable_id(),
+            slash_name = %name,
+            owner = %payload.owner_label(),
+            "acp_slash_picker_entry_built"
+        );
+
         items.push(ContextPickerItem {
-            id: SharedString::from(format!("slash-cmd:{name}")),
+            id: SharedString::from(format!("slash-cmd:{}", payload.stable_id())),
             label: SharedString::from(name.to_string()),
             description: SharedString::from(slash_command_description(name, description)),
             meta: SharedString::from(meta_str),
-            kind: ContextPickerItemKind::SlashCommand(name.to_string()),
+            kind: ContextPickerItemKind::SlashCommand(payload.clone()),
             score,
             label_highlight_indices: label_hits,
             meta_highlight_indices: meta_hits,
@@ -1036,6 +1082,37 @@ where
     let mut items = Vec::with_capacity(command_count);
 
     extend_agent_slash_command_items(&query_lower, commands, &mut items);
+    sort_picker_items(&mut items);
+
+    tracing::info!(
+        target: "ai",
+        query = %query,
+        command_count,
+        item_count = items.len(),
+        "ai_context_picker_slash_items_built"
+    );
+    log_top_ranked_items(&items);
+
+    items
+}
+
+/// Build a ranked list of picker items for slash mode using source-aware
+/// payloads. Each payload carries plugin/Claude ownership so duplicate
+/// skill slugs produce rows with distinct stable IDs.
+pub fn build_slash_picker_items_with_payloads<'a, I>(
+    query: &str,
+    payload_commands: I,
+) -> Vec<ContextPickerItem>
+where
+    I: IntoIterator<Item = (&'a types::SlashCommandPayload, &'a str)>,
+{
+    let query_lower = query.to_lowercase();
+    let commands: Vec<(&types::SlashCommandPayload, &str)> =
+        payload_commands.into_iter().collect();
+    let command_count = commands.len();
+    let mut items = Vec::with_capacity(command_count);
+
+    extend_agent_slash_command_items_with_payloads(&query_lower, commands, &mut items);
     sort_picker_items(&mut items);
 
     tracing::info!(
@@ -1178,5 +1255,45 @@ fn section_priority(kind: &ContextPickerItemKind) -> u8 {
         ContextPickerItemKind::File(_) => 2,
         ContextPickerItemKind::Folder(_) => 3,
         ContextPickerItemKind::Portal(_) => 0,
+        // Inert rows (loading / empty state) sort last so live results
+        // always appear above them.
+        ContextPickerItemKind::Inert => 255,
+    }
+}
+
+// ── Slash picker loading and empty-state rows ───────────────────────
+
+/// Build a non-actionable "Discovering skills…" placeholder row.
+///
+/// Shown when the ACP slash picker opens before async discovery completes
+/// (i.e. `cached_slash_commands` is still empty).
+pub(crate) fn slash_picker_loading_row() -> ContextPickerItem {
+    tracing::debug!("acp_slash_picker_loading");
+    ContextPickerItem {
+        id: SharedString::from("slash-loading"),
+        label: SharedString::from("Discovering skills\u{2026}"),
+        description: SharedString::from("Scanning plugins and Claude skills"),
+        meta: SharedString::from(""),
+        kind: ContextPickerItemKind::Inert,
+        score: 0,
+        label_highlight_indices: Vec::new(),
+        meta_highlight_indices: Vec::new(),
+    }
+}
+
+/// Build a non-actionable "No commands or skills found" row.
+///
+/// Shown when the slash query filters out all discovered commands.
+pub(crate) fn slash_picker_empty_row() -> ContextPickerItem {
+    tracing::debug!("acp_slash_picker_empty_state");
+    ContextPickerItem {
+        id: SharedString::from("slash-empty"),
+        label: SharedString::from("No commands or skills found"),
+        description: SharedString::from("Try another slash name or plugin skill"),
+        meta: SharedString::from(""),
+        kind: ContextPickerItemKind::Inert,
+        score: 0,
+        label_highlight_indices: Vec::new(),
+        meta_highlight_indices: Vec::new(),
     }
 }

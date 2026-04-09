@@ -1,7 +1,10 @@
-use super::types::{ContextPickerItemKind, ContextPickerState, ContextPickerTrigger};
+use super::types::{
+    ContextPickerItemKind, ContextPickerState, ContextPickerTrigger, SlashCommandPayload,
+};
 use super::{
-    build_picker_items, build_slash_picker_items, extract_context_picker_query, match_query_chars,
-    score_builtin,
+    build_picker_items, build_slash_picker_items, build_slash_picker_items_with_payloads,
+    extract_context_picker_query, match_query_chars, score_builtin, slash_picker_empty_row,
+    slash_picker_loading_row,
 };
 use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
 
@@ -449,7 +452,9 @@ fn slash_mode_compact_matches_agent_command() {
     let items = build_slash_picker_items("com", ["compact", "clear", "help"]);
     let first = items.first().expect("Slash 'com' should match compact");
     match &first.kind {
-        ContextPickerItemKind::SlashCommand(command) => assert_eq!(command, "compact"),
+        ContextPickerItemKind::SlashCommand(payload) => {
+            assert_eq!(payload.slash_name(), "compact")
+        }
         other => panic!("Expected SlashCommand(compact), got {:?}", other),
     }
 }
@@ -484,7 +489,9 @@ fn slash_commands_rank_prefix_matches_before_fuzzy_matches() {
     let items = build_slash_picker_items("cle", ["compact", "clear", "help"]);
     let first = items.first().expect("Slash query should return clear");
     match &first.kind {
-        ContextPickerItemKind::SlashCommand(command) => assert_eq!(command, "clear"),
+        ContextPickerItemKind::SlashCommand(payload) => {
+            assert_eq!(payload.slash_name(), "clear")
+        }
         other => panic!("Expected SlashCommand(clear), got {:?}", other),
     }
 }
@@ -810,7 +817,7 @@ fn slash_mode_meta_highlights_align_with_slash_command() {
     let items = build_slash_picker_items("com", ["compact", "clear", "help"]);
     let compact = items
         .iter()
-        .find(|i| matches!(&i.kind, ContextPickerItemKind::SlashCommand(command) if command == "compact"))
+        .find(|i| matches!(&i.kind, ContextPickerItemKind::SlashCommand(ref payload) if payload.slash_name() == "compact"))
         .expect("compact should match 'com' in slash mode");
 
     assert!(
@@ -867,7 +874,7 @@ fn slash_and_mention_highlights_both_cover_query_length() {
     let slash_query = "com";
     let slash_items = build_slash_picker_items(slash_query, ["compact", "clear", "help"]);
     let slash_compact = slash_items.iter().find(
-        |i| matches!(&i.kind, ContextPickerItemKind::SlashCommand(command) if command == "compact"),
+        |i| matches!(&i.kind, ContextPickerItemKind::SlashCommand(ref payload) if payload.slash_name() == "compact"),
     );
 
     let mention_items = build_picker_items(ContextPickerTrigger::Mention, mention_query);
@@ -1117,4 +1124,254 @@ fn context_picker_visible_range_uses_shared_dropdown_contract() {
     use crate::components::inline_dropdown::inline_dropdown_visible_range;
     assert_eq!(inline_dropdown_visible_range(0, 4, 8), 0..4);
     assert_eq!(inline_dropdown_visible_range(6, 20, 8), 2..10);
+}
+
+// ── Source-aware slash identity tests ─────────────────────────────────
+
+#[test]
+fn slash_mode_duplicate_skill_rows_keep_distinct_payloads() {
+    use std::path::PathBuf;
+
+    let alpha_skill = crate::plugins::PluginSkill {
+        plugin_id: "alpha".to_string(),
+        plugin_title: "Alpha".to_string(),
+        skill_id: "review".to_string(),
+        path: PathBuf::from("/alpha/skills/review/SKILL.md"),
+        title: "Review".to_string(),
+        description: "Alpha review".to_string(),
+    };
+    let beta_skill = crate::plugins::PluginSkill {
+        plugin_id: "beta".to_string(),
+        plugin_title: "Beta".to_string(),
+        skill_id: "review".to_string(),
+        path: PathBuf::from("/beta/skills/review/SKILL.md"),
+        title: "Review".to_string(),
+        description: "Beta review".to_string(),
+    };
+
+    let payloads = vec![
+        (
+            SlashCommandPayload::Default {
+                name: "clear".to_string(),
+            },
+            "Clear conversation".to_string(),
+        ),
+        (
+            SlashCommandPayload::PluginSkill(alpha_skill.clone()),
+            "Alpha review".to_string(),
+        ),
+        (
+            SlashCommandPayload::PluginSkill(beta_skill.clone()),
+            "Beta review".to_string(),
+        ),
+    ];
+
+    let items = build_slash_picker_items_with_payloads(
+        "review",
+        payloads.iter().map(|(p, d)| (p, d.as_str())),
+    );
+
+    // Both plugin review rows should appear
+    assert_eq!(items.len(), 2, "Two 'review' skill rows should match");
+
+    let ids: Vec<String> = items.iter().map(|i| i.id.to_string()).collect();
+    assert!(
+        ids.contains(&"slash-cmd:plugin:alpha:review".to_string()),
+        "Alpha review row should have stable ID, got: {:?}",
+        ids
+    );
+    assert!(
+        ids.contains(&"slash-cmd:plugin:beta:review".to_string()),
+        "Beta review row should have stable ID, got: {:?}",
+        ids
+    );
+
+    // Verify payloads are distinct
+    let alpha_row = items
+        .iter()
+        .find(|i| i.id.as_ref() == "slash-cmd:plugin:alpha:review")
+        .expect("alpha row");
+    let beta_row = items
+        .iter()
+        .find(|i| i.id.as_ref() == "slash-cmd:plugin:beta:review")
+        .expect("beta row");
+
+    assert_ne!(alpha_row.meta, beta_row.meta, "Meta should differ by owner");
+    assert!(
+        alpha_row.meta.contains("Alpha"),
+        "Alpha row meta should contain 'Alpha', got: {}",
+        alpha_row.meta
+    );
+    assert!(
+        beta_row.meta.contains("Beta"),
+        "Beta row meta should contain 'Beta', got: {}",
+        beta_row.meta
+    );
+}
+
+#[test]
+fn slash_payload_stable_id_formats() {
+    let default = SlashCommandPayload::Default {
+        name: "compact".to_string(),
+    };
+    assert_eq!(default.stable_id(), "default:compact");
+    assert_eq!(default.slash_name(), "compact");
+    assert_eq!(default.owner_label(), "Built-in");
+
+    let plugin = SlashCommandPayload::PluginSkill(crate::plugins::PluginSkill {
+        plugin_id: "tools".to_string(),
+        plugin_title: "Dev Tools".to_string(),
+        skill_id: "lint".to_string(),
+        path: std::path::PathBuf::from("/tmp/lint/SKILL.md"),
+        title: "Lint".to_string(),
+        description: String::new(),
+    });
+    assert_eq!(plugin.stable_id(), "plugin:tools:lint");
+    assert_eq!(plugin.slash_name(), "lint");
+    assert_eq!(plugin.owner_label(), "Dev Tools");
+
+    let claude = SlashCommandPayload::ClaudeCodeSkill {
+        skill_id: "plan".to_string(),
+        skill_path: std::path::PathBuf::from("/tmp/plan/SKILL.md"),
+    };
+    assert_eq!(claude.stable_id(), "claude:plan");
+    assert_eq!(claude.slash_name(), "plan");
+    assert_eq!(claude.owner_label(), "Claude Code");
+}
+
+#[test]
+fn slash_default_items_have_default_stable_ids() {
+    let items = build_slash_picker_items("", ["compact", "clear"]);
+    for item in &items {
+        assert!(
+            item.id.starts_with("slash-cmd:default:"),
+            "Default slash items should have 'slash-cmd:default:' prefix, got: {}",
+            item.id
+        );
+    }
+}
+
+// =========================================================================
+// Loading and empty state rows
+// =========================================================================
+
+#[test]
+fn slash_picker_loading_and_empty_states_are_inert() {
+    let loading = slash_picker_loading_row();
+    assert!(
+        matches!(loading.kind, ContextPickerItemKind::Inert),
+        "Loading row must be Inert, got: {:?}",
+        loading.kind
+    );
+    assert_eq!(loading.id.as_ref(), "slash-loading");
+    assert!(
+        loading.label.contains("Discovering"),
+        "Loading label should mention discovery: {}",
+        loading.label
+    );
+    assert_eq!(loading.score, 0, "Inert rows should have zero score");
+
+    let empty = slash_picker_empty_row();
+    assert!(
+        matches!(empty.kind, ContextPickerItemKind::Inert),
+        "Empty row must be Inert, got: {:?}",
+        empty.kind
+    );
+    assert_eq!(empty.id.as_ref(), "slash-empty");
+    assert!(
+        empty.label.contains("No commands"),
+        "Empty label should indicate no results: {}",
+        empty.label
+    );
+    assert_eq!(empty.score, 0, "Inert rows should have zero score");
+
+    // Snapshot section should report "inert" for both.
+    let state = ContextPickerState::new(
+        ContextPickerTrigger::Slash,
+        String::new(),
+        vec![loading.clone(), empty.clone()],
+    );
+    let snap = state.snapshot();
+    assert_eq!(snap.items.len(), 2);
+    assert_eq!(snap.items[0].section, "inert");
+    assert_eq!(snap.items[1].section, "inert");
+}
+
+#[test]
+fn acp_slash_picker_duplicate_rows_show_owner_labels() {
+    let alpha_skill = crate::plugins::PluginSkill {
+        plugin_id: "alpha".to_string(),
+        plugin_title: "Alpha".to_string(),
+        skill_id: "review".to_string(),
+        path: std::path::PathBuf::from("/alpha/skills/review/SKILL.md"),
+        title: "Review".to_string(),
+        description: "Alpha review desc".to_string(),
+    };
+    let beta_skill = crate::plugins::PluginSkill {
+        plugin_id: "beta".to_string(),
+        plugin_title: "Beta".to_string(),
+        skill_id: "review".to_string(),
+        path: std::path::PathBuf::from("/beta/skills/review/SKILL.md"),
+        title: "Review".to_string(),
+        description: "Beta review desc".to_string(),
+    };
+
+    let payloads = vec![
+        (
+            SlashCommandPayload::Default {
+                name: "clear".to_string(),
+            },
+            "Clear conversation".to_string(),
+        ),
+        (
+            SlashCommandPayload::PluginSkill(alpha_skill),
+            "Alpha review desc".to_string(),
+        ),
+        (
+            SlashCommandPayload::PluginSkill(beta_skill),
+            "Beta review desc".to_string(),
+        ),
+    ];
+
+    // Query "review" should match both plugin rows but not "clear".
+    let items = build_slash_picker_items_with_payloads(
+        "review",
+        payloads.iter().map(|(p, d)| (p, d.as_str())),
+    );
+    assert_eq!(items.len(), 2, "Two 'review' skill rows should match");
+
+    let alpha_row = items
+        .iter()
+        .find(|i| i.id.as_ref() == "slash-cmd:plugin:alpha:review")
+        .expect("Alpha review row should exist");
+    let beta_row = items
+        .iter()
+        .find(|i| i.id.as_ref() == "slash-cmd:plugin:beta:review")
+        .expect("Beta review row should exist");
+
+    // Meta must show owner labels.
+    assert!(
+        alpha_row.meta.contains("Alpha"),
+        "Alpha row meta should show owner 'Alpha', got: {}",
+        alpha_row.meta
+    );
+    assert!(
+        beta_row.meta.contains("Beta"),
+        "Beta row meta should show owner 'Beta', got: {}",
+        beta_row.meta
+    );
+    // Default rows should NOT show owner in meta.
+    let all_items = build_slash_picker_items_with_payloads(
+        "",
+        payloads.iter().map(|(p, d)| (p, d.as_str())),
+    );
+    let clear_row = all_items
+        .iter()
+        .find(|i| i.id.as_ref() == "slash-cmd:default:clear")
+        .expect("clear row");
+    assert!(
+        !clear_row.meta.contains("Built-in"),
+        "Default command meta should not show owner label: {}",
+        clear_row.meta
+    );
 }

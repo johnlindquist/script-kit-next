@@ -166,30 +166,17 @@ impl ScriptListApp {
         skill: &crate::plugins::PluginSkill,
         cx: &mut Context<Self>,
     ) {
-        // Read the skill document for context staging
-        let skill_content = std::fs::read_to_string(&skill.path).unwrap_or_default();
-
-        // Build a deterministic initial input that tells the ACP agent
-        // which skill to use for this session
-        let initial_input = if skill_content.is_empty() {
-            format!(
-                "Use the skill \"{}\" from plugin \"{}\" for this session.",
-                skill.title, skill.plugin_title
-            )
+        let owner = if skill.plugin_title.is_empty() {
+            &skill.plugin_id
         } else {
-            format!(
-                "Use the attached skill \"{}\" from plugin \"{}\" for this session.\n\n<skill path=\"{}\">\n{}\n</skill>",
-                skill.title,
-                skill.plugin_title,
-                skill.path.display(),
-                skill_content
-            )
+            &skill.plugin_title
         };
+        let initial_input =
+            crate::ai::acp::build_staged_skill_prompt(&skill.title, owner, &skill.path);
 
         tracing::info!(
             plugin_id = %skill.plugin_id,
             skill_id = %skill.skill_id,
-            content_len = skill_content.len(),
             "acp_skill_context_staged"
         );
 

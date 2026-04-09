@@ -433,7 +433,9 @@ mod tests {
                     description: SharedString::from(format!("Description {ix}")),
                     meta: SharedString::from(""),
                     kind: crate::ai::window::context_picker::types::ContextPickerItemKind::SlashCommand(
-                        format!("cmd-{ix}"),
+                        crate::ai::window::context_picker::types::SlashCommandPayload::Default {
+                            name: format!("cmd-{ix}"),
+                        },
                     ),
                     score: 0,
                     label_highlight_indices: Vec::new(),

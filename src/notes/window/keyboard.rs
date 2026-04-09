@@ -293,7 +293,6 @@ impl NotesApp {
             crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Notes, wb);
             window.close_all_dialogs(cx);
             window.remove_window();
-            super::window_ops::restore_launcher_after_notes_close(cx);
             return;
         }
 
@@ -399,7 +398,6 @@ impl NotesApp {
                     );
                     window.close_all_dialogs(cx);
                     window.remove_window();
-                    super::window_ops::restore_launcher_after_notes_close(cx);
                 }
                 "." => {
                     if modifiers.shift {
@@ -669,29 +667,18 @@ mod dialog_modal_guard_tests {
     }
 
     #[test]
-    fn notes_close_paths_restore_launcher_after_close() {
+    fn notes_close_paths_close_all_dialogs_before_remove_window() {
         let source = fs::read_to_string("src/notes/window/keyboard.rs")
             .expect("Failed to read src/notes/window/keyboard.rs");
         let normalized = normalize_ws(&source);
 
-        // Both Escape and Cmd+W close dialogs before removing the window,
-        // then call the restore helper to re-show the launcher.
         let close_then_remove_count = normalized
             .matches("window.close_all_dialogs(cx); window.remove_window();")
             .count();
+
         assert!(
             close_then_remove_count >= 2,
-            "Escape and Cmd+W should both close dialogs before removing the Notes window (found {})",
-            close_then_remove_count,
-        );
-
-        let restore_count = normalized
-            .matches("super::window_ops::restore_launcher_after_notes_close(cx);")
-            .count();
-        assert!(
-            restore_count >= 2,
-            "Escape and Cmd+W should both restore the launcher after closing Notes (found {})",
-            restore_count,
+            "Escape and Cmd+W should both close dialogs before removing the Notes window"
         );
     }
 }

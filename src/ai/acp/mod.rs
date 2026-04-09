@@ -69,4 +69,7 @@ pub(crate) use thread::{
     AcpContextBootstrapState, AcpThread, AcpThreadInit, AcpThreadMessage, AcpThreadStatus,
     AcpToolCallState,
 };
-pub(crate) use view::{AcpChatSession, AcpChatView, AcpHistoryResumeRequest, AcpRetryRequest};
+pub(crate) use view::{
+    build_staged_skill_prompt, AcpChatSession, AcpChatView, AcpHistoryResumeRequest,
+    AcpRetryRequest,
+};

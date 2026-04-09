@@ -164,6 +164,7 @@ pub(crate) fn format_inline_file_token(path: &str) -> String {
 
 /// Maximum display name length for typed mention tokens.
 const TYPED_MENTION_NAME_MAX_LEN: usize = 7;
+const TYPED_MENTION_LABEL_MAX_LEN: usize = 14;
 
 /// Map a file extension to a short type prefix for typed mentions.
 pub(crate) fn typed_mention_prefix(path: &str) -> &'static str {
@@ -242,6 +243,49 @@ pub(crate) fn format_typed_mention_token(prefix: &str, name: &str) -> String {
     } else {
         format!("@{prefix}:{name}")
     }
+}
+
+fn strip_typed_mention_label_prefix(label: &str) -> &str {
+    let trimmed = label.trim();
+    let Some((prefix, rest)) = trimmed.split_once(':') else {
+        return trimmed;
+    };
+
+    let normalized = prefix.trim().to_ascii_lowercase();
+    let is_known_prefix = matches!(
+        normalized.as_str(),
+        "file"
+            | "folder"
+            | "search"
+            | "input"
+            | "clipboard"
+            | "command"
+            | "window"
+            | "app"
+            | "process"
+            | "menu command"
+            | "agent"
+            | "suggestion"
+            | "selection"
+            | "context"
+            | "ambient"
+    );
+
+    if is_known_prefix && !rest.trim().is_empty() {
+        rest.trim()
+    } else {
+        trimmed
+    }
+}
+
+fn typed_mention_label_name(label: &str) -> String {
+    let display = strip_typed_mention_label_prefix(label);
+    let display_len = display.chars().count();
+    let mut name: String = display.chars().take(TYPED_MENTION_LABEL_MAX_LEN).collect();
+    if display_len > TYPED_MENTION_LABEL_MAX_LEN {
+        name.push('\u{2026}');
+    }
+    name
 }
 
 /// Scan `text` for inline `@mention` tokens and resolve each to an
@@ -379,7 +423,7 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
             let name = typed_mention_display_name(path);
             Some(format_typed_mention_token(prefix, &name))
         }
-        AiContextPart::FocusedTarget { target, label, .. } => {
+        AiContextPart::FocusedTarget { target, label: _, .. } => {
             // File/directory targets use typed file prefixes (@rs:, @dir:, etc.)
             if let Some(path) = (target.kind == "file" || target.kind == "directory")
                 .then_some(target.metadata.as_ref())
@@ -397,27 +441,11 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
             }
 
             // Non-file targets use @cmd: prefix.
-            let name = label
-                .chars()
-                .take(TYPED_MENTION_NAME_MAX_LEN)
-                .collect::<String>();
-            let name = if label.len() > TYPED_MENTION_NAME_MAX_LEN {
-                format!("{name}\u{2026}")
-            } else {
-                name
-            };
+            let name = typed_mention_label_name(&target.label);
             Some(format_typed_mention_token("cmd", &name))
         }
         AiContextPart::AmbientContext { label } => {
-            let name = label
-                .chars()
-                .take(TYPED_MENTION_NAME_MAX_LEN)
-                .collect::<String>();
-            let name = if label.len() > TYPED_MENTION_NAME_MAX_LEN {
-                format!("{name}\u{2026}")
-            } else {
-                name
-            };
+            let name = typed_mention_label_name(label);
             Some(format_typed_mention_token("env", &name))
         }
     }
