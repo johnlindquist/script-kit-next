@@ -94,3 +94,9 @@ Include:
 - Do not use `export const metadata`
 - Do not omit the backend suffix when you want a specific CLI
 - Do not use non-underscore `sk_*` keys
+
+## Related Skills
+
+- [acp-chat](../acp-chat/SKILL.md) — programmatic ACP Chat workflows using the ACP SDK
+- [script-authoring](../script-authoring/SKILL.md) — create and manage TypeScript scripts
+- [scriptlets](../scriptlets/SKILL.md) — package scripts as extension bundles

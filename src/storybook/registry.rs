@@ -99,7 +99,7 @@ mod tests {
         );
         assert!(
             !stories_by_surface(StorySurface::MiniAiChat).is_empty(),
-            "Mini AI Chat surface should have at least one story"
+            "Mini ACP Chat surface should have at least one story"
         );
     }
 

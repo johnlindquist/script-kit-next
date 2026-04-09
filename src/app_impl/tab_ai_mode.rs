@@ -399,7 +399,7 @@ impl ScriptListApp {
     ) {
         let Some(plan) = crate::ai::plan_tab_ai_quick_submit(source, &raw_text) else {
             // Empty input — open the harness without intent.
-            self.open_tab_ai_chat(cx);
+            self.open_tab_ai_acp_with_entry_intent(None, cx);
             return;
         };
 
@@ -827,7 +827,7 @@ impl ScriptListApp {
             source_view = %source_view,
         );
 
-        self.open_tab_ai_chat(cx);
+        self.open_tab_ai_acp_with_entry_intent(None, cx);
         true
     }
 

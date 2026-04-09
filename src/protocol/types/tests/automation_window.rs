@@ -256,7 +256,7 @@ fn automation_window_list_result_round_trip() {
             AutomationWindowInfo {
                 id: "acpDetached:thread-1".into(),
                 kind: AutomationWindowKind::AcpDetached,
-                title: Some("Script Kit AI".into()),
+                title: Some("Script Kit ACP".into()),
                 focused: true,
                 visible: true,
                 semantic_surface: Some("acpChat".into()),
@@ -467,7 +467,7 @@ fn automation_inspect_result_round_trip_and_request_id() {
             schema_version: crate::protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
             window_id: "acpDetached:thread-1".into(),
             window_kind: "AcpDetached".into(),
-            title: Some("Script Kit AI".into()),
+            title: Some("Script Kit ACP".into()),
             resolved_bounds: None,
             target_bounds_in_screenshot: None,
             surface_hit_point: None,

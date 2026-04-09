@@ -366,7 +366,7 @@ pub fn update_all_secondary_windows_appearance(is_dark: bool) {
                 .to_string();
 
             // Match secondary window titles
-            if title_string.contains("Script Kit AI")
+            if title_string.contains("Script Kit ACP")
                 || title_string.contains("Script Kit Notes")
                 || title_string.contains("Actions")
                 || title_string.contains("Script Kit Footer")

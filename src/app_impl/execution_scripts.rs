@@ -498,7 +498,7 @@ impl ScriptListApp {
     ///
     /// Returns `true` if the main window should be shown immediately, `false` if not.
     /// Interactive scripts start headless and prompt messages reopen the window on demand.
-    /// Apps and certain builtins (AI Chat, Notes) open their own windows
+    /// Apps and certain builtins (ACP Chat, Notes) open their own windows
     /// and don't need the main window.
     pub fn execute_by_command_id_or_path(
         &mut self,

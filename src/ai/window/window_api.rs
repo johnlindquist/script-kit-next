@@ -610,7 +610,7 @@ pub fn set_ai_input(cx: &mut App, text: &str, submit: bool) -> Result<(), String
 
 /// Set the main input text with an attached image in the AI window and optionally submit.
 /// The image should be base64 encoded PNG data.
-/// Used by AI commands like "Send Screen to AI Chat".
+/// Used by AI commands like "Send Screen to ACP Chat".
 ///
 /// Guards against window-close races: if the window handle becomes invalid between
 /// the open check and the notify, a warning is logged and the command is not silently lost.

@@ -754,7 +754,7 @@ impl ScriptListApp {
                         error = %error,
                         "Deferred AI text capture failed"
                     );
-                    let message = format!("Failed to capture content for AI Chat: {}", error);
+                    let message = format!("Failed to capture content for ACP Chat: {}", error);
                     this.toast_manager.push(
                         components::toast::Toast::error(message, &this.theme)
                             .duration_ms(Some(TOAST_CRITICAL_MS)),
@@ -1847,9 +1847,9 @@ impl ScriptListApp {
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
-                    "Opening AI harness terminal"
+                    "Opening ACP Chat"
                 );
-                self.open_tab_ai_chat(cx);
+                self.open_tab_ai_acp_with_entry_intent(None, cx);
 
                 Self::builtin_success(dctx, "open_ai_harness_dispatched")
             }
@@ -2072,7 +2072,7 @@ impl ScriptListApp {
                         if let Some(request) = request {
                             self.open_tab_ai_chat_with_entry_intent(Some(request), cx);
                         } else {
-                            self.open_tab_ai_chat(cx);
+                            self.open_tab_ai_acp_with_entry_intent(None, cx);
                         }
                         Self::builtin_success(dctx, "ai_generate_script_routed_to_harness")
                     }
@@ -2372,7 +2372,7 @@ impl ScriptListApp {
                             cmd.is_legacy_harness_alias(),
                             "unexpected AiCommandType variant {cmd:?} reached legacy alias arm"
                         );
-                        self.open_tab_ai_chat(cx);
+                        self.open_tab_ai_acp_with_entry_intent(None, cx);
                         Self::builtin_success(
                             dctx,
                             format!("ai_{cmd:?}_routed_to_harness"),

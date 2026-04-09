@@ -62,6 +62,8 @@ Good matches:
 
 Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact.
 
+> **Generic vs focused examples:** Generic extension examples are flat files (`extensions/starter.md`, `howto.md`, etc.). Focused feature examples are nested bundles with their own subdirectory and may include companion `.actions.md` files (e.g., `extensions/acp-chat/main.md`, `extensions/custom-actions/main.md`).
+
 ## When the request says "command", "helper", or "tool"
 
 Pick **Script** if it needs UI, Bun, files, HTTP, or multiple steps.

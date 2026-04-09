@@ -682,10 +682,10 @@ mod namespace_tests {
             .find(|action| action.id == "file:attach_to_ai")
             .expect("missing file attach_to_ai action");
 
-        assert_eq!(attach.title, "Attach to AI Chat");
+        assert_eq!(attach.title, "Attach to ACP Chat");
         assert_eq!(
             attach.description.as_deref(),
-            Some("Attaches this file to the AI chat window")
+            Some("Attaches this file to ACP Chat")
         );
         assert_eq!(attach.shortcut.as_deref(), Some("⌃⌘A"));
         assert_eq!(attach.icon, Some(IconName::MessageCircle));
@@ -926,7 +926,7 @@ mod secondary_command_contract_tests {
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         assert!(
             ids.contains(&"file:attach_to_ai"),
-            "Files should have Attach to AI Chat"
+            "Files should have Attach to ACP Chat"
         );
     }
 
@@ -937,7 +937,7 @@ mod secondary_command_contract_tests {
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         assert!(
             !ids.contains(&"file:attach_to_ai"),
-            "Directories must not have Attach to AI Chat"
+            "Directories must not have Attach to ACP Chat"
         );
     }
 

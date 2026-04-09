@@ -39,7 +39,7 @@ fn test_is_word_boundary_match_mid_word() {
 #[test]
 fn test_is_exact_name_match() {
     assert!(is_exact_name_match("Hello", "hello"));
-    assert!(is_exact_name_match("AI Chat", "ai chat"));
+    assert!(is_exact_name_match("ACP Chat", "acp chat"));
     assert!(!is_exact_name_match("Hello World", "hello"));
     assert!(!is_exact_name_match("Hi", "hello"));
 }

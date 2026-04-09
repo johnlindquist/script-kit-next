@@ -279,7 +279,7 @@ impl ScriptListApp {
     ///
     /// FIX: Resolves bug where main menu sometimes opened with a random item
     /// selected instead of the first item (e.g., "Reset Window Positions"
-    /// instead of "AI Chat").
+    /// instead of "ACP Chat").
     pub fn ensure_selection_at_first_item(&mut self, cx: &mut Context<Self>) {
         // Only reset selection if we're in the script list view
         if !matches!(self.current_view, AppView::ScriptList) {

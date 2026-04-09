@@ -610,11 +610,11 @@ mod tests {
         let p = test_prefix();
 
         let mut info = make_info(&p, "acp", AutomationWindowKind::AcpDetached);
-        info.title = Some(format!("{p} Script Kit AI Chat"));
+        info.title = Some(format!("{p} Script Kit ACP Chat"));
         upsert_automation_window(info);
 
         let target = AutomationWindowTarget::TitleContains {
-            text: format!("{p} Script Kit AI"),
+            text: format!("{p} Script Kit ACP"),
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should match title substring");
@@ -758,7 +758,7 @@ mod tests {
         upsert_automation_window(main);
 
         let mut acp = make_info(&p, "acp-thread-1", AutomationWindowKind::AcpDetached);
-        acp.title = Some("Script Kit AI".into());
+        acp.title = Some("Script Kit ACP".into());
         acp.focused = true;
         acp.semantic_surface = Some("acpChat".into());
         upsert_automation_window(acp);
@@ -771,7 +771,7 @@ mod tests {
         let resolved =
             resolve_automation_window(Some(&target)).expect("should resolve detached ACP");
         assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
-        assert_eq!(resolved.title.as_deref(), Some("Script Kit AI"));
+        assert_eq!(resolved.title.as_deref(), Some("Script Kit ACP"));
         // The screenshot function would use this title to find the OS window
         assert_ne!(
             resolved.title.as_deref(),

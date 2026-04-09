@@ -1,11 +1,12 @@
-//! Contract tests verifying Tab AI routes to the harness terminal surface.
+//! Contract tests verifying Tab AI compatibility routes and ACP entry points.
 //!
-//! The primary Tab AI entry path is:
+//! The primary Tab AI compatibility entry path is:
 //!   Tab key → `open_tab_ai_chat()` → `open_tab_ai_harness_terminal_from_request()` →
 //!   `AppView::QuickTerminalView` rendered via `TermPrompt`.
 //!
-//! Tests in this file validate that the harness-terminal contract is the
-//! authoritative Tab AI surface.
+//! Direct zero-intent launcher surfaces now route through
+//! `open_tab_ai_acp_with_entry_intent(None, cx)`, while `open_tab_ai_chat()`
+//! remains the compatibility wrapper for Tab-driven harness entry.
 
 const TAB_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const TAB_NEW_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
@@ -670,7 +671,7 @@ fn render_impl_renders_tab_ai_save_offer_overlay() {
 // =========================================================================
 
 #[test]
-fn script_list_cmd_enter_fallback_routes_to_open_tab_ai_chat() {
+fn script_list_cmd_enter_fallback_routes_to_shared_acp_helper() {
     assert!(
         SCRIPT_LIST_SOURCE.contains("try_route_global_cmd_enter_to_acp_context_capture(cx)"),
         "ScriptList Cmd+Enter fallback must route through the shared AI helper"
@@ -1917,7 +1918,8 @@ fn generate_script_builtin_routes_to_harness_not_chat_prompt() {
     assert!(
         BUILTIN_EXECUTION_SOURCE
             .contains("self.open_tab_ai_chat_with_entry_intent(Some(request), cx);")
-            || BUILTIN_EXECUTION_SOURCE.contains("self.open_tab_ai_chat(cx);"),
+            || BUILTIN_EXECUTION_SOURCE
+                .contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
         "GenerateScript must route through the shared Tab AI entry point"
     );
 }
@@ -2235,16 +2237,16 @@ fn builtin_ai_chat_does_not_open_legacy_ai_window() {
         "AiChat entry must no longer open the legacy AI window"
     );
     assert!(
-        arm.contains("open_tab_ai_chat(cx)"),
-        "AiChat entry must route to the harness terminal"
+        arm.contains("open_tab_ai_acp_with_entry_intent(None, cx)"),
+        "AiChat entry must route to the ACP chat entry helper"
     );
 }
 
 #[test]
-fn builtin_ai_chat_entry_reflects_harness_label() {
+fn builtin_ai_chat_entry_reflects_acp_label() {
     assert!(
-        BUILTINS_SOURCE.contains("\"Open AI Harness\""),
-        "builtin/ai-chat entry must use the harness label, not the legacy AI Chat label"
+        BUILTINS_SOURCE.contains("\"Open ACP Chat\""),
+        "builtin/ai-chat entry must use the ACP Chat label, not the legacy AI Chat label"
     );
 }
 

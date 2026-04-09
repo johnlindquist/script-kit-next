@@ -39,8 +39,8 @@ pub const ACTIONS_DIALOG_EXPECT_SECTION_MODE: &str = "headers";
 /// `.impeccable.md` contract: the search input stays bare, so no divider.
 pub const ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER: bool = false;
 
-/// `.impeccable.md` contract: when footer hints are shown, there are exactly 3.
-pub const ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT: u8 = 3;
+/// `.impeccable.md` contract: when footer hints are shown, there are exactly 2.
+pub const ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT: u8 = 2;
 
 /// `.impeccable.md` contract: search input belongs at the top of the dialog.
 pub const ACTIONS_DIALOG_EXPECT_SEARCH_POSITION: &str = "top";
@@ -83,7 +83,7 @@ mod tests {
         assert_eq!(ACTIONS_DIALOG_EXPECT_SECTION_MODE, "headers");
         let divider = ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER;
         assert!(!divider);
-        assert_eq!(ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT, 3);
+        assert_eq!(ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT, 2);
     }
 
     #[test]

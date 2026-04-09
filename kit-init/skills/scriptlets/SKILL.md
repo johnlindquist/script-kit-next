@@ -105,6 +105,15 @@ Use `{{content}}` inside the companion action to access the selected parent comm
 
 See [custom-actions](../custom-actions/SKILL.md) for the canonical pattern.
 
+## Focused Feature Examples
+
+Generic examples are flat files under `~/.scriptkit/kit/examples/extensions/`. Focused feature examples are nested bundles:
+
+- `~/.scriptkit/kit/examples/extensions/acp-chat/main.md` — ACP-oriented extension helpers
+- `~/.scriptkit/kit/examples/extensions/custom-actions/main.md` — shared Actions Menu patterns
+- `~/.scriptkit/kit/examples/extensions/custom-actions/main.actions.md` — companion actions file
+- `~/.scriptkit/kit/examples/extensions/notes/main.md` — Notes automation as an extension bundle
+
 ## Related Skills
 
 - [custom-actions](../custom-actions/SKILL.md) — shared Actions Menu patterns for extension bundles

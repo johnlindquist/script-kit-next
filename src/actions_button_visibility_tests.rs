@@ -218,8 +218,8 @@ mod tests {
         );
         assert!(
             dispatcher_section.contains("FooterAction::Ai")
-                && dispatcher_section.contains("open_tab_ai_chat"),
-            "FooterAction::Ai must dispatch to open_tab_ai_chat()"
+                && dispatcher_section.contains("open_tab_ai_acp_with_entry_intent"),
+            "FooterAction::Ai must dispatch to open_tab_ai_acp_with_entry_intent()"
         );
     }
 
@@ -425,8 +425,8 @@ mod tests {
             "Full footer Actions callback must dispatch to toggle_actions()"
         );
         assert!(
-            strip_section.contains("open_tab_ai_chat"),
-            "Full footer AI callback must dispatch to open_tab_ai_chat()"
+            strip_section.contains("open_tab_ai_acp_with_entry_intent"),
+            "Full footer AI callback must dispatch to open_tab_ai_acp_with_entry_intent()"
         );
     }
 

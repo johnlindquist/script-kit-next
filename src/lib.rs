@@ -232,7 +232,7 @@ pub mod footer_popup;
 // Separate floating window for note-taking with gpui-component
 pub mod notes;
 
-// AI Chat - Separate floating window for AI conversations
+// ACP Chat - Separate floating window for AI conversations
 // BYOK (Bring Your Own Key) with SQLite storage at ~/.scriptkit/ai-chats.db
 pub mod ai;
 

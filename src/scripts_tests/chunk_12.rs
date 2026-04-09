@@ -205,7 +205,7 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
     let builtins = vec![
         BuiltInEntry {
             id: "builtin/ai-chat".to_string(),
-            name: "AI Chat".to_string(),
+            name: "ACP Chat".to_string(),
             description: "Chat with AI assistants".to_string(),
             keywords: vec!["ai".to_string(), "chat".to_string()],
             feature: BuiltInFeature::AiChat,
@@ -270,13 +270,13 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
         .collect();
 
     // Default suggestions should appear in order from DEFAULT_SUGGESTED_ITEMS
-    // AI Chat, Notes, Clipboard History are in defaults (in that order)
+    // ACP Chat, Notes, Clipboard History are in defaults (in that order)
     // Some Other Command is NOT in defaults, goes to COMMANDS
     assert_eq!(
         grouped_names,
         vec![
             "[SUGGESTED]",
-            "AI Chat",
+            "ACP Chat",
             "Notes",
             "Clipboard History",
             "[COMMANDS]",
@@ -295,7 +295,7 @@ fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
     let builtins = vec![
         BuiltInEntry {
             id: "builtin/ai-chat".to_string(),
-            name: "AI Chat".to_string(),
+            name: "ACP Chat".to_string(),
             description: "Chat with AI assistants".to_string(),
             keywords: vec!["ai".to_string()],
             feature: BuiltInFeature::AiChat,
@@ -350,10 +350,10 @@ fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
         .collect();
 
     // With frecency data, SUGGESTED shows frecency-based items (Notes has usage)
-    // AI Chat has no usage, goes to COMMANDS
+    // ACP Chat has no usage, goes to COMMANDS
     assert_eq!(
         grouped_names,
-        vec!["[SUGGESTED]", "Notes", "[COMMANDS]", "AI Chat",],
+        vec!["[SUGGESTED]", "Notes", "[COMMANDS]", "ACP Chat",],
         "With frecency data, should use frecency-based suggestions, not defaults. Got: {:?}",
         grouped_names
     );

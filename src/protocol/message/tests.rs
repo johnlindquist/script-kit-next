@@ -11,7 +11,7 @@ fn test_chat_message_with_use_builtin_ai() {
             "id": "chat-1",
             "placeholder": "Ask a question...",
             "messages": [{"role": "user", "content": "Hello"}],
-            "hint": "AI Chat",
+            "hint": "ACP Chat",
             "useBuiltinAi": true
         }"#;
 

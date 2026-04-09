@@ -504,7 +504,7 @@ impl ScriptListApp {
             .to_string();
 
         if query.is_empty() {
-            self.open_tab_ai_chat(cx);
+            self.open_tab_ai_acp_with_entry_intent(None, cx);
         } else {
             self.open_tab_ai_chat_with_entry_intent(Some(query), cx);
         }

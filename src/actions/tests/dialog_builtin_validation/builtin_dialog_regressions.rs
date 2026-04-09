@@ -4318,7 +4318,7 @@ mod from_dialog_builtin_action_validation_tests_35 {
             .iter()
             .find(|a| a.id == "clip:clipboard_attach_to_ai")
             .unwrap();
-        assert_eq!(action.title, "Attach to AI Chat");
+        assert_eq!(action.title, "Attach to ACP Chat");
     }
     
     #[test]
@@ -12283,7 +12283,7 @@ mod from_dialog_builtin_action_validation_tests_41 {
                 .iter()
                 .find(|a| a.id == "clip:clipboard_attach_to_ai")
                 .unwrap();
-            assert_eq!(attach.title, "Attach to AI Chat");
+            assert_eq!(attach.title, "Attach to ACP Chat");
         }
     
         #[test]

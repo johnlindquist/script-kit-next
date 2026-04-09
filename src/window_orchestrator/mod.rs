@@ -337,7 +337,7 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
         }
 
         // ---------------------------------------------------------------
-        // Detached AI Chat
+        // Detached ACP Chat
         // ---------------------------------------------------------------
         WindowEvent::OpenDetachedAiChat => {
             next.detached_ai.visible = true;

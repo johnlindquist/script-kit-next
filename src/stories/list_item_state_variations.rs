@@ -84,7 +84,7 @@ impl Story for ListItemStateVariationsStory {
                         render_list_item_with_intensity(
                             colors,
                             0.08,
-                            "AI Chat",
+                            "ACP Chat",
                             "Chat with AI assistants",
                         ),
                     ))

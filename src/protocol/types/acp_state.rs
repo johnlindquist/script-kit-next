@@ -567,12 +567,12 @@ mod tests {
         let target = AcpResolvedTarget {
             window_id: "acpDetached:thread-1".to_string(),
             window_kind: "acpDetached".to_string(),
-            title: Some("Script Kit AI".to_string()),
+            title: Some("Script Kit ACP".to_string()),
         };
         let json = serde_json::to_value(&target).expect("serialize");
         assert_eq!(json["windowId"], "acpDetached:thread-1");
         assert_eq!(json["windowKind"], "acpDetached");
-        assert_eq!(json["title"], "Script Kit AI");
+        assert_eq!(json["title"], "Script Kit ACP");
 
         let back: AcpResolvedTarget = serde_json::from_value(json).expect("deserialize");
         assert_eq!(back, target);
@@ -584,7 +584,7 @@ mod tests {
             resolved_target: Some(AcpResolvedTarget {
                 window_id: "acpDetached:thread-1".to_string(),
                 window_kind: "acpDetached".to_string(),
-                title: Some("Script Kit AI".to_string()),
+                title: Some("Script Kit ACP".to_string()),
             }),
             ..Default::default()
         };

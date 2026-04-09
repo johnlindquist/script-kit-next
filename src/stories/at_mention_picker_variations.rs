@@ -127,7 +127,7 @@ impl Story for AtMentionPickerVariationsStory {
     }
 
     fn category(&self) -> &'static str {
-        "AI Chat"
+        "ACP Chat"
     }
 
     fn surface(&self) -> StorySurface {
