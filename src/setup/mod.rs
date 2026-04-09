@@ -48,6 +48,18 @@ const EMBEDDED_WINDOW_MANAGEMENT_EXTENSION: &str =
 /// Embedded AI Text Tools extension (built-in extension that ships with the app)
 const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
     include_str!("../../kit-init/extensions/ai-text-tools/main.md");
+/// Embedded ACP Chat example extension (built-in extension that ships with the app)
+const EMBEDDED_EXAMPLE_EXTENSION_ACP_CHAT: &str =
+    include_str!("../../kit-init/extensions/acp-chat/main.md");
+/// Embedded Custom Actions example extension (built-in extension that ships with the app)
+const EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS: &str =
+    include_str!("../../kit-init/extensions/custom-actions/main.md");
+/// Embedded Custom Actions shared actions (built-in companion actions for custom-actions example)
+const EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS_ACTIONS: &str =
+    include_str!("../../kit-init/extensions/custom-actions/main.actions.md");
+/// Embedded Notes example extension (built-in extension that ships with the app)
+const EMBEDDED_EXAMPLE_EXTENSION_NOTES: &str =
+    include_str!("../../kit-init/extensions/notes/main.md");
 /// Embedded Examples extension - main scriptlet examples (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLES_MAIN: &str = include_str!("../../kit-init/extensions/examples/main.md");
 /// Embedded Examples extension - advanced scriptlet examples (built-in extension that ships with the app)
@@ -94,6 +106,11 @@ const EMBEDDED_EXAMPLES_START_HERE: &str = include_str!("../../kit-init/examples
 const EMBEDDED_SKILL_NOTES: &str = include_str!("../../kit-init/skills/notes/SKILL.md");
 /// Skill: agent authoring (compatibility — skills are now the preferred reusable AI unit)
 const EMBEDDED_SKILL_AGENTS: &str = include_str!("../../kit-init/skills/agents/SKILL.md");
+/// Skill: ACP Chat — programmatic ACP Chat flows, typed context parts, streaming, and lifecycle
+const EMBEDDED_SKILL_ACP_CHAT: &str = include_str!("../../kit-init/skills/acp-chat/SKILL.md");
+/// Skill: custom actions — Actions Menu commands in scripts and companion .actions.md files
+const EMBEDDED_SKILL_CUSTOM_ACTIONS: &str =
+    include_str!("../../kit-init/skills/custom-actions/SKILL.md");
 /// Default ACP agent catalog (seeded on first run — provider/catalog selection, not plugin skills)
 const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
   "schemaVersion": 1,
@@ -618,6 +635,36 @@ pub fn ensure_kit_setup() -> SetupResult {
         "kit/examples/extensions/starter.md",
     );
 
+    // App-managed: Built-in ACP Chat example extension (refresh if changed)
+    write_string_if_changed(
+        &examples_dir.join("acp-chat").join("main.md"),
+        EMBEDDED_EXAMPLE_EXTENSION_ACP_CHAT,
+        &mut warnings,
+        "kit/examples/extensions/acp-chat/main.md",
+    );
+
+    // App-managed: Built-in Custom Actions example extension (refresh if changed)
+    write_string_if_changed(
+        &examples_dir.join("custom-actions").join("main.md"),
+        EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS,
+        &mut warnings,
+        "kit/examples/extensions/custom-actions/main.md",
+    );
+    write_string_if_changed(
+        &examples_dir.join("custom-actions").join("main.actions.md"),
+        EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS_ACTIONS,
+        &mut warnings,
+        "kit/examples/extensions/custom-actions/main.actions.md",
+    );
+
+    // App-managed: Built-in Notes example extension (refresh if changed)
+    write_string_if_changed(
+        &examples_dir.join("notes").join("main.md"),
+        EMBEDDED_EXAMPLE_EXTENSION_NOTES,
+        &mut warnings,
+        "kit/examples/extensions/notes/main.md",
+    );
+
     // User-owned: config.ts (only create if missing)
     // Located in kit/ directory so it can be version controlled with user scripts
     let config_path = kit_dir.join("kit").join("config.ts");
@@ -750,6 +797,18 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_SKILL_AGENTS,
         &mut warnings,
         "kit/authoring/skills/agents/SKILL.md",
+    );
+    write_string_if_changed(
+        &authoring_skills.join("acp-chat").join("SKILL.md"),
+        EMBEDDED_SKILL_ACP_CHAT,
+        &mut warnings,
+        "kit/authoring/skills/acp-chat/SKILL.md",
+    );
+    write_string_if_changed(
+        &authoring_skills.join("custom-actions").join("SKILL.md"),
+        EMBEDDED_SKILL_CUSTOM_ACTIONS,
+        &mut warnings,
+        "kit/authoring/skills/custom-actions/SKILL.md",
     );
 
     // App-managed: Example scripts — seeded into the examples plugin (refresh if changed)

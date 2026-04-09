@@ -94,6 +94,23 @@ Choose an extension bundle when the request is:
 - a quick shell command
 - a small grouped helper set
 
+## Companion Actions Files
+
+To add shared actions to every command in a bundle, create a matching companion file:
+
+- Parent bundle: `~/.scriptkit/kit/main/extensions/<name>.md`
+- Shared actions: `~/.scriptkit/kit/main/extensions/<name>.actions.md`
+
+Use `{{content}}` inside the companion action to access the selected parent command content.
+
+See [custom-actions](../custom-actions/SKILL.md) for the canonical pattern.
+
+## Related Skills
+
+- [custom-actions](../custom-actions/SKILL.md) — shared Actions Menu patterns for extension bundles
+- [acp-chat](../acp-chat/SKILL.md) — ACP-oriented extension helpers
+- [notes](../notes/SKILL.md) — package Notes automation examples as extension bundles
+
 ## Done When
 
 - the file lives in `~/.scriptkit/kit/main/extensions/`

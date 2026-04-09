@@ -8,6 +8,8 @@ Plugin-owned skills for working with Script Kit. Each subdirectory contains a `S
 |-------|---------|
 | [script-authoring](script-authoring/SKILL.md) | Creating, structuring, and running TypeScript scripts |
 | [scriptlets](scriptlets/SKILL.md) | Markdown extension bundles with embedded commands |
+| [acp-chat](acp-chat/SKILL.md) | Programmatic ACP Chat flows, typed context parts, streaming, and chat lifecycle operations |
+| [custom-actions](custom-actions/SKILL.md) | Actions Menu commands in scripts and shared extension companion `.actions.md` files |
 | [agents](agents/SKILL.md) | Creating agent files (compatibility — prefer skills for new work) |
 | [config](config/SKILL.md) | Configuration, theming, and workspace setup |
 | [notes](notes/SKILL.md) | Working with the Notes window — creation, search, and automation |

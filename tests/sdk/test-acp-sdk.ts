@@ -283,6 +283,54 @@ async function runTests() {
     }
   }
 
+  // =============================================================================
+  // Test 11: aiGetStreamingStatus shape
+  // =============================================================================
+  {
+    const test = 'acp-aiGetStreamingStatus-shape';
+    const start = Date.now();
+    logTest(test, 'running');
+    try {
+      const msg = await expectSentMessage(
+        () => aiGetStreamingStatus('chat-123'),
+        'aiGetStreamingStatus',
+        (m) => {
+          if (m.chatId !== 'chat-123') {
+            throw new Error(`bad aiGetStreamingStatus payload: ${JSON.stringify(m)}`);
+          }
+        },
+      );
+      debug(`aiGetStreamingStatus payload: ${JSON.stringify(msg)}`);
+      logTest(test, 'pass', { result: msg, duration_ms: Date.now() - start });
+    } catch (err) {
+      logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });
+    }
+  }
+
+  // =============================================================================
+  // Test 12: aiDeleteChat shape
+  // =============================================================================
+  {
+    const test = 'acp-aiDeleteChat-shape';
+    const start = Date.now();
+    logTest(test, 'running');
+    try {
+      const msg = await expectSentMessage(
+        () => aiDeleteChat('chat-123', true),
+        'aiDeleteChat',
+        (m) => {
+          if (m.chatId !== 'chat-123' || m.permanent !== true) {
+            throw new Error(`bad aiDeleteChat payload: ${JSON.stringify(m)}`);
+          }
+        },
+      );
+      debug(`aiDeleteChat payload: ${JSON.stringify(msg)}`);
+      logTest(test, 'pass', { result: msg, duration_ms: Date.now() - start });
+    } catch (err) {
+      logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });
+    }
+  }
+
   debug('ACP SDK tests complete');
   process.exit(0);
 }

@@ -102,6 +102,12 @@ These are UI actions, not JavaScript globals. The current public Notes script su
 - **Automation target must be open**: `getElements` and `batch` commands targeting Notes require the Notes window to be open. Use `waitFor` with a timeout to handle the case where it is not yet visible.
 - **No invented JS globals**: The current public Notes script surface is the automation target (`kind: notes`). Do not document or rely on `notesOpen()`, `notesCreate()`, or similar JavaScript globals unless they are added to `scripts/kit-sdk.ts`.
 
+## Related Skills
+
+- [acp-chat](../acp-chat/SKILL.md) — send note content into ACP Chat and continue there
+- [custom-actions](../custom-actions/SKILL.md) — expose note-related actions in the Actions Menu
+- [scriptlets](../scriptlets/SKILL.md) — package Notes automation helpers as extension bundles
+
 ## Done When
 
 - [ ] Notes window opens and is addressable via automation target
