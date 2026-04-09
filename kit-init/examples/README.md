@@ -45,6 +45,16 @@ Reference markdown bundles copied from the built-in examples kit.
 
 Copy patterns from these files into `~/.scriptkit/kit/main/extensions/`.
 
+### Focused Extensions
+
+Nested bundles demonstrating feature-specific patterns. Each lives in its own subdirectory.
+
+| Directory | Pattern Demonstrated | Skill |
+|-----------|---------------------|-------|
+| `extensions/acp-chat/main.md` | ACP-oriented extension helpers | [acp-chat](~/.scriptkit/kit/authoring/skills/acp-chat/SKILL.md) |
+| `extensions/custom-actions/main.md` | Shared Actions Menu patterns with companion `.actions.md` | [custom-actions](~/.scriptkit/kit/authoring/skills/custom-actions/SKILL.md) |
+| `extensions/notes/main.md` | Notes automation as an extension bundle | [notes](~/.scriptkit/kit/authoring/skills/notes/SKILL.md) |
+
 ## Agents (Compatibility) (`agents/`)
 
 Reference mdflow agent files. For new reusable AI work, prefer creating a skill (`~/.scriptkit/kit/main/skills/<name>/SKILL.md`) instead — skills are the preferred reusable AI unit and appear as first-class main-menu items.

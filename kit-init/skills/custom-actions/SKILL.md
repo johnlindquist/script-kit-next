@@ -81,6 +81,11 @@ open -a Safari "{{content}}"
 - The companion file must share the same basename: `main.md` + `main.actions.md`.
 - Use `{{content}}` inside companion actions to read the selected parent command content.
 
+## Related Examples
+
+- `~/.scriptkit/kit/examples/extensions/custom-actions.md` — parent bundle entries that receive shared actions
+- `~/.scriptkit/kit/examples/extensions/custom-actions.actions.md` — companion Actions Menu definitions using `{{content}}`
+
 ## Related Skills
 
 - [scriptlets](../scriptlets/SKILL.md) — bundle and companion-file structure

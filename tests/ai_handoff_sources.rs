@@ -88,7 +88,7 @@ fn deferred_ai_handoff_emits_failure_log_on_open_error() {
         "helper should emit a failure log event when AI window open fails"
     );
     assert!(
-        helper.contains("Failed to send to AI Chat: {}"),
+        helper.contains("Failed to send to ACP Chat: {}"),
         "helper should show an error toast with the underlying reason on failure"
     );
 }
@@ -226,8 +226,8 @@ fn open_only_handoffs_keep_open_only_variant_for_non_harness_paths() {
     // Builtin execution now routes AI entry through the Tab AI harness
     // instead of the legacy deferred AI window helper.
     assert!(
-        ai_chat_branch.contains("self.open_tab_ai_chat(cx);"),
-        "AI chat builtin should open the Tab AI harness"
+        ai_chat_branch.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
+        "AI chat builtin should open ACP Chat"
     );
     assert!(
         ai_command_branch.contains("open_tab_ai_chat_with_entry_intent(")
@@ -365,7 +365,7 @@ fn deferred_handoff_failure_toast_includes_real_reason() {
     let helper = slice_from(&source, "fn open_ai_window_after_already_hidden(");
 
     assert!(
-        helper.contains("Failed to send to AI Chat: {}"),
+        helper.contains("Failed to send to ACP Chat: {}"),
         "handoff failure toast should include the underlying reason"
     );
 }
@@ -403,7 +403,7 @@ fn deferred_ai_handoff_emits_actionable_failure_toast_on_open_error() {
         "helper should emit a failure log event when AI handoff fails"
     );
     assert!(
-        helper.contains("format!(\"Failed to send to AI Chat: {}\", error)"),
+        helper.contains("format!(\"Failed to send to ACP Chat: {}\", error)"),
         "helper should surface the propagated handoff error in the toast"
     );
     // Ensure we do NOT use a hardcoded open-window message

@@ -26,19 +26,19 @@ fn get_settings_items() -> Vec<SettingsItem> {
         },
         SettingsItem {
             name: "Configure Vercel AI Gateway",
-            description: "Set up the Vercel AI Gateway API key for AI Chat",
+            description: "Set up the Vercel AI Gateway API key for ACP Chat",
             icon: "🔑",
             action: SettingsAction::ConfigureVercelApiKey,
         },
         SettingsItem {
             name: "Configure OpenAI API Key",
-            description: "Set up the OpenAI API key for AI Chat",
+            description: "Set up the OpenAI API key for ACP Chat",
             icon: "🔑",
             action: SettingsAction::ConfigureOpenAiApiKey,
         },
         SettingsItem {
             name: "Configure Anthropic API Key",
-            description: "Set up the Anthropic API key for AI Chat",
+            description: "Set up the Anthropic API key for ACP Chat",
             icon: "🔑",
             action: SettingsAction::ConfigureAnthropicApiKey,
         },

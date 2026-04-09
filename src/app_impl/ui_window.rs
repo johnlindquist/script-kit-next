@@ -93,7 +93,7 @@ impl ScriptListApp {
                 );
             }
             crate::footer_popup::FooterAction::Ai => {
-                self.open_tab_ai_chat(cx);
+                self.open_tab_ai_acp_with_entry_intent(None, cx);
             }
             crate::footer_popup::FooterAction::Apply => {
                 if let AppView::QuickTerminalView { entity } = &self.current_view {

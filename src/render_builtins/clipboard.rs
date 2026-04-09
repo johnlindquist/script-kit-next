@@ -538,7 +538,7 @@ impl ScriptListApp {
             vec![
                 "\u{21b5} Attach".into(),
                 "Esc Cancel".into(),
-                "Attaching to AI Chat".into(),
+                "Attaching to ACP Chat".into(),
             ]
         } else {
             crate::components::universal_prompt_hints()

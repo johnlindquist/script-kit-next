@@ -51,7 +51,7 @@ impl StorySurface {
             Self::TurnCard => "Turn Card",
             Self::FullPrompt => "Full Prompt",
             Self::MainMenu => "Main Menu",
-            Self::MiniAiChat => "Mini AI Chat",
+            Self::MiniAiChat => "Mini ACP Chat",
         }
     }
 }

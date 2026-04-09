@@ -50,16 +50,16 @@ const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
     include_str!("../../kit-init/extensions/ai-text-tools/main.md");
 /// Embedded ACP Chat example extension (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLE_EXTENSION_ACP_CHAT: &str =
-    include_str!("../../kit-init/extensions/acp-chat/main.md");
+    include_str!("../../kit-init/extensions/examples/acp-chat.md");
 /// Embedded Custom Actions example extension (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS: &str =
-    include_str!("../../kit-init/extensions/custom-actions/main.md");
+    include_str!("../../kit-init/extensions/examples/custom-actions.md");
 /// Embedded Custom Actions shared actions (built-in companion actions for custom-actions example)
 const EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS_ACTIONS: &str =
     include_str!("../../kit-init/extensions/custom-actions/main.actions.md");
 /// Embedded Notes example extension (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLE_EXTENSION_NOTES: &str =
-    include_str!("../../kit-init/extensions/notes/main.md");
+    include_str!("../../kit-init/extensions/examples/notes.md");
 /// Embedded Examples extension - main scriptlet examples (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLES_MAIN: &str = include_str!("../../kit-init/extensions/examples/main.md");
 /// Embedded Examples extension - advanced scriptlet examples (built-in extension that ships with the app)

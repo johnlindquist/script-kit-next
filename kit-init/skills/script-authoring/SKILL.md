@@ -253,3 +253,10 @@ const url3 = await arg("URL 3");
 - **Node.js APIs**: Use `Bun.file()` / `Bun.write()` / `` $`cmd` `` instead of `fs` / `child_process`
 - **Wrong directory**: Scripts must be in `kit/main/scripts/`, not `scripts/` or elsewhere
 - **Unsafe home paths**: Prefer `home(...)` over `env.HOME` for user-relative locations
+
+## Related Skills
+
+- [scriptlets](../scriptlets/SKILL.md) — package scripts as extension bundles
+- [acp-chat](../acp-chat/SKILL.md) — programmatic ACP Chat workflows using the ACP SDK
+- [custom-actions](../custom-actions/SKILL.md) — expose script helpers through the Actions Menu
+- [agents](../agents/SKILL.md) — mdflow-backed agent files (compatibility path)

@@ -513,7 +513,7 @@ pub fn capture_app_screenshot(
 /// Capture a screenshot of a window by its title pattern.
 ///
 /// Similar to `capture_app_screenshot` but allows specifying which window to capture
-/// by matching the title. This is useful for secondary windows like the AI Chat window.
+/// by matching the title. This is useful for secondary windows like the ACP Chat window.
 ///
 /// # Arguments
 /// * `title_pattern` - A string that the window title must contain

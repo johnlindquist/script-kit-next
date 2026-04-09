@@ -91,7 +91,7 @@ impl AiWindowMode {
 
     pub(super) fn title(self) -> &'static str {
         match self {
-            Self::Full => "Script Kit AI",
+            Self::Full => "Script Kit ACP",
             Self::Mini => "Mini AI",
         }
     }
@@ -198,7 +198,7 @@ mod ai_window_mode_tests {
     fn test_ai_window_mode_uses_expected_titles_and_dimensions() {
         assert_eq!(AiWindowMode::Full.default_width(), 900.0);
         assert_eq!(AiWindowMode::Full.default_height(), 700.0);
-        assert_eq!(AiWindowMode::Full.title(), "Script Kit AI");
+        assert_eq!(AiWindowMode::Full.title(), "Script Kit ACP");
 
         assert_eq!(AiWindowMode::Mini.default_width(), MINI_WINDOW_DEFAULT_W);
         assert_eq!(AiWindowMode::Mini.default_height(), MINI_WINDOW_DEFAULT_H);

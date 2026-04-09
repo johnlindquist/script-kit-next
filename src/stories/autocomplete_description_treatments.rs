@@ -223,7 +223,7 @@ impl Story for AutocompleteDescriptionTreatmentsStory {
     }
 
     fn category(&self) -> &'static str {
-        "AI Chat"
+        "ACP Chat"
     }
 
     fn surface(&self) -> StorySurface {

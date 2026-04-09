@@ -46,7 +46,7 @@ fn detached_acp_targeting_flow() {
     let acp = AutomationWindowInfo {
         id: format!("{p}:acp-thread-1"),
         kind: AutomationWindowKind::AcpDetached,
-        title: Some("Script Kit AI".into()),
+        title: Some("Script Kit ACP".into()),
         focused: true,
         visible: true,
         semantic_surface: Some("acpChat".into()),
@@ -65,7 +65,7 @@ fn detached_acp_targeting_flow() {
         .expect("should resolve ACP");
     assert_eq!(resolved.kind, AutomationWindowKind::AcpDetached);
     assert_eq!(resolved.semantic_surface.as_deref(), Some("acpChat"));
-    assert_eq!(resolved.title.as_deref(), Some("Script Kit AI"));
+    assert_eq!(resolved.title.as_deref(), Some("Script Kit ACP"));
 
     // Target by ID → ACP
     let resolved_id =
@@ -315,7 +315,7 @@ fn acp_test_probe_result_carries_resolved_target() {
     probe.state.resolved_target = Some(AcpResolvedTarget {
         window_id: "acpDetached:thread-1".to_string(),
         window_kind: "acpDetached".to_string(),
-        title: Some("Script Kit AI".to_string()),
+        title: Some("Script Kit ACP".to_string()),
     });
     let msg = Message::acp_test_probe_result("probe-read-det-1".into(), probe);
     let json = serde_json::to_value(&msg).expect("serialize");
@@ -327,7 +327,7 @@ fn acp_test_probe_result_carries_resolved_target() {
         .expect("resolvedTarget in state");
     assert_eq!(rt["windowKind"], "acpDetached");
     assert_eq!(rt["windowId"], "acpDetached:thread-1");
-    assert_eq!(rt["title"], "Script Kit AI");
+    assert_eq!(rt["title"], "Script Kit ACP");
 
     // Round-trip
     let back: Message = serde_json::from_value(json).expect("deserialize");
@@ -348,7 +348,7 @@ fn acp_state_result_carries_resolved_target() {
     state.resolved_target = Some(AcpResolvedTarget {
         window_id: "acpDetached:thread-1".to_string(),
         window_kind: "acpDetached".to_string(),
-        title: Some("Script Kit AI".to_string()),
+        title: Some("Script Kit ACP".to_string()),
     });
     let msg = Message::acp_state_result("acp-state-det-1".into(), state);
     let json = serde_json::to_value(&msg).expect("serialize");
@@ -414,7 +414,7 @@ fn acp_setup_action_result_with_resolved_target_round_trips() {
     state.resolved_target = Some(AcpResolvedTarget {
         window_id: "acpDetached:thread-1".to_string(),
         window_kind: "acpDetached".to_string(),
-        title: Some("Script Kit AI".to_string()),
+        title: Some("Script Kit ACP".to_string()),
     });
     let msg = Message::AcpSetupActionResult {
         request_id: "setup-det-result".into(),
@@ -638,7 +638,7 @@ fn acp_detached_inspect_result_carries_semantic_quality() {
         schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
         window_id: "acpDetached:thread-1".into(),
         window_kind: "AcpDetached".into(),
-        title: Some("Script Kit AI".into()),
+        title: Some("Script Kit ACP".into()),
         resolved_bounds: None,
         target_bounds_in_screenshot: None,
         surface_hit_point: None,
@@ -678,7 +678,7 @@ fn acp_detached_full_quality_inspect_receipt() {
         schema_version: AUTOMATION_INSPECT_SCHEMA_VERSION,
         window_id: "acpDetached:thread-2".into(),
         window_kind: "AcpDetached".into(),
-        title: Some("Script Kit AI".into()),
+        title: Some("Script Kit ACP".into()),
         resolved_bounds: None,
         target_bounds_in_screenshot: None,
         surface_hit_point: None,

@@ -127,7 +127,7 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
         }
 
         // -----------------------------------------------------------------
-        // Detached AI Chat
+        // Detached ACP Chat
         // -----------------------------------------------------------------
         WindowCommand::OpenDetachedAiChatWindow => {
             if let Err(e) = crate::ai::acp::chat_window::open_chat_window(cx) {

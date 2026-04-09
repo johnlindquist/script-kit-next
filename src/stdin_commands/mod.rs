@@ -383,14 +383,14 @@ pub enum ExternalCommand {
     },
     /// Open the Notes window (for testing)
     OpenNotes,
-    /// Open the AI Chat window (for testing)
+    /// Open the ACP Chat window (for testing)
     OpenAi,
-    /// Open the Mini AI Chat window (for testing)
+    /// Open the Mini ACP Chat window (for testing)
     OpenMiniAi,
-    /// Open the AI Chat window with mock data (for visual testing)
+    /// Open the ACP Chat window with mock data (for visual testing)
     /// This inserts sample conversations to test the UI layout
     OpenAiWithMockData,
-    /// Open the Mini AI Chat window with mock data (for visual testing)
+    /// Open the Mini ACP Chat window with mock data (for visual testing)
     OpenMiniAiWithMockData,
     /// Show the AI command bar (Cmd+K menu) for testing the refactored ActionsDialog
     ShowAiCommandBar,
@@ -405,7 +405,7 @@ pub enum ExternalCommand {
         request_id: Option<ExternalCommandRequestId>,
     },
     /// Capture a screenshot of a window by title pattern and save to file (for testing)
-    /// title: Title pattern to match (e.g., "Script Kit AI" for the AI window)
+    /// title: Title pattern to match (e.g., "Script Kit ACP" for the ACP Chat window)
     /// path: File path to save the PNG screenshot
     CaptureWindow {
         title: String,
@@ -1149,12 +1149,11 @@ mod tests {
 
     #[test]
     fn test_external_command_capture_window_deserialization() -> anyhow::Result<()> {
-        let json =
-            r#"{"type": "captureWindow", "title": "Script Kit AI", "path": "/tmp/screenshot.png"}"#;
+        let json = r#"{"type": "captureWindow", "title": "Script Kit ACP", "path": "/tmp/screenshot.png"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
         match cmd {
             ExternalCommand::CaptureWindow { title, path, .. } => {
-                assert_eq!(title, "Script Kit AI");
+                assert_eq!(title, "Script Kit ACP");
                 assert_eq!(path, "/tmp/screenshot.png");
             }
             _ => panic!("Expected CaptureWindow command"),

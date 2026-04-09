@@ -61,6 +61,10 @@ Use `kit://context?profile=minimal` for current desktop context.
 - `parts` are typed attachments, not free-form text blobs.
 - Do not invent Notes globals or screenshot globals here.
 
+## Related Examples
+
+- `~/.scriptkit/kit/examples/extensions/acp-chat.md` — start chats, attach typed context parts, and inspect streaming status
+
 ## Related Skills
 
 - [custom-actions](../custom-actions/SKILL.md) — expose ACP helpers through the Actions Menu

@@ -1136,7 +1136,7 @@ impl ScriptListApp {
                         }
                     }),
                     cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-                        this.open_tab_ai_chat(cx);
+                        this.open_tab_ai_acp_with_entry_intent(None, cx);
                     }),
                 );
             if let Some(footer) = self.main_window_footer_slot(gpui_footer) {

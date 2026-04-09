@@ -705,11 +705,10 @@ fn audit_workflow_affordance_surface(
                 && combined.contains("ACTIONS_DIALOG_EXPECT_SEARCH_POSITION")
                 && combined.contains("ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT");
 
-            let has_three_key_footer = combined.contains("\"↵ Run\"")
-                && combined.contains("\"⌘K Actions\"")
-                && combined.contains("\"⌘↵ AI\"");
+            let has_two_key_actions_footer =
+                combined.contains("\"↵ Run\"") && combined.contains("\"⌘K Actions\"");
 
-            if has_runtime_contract && has_three_key_footer {
+            if has_runtime_contract && has_two_key_actions_footer {
                 findings.push(info(
                     "command palette contract is audited",
                     "Actions dialog already declares a machine-readable runtime contract for top search, footer hints, and chrome regressions. Treat it as the baseline command surface for every keyboard-first workflow.",
@@ -718,7 +717,7 @@ fn audit_workflow_affordance_surface(
             } else {
                 findings.push(warning(
                     "command palette contract is not fully reportable",
-                    "Actions dialog is the core power-user surface, but the audited source no longer proves both the runtime contract and the canonical three-key footer together.",
+                    "Actions dialog is the core power-user surface, but the audited source no longer proves both the runtime contract and the canonical two-key footer together.",
                     vec!["src/actions/dialog.rs".to_string()],
                 ));
             }
@@ -997,7 +996,7 @@ pub fn render_workflow_affordance_consistency_markdown(report: &AuditReport) -> 
         report.summary.clone(),
         String::new(),
         "## What This Checks".to_string(),
-        "- Keyboard-first consistency across command surfaces: universal three-key footer, mini-vs-expanded parity, explicit exceptions, and reportable runtime audits.".to_string(),
+        "- Keyboard-first consistency across command surfaces: footer contracts, mini-vs-expanded parity, explicit exceptions, and reportable runtime audits.".to_string(),
         String::new(),
         "## Surface Status".to_string(),
         "| Surface | Status | Files |".to_string(),

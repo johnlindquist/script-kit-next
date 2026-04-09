@@ -33,7 +33,7 @@ impl ScriptListApp {
     ///
     /// This creates an EnvPrompt that stores the key in the system keyring.
     /// Once stored, the key will be available to:
-    /// - AI Chat window (via DetectedKeys::from_environment)
+    /// - ACP Chat window (via DetectedKeys::from_environment)
     /// - Scripts using `await env("SCRIPT_KIT_*_API_KEY")`
     fn show_api_key_prompt(
         &mut self,

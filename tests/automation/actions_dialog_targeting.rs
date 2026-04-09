@@ -554,7 +554,7 @@ fn actions_dialog_records_parent_identity_from_non_main_host() {
     let acp = AutomationWindowInfo {
         id: format!("{p}:acp"),
         kind: AutomationWindowKind::AcpDetached,
-        title: Some("AI Chat".into()),
+        title: Some("ACP Chat".into()),
         focused: true,
         visible: true,
         semantic_surface: Some("acpChat".into()),

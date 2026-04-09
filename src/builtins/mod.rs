@@ -121,15 +121,15 @@ pub enum AiCommandType {
     GenerateScript,
     /// Generate a new Script Kit script using the frontmost app's live context
     GenerateScriptFromCurrentApp,
-    /// Send a screenshot of the entire screen to AI Chat
+    /// Send a screenshot of the entire screen to ACP Chat
     SendScreenToAi,
-    /// Send a screenshot of the focused window to AI Chat
+    /// Send a screenshot of the focused window to ACP Chat
     SendFocusedWindowToAi,
-    /// Send the currently selected text to AI Chat
+    /// Send the currently selected text to ACP Chat
     SendSelectedTextToAi,
-    /// Send the focused browser tab URL/content to AI Chat
+    /// Send the focused browser tab URL/content to ACP Chat
     SendBrowserTabToAi,
-    /// Send a selected screen area to AI Chat (interactive selection)
+    /// Send a selected screen area to ACP Chat (interactive selection)
     SendScreenAreaToAi,
     /// Create a new AI chat preset/template
     CreateAiPreset,
@@ -267,7 +267,7 @@ pub enum BuiltInFeature {
     /// In-app StoryBrowser compare/adopt tool (storybook feature only)
     #[cfg(feature = "storybook")]
     DesignExplorer,
-    /// AI Chat window for conversing with AI assistants
+    /// ACP Chat window for conversing with AI assistants
     AiChat,
     /// Notes window for quick notes and scratchpad
     Notes,
@@ -429,7 +429,7 @@ impl BuiltInEntry {
             BuiltInFeature::DesignGallery => "Open Gallery",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Open Explorer",
-            BuiltInFeature::AiChat => "Open AI Harness",
+            BuiltInFeature::AiChat => "Open ACP Chat",
             BuiltInFeature::Notes => "Open Notes",
             BuiltInFeature::EmojiPicker => "Open Emoji Picker",
             BuiltInFeature::MenuBarAction(_) => "Execute Menu Item",
@@ -472,7 +472,7 @@ impl BuiltInEntry {
                 NotesCommandType::QuickCapture => "Start Quick Capture",
             },
             BuiltInFeature::AiCommand(action) => match action {
-                AiCommandType::OpenAi | AiCommandType::MiniAi => "Open AI Harness",
+                AiCommandType::OpenAi | AiCommandType::MiniAi => "Open ACP Chat",
                 AiCommandType::NewConversation => "Start New Chat",
                 AiCommandType::ClearConversation => "Clear Conversation",
                 AiCommandType::GenerateScript => "Generate Script",
@@ -715,11 +715,11 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             debug!("Added Window Switcher built-in entry");
         }
 
-        // AI Harness is always available — opens the instant harness terminal
+        // ACP Chat is always available from the launcher.
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/ai-chat",
-            "Open AI Harness",
-            "Open the instant AI harness terminal with fresh context",
+            "Open ACP Chat",
+            "Open ACP Chat with fresh context",
             vec![
                 "ai",
                 "harness",
@@ -733,7 +733,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             BuiltInFeature::AiChat,
             "bot",
         ));
-        debug!("Added AI Harness built-in entry");
+        debug!("Added ACP Chat built-in entry");
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/acp-history",
@@ -1167,7 +1167,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/generate-script-with-ai",
             GENERATE_SCRIPT_WITH_AI_LABEL,
-            "Open the AI harness to generate a Script Kit script from your prompt text",
+            "Open ACP Chat to generate a Script Kit script from your prompt text",
             vec![
                 "generate",
                 "script",
@@ -1206,7 +1206,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-screen-to-ai",
             "Send Screen to AI",
-            "Capture the full screen and send it to the AI harness",
+            "Capture the full screen and send it to ACP Chat",
             vec![
                 "send",
                 "screen",
@@ -1223,7 +1223,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-focused-window-to-ai",
             "Send Focused Window to AI",
-            "Capture the focused window and send it to the AI harness",
+            "Capture the focused window and send it to ACP Chat",
             vec![
                 "send",
                 "window",
@@ -1240,7 +1240,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-selected-text-to-ai",
             "Send Selected Text to AI",
-            "Send the currently selected text to the AI harness",
+            "Send the currently selected text to ACP Chat",
             vec![
                 "send",
                 "selected",
@@ -1257,7 +1257,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-browser-tab-to-ai",
             "Send Focused Browser Tab to AI",
-            "Send the current browser tab URL to the AI harness",
+            "Send the current browser tab URL to ACP Chat",
             vec![
                 "send", "browser", "tab", "url", "safari", "chrome", "ai", "chat", "web",
             ],
@@ -1443,7 +1443,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/configure-vercel-api",
             "Configure Vercel AI Gateway",
-            "Open setup for the Vercel AI Gateway API key used by AI Chat",
+            "Open setup for the Vercel AI Gateway API key used by ACP Chat",
             vec![
                 "vercel",
                 "api",
@@ -1462,7 +1462,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/configure-openai-api",
             "Configure OpenAI API Key",
-            "Open setup for the OpenAI API key used by AI Chat",
+            "Open setup for the OpenAI API key used by ACP Chat",
             vec![
                 "openai",
                 "api",
@@ -1481,7 +1481,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/configure-anthropic-api",
             "Configure Anthropic API Key",
-            "Open setup for the Anthropic API key used by AI Chat",
+            "Open setup for the Anthropic API key used by ACP Chat",
             vec![
                 "anthropic",
                 "api",
@@ -1882,7 +1882,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/dictation-to-ai",
             "Dictate to AI",
-            "Voice dictation — speak and submit to AI harness",
+            "Voice dictation — speak and submit to ACP Chat",
             vec![
                 "dictate ai",
                 "voice ai",
@@ -2236,7 +2236,7 @@ mod tests {
         let ai_chat = entries.iter().find(|e| e.id == "builtin/ai-chat");
         assert!(ai_chat.is_some());
         let ai_chat = ai_chat.unwrap();
-        assert_eq!(ai_chat.name, "Open AI Harness");
+        assert_eq!(ai_chat.name, "Open ACP Chat");
         assert_eq!(ai_chat.feature, BuiltInFeature::AiChat);
         assert!(ai_chat.keywords.contains(&"ai".to_string()));
         assert!(ai_chat.keywords.contains(&"harness".to_string()));
@@ -2283,7 +2283,7 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // App launcher no longer creates a built-in entry (apps appear in main search)
-        // But AI Chat, Notes and Design Gallery are always enabled (plus new command entries)
+        // But ACP Chat, Notes and Design Gallery are always enabled (plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
@@ -2301,7 +2301,7 @@ mod tests {
         };
         let entries = get_builtin_entries(&config);
 
-        // AI Chat, Notes, and Design Gallery are always enabled (plus new command entries)
+        // ACP Chat, Notes, and Design Gallery are always enabled (plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
@@ -2320,7 +2320,7 @@ mod tests {
         };
         let entries = get_builtin_entries(&config);
 
-        // Window switcher + AI Chat + Notes + Design Gallery (always enabled, plus new command entries)
+        // Window switcher + ACP Chat + Notes + Design Gallery (always enabled, plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin/window-switcher"));
         assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));

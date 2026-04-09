@@ -870,7 +870,7 @@ impl ScriptListApp {
             );
 
             self.close_tab_ai_harness_terminal(cx);
-            self.open_tab_ai_chat(cx);
+            self.open_tab_ai_acp_with_entry_intent(None, cx);
 
             let mut outcome = DispatchOutcome::success();
             outcome.user_message = Some(format!(
@@ -926,7 +926,7 @@ impl ScriptListApp {
             "acp_clear_conversation" => {
                 // Close and reopen the ACP chat for a fresh session
                 self.close_tab_ai_harness_terminal(cx);
-                self.open_tab_ai_chat(cx);
+                self.open_tab_ai_acp_with_entry_intent(None, cx);
                 DispatchOutcome::success()
             }
             "acp_paste_to_frontmost" => {
@@ -1486,7 +1486,7 @@ impl ScriptListApp {
             }
             "acp_reattach_panel" => {
                 crate::ai::acp::chat_window::close_chat_window(cx);
-                self.open_tab_ai_chat(cx);
+                self.open_tab_ai_acp_with_entry_intent(None, cx);
                 let mut o = DispatchOutcome::success();
                 o.user_message = Some("Chat re-attached to panel".to_string());
                 o

@@ -285,7 +285,7 @@ impl DetectedKeys {
     /// 2. System keyring (for users who use built-in "Configure API Key" commands)
     ///
     /// This allows the SDK's `await env("SCRIPT_KIT_VERCEL_API_KEY")` to store keys
-    /// in the keyring, and have the AI Chat window automatically pick them up.
+    /// in the keyring, and have the ACP Chat window automatically pick them up.
     pub fn from_environment() -> Self {
         Self {
             openai: read_key_env_or_keyring(env_vars::OPENAI_API_KEY).map(SecretString::from),

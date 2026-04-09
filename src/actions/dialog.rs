@@ -3039,7 +3039,6 @@ impl Render for ActionsDialog {
         let footer_container = if self.config.show_footer {
             Some(div().w_full().child(crate::components::HintStrip::new(vec![
                 "↵ Run".into(),
-                "⌘↵ AI".into(),
                 "⌘K Actions".into(),
             ])))
         } else {
@@ -3198,7 +3197,7 @@ pub(crate) struct ActionsDialogChromeAudit {
     pub section_mode: &'static str,
     /// Corner radius for row selection background (0 = sharp).
     pub row_radius: u16,
-    /// Number of items in the footer hint strip (spec: exactly 3).
+    /// Number of items in the footer hint strip (spec: exactly 2).
     pub footer_hint_count: u8,
 }
 
@@ -3403,8 +3402,8 @@ impl ActionsDialogRuntimeAudit {
             violations.push(ActionsDialogRuntimeViolation {
                 surface: self.surface,
                 field: "footer_hint_count",
-                expected: "3",
-                actual: "not_3",
+                expected: "2",
+                actual: "not_2",
             });
         }
         violations
@@ -3616,14 +3615,14 @@ mod tests {
 
     // ── Chrome contract tests (.impeccable.md) ──────────────────────────
 
-    /// The live dialog footer must render exactly three hint-strip keys:
-    /// `↵ Run`, `⌘↵ AI`, `⌘K Actions`.
+    /// The live dialog footer must render exactly two hint-strip keys:
+    /// `↵ Run`, `⌘K Actions`.
     #[test]
-    fn actions_dialog_footer_matches_three_key_contract() {
+    fn actions_dialog_footer_matches_two_key_contract() {
         let audit = ActionsDialogChromeAudit::from_live_defaults();
         assert_eq!(
-            audit.footer_hint_count, 3,
-            "footer must show exactly 3 hints per .impeccable.md three-key rule"
+            audit.footer_hint_count, 2,
+            "footer must show exactly 2 hints per .impeccable.md two-key rule"
         );
     }
 
@@ -3765,7 +3764,7 @@ mod actions_dialog_spec_tests {
         assert_eq!(audit.search_position, "top");
         assert!(!audit.shows_search_divider);
         assert_eq!(audit.section_mode, "headers");
-        assert_eq!(audit.footer_hint_count, 3);
+        assert_eq!(audit.footer_hint_count, 2);
     }
 
     #[test]
@@ -3778,7 +3777,7 @@ mod actions_dialog_spec_tests {
             show_footer: true,
             show_icons: true,
             show_container_border: false,
-            footer_hint_count: 3,
+            footer_hint_count: 2,
         };
         assert!(
             audit
@@ -3799,7 +3798,7 @@ mod actions_dialog_spec_tests {
             show_footer: true,
             show_icons: true,
             show_container_border: false,
-            footer_hint_count: 3,
+            footer_hint_count: 2,
         };
         assert!(
             audit
@@ -3820,7 +3819,7 @@ mod actions_dialog_spec_tests {
             show_footer: true,
             show_icons: true,
             show_container_border: false,
-            footer_hint_count: 3,
+            footer_hint_count: 2,
         };
         assert!(
             audit.validate().iter().any(|v| v.field == "section_mode"),
@@ -3838,7 +3837,7 @@ mod actions_dialog_spec_tests {
             show_footer: true,
             show_icons: true,
             show_container_border: true,
-            footer_hint_count: 3,
+            footer_hint_count: 2,
         };
         assert!(
             audit
@@ -3866,7 +3865,7 @@ mod actions_dialog_spec_tests {
                 .validate()
                 .iter()
                 .any(|v| v.field == "footer_hint_count"),
-            "footer hint count != 3 should fail verification"
+            "footer hint count != 2 should fail verification"
         );
     }
 
@@ -3880,7 +3879,7 @@ mod actions_dialog_spec_tests {
             show_footer: true,
             show_icons: true,
             show_container_border: false,
-            footer_hint_count: 3,
+            footer_hint_count: 2,
         };
         assert!(
             audit.validate().is_empty(),
@@ -3919,7 +3918,7 @@ mod actions_dialog_spec_tests {
         assert_eq!(contract.search_position, "top");
         assert!(!contract.shows_search_divider);
         assert!(!contract.show_container_border);
-        assert_eq!(contract.footer_hint_count, 3);
+        assert_eq!(contract.footer_hint_count, 2);
     }
 
     #[test]

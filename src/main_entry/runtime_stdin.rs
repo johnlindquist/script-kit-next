@@ -305,7 +305,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         view.update_window_size_deferred(window, ctx);
                                     }
                                     "tab-ai" | "tabai" => {
-                                        view.open_tab_ai_chat(ctx);
+                                        view.open_tab_ai_acp_with_entry_intent(None, ctx);
                                     }
                                     _ => {
                                         logging::log("ERROR", &format!("Unknown built-in: '{}'", name));

@@ -1137,7 +1137,7 @@ impl ScriptListApp {
             vec![
                 primary.into(),
                 "Esc Cancel".into(),
-                "Attaching to AI Chat".into(),
+                "Attaching to ACP Chat".into(),
             ]
         } else if let Some(file) = selected_file.as_ref() {
             let primary = if matches!(file.file_type, file_search::FileType::Directory) {

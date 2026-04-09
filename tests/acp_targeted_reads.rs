@@ -45,7 +45,7 @@ fn acp_detached_target_resolves_to_correct_kind() {
     script_kit_gpui::windows::upsert_automation_window(AutomationWindowInfo {
         id: format!("{p}:acp-1"),
         kind: AutomationWindowKind::AcpDetached,
-        title: Some("Script Kit AI".into()),
+        title: Some("Script Kit ACP".into()),
         focused: true,
         visible: true,
         semantic_surface: Some("acpChat".into()),
@@ -258,7 +258,7 @@ fn acp_detached_target_by_id_resolves_correctly() {
     script_kit_gpui::windows::upsert_automation_window(AutomationWindowInfo {
         id: format!("{p}:acp-thread-42"),
         kind: AutomationWindowKind::AcpDetached,
-        title: Some("Script Kit AI".into()),
+        title: Some("Script Kit ACP".into()),
         focused: false,
         visible: true,
         semantic_surface: Some("acpChat".into()),
@@ -392,7 +392,7 @@ fn acp_state_result_with_resolved_target_round_trips() {
     state.resolved_target = Some(AcpResolvedTarget {
         window_id: "acpDetached:thread-1".to_string(),
         window_kind: "acpDetached".to_string(),
-        title: Some("Script Kit AI".to_string()),
+        title: Some("Script Kit ACP".to_string()),
     });
 
     let response = Message::acp_state_result("acp-state-resolved-1".to_string(), state);
@@ -409,7 +409,7 @@ fn acp_state_result_with_resolved_target_round_trips() {
     );
     assert_eq!(
         json["resolvedTarget"]["title"].as_str(),
-        Some("Script Kit AI")
+        Some("Script Kit ACP")
     );
 
     // Schema version should be 2 with resolved_target support

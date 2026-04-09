@@ -158,11 +158,10 @@ pub fn render_actions_dialog_presentation(
         container = container.child(render_search_row(model, &style, theme, &mono));
     }
 
-    // Three-key hint strip footer — matches live dialog exactly
+    // Two-key hint strip footer — matches live dialog exactly
     if model.show_footer {
         container = container.child(div().w_full().child(crate::components::HintStrip::new(vec![
             "↵ Run".into(),
-            "⌘↵ AI".into(),
             "⌘K Actions".into(),
         ])));
     }

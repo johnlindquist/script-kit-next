@@ -217,7 +217,7 @@ pub fn send_ai_window_to_back() {
                 if !title_cstr.is_null() {
                     let title_str = CStr::from_ptr(title_cstr).to_string_lossy();
 
-                    if title_str == "Script Kit AI" {
+                    if title_str == "Script Kit ACP" {
                         // Found the AI window - send it to the back
                         let _: () = msg_send![window, orderBack: nil];
                         logging::log(

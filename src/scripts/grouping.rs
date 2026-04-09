@@ -36,7 +36,7 @@ pub const DEFAULT_MAX_RECENT_ITEMS: usize = 10;
 /// These appear in the SUGGESTED section when the user has no usage history.
 /// Order matters - items will appear in this order.
 pub const DEFAULT_SUGGESTED_ITEMS: &[&str] = &[
-    "AI Chat",
+    "ACP Chat",
     "Notes",
     "Clipboard History",
     "Quick Terminal",

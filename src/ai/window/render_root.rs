@@ -432,7 +432,7 @@ impl Render for AiApp {
                 chat.title.clone()
             }
         } else {
-            "AI Chat".to_string()
+            "ACP Chat".to_string()
         };
         div()
             .relative() // Keep relative positioning for overlay dropdowns

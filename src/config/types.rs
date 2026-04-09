@@ -626,7 +626,7 @@ pub struct Config {
         rename = "notesHotkey"
     )]
     pub notes_hotkey: Option<HotkeyConfig>,
-    /// Hotkey for opening AI Chat window (default: Cmd+Shift+Space)
+    /// Hotkey for opening ACP Chat window (default: Cmd+Shift+Space)
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "aiHotkey")]
     pub ai_hotkey: Option<HotkeyConfig>,
     /// Whether AI hotkey is enabled (default: true)

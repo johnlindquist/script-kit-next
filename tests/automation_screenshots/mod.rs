@@ -170,7 +170,7 @@ fn main_target_penalizes_secondary_windows() {
 
     let main = score(&resolved, "Script Kit", false, 800, 600);
     let notes = score(&resolved, "Notes", false, 800, 600);
-    let ai = score(&resolved, "AI Chat", false, 800, 600);
+    let ai = score(&resolved, "ACP Chat", false, 800, 600);
 
     assert!(main > notes, "main={main} should beat notes={notes}");
     assert!(main > ai, "main={main} should beat ai={ai}");
@@ -187,8 +187,8 @@ fn identical_candidates_tie() {
         Some((600.0, 400.0)),
     );
 
-    let a = score(&resolved, "Script Kit AI", false, 600, 400);
-    let b = score(&resolved, "Script Kit AI", false, 600, 400);
+    let a = score(&resolved, "Script Kit ACP", false, 600, 400);
+    let b = score(&resolved, "Script Kit ACP", false, 600, 400);
 
     assert_eq!(a, b, "identical candidates must tie");
 }
@@ -202,8 +202,8 @@ fn size_difference_breaks_tie() {
         Some((600.0, 400.0)),
     );
 
-    let exact = score(&resolved, "Script Kit AI", false, 600, 400);
-    let close = score(&resolved, "Script Kit AI", false, 603, 401);
+    let exact = score(&resolved, "Script Kit ACP", false, 600, 400);
+    let close = score(&resolved, "Script Kit ACP", false, 603, 401);
 
     assert!(
         exact > close,
@@ -220,8 +220,8 @@ fn focus_difference_breaks_tie_when_sizes_equal() {
         Some((600.0, 400.0)),
     );
 
-    let focused = score(&resolved, "Script Kit AI", true, 600, 400);
-    let unfocused = score(&resolved, "Script Kit AI", false, 600, 400);
+    let focused = score(&resolved, "Script Kit ACP", true, 600, 400);
+    let unfocused = score(&resolved, "Script Kit ACP", false, 600, 400);
 
     assert!(
         focused > unfocused,
@@ -236,8 +236,8 @@ fn ambiguous_error_message_contains_candidates_and_score() {
     // Simulate what capture_resolved_window would produce for a tie
     let id = "acpDetached:thread-1";
     let kind = AutomationWindowKind::AcpDetached;
-    let title_a = "Script Kit AI";
-    let title_b = "Script Kit AI";
+    let title_a = "Script Kit ACP";
+    let title_b = "Script Kit ACP";
     let tied_score = 5100;
 
     let error = format!(
