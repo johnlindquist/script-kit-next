@@ -1196,6 +1196,24 @@ notesHotkey: {
 
 Notes are stored in SQLite at `~/.scriptkit/db/notes.sqlite`.
 
+### Notes Automation
+
+Notes are currently exposed to scripts through the automation protocol rather than dedicated JavaScript globals.
+
+```json
+{"type":"getElements","requestId":"elm-notes","target":{"type":"kind","kind":"notes"},"limit":10}
+```
+
+```json
+{"type":"waitFor","requestId":"w-notes","target":{"type":"kind","kind":"notes"},"condition":{"type":"elementExists","semanticId":"input:notes-editor"},"timeout":3000,"pollInterval":25}
+```
+
+```json
+{"type":"batch","requestId":"b-notes","target":{"type":"kind","kind":"notes"},"commands":[{"type":"setInput","text":"Hello from automation"}]}
+```
+
+Use the semantic IDs `panel:notes-window` and `input:notes-editor`. Do not read or write `~/.scriptkit/db/notes.sqlite` directly from scripts.
+
 ---
 
 ## File Watching
