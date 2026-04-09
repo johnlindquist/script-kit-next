@@ -42,23 +42,6 @@ struct ScreenshotSuccess {
     path: String,
 }
 
-fn print_available_stories() {
-    eprintln!("Available stories:");
-    for entry in all_stories() {
-        let compare_ready = if entry.story.variants().len() > 1 {
-            " (compare-ready)"
-        } else {
-            ""
-        };
-        eprintln!(
-            "  {:<28} - {}{}",
-            entry.story.id(),
-            entry.story.name(),
-            compare_ready
-        );
-    }
-}
-
 fn print_json_error_and_exit(
     kind: &'static str,
     message: String,
@@ -138,13 +121,6 @@ fn print_adopt_result_and_exit(story_id: Option<&str>, variant_id: Option<&str>)
             2,
         );
     }
-
-    tracing::info!(
-        event = "storybook_adopt_requested",
-        story_id = story_id,
-        variant_id = variant_id,
-        "Requested story adoption"
-    );
 
     match save_selected_story_variant(story_id, variant_id) {
         Ok(result) => {
@@ -235,11 +211,6 @@ fn main() {
                 print_story_catalog_json_and_exit();
             }
             "--help" | "-h" => {
-                tracing::info!(
-                    event = "storybook_help_rendered",
-                    story_count = all_stories().count(),
-                    "Rendered storybook help"
-                );
                 eprintln!("Script Kit Storybook - Component Preview Tool");
                 eprintln!();
                 eprintln!("Usage: storybook [OPTIONS]");
@@ -255,7 +226,8 @@ fn main() {
                 eprintln!("  --catalog-json       Print compare-ready story catalog as JSON");
                 eprintln!("  -h, --help           Show this help message");
                 eprintln!();
-                print_available_stories();
+                eprintln!("Available stories:");
+                eprintln!("  main-menu        - Current launcher main menu");
                 std::process::exit(0);
             }
             _ => {}
@@ -407,10 +379,6 @@ fn capture_storybook_screenshot() -> Result<String, Box<dyn std::error::Error>> 
 }
 
 fn build_story_catalog_json() -> Result<String, Box<dyn std::error::Error>> {
-    tracing::info!(
-        event = "storybook_catalog_json_requested",
-        "Building story catalog json"
-    );
     let snapshot = script_kit_gpui::storybook::load_story_catalog_snapshot()?;
     Ok(serde_json::to_string_pretty(&snapshot)?)
 }

@@ -1028,7 +1028,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                         },
                         StdinCommand::Protocol(message) => {
                             logging::log("STDIN", "Routing stdin protocol message");
-                            view.handle_stdin_protocol_message(message, ctx);
+                            view.handle_stdin_protocol_message(*message, ctx);
                         }
 
                     }

@@ -544,14 +544,14 @@ impl ExternalCommand {
 #[derive(Debug, Clone)]
 pub enum StdinCommand {
     External(ExternalCommand),
-    Protocol(crate::protocol::Message),
+    Protocol(Box<crate::protocol::Message>),
 }
 
 impl StdinCommand {
     pub fn command_type(&self) -> &'static str {
         match self {
             Self::External(command) => command.command_type(),
-            Self::Protocol(message) => match message {
+            Self::Protocol(message) => match message.as_ref() {
                 crate::protocol::Message::GetState { .. } => "getState",
                 crate::protocol::Message::GetElements { .. } => "getElements",
                 crate::protocol::Message::GetAcpState { .. } => "getAcpState",
@@ -574,7 +574,7 @@ impl StdinCommand {
     pub fn request_id(&self) -> Option<&str> {
         match self {
             Self::External(command) => command.request_id().map(AsRef::as_ref),
-            Self::Protocol(message) => match message {
+            Self::Protocol(message) => match message.as_ref() {
                 crate::protocol::Message::GetState { request_id, .. }
                 | crate::protocol::Message::GetElements { request_id, .. }
                 | crate::protocol::Message::GetAcpState { request_id, .. }
@@ -607,7 +607,7 @@ fn parse_stdin_command(trimmed: &str) -> anyhow::Result<StdinCommand> {
     }
 
     let message = serde_json::from_str::<crate::protocol::Message>(trimmed)?;
-    Ok(StdinCommand::Protocol(message))
+    Ok(StdinCommand::Protocol(Box::new(message)))
 }
 
 pub fn create_stdout_response_sender() -> mpsc::SyncSender<crate::protocol::Message> {

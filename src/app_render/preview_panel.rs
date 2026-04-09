@@ -415,6 +415,86 @@ impl ScriptListApp {
                         );
                     }
 
+                    scripts::SearchResult::Skill(skill_match) => {
+                        let skill = &skill_match.skill;
+
+                        // Divider before SKILL.md preview
+                        panel = panel.child(
+                            div()
+                                .w_full()
+                                .h(px(style.visual.border_thin))
+                                .bg(rgba(chrome.divider_rgba))
+                                .my(px(style.spacing.padding_sm)),
+                        );
+
+                        // SKILL.md header
+                        panel = panel.child(
+                            div()
+                                .text_size(px(style.section_label_font_size))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(rgba((style.text_muted << 8) | 0xCC))
+                                .pb(px(style.spacing.padding_sm))
+                                .child("SKILL.md"),
+                        );
+
+                        let is_dark = self.theme.is_dark_mode();
+                        let preview = {
+                            const MAX_LINES: usize = 40;
+                            const MAX_LINE_LENGTH: usize = 120;
+                            match std::fs::read_to_string(&skill.path) {
+                                Ok(content) => content
+                                    .lines()
+                                    .take(MAX_LINES)
+                                    .map(|line| truncate_preview_line_for_display(line, MAX_LINE_LENGTH))
+                                    .join("\n"),
+                                Err(error) => {
+                                    tracing::warn!(
+                                        event = "skill_info_panel_preview_read_failed",
+                                        path = %skill.path.display(),
+                                        %error,
+                                        "Failed to read SKILL.md for preview"
+                                    );
+                                    format!("Failed to read {}: {}", skill.path.display(), error)
+                                }
+                            }
+                        };
+                        let lines = highlight_code_lines(&preview, "md", is_dark);
+
+                        let mut doc_container = div()
+                            .w_full()
+                            .min_w(px(280.))
+                            .p(px(style.spacing.padding_md))
+                            .rounded(px(border_radius))
+                            .bg(rgba((bg_search_box << 8) | 0x80))
+                            .overflow_hidden()
+                            .flex()
+                            .flex_col();
+
+                        for line in lines {
+                            let mut line_div = div()
+                                .flex()
+                                .flex_row()
+                                .w_full()
+                                .font_family(style.typography.font_family_mono)
+                                .text_xs()
+                                .min_h(px(style.spacing.padding_lg));
+
+                            if line.spans.is_empty() {
+                                line_div = line_div.child(" ");
+                            } else {
+                                for span in line.spans {
+                                    line_div = line_div.child(
+                                        div().text_color(rgb(span.color)).child(span.text),
+                                    );
+                                }
+                            }
+
+                            doc_container = doc_container.child(line_div);
+                        }
+
+                        panel = panel.child(doc_container);
+                    }
+
                     // No code preview for other result types
                     _ => {}
                 }
