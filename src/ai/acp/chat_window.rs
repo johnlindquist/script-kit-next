@@ -567,6 +567,13 @@ fn dispatch_detached_action_checked(
 /// Handles the subset of ACP chat actions that make sense in the detached
 /// window context (copy, scroll, expand/collapse, close, reattach, etc.).
 fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &str, cx: &mut App) {
+    tracing::info!(
+        event = "acp_actions_menu_selected",
+        host = "detached",
+        action_id,
+        "Selected ACP Actions Menu item"
+    );
+
     if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
         if let Some(entity) = entity_weak.upgrade() {
             entity.update(cx, |chat, cx| {

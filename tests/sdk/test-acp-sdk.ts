@@ -26,6 +26,19 @@ function debug(msg: string) {
   console.error(`[TEST] ${msg}`);
 }
 
+async function expectSentMessage(
+  invoke: () => Promise<unknown>,
+  type: string,
+  validate?: (msg: any) => void,
+): Promise<any> {
+  sentMessages.length = 0;
+  await invoke();
+  const msg = sentMessages.find((m: any) => m.type === type) as any;
+  if (!msg) throw new Error(`${type} message not found`);
+  validate?.(msg);
+  return msg;
+}
+
 // Capture messages sent to stdout
 const sentMessages: unknown[] = [];
 const originalStdoutWrite = (process as any).stdout.write.bind((process as any).stdout);
@@ -144,6 +157,126 @@ async function runTests() {
       }
 
       debug(`aiOn subscribe payload: ${JSON.stringify(msg)}`);
+      logTest(test, 'pass', { result: msg, duration_ms: Date.now() - start });
+    } catch (err) {
+      logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });
+    }
+  }
+
+  // =============================================================================
+  // Test 5: aiIsOpen sends request
+  // =============================================================================
+  {
+    const test = 'acp-aiIsOpen-sends-request';
+    const start = Date.now();
+    logTest(test, 'running');
+    try {
+      const msg = await expectSentMessage(() => aiIsOpen(), 'aiIsOpen');
+      debug(`aiIsOpen payload: ${JSON.stringify(msg)}`);
+      logTest(test, 'pass', { result: msg, duration_ms: Date.now() - start });
+    } catch (err) {
+      logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });
+    }
+  }
+
+  // =============================================================================
+  // Test 6: aiGetActiveChat sends request
+  // =============================================================================
+  {
+    const test = 'acp-aiGetActiveChat-sends-request';
+    const start = Date.now();
+    logTest(test, 'running');
+    try {
+      const msg = await expectSentMessage(() => aiGetActiveChat(), 'aiGetActiveChat');
+      debug(`aiGetActiveChat payload: ${JSON.stringify(msg)}`);
+      logTest(test, 'pass', { result: msg, duration_ms: Date.now() - start });
+    } catch (err) {
+      logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });
+    }
+  }
+
+  // =============================================================================
+  // Test 7: aiListChats shape
+  // =============================================================================
+  {
+    const test = 'acp-aiListChats-shape';
+    const start = Date.now();
+    logTest(test, 'running');
+    try {
+      const msg = await expectSentMessage(
+        () => aiListChats(25, true),
+        'aiListChats',
+        (m) => {
+          if (m.limit !== 25 || m.includeDeleted !== true) {
+            throw new Error(`bad aiListChats payload: ${JSON.stringify(m)}`);
+          }
+        },
+      );
+      debug(`aiListChats payload: ${JSON.stringify(msg)}`);
+      logTest(test, 'pass', { result: msg, duration_ms: Date.now() - start });
+    } catch (err) {
+      logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });
+    }
+  }
+
+  // =============================================================================
+  // Test 8: aiGetConversation shape
+  // =============================================================================
+  {
+    const test = 'acp-aiGetConversation-shape';
+    const start = Date.now();
+    logTest(test, 'running');
+    try {
+      const msg = await expectSentMessage(
+        () => aiGetConversation('chat-123', 20),
+        'aiGetConversation',
+        (m) => {
+          if (m.chatId !== 'chat-123' || m.limit !== 20) {
+            throw new Error(`bad aiGetConversation payload: ${JSON.stringify(m)}`);
+          }
+        },
+      );
+      debug(`aiGetConversation payload: ${JSON.stringify(msg)}`);
+      logTest(test, 'pass', { result: msg, duration_ms: Date.now() - start });
+    } catch (err) {
+      logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });
+    }
+  }
+
+  // =============================================================================
+  // Test 9: aiSetSystemPrompt shape
+  // =============================================================================
+  {
+    const test = 'acp-aiSetSystemPrompt-shape';
+    const start = Date.now();
+    logTest(test, 'running');
+    try {
+      const msg = await expectSentMessage(
+        () => aiSetSystemPrompt('chat-123', 'Be concise'),
+        'aiSetSystemPrompt',
+        (m) => {
+          if (m.chatId !== 'chat-123' || m.prompt !== 'Be concise') {
+            throw new Error(`bad aiSetSystemPrompt payload: ${JSON.stringify(m)}`);
+          }
+        },
+      );
+      debug(`aiSetSystemPrompt payload: ${JSON.stringify(msg)}`);
+      logTest(test, 'pass', { result: msg, duration_ms: Date.now() - start });
+    } catch (err) {
+      logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });
+    }
+  }
+
+  // =============================================================================
+  // Test 10: aiFocus sends request
+  // =============================================================================
+  {
+    const test = 'acp-aiFocus-sends-request';
+    const start = Date.now();
+    logTest(test, 'running');
+    try {
+      const msg = await expectSentMessage(() => aiFocus(), 'aiFocus');
+      debug(`aiFocus payload: ${JSON.stringify(msg)}`);
       logTest(test, 'pass', { result: msg, duration_ms: Date.now() - start });
     } catch (err) {
       logTest(test, 'fail', { error: String(err), duration_ms: Date.now() - start });
