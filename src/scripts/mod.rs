@@ -41,7 +41,7 @@ pub use self::search::{
 pub use self::types::{
     preview_cache_is_valid, preview_match_signature, AgentMatch, AppMatch, BuiltInMatch,
     FallbackConfig, FallbackMatch, MatchIndices, Script, ScriptContentMatch, ScriptMatch,
-    ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult, WindowMatch,
+    ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult, SkillMatch, WindowMatch,
 };
 
 #[cfg(test)]

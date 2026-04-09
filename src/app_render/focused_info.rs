@@ -1064,9 +1064,10 @@ impl ScriptListApp {
                         )
                     }
                     scripts::SearchResult::Skill(m) => {
-                        // Skills use plugin-qualified key and are editable files
+                        // Skills are plugin-owned SKILL.md files with file actions
+                        // but not script-specific actions (view logs, delete script)
                         Some(
-                            ScriptInfo::new(
+                            ScriptInfo::skill(
                                 &m.skill.title,
                                 m.skill.path.to_string_lossy().to_string(),
                             )

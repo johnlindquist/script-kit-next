@@ -173,6 +173,21 @@ fn copy_content_reads_file_and_copies_to_clipboard() {
     );
 }
 
+#[test]
+fn copy_content_supports_skill_results() {
+    let content = super::read_all_handle_action_sources();
+
+    let copy_pos = content
+        .find("\"copy_content\"")
+        .expect("Expected copy_content action handler");
+    let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
+
+    assert!(
+        block.contains("SearchResult::Skill(m)"),
+        "copy_content should support Skill result type for reading SKILL.md"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // copy_content — error paths
 // ---------------------------------------------------------------------------

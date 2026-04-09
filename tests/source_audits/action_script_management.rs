@@ -25,7 +25,7 @@ fn edit_script_uses_async_editor_launch() {
 }
 
 #[test]
-fn edit_script_supports_scripts_and_agents() {
+fn edit_script_supports_scripts_skills_and_agents() {
     let content = super::read_all_handle_action_sources();
 
     let edit_pos = content
@@ -34,8 +34,16 @@ fn edit_script_supports_scripts_and_agents() {
     let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
 
     assert!(
-        block.contains("SearchResult::Script(m)") && block.contains("SearchResult::Agent(m)"),
-        "edit_script should support both Script and Agent result types"
+        block.contains("SearchResult::Script(m)"),
+        "edit_script should support Script result type"
+    );
+    assert!(
+        block.contains("SearchResult::Skill(m)"),
+        "edit_script should support Skill result type"
+    );
+    assert!(
+        block.contains("SearchResult::Agent(m)"),
+        "edit_script should support Agent result type"
     );
 }
 

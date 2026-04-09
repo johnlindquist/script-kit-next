@@ -80,6 +80,10 @@ pub struct ScriptInfo {
     /// Used by "Reset Ranking" to know which frecency entry to remove.
     /// When `is_suggested` is true, this should be a non-empty path.
     pub frecency_path: Option<String>,
+    /// Whether this is a plugin-owned skill (SKILL.md).
+    /// Skills expose file-oriented actions (edit, copy content, reveal)
+    /// but not script-specific actions (view logs, delete script).
+    pub is_skill: bool,
     /// Whether this is an agent file (.claude.md or similar).
     /// Retained for ACP internals and action dialog compatibility.
     /// Agents are suppressed from the main-menu launcher pipeline;
@@ -105,6 +109,7 @@ impl Default for ScriptInfo {
             alias: None,
             is_suggested: false,
             frecency_path: None,
+            is_skill: false,
             is_agent: false,
             is_app: false,
             bundle_id: None,
@@ -142,6 +147,7 @@ impl ScriptInfo {
         path: impl Into<String>,
         is_script: bool,
         is_scriptlet: bool,
+        is_skill: bool,
         is_agent: bool,
         is_app: bool,
         action_verb: impl Into<String>,
@@ -154,6 +160,7 @@ impl ScriptInfo {
             path: path.into(),
             is_script,
             is_scriptlet,
+            is_skill,
             is_agent,
             is_app,
             action_verb: Self::normalized_action_verb(action_verb),
@@ -170,6 +177,7 @@ impl ScriptInfo {
             name,
             path,
             true,
+            false,
             false,
             false,
             false,
@@ -191,6 +199,7 @@ impl ScriptInfo {
             name,
             path,
             true,
+            false,
             false,
             false,
             false,
@@ -216,6 +225,7 @@ impl ScriptInfo {
             true,
             false,
             false,
+            false,
             Self::DEFAULT_ACTION_VERB,
             shortcut,
             alias,
@@ -238,6 +248,7 @@ impl ScriptInfo {
             false,
             false,
             false,
+            false,
             Self::DEFAULT_ACTION_VERB,
             shortcut,
             alias,
@@ -252,6 +263,7 @@ impl ScriptInfo {
         Self::build(
             name,
             String::new(),
+            false,
             false,
             false,
             false,
@@ -277,7 +289,30 @@ impl ScriptInfo {
             false,
             false,
             false,
+            false,
             Self::DEFAULT_ACTION_VERB,
+            None,
+            None,
+            None,
+        )
+    }
+
+    /// Create a ScriptInfo for a plugin-owned skill (SKILL.md).
+    /// Skills expose file-oriented actions (edit, copy content, reveal in finder)
+    /// but not script-specific ones (view logs, delete script).
+    pub fn skill(
+        name: impl Into<String>,
+        path: impl Into<String>,
+    ) -> Self {
+        Self::build(
+            name,
+            path,
+            false,
+            false,
+            true,
+            false,
+            false,
+            "Open in ACP Chat",
             None,
             None,
             None,
@@ -296,6 +331,7 @@ impl ScriptInfo {
         Self::build(
             name,
             path,
+            false,
             false,
             false,
             true,
@@ -322,6 +358,7 @@ impl ScriptInfo {
             false,
             false,
             false,
+            false,
             true,
             "Launch",
             shortcut,
@@ -337,7 +374,7 @@ impl ScriptInfo {
         is_script: bool,
         action_verb: impl Into<String>,
     ) -> Self {
-        Self::build(name, path, is_script, false, false, false, action_verb, None, None, None)
+        Self::build(name, path, is_script, false, false, false, false, action_verb, None, None, None)
     }
 
     /// Create a ScriptInfo with all options including custom action verb and shortcut
@@ -353,6 +390,7 @@ impl ScriptInfo {
             name,
             path,
             is_script,
+            false,
             false,
             false,
             false,
@@ -377,6 +415,7 @@ impl ScriptInfo {
             name,
             path,
             is_script,
+            false,
             false,
             false,
             false,

@@ -8,9 +8,10 @@ use crate::agents::Agent;
 use crate::app_launcher;
 use crate::builtins::{BuiltInEntry, BuiltInFeature, BuiltInGroup};
 use crate::fallbacks::{BuiltinFallback, FallbackAction, FallbackCondition, FallbackItem};
+use crate::plugins::PluginSkill;
 use crate::scripts::{
     AgentMatch, AppMatch, BuiltInMatch, FallbackMatch, MatchIndices, Script, ScriptMatch,
-    ScriptMatchKind, Scriptlet, ScriptletMatch, WindowMatch,
+    ScriptMatchKind, Scriptlet, ScriptletMatch, SkillMatch, WindowMatch,
 };
 use crate::window_control;
 use std::path::PathBuf;
@@ -103,6 +104,21 @@ fn make_agent_match(name: &str, path: &str) -> AgentMatch {
         }),
         score: 100,
         display_name: name.to_string(),
+        match_indices: MatchIndices::default(),
+    }
+}
+
+fn make_skill_match(title: &str, path: &str) -> SkillMatch {
+    SkillMatch {
+        skill: Arc::new(PluginSkill {
+            plugin_id: "test-plugin".to_string(),
+            plugin_title: "Test Plugin".to_string(),
+            skill_id: "test-skill".to_string(),
+            path: PathBuf::from(path),
+            title: title.to_string(),
+            description: String::new(),
+        }),
+        score: 100,
         match_indices: MatchIndices::default(),
     }
 }
@@ -260,6 +276,18 @@ fn test_extract_path_for_copy_scriptlet() {
     );
 }
 
+// Tests for extract_path_for_reveal — Skill variant
+
+#[test]
+fn test_extract_path_for_reveal_skill() {
+    let skill_match = make_skill_match("Scriptlet Authoring", "/tmp/skills/SKILL.md");
+    let result = extract_path_for_reveal(Some(&SearchResult::Skill(skill_match)));
+    assert_eq!(
+        result.expect("Skill should be revealable"),
+        PathBuf::from("/tmp/skills/SKILL.md")
+    );
+}
+
 // Tests for extract_path_for_copy — App, Agent, Window, Fallback variants
 
 #[test]
@@ -337,6 +365,18 @@ fn test_extract_path_for_edit_scriptlet() {
     );
 }
 
+// Tests for extract_path_for_copy — Skill variant
+
+#[test]
+fn test_extract_path_for_copy_skill() {
+    let skill_match = make_skill_match("Scriptlet Authoring", "/tmp/skills/SKILL.md");
+    let result = extract_path_for_copy(Some(&SearchResult::Skill(skill_match)));
+    assert_eq!(
+        result.expect("Skill path should be copyable"),
+        PathBuf::from("/tmp/skills/SKILL.md")
+    );
+}
+
 // Tests for extract_path_for_edit — App, Agent, Window, Fallback, BuiltIn variants
 
 #[test]
@@ -346,6 +386,18 @@ fn test_extract_path_for_edit_agent() {
     assert_eq!(
         result.expect("Agent should be editable"),
         PathBuf::from("/tmp/agents/my-agent.claude.md")
+    );
+}
+
+// Tests for extract_path_for_edit — Skill variant
+
+#[test]
+fn test_extract_path_for_edit_skill() {
+    let skill_match = make_skill_match("Scriptlet Authoring", "/tmp/skills/SKILL.md");
+    let result = extract_path_for_edit(Some(&SearchResult::Skill(skill_match)));
+    assert_eq!(
+        result.expect("Skill should be editable"),
+        PathBuf::from("/tmp/skills/SKILL.md")
     );
 }
 

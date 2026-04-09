@@ -57,6 +57,7 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         name = %script.name,
         is_script = script.is_script,
         is_scriptlet = script.is_scriptlet,
+        is_skill = script.is_skill,
         is_agent = script.is_agent,
         has_shortcut = script.shortcut.is_some(),
         has_alias = script.alias.is_some(),
@@ -162,7 +163,11 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
         );
     }
 
-    if (script.is_script || script.is_scriptlet || script.is_agent || script.is_app)
+    if (script.is_script
+        || script.is_scriptlet
+        || script.is_skill
+        || script.is_agent
+        || script.is_app)
         && !script.path.trim().is_empty()
     {
         let (title, description) =
@@ -455,6 +460,56 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
                 "copy_content",
                 "Copy Content",
                 Some("Copy entire file content to clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⌥C")
+            .with_icon(IconName::Copy)
+            .with_section("Share"),
+        );
+    }
+
+    if script.is_skill {
+        actions.push(
+            Action::new(
+                "edit_script",
+                "Edit Skill",
+                Some("Open the SKILL.md file in $EDITOR".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘E")
+            .with_icon(IconName::Pencil)
+            .with_section("Edit"),
+        );
+
+        actions.push(
+            Action::new(
+                "reveal_in_finder",
+                "Open in Finder",
+                Some("Reveal skill file in Finder".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧F")
+            .with_icon(IconName::FolderOpen)
+            .with_section("Share"),
+        );
+
+        actions.push(
+            Action::new(
+                "copy_path",
+                "Copy Path",
+                Some("Copy skill path to clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⇧C")
+            .with_icon(IconName::Copy)
+            .with_section("Share"),
+        );
+
+        actions.push(
+            Action::new(
+                "copy_content",
+                "Copy Content",
+                Some("Copy SKILL.md content to clipboard".to_string()),
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⌘⌥C")

@@ -225,6 +225,71 @@ fn no_legacy_logging_in_handler_files() {
     );
 }
 
+/// Skills must get file-oriented actions (edit, copy content, reveal, copy path)
+/// from the action builder via the is_skill flag.
+#[test]
+fn skill_script_info_produces_file_oriented_actions() {
+    use script_kit_gpui::actions::ScriptInfo;
+
+    let info = ScriptInfo::skill("Scriptlet Authoring", "/tmp/skills/SKILL.md");
+
+    assert!(info.is_skill, "ScriptInfo::skill() should set is_skill");
+    assert!(
+        !info.is_script,
+        "ScriptInfo::skill() should NOT set is_script"
+    );
+    assert!(
+        !info.is_scriptlet,
+        "ScriptInfo::skill() should NOT set is_scriptlet"
+    );
+    assert!(
+        !info.is_agent,
+        "ScriptInfo::skill() should NOT set is_agent"
+    );
+    assert_eq!(info.action_verb, "Open in ACP Chat");
+}
+
+/// The action builder source must have an is_skill block that exposes
+/// file-oriented actions for skills.
+#[test]
+fn action_builder_exposes_skill_file_actions() {
+    let content = fs::read_to_string("src/actions/builders/script_context.rs")
+        .expect("Failed to read script_context.rs");
+
+    let guard = "if script.is_skill {";
+    assert!(
+        content.contains(guard),
+        "Action builder must have an `if script.is_skill` block"
+    );
+
+    // Find the is_skill guard block and verify it contains the expected actions
+    let skill_pos = content
+        .find(guard)
+        .expect("Expected `if script.is_skill` block in action builder");
+    let block = &content[skill_pos..content.len().min(skill_pos + 2000)];
+
+    assert!(
+        block.contains("\"edit_script\""),
+        "is_skill block should include edit_script action"
+    );
+    assert!(
+        block.contains("\"copy_content\""),
+        "is_skill block should include copy_content action"
+    );
+    assert!(
+        block.contains("\"reveal_in_finder\""),
+        "is_skill block should include reveal_in_finder action"
+    );
+    assert!(
+        block.contains("\"copy_path\""),
+        "is_skill block should include copy_path action"
+    );
+    assert!(
+        block.contains("Edit Skill"),
+        "is_skill block should label edit action as 'Edit Skill'"
+    );
+}
+
 /// Every variant of `BuiltInFeature` must have a corresponding match arm
 /// in `execute_builtin_with_query` in `builtin_execution.rs`.
 #[test]
