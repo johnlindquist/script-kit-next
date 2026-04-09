@@ -247,7 +247,7 @@ impl ScriptListApp {
 
         // Clear channels (they will be dropped, closing the connections)
         self.prompt_receiver = None;
-        self.response_sender = None;
+        self.response_sender = self.default_response_sender.clone();
 
         // Clear script session (parking_lot mutex never poisons)
         *self.script_session.lock() = None;

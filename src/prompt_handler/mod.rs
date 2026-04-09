@@ -669,8 +669,148 @@ fn classify_prompt_message_route(message: &PromptMessage) -> PromptMessageRoute 
     }
 }
 
+fn prompt_message_from_protocol_message(message: crate::protocol::Message) -> Option<PromptMessage> {
+    match message {
+        Message::GetState { request_id, target } => Some(PromptMessage::GetState {
+            request_id,
+            target,
+        }),
+        Message::GetElements {
+            request_id,
+            limit,
+            target,
+        } => Some(PromptMessage::GetElements {
+            request_id,
+            limit,
+            target,
+        }),
+        Message::GetAcpState { request_id, target } => Some(PromptMessage::GetAcpState {
+            request_id,
+            target,
+        }),
+        Message::PerformAcpSetupAction {
+            request_id,
+            action,
+            agent_id,
+            target,
+        } => Some(PromptMessage::PerformAcpSetupAction {
+            request_id,
+            action,
+            agent_id,
+            target,
+        }),
+        Message::ResetAcpTestProbe { request_id, target } => {
+            Some(PromptMessage::ResetAcpTestProbe { request_id, target })
+        }
+        Message::GetAcpTestProbe {
+            request_id,
+            tail,
+            target,
+        } => Some(PromptMessage::GetAcpTestProbe {
+            request_id,
+            tail,
+            target,
+        }),
+        Message::GetLayoutInfo { request_id, target } => Some(PromptMessage::GetLayoutInfo {
+            request_id,
+            target,
+        }),
+        Message::InspectAutomationWindow {
+            request_id,
+            target,
+            hi_dpi,
+            probes,
+        } => Some(PromptMessage::InspectAutomationWindow {
+            request_id,
+            target,
+            hi_dpi,
+            probes,
+        }),
+        Message::WaitFor {
+            request_id,
+            condition,
+            timeout,
+            poll_interval,
+            trace,
+            target,
+        } => Some(PromptMessage::WaitFor {
+            request_id,
+            condition,
+            timeout,
+            poll_interval,
+            trace,
+            target,
+        }),
+        Message::Batch {
+            request_id,
+            commands,
+            options,
+            trace,
+            target,
+        } => Some(PromptMessage::Batch {
+            request_id,
+            commands,
+            options,
+            trace,
+            target,
+        }),
+        Message::SimulateGpuiEvent {
+            request_id,
+            target,
+            event,
+        } => Some(PromptMessage::SimulateGpuiEvent {
+            request_id,
+            target,
+            event,
+        }),
+        _ => None,
+    }
+}
+
 // --- merged from part_001.rs ---
 impl ScriptListApp {
+    pub(crate) fn handle_stdin_protocol_message(
+        &mut self,
+        message: crate::protocol::Message,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(prompt_message) = prompt_message_from_protocol_message(message.clone()) {
+            self.handle_prompt_message(prompt_message, cx);
+            return;
+        }
+
+        match message {
+            Message::ListAutomationWindows { request_id } => {
+                let windows = crate::windows::list_automation_windows();
+                let focused_window_id = crate::windows::focused_automation_window_id();
+                let response = Message::automation_window_list_result(
+                    request_id,
+                    windows,
+                    focused_window_id,
+                );
+                if let Some(ref sender) = self.response_sender {
+                    let _ = sender.try_send(response);
+                } else {
+                    tracing::warn!(
+                        category = "STDIN",
+                        "No response sender available for listAutomationWindows"
+                    );
+                }
+            }
+            other => {
+                let message_type = serde_json::to_value(&other)
+                    .ok()
+                    .and_then(|value| value.get("type").and_then(|ty| ty.as_str()).map(str::to_owned))
+                    .unwrap_or_else(|| "unknown".to_string());
+                tracing::warn!(
+                    category = "STDIN",
+                    message_type = %message_type,
+                    "Unsupported protocol message received via stdin"
+                );
+            }
+        }
+    }
+
     pub(crate) fn make_submit_callback(
         &self,
         dropped_label: &'static str,

@@ -374,6 +374,7 @@ impl ScriptListApp {
         let (inline_chat_claude_code_tx, inline_chat_claude_code_rx) = mpsc::sync_channel(4);
         // Create channel for naming dialog completion signals
         let (naming_submit_tx, naming_submit_rx) = mpsc::sync_channel(4);
+        let default_response_sender = create_stdout_response_sender();
         // Discover plugin skills for main-menu search
         let plugin_skills: Vec<std::sync::Arc<crate::plugins::PluginSkill>> = {
             let skills = crate::plugins::discover_plugins()
@@ -424,7 +425,8 @@ impl ScriptListApp {
             arg_input: TextInputState::new(),
             arg_selected_index: 0,
             prompt_receiver: None,
-            response_sender: None,
+            response_sender: Some(default_response_sender.clone()),
+            default_response_sender: Some(default_response_sender),
             // Variable-height list state for main menu (section headers at 24px, items at 48px)
             // Start with 0 items, will be reset when grouped_items changes
             // .measure_all() ensures all items are measured upfront for correct scroll height

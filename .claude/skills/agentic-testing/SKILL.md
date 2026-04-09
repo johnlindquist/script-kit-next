@@ -24,7 +24,7 @@ Verify code changes by observing the running app. Build, start via named pipe, i
 - NEVER modify files outside the project directory
 - NEVER commit, push, or modify git history
 - ALL verification is read-only: build, launch, screenshot, grep, read logs
-- Temp files (pipes, screenshots) go in project `test-screenshots/` or `/tmp`
+- Temp pipes/logs may live under `/tmp` via the session wrapper. Runtime `captureWindow` screenshots must go in project `.test-screenshots/` / `test-screenshots/` or `~/.scriptkit/screenshots`
 - The app runs locally only — never connect to production
 - Every verification run MUST stop every Script Kit process/session it started before reporting results
 
@@ -115,10 +115,10 @@ S="bash scripts/agentic/session.sh send default"
 $S '{"type":"setFilter","text":"search term"}'
 
 # Discover visible elements (returns semantic IDs)
-$S '{"type":"getElements","requestId":"e1"}'
+bash scripts/agentic/session.sh rpc default '{"type":"getElements","requestId":"e1"}' --expect elementsResult
 
 # Select element by semantic ID (from getElements response)
-$S '{"type":"batch","requestId":"b1","commands":[{"type":"selectBySemanticId","semanticId":"choice:0:apple","submit":true}]}'
+bash scripts/agentic/session.sh rpc default '{"type":"batch","requestId":"b1","commands":[{"type":"selectBySemanticId","semanticId":"choice:0:apple","submit":true}]}' --expect batchResult
 
 # Trigger a built-in view
 $S '{"type":"triggerBuiltin","name":"clipboard"}'
@@ -137,17 +137,19 @@ $S '{"type":"simulateKey","key":"w","modifiers":["cmd"]}'
 $S '{"type":"simulateKey","key":"h","modifiers":[]}'
 
 # Query ACP state (returns input, cursor, picker, accepted item, thread status)
-$S '{"type":"getAcpState","requestId":"acp1"}'
+bash scripts/agentic/session.sh rpc default '{"type":"getAcpState","requestId":"acp1"}' --expect acpStateResult
 ```
 
 ### 5. Capture Screenshots
 ```bash
-mkdir -p test-screenshots
-bash scripts/agentic/session.sh send default '{"type":"captureWindow","title":"","path":"'"$(pwd)"'/test-screenshots/step-01.png"}'
+mkdir -p .test-screenshots
+bash scripts/agentic/session.sh send default '{"type":"captureWindow","title":"","path":"'"$(pwd)"'/.test-screenshots/step-01.png"}'
 sleep 1
 ```
 - `title` is substring match. `""` matches any window.
+- For embedded ACP in the main Script Kit window, use `title: ""` or the resolver-driven `verify-shot.ts` / `window.ts` flow. Do not assume the title contains `ACP Chat`.
 - Path must be absolute — use `$(pwd)/` prefix.
+- Runtime `captureWindow` does not allow arbitrary `/tmp/*.png` output paths.
 - Always `sleep 1` after capture for file write.
 - The screenshot must come from the real runtime surface you are verifying, not a synthetic component window.
 - **Read the PNG** to visually verify. Never assume correctness without checking.
@@ -217,7 +219,8 @@ The session wrapper uses a background forwarder process so any shell can send co
 
 **Rules:**
 - Always use `session.sh start` instead of manual `mkfifo` + `exec 3>` for new verification flows
-- Use `session.sh send` for all protocol commands — do not assume fd 3 survives across steps
+- Use `session.sh send` for fire-and-forget stdin commands like `show`, `triggerBuiltin`, `setFilter`, and `captureWindow`
+- Use `session.sh rpc` for protocol requests that expect a typed response like `getAcpState`, `getElements`, `waitFor`, `batch`, and `inspectAutomationWindow`
 - Check session health with `session.sh status` or `session-state.ts` before sending commands
 - Stop sessions with `session.sh stop` when done — do not leave orphan processes
 - Treat cleanup as part of the test itself: a run is incomplete until the session is stopped and verified dead
