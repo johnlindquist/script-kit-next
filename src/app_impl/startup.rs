@@ -567,6 +567,7 @@ impl ScriptListApp {
             tab_ai_harness_return_focus_target: None,
             tab_ai_harness_script_list_trigger: None,
             tab_ai_harness_apply_back_route: None,
+            embedded_acp_chat: None,
             attachment_portal_return_view: None,
             attachment_portal_return_focus_target: None,
             // Input history for shell-like up/down navigation

@@ -147,6 +147,10 @@ impl ScriptListApp {
             }
         }
 
+        if self.try_reuse_embedded_acp_view(entry_intent.clone(), cx) {
+            return;
+        }
+
         self.begin_tab_ai_harness_entry(
             entry_intent,
             None,
@@ -281,6 +285,61 @@ impl ScriptListApp {
             });
         })
         .detach();
+    }
+
+    fn try_reuse_embedded_acp_view(
+        &mut self,
+        entry_intent: Option<String>,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(entity) = self.embedded_acp_chat.as_ref().cloned() else {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_embedded_acp_cache_miss",
+            );
+            return false;
+        };
+
+        let is_setup_mode = entity.read(cx).is_setup_mode();
+        let normalized_intent = entry_intent
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty());
+        let source_view = self.current_view.clone();
+
+        self.tab_ai_harness_return_view = Some(source_view.clone());
+        self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
+        self.current_view = AppView::AcpChatView {
+            entity: entity.clone(),
+        };
+        self.focused_input = FocusedInput::None;
+        self.show_actions_popup = false;
+        self.actions_dialog = None;
+        self.pending_focus = Some(FocusTarget::ChatPrompt);
+
+        if let Some(intent) = normalized_intent.clone().filter(|_| !is_setup_mode) {
+            entity.update(cx, |chat, cx| {
+                chat.live_thread().update(cx, |thread, cx| {
+                    thread.set_input(intent.clone(), cx);
+                    if let Err(error) = thread.submit_input(cx) {
+                        tracing::warn!(
+                            target: "script_kit::tab_ai",
+                            event = "tab_ai_embedded_acp_reuse_submit_failed",
+                            error = %error,
+                        );
+                    }
+                });
+            });
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_embedded_acp_reused",
+            source_view = ?source_view,
+            auto_submit = normalized_intent.is_some(),
+            is_setup_mode,
+        );
+        cx.notify();
+        true
     }
 
     /// Entry point with explicit capture kind.
@@ -1573,6 +1632,7 @@ impl ScriptListApp {
         let stage_started_at = std::time::Instant::now();
         let view_entity = cx.new(|cx| crate::ai::acp::AcpChatView::new(thread.clone(), cx));
         self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
+        self.embedded_acp_chat = Some(view_entity.clone());
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_open_stage",
@@ -2454,6 +2514,14 @@ impl ScriptListApp {
         if closing_quick_terminal {
             self.terminate_tab_ai_harness_session(cx);
         }
+        if closing_acp_chat {
+            if let AppView::AcpChatView { entity } = &self.current_view {
+                self.embedded_acp_chat = Some(entity.clone());
+                entity.update(cx, |view, cx| {
+                    view.prepare_for_host_hide(cx);
+                });
+            }
+        }
 
         let return_view = self
             .tab_ai_harness_return_view
@@ -2537,6 +2605,12 @@ impl ScriptListApp {
         // target a chat surface that has already been detached.
         self.tab_ai_harness_capture_generation += 1;
         self.tab_ai_harness_apply_back_route = None;
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            self.embedded_acp_chat = Some(entity.clone());
+            entity.update(cx, |view, cx| {
+                view.prepare_for_host_hide(cx);
+            });
+        }
 
         // A hotkey detach is a deliberate mode switch back to the launcher,
         // not a normal "return to the originating surface" close.

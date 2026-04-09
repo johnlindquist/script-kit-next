@@ -86,11 +86,11 @@
                         });
                     }
                     Some(TrayMenuAction::OpenAiChat) => {
-                        logging::log("TRAY", "AI Chat menu item clicked");
+                        logging::log("TRAY", "ACP Chat menu item clicked");
                         let _ = cx.update(|cx| {
-                            if let Err(e) = ai::open_ai_window(cx) {
-                                logging::log("TRAY", &format!("Failed to open AI window: {}", e));
-                            }
+                            app_entity_for_tray.update(cx, |view, cx| {
+                                view.open_tab_ai_acp_with_entry_intent(None, cx);
+                            });
                         });
                     }
                     Some(TrayMenuAction::LaunchAtLogin) => {
@@ -259,11 +259,11 @@
             // Event-driven: .recv().await blocks until a message arrives
             while let Ok(hotkey_event) = hotkeys::ai_hotkey_channel().1.recv().await {
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
-                logging::log("HOTKEY", "AI hotkey triggered - opening AI window");
+                logging::log("HOTKEY", "AI hotkey triggered - opening ACP Chat");
                 let _ = cx.update(|cx: &mut gpui::App| {
-                    if let Err(e) = ai::open_ai_window(cx) {
-                        logging::log("HOTKEY", &format!("Failed to open AI window: {}", e));
-                    }
+                    app_entity.update(cx, |view, cx| {
+                        view.open_tab_ai_acp_with_entry_intent(None, cx);
+                    });
                 });
             }
             logging::log("HOTKEY", "AI hotkey listener exiting (channel closed)");

@@ -203,7 +203,7 @@ impl TrayManager {
     /// 1. Open Script Kit
     /// 2. ---
     /// 3. Open Notes
-    /// 4. Open AI Chat
+    /// 4. Open ACP Chat
     /// 5. ---
     /// 6. Open on GitHub
     /// 7. Manual
@@ -239,7 +239,7 @@ impl TrayManager {
         );
         let open_ai_chat_item = IconMenuItem::with_id_and_native_icon(
             TrayMenuAction::OpenAiChat.id(),
-            "Open AI Chat",
+            "Open ACP Chat",
             true,
             Some(NativeIcon::IChatTheater),
             None,
@@ -318,7 +318,7 @@ impl TrayManager {
         menu.append(&open_notes_item)
             .context("Failed to add Open Notes item")?;
         menu.append(&open_ai_chat_item)
-            .context("Failed to add Open AI Chat item")?;
+            .context("Failed to add Open ACP Chat item")?;
         menu.append(&PredefinedMenuItem::separator())
             .context("Failed to add separator")?;
 

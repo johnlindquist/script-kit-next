@@ -298,6 +298,9 @@ struct ScriptListApp {
     pub(crate) tab_ai_harness_script_list_trigger: Option<char>,
     /// Pending explicit apply-back route for the active Tab AI harness session.
     pub(crate) tab_ai_harness_apply_back_route: Option<crate::ai::TabAiApplyBackRoute>,
+    /// Persistent embedded ACP chat entity so repeated Tab opens can reuse
+    /// the same live ACP connection instead of cold-starting a new one.
+    pub(crate) embedded_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
     /// Previous surface to restore when leaving an attachment portal (file search / clipboard).
     pub(crate) attachment_portal_return_view: Option<AppView>,
     /// Previous focus target to restore when leaving an attachment portal.

@@ -95,6 +95,10 @@ impl DeferredAiWindowAction {
         }
     }
 
+    fn requires_legacy_ai_window(&self) -> bool {
+        matches!(self, Self::ApplyPreset { .. })
+    }
+
     fn apply(self, cx: &mut App) -> Result<&'static str, String> {
         match self {
             Self::OpenOnly => Ok("open_only"),
@@ -119,6 +123,93 @@ impl DeferredAiWindowAction {
                 Ok("apply_preset")
             }
         }
+    }
+
+    fn apply_to_acp(
+        self,
+        entity: Entity<crate::ai::acp::view::AcpChatView>,
+        cx: &mut App,
+    ) -> Result<&'static str, String> {
+        entity.update(cx, move |chat, cx| match self {
+            Self::OpenOnly => Ok("open_only"),
+            Self::SetInput { text, submit } => {
+                if chat.is_setup_mode() {
+                    return Err("ACP Chat is in setup mode".to_string());
+                }
+                chat.set_input(text, cx);
+                if submit {
+                    let Some(thread) = chat.thread() else {
+                        return Err("ACP Chat thread unavailable".to_string());
+                    };
+                    thread
+                        .update(cx, |thread, cx| thread.submit_input(cx))
+                        .map_err(|error| error.to_string())?;
+                }
+                Ok("set_input")
+            }
+            Self::SetInputWithImage {
+                text,
+                image_base64,
+                submit,
+            } => {
+                if chat.is_setup_mode() {
+                    return Err("ACP Chat is in setup mode".to_string());
+                }
+
+                use base64::Engine as _;
+
+                let png_bytes = base64::engine::general_purpose::STANDARD
+                    .decode(image_base64)
+                    .map_err(|error| format!("Failed to decode image attachment: {error}"))?;
+                let temp_path = std::env::temp_dir()
+                    .join(format!("script-kit-acp-clipboard-{}.png", uuid::Uuid::new_v4()));
+                std::fs::write(&temp_path, png_bytes)
+                    .map_err(|error| format!("Failed to write image attachment: {error}"))?;
+                let path = temp_path.to_string_lossy().into_owned();
+
+                chat.live_thread().update(cx, |thread, cx| {
+                    thread.add_context_part(
+                        crate::ai::AiContextPart::FilePath {
+                            path,
+                            label: "Clipboard Image".to_string(),
+                        },
+                        cx,
+                    );
+                    thread.set_input(text, cx);
+                    if submit {
+                        thread.submit_input(cx)?;
+                    }
+                    Ok::<(), String>(())
+                })
+                .map_err(|error| error.to_string())?;
+
+                Ok("set_input_with_image")
+            }
+            Self::AddAttachment { path } => {
+                if chat.is_setup_mode() {
+                    return Err("ACP Chat is in setup mode".to_string());
+                }
+
+                let label = std::path::Path::new(&path)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(|name| name.to_string())
+                    .unwrap_or_else(|| path.clone());
+
+                chat.live_thread().update(cx, |thread, cx| {
+                    thread.add_context_part(
+                        crate::ai::AiContextPart::FilePath { path, label },
+                        cx,
+                    );
+                });
+
+                Ok("add_attachment")
+            }
+            Self::ApplyPreset { preset_id } => {
+                ai::apply_ai_preset(cx, &preset_id);
+                Ok("apply_preset")
+            }
+        })
     }
 }
 
@@ -252,6 +343,7 @@ impl ScriptListApp {
         let source_action = source_action.to_string();
         let trace_id = trace_id.to_string();
         let deferred_action_name = deferred_action.name();
+        let requires_legacy_ai_window = deferred_action.requires_legacy_ai_window();
 
         tracing::info!(
             category = "AI",
@@ -259,7 +351,8 @@ impl ScriptListApp {
             source_action = %source_action,
             trace_id = %trace_id,
             deferred_action = deferred_action_name,
-            "Opening AI window after main window already hidden"
+            requires_legacy_ai_window,
+            "Opening deferred chat handoff after main window already hidden"
         );
 
         cx.spawn(async move |this, cx| {
@@ -269,13 +362,28 @@ impl ScriptListApp {
 
             let started_at = std::time::Instant::now();
 
-            let open_result = cx.update(|cx| {
-                ai::open_ai_window(cx).map_err(|error| error.to_string())?;
-                Ok::<(), String>(())
-            });
+            let open_result = if requires_legacy_ai_window {
+                cx.update(|cx| {
+                    ai::open_ai_window(cx).map_err(|error| error.to_string())?;
+                    Ok::<(), String>(())
+                })
+            } else {
+                match this.update(cx, |this, cx| {
+                    this.open_tab_ai_acp_with_entry_intent(None, cx);
+                    Ok::<(), String>(())
+                }) {
+                    Ok(result) => result,
+                    Err(error) => Err(error.to_string()),
+                }
+            };
 
             if open_result.is_ok() {
-                let ready_now = cx.update(ai::is_ai_window_ready);
+                let ready_now = if requires_legacy_ai_window {
+                    cx.update(ai::is_ai_window_ready)
+                } else {
+                    this.update(cx, |this, _cx| this.active_acp_chat_entity().is_some())
+                        .unwrap_or(false)
+                };
                 if !ready_now {
                     cx.background_executor()
                         .timer(std::time::Duration::from_millis(16))
@@ -283,14 +391,26 @@ impl ScriptListApp {
                 }
             }
 
-            let handoff_result = open_result.and_then(|()| {
-                cx.update(|cx| {
-                    if !ai::is_ai_window_ready(cx) {
-                        return Err("AI window not ready after open".to_string());
-                    }
-                    deferred_action.apply(cx)
+            let handoff_result = if requires_legacy_ai_window {
+                open_result.and_then(|()| {
+                    cx.update(|cx| {
+                        if !ai::is_ai_window_ready(cx) {
+                            return Err("AI window not ready after open".to_string());
+                        }
+                        deferred_action.apply(cx)
+                    })
                 })
-            });
+            } else {
+                open_result.and_then(|()| {
+                    this.update(cx, |this, cx| {
+                        let Some(entity) = this.active_acp_chat_entity() else {
+                            return Err("ACP Chat not ready after open".to_string());
+                        };
+                        deferred_action.apply_to_acp(entity, cx)
+                    })
+                    .map_err(|error| error.to_string())?
+                })
+            };
 
             match handoff_result {
                 Ok(apply_stage) => {
@@ -302,6 +422,7 @@ impl ScriptListApp {
                             trace_id = %trace_id,
                             deferred_action = deferred_action_name,
                             apply_stage,
+                            requires_legacy_ai_window,
                             duration_ms = started_at.elapsed().as_millis() as u64,
                             "AI handoff completed"
                         );
@@ -317,8 +438,9 @@ impl ScriptListApp {
                             trace_id = %trace_id,
                             deferred_action = deferred_action_name,
                             error = %error,
+                            requires_legacy_ai_window,
                             duration_ms = started_at.elapsed().as_millis() as u64,
-                            "Failed to open AI window after hiding main window"
+                            "Failed to complete deferred chat handoff after hiding main window"
                         );
                         this.show_error_toast(format!("Failed to send to ACP Chat: {}", error), cx);
                     });
@@ -326,6 +448,15 @@ impl ScriptListApp {
             }
         })
         .detach();
+    }
+
+    fn active_acp_chat_entity(&self) -> Option<Entity<crate::ai::acp::view::AcpChatView>> {
+        crate::ai::acp::chat_window::get_detached_acp_view_entity().or_else(|| {
+            let AppView::AcpChatView { entity } = &self.current_view else {
+                return None;
+            };
+            Some(entity.clone())
+        })
     }
 
     /// Reveal a path and return completion back to the UI thread for HUD feedback.
@@ -1214,11 +1345,13 @@ impl ScriptListApp {
                 let char_count = markdown.chars().count();
                 match crate::notes::save_note_with_content(cx, markdown) {
                     Ok(_) => {
+                        self.close_acp_chat_to_script_list(false, cx);
                         tracing::info!(
                             target: "script_kit::tab_ai",
                             event = "acp_save_as_note_succeeded",
                             message_count,
                             char_count,
+                            handoff = "notes_window",
                             "ACP save-as-note completed"
                         );
                         let mut o = DispatchOutcome::success();

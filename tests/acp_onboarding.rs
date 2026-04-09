@@ -48,8 +48,8 @@ fn ai_setup_surface_no_longer_mentions_claude_only_copy() {
         "setup card title must say ACP Agent Required"
     );
     assert!(
-        SETUP_RENDER_SOURCE.contains("Open ACP Agent Catalog"),
-        "setup card must offer Open ACP Agent Catalog"
+        SETUP_RENDER_SOURCE.contains("Add ACP Agent"),
+        "setup card must offer Add ACP Agent"
     );
     assert!(
         !SETUP_RENDER_SOURCE.contains("Connect to Claude Code"),
@@ -78,8 +78,8 @@ fn setup_has_open_acp_agents_catalog() {
         "setup.rs must have open_acp_agents_catalog method"
     );
     assert!(
-        SETUP_SOURCE.contains("default_acp_agents_path"),
-        "open_acp_agents_catalog must use the default catalog path"
+        SETUP_SOURCE.contains("open_acp_agents_catalog_in_editor"),
+        "open_acp_agents_catalog must route through the catalog editor helper"
     );
 }
 
@@ -195,9 +195,10 @@ fn classify_agent_source_distinguishes_legacy_from_builtin() {
         "claude-code must be classified as LegacyClaudeCode"
     );
     assert!(
-        ACP_CONFIG_SOURCE
-            .contains(r#""opencode" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn"#),
-        "opencode and codex-acp must be classified as BuiltIn"
+        ACP_CONFIG_SOURCE.contains(
+            r#""opencode" | "gemini-cli" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn"#
+        ),
+        "opencode, gemini-cli, and codex-acp must be classified as BuiltIn"
     );
 }
 

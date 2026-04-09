@@ -92,18 +92,19 @@ fn load_main_menu_snapshot() -> Option<MainMenuSnapshot> {
                 }
             };
 
-            let render_image = match crate::list_item::decode_png_to_render_image(&bytes) {
-                Ok(image) => image,
-                Err(error) => {
-                    tracing::warn!(
-                        event = "storybook_main_menu_snapshot_decode_failed",
-                        path = %path.display(),
-                        error = %error,
-                        "Failed to decode main menu snapshot for storybook"
-                    );
-                    return None;
-                }
-            };
+            let render_image =
+                match crate::list_item::decode_png_to_render_image_with_bgra_conversion(&bytes) {
+                    Ok(image) => image,
+                    Err(error) => {
+                        tracing::warn!(
+                            event = "storybook_main_menu_snapshot_decode_failed",
+                            path = %path.display(),
+                            error = %error,
+                            "Failed to decode main menu snapshot for storybook"
+                        );
+                        return None;
+                    }
+                };
 
             Some(MainMenuSnapshot {
                 image: render_image,

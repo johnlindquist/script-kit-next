@@ -345,10 +345,12 @@ impl NotesApp {
                     } else {
                         self.open_actions_panel(window, cx);
                     }
+                    cx.stop_propagation();
                 }
                 key if key.eq_ignore_ascii_case("p") => {
                     if modifiers.shift {
                         self.toggle_preview(window, cx);
+                        cx.stop_propagation();
                     } else {
                         self.close_actions_panel(window, cx);
                         if self.note_switcher.is_open() {
@@ -356,6 +358,7 @@ impl NotesApp {
                         } else {
                             self.open_browse_panel(window, cx);
                         }
+                        cx.stop_propagation();
                     }
                 }
                 key if key.eq_ignore_ascii_case("f") => {

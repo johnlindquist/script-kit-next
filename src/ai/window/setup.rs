@@ -178,34 +178,24 @@ impl AiApp {
 
     /// Open the ACP agents catalog file for recovery without requiring a restart.
     ///
-    /// Seeds a default catalog if none exists, then opens it in the default
-    /// editor so the user can add, fix, or remove agent entries.
+    /// Seeds starter entries for common ACP agents, then opens the catalog
+    /// so the user can add, fix, or remove agent entries.
     pub(super) fn open_acp_agents_catalog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let path = crate::ai::acp::default_acp_agents_path();
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "open_acp_agents_catalog",
-            path = %path.display(),
-        );
-
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-
-        if !path.exists() {
-            let default_file = crate::ai::acp::AcpAgentCatalogFile::default();
-            if let Ok(json) = serde_json::to_string_pretty(&default_file) {
-                let _ = std::fs::write(&path, json);
+        match crate::ai::acp::open_acp_agents_catalog_in_editor() {
+            Ok(path) => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "open_acp_agents_catalog",
+                    path = %path.display(),
+                );
             }
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            let _ = std::process::Command::new("open")
-                .arg("-a")
-                .arg("TextEdit")
-                .arg(&path)
-                .spawn();
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "open_acp_agents_catalog_failed",
+                    error = %error,
+                );
+            }
         }
 
         self.focus_input(window, cx);

@@ -626,6 +626,36 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
                 }
             }
         }
+        "acp_save_as_note" => {
+            if let Some(entity) = entity_weak.upgrade() {
+                let maybe_markdown = {
+                    let view = entity.read(cx);
+                    view.thread().and_then(|thread| {
+                        let messages = thread.read(cx).messages.clone();
+                        super::export::build_acp_conversation_markdown(&messages)
+                    })
+                };
+                if let Some(markdown) = maybe_markdown {
+                    match crate::notes::save_note_with_content(cx, markdown) {
+                        Ok(()) => {
+                            close_chat_window(cx);
+                            tracing::info!(
+                                event = "detached_action_save_as_note",
+                                handoff = "notes_window"
+                            );
+                        }
+                        Err(error) => {
+                            tracing::warn!(
+                                event = "detached_action_save_as_note_failed",
+                                error = %error
+                            );
+                        }
+                    }
+                } else {
+                    tracing::warn!(event = "detached_action_save_as_note_blocked");
+                }
+            }
+        }
         "acp_retry_last" => {
             if let Some(entity) = entity_weak.upgrade() {
                 let last_user_msg = {

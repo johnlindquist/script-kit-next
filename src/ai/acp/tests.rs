@@ -1189,8 +1189,8 @@ fn ai_setup_surface_no_longer_mentions_claude_only_copy() {
         "setup card title must say ACP Agent Required"
     );
     assert!(
-        SETUP_RENDER_SOURCE.contains("Open ACP Agent Catalog"),
-        "setup card must offer Open ACP Agent Catalog"
+        SETUP_RENDER_SOURCE.contains("Add ACP Agent"),
+        "setup card must offer Add ACP Agent"
     );
     assert!(
         !SETUP_RENDER_SOURCE.contains("Connect to Claude Code"),

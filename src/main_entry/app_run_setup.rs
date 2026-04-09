@@ -676,11 +676,11 @@ app.run(move |cx: &mut App| {
                         });
                     }
                     Some(TrayMenuAction::OpenAiChat) => {
-                        logging::log("TRAY", "AI Chat menu item clicked");
+                        logging::log("TRAY", "ACP Chat menu item clicked");
                         cx.update(|cx| {
-                            if let Err(e) = ai::open_ai_window(cx) {
-                                logging::log("TRAY", &format!("Failed to open AI window: {}", e));
-                            }
+                            app_entity_for_tray.update(cx, |view, cx| {
+                                view.open_tab_ai_acp_with_entry_intent(None, cx);
+                            });
                         });
                     }
                     Some(TrayMenuAction::LaunchAtLogin) => {
@@ -914,16 +914,17 @@ app.run(move |cx: &mut App| {
 
         // AI hotkey listener - event-driven via async_channel
         // Same pattern as Notes hotkey - works immediately on app launch
+        let app_entity_for_ai_hotkey = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "AI hotkey listener started (event-driven)");
             // Event-driven: .recv().await blocks until a message arrives
             while let Ok(hotkey_event) = hotkeys::ai_hotkey_channel().1.recv().await {
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
-                logging::log("HOTKEY", "AI hotkey triggered - opening AI window");
+                logging::log("HOTKEY", "AI hotkey triggered - opening ACP Chat");
                 cx.update(|cx: &mut gpui::App| {
-                    if let Err(e) = ai::open_ai_window(cx) {
-                        logging::log("HOTKEY", &format!("Failed to open AI window: {}", e));
-                    }
+                    app_entity_for_ai_hotkey.update(cx, |view, cx| {
+                        view.open_tab_ai_acp_with_entry_intent(None, cx);
+                    });
                 });
             }
             logging::log("HOTKEY", "AI hotkey listener exiting (channel closed)");
@@ -2305,40 +2306,26 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 }
                             }
                             ExternalCommand::OpenAi => {
-                                logging::log("STDIN", "Opening AI window via stdin command");
-                                if let Err(e) = ai::open_ai_window(ctx) {
-                                    logging::log("STDIN", &format!("Failed to open AI window: {}", e));
-                                }
+                                logging::log("STDIN", "Opening ACP Chat via openAi compatibility alias");
+                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenMiniAi => {
-                                logging::log("STDIN", "Opening mini AI window via stdin command");
-                                if let Err(e) = ai::open_mini_ai_window(ctx) {
-                                    logging::log("STDIN", &format!("Failed to open mini AI window: {}", e));
-                                }
+                                logging::log("STDIN", "Opening ACP Chat via openMiniAi compatibility alias");
+                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenAiWithMockData => {
-                                logging::log("STDIN", "Opening AI window with mock data via stdin command");
-                                // First insert mock data
-                                if let Err(e) = ai::insert_mock_data() {
-                                    logging::log("STDIN", &format!("Failed to insert mock data: {}", e));
-                                } else {
-                                    logging::log("STDIN", "Mock data inserted successfully");
-                                }
-                                // Then open the window
-                                if let Err(e) = ai::open_ai_window(ctx) {
-                                    logging::log("STDIN", &format!("Failed to open AI window: {}", e));
-                                }
+                                logging::log(
+                                    "STDIN",
+                                    "Ignoring deprecated mock-data AI alias and opening ACP Chat",
+                                );
+                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenMiniAiWithMockData => {
-                                logging::log("STDIN", "Opening mini AI window with mock data via stdin command");
-                                if let Err(e) = ai::insert_mock_data() {
-                                    logging::log("STDIN", &format!("Failed to insert mock data: {}", e));
-                                } else {
-                                    logging::log("STDIN", "Mock data inserted successfully");
-                                }
-                                if let Err(e) = ai::open_mini_ai_window(ctx) {
-                                    logging::log("STDIN", &format!("Failed to open mini AI window: {}", e));
-                                }
+                                logging::log(
+                                    "STDIN",
+                                    "Ignoring deprecated mini mock-data AI alias and opening ACP Chat",
+                                );
+                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::ShowAiCommandBar => {
                                 logging::log("STDIN", "Showing AI command bar via stdin command");

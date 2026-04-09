@@ -321,6 +321,26 @@ fn notes_acp_handoff_emits_structured_logs() {
         handler.contains("acp_save_as_note"),
         "ACP handler must emit acp_save_as_note structured log"
     );
+    assert!(
+        handler.contains("self.close_acp_chat_to_script_list(false, cx);"),
+        "Embedded ACP save-as-note should close ACP back to ScriptList on success"
+    );
+
+    let detached = include_str!("../src/ai/acp/chat_window.rs");
+    assert!(
+        detached.contains("\"acp_save_as_note\""),
+        "Detached ACP handler must implement acp_save_as_note"
+    );
+    assert!(
+        detached.contains("close_chat_window(cx);"),
+        "Detached ACP save-as-note should close the detached ACP window on success"
+    );
+
+    let builder = include_str!("../src/actions/builders/script_context.rs");
+    assert!(
+        builder.contains("| \"acp_save_as_note\""),
+        "Detached ACP host filter should allow acp_save_as_note"
+    );
 }
 
 #[test]

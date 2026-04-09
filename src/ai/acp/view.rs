@@ -712,6 +712,20 @@ impl AcpChatView {
         self.on_open_history_command = Some(std::sync::Arc::new(callback));
     }
 
+    /// Prepare the embedded ACP view to be hidden behind another main-panel
+    /// surface while keeping its live thread/session intact for reuse.
+    pub(crate) fn prepare_for_host_hide(&mut self, cx: &mut Context<Self>) {
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+        self.permission_options_open = false;
+        self.mention_session = None;
+        self.history_menu = None;
+        self.setup_agent_picker = None;
+        self.pending_history_portal_query = None;
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
+    }
+
     fn trigger_open_history_command(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(callback) = self.on_open_history_command.clone() {
             Self::spawn_footer_callback(callback, window, cx);
@@ -4083,7 +4097,8 @@ impl AcpChatView {
                 "Authenticate, then press Tab to retry".to_string()
             }
             super::setup_state::AcpSetupAction::OpenCatalog => {
-                "Edit ~/.scriptkit/acp/agents.json, then press Tab to retry".to_string()
+                "Add or edit an ACP agent in ~/.scriptkit/acp/agents.json, then press Tab to retry"
+                    .to_string()
             }
             super::setup_state::AcpSetupAction::SelectAgent => {
                 "Press Enter to select a different agent".to_string()
@@ -4093,7 +4108,7 @@ impl AcpChatView {
         let secondary_hint: Option<String> = state.secondary_action.map(|action| match action {
             super::setup_state::AcpSetupAction::SelectAgent => "Enter: select agent".to_string(),
             super::setup_state::AcpSetupAction::Retry => "Tab: retry".to_string(),
-            super::setup_state::AcpSetupAction::OpenCatalog => "Edit agents.json".to_string(),
+            super::setup_state::AcpSetupAction::OpenCatalog => "Add agent".to_string(),
             _ => String::new(),
         });
 
@@ -4611,10 +4626,22 @@ impl AcpChatView {
                 self.queue_setup_retry_request(cx);
             }
             super::setup_state::AcpSetupAction::OpenCatalog => {
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_setup_open_catalog_requested",
-                );
+                match crate::ai::acp::open_acp_agents_catalog_in_editor() {
+                    Ok(path) => {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_setup_open_catalog_requested",
+                            path = %path.display(),
+                        );
+                    }
+                    Err(error) => {
+                        tracing::warn!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_setup_open_catalog_failed",
+                            error = %error,
+                        );
+                    }
+                }
             }
             super::setup_state::AcpSetupAction::Install
             | super::setup_state::AcpSetupAction::Authenticate => {

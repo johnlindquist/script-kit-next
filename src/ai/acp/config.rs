@@ -270,12 +270,152 @@ fn command_exists(command: &str) -> bool {
     which::which(command).is_ok()
 }
 
+fn opencode_agent_config() -> AcpAgentConfig {
+    AcpAgentConfig {
+        id: "opencode".to_string(),
+        display_name: "OpenCode".to_string(),
+        command: "opencode".to_string(),
+        args: vec!["acp".to_string()],
+        env: HashMap::new(),
+        models: Vec::new(),
+        install: Some(AcpAgentInstallSpec {
+            command: "npm".to_string(),
+            args: vec![
+                "install".to_string(),
+                "-g".to_string(),
+                "opencode-ai".to_string(),
+            ],
+        }),
+        auth: None,
+    }
+}
+
+fn gemini_cli_agent_config() -> AcpAgentConfig {
+    AcpAgentConfig {
+        id: "gemini-cli".to_string(),
+        display_name: "Gemini CLI".to_string(),
+        command: "gemini".to_string(),
+        args: vec!["--acp".to_string()],
+        env: HashMap::new(),
+        models: Vec::new(),
+        install: Some(AcpAgentInstallSpec {
+            command: "npm".to_string(),
+            args: vec![
+                "install".to_string(),
+                "-g".to_string(),
+                "@google/gemini-cli".to_string(),
+            ],
+        }),
+        auth: None,
+    }
+}
+
+fn codex_acp_agent_config() -> AcpAgentConfig {
+    AcpAgentConfig {
+        id: "codex-acp".to_string(),
+        display_name: "Codex".to_string(),
+        command: "codex-acp".to_string(),
+        args: Vec::new(),
+        env: HashMap::new(),
+        models: Vec::new(),
+        install: Some(AcpAgentInstallSpec {
+            command: "npx".to_string(),
+            args: vec!["@zed-industries/codex-acp".to_string()],
+        }),
+        auth: Some(AcpAgentAuthHint {
+            summary: "Authenticate with ChatGPT, CODEX_API_KEY, or OPENAI_API_KEY.".to_string(),
+        }),
+    }
+}
+
+fn starter_acp_agent_configs() -> Vec<AcpAgentConfig> {
+    vec![
+        opencode_agent_config(),
+        gemini_cli_agent_config(),
+        codex_acp_agent_config(),
+    ]
+}
+
+fn merge_catalog_with_starter_agents(file: &mut super::catalog::AcpAgentCatalogFile) -> usize {
+    let mut added = 0;
+    for starter in starter_acp_agent_configs() {
+        if file.agents.iter().any(|existing| existing.id == starter.id) {
+            continue;
+        }
+        file.agents.push(starter);
+        added += 1;
+    }
+    added
+}
+
+/// Ensure the ACP catalog exists and includes starter entries for common
+/// ACP-compatible agents so the user has a concrete file to edit.
+pub(crate) fn ensure_acp_agents_catalog_seeded() -> anyhow::Result<PathBuf> {
+    let path = super::catalog::default_acp_agents_path();
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("create ACP catalog directory {}", parent.display()))?;
+    }
+
+    let existed = path.exists();
+    let mut file = if existed {
+        let bytes = std::fs::read(&path)
+            .with_context(|| format!("read ACP agents catalog at {}", path.display()))?;
+        serde_json::from_slice::<super::catalog::AcpAgentCatalogFile>(&bytes)
+            .with_context(|| format!("parse ACP agents catalog at {}", path.display()))?
+    } else {
+        super::catalog::AcpAgentCatalogFile::default()
+    };
+
+    let starter_count = merge_catalog_with_starter_agents(&mut file);
+    if !existed || starter_count > 0 {
+        let bytes = serde_json::to_vec_pretty(&file)
+            .with_context(|| format!("serialize ACP agents catalog at {}", path.display()))?;
+        std::fs::write(&path, bytes)
+            .with_context(|| format!("write ACP agents catalog at {}", path.display()))?;
+    }
+
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "acp_agent_catalog_seeded_for_editing",
+        path = %path.display(),
+        existed,
+        starter_count,
+        total_agents = file.agents.len(),
+    );
+
+    Ok(path)
+}
+
+/// Seed the ACP catalog with starter entries and open it in the default editor.
+pub(crate) fn open_acp_agents_catalog_in_editor() -> anyhow::Result<PathBuf> {
+    let path = ensure_acp_agents_catalog_seeded()?;
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("-a")
+            .arg("TextEdit")
+            .arg(&path)
+            .spawn()
+            .with_context(|| format!("open ACP agents catalog in TextEdit: {}", path.display()))?;
+    }
+
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "acp_agent_catalog_editor_opened",
+        path = %path.display(),
+    );
+
+    Ok(path)
+}
+
 /// Load all ACP agent configs from every source (legacy + catalog + built-in).
 ///
 /// Sources (in priority order):
 /// 1. Legacy Claude Code config (synthesized from `claudeCode` settings).
 /// 2. `~/.scriptkit/acp/agents.json` (user-managed catalog file).
-/// 3. Built-in auto-detection (`opencode`, `codex-acp` on PATH).
+/// 3. Built-in auto-detection (`opencode`, `gemini`, `codex-acp` on PATH).
 pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
     let mut agents = Vec::new();
 
@@ -308,35 +448,17 @@ pub(crate) fn load_acp_agent_configs() -> anyhow::Result<Vec<AcpAgentConfig>> {
 
     // 3. Built-in OpenCode detection.
     if command_exists("opencode") && !agents.iter().any(|a| a.id == "opencode") {
-        agents.push(AcpAgentConfig {
-            id: "opencode".to_string(),
-            display_name: "OpenCode".to_string(),
-            command: "opencode".to_string(),
-            args: vec!["acp".to_string()],
-            env: HashMap::new(),
-            models: Vec::new(),
-            install: None,
-            auth: None,
-        });
+        agents.push(opencode_agent_config());
     }
 
-    // 4. Built-in Codex ACP detection.
+    // 4. Built-in Gemini CLI detection.
+    if command_exists("gemini") && !agents.iter().any(|a| a.id == "gemini-cli") {
+        agents.push(gemini_cli_agent_config());
+    }
+
+    // 5. Built-in Codex ACP detection.
     if command_exists("codex-acp") && !agents.iter().any(|a| a.id == "codex-acp") {
-        agents.push(AcpAgentConfig {
-            id: "codex-acp".to_string(),
-            display_name: "Codex".to_string(),
-            command: "codex-acp".to_string(),
-            args: Vec::new(),
-            env: HashMap::new(),
-            models: Vec::new(),
-            install: Some(AcpAgentInstallSpec {
-                command: "npx".to_string(),
-                args: vec!["@zed-industries/codex-acp".to_string()],
-            }),
-            auth: Some(AcpAgentAuthHint {
-                summary: "Authenticate with ChatGPT, CODEX_API_KEY, or OPENAI_API_KEY.".to_string(),
-            }),
-        });
+        agents.push(codex_acp_agent_config());
     }
 
     tracing::info!(
@@ -442,7 +564,7 @@ pub(crate) fn load_acp_agent_catalog_entries(
 fn classify_agent_source(agent_id: &str) -> super::catalog::AcpAgentSource {
     match agent_id {
         "claude-code" => super::catalog::AcpAgentSource::LegacyClaudeCode,
-        "opencode" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn,
+        "opencode" | "gemini-cli" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn,
         _ => super::catalog::AcpAgentSource::ScriptKitCatalog,
     }
 }
@@ -753,6 +875,46 @@ mod tests {
     }
 
     #[test]
+    fn starter_catalog_entries_include_common_acp_agents() {
+        let starters = starter_acp_agent_configs();
+        let ids = starters
+            .iter()
+            .map(|agent| agent.id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(ids, vec!["opencode", "gemini-cli", "codex-acp"]);
+
+        let gemini = starters
+            .iter()
+            .find(|agent| agent.id == "gemini-cli")
+            .expect("gemini starter");
+        assert_eq!(gemini.command, "gemini");
+        assert_eq!(gemini.args, vec!["--acp"]);
+    }
+
+    #[test]
+    fn merge_catalog_with_starters_preserves_existing_entries() {
+        let mut file = crate::ai::acp::catalog::AcpAgentCatalogFile {
+            schema_version: crate::ai::acp::catalog::ACP_AGENT_CATALOG_SCHEMA_VERSION,
+            agents: vec![AcpAgentConfig {
+                id: "opencode".into(),
+                display_name: "OpenCode".into(),
+                command: "opencode".into(),
+                args: vec!["acp".into()],
+                env: HashMap::new(),
+                models: vec![],
+                install: None,
+                auth: None,
+            }],
+        };
+
+        let added = merge_catalog_with_starter_agents(&mut file);
+        assert_eq!(added, 2);
+        assert_eq!(file.agents[0].id, "opencode");
+        assert!(file.agents.iter().any(|agent| agent.id == "gemini-cli"));
+        assert!(file.agents.iter().any(|agent| agent.id == "codex-acp"));
+    }
+
+    #[test]
     fn model_infos_defaults() {
         let config = AcpAgentConfig {
             id: "test-agent".into(),
@@ -796,6 +958,14 @@ mod tests {
         let infos = config.model_infos();
         assert_eq!(infos[0].display_name, "Gemini 2.5 Pro");
         assert_eq!(infos[0].context_window, 1_000_000);
+    }
+
+    #[test]
+    fn classify_agent_source_marks_gemini_as_builtin() {
+        assert_eq!(
+            classify_agent_source("gemini-cli"),
+            crate::ai::acp::catalog::AcpAgentSource::BuiltIn
+        );
     }
 
     #[test]

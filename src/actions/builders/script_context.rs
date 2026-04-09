@@ -969,6 +969,7 @@ fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> 
                     | "acp_copy_last_response"
                     | "acp_retry_last"
                     | "acp_export_markdown"
+                    | "acp_save_as_note"
                     | "acp_scroll_to_top"
                     | "acp_scroll_to_bottom"
                     | "acp_expand_all"
