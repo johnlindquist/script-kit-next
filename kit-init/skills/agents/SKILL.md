@@ -1,11 +1,11 @@
 ---
 name: agents
-description: Create mdflow-backed agent files for Script Kit. Use when the user wants to create AI agents, configure agent backends (Claude, Gemini, Codex), or manage agent metadata.
+description: Compatibility — create mdflow-backed agent files for Script Kit. Prefer skills for new reusable AI work.
 ---
 
-# Agents
+# Agents (Compatibility)
 
-Create mdflow-backed agent files for Script Kit.
+Create mdflow-backed agent files for Script Kit. For new reusable AI work, prefer creating a skill (`kit/main/skills/<name>/SKILL.md`) instead — skills are the preferred reusable AI unit and appear as first-class main-menu items that open ACP Chat.
 
 ## Where Agents Live
 
