@@ -4,7 +4,7 @@ use super::types::{
 use super::{
     build_picker_items, build_slash_picker_items, build_slash_picker_items_with_payloads,
     extract_context_picker_query, match_query_chars, score_builtin, slash_picker_empty_row,
-    slash_picker_loading_row,
+    slash_picker_loading_row, slash_picker_no_match_row,
 };
 use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
 
@@ -1372,4 +1372,74 @@ fn acp_slash_picker_duplicate_rows_show_owner_labels() {
         "Default command meta should not show owner label: {}",
         clear_row.meta
     );
+}
+
+// =========================================================================
+// No-match row
+// =========================================================================
+
+#[test]
+fn slash_picker_no_match_row_is_inert_and_distinct() {
+    let no_match = slash_picker_no_match_row();
+    assert!(
+        matches!(no_match.kind, ContextPickerItemKind::Inert),
+        "No-match row must be Inert, got: {:?}",
+        no_match.kind
+    );
+    assert_eq!(no_match.id.as_ref(), "slash-no-match");
+    assert!(
+        no_match.label.contains("No matching"),
+        "No-match label should indicate no match: {}",
+        no_match.label
+    );
+    assert_eq!(no_match.score, 0, "Inert rows should have zero score");
+
+    // Distinct from loading and empty rows.
+    let loading = slash_picker_loading_row();
+    let empty = slash_picker_empty_row();
+    assert_ne!(no_match.id, loading.id);
+    assert_ne!(no_match.id, empty.id);
+}
+
+// =========================================================================
+// Slash picker query filters to no-match row
+// =========================================================================
+
+#[test]
+fn slash_picker_query_filters_to_no_match_row() {
+    // Build items with real commands, then filter with a query that
+    // won't match anything. The caller (refresh_mention_session) would
+    // push a no-match row in this case.
+    let payloads = vec![
+        (
+            SlashCommandPayload::Default {
+                name: "compact".to_string(),
+            },
+            "Compact conversation".to_string(),
+        ),
+        (
+            SlashCommandPayload::Default {
+                name: "clear".to_string(),
+            },
+            "Clear conversation".to_string(),
+        ),
+    ];
+
+    let items = build_slash_picker_items_with_payloads(
+        "zzzzzz",
+        payloads.iter().map(|(p, d)| (p, d.as_str())),
+    );
+    assert!(
+        items.is_empty(),
+        "Gibberish query should filter all items: {:?}",
+        items.iter().map(|i| i.id.as_ref()).collect::<Vec<_>>()
+    );
+
+    // Simulates the refresh_mention_session fallback.
+    let mut display_items = items;
+    if display_items.is_empty() {
+        display_items.push(slash_picker_no_match_row());
+    }
+    assert_eq!(display_items.len(), 1);
+    assert_eq!(display_items[0].id.as_ref(), "slash-no-match");
 }

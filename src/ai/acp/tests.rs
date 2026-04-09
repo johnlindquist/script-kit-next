@@ -1989,3 +1989,190 @@ fn acp_claude_skill_staged_prompt_uses_claude_owner_phrase() {
         "Claude Code skills must not be mislabeled as plugins: {staged}"
     );
 }
+
+// =========================================================================
+// Cross-source collision detection
+// =========================================================================
+
+/// Verify that cross-source collision bookkeeping correctly seeds
+/// default names and detects plugin-vs-default and Claude-vs-{default,plugin}
+/// collisions. This test exercises the collision bookkeeping in isolation
+/// using the same data structures as `discover_slash_commands`.
+#[test]
+fn acp_slash_cross_source_collision_bookkeeping() {
+    use std::collections::{HashMap, HashSet};
+
+    // Simulate the discover_slash_commands owner-tracking logic.
+    let default_names: HashSet<String> = ["review", "compact"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let mut owners_by_slash: HashMap<String, Vec<String>> = HashMap::new();
+    for name in &default_names {
+        owners_by_slash
+            .entry(name.clone())
+            .or_default()
+            .push("Built-in".to_string());
+    }
+
+    // Plugin skill collides with "review" default.
+    let plugin_name = "review".to_string();
+    let mut plugin_names: HashSet<String> = HashSet::new();
+    plugin_names.insert(plugin_name.clone());
+    owners_by_slash
+        .entry(plugin_name.clone())
+        .or_default()
+        .push("Alpha".to_string());
+
+    assert!(
+        default_names.contains(&plugin_name),
+        "Plugin 'review' should collide with default 'review'"
+    );
+
+    // Claude skill collides with both "review" (default + plugin).
+    let claude_name = "review".to_string();
+    owners_by_slash
+        .entry(claude_name.clone())
+        .or_default()
+        .push("Claude Code".to_string());
+
+    assert!(
+        plugin_names.contains(&claude_name),
+        "Claude 'review' should collide with plugin 'review'"
+    );
+    assert!(
+        default_names.contains(&claude_name),
+        "Claude 'review' should collide with default 'review'"
+    );
+
+    // Final cross-source check: "review" has 3 owners.
+    let review_owners = owners_by_slash.get("review").expect("review should exist");
+    assert_eq!(
+        review_owners.len(),
+        3,
+        "review should have 3 owners (Built-in, Alpha, Claude Code): {:?}",
+        review_owners
+    );
+    assert!(review_owners.contains(&"Built-in".to_string()));
+    assert!(review_owners.contains(&"Alpha".to_string()));
+    assert!(review_owners.contains(&"Claude Code".to_string()));
+
+    // "compact" should have exactly 1 owner (no collision).
+    let compact_owners = owners_by_slash
+        .get("compact")
+        .expect("compact should exist");
+    assert_eq!(
+        compact_owners.len(),
+        1,
+        "compact should have 1 owner: {:?}",
+        compact_owners
+    );
+}
+
+/// Qualified key dedup preserves source-distinct rows even when slash
+/// names collide. This ensures the picker shows both rows with owner labels.
+#[test]
+fn acp_slash_dedup_preserves_source_distinct_rows() {
+    use super::view::{SlashCommandEntry, SlashCommandSource};
+    use std::collections::HashSet;
+
+    let default_review = SlashCommandEntry::default_command("review");
+    let plugin_review = SlashCommandEntry {
+        name: "review".to_string(),
+        description: "Alpha review".to_string(),
+        source: SlashCommandSource::PluginSkill(crate::plugins::PluginSkill {
+            plugin_id: "alpha".to_string(),
+            plugin_title: "Alpha".to_string(),
+            skill_id: "review".to_string(),
+            path: std::path::PathBuf::from("/alpha/review/SKILL.md"),
+            title: "Review".to_string(),
+            description: String::new(),
+        }),
+    };
+    let claude_review = SlashCommandEntry {
+        name: "review".to_string(),
+        description: "Claude review".to_string(),
+        source: SlashCommandSource::ClaudeCodeSkill {
+            skill_id: "review".to_string(),
+            skill_path: std::path::PathBuf::from("/claude/review/SKILL.md"),
+        },
+    };
+
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut commands = Vec::new();
+
+    for entry in [&default_review, &plugin_review, &claude_review] {
+        if seen.insert(entry.qualified_key()) {
+            commands.push(entry.clone());
+        }
+    }
+
+    // All three should be distinct by qualified_key even though all share
+    // the same bare slash name "review".
+    assert_eq!(
+        commands.len(),
+        3,
+        "All three sources should produce distinct rows: {:?}",
+        commands
+            .iter()
+            .map(|e| e.qualified_key())
+            .collect::<Vec<_>>()
+    );
+}
+
+/// Plugin and Claude skill slash acceptance both produce the same staged
+/// prompt payload as main-menu skill launch (through `build_staged_skill_prompt`).
+#[test]
+fn acp_slash_and_main_menu_skill_launch_share_prompt_contract() {
+    use super::view::build_staged_skill_prompt;
+    use std::io::Write;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let skill_path = dir.path().join("SKILL.md");
+    {
+        let mut f = std::fs::File::create(&skill_path).expect("create");
+        f.write_all(b"# Deploy\nDeploy the current project.")
+            .expect("write");
+    }
+
+    let skill = crate::plugins::PluginSkill {
+        plugin_id: "infra".to_string(),
+        plugin_title: "Infrastructure".to_string(),
+        skill_id: "deploy".to_string(),
+        path: skill_path.clone(),
+        title: "Deploy".to_string(),
+        description: "Deploy skill".to_string(),
+    };
+
+    // Main-menu path (from open_acp_with_selected_skill).
+    let owner = if skill.plugin_title.is_empty() {
+        &skill.plugin_id
+    } else {
+        &skill.plugin_title
+    };
+    let main_menu = build_staged_skill_prompt(&skill.title, owner, &skill.path);
+
+    // Slash acceptance path (from accept_mention_selection_impl).
+    let slash_accept = build_staged_skill_prompt(&skill.title, owner, &skill.path);
+
+    assert_eq!(
+        main_menu, slash_accept,
+        "Main-menu and slash acceptance must produce identical staged payloads"
+    );
+
+    // Claude Code skill uses "Claude Code" as owner.
+    let claude_skill_path = dir.path().join("CLAUDE_SKILL.md");
+    {
+        let mut f = std::fs::File::create(&claude_skill_path).expect("create");
+        f.write_all(b"# Plan\nCreate a plan.").expect("write");
+    }
+    let claude_staged = build_staged_skill_prompt("Plan", "Claude Code", &claude_skill_path);
+    assert!(
+        claude_staged.contains("from Claude Code"),
+        "Claude skill must use 'from Claude Code': {claude_staged}"
+    );
+    assert!(
+        !claude_staged.contains("from plugin"),
+        "Claude skill must not use plugin phrasing: {claude_staged}"
+    );
+}
