@@ -53,7 +53,9 @@ pub fn all_categories() -> Vec<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{all_categories, first_story_with_multiple_variants, stories_by_surface};
+    use super::{
+        all_categories, all_stories, first_story_with_multiple_variants, stories_by_surface,
+    };
     use crate::storybook::StorySurface;
 
     #[test]
@@ -64,10 +66,10 @@ mod tests {
     }
 
     #[test]
-    fn comparable_story_helper_only_returns_valid_entries() {
+    fn comparable_stories_exist_in_design_lab() {
         assert!(
-            first_story_with_multiple_variants().is_none(),
-            "the reset storybook should not expose compare-ready stories"
+            first_story_with_multiple_variants().is_some(),
+            "design lab should expose at least one compare-ready story"
         );
     }
 
@@ -82,23 +84,42 @@ mod tests {
     }
 
     #[test]
-    fn other_surfaces_are_empty_after_storybook_reset() {
+    fn design_lab_surfaces_are_populated() {
         assert!(
-            stories_by_surface(StorySurface::Footer).is_empty(),
-            "Footer stories should be removed from the reset storybook"
+            !stories_by_surface(StorySurface::Footer).is_empty(),
+            "Footer surface should have at least one story"
         );
         assert!(
-            stories_by_surface(StorySurface::Header).is_empty(),
-            "Header stories should be removed from the reset storybook"
+            !stories_by_surface(StorySurface::ActionDialog).is_empty(),
+            "Action Dialog surface should have at least one story"
         );
         assert!(
-            stories_by_surface(StorySurface::ActionDialog).is_empty(),
-            "Action dialog stories should be removed from the reset storybook"
+            !stories_by_surface(StorySurface::Input).is_empty(),
+            "Input surface should have at least one story"
+        );
+        assert!(
+            !stories_by_surface(StorySurface::MiniAiChat).is_empty(),
+            "Mini AI Chat surface should have at least one story"
         );
     }
 
     #[test]
-    fn reset_storybook_exposes_single_launcher_category() {
-        assert_eq!(all_categories(), vec!["Launcher"]);
+    fn design_lab_has_multiple_categories() {
+        let categories = all_categories();
+        assert!(
+            categories.len() >= 2,
+            "design lab should expose at least Launcher + Layouts categories, got: {categories:?}"
+        );
+        assert!(categories.contains(&"Launcher"));
+        assert!(categories.contains(&"Layouts"));
+    }
+
+    #[test]
+    fn design_lab_story_count() {
+        let count = all_stories().count();
+        assert!(
+            count >= 5,
+            "design lab should have at least 5 registered stories, got {count}"
+        );
     }
 }

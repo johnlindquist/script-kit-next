@@ -104,9 +104,10 @@ pub fn render_actions_dialog_presentation(
     // Search input
     if model.show_search && model.search_at_top {
         container = container.child(render_search_row(model, &style, theme, &mono));
+        if style.show_search_divider {
+            container = container.child(render_search_divider(theme));
+        }
     }
-
-    // No search divider — bare input per .impeccable.md spec
 
     // Action rows
     let mut action_index: usize = 0;
@@ -149,8 +150,11 @@ pub fn render_actions_dialog_presentation(
 
     container = container.child(items_container.children(item_elements));
 
-    // Bottom search (when search is not at top) — no divider
+    // Bottom search (when search is not at top)
     if model.show_search && !model.search_at_top {
+        if style.show_search_divider {
+            container = container.child(render_search_divider(theme));
+        }
         container = container.child(render_search_row(model, &style, theme, &mono));
     }
 
@@ -225,6 +229,14 @@ fn render_search_row(
     }
 
     row.into_any_element()
+}
+
+fn render_search_divider(theme: &Theme) -> AnyElement {
+    div()
+        .w_full()
+        .h(px(1.))
+        .bg(theme.colors.ui.border.with_opacity(0.30))
+        .into_any_element()
 }
 
 fn render_action_row(
