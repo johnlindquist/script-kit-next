@@ -314,18 +314,20 @@ impl PromptHeader {
             )
     }
 
-    /// Render the "Ask AI" hint with a Cmd+Enter badge (Raycast-style)
-    ///
-    /// Displays: "Ask AI [⌘↵]" where the shortcut is in a subtle bordered badge
+    /// Render the "Ask [⇥]" hint — compact ACP entry affordance.
     fn render_ask_ai_hint(&self) -> impl IntoElement {
+        static ASK_HINT_LOGGED: std::sync::Once = std::sync::Once::new();
+        ASK_HINT_LOGGED.call_once(|| {
+            tracing::info!(trigger = "tab", badge = "⇥", "prompt_header_ask_hint_ready");
+        });
+
         let colors = self.colors;
         let transparent_bg = 0x00000000;
 
         hstack()
             .flex_shrink_0()
-            .gap(rems(0.375))
+            .gap(px(6.))
             .items_center()
-            // "Ask AI" text button - ghost/transparent style
             .child(
                 div()
                     .id("ask-ai-btn")
@@ -344,9 +346,8 @@ impl PromptHeader {
                             .bg(rgba(colors.hover_overlay))
                             .text_color(colors.text_primary.to_rgb())
                     })
-                    .child("Ask AI"),
+                    .child("Ask"),
             )
-            // "⌘↵" badge button - ghost/transparent style with border
             .child(
                 div()
                     .id("tab-badge-btn")
@@ -354,12 +355,12 @@ impl PromptHeader {
                     .min_h(px(BUTTON_GHOST_HEIGHT))
                     .px(px(BUTTON_GHOST_PADDING_X))
                     .py(px(BUTTON_GHOST_PADDING_Y))
+                    .border_1()
+                    .border_color(colors.border.to_rgb())
                     .rounded(px(6.))
                     .bg(rgba(transparent_bg))
                     .cursor_pointer()
-                    .border_1()
-                    .border_color(colors.border.to_rgb())
-                    .text_sm()
+                    .text_xs()
                     .font_weight(FontWeight::MEDIUM)
                     .font_family(crate::list_item::FONT_SYSTEM_UI)
                     .text_color(colors.text_muted.to_rgb())
@@ -368,7 +369,7 @@ impl PromptHeader {
                             .bg(rgba(colors.hover_overlay))
                             .text_color(colors.text_primary.to_rgb())
                     })
-                    .child("⌘↵"),
+                    .child("⇥"),
             )
     }
 
