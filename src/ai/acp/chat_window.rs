@@ -360,7 +360,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
     if actions::is_actions_window_open() {
         actions::close_actions_window(cx);
         activate_chat_window(cx);
-        tracing::info!(event = "detached_actions_closed");
+        tracing::info!(target: "script_kit::keyboard", event = "detached_actions_closed");
         return;
     }
 
@@ -377,7 +377,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
     };
 
     if view_weak.is_none() {
-        tracing::warn!(event = "detached_actions_no_view_entity");
+        tracing::warn!(target: "script_kit::keyboard", event = "detached_actions_no_view_entity");
         return;
     }
 
@@ -477,7 +477,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
     dialog.update(cx, |dialog, _cx| {
         dialog.set_on_close(std::sync::Arc::new(|cx| {
             activate_chat_window(cx);
-            tracing::info!(event = "detached_actions_closed_restore_chat_focus");
+            tracing::info!(target: "script_kit::keyboard", event = "detached_actions_closed_restore_chat_focus");
         }));
     });
 
@@ -493,7 +493,7 @@ pub fn toggle_detached_actions(cx: &mut App) {
     ) {
         Ok(handle) => handle,
         Err(e) => {
-            tracing::warn!(%e, "detached_actions_open_failed");
+            tracing::warn!(target: "script_kit::keyboard", %e, "detached_actions_open_failed");
             return;
         }
     };
@@ -503,12 +503,14 @@ pub fn toggle_detached_actions(cx: &mut App) {
     });
 
     tracing::info!(
+        target: "script_kit::keyboard",
         event = "detached_actions_opened",
-        actions_len = root_actions_len
+        actions_len = root_actions_len,
     );
     tracing::info!(
+        target: "script_kit::keyboard",
         event = "detached_actions_window_activated",
-        actions_len = root_actions_len
+        actions_len = root_actions_len,
     );
 
     // Spawn a one-shot task that receives the selected action_id from the
