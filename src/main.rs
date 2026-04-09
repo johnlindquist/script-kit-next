@@ -265,8 +265,8 @@ type PromptChannel = (mpsc::Sender<PromptMessage>, mpsc::Receiver<PromptMessage>
 
 // Import utilities from modules
 use stdin_commands::{
-    start_stdin_listener, validate_capture_window_output_path, ExternalCommand,
-    ExternalCommandEnvelope, KeyModifier,
+    create_stdout_response_sender, start_stdin_listener, validate_capture_window_output_path,
+    ExternalCommand, KeyModifier, StdinCommand, StdinCommandEnvelope,
 };
 use utils::render_path_with_highlights;
 

@@ -32,11 +32,13 @@
 
 // --- merged from part_000.rs ---
 use crate::logging;
+use crate::protocol;
 use crate::protocol::GridDepthOption;
 use crate::setup;
 use itertools::Itertools;
 use std::io::BufRead;
 use std::path::{Component, Path, PathBuf};
+use std::sync::mpsc;
 use uuid::Uuid;
 /// Default grid size for ShowGrid command
 fn default_grid_size() -> u32 {
@@ -540,9 +542,119 @@ impl ExternalCommand {
     }
 }
 #[derive(Debug, Clone)]
-pub struct ExternalCommandEnvelope {
-    pub command: ExternalCommand,
+pub enum StdinCommand {
+    External(ExternalCommand),
+    Protocol(crate::protocol::Message),
+}
+
+impl StdinCommand {
+    pub fn command_type(&self) -> &'static str {
+        match self {
+            Self::External(command) => command.command_type(),
+            Self::Protocol(message) => match message {
+                crate::protocol::Message::GetState { .. } => "getState",
+                crate::protocol::Message::GetElements { .. } => "getElements",
+                crate::protocol::Message::GetAcpState { .. } => "getAcpState",
+                crate::protocol::Message::PerformAcpSetupAction { .. } => "performAcpSetupAction",
+                crate::protocol::Message::ResetAcpTestProbe { .. } => "resetAcpTestProbe",
+                crate::protocol::Message::GetAcpTestProbe { .. } => "getAcpTestProbe",
+                crate::protocol::Message::GetLayoutInfo { .. } => "getLayoutInfo",
+                crate::protocol::Message::InspectAutomationWindow { .. } => {
+                    "inspectAutomationWindow"
+                }
+                crate::protocol::Message::WaitFor { .. } => "waitFor",
+                crate::protocol::Message::Batch { .. } => "batch",
+                crate::protocol::Message::ListAutomationWindows { .. } => "listAutomationWindows",
+                crate::protocol::Message::SimulateGpuiEvent { .. } => "simulateGpuiEvent",
+                _ => "protocol",
+            },
+        }
+    }
+
+    pub fn request_id(&self) -> Option<&str> {
+        match self {
+            Self::External(command) => command.request_id().map(AsRef::as_ref),
+            Self::Protocol(message) => match message {
+                crate::protocol::Message::GetState { request_id, .. }
+                | crate::protocol::Message::GetElements { request_id, .. }
+                | crate::protocol::Message::GetAcpState { request_id, .. }
+                | crate::protocol::Message::PerformAcpSetupAction { request_id, .. }
+                | crate::protocol::Message::ResetAcpTestProbe { request_id, .. }
+                | crate::protocol::Message::GetAcpTestProbe { request_id, .. }
+                | crate::protocol::Message::GetLayoutInfo { request_id, .. }
+                | crate::protocol::Message::InspectAutomationWindow { request_id, .. }
+                | crate::protocol::Message::WaitFor { request_id, .. }
+                | crate::protocol::Message::Batch { request_id, .. }
+                | crate::protocol::Message::ListAutomationWindows { request_id, .. }
+                | crate::protocol::Message::SimulateGpuiEvent { request_id, .. } => {
+                    Some(request_id.as_str())
+                }
+                _ => message.id(),
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StdinCommandEnvelope {
+    pub command: StdinCommand,
     pub correlation_id: String,
+}
+
+fn parse_stdin_command(trimmed: &str) -> anyhow::Result<StdinCommand> {
+    if let Ok(command) = serde_json::from_str::<ExternalCommand>(trimmed) {
+        return Ok(StdinCommand::External(command));
+    }
+
+    let message = serde_json::from_str::<crate::protocol::Message>(trimmed)?;
+    Ok(StdinCommand::Protocol(message))
+}
+
+pub fn create_stdout_response_sender() -> mpsc::SyncSender<crate::protocol::Message> {
+    let (response_tx, response_rx) = mpsc::sync_channel::<crate::protocol::Message>(100);
+
+    std::thread::spawn(move || {
+        use std::io::Write;
+
+        let stdout = std::io::stdout();
+        let mut handle = stdout.lock();
+
+        while let Ok(response) = response_rx.recv() {
+            let json: String = match protocol::serialize_message(&response) {
+                Ok(json) => json,
+                Err(error) => {
+                    tracing::warn!(
+                        category = "STDIN",
+                        error = %error,
+                        "Failed to serialize stdin protocol response"
+                    );
+                    continue;
+                }
+            };
+
+            logging::log_protocol_send(1, &json);
+
+            if let Err(error) = writeln!(handle, "{}", json) {
+                tracing::warn!(
+                    category = "STDIN",
+                    error = %error,
+                    "Failed to write stdin protocol response to stdout"
+                );
+                break;
+            }
+
+            if let Err(error) = handle.flush() {
+                tracing::warn!(
+                    category = "STDIN",
+                    error = %error,
+                    "Failed to flush stdin protocol response stdout"
+                );
+                break;
+            }
+        }
+    });
+
+    response_tx
 }
 // --- merged from part_001.rs ---
 /// Start a thread that listens on stdin for external JSONL commands.
@@ -558,7 +670,7 @@ pub struct ExternalCommandEnvelope {
 /// Spawns a background thread that reads stdin line-by-line. When the channel
 /// is closed (receiver dropped), the thread will exit gracefully.
 #[tracing::instrument(skip_all)]
-pub fn start_stdin_listener() -> async_channel::Receiver<ExternalCommandEnvelope> {
+pub fn start_stdin_listener() -> async_channel::Receiver<StdinCommandEnvelope> {
     // P1-6: Use bounded channel to prevent unbounded memory growth
     // Capacity of 100 is generous for stdin commands (typically < 10/sec)
     let (tx, rx) = async_channel::bounded(100);
@@ -587,7 +699,7 @@ pub fn start_stdin_listener() -> async_channel::Receiver<ExternalCommandEnvelope
                     }
 
                     let summary = logging::summarize_payload(trimmed);
-                    match serde_json::from_str::<ExternalCommand>(trimmed) {
+                    match parse_stdin_command(trimmed) {
                         Ok(cmd) => {
                             let correlation_id = cmd
                                 .request_id()
@@ -608,7 +720,7 @@ pub fn start_stdin_listener() -> async_channel::Receiver<ExternalCommandEnvelope
 
                             // send_blocking is used since we're in a sync thread
                             if tx
-                                .send_blocking(ExternalCommandEnvelope {
+                                .send_blocking(StdinCommandEnvelope {
                                     command: cmd,
                                     correlation_id: correlation_id.clone(),
                                 })
@@ -925,6 +1037,26 @@ mod tests {
     fn test_external_command_type_accessor() {
         let cmd = ExternalCommand::Show { request_id: None };
         assert_eq!(cmd.command_type(), "show");
+    }
+
+    #[test]
+    fn test_parse_stdin_command_supports_external_commands() -> anyhow::Result<()> {
+        let parsed = parse_stdin_command(r#"{"type":"show","requestId":"show-1"}"#)?;
+        assert_eq!(parsed.command_type(), "show");
+        assert_eq!(parsed.request_id(), Some("show-1"));
+        assert!(matches!(parsed, StdinCommand::External(_)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_stdin_command_supports_protocol_messages() -> anyhow::Result<()> {
+        let parsed = parse_stdin_command(
+            r#"{"type":"waitFor","requestId":"wf-1","condition":"choicesRendered"}"#,
+        )?;
+        assert_eq!(parsed.command_type(), "waitFor");
+        assert_eq!(parsed.request_id(), Some("wf-1"));
+        assert!(matches!(parsed, StdinCommand::Protocol(_)));
+        Ok(())
     }
 
     #[test]

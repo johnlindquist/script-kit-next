@@ -83,6 +83,8 @@ struct ScriptListApp {
     // Channel for sending responses back to script
     // FIX: Use SyncSender (bounded channel) to prevent OOM from slow scripts
     response_sender: Option<mpsc::SyncSender<Message>>,
+    // Default stdout-backed response channel for stdin/session RPCs when no script owns stdin.
+    default_response_sender: Option<mpsc::SyncSender<Message>>,
     // List state for variable-height list (supports section headers at 24px + items at 48px)
     main_list_state: ListState,
     // Scroll handle for uniform_list (still used for backward compat in some views)

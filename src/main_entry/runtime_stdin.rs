@@ -57,7 +57,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
     logging::log("STDIN", "Async stdin command handler started");
 
     // Event-driven: recv().await yields until a command arrives
-    while let Ok(ExternalCommandEnvelope {
+    while let Ok(StdinCommandEnvelope {
         command: cmd,
         correlation_id,
     }) = stdin_rx.recv().await
@@ -78,6 +78,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                     // Note: We have both `window` from Root and `view` from entity here
                     // ctx is Context<ScriptListApp>, window is &mut Window
                     match cmd {
+                        StdinCommand::External(cmd) => match cmd {
                             ExternalCommand::Run { ref path, ref request_id } => {
                                 let rid = request_id.as_deref().unwrap_or("-");
                                 logging::log("STDIN", &format!("[{}] Executing script: {}", rid, path));
@@ -1024,6 +1025,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 logging::log("STDIN", &format!("ShowShortcutRecorder: command_id='{}', command_name='{}'", command_id, command_name));
                                 view.show_shortcut_recorder(command_id.clone(), command_name.clone(), ctx);
                             }
+                        },
+                        StdinCommand::Protocol(message) => {
+                            logging::log("STDIN", "Routing stdin protocol message");
+                            view.handle_stdin_protocol_message(message, ctx);
                         }
 
                     }
