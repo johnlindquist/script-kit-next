@@ -229,35 +229,17 @@ impl NotesApp {
             NotesAction::SendToAi => {
                 let content = self.editor_state.read(cx).value().to_string();
                 if content.trim().is_empty() {
-                    tracing::warn!(
-                        event = "notes_acp_handoff_blocked",
-                        reason = "empty_note",
-                        "Blocked Notes/ACP handoff"
-                    );
                     self.show_action_feedback("Note is empty", true);
                 } else {
-                    // Open ACP Chat and set input to note content
+                    // Open AI window and set input to note content
                     if let Err(e) = crate::ai::open_ai_window(cx) {
-                        tracing::warn!(
-                            event = "notes_acp_handoff_blocked",
-                            reason = %format!("open_failed: {e}"),
-                            "Blocked Notes/ACP handoff"
-                        );
-                        self.show_action_feedback("Failed to open ACP Chat", true);
+                        tracing::warn!(%e, "send_to_ai_open_failed");
+                        self.show_action_feedback("Failed to open AI", true);
                     } else if let Err(e) = crate::ai::set_ai_input(cx, &content, false) {
-                        tracing::warn!(
-                            event = "notes_acp_handoff_blocked",
-                            reason = %format!("set_input_failed: {e}"),
-                            "Blocked Notes/ACP handoff"
-                        );
-                        self.show_action_feedback("Failed to send to ACP Chat", true);
+                        tracing::warn!(%e, "send_to_ai_set_input_failed");
+                        self.show_action_feedback("Failed to send to AI", true);
                     } else {
-                        tracing::info!(
-                            event = "notes_send_to_acp",
-                            char_count = content.chars().count(),
-                            "Sent active note to ACP Chat"
-                        );
-                        self.show_action_feedback("Sent to ACP Chat", false);
+                        self.show_action_feedback("Sent to AI", false);
                     }
                 }
             }

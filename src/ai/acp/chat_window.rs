@@ -356,8 +356,17 @@ pub(crate) fn activate_chat_window(cx: &mut App) {
 pub fn toggle_detached_actions(cx: &mut App) {
     use crate::actions::{self, ActionsDialog, ActionsDialogConfig, WindowPosition};
 
+    let actions_window_open = actions::is_actions_window_open();
+    let has_view_entity = get_detached_acp_view_entity().is_some();
+    tracing::debug!(
+        target: "script_kit::keyboard",
+        event = "detached_actions_toggle_requested",
+        actions_window_open,
+        has_view_entity,
+    );
+
     // If actions are already open, close them and re-focus the chat (toggle behavior)
-    if actions::is_actions_window_open() {
+    if actions_window_open {
         actions::close_actions_window(cx);
         activate_chat_window(cx);
         tracing::info!(target: "script_kit::keyboard", event = "detached_actions_closed");
@@ -567,13 +576,6 @@ fn dispatch_detached_action_checked(
 /// Handles the subset of ACP chat actions that make sense in the detached
 /// window context (copy, scroll, expand/collapse, close, reattach, etc.).
 fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &str, cx: &mut App) {
-    tracing::info!(
-        event = "acp_actions_menu_selected",
-        host = "detached",
-        action_id,
-        "Selected ACP Actions Menu item"
-    );
-
     if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
         if let Some(entity) = entity_weak.upgrade() {
             entity.update(cx, |chat, cx| {
