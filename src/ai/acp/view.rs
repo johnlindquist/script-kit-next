@@ -5162,9 +5162,19 @@ impl AcpChatView {
 
         // ── Cmd+K → open actions dialog ──────
         if modifiers.platform && crate::ui_foundation::is_key_k(key) {
-            if crate::ai::acp::chat_window::is_chat_window_open() {
+            let detached_window_open = crate::ai::acp::chat_window::is_chat_window_open();
+            tracing::debug!(
+                target: "script_kit::keyboard",
+                event = "acp_cmd_k_route",
+                detached_window_open,
+                route = if detached_window_open { "detached_local" } else { "propagate_to_main_window" },
+            );
+            if detached_window_open {
                 // Detached window: open actions popup directly
-                tracing::info!(event = "detached_actions_shortcut_pressed");
+                tracing::info!(
+                    target: "script_kit::keyboard",
+                    event = "detached_actions_shortcut_pressed",
+                );
                 crate::ai::acp::chat_window::toggle_detached_actions(cx);
                 cx.stop_propagation();
             } else {

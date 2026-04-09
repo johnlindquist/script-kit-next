@@ -1501,20 +1501,37 @@ impl ScriptListApp {
         let actions_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
+                let is_notes = crate::notes::is_notes_window(window);
+                let is_ai = crate::ai::is_ai_window(window);
+                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_actions = crate::actions::is_actions_window(window);
+
                 // When the main window is hidden (e.g. Notes/AI open), main-menu
                 // key interceptors must not consume keystrokes from secondary windows.
                 if !script_kit_gpui::is_main_window_visible() {
+                    tracing::debug!(
+                        target: "script_kit::keyboard",
+                        event = "actions_interceptor_main_window_hidden",
+                        is_notes,
+                        is_ai,
+                        is_detached_acp,
+                        is_actions,
+                    );
                     return;
                 }
 
                 // CRITICAL: Skip processing if this keystroke is from a secondary window.
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
                 // We only want to handle keystrokes for the main window.
-                if crate::notes::is_notes_window(window)
-                    || crate::ai::is_ai_window(window)
-                    || crate::ai::acp::chat_window::is_chat_window(window)
-                    || crate::actions::is_actions_window(window)
-                {
+                if is_notes || is_ai || is_detached_acp || is_actions {
+                    tracing::debug!(
+                        target: "script_kit::keyboard",
+                        event = "actions_interceptor_skipped_secondary_window",
+                        is_notes,
+                        is_ai,
+                        is_detached_acp,
+                        is_actions,
+                    );
                     return; // Let the secondary window handle its own keystrokes
                 }
 
@@ -1537,6 +1554,23 @@ impl ScriptListApp {
                         // This MUST be intercepted here because the Input component has focus and
                         // normal on_key_down handlers won't receive the event
                         if has_cmd && key.eq_ignore_ascii_case("k") && !has_shift {
+                            let owner = match &this.current_view {
+                                AppView::ScriptList => "script_list",
+                                AppView::AcpChatView { .. } => "embedded_acp",
+                                AppView::QuickTerminalView { .. } => "quick_terminal",
+                                AppView::FileSearchView { .. } => "file_search",
+                                AppView::ArgPrompt { .. } => "arg_prompt",
+                                AppView::ChatPrompt { .. } => "chat_prompt",
+                                AppView::WebcamView { .. } => "webcam",
+                                AppView::ClipboardHistoryView { .. } => "clipboard_history",
+                                _ => "main_window_other",
+                            };
+                            tracing::debug!(
+                                target: "script_kit::keyboard",
+                                event = "actions_interceptor_owner_path",
+                                owner,
+                                show_actions_popup = this.show_actions_popup,
+                            );
                             match &mut this.current_view {
                                 AppView::ScriptList => {
                                     // Toggle actions for the main script list
