@@ -766,7 +766,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         .with_section("Window"),
         Action::new(
             "acp_close",
-            "Close AI Chat",
+            "Close ACP Chat",
             None,
             ActionCategory::ScriptContext,
         )
@@ -1020,7 +1020,7 @@ pub(crate) fn get_acp_chat_root_route_for_host(
     let context_title = selected_agent_id
         .and_then(|id| catalog_entries.iter().find(|e| e.id.as_ref() == id))
         .map(|e| e.display_name.to_string())
-        .or_else(|| Some("AI Chat".to_string()));
+        .or_else(|| Some("ACP Chat".to_string()));
 
     let actions = filter_acp_actions_for_host(
         host,

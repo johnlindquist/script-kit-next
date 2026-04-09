@@ -1,5 +1,41 @@
 use crate::action_helpers::{ActionOutcomeStatus, DispatchContext, DispatchOutcome};
 
+const ACP_CHAT_CONVERSATION_HEADING: &str = "# ACP Chat Conversation\n\n";
+
+fn acp_thread_role_label(
+    role: &crate::ai::acp::thread::AcpThreadMessageRole,
+) -> &'static str {
+    match role {
+        crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
+        crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Assistant**",
+        crate::ai::acp::thread::AcpThreadMessageRole::Thought => "**Thinking**",
+        crate::ai::acp::thread::AcpThreadMessageRole::Tool => "**Tool**",
+        crate::ai::acp::thread::AcpThreadMessageRole::System => "**System**",
+        crate::ai::acp::thread::AcpThreadMessageRole::Error => "**Error**",
+    }
+}
+
+/// Build a markdown document from ACP thread messages. Returns `None` if no
+/// messages have non-empty renderable body text.
+fn build_acp_conversation_markdown(
+    messages: &[crate::ai::acp::thread::AcpThreadMessage],
+) -> Option<String> {
+    let mut md = String::from(ACP_CHAT_CONVERSATION_HEADING);
+    let mut wrote_any = false;
+    for msg in messages {
+        let body = msg.body.trim();
+        if body.is_empty() {
+            continue;
+        }
+        md.push_str(acp_thread_role_label(&msg.role));
+        md.push_str("\n\n");
+        md.push_str(body);
+        md.push_str("\n\n---\n\n");
+        wrote_any = true;
+    }
+    wrote_any.then_some(md)
+}
+
 /// A code block extracted from markdown with optional language hint.
 struct CodeBlock {
     code: String,
@@ -319,7 +355,7 @@ impl ScriptListApp {
                             duration_ms = started_at.elapsed().as_millis() as u64,
                             "Failed to open AI window after hiding main window"
                         );
-                        this.show_error_toast(format!("Failed to send to AI Chat: {}", error), cx);
+                        this.show_error_toast(format!("Failed to send to ACP Chat: {}", error), cx);
                     });
                 }
             }
@@ -1127,28 +1163,52 @@ impl ScriptListApp {
                     let view = entity.read(cx);
                     view.thread().map(|thread| thread.read(cx).messages.clone())
                 };
-                if let Some(messages) = messages {
-                    let mut md = String::from("# AI Chat Conversation\n\n");
-                    for msg in &messages {
-                        let role_label = match msg.role {
-                            crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
-                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant => {
-                                "**Assistant**"
-                            }
-                            crate::ai::acp::thread::AcpThreadMessageRole::Thought => "**Thinking**",
-                            crate::ai::acp::thread::AcpThreadMessageRole::Tool => "**Tool**",
-                            crate::ai::acp::thread::AcpThreadMessageRole::System => "**System**",
-                            crate::ai::acp::thread::AcpThreadMessageRole::Error => "**Error**",
-                        };
-                        md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
-                    }
-                    cx.write_to_clipboard(gpui::ClipboardItem::new_string(md));
+                let message_count = messages.as_ref().map(Vec::len).unwrap_or(0);
+
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_export_markdown_started",
+                    message_count,
+                    "Starting ACP export-as-markdown"
+                );
+
+                let Some(markdown) = messages
+                    .as_ref()
+                    .and_then(|msgs| build_acp_conversation_markdown(msgs))
+                else {
+                    let reason = if message_count == 0 {
+                        "no_messages"
+                    } else {
+                        "empty_renderable_messages"
+                    };
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_export_markdown_blocked",
+                        reason = %reason,
+                        message_count,
+                        "ACP export-as-markdown blocked"
+                    );
                     let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some("Conversation copied as markdown".to_string());
-                    outcome
-                } else {
-                    DispatchOutcome::not_handled()
-                }
+                    outcome.user_message =
+                        Some("No ACP messages to copy".to_string());
+                    return outcome;
+                };
+
+                let char_count = markdown.chars().count();
+                cx.write_to_clipboard(gpui::ClipboardItem::new_string(markdown));
+
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_export_markdown_succeeded",
+                    message_count,
+                    char_count,
+                    "ACP export-as-markdown completed"
+                );
+
+                let mut outcome = DispatchOutcome::success();
+                outcome.user_message =
+                    Some("Copied ACP conversation as markdown".to_string());
+                outcome
             }
             "acp_save_as_note" => {
                 let entity = entity.clone();
@@ -1165,41 +1225,40 @@ impl ScriptListApp {
                     "Starting ACP save-as-note"
                 );
 
-                if message_count == 0 {
+                let Some(markdown) = messages
+                    .as_ref()
+                    .and_then(|msgs| build_acp_conversation_markdown(msgs))
+                else {
+                    let reason = if message_count == 0 {
+                        "no_messages"
+                    } else {
+                        "empty_renderable_messages"
+                    };
                     tracing::warn!(
                         target: "script_kit::tab_ai",
                         event = "acp_save_as_note_blocked",
-                        reason = "no_messages",
+                        reason = %reason,
+                        message_count,
                         "ACP save-as-note blocked"
                     );
                     let mut o = DispatchOutcome::success();
-                    o.user_message = Some("No messages to save".to_string());
+                    o.user_message = Some("No ACP messages to save".to_string());
                     return o;
-                }
+                };
 
-                let mut md = String::from("# AI Chat Conversation\n\n");
-                for msg in messages.unwrap_or_default() {
-                    let role_label = match msg.role {
-                        crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
-                        crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Assistant**",
-                        crate::ai::acp::thread::AcpThreadMessageRole::Thought => "**Thinking**",
-                        crate::ai::acp::thread::AcpThreadMessageRole::Tool => "**Tool**",
-                        crate::ai::acp::thread::AcpThreadMessageRole::System => "**System**",
-                        crate::ai::acp::thread::AcpThreadMessageRole::Error => "**Error**",
-                    };
-                    md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
-                }
-
-                match crate::notes::save_note_with_content(cx, md) {
+                let char_count = markdown.chars().count();
+                match crate::notes::save_note_with_content(cx, markdown) {
                     Ok(_) => {
                         tracing::info!(
                             target: "script_kit::tab_ai",
                             event = "acp_save_as_note_succeeded",
                             message_count,
+                            char_count,
                             "ACP save-as-note completed"
                         );
                         let mut o = DispatchOutcome::success();
-                        o.user_message = Some("Saved conversation to Notes".to_string());
+                        o.user_message =
+                            Some("Saved ACP conversation to Notes".to_string());
                         o
                     }
                     Err(e) => {
@@ -1207,12 +1266,14 @@ impl ScriptListApp {
                             target: "script_kit::tab_ai",
                             event = "acp_save_as_note_failed",
                             message_count,
+                            char_count,
                             error = %e,
                             "ACP save-as-note failed"
                         );
-                        let mut o = DispatchOutcome::success();
-                        o.user_message = Some(format!("Failed to save note: {e}"));
-                        o
+                        DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            format!("Failed to save note: {e}"),
+                        )
                     }
                 }
             }
