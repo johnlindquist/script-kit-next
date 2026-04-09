@@ -10,7 +10,7 @@ const FOOTER_DIVIDER_ID: &str = "script-kit-footer-divider";
 #[cfg(target_os = "macos")]
 const FOOTER_HINTS_ID: &str = "script-kit-footer-hints";
 #[cfg(target_os = "macos")]
-const FOOTER_HINT_ITEM_GAP: f64 = 8.0;
+const FOOTER_HINT_ITEM_GAP: f64 = 4.0;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_KEY_LABEL_GAP: f64 = 3.0;
 #[cfg(target_os = "macos")]
@@ -28,6 +28,8 @@ const FOOTER_HINT_FONT_WEIGHT_LIGHT: f64 = 0.18;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_TEXT_ALIGN_LEFT: usize = 0;
 #[cfg(target_os = "macos")]
+const FOOTER_HINT_TEXT_ALIGN_RIGHT: usize = 2;
+#[cfg(target_os = "macos")]
 const FOOTER_HINT_BUTTON_ID_PREFIX: &str = "script-kit-footer-button-";
 #[cfg(target_os = "macos")]
 const FOOTER_LEFT_INFO_ID: &str = "script-kit-footer-left-info";
@@ -36,11 +38,11 @@ const FOOTER_STREAMING_DOT_SIZE: f64 = 6.0;
 #[cfg(target_os = "macos")]
 const FOOTER_LEFT_DOT_LABEL_GAP: f64 = 6.0;
 #[cfg(target_os = "macos")]
-const FOOTER_RUN_SLOT_WIDTH: f64 = 160.0;
+const FOOTER_RUN_SLOT_MIN_WIDTH: f64 = 96.0;
 #[cfg(target_os = "macos")]
-const FOOTER_ACTIONS_SLOT_WIDTH: f64 = 104.0;
+const FOOTER_ACTIONS_SLOT_WIDTH: f64 = 96.0;
 #[cfg(target_os = "macos")]
-const FOOTER_AI_SLOT_WIDTH: f64 = 64.0;
+const FOOTER_AI_SLOT_WIDTH: f64 = 56.0;
 #[cfg(target_os = "macos")]
 const FOOTER_APPLY_SLOT_WIDTH: f64 = 88.0;
 #[cfg(target_os = "macos")]
@@ -798,7 +800,7 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
 #[cfg(target_os = "macos")]
 fn footer_hint_slot_width(action: FooterAction) -> f64 {
     match action {
-        FooterAction::Run => FOOTER_RUN_SLOT_WIDTH,
+        FooterAction::Run => FOOTER_RUN_SLOT_MIN_WIDTH,
         FooterAction::Actions => FOOTER_ACTIONS_SLOT_WIDTH,
         FooterAction::Ai => FOOTER_AI_SLOT_WIDTH,
         FooterAction::Apply => FOOTER_APPLY_SLOT_WIDTH,
@@ -830,7 +832,7 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
         button_cfg.label.as_ref(),
         font,
         text_color,
-        FOOTER_HINT_TEXT_ALIGN_LEFT,
+        FOOTER_HINT_TEXT_ALIGN_RIGHT,
     );
     if key_field == nil || label_field == nil {
         return nil;
@@ -839,23 +841,25 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     let key_size: NSSize = msg_send![key_field, fittingSize];
     let label_size: NSSize = msg_send![label_field, fittingSize];
     let min_content_width = key_size.width + (FOOTER_HINT_PADDING_X * 2.0) + 12.0;
-    let item_width = footer_hint_slot_width(button_cfg.action).max(min_content_width);
+    let content_width = label_size.width + FOOTER_HINT_KEY_LABEL_GAP + key_size.width;
+    let intrinsic_width = content_width + (FOOTER_HINT_PADDING_X * 2.0);
+    let item_width = footer_hint_slot_width(button_cfg.action)
+        .max(min_content_width)
+        .max(intrinsic_width);
     let item_height = footer_height();
     let content_height = key_size.height.max(label_size.height) + (FOOTER_HINT_PADDING_Y * 2.0);
     let content_y = ((item_height - content_height) / 2.0).round();
     let key_y = (content_y + FOOTER_HINT_PADDING_Y).round();
     let label_y = (content_y + FOOTER_HINT_PADDING_Y).round();
-    let content_width = label_size.width + FOOTER_HINT_KEY_LABEL_GAP + key_size.width;
-    let content_x = ((item_width - content_width) / 2.0)
-        .max(FOOTER_HINT_PADDING_X)
-        .round();
-    let key_x = (content_x + label_size.width + FOOTER_HINT_KEY_LABEL_GAP).round();
+    let key_x = (item_width - FOOTER_HINT_PADDING_X - key_size.width).round();
+    let label_x = FOOTER_HINT_PADDING_X.round();
+    let label_width = (key_x - FOOTER_HINT_KEY_LABEL_GAP - label_x).max(0.0);
 
     let _: () = msg_send![
         label_field,
         setFrame: NSRect::new(
-            NSPoint::new(content_x, label_y),
-            NSSize::new(label_size.width, label_size.height)
+            NSPoint::new(label_x, label_y),
+            NSSize::new(label_width, label_size.height)
         )
     ];
     let _: () = msg_send![
