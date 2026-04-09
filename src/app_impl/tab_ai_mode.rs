@@ -152,36 +152,53 @@ impl ScriptListApp {
     /// Open ACP Chat with a selected plugin skill staged as context.
     ///
     /// The skill's SKILL.md content is read and staged as the initial prompt
-    /// context, with a deterministic initial input referencing the skill.
-    /// This keeps `selected_agent`/provider logic untouched.
+    /// context, with a launcher-origin preamble and explicit plugin/skill fields.
+    /// Unreadable skill files produce an intentional fallback message instead of
+    /// a silent empty attachment. This keeps `selected_agent`/provider logic untouched.
     pub(crate) fn open_acp_with_selected_skill(
         &mut self,
         skill: &crate::plugins::PluginSkill,
         cx: &mut Context<Self>,
     ) {
-        // Read the skill document for context staging
-        let skill_content = std::fs::read_to_string(&skill.path).unwrap_or_default();
+        // Read the skill document for context staging, tracking read errors explicitly
+        let (skill_content, read_error) = match std::fs::read_to_string(&skill.path) {
+            Ok(content) => (content, None),
+            Err(error) => {
+                tracing::warn!(
+                    plugin_id = %skill.plugin_id,
+                    skill_id = %skill.skill_id,
+                    path = %skill.path.display(),
+                    error = %error,
+                    "acp_skill_read_failed"
+                );
+                (String::new(), Some(error.to_string()))
+            }
+        };
 
-        // Build a deterministic initial input that tells the ACP agent
-        // which skill to use for this session
-        let initial_input = if skill_content.is_empty() {
-            format!(
-                "Use the skill \"{}\" from plugin \"{}\" for this session.",
-                skill.title, skill.plugin_title
-            )
-        } else {
-            format!(
-                "Use the attached skill \"{}\" from plugin \"{}\" for this session.\n\n<skill path=\"{}\">\n{}\n</skill>",
+        // Build a deterministic initial input with launcher-origin preamble.
+        // When the file could not be read, produce an explicit fallback instead
+        // of silently staging an empty attachment.
+        let initial_input = match read_error {
+            Some(error) => format!(
+                "Skill selected from the Script Kit launcher.\n\n\
+                 Plugin: {}\n\
+                 Skill: {}\n\
+                 Path: {}\n\n\
+                 The skill file could not be read: {}.\n\
+                 Proceed without the attached skill body and ask for clarification only if the missing file blocks the task.",
+                skill.display_source(),
                 skill.title,
-                skill.plugin_title,
                 skill.path.display(),
-                skill_content
-            )
+                error,
+            ),
+            None => skill.acp_entry_intent(&skill_content),
         };
 
         tracing::info!(
             plugin_id = %skill.plugin_id,
             skill_id = %skill.skill_id,
+            title = %skill.title,
+            source = %skill.display_source(),
             content_len = skill_content.len(),
             "acp_skill_context_staged"
         );

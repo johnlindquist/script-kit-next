@@ -85,8 +85,9 @@ impl ScriptListApp {
             "edit_script" => {
                 tracing::info!(category = "UI", "edit script action");
                 if let Some(result) = self.get_selected_result() {
-                    let path_opt = match result {
+                    let path_opt = match &result {
                         scripts::SearchResult::Script(m) => Some(m.script.path.clone()),
+                        scripts::SearchResult::Skill(m) => Some(m.skill.path.clone()),
                         scripts::SearchResult::Agent(m) => Some(m.agent.path.clone()),
                         scripts::SearchResult::Scriptlet(_) => None,
                         scripts::SearchResult::BuiltIn(_) => None,
@@ -94,6 +95,16 @@ impl ScriptListApp {
                         scripts::SearchResult::Window(_) => None,
                         scripts::SearchResult::Fallback(_) => None,
                     };
+
+                    if let Some(ref path) = path_opt {
+                        tracing::info!(
+                            category = "UI",
+                            event = "launcher_edit_file_requested",
+                            item_type = result.type_label(),
+                            path = %path.display(),
+                            "launcher_edit_file_requested"
+                        );
+                    }
 
                     if let Some(path) = path_opt {
                         let editor_launch_rx = self.launch_editor_with_feedback_async(&path, trace_id);
@@ -382,9 +393,12 @@ impl ScriptListApp {
                 tracing::info!(category = "UI", "copy content action");
                 if let Some(result) = self.get_selected_result() {
                     // Get the file path based on the result type
-                    let file_path_opt: Option<String> = match result {
+                    let file_path_opt: Option<String> = match &result {
                         scripts::SearchResult::Script(m) => {
                             Some(m.script.path.to_string_lossy().to_string())
+                        }
+                        scripts::SearchResult::Skill(m) => {
+                            Some(m.skill.path.to_string_lossy().to_string())
                         }
                         scripts::SearchResult::Agent(m) => {
                             Some(m.agent.path.to_string_lossy().to_string())
@@ -398,6 +412,16 @@ impl ScriptListApp {
                         }
                         _ => None,
                     };
+
+                    if let Some(ref file_path) = file_path_opt {
+                        tracing::info!(
+                            category = "UI",
+                            event = "launcher_copy_content_requested",
+                            item_type = result.type_label(),
+                            path = %file_path,
+                            "launcher_copy_content_requested"
+                        );
+                    }
 
                     if let Some(file_path) = file_path_opt {
                         // Read the file content

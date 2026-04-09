@@ -46,3 +46,46 @@ pub struct PluginSkill {
     /// Description parsed from SKILL.md frontmatter, empty if absent
     pub description: String,
 }
+
+impl PluginSkill {
+    /// Returns the best human-readable source label for this skill's plugin.
+    /// Prefers `plugin_title`; falls back to `plugin_id` when the title is empty.
+    pub fn display_source(&self) -> &str {
+        if self.plugin_title.is_empty() {
+            &self.plugin_id
+        } else {
+            &self.plugin_title
+        }
+    }
+
+    /// Build the ACP entry intent text for launching this skill from the launcher.
+    ///
+    /// When `skill_content` is non-empty, the SKILL.md body is embedded in a
+    /// `<skill>` tag. When empty (unreadable or genuinely blank), the intent
+    /// omits the attachment and asks the agent to proceed without it.
+    pub fn acp_entry_intent(&self, skill_content: &str) -> String {
+        let source = self.display_source();
+        if skill_content.trim().is_empty() {
+            format!(
+                "Skill selected from the Script Kit launcher.\n\n\
+                 Plugin: {source}\n\
+                 Skill: {}\n\n\
+                 Use this skill for this session.",
+                self.title,
+            )
+        } else {
+            format!(
+                "Skill selected from the Script Kit launcher.\n\n\
+                 Plugin: {source}\n\
+                 Skill: {}\n\
+                 Path: {}\n\n\
+                 <skill path=\"{}\">\n{}\n</skill>\n\n\
+                 Use the attached skill for this session.",
+                self.title,
+                self.path.display(),
+                self.path.display(),
+                skill_content,
+            )
+        }
+    }
+}

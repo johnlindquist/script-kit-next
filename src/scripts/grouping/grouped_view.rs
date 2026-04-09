@@ -58,9 +58,10 @@ pub(super) fn build_grouped_view_results(
         }
     };
 
-    // Helper to get plugin/kit name for grouping (scripts, scriptlets, and skills)
+    // Helper to get plugin/kit key for grouping (scripts, scriptlets, and skills).
+    // This is the stable internal key used for frecency and section identity.
     // Agents are suppressed from grouping — they are not top-level launcher artifacts.
-    let get_kit_name = |result: &SearchResult| -> Option<String> {
+    let get_kit_key = |result: &SearchResult| -> Option<String> {
         match result {
             SearchResult::Script(sm) => sm.script.kit_name.clone(),
             SearchResult::Scriptlet(sm) => {
@@ -77,6 +78,14 @@ pub(super) fn build_grouped_view_results(
             _ => None,
         }
     };
+
+    // Helper to get display label for a section header.
+    // Resolves to the manifest title when available, falls back to the grouping key.
+    let get_kit_label =
+        |result: &SearchResult| -> Option<String> { result.source_name().map(|s| s.to_string()) };
+
+    // Maps grouping keys to their best-known display labels.
+    let mut kit_labels: HashMap<String, String> = HashMap::new();
 
     // Find indices of results that are "suggested" and categorize non-suggested by kit or type
     let mut suggested_indices: Vec<(usize, f64)> = Vec::new();
@@ -109,8 +118,10 @@ pub(super) fn build_grouped_view_results(
                     SearchResult::Script(_)
                     | SearchResult::Scriptlet(_)
                     | SearchResult::Skill(_) => {
-                        // Group by kit/plugin name (default to "main" if no kit specified)
-                        let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
+                        // Group by kit/plugin key (default to "main" if no kit specified)
+                        let kit = get_kit_key(result).unwrap_or_else(|| "main".to_string());
+                        let label = get_kit_label(result).unwrap_or_else(|| kit.clone());
+                        kit_labels.entry(kit.clone()).or_insert(label);
                         kit_indices.entry(kit).or_default().push(idx);
                     }
                     SearchResult::BuiltIn(_) | SearchResult::Window(_) => {
@@ -133,7 +144,9 @@ pub(super) fn build_grouped_view_results(
             // If no path, categorize by type (shouldn't happen, but handle gracefully)
             match result {
                 SearchResult::Script(_) | SearchResult::Scriptlet(_) | SearchResult::Skill(_) => {
-                    let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
+                    let kit = get_kit_key(result).unwrap_or_else(|| "main".to_string());
+                    let label = get_kit_label(result).unwrap_or_else(|| kit.clone());
+                    kit_labels.entry(kit.clone()).or_insert(label);
                     kit_indices.entry(kit).or_default().push(idx);
                 }
                 SearchResult::BuiltIn(_) | SearchResult::Window(_) => commands_indices.push(idx),
@@ -228,8 +241,18 @@ pub(super) fn build_grouped_view_results(
     // 2. MAIN kit (if it has items)
     if let Some(main_indices) = kit_indices.get("main") {
         if !main_indices.is_empty() {
+            let header = kit_labels
+                .get("main")
+                .cloned()
+                .unwrap_or_else(|| "Main".to_string());
+            tracing::info!(
+                plugin_id = "main",
+                section_label = %header,
+                item_count = main_indices.len(),
+                "main_menu_plugin_section_built"
+            );
             grouped.push(GroupedListItem::SectionHeader(
-                format!("MAIN · {}", main_indices.len()),
+                format!("{} · {}", header.to_uppercase(), main_indices.len()),
                 Some("Code".to_string()),
             ));
             for idx in main_indices {
@@ -253,9 +276,19 @@ pub(super) fn build_grouped_view_results(
     for kit_name in &other_kit_names {
         if let Some(indices) = kit_indices.get(*kit_name) {
             if !indices.is_empty() {
-                // Use uppercase kit name as section header with count and bolt icon
+                // Resolve manifest title for the section header; fall back to the grouping key
+                let header = kit_labels
+                    .get(*kit_name)
+                    .cloned()
+                    .unwrap_or_else(|| (*kit_name).clone());
+                tracing::info!(
+                    plugin_id = %(*kit_name),
+                    section_label = %header,
+                    item_count = indices.len(),
+                    "main_menu_plugin_section_built"
+                );
                 grouped.push(GroupedListItem::SectionHeader(
-                    format!("{} · {}", kit_name.to_uppercase(), indices.len()),
+                    format!("{} · {}", header.to_uppercase(), indices.len()),
                     Some("BoltFilled".to_string()),
                 ));
                 for idx in indices {

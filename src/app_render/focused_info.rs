@@ -601,6 +601,86 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("Window", style));
         }
 
+        scripts::SearchResult::Skill(skill_match) => {
+            let skill = &skill_match.skill;
+
+            // Source indicator: plugin name
+            let mut path_div = div()
+                .flex()
+                .flex_row()
+                .text_xs()
+                .font_family(t.font_family_mono)
+                .pb(px(s.padding_xs))
+                .overflow_x_hidden()
+                .child(
+                    div()
+                        .text_color(rgba((style.text_muted << 8) | 0x99))
+                        .child(format!("skill: {} / ", skill.display_source())),
+                );
+
+            let skill_filename = skill
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| "SKILL.md".to_string());
+            path_div = path_div.child(
+                div()
+                    .text_color(rgba((style.text_muted << 8) | 0x99))
+                    .child(skill_filename),
+            );
+
+            content = content.child(path_div);
+
+            // Name header
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(skill.title.clone()),
+            );
+
+            // Description
+            if !skill.description.is_empty() {
+                content = content.child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(style.text_secondary))
+                        .pb(px(s.padding_md))
+                        .child(skill.description.clone()),
+                );
+            }
+
+            // Metadata badges
+            {
+                let mut badges = div()
+                    .flex()
+                    .flex_row()
+                    .flex_wrap()
+                    .gap(px(s.gap_sm))
+                    .pb(px(s.padding_sm));
+                badges = badges.child(focused_info_badge(
+                    &format!("plugin: {}", skill.display_source()),
+                    style.badge_bg_rgba,
+                    style.badge_border_rgba,
+                    style.badge_text_hex,
+                ));
+                badges = badges.child(focused_info_badge(
+                    "Opens ACP Chat",
+                    style.accent_badge_bg_rgba,
+                    style.accent_badge_border_rgba,
+                    style.accent_badge_text_hex,
+                ));
+                content = content.child(badges);
+            }
+
+            // Divider + Type indicator
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Skill", style));
+        }
+
         scripts::SearchResult::Agent(agent_match) => {
             let agent = &agent_match.agent;
 
@@ -878,6 +958,10 @@ impl ScriptListApp {
                     scripts::SearchResult::Window(m) => {
                         Some(format!("window:{}:{}", m.window.app, m.window.title))
                     }
+                    scripts::SearchResult::Skill(m) => Some(format!(
+                        "skill:{}:{}",
+                        m.skill.plugin_id, m.skill.skill_id
+                    )),
                     scripts::SearchResult::Agent(m) => {
                         Some(format!("agent:{}", m.agent.path.to_string_lossy()))
                     }
@@ -975,6 +1059,16 @@ impl ScriptListApp {
                                 format!("window:{}", m.window.id),
                                 false,
                                 "Switch to",
+                            )
+                            .with_frecency(is_suggested, frecency_path),
+                        )
+                    }
+                    scripts::SearchResult::Skill(m) => {
+                        // Skills use plugin-qualified key and are editable files
+                        Some(
+                            ScriptInfo::new(
+                                &m.skill.title,
+                                m.skill.path.to_string_lossy().to_string(),
                             )
                             .with_frecency(is_suggested, frecency_path),
                         )

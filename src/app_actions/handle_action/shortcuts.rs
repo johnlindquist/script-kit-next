@@ -52,6 +52,11 @@ impl ScriptListApp {
                             let command_name = m.app.name.clone();
                             self.show_shortcut_recorder(command_id, command_name, cx);
                         }
+                        scripts::SearchResult::Skill(m) => {
+                            let command_id = format!("skill/{}:{}", m.skill.plugin_id, m.skill.skill_id);
+                            let command_name = m.skill.title.clone();
+                            self.show_shortcut_recorder(command_id, command_name, cx);
+                        }
                         scripts::SearchResult::Window(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
@@ -103,6 +108,9 @@ impl ScriptListApp {
                                     m.app.name.to_lowercase().replace(' ', "-")
                                 ))
                             }
+                        }
+                        scripts::SearchResult::Skill(m) => {
+                            Some(format!("skill/{}:{}", m.skill.plugin_id, m.skill.skill_id))
                         }
                         scripts::SearchResult::Agent(m) => {
                             Some(format!("agent/{}", m.agent.name))
@@ -181,6 +189,10 @@ impl ScriptListApp {
                             };
                             (id, m.app.name.clone())
                         }
+                        scripts::SearchResult::Skill(m) => (
+                            format!("skill/{}:{}", m.skill.plugin_id, m.skill.skill_id),
+                            m.skill.title.clone(),
+                        ),
                         scripts::SearchResult::Agent(m) => {
                             (format!("agent/{}", m.agent.name), m.agent.name.clone())
                         }
@@ -227,6 +239,9 @@ impl ScriptListApp {
                                     m.app.name.to_lowercase().replace(' ', "-")
                                 ))
                             }
+                        }
+                        scripts::SearchResult::Skill(m) => {
+                            Some(format!("skill/{}:{}", m.skill.plugin_id, m.skill.skill_id))
                         }
                         scripts::SearchResult::Agent(m) => {
                             Some(format!("agent/{}", m.agent.name))

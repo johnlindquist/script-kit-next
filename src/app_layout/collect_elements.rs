@@ -1205,6 +1205,7 @@ impl ScriptListApp {
                 scripts::SearchResult::BuiltIn(m) => m.entry.name.clone(),
                 scripts::SearchResult::App(m) => m.app.name.clone(),
                 scripts::SearchResult::Window(m) => m.window.title.clone(),
+                scripts::SearchResult::Skill(m) => m.skill.title.clone(),
                 scripts::SearchResult::Agent(m) => m.agent.name.clone(),
                 scripts::SearchResult::Fallback(m) => m.fallback.name().to_string(),
             })

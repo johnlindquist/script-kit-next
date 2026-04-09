@@ -380,7 +380,7 @@ impl SearchResult {
     ///    - Scripts → "Run Script"
     ///    - Commands/Built-ins → "Run Command"
     ///    - Scriptlets/Snippets → "Paste Snippet"
-    ///    - Skills → "Open Skill"
+    ///    - Skills → "Open in ACP Chat"
     ///    - Apps → "Launch App"
     ///    - Windows → "Switch to Window"
     ///    - Agents → "Run Agent"
@@ -407,7 +407,7 @@ impl SearchResult {
                     _ => "Run Snippet",
                 }
             }
-            SearchResult::Skill(_) => "Open Skill",
+            SearchResult::Skill(_) => "Open in ACP Chat",
             SearchResult::BuiltIn(_) => "Run Command",
             SearchResult::App(_) => "Launch App",
             SearchResult::Window(_) => "Switch to Window",

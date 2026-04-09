@@ -182,6 +182,19 @@ pub fn render_design_item(
                     });
                     (sm.scriptlet.name.clone(), description, badge, Some(icon))
                 }
+                SearchResult::Skill(sm) => {
+                    let description = if sm.skill.description.is_empty() {
+                        None
+                    } else {
+                        Some(sm.skill.description.clone())
+                    };
+                    (
+                        sm.skill.title.clone(),
+                        description,
+                        None,
+                        Some(IconKind::Svg("BoltFilled".to_string())),
+                    )
+                }
                 SearchResult::BuiltIn(bm) => {
                     // Built-ins: pass icon name through directly (Lucide kebab-case)
                     let icon = match &bm.entry.icon {

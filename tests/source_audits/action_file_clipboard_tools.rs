@@ -184,7 +184,7 @@ fn copy_content_shows_error_for_unsupported_item_types() {
     let copy_pos = content
         .find("\"copy_content\"")
         .expect("Expected copy_content action handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
+    let block = &content[copy_pos..content.len().min(copy_pos + 4000)];
 
     assert!(
         block.contains("Cannot copy content for this item type"),
@@ -199,7 +199,7 @@ fn copy_content_shows_error_when_no_selection() {
     let copy_pos = content
         .find("\"copy_content\"")
         .expect("Expected copy_content action handler");
-    let block = &content[copy_pos..content.len().min(copy_pos + 3000)];
+    let block = &content[copy_pos..content.len().min(copy_pos + 4000)];
 
     assert!(
         block.contains("selection_required_message_for_action(action_id)"),
