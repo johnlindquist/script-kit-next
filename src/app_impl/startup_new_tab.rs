@@ -11,8 +11,22 @@
                     return;
                 }
 
-                // Skip keystrokes from secondary windows
-                if crate::actions::is_actions_window(window) {
+                // Skip keystrokes from secondary windows — interceptors are
+                // GLOBAL and fire for ALL windows.  Secondary windows own
+                // their own Tab/Cmd+Enter handling.
+                let is_notes = crate::notes::is_notes_window(window);
+                let is_ai = crate::ai::is_ai_window(window);
+                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_actions = crate::actions::is_actions_window(window);
+                if is_notes || is_ai || is_detached_acp || is_actions {
+                    tracing::debug!(
+                        target: "script_kit::keyboard",
+                        event = "tab_interceptor_skipped_secondary_window",
+                        is_notes,
+                        is_ai,
+                        is_detached_acp,
+                        is_actions,
+                    );
                     return;
                 }
 
@@ -53,6 +67,23 @@
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
+                            let owner = match &this.current_view {
+                                AppView::ScriptList => "script_list",
+                                AppView::AcpChatView { .. } => "embedded_acp",
+                                AppView::QuickTerminalView { .. } => "quick_terminal",
+                                AppView::FileSearchView { .. } => "file_search",
+                                AppView::ChatPrompt { .. } => "chat_prompt",
+                                _ => "main_window_other",
+                            };
+                            tracing::debug!(
+                                target: "script_kit::keyboard",
+                                event = "tab_interceptor_owner_path",
+                                owner,
+                                has_shift,
+                                show_actions_popup = this.show_actions_popup,
+                                save_offer_open = this.tab_ai_save_offer_state.is_some(),
+                            );
+
                             // File search keeps Shift+Tab for parent-directory
                             // navigation and leaves plain Tab local.
                             if matches!(this.current_view, AppView::FileSearchView { .. }) {

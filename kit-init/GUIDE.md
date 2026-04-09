@@ -14,7 +14,7 @@ Welcome to Script Kit! This guide will help you get started and master the power
 6. [Configuration](#configuration-configts)
 7. [Themes](#themes-themejson)
 8. [Built-in Features](#built-in-features)
-9. [AI Window (BYOK)](#ai-window-byok)
+9. [ACP Chat (BYOK)](#acp-chat-byok)
 10. [Notes Window](#notes-window)
 11. [File Watching](#file-watching)
 12. [Multiple Environments](#multiple-environments)
@@ -1073,14 +1073,15 @@ await tileWindow(windowId, "left");
 
 ---
 
-## AI Window (BYOK)
+## ACP Chat (BYOK)
 
-Script Kit includes a built-in AI chat window that uses your own API keys (BYOK = Bring Your Own Key).
+Script Kit includes ACP Chat — a built-in AI chat surface that uses your own API keys (BYOK = Bring Your Own Key). ACP Chat is the primary AI interface, accessible from the launcher and from scripts via the SDK.
 
-### Opening the AI Window
+### Opening ACP Chat
 
+- **Tab** from the launcher opens ACP Chat with current context
 - **Hotkey**: `Cmd+Shift+Space` (default, configurable)
-- **From script**: See [SDK Reference](#sdk-quick-reference)
+- **From script**: Use `aiStartChat()` or `aiFocus()` — see [SDK Reference](#sdk-quick-reference)
 
 ### API Key Setup
 
@@ -1117,6 +1118,34 @@ Set one of these environment variables:
 - **Model picker** to select AI models
 - **Chat history** with sidebar navigation
 - **Multi-provider support** (Anthropic Claude, OpenAI GPT)
+- **Context injection** — Tab from the launcher captures desktop context automatically
+
+### ACP Chat SDK
+
+Scripts can programmatically create and manage ACP Chat conversations:
+
+```typescript
+// Start a new chat
+const result = await aiStartChat("Summarize the last commit", {
+  systemPrompt: "Be concise",
+  modelId: "claude-3-5-sonnet-20241022",
+});
+console.log(result.chatId); // use for follow-up messages
+
+// Send a follow-up message
+await aiSendMessage(result.chatId, "Now explain the diff");
+
+// Query chat state
+const isOpen = await aiIsOpen();
+const chats = await aiListChats();
+const messages = await aiGetConversation(result.chatId);
+
+// Focus or delete
+await aiFocus();
+await aiDeleteChat(result.chatId);
+```
+
+See the full function list in [ACP Chat SDK](#acp-chat-sdk-1) under SDK Quick Reference.
 
 ### Configuring the Hotkey
 
@@ -1283,7 +1312,7 @@ export SK_PATH=~/Projects/my-app/.kit
 | `micro(placeholder, choices)` | Tiny prompt | `Promise<string>` |
 | `select(placeholder, choices)` | Multi-select | `Promise<string[]>` |
 | `term(command?)` | Terminal emulator | `Promise<string>` |
-| `chat(options?)` | Chat interface | `Promise<string>` |
+| `chat(options?)` | Chat interface (prompt-level) | `Promise<ChatResult>` |
 | `widget(html, options?)` | Floating widget window | `Promise<WidgetController>` |
 | `webcam()` | Camera capture | `Promise<Buffer>` |
 | `mic()` | Audio recording | `Promise<Buffer>` |
@@ -1390,6 +1419,21 @@ export SK_PATH=~/Projects/my-app/.kit
 | `moveWindow(windowId, x, y)` | Move a window |
 | `resizeWindow(windowId, width, height)` | Resize a window |
 | `tileWindow(windowId, position)` | Tile a window |
+
+### ACP Chat SDK
+
+| Function | Description |
+|----------|-------------|
+| `aiIsOpen()` | Check if ACP Chat is open |
+| `aiGetActiveChat()` | Get the active chat info |
+| `aiListChats(limit?, includeDeleted?)` | List all chats |
+| `aiGetConversation(chatId?, limit?)` | Get messages from a chat |
+| `aiStartChat(message, options?)` | Start a new ACP Chat conversation |
+| `aiSendMessage(chatId, content, imagePath?)` | Send a follow-up message |
+| `aiSetSystemPrompt(chatId, prompt)` | Set the system prompt for a chat |
+| `aiFocus()` | Focus the ACP Chat window |
+| `aiGetStreamingStatus(chatId?)` | Check if a chat is currently streaming |
+| `aiDeleteChat(chatId, permanent?)` | Delete a chat |
 
 ### Miscellaneous
 

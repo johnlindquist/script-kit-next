@@ -1855,14 +1855,34 @@ impl ScriptListApp {
             }
             builtins::BuiltInFeature::Notes => {
                 tracing::info!(
+                    target: "script_kit::keyboard",
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
-                    "Opening Notes window"
+                    event = "notes_handoff_preserving_launcher_context",
+                    filter_text_len = self.filter_text.len(),
+                    show_actions_popup = self.show_actions_popup,
+                    "Opening Notes window (preserving launcher context)"
                 );
+
+                // Close companion UI before hiding so it does not stay stale.
+                if crate::confirm::is_confirm_window_open() {
+                    crate::confirm::route_key_to_confirm_popup("escape", cx);
+                }
+                if crate::actions::is_actions_window_open() {
+                    crate::actions::close_actions_window(cx);
+                    self.show_actions_popup = false;
+                    self.actions_closed_at = Some(std::time::Instant::now());
+                    self.actions_dialog = None;
+                    self.mark_filter_resync_after_actions_if_needed();
+                    self.pop_focus_overlay(cx);
+                }
+
+                self.pending_focus = None;
                 script_kit_gpui::set_main_window_visible(false);
-                self.reset_to_script_list(cx);
                 platform::defer_hide_main_window(cx);
                 if let Err(e) = notes::open_notes_window(cx) {
+                    script_kit_gpui::set_main_window_visible(true);
+                    platform::show_main_window_without_activation();
                     let message = format!("Failed to open Notes: {}", e);
                     self.show_error_toast(message.clone(), cx);
                     Self::builtin_error(
@@ -1957,16 +1977,33 @@ impl ScriptListApp {
             // =========================================================================
             builtins::BuiltInFeature::NotesCommand(cmd_type) => {
                 tracing::info!(
+                    target: "script_kit::keyboard",
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
                     notes_command = ?cmd_type,
-                    "Executing notes command"
+                    event = "notes_command_handoff_preserving_launcher_context",
+                    filter_text_len = self.filter_text.len(),
+                    show_actions_popup = self.show_actions_popup,
+                    "Executing notes command (preserving launcher context)"
                 );
 
                 use builtins::NotesCommandType;
 
+                // Close companion UI before hiding so it does not stay stale.
+                if crate::confirm::is_confirm_window_open() {
+                    crate::confirm::route_key_to_confirm_popup("escape", cx);
+                }
+                if crate::actions::is_actions_window_open() {
+                    crate::actions::close_actions_window(cx);
+                    self.show_actions_popup = false;
+                    self.actions_closed_at = Some(std::time::Instant::now());
+                    self.actions_dialog = None;
+                    self.mark_filter_resync_after_actions_if_needed();
+                    self.pop_focus_overlay(cx);
+                }
+
+                self.pending_focus = None;
                 script_kit_gpui::set_main_window_visible(false);
-                self.reset_to_script_list(cx);
                 platform::defer_hide_main_window(cx);
 
                 let result = match cmd_type {
@@ -1977,6 +2014,8 @@ impl ScriptListApp {
                 };
 
                 if let Err(e) = result {
+                    script_kit_gpui::set_main_window_visible(true);
+                    platform::show_main_window_without_activation();
                     let message = format!("Notes command failed: {}", e);
                     self.show_error_toast(message.clone(), cx);
                     Self::builtin_error(

@@ -10,22 +10,23 @@
                     return;
                 }
 
-                // CRITICAL: Skip processing if this keystroke is from a secondary window.
-                // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
-                // We only want to handle keystrokes for the main window.
-                // The actions popup manages its own Escape/Enter/arrows in ActionsWindow::render().
+                // Skip keystrokes from secondary windows — interceptors are
+                // GLOBAL and fire for ALL windows.  Secondary windows own
+                // their own Cmd+K/Escape/Enter handling.
+                let is_notes = crate::notes::is_notes_window(window);
+                let is_ai = crate::ai::is_ai_window(window);
                 let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
-                if crate::notes::is_notes_window(window)
-                    || crate::ai::is_ai_window(window)
-                    || crate::actions::is_actions_window(window)
-                    || is_detached_acp
-                {
-                    if is_detached_acp {
-                        tracing::debug!(
-                            event = "main_actions_interceptor_skipped_detached_acp_window",
-                        );
-                    }
-                    return; // Let the secondary window handle its own keystrokes
+                let is_actions = crate::actions::is_actions_window(window);
+                if is_notes || is_ai || is_detached_acp || is_actions {
+                    tracing::debug!(
+                        target: "script_kit::keyboard",
+                        event = "actions_interceptor_skipped_secondary_window",
+                        is_notes,
+                        is_ai,
+                        is_detached_acp,
+                        is_actions,
+                    );
+                    return;
                 }
 
                 let key = event.keystroke.key.as_str();
@@ -44,6 +45,17 @@
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
+                        tracing::debug!(
+                            target: "script_kit::keyboard",
+                            event = "actions_interceptor_owner_path",
+                            current_view = %this.app_view_name(),
+                            key = %key,
+                            has_cmd,
+                            has_shift,
+                            has_key_char = key_char.is_some(),
+                            show_actions_popup = this.show_actions_popup,
+                        );
+
                         // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt, etc.)
                         // This MUST be intercepted here because the Input component has focus and
                         // normal on_key_down handlers won't receive the event.

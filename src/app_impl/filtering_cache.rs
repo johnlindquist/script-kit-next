@@ -28,6 +28,52 @@ impl ScriptListApp {
         self.filter_text.as_str()
     }
 
+    /// Shared recompute helper: every filtered search path routes through here
+    /// so plugin skills are always included in main-menu results.
+    fn recompute_filtered_results(&self, filter_text: &str) -> Vec<scripts::SearchResult> {
+        let search_start = std::time::Instant::now();
+        let results = scripts::fuzzy_search_unified_all_with_skills(
+            &self.scripts,
+            &self.scriptlets,
+            &self.builtin_entries,
+            &self.apps,
+            &self.skills,
+            filter_text,
+        );
+        let search_elapsed = search_start.elapsed();
+
+        if !filter_text.is_empty() {
+            logging::log(
+                "PERF",
+                &format!(
+                    "Search '{}' took {:.2}ms ({} results from {} total, including {} skills)",
+                    filter_text,
+                    search_elapsed.as_secs_f64() * 1000.0,
+                    results.len(),
+                    self.scripts.len()
+                        + self.scriptlets.len()
+                        + self.builtin_entries.len()
+                        + self.apps.len()
+                        + self.skills.len(),
+                    self.skills.len(),
+                ),
+            );
+        }
+
+        tracing::info!(
+            filter_text = %filter_text,
+            result_count = results.len(),
+            script_count = self.scripts.len(),
+            scriptlet_count = self.scriptlets.len(),
+            builtin_count = self.builtin_entries.len(),
+            app_count = self.apps.len(),
+            skill_count = self.skills.len(),
+            "main_menu_filtered_results_recomputed"
+        );
+
+        results
+    }
+
     /// P1: Now uses caching - invalidates only when filter_text changes
     pub(crate) fn filtered_results(&self) -> Vec<scripts::SearchResult> {
         let filter_text = self.filter_text();
@@ -46,60 +92,39 @@ impl ScriptListApp {
             ),
         );
 
-        // PERF: Measure search time (only log when actually filtering)
-        let search_start = std::time::Instant::now();
-        let results = scripts::fuzzy_search_unified(&self.scripts, &self.scriptlets, filter_text);
-        let search_elapsed = search_start.elapsed();
-
-        // Only log search performance when there's an active filter
-        if !filter_text.is_empty() {
-            logging::log(
-                "PERF",
-                &format!(
-                    "Search '{}' took {:.2}ms ({} results from {} total)",
-                    filter_text,
-                    search_elapsed.as_secs_f64() * 1000.0,
-                    results.len(),
-                    self.scripts.len() + self.scriptlets.len()
-                ),
-            );
-        }
-        results
+        self.recompute_filtered_results(filter_text)
     }
 
     /// P1: Get filtered results with cache update (mutable version)
     /// Call this when you need to ensure cache is updated
     pub(crate) fn get_filtered_results_cached(&mut self) -> &Vec<scripts::SearchResult> {
         if self.filter_text != self.filter_cache_key {
+            let filter_text = self.filter_text.clone();
             logging::log(
                 "FILTER_PERF",
                 &format!(
-                    "[4a/5] SEARCH_START for '{}' (scripts={}, scriptlets={}, builtins={}, apps={})",
-                    self.filter_text,
+                    "[4a/5] SEARCH_START for '{}' (scripts={}, scriptlets={}, builtins={}, apps={}, skills={})",
+                    filter_text,
                     self.scripts.len(),
                     self.scriptlets.len(),
                     self.builtin_entries.len(),
-                    self.apps.len()
+                    self.apps.len(),
+                    self.skills.len(),
                 ),
             );
             let search_start = std::time::Instant::now();
-            self.cached_filtered_results = scripts::fuzzy_search_unified_all(
-                &self.scripts,
-                &self.scriptlets,
-                &self.builtin_entries,
-                &self.apps,
-                &self.filter_text,
-            );
-            self.filter_cache_key = self.filter_text.clone();
+            self.cached_filtered_results = self.recompute_filtered_results(&filter_text);
+            self.filter_cache_key = filter_text.clone();
             let search_elapsed = search_start.elapsed();
 
             logging::log(
                 "FILTER_PERF",
                 &format!(
-                    "[4a/5] SEARCH_DONE '{}' in {:.2}ms -> {} results",
-                    self.filter_text,
+                    "[4a/5] SEARCH_DONE '{}' in {:.2}ms -> {} results (skills={})",
+                    filter_text,
                     search_elapsed.as_secs_f64() * 1000.0,
                     self.cached_filtered_results.len(),
+                    self.skills.len(),
                 ),
             );
         }
