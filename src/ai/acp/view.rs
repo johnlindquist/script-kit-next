@@ -32,10 +32,11 @@ use super::{AcpApprovalOption, AcpApprovalPreview, AcpApprovalPreviewKind, AcpAp
 
 use crate::ai::message_parts::AiContextPart;
 use crate::ai::window::context_picker::types::{
-    ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger,
+    ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger, SlashCommandPayload,
 };
 use crate::ai::window::context_picker::{
     build_picker_items, build_slash_picker_items, build_slash_picker_items_with_descriptions,
+    build_slash_picker_items_with_payloads, slash_picker_empty_row, slash_picker_loading_row,
 };
 
 /// Active @-mention session state for the ACP inline context picker.
@@ -92,6 +93,160 @@ fn parse_skill_description(content: &str) -> Option<String> {
         }
     }
     None
+}
+
+// ── Source-aware slash command model ──────────────────────────────────
+
+/// The origin of a slash command entry discovered during skill enumeration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum SlashCommandSource {
+    /// A built-in Claude Code command (e.g. `/compact`, `/clear`).
+    Default,
+    /// A skill owned by a discovered plugin.
+    PluginSkill(crate::plugins::PluginSkill),
+    /// A user-level Claude Code skill from `~/.scriptkit/.claude/skills/`.
+    ClaudeCodeSkill {
+        skill_id: String,
+        skill_path: std::path::PathBuf,
+    },
+}
+
+impl SlashCommandSource {
+    fn owner_label(&self) -> String {
+        match self {
+            Self::Default => "Built-in".to_string(),
+            Self::PluginSkill(skill) => {
+                if skill.plugin_title.is_empty() {
+                    skill.plugin_id.clone()
+                } else {
+                    skill.plugin_title.clone()
+                }
+            }
+            Self::ClaudeCodeSkill { .. } => "Claude Code".to_string(),
+        }
+    }
+}
+
+/// A discovered slash command entry with source identity and description.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SlashCommandEntry {
+    /// The bare slash name (e.g. `"compact"`, `"review"`).
+    pub name: String,
+    /// Human-readable description for the picker.
+    pub description: String,
+    /// Where this entry came from.
+    pub source: SlashCommandSource,
+}
+
+impl SlashCommandEntry {
+    pub(crate) fn default_command(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+            description: String::new(),
+            source: SlashCommandSource::Default,
+        }
+    }
+
+    fn plugin_skill(skill: &crate::plugins::PluginSkill) -> Self {
+        let plugin_title = if skill.plugin_title.is_empty() {
+            skill.plugin_id.clone()
+        } else {
+            skill.plugin_title.clone()
+        };
+
+        let raw_desc = if skill.description.is_empty() {
+            format!("Plugin: {}", plugin_title)
+        } else {
+            format!("{} \u{2014} {}", plugin_title, skill.description)
+        };
+
+        let desc_chars: Vec<char> = raw_desc.chars().collect();
+        let description = if desc_chars.len() > 80 {
+            let truncated: String = desc_chars.into_iter().take(77).collect();
+            format!("{truncated}\u{2026}")
+        } else {
+            raw_desc
+        };
+
+        Self {
+            name: skill.skill_id.clone(),
+            description,
+            source: SlashCommandSource::PluginSkill(skill.clone()),
+        }
+    }
+
+    fn claude_code_skill(
+        name: String,
+        description: String,
+        skill_path: std::path::PathBuf,
+    ) -> Self {
+        Self {
+            name: name.clone(),
+            description,
+            source: SlashCommandSource::ClaudeCodeSkill {
+                skill_id: name,
+                skill_path,
+            },
+        }
+    }
+
+    /// A key that uniquely identifies this entry across sources.
+    pub(crate) fn qualified_key(&self) -> String {
+        match &self.source {
+            SlashCommandSource::Default => format!("default:{}", self.name),
+            SlashCommandSource::PluginSkill(skill) => {
+                format!("{}:{}", skill.plugin_id, skill.skill_id)
+            }
+            SlashCommandSource::ClaudeCodeSkill { skill_id, .. } => {
+                format!("claude:{skill_id}")
+            }
+        }
+    }
+
+    /// Convert to a `SlashCommandPayload` for the context picker item kind.
+    pub(crate) fn to_payload(&self) -> SlashCommandPayload {
+        match &self.source {
+            SlashCommandSource::Default => SlashCommandPayload::Default {
+                name: self.name.clone(),
+            },
+            SlashCommandSource::PluginSkill(skill) => {
+                SlashCommandPayload::PluginSkill(skill.clone())
+            }
+            SlashCommandSource::ClaudeCodeSkill {
+                skill_id,
+                skill_path,
+            } => SlashCommandPayload::ClaudeCodeSkill {
+                skill_id: skill_id.clone(),
+                skill_path: skill_path.clone(),
+            },
+        }
+    }
+}
+
+/// Build the staged prompt text for a local skill being accepted from
+/// the ACP slash picker or main-menu skill launch.  Both entry paths
+/// must produce the same deterministic payload so that the ACP agent
+/// receives identical context regardless of how the user invoked the skill.
+pub(crate) fn build_staged_skill_prompt(
+    skill_title: &str,
+    owner_label: &str,
+    skill_path: &std::path::Path,
+) -> String {
+    let skill_content = std::fs::read_to_string(skill_path).unwrap_or_default();
+    let owner_phrase = if owner_label == "Claude Code" {
+        format!("from {owner_label}")
+    } else {
+        format!("from plugin \"{owner_label}\"")
+    };
+    if skill_content.is_empty() {
+        format!("Use the skill \"{skill_title}\" {owner_phrase} for this session.")
+    } else {
+        format!(
+            "Use the attached skill \"{skill_title}\" {owner_phrase} for this session.\n\n<skill path=\"{}\">\n{}\n</skill>",
+            skill_path.display(),
+            skill_content
+        )
+    }
 }
 
 /// Session mode for the ACP chat view.
@@ -178,8 +333,8 @@ pub(crate) struct AcpChatView {
     model_selector_selected_index: usize,
     /// Cmd+F search: (query, current_match_index). None = search hidden.
     pub(crate) search_state: Option<(String, usize)>,
-    /// Cached slash commands (name, description) discovered at creation.
-    cached_slash_commands: Vec<(String, String)>,
+    /// Cached slash commands discovered at creation, with source identity.
+    cached_slash_commands: Vec<SlashCommandEntry>,
     /// Handle to the deferred slash command discovery task.
     _slash_discovery_task: Task<()>,
     /// Active @-mention picker session (None = picker hidden).
@@ -320,7 +475,9 @@ impl AcpChatView {
             }
             ContextPickerItemKind::File(_) => format!("file:{}", item.label),
             ContextPickerItemKind::Folder(_) => format!("folder:{}", item.label),
-            ContextPickerItemKind::Portal(_) => item.id.to_string(),
+            ContextPickerItemKind::Portal(_) | ContextPickerItemKind::Inert => {
+                item.id.to_string()
+            }
         }
     }
 
@@ -1484,22 +1641,20 @@ impl AcpChatView {
     }
 
     /// Scan plugin skill directories for slash command candidates, combine with
-    /// built-in Claude Code commands. Returns (name, description) tuples.
+    /// built-in Claude Code commands. Returns typed `SlashCommandEntry` entries
+    /// with full source identity.
     ///
     /// Uses `discover_plugin_skills()` so skill enumeration is routed through
     /// plugin ownership instead of hand-scanning `kit/*/skills/`.
-    fn discover_slash_commands() -> Vec<(String, String)> {
-        let mut commands: Vec<(String, String)> = Self::DEFAULT_SLASH_COMMANDS
+    fn discover_slash_commands() -> Vec<SlashCommandEntry> {
+        let mut commands: Vec<SlashCommandEntry> = Self::DEFAULT_SLASH_COMMANDS
             .iter()
-            .map(|s| (s.to_string(), String::new()))
+            .map(|s| SlashCommandEntry::default_command(s))
             .collect();
 
         let mut seen: std::collections::HashSet<String> =
-            commands.iter().map(|(name, _)| name.clone()).collect();
+            commands.iter().map(|e| e.qualified_key()).collect();
 
-        // Discover skills from all plugin roots via the canonical plugin index.
-        // Use plugin-qualified key for dedup so two plugins with the same
-        // skill_id both appear in the slash picker.
         // Track slash-name owners for collision detection.
         let mut owners_by_slash: std::collections::HashMap<String, Vec<String>> =
             std::collections::HashMap::new();
@@ -1507,50 +1662,22 @@ impl AcpChatView {
         if let Ok(index) = crate::plugins::discover_plugins() {
             if let Ok(skills) = crate::plugins::discover_plugin_skills(&index) {
                 for skill in &skills {
-                    let qualified_key = format!("{}:{}", skill.plugin_id, skill.skill_id);
-                    if seen.contains(&qualified_key) {
-                        continue;
-                    }
-
-                    let plugin_title = if skill.plugin_title.is_empty() {
-                        skill.plugin_id.clone()
-                    } else {
-                        skill.plugin_title.clone()
-                    };
+                    let entry = SlashCommandEntry::plugin_skill(skill);
+                    let owner = entry.source.owner_label();
 
                     owners_by_slash
-                        .entry(skill.skill_id.clone())
+                        .entry(entry.name.clone())
                         .or_default()
-                        .push(plugin_title.clone());
+                        .push(owner);
 
-                    // Plugin-scoped description so duplicate skill slugs are
-                    // visually distinguishable in the ACP slash menu.
-                    let raw_desc = if skill.description.is_empty() {
-                        format!("Plugin: {}", plugin_title)
-                    } else {
-                        format!("{} \u{2014} {}", plugin_title, skill.description)
-                    };
-
-                    // Truncate long descriptions for the menu without slicing
-                    // through a multibyte UTF-8 codepoint.
-                    let desc_chars: Vec<char> = raw_desc.chars().collect();
-                    let desc = if desc_chars.len() > 80 {
-                        let truncated: String = desc_chars.into_iter().take(77).collect();
-                        format!("{truncated}\u{2026}")
-                    } else {
-                        raw_desc
-                    };
-
-                    tracing::info!(
-                        plugin_id = %skill.plugin_id,
-                        plugin_title = %plugin_title,
-                        skill_id = %skill.skill_id,
-                        slash_name = %skill.skill_id,
-                        "acp_slash_skill_cataloged"
-                    );
-
-                    seen.insert(qualified_key);
-                    commands.push((skill.skill_id.clone(), desc));
+                    if seen.insert(entry.qualified_key()) {
+                        tracing::info!(
+                            plugin_id = %skill.plugin_id,
+                            skill_id = %skill.skill_id,
+                            "acp_slash_skill_cataloged"
+                        );
+                        commands.push(entry);
+                    }
                 }
             }
         }
@@ -1578,24 +1705,29 @@ impl AcpChatView {
                 let Some(name) = entry.file_name().to_str().map(str::to_string) else {
                     continue;
                 };
-                if seen.contains(&name) {
-                    continue;
-                }
 
                 let desc = std::fs::read_to_string(&skill_md)
                     .ok()
                     .and_then(|content| parse_skill_description(&content))
                     .unwrap_or_default();
 
-                seen.insert(name.clone());
-                commands.push((name, desc));
+                let slash_entry =
+                    SlashCommandEntry::claude_code_skill(name, desc, skill_md);
+
+                if seen.insert(slash_entry.qualified_key()) {
+                    commands.push(slash_entry);
+                }
             }
         }
 
+        tracing::info!(count = commands.len(), "acp_slash_entries_discovered");
         commands
     }
 
-    fn resolved_slash_commands(&self, available_commands: &[String]) -> Vec<(String, String)> {
+    /// Resolve cached slash commands against the agent-reported available
+    /// commands. Plugin and Claude skills are always included regardless
+    /// of provider advertisement; only default commands are gated.
+    fn resolved_slash_commands(&self, available_commands: &[String]) -> Vec<SlashCommandEntry> {
         if available_commands.is_empty() {
             return self.cached_slash_commands.clone();
         }
@@ -1603,41 +1735,30 @@ impl AcpChatView {
         let available_set: std::collections::HashSet<&str> =
             available_commands.iter().map(|s| s.as_str()).collect();
 
-        // Collect all cached entries whose name matches an available command,
-        // preserving duplicates so plugin skills with the same slug from
-        // different plugins both appear as separate picker rows.
-        let mut result: Vec<(String, String)> = Vec::new();
-        let mut seen_names: std::collections::HashMap<&str, usize> =
-            std::collections::HashMap::new();
+        let mut result = Vec::new();
 
-        for (name, description) in &self.cached_slash_commands {
-            if available_set.contains(name.as_str()) {
-                *seen_names.entry(name.as_str()).or_default() += 1;
-                result.push((name.clone(), description.clone()));
+        for entry in &self.cached_slash_commands {
+            match &entry.source {
+                // Default commands are only included if the provider advertises them.
+                SlashCommandSource::Default if available_set.contains(entry.name.as_str()) => {
+                    result.push(entry.clone());
+                }
+                // Plugin and Claude skills are always included.
+                SlashCommandSource::PluginSkill(_)
+                | SlashCommandSource::ClaudeCodeSkill { .. } => {
+                    result.push(entry.clone());
+                }
+                _ => {}
             }
         }
 
         // Include agent-reported commands that aren't in our cache
-        let cached_names: std::collections::HashSet<&str> = self
-            .cached_slash_commands
-            .iter()
-            .map(|(n, _)| n.as_str())
-            .collect();
         for cmd in available_commands {
-            if !cached_names.contains(cmd.as_str()) {
-                result.push((cmd.clone(), String::new()));
-            }
-        }
-
-        // Log when resolution encounters duplicate names — this means the
-        // bare-name join would have silently collapsed plugin-scoped rows.
-        for (name, count) in &seen_names {
-            if *count > 1 {
-                tracing::warn!(
-                    slash_name = %name,
-                    cached_count = count,
-                    "acp_slash_resolution_ambiguous"
-                );
+            let already_present = result.iter().any(|entry| {
+                matches!(entry.source, SlashCommandSource::Default) && entry.name == *cmd
+            });
+            if !already_present {
+                result.push(SlashCommandEntry::default_command(cmd));
             }
         }
 
@@ -3163,23 +3284,32 @@ impl AcpChatView {
                 let items = match trigger {
                     ContextPickerTrigger::Mention => build_picker_items(trigger, &query),
                     ContextPickerTrigger::Slash => {
-                        if available_commands.is_empty() {
-                            build_slash_picker_items_with_descriptions(
-                                &query,
-                                self.cached_slash_commands
-                                    .iter()
-                                    .map(|(name, description)| {
-                                        (name.as_str(), description.as_str())
-                                    }),
-                            )
+                        if self.cached_slash_commands.is_empty() {
+                            // Async discovery hasn't completed yet — show
+                            // intentional loading row instead of blank list.
+                            vec![slash_picker_loading_row()]
                         } else {
-                            let resolved = self.resolved_slash_commands(&available_commands);
-                            build_slash_picker_items_with_descriptions(
+                            let entries = if available_commands.is_empty() {
+                                self.cached_slash_commands.clone()
+                            } else {
+                                self.resolved_slash_commands(&available_commands)
+                            };
+                            let payloads: Vec<(SlashCommandPayload, String)> = entries
+                                .iter()
+                                .map(|e| (e.to_payload(), e.description.clone()))
+                                .collect();
+                            let mut items = build_slash_picker_items_with_payloads(
                                 &query,
-                                resolved.iter().map(|(name, description)| {
-                                    (name.as_str(), description.as_str())
-                                }),
-                            )
+                                payloads
+                                    .iter()
+                                    .map(|(p, d)| (p, d.as_str())),
+                            );
+                            if items.is_empty() {
+                                // Query filtered out everything — show explicit
+                                // empty state instead of an unexplained blank.
+                                items.push(slash_picker_empty_row());
+                            }
+                            items
                         }
                     }
                 };
@@ -3398,6 +3528,14 @@ impl AcpChatView {
             None => return,
         };
 
+        // Inert items (loading spinner, empty state) are non-actionable.
+        if matches!(item.kind, ContextPickerItemKind::Inert) {
+            tracing::debug!(item_id = %item.id, "acp_picker_inert_item_ignored");
+            // Restore session so the picker stays open.
+            self.mention_session = Some(session);
+            return;
+        }
+
         let trigger_str = match session.trigger {
             ContextPickerTrigger::Mention => "@",
             ContextPickerTrigger::Slash => "/",
@@ -3421,36 +3559,85 @@ impl AcpChatView {
             cursor_after: 0, // Updated after insertion.
         });
 
-        // ── Literal ACP slash commands stay in the composer as `/command ` text ──
+        // ── Slash command acceptance: default inserts text, skills stage content ──
         if session.trigger == ContextPickerTrigger::Slash {
-            if let ContextPickerItemKind::SlashCommand(command) = &item.kind {
-                let current_text = self.live_thread().read(cx).input.text().to_string();
-                let command_text = format!("/{command} ");
-                let next_text = Self::replace_text_in_char_range(
-                    &current_text,
-                    session.trigger_range.clone(),
-                    &command_text,
-                );
-                let next_cursor =
-                    Self::caret_after_replacement(&session.trigger_range, &command_text);
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_picker_literal_slash_inserted",
-                    command = %command,
-                    submit,
-                );
-                if let Some(ref mut accepted) = self.last_accepted_item {
-                    accepted.cursor_after = next_cursor;
-                }
-                self.live_thread().update(cx, |thread, cx| {
-                    thread.input.set_text(next_text);
-                    thread.input.set_cursor(next_cursor);
-                    if submit {
-                        let _ = thread.submit_input(cx);
-                    } else {
-                        cx.notify();
+            if let ContextPickerItemKind::SlashCommand(ref payload) = item.kind {
+                match payload {
+                    SlashCommandPayload::Default { name } => {
+                        // Default commands insert literal `/command ` text.
+                        let current_text =
+                            self.live_thread().read(cx).input.text().to_string();
+                        let command_text = format!("/{name} ");
+                        let next_text = Self::replace_text_in_char_range(
+                            &current_text,
+                            session.trigger_range.clone(),
+                            &command_text,
+                        );
+                        let next_cursor = Self::caret_after_replacement(
+                            &session.trigger_range,
+                            &command_text,
+                        );
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_picker_literal_slash_inserted",
+                            slash_name = %name,
+                            submit,
+                        );
+                        if let Some(ref mut accepted) = self.last_accepted_item {
+                            accepted.cursor_after = next_cursor;
+                        }
+                        self.live_thread().update(cx, |thread, cx| {
+                            thread.input.set_text(next_text);
+                            thread.input.set_cursor(next_cursor);
+                            if submit {
+                                let _ = thread.submit_input(cx);
+                            } else {
+                                cx.notify();
+                            }
+                        });
                     }
-                });
+                    SlashCommandPayload::PluginSkill(skill) => {
+                        // Plugin skills stage local <skill> content.
+                        let owner = if skill.plugin_title.is_empty() {
+                            &skill.plugin_id
+                        } else {
+                            &skill.plugin_title
+                        };
+                        let staged =
+                            build_staged_skill_prompt(&skill.title, owner, &skill.path);
+                        tracing::info!(
+                            plugin_id = %skill.plugin_id,
+                            skill_id = %skill.skill_id,
+                            "acp_slash_skill_selected"
+                        );
+                        self.live_thread().update(cx, |thread, cx| {
+                            thread.input.set_text(staged);
+                            thread.input.set_cursor(0);
+                            cx.notify();
+                        });
+                    }
+                    SlashCommandPayload::ClaudeCodeSkill {
+                        skill_id,
+                        skill_path,
+                    } => {
+                        // Claude Code skills stage local <skill> content.
+                        let staged = build_staged_skill_prompt(
+                            skill_id,
+                            "Claude Code",
+                            skill_path,
+                        );
+                        tracing::info!(
+                            skill_id = %skill_id,
+                            path = %skill_path.display(),
+                            "acp_slash_claude_skill_selected"
+                        );
+                        self.live_thread().update(cx, |thread, cx| {
+                            thread.input.set_text(staged);
+                            thread.input.set_cursor(0);
+                            cx.notify();
+                        });
+                    }
+                }
                 self.sync_mention_popup_window_from_cached_parent(cx);
                 cx.notify();
                 return;
@@ -3484,7 +3671,7 @@ impl AcpChatView {
                     session.trigger == ContextPickerTrigger::Mention,
                 )
             }
-            ContextPickerItemKind::SlashCommand(_) => return,
+            ContextPickerItemKind::SlashCommand(_) | ContextPickerItemKind::Inert => return,
             ContextPickerItemKind::Portal(portal_kind) => {
                 // For AcpHistory portals, stash the remaining input text as the
                 // prefilter query before clearing the trigger text.

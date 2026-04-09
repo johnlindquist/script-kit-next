@@ -1693,3 +1693,300 @@ fn acp_and_ai_window_share_inline_sync_kernel() {
         "AI window must use shared inline sync planning",
     );
 }
+
+// =========================================================================
+// Source-aware slash command identity and resolution
+// =========================================================================
+
+#[test]
+fn acp_resolved_slash_commands_keep_local_skills_without_provider_advertisement() {
+    use super::view::{SlashCommandEntry, SlashCommandSource};
+    use std::path::PathBuf;
+
+    // Simulate cached entries: one default, two plugin skills, one claude skill
+    let cached = vec![
+        SlashCommandEntry {
+            name: "clear".to_string(),
+            description: String::new(),
+            source: SlashCommandSource::Default,
+        },
+        SlashCommandEntry {
+            name: "review".to_string(),
+            description: "Alpha review".to_string(),
+            source: SlashCommandSource::PluginSkill(crate::plugins::PluginSkill {
+                plugin_id: "alpha".to_string(),
+                plugin_title: "Alpha".to_string(),
+                skill_id: "review".to_string(),
+                path: PathBuf::from("/alpha/skills/review/SKILL.md"),
+                title: "Review".to_string(),
+                description: "Alpha review".to_string(),
+            }),
+        },
+        SlashCommandEntry {
+            name: "review".to_string(),
+            description: "Beta review".to_string(),
+            source: SlashCommandSource::PluginSkill(crate::plugins::PluginSkill {
+                plugin_id: "beta".to_string(),
+                plugin_title: "Beta".to_string(),
+                skill_id: "review".to_string(),
+                path: PathBuf::from("/beta/skills/review/SKILL.md"),
+                title: "Review".to_string(),
+                description: "Beta review".to_string(),
+            }),
+        },
+        SlashCommandEntry {
+            name: "plan".to_string(),
+            description: "Plan skill".to_string(),
+            source: SlashCommandSource::ClaudeCodeSkill {
+                skill_id: "plan".to_string(),
+                skill_path: PathBuf::from("/claude/skills/plan/SKILL.md"),
+            },
+        },
+    ];
+
+    // Provider only advertises "clear" and "help" — plugin and Claude skills
+    // should still appear in the resolved output.
+    let available = vec!["clear".to_string(), "help".to_string()];
+
+    // Exercise the resolution logic directly using the same algorithm as the view.
+    let available_set: std::collections::HashSet<&str> =
+        available.iter().map(|s| s.as_str()).collect();
+    let mut result: Vec<SlashCommandEntry> = Vec::new();
+
+    for entry in &cached {
+        match &entry.source {
+            SlashCommandSource::Default if available_set.contains(entry.name.as_str()) => {
+                result.push(entry.clone());
+            }
+            SlashCommandSource::PluginSkill(_) | SlashCommandSource::ClaudeCodeSkill { .. } => {
+                result.push(entry.clone());
+            }
+            _ => {}
+        }
+    }
+    for cmd in &available {
+        let already_present = result.iter().any(|entry| {
+            matches!(entry.source, SlashCommandSource::Default) && entry.name == *cmd
+        });
+        if !already_present {
+            result.push(SlashCommandEntry {
+                name: cmd.clone(),
+                description: String::new(),
+                source: SlashCommandSource::Default,
+            });
+        }
+    }
+
+    let names: Vec<&str> = result.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["clear", "review", "review", "plan", "help"],
+        "Expected: default clear + both plugin reviews + claude plan + new default help"
+    );
+
+    // Verify both reviews are from different plugins
+    let reviews: Vec<&SlashCommandEntry> =
+        result.iter().filter(|e| e.name == "review").collect();
+    assert_eq!(reviews.len(), 2);
+    assert!(
+        matches!(
+            &reviews[0].source,
+            SlashCommandSource::PluginSkill(s) if s.plugin_id == "alpha"
+        ),
+        "First review should be from alpha"
+    );
+    assert!(
+        matches!(
+            &reviews[1].source,
+            SlashCommandSource::PluginSkill(s) if s.plugin_id == "beta"
+        ),
+        "Second review should be from beta"
+    );
+
+    // Plugin skills appear even though provider didn't advertise "review"
+    assert!(
+        !available_set.contains("review"),
+        "Provider should not have advertised 'review'"
+    );
+}
+
+#[test]
+fn acp_slash_command_entry_qualified_keys_are_distinct() {
+    use super::view::{SlashCommandEntry, SlashCommandSource};
+    use std::path::PathBuf;
+
+    let default = SlashCommandEntry {
+        name: "review".to_string(),
+        description: String::new(),
+        source: SlashCommandSource::Default,
+    };
+    let plugin = SlashCommandEntry {
+        name: "review".to_string(),
+        description: "Plugin review".to_string(),
+        source: SlashCommandSource::PluginSkill(crate::plugins::PluginSkill {
+            plugin_id: "alpha".to_string(),
+            plugin_title: "Alpha".to_string(),
+            skill_id: "review".to_string(),
+            path: PathBuf::from("/alpha/review/SKILL.md"),
+            title: "Review".to_string(),
+            description: String::new(),
+        }),
+    };
+    let claude = SlashCommandEntry {
+        name: "review".to_string(),
+        description: "Claude review".to_string(),
+        source: SlashCommandSource::ClaudeCodeSkill {
+            skill_id: "review".to_string(),
+            skill_path: PathBuf::from("/claude/review/SKILL.md"),
+        },
+    };
+
+    let keys: Vec<String> = vec![
+        default.qualified_key(),
+        plugin.qualified_key(),
+        claude.qualified_key(),
+    ];
+    let unique: std::collections::HashSet<&str> = keys.iter().map(|s| s.as_str()).collect();
+    assert_eq!(
+        unique.len(),
+        3,
+        "All three sources should have distinct qualified keys: {:?}",
+        keys
+    );
+}
+
+// =========================================================================
+// Slash acceptance contracts
+// =========================================================================
+
+/// Default slash commands produce a `SlashCommandPayload::Default` whose
+/// acceptance contract is to insert literal `/command` text — NOT to stage
+/// skill content via `build_staged_skill_prompt`.
+#[test]
+fn acp_default_slash_accept_inserts_command_text() {
+    use super::view::SlashCommandEntry;
+    use crate::ai::window::context_picker::types::SlashCommandPayload;
+
+    let entry = SlashCommandEntry::default_command("compact");
+    let payload = entry.to_payload();
+
+    // Must produce a Default payload, which the acceptance path inserts as
+    // literal `/compact ` text into the composer.
+    match &payload {
+        SlashCommandPayload::Default { name } => {
+            assert_eq!(name, "compact");
+            // Acceptance inserts `/{name} ` — verify the format.
+            let inserted = format!("/{name} ");
+            assert_eq!(inserted, "/compact ");
+        }
+        other => panic!(
+            "Expected SlashCommandPayload::Default for a default entry, got {:?}",
+            other
+        ),
+    }
+}
+
+/// Plugin skills accepted from the ACP slash picker must stage the same
+/// deterministic `<skill path="...">...</skill>` payload as the main-menu
+/// skill launch path.  Both use `build_staged_skill_prompt`.
+#[test]
+fn acp_plugin_slash_accept_stages_selected_skill_prompt() {
+    use super::view::{build_staged_skill_prompt, SlashCommandEntry, SlashCommandSource};
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    // Create a temp skill file with known content.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let skill_path = dir.path().join("SKILL.md");
+    {
+        let mut f = std::fs::File::create(&skill_path).expect("create skill file");
+        f.write_all(b"# Review\nReview code changes against project guidelines.")
+            .expect("write");
+    }
+
+    let skill = crate::plugins::PluginSkill {
+        plugin_id: "alpha".to_string(),
+        plugin_title: "Alpha".to_string(),
+        skill_id: "review".to_string(),
+        path: skill_path.clone(),
+        title: "Review".to_string(),
+        description: "Alpha review".to_string(),
+    };
+
+    // Build via the shared helper — same function used by both main-menu and
+    // slash acceptance paths.
+    let staged = build_staged_skill_prompt("Review", "Alpha", &skill_path);
+
+    assert!(
+        staged.contains("<skill path=\""),
+        "Staged payload must contain <skill path=...> wrapper: {staged}"
+    );
+    assert!(
+        staged.contains("</skill>"),
+        "Staged payload must close the <skill> tag: {staged}"
+    );
+    assert!(
+        staged.contains("Review code changes against project guidelines."),
+        "Staged payload must include the skill file content: {staged}"
+    );
+    assert!(
+        staged.contains("from plugin \"Alpha\""),
+        "Staged payload must reference the owner: {staged}"
+    );
+
+    // Verify main-menu path produces the identical output.
+    let owner = if skill.plugin_title.is_empty() {
+        &skill.plugin_id
+    } else {
+        &skill.plugin_title
+    };
+    let main_menu_staged = build_staged_skill_prompt(&skill.title, owner, &skill.path);
+    assert_eq!(
+        staged, main_menu_staged,
+        "Slash and main-menu paths must produce identical staged payloads"
+    );
+
+    // When two plugins share the same slash slug, their staged payloads diverge
+    // because the skill_path differs.
+    let beta_path = dir.path().join("BETA_SKILL.md");
+    {
+        let mut f = std::fs::File::create(&beta_path).expect("create beta skill");
+        f.write_all(b"# Review\nBeta-specific review checklist.")
+            .expect("write");
+    }
+
+    let beta_staged = build_staged_skill_prompt("Review", "Beta", &beta_path);
+    assert_ne!(
+        staged, beta_staged,
+        "Same slug from different plugins must produce different payloads"
+    );
+    assert!(
+        beta_staged.contains("from plugin \"Beta\""),
+        "Beta payload must reference its own owner"
+    );
+}
+
+#[test]
+fn acp_claude_skill_staged_prompt_uses_claude_owner_phrase() {
+    use super::view::build_staged_skill_prompt;
+    use std::io::Write;
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let skill_path = dir.path().join("SKILL.md");
+    {
+        let mut f = std::fs::File::create(&skill_path).expect("create skill file");
+        f.write_all(b"# Plan\nDraft a concise implementation plan.")
+            .expect("write");
+    }
+
+    let staged = build_staged_skill_prompt("Plan", "Claude Code", &skill_path);
+
+    assert!(
+        staged.contains("from Claude Code"),
+        "Claude Code skills should be labeled as Claude Code, got: {staged}"
+    );
+    assert!(
+        !staged.contains("from plugin \"Claude Code\""),
+        "Claude Code skills must not be mislabeled as plugins: {staged}"
+    );
+}

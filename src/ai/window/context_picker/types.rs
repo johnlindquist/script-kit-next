@@ -19,6 +19,61 @@ pub enum PortalKind {
     AcpHistory,
 }
 
+/// Source-aware identity for a slash command in the ACP picker.
+///
+/// Carries enough information to distinguish duplicate slash slugs from
+/// different plugins and to stage local skill content on acceptance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SlashCommandPayload {
+    /// A built-in Claude Code slash command (e.g. `/compact`, `/clear`).
+    Default { name: String },
+    /// A skill from a discovered plugin.
+    PluginSkill(crate::plugins::PluginSkill),
+    /// A user-level Claude Code skill from `~/.scriptkit/.claude/skills/`.
+    ClaudeCodeSkill {
+        skill_id: String,
+        skill_path: std::path::PathBuf,
+    },
+}
+
+impl SlashCommandPayload {
+    /// The bare slash name shown in the picker (e.g. `"compact"`, `"review"`).
+    pub fn slash_name(&self) -> &str {
+        match self {
+            Self::Default { name } => name.as_str(),
+            Self::PluginSkill(skill) => skill.skill_id.as_str(),
+            Self::ClaudeCodeSkill { skill_id, .. } => skill_id.as_str(),
+        }
+    }
+
+    /// A stable identifier that distinguishes duplicate slash slugs from
+    /// different sources (e.g. `"default:compact"`, `"plugin:alpha:review"`).
+    pub fn stable_id(&self) -> String {
+        match self {
+            Self::Default { name } => format!("default:{name}"),
+            Self::PluginSkill(skill) => {
+                format!("plugin:{}:{}", skill.plugin_id, skill.skill_id)
+            }
+            Self::ClaudeCodeSkill { skill_id, .. } => format!("claude:{skill_id}"),
+        }
+    }
+
+    /// Human-readable owner label for display in the picker meta column.
+    pub fn owner_label(&self) -> String {
+        match self {
+            Self::Default { .. } => "Built-in".to_string(),
+            Self::PluginSkill(skill) => {
+                if skill.plugin_title.is_empty() {
+                    skill.plugin_id.clone()
+                } else {
+                    skill.plugin_title.clone()
+                }
+            }
+            Self::ClaudeCodeSkill { .. } => "Claude Code".to_string(),
+        }
+    }
+}
+
 /// The kind of item in the context picker.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContextPickerItemKind {
@@ -28,12 +83,15 @@ pub enum ContextPickerItemKind {
     File(std::path::PathBuf),
     /// A local folder attachment.
     Folder(std::path::PathBuf),
-    /// A Claude Code agent slash command (e.g. `/compact`, `/clear`).
-    /// Acceptance inserts the command text and optionally submits.
-    SlashCommand(String),
+    /// A slash command with source-aware identity. Default commands insert
+    /// literal `/command` text; plugin and Claude skills stage local content.
+    SlashCommand(SlashCommandPayload),
     /// Opens a full built-in view as a portal for rich browsing.
     /// Selection in the portal attaches the result back to the ACP chat.
     Portal(PortalKind),
+    /// A non-actionable placeholder row (loading spinner, empty state).
+    /// Acceptance is a no-op; the row exists only for visual feedback.
+    Inert,
 }
 
 /// A single row in the context picker.
@@ -107,6 +165,7 @@ impl ContextPickerState {
                         ContextPickerItemKind::Folder(_) => "folder",
                         ContextPickerItemKind::SlashCommand(_) => "slash_command",
                         ContextPickerItemKind::Portal(_) => "portal",
+                        ContextPickerItemKind::Inert => "inert",
                     },
                     score: item.score,
                 })
