@@ -1532,46 +1532,46 @@ Request the current visible UI surface. Returns semantic IDs for AI-driven targe
 
 **Warning codes (canonical vocabulary):** `panel_only_theme_chooser`, `panel_only_actions_dialog`, `panel_only_div_prompt`, `panel_only_form_prompt`, `panel_only_term_prompt`, `panel_only_editor_prompt`, `panel_only_path_prompt`, `panel_only_chat_prompt`, `panel_only_env_prompt`, `panel_only_drop_prompt`, `panel_only_template_prompt`, `panel_only_naming_prompt`, `panel_only_creation_feedback`, `panel_only_webcam`, `panel_only_scratch_pad`, `panel_only_quick_terminal`, `collector_used_current_view_fallback`, `target_unsupported_non_main`
 
-#### Fail-closed targeting
+#### Secondary-surface targeting
 
-If a target resolves successfully but the executor for that surface is not implemented yet, the command **does not** fall back to another window. It fails closed with a structured error.
+If a target resolves successfully, the runtime routes the command to the matching surface-specific executor. It does **not** fall back to another window.
 
-For `getElements`, the runtime returns empty elements with the `target_unsupported_non_main` warning:
+`getElements` supports `main`, `notes`, `acpDetached`, `actionsDialog`, and `promptPopup`. If a resolved surface has no collector yet, the runtime returns empty elements with a `target_unsupported_non_main` warning:
 
 ```json
 {
   "type": "elementsResult",
-  "requestId": "elm-notes",
+  "requestId": "elm-ai",
   "elements": [],
   "totalCount": 0,
   "truncated": false,
   "focusedSemanticId": null,
   "selectedSemanticId": null,
-  "warnings": ["target_unsupported_non_main: getElements currently supports only the main automation window; resolved notes (Notes)"]
+  "warnings": ["target_unsupported_non_main: getElements has no collector for ai:0 (Ai)"]
 }
 ```
 
-For `waitFor`, the runtime returns `success=false` with an `actionFailed` error before any polling starts:
+`waitFor` supports `main`, `notes`, `acpDetached`, `actionsDialog`, and `promptPopup`. Unsupported resolved kinds return `success=false` with an `actionFailed` error before any polling starts:
 
 ```json
 {
   "type": "waitForResult",
-  "requestId": "wait-notes",
+  "requestId": "wait-ai",
   "success": false,
   "elapsed": 0,
   "error": {
     "code": "action_failed",
-    "message": "waitFor currently supports only the main automation window; resolved notes (Notes)"
+    "message": "waitFor supports Main, AcpDetached, Notes, ActionsDialog, and PromptPopup targets; resolved ai:0 (Ai)"
   }
 }
 ```
 
-For `batch`, the runtime returns `success=false` with `failedAt=0` and a single result entry before any command mutates UI state:
+`batch` supports `main`, `notes`, `acpDetached`, `actionsDialog`, and `promptPopup`. Unsupported resolved kinds return `success=false` with `failedAt=0` and a single result entry before any command mutates UI state:
 
 ```json
 {
   "type": "batchResult",
-  "requestId": "batch-notes",
+  "requestId": "batch-ai",
   "success": false,
   "results": [{
     "index": 0,
@@ -1580,7 +1580,7 @@ For `batch`, the runtime returns `success=false` with `failedAt=0` and a single 
     "elapsed": 0,
     "error": {
       "code": "action_failed",
-      "message": "batch currently supports only the main automation window; resolved notes (Notes)"
+      "message": "batch supports Main, AcpDetached, Notes, ActionsDialog, and PromptPopup targets; resolved ai:0 (Ai)"
     }
   }],
   "failedAt": 0,
@@ -2368,15 +2368,15 @@ High-fidelity event simulation through GPUI's real event pipeline (unlike legacy
 | Command | Notes |
 |---------|-------|
 | `getState` | UI state for targeted window |
-| `getElements` | Semantic elements for targeted window (main-only, non-main fails closed) |
+| `getElements` | Semantic elements for `main` and `notes` targets; unsupported secondary targets fail closed |
 | `captureScreenshot` | Screenshot of targeted window (uses bounds for scoring; fails closed on ambiguous tie) |
 | `getAcpState` | ACP state (Main + AcpDetached targets supported; non-ACP secondary targets return default + `target_unsupported` warning) |
 | `getAcpTestProbe` | Test probe (Main + AcpDetached targets supported; non-ACP secondary targets return default + `target_unsupported` warning) |
 | `resetAcpTestProbe` | Probe reset (Main + AcpDetached targets supported; non-ACP secondary targets return default + `target_unsupported` warning) |
 | `performAcpSetupAction` | Setup action dispatch (Main + AcpDetached targets supported; non-ACP secondary targets return structured error) |
 | `simulateClick` | Click in targeted window |
-| `waitFor` | Poll condition on targeted window (main-only, non-main fails closed) |
-| `batch` | Execute batch on targeted window (main-only, non-main fails closed) |
+| `waitFor` | Poll condition on `main` and `notes` targets; unsupported secondary targets fail closed |
+| `batch` | Execute batch on `main` and `notes` targets; unsupported secondary targets fail closed |
 | `simulateGpuiEvent` | GPUI event dispatch to targeted window (fails closed when multiple visible windows share the resolved kind) |
 | `inspectAutomationWindow` | Unified inspection bundle: resolved identity, screenshot dimensions, pixel probes, and semantic elements in one round-trip |
 

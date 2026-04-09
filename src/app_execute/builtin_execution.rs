@@ -1878,20 +1878,6 @@ impl ScriptListApp {
                 }
 
                 self.pending_focus = None;
-
-                tracing::info!(
-                    target: "script_kit::keyboard",
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    event = "notes_handoff_launcher_state_snapshot",
-                    current_view = ?self.current_view,
-                    focused_input = ?self.focused_input,
-                    pending_focus = ?self.pending_focus,
-                    filter_text_len = self.filter_text.len(),
-                    show_actions_popup = self.show_actions_popup,
-                    "Snapshotting launcher state before Notes handoff"
-                );
-
                 script_kit_gpui::set_main_window_visible(false);
                 platform::defer_hide_main_window(cx);
                 if let Err(e) = notes::open_notes_window(cx) {
@@ -2017,20 +2003,6 @@ impl ScriptListApp {
                 }
 
                 self.pending_focus = None;
-
-                tracing::info!(
-                    target: "script_kit::keyboard",
-                    category = "BUILTIN",
-                    trace_id = %dctx.trace_id,
-                    event = "notes_handoff_launcher_state_snapshot",
-                    current_view = ?self.current_view,
-                    focused_input = ?self.focused_input,
-                    pending_focus = ?self.pending_focus,
-                    filter_text_len = self.filter_text.len(),
-                    show_actions_popup = self.show_actions_popup,
-                    "Snapshotting launcher state before Notes command handoff"
-                );
-
                 script_kit_gpui::set_main_window_visible(false);
                 platform::defer_hide_main_window(cx);
 

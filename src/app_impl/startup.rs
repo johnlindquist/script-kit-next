@@ -1510,20 +1510,12 @@ impl ScriptListApp {
                 // CRITICAL: Skip processing if this keystroke is from a secondary window.
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
                 // We only want to handle keystrokes for the main window.
-                let is_notes = crate::notes::is_notes_window(window);
-                let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
-                if is_notes || is_ai || is_detached_acp || is_actions {
-                    tracing::debug!(
-                        target: "script_kit::keyboard",
-                        event = "actions_interceptor_skipped_secondary_window",
-                        is_notes,
-                        is_ai,
-                        is_detached_acp,
-                        is_actions,
-                    );
-                    return;
+                if crate::notes::is_notes_window(window)
+                    || crate::ai::is_ai_window(window)
+                    || crate::ai::acp::chat_window::is_chat_window(window)
+                    || crate::actions::is_actions_window(window)
+                {
+                    return; // Let the secondary window handle its own keystrokes
                 }
 
                 let key = event.keystroke.key.as_str();
@@ -1541,26 +1533,6 @@ impl ScriptListApp {
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        let owner = match &this.current_view {
-                            AppView::ScriptList => "script_list",
-                            AppView::FileSearchView { .. } => "file_search",
-                            AppView::ArgPrompt { .. } => "arg_prompt",
-                            AppView::ChatPrompt { .. } => "chat_prompt",
-                            AppView::WebcamView { .. } => "webcam",
-                            AppView::ClipboardHistoryView { .. } => "clipboard_history",
-                            AppView::AcpChatView { .. } => "embedded_acp",
-                            _ => "main_window_other",
-                        };
-                        tracing::debug!(
-                            target: "script_kit::keyboard",
-                            event = "actions_interceptor_owner_path",
-                            owner,
-                            key = %key,
-                            has_cmd,
-                            has_shift,
-                            show_actions_popup = this.show_actions_popup,
-                        );
-
                         // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt)
                         // This MUST be intercepted here because the Input component has focus and
                         // normal on_key_down handlers won't receive the event

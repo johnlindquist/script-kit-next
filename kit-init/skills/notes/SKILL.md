@@ -91,6 +91,7 @@ The Notes window is a first-class automation target. Use `target: { "type": "kin
 - **No raw DB access**: Do not read/write `notes.sqlite` directly from scripts. Use the automation protocol.
 - **Hotkey required**: The Notes window has no default hotkey. Users must set `notesHotkey` in config before it appears in the launcher shortcuts.
 - **Automation target must be open**: `getElements` and `batch` commands targeting Notes require the Notes window to be open. Use `waitFor` with a timeout to handle the case where it is not yet visible.
+- **No invented JS globals**: The current public Notes script surface is the automation target (`kind: notes`). Do not document or rely on `notesOpen()`, `notesCreate()`, or similar JavaScript globals unless they are added to `scripts/kit-sdk.ts`.
 
 ## Done When
 
