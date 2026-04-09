@@ -356,11 +356,19 @@ pub(crate) fn activate_chat_window(cx: &mut App) {
 pub fn toggle_detached_actions(cx: &mut App) {
     use crate::actions::{self, ActionsDialog, ActionsDialogConfig, WindowPosition};
 
+    let actions_window_open_before = actions::is_actions_window_open();
+
     // If actions are already open, close them and re-focus the chat (toggle behavior)
-    if actions::is_actions_window_open() {
+    if actions_window_open_before {
         actions::close_actions_window(cx);
         activate_chat_window(cx);
-        tracing::info!(target: "script_kit::keyboard", event = "detached_actions_closed");
+        tracing::info!(
+            target: "script_kit::keyboard",
+            event = "detached_actions_toggle_result",
+            actions_window_open_before,
+            actions_window_open_after = actions::is_actions_window_open(),
+            has_view_entity = true,
+        );
         return;
     }
 
@@ -445,17 +453,6 @@ pub fn toggle_detached_actions(cx: &mut App) {
     let (selected_agent_id, catalog_entries, selected_model_id, available_models) =
         acp_context.unwrap_or_else(|| (None, Vec::new(), None, Vec::new()));
 
-    // Create the dialog entity using the host-aware route builder
-    let root_actions_len = crate::actions::get_acp_chat_root_route_for_host(
-        &catalog_entries,
-        selected_agent_id.as_deref(),
-        &available_models,
-        selected_model_id.as_deref(),
-        crate::actions::AcpActionsDialogHost::Detached,
-    )
-    .actions
-    .len();
-
     let dialog = cx.new(|cx| {
         let focus_handle = cx.focus_handle();
         let mut dialog = ActionsDialog::with_acp_chat_for_host(
@@ -504,13 +501,10 @@ pub fn toggle_detached_actions(cx: &mut App) {
 
     tracing::info!(
         target: "script_kit::keyboard",
-        event = "detached_actions_opened",
-        actions_len = root_actions_len,
-    );
-    tracing::info!(
-        target: "script_kit::keyboard",
-        event = "detached_actions_window_activated",
-        actions_len = root_actions_len,
+        event = "detached_actions_toggle_result",
+        actions_window_open_before,
+        actions_window_open_after = crate::actions::is_actions_window_open(),
+        has_view_entity = view_weak.is_some(),
     );
 
     // Spawn a one-shot task that receives the selected action_id from the
