@@ -9,12 +9,71 @@ use crate::list_item::GroupedListItem;
 use super::super::types::SearchResult;
 use super::DEFAULT_SUGGESTED_ITEMS;
 
+/// A plugin-based section in the grouped launcher view.
+/// `key` is the stable identity (plugin_id or "main"); `label` is the display title.
+#[derive(Debug, Clone)]
+struct PluginGroupSection {
+    label: String,
+    indices: Vec<usize>,
+}
+
+/// Returns `(grouping_key, display_label)` for plugin-owned result types.
+/// Uses plugin_title for display when available; falls back to the grouping key.
+fn plugin_group_identity(result: &SearchResult) -> Option<(String, String)> {
+    match result {
+        SearchResult::Script(sm) => {
+            let key = if sm.script.plugin_id.is_empty() {
+                sm.script
+                    .kit_name
+                    .clone()
+                    .unwrap_or_else(|| "main".to_string())
+            } else {
+                sm.script.plugin_id.clone()
+            };
+            let label = sm
+                .script
+                .plugin_title
+                .clone()
+                .filter(|title| !title.is_empty())
+                .unwrap_or_else(|| key.clone());
+            Some((key, label))
+        }
+        SearchResult::Scriptlet(sm) => {
+            let key = if sm.scriptlet.plugin_id.is_empty() {
+                sm.scriptlet
+                    .group
+                    .clone()
+                    .unwrap_or_else(|| "main".to_string())
+            } else {
+                sm.scriptlet.plugin_id.clone()
+            };
+            let label = sm
+                .scriptlet
+                .plugin_title
+                .clone()
+                .filter(|title| !title.is_empty())
+                .unwrap_or_else(|| key.clone());
+            Some((key, label))
+        }
+        SearchResult::Skill(sm) => {
+            let key = sm.skill.plugin_id.clone();
+            let label = if sm.skill.plugin_title.is_empty() {
+                key.clone()
+            } else {
+                sm.skill.plugin_title.clone()
+            };
+            Some((key, label))
+        }
+        _ => None,
+    }
+}
+
 pub(super) fn build_grouped_view_results(
     results: Vec<SearchResult>,
     frecency_store: &FrecencyStore,
     suggested_config: &SuggestedConfig,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
-    // Grouped view mode: create SUGGESTED and kit-based sections
+    // Grouped view mode: create SUGGESTED and plugin-based sections
     let mut grouped = Vec::new();
 
     // Get suggested items from frecency store (respecting config)
@@ -58,30 +117,10 @@ pub(super) fn build_grouped_view_results(
         }
     };
 
-    // Helper to get plugin/kit name for grouping (scripts, scriptlets, and skills)
-    // Agents are suppressed from grouping — they are not top-level launcher artifacts.
-    let get_kit_name = |result: &SearchResult| -> Option<String> {
-        match result {
-            SearchResult::Script(sm) => sm.script.kit_name.clone(),
-            SearchResult::Scriptlet(sm) => {
-                // Use plugin_id for grouping when available, fall back to group
-                if sm.scriptlet.plugin_id.is_empty() {
-                    sm.scriptlet.group.clone()
-                } else {
-                    Some(sm.scriptlet.plugin_id.clone())
-                }
-            }
-            SearchResult::Skill(sm) => Some(sm.skill.plugin_id.clone()),
-            // Suppressed: agents are not grouped in the launcher
-            SearchResult::Agent(_) => None,
-            _ => None,
-        }
-    };
-
-    // Find indices of results that are "suggested" and categorize non-suggested by kit or type
+    // Find indices of results that are "suggested" and categorize non-suggested by plugin or type
     let mut suggested_indices: Vec<(usize, f64)> = Vec::new();
-    // Kit-based grouping: HashMap<kit_name, Vec<index>> (includes scripts, scriptlets, and agents)
-    let mut kit_indices: HashMap<String, Vec<usize>> = HashMap::new();
+    // Plugin-based grouping: HashMap<plugin_key, PluginGroupSection>
+    let mut plugin_groups: HashMap<String, PluginGroupSection> = HashMap::new();
     let mut commands_indices: Vec<usize> = Vec::new();
     let mut apps_indices: Vec<usize> = Vec::new();
 
@@ -104,14 +143,21 @@ pub(super) fn build_grouped_view_results(
             if score >= min_score && suggested_paths.contains(&path) && !is_excluded_builtin {
                 suggested_indices.push((idx, score));
             } else {
-                // Categorize by kit (for scripts/scriptlets/skills) or by type (for others)
+                // Categorize by plugin (for scripts/scriptlets/skills) or by type (for others)
                 match result {
                     SearchResult::Script(_)
                     | SearchResult::Scriptlet(_)
                     | SearchResult::Skill(_) => {
-                        // Group by kit/plugin name (default to "main" if no kit specified)
-                        let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
-                        kit_indices.entry(kit).or_default().push(idx);
+                        let (key, label) = plugin_group_identity(result)
+                            .unwrap_or_else(|| ("main".to_string(), "Main".to_string()));
+                        plugin_groups
+                            .entry(key)
+                            .or_insert_with(|| PluginGroupSection {
+                                label,
+                                indices: Vec::new(),
+                            })
+                            .indices
+                            .push(idx);
                     }
                     SearchResult::BuiltIn(_) | SearchResult::Window(_) => {
                         commands_indices.push(idx)
@@ -133,8 +179,16 @@ pub(super) fn build_grouped_view_results(
             // If no path, categorize by type (shouldn't happen, but handle gracefully)
             match result {
                 SearchResult::Script(_) | SearchResult::Scriptlet(_) | SearchResult::Skill(_) => {
-                    let kit = get_kit_name(result).unwrap_or_else(|| "main".to_string());
-                    kit_indices.entry(kit).or_default().push(idx);
+                    let (key, label) = plugin_group_identity(result)
+                        .unwrap_or_else(|| ("main".to_string(), "Main".to_string()));
+                    plugin_groups
+                        .entry(key)
+                        .or_insert_with(|| PluginGroupSection {
+                            label,
+                            indices: Vec::new(),
+                        })
+                        .indices
+                        .push(idx);
                 }
                 SearchResult::BuiltIn(_) | SearchResult::Window(_) => commands_indices.push(idx),
                 SearchResult::App(_) => apps_indices.push(idx),
@@ -176,8 +230,8 @@ pub(super) fn build_grouped_view_results(
         let default_set: HashSet<usize> = default_suggested_indices.iter().copied().collect();
         commands_indices.retain(|idx| !default_set.contains(idx));
         apps_indices.retain(|idx| !default_set.contains(idx));
-        for indices in kit_indices.values_mut() {
-            indices.retain(|idx| !default_set.contains(idx));
+        for section in plugin_groups.values_mut() {
+            section.indices.retain(|idx| !default_set.contains(idx));
         }
     }
 
@@ -186,19 +240,19 @@ pub(super) fn build_grouped_view_results(
         indices.sort_by_cached_key(|&idx| results[idx].name().to_lowercase());
     };
 
-    // Sort items within each kit section
-    for indices in kit_indices.values_mut() {
-        sort_alphabetically(indices);
+    // Sort items within each plugin section
+    for section in plugin_groups.values_mut() {
+        sort_alphabetically(&mut section.indices);
     }
     sort_alphabetically(&mut commands_indices);
     sort_alphabetically(&mut apps_indices);
 
-    // Get non-main kit names sorted alphabetically
-    let mut other_kit_names: Vec<&String> = kit_indices
+    // Get non-main plugin keys sorted alphabetically by display label
+    let mut other_plugin_keys: Vec<&String> = plugin_groups
         .keys()
         .filter(|k| k.as_str() != "main")
         .collect();
-    other_kit_names.sort_by_key(|a| a.to_lowercase());
+    other_plugin_keys.sort_by_cached_key(|k| plugin_groups[*k].label.to_lowercase());
 
     // Build grouped list in order: SUGGESTED, MAIN, COMMANDS, other kits, APPS
     // Each section header includes an item count suffix (e.g., "SUGGESTED · 5")
@@ -225,14 +279,24 @@ pub(super) fn build_grouped_view_results(
         }
     }
 
-    // 2. MAIN kit (if it has items)
-    if let Some(main_indices) = kit_indices.get("main") {
-        if !main_indices.is_empty() {
+    // 2. MAIN plugin section (if it has items)
+    if let Some(main_section) = plugin_groups.get("main") {
+        if !main_section.indices.is_empty() {
+            tracing::info!(
+                plugin_key = "main",
+                plugin_label = %main_section.label,
+                item_count = main_section.indices.len(),
+                "main_menu_plugin_section_built"
+            );
             grouped.push(GroupedListItem::SectionHeader(
-                format!("MAIN · {}", main_indices.len()),
+                format!(
+                    "{} · {}",
+                    main_section.label.to_uppercase(),
+                    main_section.indices.len()
+                ),
                 Some("Code".to_string()),
             ));
-            for idx in main_indices {
+            for idx in &main_section.indices {
                 grouped.push(GroupedListItem::Item(*idx));
             }
         }
@@ -249,16 +313,25 @@ pub(super) fn build_grouped_view_results(
         }
     }
 
-    // 4. Other kit sections (CLEANSHOT, etc.) - alphabetically sorted
-    for kit_name in &other_kit_names {
-        if let Some(indices) = kit_indices.get(*kit_name) {
-            if !indices.is_empty() {
-                // Use uppercase kit name as section header with count and bolt icon
+    // 4. Other plugin sections - sorted alphabetically by display label
+    for plugin_key in &other_plugin_keys {
+        if let Some(section) = plugin_groups.get(*plugin_key) {
+            if !section.indices.is_empty() {
+                tracing::info!(
+                    plugin_key = %plugin_key,
+                    plugin_label = %section.label,
+                    item_count = section.indices.len(),
+                    "main_menu_plugin_section_built"
+                );
                 grouped.push(GroupedListItem::SectionHeader(
-                    format!("{} · {}", kit_name.to_uppercase(), indices.len()),
+                    format!(
+                        "{} · {}",
+                        section.label.to_uppercase(),
+                        section.indices.len()
+                    ),
                     Some("BoltFilled".to_string()),
                 ));
-                for idx in indices {
+                for idx in &section.indices {
                     grouped.push(GroupedListItem::Item(*idx));
                 }
             }
@@ -278,17 +351,17 @@ pub(super) fn build_grouped_view_results(
 
     // Note: Agents are suppressed from the grouped view; skills replace them
 
-    // Calculate kit counts for logging
-    let kit_count: usize = kit_indices.values().map(|v| v.len()).sum();
+    // Calculate plugin section counts for logging
+    let plugin_items_count: usize = plugin_groups.values().map(|s| s.indices.len()).sum();
 
     debug!(
         suggested_count = suggested_indices.len(),
-        kit_sections = kit_indices.len(),
-        kit_items_count = kit_count,
+        plugin_sections = plugin_groups.len(),
+        plugin_items_count = plugin_items_count,
         commands_count = commands_indices.len(),
         apps_count = apps_indices.len(),
         total_grouped = grouped.len(),
-        "Grouped view: created kit-based sections (scripts, scriptlets, skills grouped by kit)"
+        "Grouped view: created plugin-based sections (scripts, scriptlets, skills grouped by plugin)"
     );
 
     (grouped, results)

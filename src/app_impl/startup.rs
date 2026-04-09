@@ -1501,10 +1501,10 @@ impl ScriptListApp {
         let actions_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
-                let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
-                let has_shift = event.keystroke.modifiers.shift;
-                let key_char = event.keystroke.key_char.as_deref();
+                let is_notes = crate::notes::is_notes_window(window);
+                let is_ai = crate::ai::is_ai_window(window);
+                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_actions = crate::actions::is_actions_window(window);
 
                 // When the main window is hidden (e.g. Notes/AI open), main-menu
                 // key interceptors must not consume keystrokes from secondary windows.
@@ -1512,15 +1512,13 @@ impl ScriptListApp {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_main_window_hidden",
-                        key = %key,
+                        is_notes,
+                        is_ai,
+                        is_detached_acp,
+                        is_actions,
                     );
                     return;
                 }
-
-                let is_notes = crate::notes::is_notes_window(window);
-                let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
 
                 // CRITICAL: Skip processing if this keystroke is from a secondary window.
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
@@ -1529,7 +1527,6 @@ impl ScriptListApp {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_skipped_secondary_window",
-                        key = %key,
                         is_notes,
                         is_ai,
                         is_detached_acp,
@@ -1537,6 +1534,11 @@ impl ScriptListApp {
                     );
                     return; // Let the secondary window handle its own keystrokes
                 }
+
+                let key = event.keystroke.key.as_str();
+                let has_cmd = event.keystroke.modifiers.platform;
+                let has_shift = event.keystroke.modifiers.shift;
+                let key_char = event.keystroke.key_char.as_deref();
                 if confirm::consume_main_window_key_while_confirm_open(
                     key,
                     &event.keystroke.modifiers,
@@ -1567,9 +1569,6 @@ impl ScriptListApp {
                                 target: "script_kit::keyboard",
                                 event = "actions_interceptor_owner_path",
                                 owner,
-                                key = %key,
-                                has_cmd,
-                                has_shift,
                                 show_actions_popup = this.show_actions_popup,
                             );
                             match &mut this.current_view {
