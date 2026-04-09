@@ -1182,30 +1182,26 @@ mod tests {
     // --- Compare-mode transition tests ---
 
     #[test]
-    fn compare_mode_is_unavailable_in_reset_catalog() {
-        for entry in all_stories() {
-            assert_eq!(
-                entry.story.variants().len(),
-                1,
-                "reset storybook should only expose single-variant stories"
-            );
-        }
+    fn compare_mode_is_available_in_design_lab() {
+        let multi_variant_count = all_stories()
+            .filter(|entry| entry.story.variants().len() > 1)
+            .count();
+        assert!(
+            multi_variant_count >= 4,
+            "design lab should have at least 4 compare-ready stories, got {multi_variant_count}"
+        );
 
         assert!(
-            first_story_with_multiple_variants().is_none(),
-            "reset storybook should not expose compare-ready stories"
+            first_story_with_multiple_variants().is_some(),
+            "design lab should expose at least one compare-ready story"
         );
     }
 
     #[test]
-    fn compare_mode_ineligible_for_every_single_variant_story() {
-        // Verify that no single-variant story is accidentally compare-ready
-        let mut single_variant_count = 0;
+    fn single_variant_stories_remain_compare_ineligible() {
         for entry in all_stories() {
             let variants = entry.story.variants();
             if variants.len() <= 1 {
-                single_variant_count += 1;
-                // Simulate toggle_compare_mode: should stay Single
                 let would_enter = variants.len() > 1;
                 assert!(
                     !would_enter,
@@ -1215,24 +1211,17 @@ mod tests {
                 );
             }
         }
-        assert!(
-            single_variant_count > 0,
-            "Expect at least one single-variant story in the registry"
-        );
     }
 
     #[test]
     fn variant_navigation_noop_for_single_variant() {
-        // Find a single-variant story
         let single = all_stories().find(|e| e.story.variants().len() <= 1);
         if let Some(entry) = single {
             let count = entry.story.variants().len();
-            // Simulate move_variant_left: should be a no-op
             let index: usize = 0;
             if count > 1 {
                 panic!("expected single-variant story");
             }
-            // The method returns early when count <= 1, so index stays 0
             assert_eq!(index, 0, "single-variant story should not navigate");
         }
     }
@@ -1327,10 +1316,17 @@ mod tests {
     }
 
     #[test]
-    fn configure_for_design_explorer_falls_back_to_single_story() {
+    fn design_lab_has_multiple_stories() {
         let stories: Vec<_> = all_stories().collect();
-        assert_eq!(stories.len(), 1);
-        assert_eq!(stories[0].story.id(), "main-menu");
+        assert!(
+            stories.len() >= 5,
+            "design lab should have at least 5 stories, got {}",
+            stories.len()
+        );
+        assert!(
+            stories.iter().any(|e| e.story.id() == "main-menu"),
+            "main-menu story must be registered"
+        );
     }
 
     #[test]

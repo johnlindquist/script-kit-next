@@ -180,7 +180,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_snapshot_surfaces_only_include_main_menu() {
+    fn catalog_snapshot_surfaces_include_design_lab_surfaces() {
         let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
 
         let main_menu_surface = snapshot
@@ -190,7 +190,28 @@ mod tests {
             .expect("Main Menu surface should be present");
         assert_eq!(main_menu_surface.story_count, 1);
         assert_eq!(main_menu_surface.comparable_story_count, 0);
-        assert_eq!(snapshot.surfaces.len(), 1);
+
+        assert!(
+            snapshot.surfaces.len() >= 4,
+            "design lab should expose at least 4 surfaces, got {}",
+            snapshot.surfaces.len()
+        );
+
+        assert!(
+            snapshot.surfaces.iter().any(|s| s.surface == "Footer"),
+            "Footer surface should be present"
+        );
+        assert!(
+            snapshot
+                .surfaces
+                .iter()
+                .any(|s| s.surface == "Action Dialog"),
+            "Action Dialog surface should be present"
+        );
+        assert!(
+            snapshot.surfaces.iter().any(|s| s.surface == "Input"),
+            "Input surface should be present"
+        );
     }
 
     #[test]
