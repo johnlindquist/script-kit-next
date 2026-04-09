@@ -1,4 +1,4 @@
-use gpui::{App, Window};
+use gpui::{App, SharedString, Window};
 
 #[cfg(target_os = "macos")]
 use cocoa::base::{id, nil, NO, YES};
@@ -22,9 +22,9 @@ const FOOTER_HINT_PADDING_Y: f64 = 2.0;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_RADIUS: f64 = 4.0;
 #[cfg(target_os = "macos")]
-const FOOTER_HINT_FONT_SIZE: f64 = 12.0;
+const FOOTER_HINT_FONT_SIZE: f64 = 12.5;
 #[cfg(target_os = "macos")]
-const FOOTER_HINT_FONT_WEIGHT_SEMIBOLD: f64 = 0.3;
+const FOOTER_HINT_FONT_WEIGHT_LIGHT: f64 = 0.18;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_BUTTON_ID_PREFIX: &str = "script-kit-footer-button-";
 #[cfg(target_os = "macos")]
@@ -33,6 +33,16 @@ const FOOTER_LEFT_INFO_ID: &str = "script-kit-footer-left-info";
 const FOOTER_STREAMING_DOT_SIZE: f64 = 6.0;
 #[cfg(target_os = "macos")]
 const FOOTER_LEFT_DOT_LABEL_GAP: f64 = 6.0;
+#[cfg(target_os = "macos")]
+const FOOTER_RUN_SLOT_WIDTH: f64 = 160.0;
+#[cfg(target_os = "macos")]
+const FOOTER_ACTIONS_SLOT_WIDTH: f64 = 104.0;
+#[cfg(target_os = "macos")]
+const FOOTER_AI_SLOT_WIDTH: f64 = 64.0;
+#[cfg(target_os = "macos")]
+const FOOTER_APPLY_SLOT_WIDTH: f64 = 88.0;
+#[cfg(target_os = "macos")]
+const FOOTER_CLOSE_SLOT_WIDTH: f64 = 88.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FooterAction {
@@ -47,17 +57,21 @@ pub(crate) enum FooterAction {
 pub(crate) struct FooterButtonConfig {
     pub action: FooterAction,
     pub key: &'static str,
-    pub label: &'static str,
+    pub label: SharedString,
     pub selected: bool,
     pub enabled: bool,
 }
 
 impl FooterButtonConfig {
-    pub(crate) fn new(action: FooterAction, key: &'static str, label: &'static str) -> Self {
+    pub(crate) fn new(
+        action: FooterAction,
+        key: &'static str,
+        label: impl Into<SharedString>,
+    ) -> Self {
         Self {
             action,
             key,
-            label,
+            label: label.into(),
             selected: false,
             enabled: true,
         }
@@ -80,11 +94,27 @@ impl FooterAction {
     }
 }
 
-/// Optional left-side info for the native footer (streaming dot + model name).
+/// Status of the ACP thread, used to pick dot color and animation.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum FooterDotStatus {
+    /// No dot shown.
+    #[default]
+    Hidden,
+    /// Streaming — pulsing gold/accent dot.
+    Streaming,
+    /// Waiting for user permission — pulsing gold dot (same as streaming).
+    WaitingForPermission,
+    /// Idle / done — solid green dot.
+    Idle,
+    /// Error — solid red dot.
+    Error,
+}
+
+/// Optional left-side info for the native footer (status dot + model name).
 #[derive(Clone, Debug, Default)]
 pub(crate) struct FooterLeftInfo {
-    /// When true, show the pulsing dot animation.
-    pub is_streaming: bool,
+    /// Controls dot color and animation.
+    pub dot_status: FooterDotStatus,
     /// Model display name (e.g. "Claude Sonnet 4"). Empty = hide label.
     pub model_name: String,
 }
@@ -565,8 +595,23 @@ unsafe fn layout_footer_left_info(
     let bounds: NSRect = msg_send![left_info_view, bounds];
     let mut x = 0.0_f64;
 
-    // ── Streaming dot ──
-    if info.is_streaming {
+    // ── Status dot (color + animation depends on thread status) ──
+    let show_dot = !matches!(info.dot_status, FooterDotStatus::Hidden);
+    if show_dot {
+        // Pick color: gold/accent for streaming/permission, green for idle, red for error.
+        let dot_hex: u32 = match info.dot_status {
+            FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission => {
+                crate::theme::get_cached_theme().colors.accent.selected
+            }
+            FooterDotStatus::Idle => 0x22c55e,  // green-500
+            FooterDotStatus::Error => 0xef4444, // red-500
+            FooterDotStatus::Hidden => unreachable!(),
+        };
+        let should_pulse = matches!(
+            info.dot_status,
+            FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission
+        );
+
         let dot_y = ((bounds.size.height - FOOTER_STREAMING_DOT_SIZE) / 2.0).round();
         let dot_view: id = msg_send![class!(NSView), alloc];
         let dot_view: id = msg_send![
@@ -582,18 +627,18 @@ unsafe fn layout_footer_left_info(
             if dot_layer != nil {
                 let _: () = msg_send![dot_layer, setCornerRadius: FOOTER_STREAMING_DOT_SIZE / 2.0];
 
-                // Accent color for the dot
-                let theme = crate::theme::get_cached_theme();
-                let accent_ns = ns_color_from_hex_with_alpha(theme.colors.accent.selected, 1.0);
-                if accent_ns != nil {
-                    // SAFETY: `accent_ns` is a valid NSColor from the theme.
-                    let cg: id = msg_send![accent_ns, CGColor];
+                let dot_ns = ns_color_from_hex_with_alpha(dot_hex, 1.0);
+                if dot_ns != nil {
+                    // SAFETY: `dot_ns` is a valid NSColor.
+                    let cg: id = msg_send![dot_ns, CGColor];
                     if cg != nil {
                         let _: () = msg_send![dot_layer, setBackgroundColor: cg];
                     }
                 }
 
-                add_pulsing_opacity_animation(dot_layer);
+                if should_pulse {
+                    add_pulsing_opacity_animation(dot_layer);
+                }
             }
             let _: () = msg_send![left_info_view, addSubview: dot_view];
             x += FOOTER_STREAMING_DOT_SIZE + FOOTER_LEFT_DOT_LABEL_GAP;
@@ -604,7 +649,7 @@ unsafe fn layout_footer_left_info(
     let font: id = msg_send![
         class!(NSFont),
         systemFontOfSize: FOOTER_HINT_FONT_SIZE
-        weight: FOOTER_HINT_FONT_WEIGHT_SEMIBOLD
+        weight: FOOTER_HINT_FONT_WEIGHT_LIGHT
     ];
     let label = make_footer_hint_text_field(&info.model_name, font, text_color);
     if label != nil {
@@ -712,7 +757,7 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
     let font: id = msg_send![
         objc::class!(NSFont),
         systemFontOfSize: FOOTER_HINT_FONT_SIZE
-        weight: FOOTER_HINT_FONT_WEIGHT_SEMIBOLD
+        weight: FOOTER_HINT_FONT_WEIGHT_LIGHT
     ];
 
     let mut items = Vec::new();
@@ -723,33 +768,16 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
             continue;
         }
         let item_frame: NSRect = msg_send![item, frame];
-        total_item_width += item_frame.size.width;
+        let target_width = footer_hint_slot_width(button_cfg.action).max(item_frame.size.width);
+        total_item_width += target_width;
         if index > 0 {
             total_item_width += FOOTER_HINT_ITEM_GAP;
         }
-        items.push((item, item_frame.size.width));
+        items.push((item, target_width));
     }
 
-    let balanced_floor_width = if items.is_empty() {
-        0.0
-    } else {
-        let gap_width = FOOTER_HINT_ITEM_GAP * (items.len().saturating_sub(1) as f64);
-        ((total_item_width - gap_width) / items.len() as f64).round()
-    };
-
-    let mut total_width = 0.0_f64;
-    for (index, (item, item_width)) in items.iter().enumerate() {
-        let target_width = item_width.max(balanced_floor_width);
-        normalize_footer_hint_item_width(*item, target_width);
-        total_width += target_width;
-        if index > 0 {
-            total_width += FOOTER_HINT_ITEM_GAP;
-        }
-    }
-
-    let mut x = (hints_bounds.size.width - total_width).max(0.0);
-    for (item, item_width) in items {
-        let target_width = item_width.max(balanced_floor_width);
+    let mut x = (hints_bounds.size.width - total_item_width).max(0.0);
+    for (item, target_width) in items {
         let frame = NSRect::new(
             NSPoint::new(x, 0.0),
             NSSize::new(target_width, hints_bounds.size.height),
@@ -761,54 +789,14 @@ unsafe fn layout_footer_hints(hints_view: id, text_color: id, buttons: &[FooterB
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn normalize_footer_hint_item_width(item: id, target_width: f64) {
-    use cocoa::foundation::{NSPoint, NSRect, NSSize};
-    use objc::{class, msg_send, sel, sel_impl};
-
-    if item == nil {
-        return;
+fn footer_hint_slot_width(action: FooterAction) -> f64 {
+    match action {
+        FooterAction::Run => FOOTER_RUN_SLOT_WIDTH,
+        FooterAction::Actions => FOOTER_ACTIONS_SLOT_WIDTH,
+        FooterAction::Ai => FOOTER_AI_SLOT_WIDTH,
+        FooterAction::Apply => FOOTER_APPLY_SLOT_WIDTH,
+        FooterAction::Close => FOOTER_CLOSE_SLOT_WIDTH,
     }
-
-    let item_frame: NSRect = msg_send![item, frame];
-    let width_delta = target_width - item_frame.size.width;
-    if width_delta <= 0.0 {
-        return;
-    }
-
-    let content_offset = (width_delta / 2.0).round();
-    let subviews: id = msg_send![item, subviews];
-    if subviews != nil {
-        let count: usize = msg_send![subviews, count];
-        for index in 0..count {
-            let child: id = msg_send![subviews, objectAtIndex: index];
-            if child == nil {
-                continue;
-            }
-
-            let child_frame: NSRect = msg_send![child, frame];
-            let is_button: cocoa::base::BOOL = msg_send![child, isKindOfClass: class!(NSButton)];
-            let new_frame = if is_button == YES {
-                NSRect::new(
-                    NSPoint::new(0.0, child_frame.origin.y),
-                    NSSize::new(target_width, child_frame.size.height),
-                )
-            } else {
-                NSRect::new(
-                    NSPoint::new(child_frame.origin.x + content_offset, child_frame.origin.y),
-                    child_frame.size,
-                )
-            };
-            let _: () = msg_send![child, setFrame: new_frame];
-        }
-    }
-
-    let _: () = msg_send![
-        item,
-        setFrame: NSRect::new(
-            item_frame.origin,
-            NSSize::new(target_width, item_frame.size.height)
-        )
-    ];
 }
 
 #[cfg(target_os = "macos")]
@@ -826,37 +814,34 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     }
 
     let key_field = make_footer_hint_text_field(button_cfg.key, font, text_color);
-    let label_field = make_footer_hint_text_field(button_cfg.label, font, text_color);
+    let label_field = make_footer_hint_text_field(button_cfg.label.as_ref(), font, text_color);
     if key_field == nil || label_field == nil {
         return nil;
     }
 
     let key_size: NSSize = msg_send![key_field, fittingSize];
     let label_size: NSSize = msg_send![label_field, fittingSize];
-    let item_width = key_size.width
-        + FOOTER_HINT_KEY_LABEL_GAP
-        + label_size.width
-        + (FOOTER_HINT_PADDING_X * 2.0);
+    let min_content_width = key_size.width + (FOOTER_HINT_PADDING_X * 2.0) + 12.0;
+    let item_width = footer_hint_slot_width(button_cfg.action).max(min_content_width);
     let item_height = footer_height();
     let content_height = key_size.height.max(label_size.height) + (FOOTER_HINT_PADDING_Y * 2.0);
     let content_y = ((item_height - content_height) / 2.0).round();
     let key_y = (content_y + FOOTER_HINT_PADDING_Y).round();
     let label_y = (content_y + FOOTER_HINT_PADDING_Y).round();
+    let key_x = (item_width - FOOTER_HINT_PADDING_X - key_size.width).max(FOOTER_HINT_PADDING_X);
+    let label_width = (key_x - FOOTER_HINT_KEY_LABEL_GAP - FOOTER_HINT_PADDING_X).max(0.0);
 
     let _: () = msg_send![
         label_field,
         setFrame: NSRect::new(
             NSPoint::new(FOOTER_HINT_PADDING_X, label_y),
-            NSSize::new(label_size.width, label_size.height)
+            NSSize::new(label_width, label_size.height)
         )
     ];
     let _: () = msg_send![
         key_field,
         setFrame: NSRect::new(
-            NSPoint::new(
-                FOOTER_HINT_PADDING_X + label_size.width + FOOTER_HINT_KEY_LABEL_GAP,
-                key_y
-            ),
+            NSPoint::new(key_x, key_y),
             NSSize::new(key_size.width, key_size.height)
         )
     ];
@@ -961,8 +946,33 @@ unsafe fn make_footer_hint_text_field(text: &str, font: id, text_color: id) -> i
     if text_color != nil {
         let _: () = msg_send![field, setTextColor: text_color];
     }
+    let _: () = msg_send![field, setLineBreakMode: 4usize];
+    let _: () = msg_send![field, setUsesSingleLineMode: YES];
     let _: () = msg_send![field, sizeToFit];
     field
+}
+
+#[cfg(test)]
+mod footer_layout_tests {
+    use super::{footer_hint_slot_width, FooterAction};
+
+    #[test]
+    fn footer_hint_slot_widths_are_stable_per_action() {
+        assert_eq!(footer_hint_slot_width(FooterAction::Run), 160.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::Actions), 104.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::Ai), 64.0);
+    }
+
+    #[test]
+    fn run_slot_is_wider_than_trailing_slots() {
+        assert!(
+            footer_hint_slot_width(FooterAction::Run)
+                > footer_hint_slot_width(FooterAction::Actions)
+        );
+        assert!(
+            footer_hint_slot_width(FooterAction::Run) > footer_hint_slot_width(FooterAction::Ai)
+        );
+    }
 }
 
 #[cfg(target_os = "macos")]

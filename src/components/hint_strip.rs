@@ -45,6 +45,7 @@ const KEYCAP_PADDING_X: f32 = 6.0;
 const KEYCAP_PADDING_Y: f32 = 1.0;
 const KEYCAP_RADIUS: f32 = 5.0;
 const KEYCAP_BG_OPACITY: f32 = 0.12;
+const FOOTER_HINT_TEXT_SIZE: f32 = 12.5;
 
 /// A click handler for a single hint button.
 pub(crate) type HintClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -585,8 +586,8 @@ fn render_hint_element_hsla(element: HintElement, color: gpui::Hsla) -> AnyEleme
             if !label.is_empty() {
                 hint_row = hint_row.child(
                     div()
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_size(px(FOOTER_HINT_TEXT_SIZE))
+                        .font_weight(FontWeight::NORMAL)
                         .text_color(color)
                         .child(label),
                 );
@@ -611,8 +612,8 @@ fn render_hint_element_hsla(element: HintElement, color: gpui::Hsla) -> AnyEleme
                         .py(px(KEYCAP_PADDING_Y))
                         .rounded(px(KEYCAP_RADIUS))
                         .bg(keycap_bg)
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_size(px(FOOTER_HINT_TEXT_SIZE))
+                        .font_weight(FontWeight::NORMAL)
                         .text_color(color)
                         .child(text)
                         .into_any_element(),
@@ -624,8 +625,8 @@ fn render_hint_element_hsla(element: HintElement, color: gpui::Hsla) -> AnyEleme
             hint_row.into_any_element()
         }
         HintElement::Text(text) => div()
-            .text_xs()
-            .font_weight(FontWeight::SEMIBOLD)
+            .text_size(px(FOOTER_HINT_TEXT_SIZE))
+            .font_weight(FontWeight::NORMAL)
             .text_color(color)
             .child(text)
             .into_any_element(),

@@ -378,7 +378,7 @@ impl SearchResult {
     /// 1. If the item has a custom `enter` text in typed metadata, use that
     /// 2. Otherwise, return type-based fallback text:
     ///    - Scripts → "Run Script"
-    ///    - Commands/Built-ins → "Run Command"
+    ///    - Built-ins → action-specific labels like "Open Settings"
     ///    - Scriptlets/Snippets → "Paste Snippet"
     ///    - Skills → "Open Skill"
     ///    - Apps → "Launch App"
@@ -408,7 +408,7 @@ impl SearchResult {
                 }
             }
             SearchResult::Skill(_) => "Open Skill",
-            SearchResult::BuiltIn(_) => "Run Command",
+            SearchResult::BuiltIn(bm) => bm.entry.default_action_text(),
             SearchResult::App(_) => "Launch App",
             SearchResult::Window(_) => "Switch to Window",
             SearchResult::Agent(_) => {

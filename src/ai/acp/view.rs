@@ -475,9 +475,7 @@ impl AcpChatView {
             }
             ContextPickerItemKind::File(_) => format!("file:{}", item.label),
             ContextPickerItemKind::Folder(_) => format!("folder:{}", item.label),
-            ContextPickerItemKind::Portal(_) | ContextPickerItemKind::Inert => {
-                item.id.to_string()
-            }
+            ContextPickerItemKind::Portal(_) | ContextPickerItemKind::Inert => item.id.to_string(),
         }
     }
 
@@ -1711,8 +1709,7 @@ impl AcpChatView {
                     .and_then(|content| parse_skill_description(&content))
                     .unwrap_or_default();
 
-                let slash_entry =
-                    SlashCommandEntry::claude_code_skill(name, desc, skill_md);
+                let slash_entry = SlashCommandEntry::claude_code_skill(name, desc, skill_md);
 
                 if seen.insert(slash_entry.qualified_key()) {
                     commands.push(slash_entry);
@@ -1744,8 +1741,7 @@ impl AcpChatView {
                     result.push(entry.clone());
                 }
                 // Plugin and Claude skills are always included.
-                SlashCommandSource::PluginSkill(_)
-                | SlashCommandSource::ClaudeCodeSkill { .. } => {
+                SlashCommandSource::PluginSkill(_) | SlashCommandSource::ClaudeCodeSkill { .. } => {
                     result.push(entry.clone());
                 }
                 _ => {}
@@ -3300,9 +3296,7 @@ impl AcpChatView {
                                 .collect();
                             let mut items = build_slash_picker_items_with_payloads(
                                 &query,
-                                payloads
-                                    .iter()
-                                    .map(|(p, d)| (p, d.as_str())),
+                                payloads.iter().map(|(p, d)| (p, d.as_str())),
                             );
                             if items.is_empty() {
                                 // Query filtered out everything — show explicit
@@ -3565,18 +3559,15 @@ impl AcpChatView {
                 match payload {
                     SlashCommandPayload::Default { name } => {
                         // Default commands insert literal `/command ` text.
-                        let current_text =
-                            self.live_thread().read(cx).input.text().to_string();
+                        let current_text = self.live_thread().read(cx).input.text().to_string();
                         let command_text = format!("/{name} ");
                         let next_text = Self::replace_text_in_char_range(
                             &current_text,
                             session.trigger_range.clone(),
                             &command_text,
                         );
-                        let next_cursor = Self::caret_after_replacement(
-                            &session.trigger_range,
-                            &command_text,
-                        );
+                        let next_cursor =
+                            Self::caret_after_replacement(&session.trigger_range, &command_text);
                         tracing::info!(
                             target: "script_kit::tab_ai",
                             event = "acp_picker_literal_slash_inserted",
@@ -3603,8 +3594,7 @@ impl AcpChatView {
                         } else {
                             &skill.plugin_title
                         };
-                        let staged =
-                            build_staged_skill_prompt(&skill.title, owner, &skill.path);
+                        let staged = build_staged_skill_prompt(&skill.title, owner, &skill.path);
                         tracing::info!(
                             plugin_id = %skill.plugin_id,
                             skill_id = %skill.skill_id,
@@ -3621,11 +3611,7 @@ impl AcpChatView {
                         skill_path,
                     } => {
                         // Claude Code skills stage local <skill> content.
-                        let staged = build_staged_skill_prompt(
-                            skill_id,
-                            "Claude Code",
-                            skill_path,
-                        );
+                        let staged = build_staged_skill_prompt(skill_id, "Claude Code", skill_path);
                         tracing::info!(
                             skill_id = %skill_id,
                             path = %skill_path.display(),

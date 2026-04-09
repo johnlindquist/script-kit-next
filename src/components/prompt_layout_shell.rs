@@ -681,7 +681,19 @@ pub(crate) const UNIVERSAL_PROMPT_HINT_COUNT: usize = 3;
 #[allow(dead_code)]
 #[inline]
 pub(crate) fn universal_prompt_hints() -> Vec<SharedString> {
-    vec!["↵ Run".into(), "⌘↵ AI".into(), "⌘K Actions".into()]
+    universal_prompt_hints_with_primary_label("Run")
+}
+
+#[allow(dead_code)]
+#[inline]
+pub(crate) fn universal_prompt_hints_with_primary_label(
+    primary_label: impl AsRef<str>,
+) -> Vec<SharedString> {
+    vec![
+        format!("↵ {}", primary_label.as_ref()).into(),
+        "⌘↵ AI".into(),
+        "⌘K Actions".into(),
+    ]
 }
 
 /// Zero-argument renderer for the canonical three-key footer.
@@ -713,7 +725,19 @@ pub(crate) fn render_universal_prompt_hint_strip_clickable(
     on_actions: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
     on_ai: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
 ) -> AnyElement {
-    crate::components::HintStrip::new(universal_prompt_hints())
+    render_universal_prompt_hint_strip_clickable_with_primary_label(
+        "Run", on_run, on_actions, on_ai,
+    )
+}
+
+#[allow(dead_code)]
+pub(crate) fn render_universal_prompt_hint_strip_clickable_with_primary_label(
+    primary_label: impl AsRef<str>,
+    on_run: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_actions: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+    on_ai: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
+) -> AnyElement {
+    crate::components::HintStrip::new(universal_prompt_hints_with_primary_label(primary_label))
         .on_hint_click(0, on_run)
         .on_hint_click(1, on_ai)
         .on_hint_click(2, on_actions)

@@ -423,7 +423,9 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
             let name = typed_mention_display_name(path);
             Some(format_typed_mention_token(prefix, &name))
         }
-        AiContextPart::FocusedTarget { target, label: _, .. } => {
+        AiContextPart::FocusedTarget {
+            target, label: _, ..
+        } => {
             // File/directory targets use typed file prefixes (@rs:, @dir:, etc.)
             if let Some(path) = (target.kind == "file" || target.kind == "directory")
                 .then_some(target.metadata.as_ref())

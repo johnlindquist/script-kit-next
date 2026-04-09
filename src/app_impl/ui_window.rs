@@ -11,6 +11,35 @@ fn mini_main_window_sizing_from_grouped_items(
 }
 
 impl ScriptListApp {
+    pub(crate) fn main_window_primary_action_label(&self) -> String {
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return "Run".to_string();
+        }
+
+        let Some(selected_index) =
+            crate::list_item::coerce_selection(&self.cached_grouped_items, self.selected_index)
+        else {
+            return "Run".to_string();
+        };
+
+        let Some(GroupedListItem::Item(result_idx)) = self.cached_grouped_items.get(selected_index)
+        else {
+            return "Run".to_string();
+        };
+
+        if self
+            .inline_calculator_for_result_index(*result_idx)
+            .is_some()
+        {
+            return "Copy".to_string();
+        }
+
+        self.cached_grouped_flat_results
+            .get(*result_idx)
+            .map(|result| result.get_default_action_text().to_string())
+            .unwrap_or_else(|| "Run".to_string())
+    }
+
     pub(crate) fn dispatch_main_window_footer_action(
         &mut self,
         action: crate::footer_popup::FooterAction,
@@ -138,9 +167,10 @@ impl ScriptListApp {
 
         let footer_disabled = self.main_window_footer_buttons_blocked();
         let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+        let run_label = self.main_window_primary_action_label();
 
         let mut buttons = vec![
-            FooterButtonConfig::new(FooterAction::Run, "↵", "Run").enabled(!footer_disabled),
+            FooterButtonConfig::new(FooterAction::Run, "↵", run_label).enabled(!footer_disabled),
             FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "AI").enabled(!footer_disabled),
         ];
 
@@ -319,11 +349,16 @@ impl ScriptListApp {
             let view = entity.read(cx);
             if !view.is_setup_mode() {
                 let thread = view.live_thread().read(cx);
+                use crate::ai::acp::thread::AcpThreadStatus;
+                use crate::footer_popup::FooterDotStatus;
+                let dot_status = match thread.status {
+                    AcpThreadStatus::Streaming => FooterDotStatus::Streaming,
+                    AcpThreadStatus::WaitingForPermission => FooterDotStatus::WaitingForPermission,
+                    AcpThreadStatus::Error => FooterDotStatus::Error,
+                    AcpThreadStatus::Idle => FooterDotStatus::Idle,
+                };
                 config.left_info = Some(crate::footer_popup::FooterLeftInfo {
-                    is_streaming: matches!(
-                        thread.status,
-                        crate::ai::acp::thread::AcpThreadStatus::Streaming
-                    ),
+                    dot_status,
                     model_name: thread.selected_model_display().to_string(),
                 });
             }

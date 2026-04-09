@@ -1765,9 +1765,9 @@ fn acp_resolved_slash_commands_keep_local_skills_without_provider_advertisement(
         }
     }
     for cmd in &available {
-        let already_present = result.iter().any(|entry| {
-            matches!(entry.source, SlashCommandSource::Default) && entry.name == *cmd
-        });
+        let already_present = result
+            .iter()
+            .any(|entry| matches!(entry.source, SlashCommandSource::Default) && entry.name == *cmd);
         if !already_present {
             result.push(SlashCommandEntry {
                 name: cmd.clone(),
@@ -1785,8 +1785,7 @@ fn acp_resolved_slash_commands_keep_local_skills_without_provider_advertisement(
     );
 
     // Verify both reviews are from different plugins
-    let reviews: Vec<&SlashCommandEntry> =
-        result.iter().filter(|e| e.name == "review").collect();
+    let reviews: Vec<&SlashCommandEntry> = result.iter().filter(|e| e.name == "review").collect();
     assert_eq!(reviews.len(), 2);
     assert!(
         matches!(

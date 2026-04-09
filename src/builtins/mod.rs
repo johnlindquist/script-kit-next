@@ -417,6 +417,246 @@ impl BuiltInEntry {
             &self.name
         }
     }
+
+    pub fn default_action_text(&self) -> &'static str {
+        match &self.feature {
+            BuiltInFeature::ClipboardHistory => "Open Clipboard History",
+            BuiltInFeature::PasteSequentially => "Paste Next Item",
+            BuiltInFeature::Favorites => "Open Favorites",
+            BuiltInFeature::AppLauncher => "Open App Launcher",
+            BuiltInFeature::App(_) => "Launch App",
+            BuiltInFeature::WindowSwitcher => "Open Window Switcher",
+            BuiltInFeature::DesignGallery => "Open Gallery",
+            #[cfg(feature = "storybook")]
+            BuiltInFeature::DesignExplorer => "Open Explorer",
+            BuiltInFeature::AiChat => "Open AI Harness",
+            BuiltInFeature::Notes => "Open Notes",
+            BuiltInFeature::EmojiPicker => "Open Emoji Picker",
+            BuiltInFeature::MenuBarAction(_) => "Execute Menu Item",
+            BuiltInFeature::SystemAction(action) => match action {
+                SystemActionType::EmptyTrash => "Empty Trash",
+                SystemActionType::LockScreen => "Lock Screen",
+                SystemActionType::Sleep => "Put Mac to Sleep",
+                SystemActionType::Restart => "Restart Mac",
+                SystemActionType::ShutDown => "Shut Down Mac",
+                SystemActionType::LogOut => "Log Out",
+                SystemActionType::ToggleDarkMode => "Toggle Dark Mode",
+                SystemActionType::ShowDesktop => "Show Desktop",
+                SystemActionType::MissionControl => "Open Mission Control",
+                SystemActionType::Launchpad => "Open Launchpad",
+                SystemActionType::ForceQuitApps => "Open Force Quit",
+                SystemActionType::Volume0 => "Set Volume to 0%",
+                SystemActionType::Volume25 => "Set Volume to 25%",
+                SystemActionType::Volume50 => "Set Volume to 50%",
+                SystemActionType::Volume75 => "Set Volume to 75%",
+                SystemActionType::Volume100 => "Set Volume to 100%",
+                SystemActionType::VolumeMute => "Mute Audio",
+                #[cfg(debug_assertions)]
+                SystemActionType::TestConfirmation => "Open Test Dialog",
+                SystemActionType::QuitScriptKit => "Quit Script Kit",
+                SystemActionType::ToggleDoNotDisturb => "Toggle Do Not Disturb",
+                SystemActionType::StartScreenSaver => "Start Screen Saver",
+                SystemActionType::OpenSystemPreferences => "Open System Settings",
+                SystemActionType::OpenPrivacySettings => "Open Privacy Settings",
+                SystemActionType::OpenDisplaySettings => "Open Display Settings",
+                SystemActionType::OpenSoundSettings => "Open Sound Settings",
+                SystemActionType::OpenNetworkSettings => "Open Network Settings",
+                SystemActionType::OpenKeyboardSettings => "Open Keyboard Settings",
+                SystemActionType::OpenBluetoothSettings => "Open Bluetooth Settings",
+                SystemActionType::OpenNotificationsSettings => "Open Notification Settings",
+            },
+            BuiltInFeature::NotesCommand(action) => match action {
+                NotesCommandType::OpenNotes => "Open Notes",
+                NotesCommandType::NewNote => "Create Note",
+                NotesCommandType::SearchNotes => "Search Notes",
+                NotesCommandType::QuickCapture => "Start Quick Capture",
+            },
+            BuiltInFeature::AiCommand(action) => match action {
+                AiCommandType::OpenAi | AiCommandType::MiniAi => "Open AI Harness",
+                AiCommandType::NewConversation => "Start New Chat",
+                AiCommandType::ClearConversation => "Clear Conversation",
+                AiCommandType::GenerateScript => "Generate Script",
+                AiCommandType::GenerateScriptFromCurrentApp => "Generate Script from App",
+                AiCommandType::SendScreenToAi => "Send Screen to AI",
+                AiCommandType::SendFocusedWindowToAi => "Send Window to AI",
+                AiCommandType::SendSelectedTextToAi => "Send Selection to AI",
+                AiCommandType::SendBrowserTabToAi => "Send Tab to AI",
+                AiCommandType::SendScreenAreaToAi => "Select Area for AI",
+                AiCommandType::CreateAiPreset => "Create AI Preset",
+                AiCommandType::ImportAiPresets => "Import AI Presets",
+                AiCommandType::SearchAiPresets => "Search AI Presets",
+                AiCommandType::ExportAiPresets => "Export AI Presets",
+            },
+            BuiltInFeature::ScriptCommand(action) => match action {
+                ScriptCommandType::NewScript => "Create Script",
+                ScriptCommandType::NewExtension => "Create Scriptlet Bundle",
+            },
+            BuiltInFeature::PermissionCommand(action) => match action {
+                PermissionCommandType::CheckPermissions => "Check Permissions",
+                PermissionCommandType::RequestAccessibility => "Request Accessibility Access",
+                PermissionCommandType::OpenAccessibilitySettings => "Open Accessibility Settings",
+            },
+            BuiltInFeature::FrecencyCommand(action) => match action {
+                FrecencyCommandType::ClearSuggested => "Clear Suggested Items",
+            },
+            BuiltInFeature::SettingsCommand(action) => match action {
+                SettingsCommandType::ResetWindowPositions => "Reset Window Positions",
+                SettingsCommandType::ConfigureVercelApiKey => "Configure Vercel API Key",
+                SettingsCommandType::ConfigureOpenAiApiKey => "Configure OpenAI API Key",
+                SettingsCommandType::ConfigureAnthropicApiKey => "Configure Anthropic API Key",
+                SettingsCommandType::ChooseTheme => "Open Theme Designer",
+                SettingsCommandType::SelectMicrophone => "Select Microphone",
+            },
+            BuiltInFeature::UtilityCommand(action) => match action {
+                UtilityCommandType::MiniMainWindow => "Open Mini Launcher",
+                UtilityCommandType::ScratchPad => "Open Scratch Pad",
+                UtilityCommandType::QuickTerminal => "Open Quick Terminal",
+                UtilityCommandType::ClaudeCode => "Open Claude Code",
+                UtilityCommandType::ProcessManager => "Open Process Manager",
+                UtilityCommandType::StopAllProcesses => "Stop All Running Scripts",
+                UtilityCommandType::DoInCurrentApp => "Do in Current App",
+                UtilityCommandType::TurnThisIntoCommand => "Turn Into Command",
+                UtilityCommandType::CurrentAppCommands => "Open App Commands",
+                UtilityCommandType::InspectCurrentContext => "Copy Current Context",
+                UtilityCommandType::TraceCurrentAppIntent => "Copy App Intent Trace",
+                UtilityCommandType::VerifyCurrentAppRecipe => "Verify App Recipe",
+                UtilityCommandType::ReplayCurrentAppRecipe => "Replay App Recipe",
+            },
+            BuiltInFeature::KitStoreCommand(action) => match action {
+                KitStoreCommandType::BrowseKits => "Browse Kit Store",
+                KitStoreCommandType::InstalledKits => "Manage Installed Kits",
+                KitStoreCommandType::UpdateAllKits => "Update All Kits",
+            },
+            BuiltInFeature::FileSearch => "Search Files",
+            BuiltInFeature::Webcam => "Open Webcam",
+            BuiltInFeature::Dictation => "Start Dictation",
+            BuiltInFeature::DictationToAiHarness => "Start Dictation to AI",
+            BuiltInFeature::DictationToFrontmostApp => "Start Dictation to App",
+            BuiltInFeature::DictationToNotes => "Start Dictation to Notes",
+            BuiltInFeature::Settings => "Open Settings",
+            BuiltInFeature::AcpHistory => "Open Conversation History",
+        }
+    }
+
+    pub fn footer_action_text(&self) -> &'static str {
+        match &self.feature {
+            BuiltInFeature::ClipboardHistory => "History",
+            BuiltInFeature::PasteSequentially => "Paste",
+            BuiltInFeature::Favorites => "Favorites",
+            BuiltInFeature::AppLauncher => "Apps",
+            BuiltInFeature::App(_) => "Launch",
+            BuiltInFeature::WindowSwitcher => "Switch",
+            BuiltInFeature::DesignGallery => "Gallery",
+            #[cfg(feature = "storybook")]
+            BuiltInFeature::DesignExplorer => "Explorer",
+            BuiltInFeature::AiChat => "Chat",
+            BuiltInFeature::Notes => "Notes",
+            BuiltInFeature::EmojiPicker => "Emoji",
+            BuiltInFeature::MenuBarAction(_) => "Menu Item",
+            BuiltInFeature::SystemAction(action) => match action {
+                SystemActionType::EmptyTrash => "Empty Trash",
+                SystemActionType::LockScreen => "Lock Screen",
+                SystemActionType::Sleep => "Sleep",
+                SystemActionType::Restart => "Restart",
+                SystemActionType::ShutDown => "Shut Down",
+                SystemActionType::LogOut => "Log Out",
+                SystemActionType::ToggleDarkMode => "Dark Mode",
+                SystemActionType::ShowDesktop => "Desktop",
+                SystemActionType::MissionControl => "Mission Ctrl",
+                SystemActionType::Launchpad => "Launchpad",
+                SystemActionType::ForceQuitApps => "Force Quit",
+                SystemActionType::Volume0 => "Volume 0%",
+                SystemActionType::Volume25 => "Volume 25%",
+                SystemActionType::Volume50 => "Volume 50%",
+                SystemActionType::Volume75 => "Volume 75%",
+                SystemActionType::Volume100 => "Volume 100%",
+                SystemActionType::VolumeMute => "Mute",
+                #[cfg(debug_assertions)]
+                SystemActionType::TestConfirmation => "Test Dialog",
+                SystemActionType::QuitScriptKit => "Quit",
+                SystemActionType::ToggleDoNotDisturb => "Toggle DND",
+                SystemActionType::StartScreenSaver => "Screen Saver",
+                SystemActionType::OpenSystemPreferences => "System Settings",
+                SystemActionType::OpenPrivacySettings => "Privacy",
+                SystemActionType::OpenDisplaySettings => "Displays",
+                SystemActionType::OpenSoundSettings => "Sound",
+                SystemActionType::OpenNetworkSettings => "Network",
+                SystemActionType::OpenKeyboardSettings => "Keyboard",
+                SystemActionType::OpenBluetoothSettings => "Bluetooth",
+                SystemActionType::OpenNotificationsSettings => "Notifications",
+            },
+            BuiltInFeature::NotesCommand(action) => match action {
+                NotesCommandType::OpenNotes => "Open Notes",
+                NotesCommandType::NewNote => "New Note",
+                NotesCommandType::SearchNotes => "Search Notes",
+                NotesCommandType::QuickCapture => "Quick Capture",
+            },
+            BuiltInFeature::AiCommand(action) => match action {
+                AiCommandType::OpenAi | AiCommandType::MiniAi => "Open Chat",
+                AiCommandType::NewConversation => "New Chat",
+                AiCommandType::ClearConversation => "Clear Chat",
+                AiCommandType::GenerateScript => "New Script",
+                AiCommandType::GenerateScriptFromCurrentApp => "App Script",
+                AiCommandType::SendScreenToAi => "Send Screen",
+                AiCommandType::SendFocusedWindowToAi => "Send Window",
+                AiCommandType::SendSelectedTextToAi => "Send Text",
+                AiCommandType::SendBrowserTabToAi => "Send Tab",
+                AiCommandType::SendScreenAreaToAi => "Select Area",
+                AiCommandType::CreateAiPreset => "New Preset",
+                AiCommandType::ImportAiPresets => "Import",
+                AiCommandType::SearchAiPresets => "Find Presets",
+                AiCommandType::ExportAiPresets => "Export",
+            },
+            BuiltInFeature::ScriptCommand(action) => match action {
+                ScriptCommandType::NewScript => "New Script",
+                ScriptCommandType::NewExtension => "New Bundle",
+            },
+            BuiltInFeature::PermissionCommand(action) => match action {
+                PermissionCommandType::CheckPermissions => "Check Access",
+                PermissionCommandType::RequestAccessibility => "Request Access",
+                PermissionCommandType::OpenAccessibilitySettings => "Accessibility",
+            },
+            BuiltInFeature::FrecencyCommand(action) => match action {
+                FrecencyCommandType::ClearSuggested => "Clear Suggested",
+            },
+            BuiltInFeature::SettingsCommand(action) => match action {
+                SettingsCommandType::ResetWindowPositions => "Reset Windows",
+                SettingsCommandType::ConfigureVercelApiKey => "Vercel Key",
+                SettingsCommandType::ConfigureOpenAiApiKey => "OpenAI Key",
+                SettingsCommandType::ConfigureAnthropicApiKey => "Anthropic Key",
+                SettingsCommandType::ChooseTheme => "Theme",
+                SettingsCommandType::SelectMicrophone => "Microphone",
+            },
+            BuiltInFeature::UtilityCommand(action) => match action {
+                UtilityCommandType::MiniMainWindow => "Mini Launcher",
+                UtilityCommandType::ScratchPad => "Scratch Pad",
+                UtilityCommandType::QuickTerminal => "Terminal",
+                UtilityCommandType::ClaudeCode => "Claude Code",
+                UtilityCommandType::ProcessManager => "Processes",
+                UtilityCommandType::StopAllProcesses => "Stop Scripts",
+                UtilityCommandType::DoInCurrentApp => "Current App",
+                UtilityCommandType::TurnThisIntoCommand => "Save Command",
+                UtilityCommandType::CurrentAppCommands => "App Commands",
+                UtilityCommandType::InspectCurrentContext => "Copy Context",
+                UtilityCommandType::TraceCurrentAppIntent => "Trace Intent",
+                UtilityCommandType::VerifyCurrentAppRecipe => "Verify Recipe",
+                UtilityCommandType::ReplayCurrentAppRecipe => "Replay Recipe",
+            },
+            BuiltInFeature::KitStoreCommand(action) => match action {
+                KitStoreCommandType::BrowseKits => "Browse Kits",
+                KitStoreCommandType::InstalledKits => "Installed Kits",
+                KitStoreCommandType::UpdateAllKits => "Update Kits",
+            },
+            BuiltInFeature::FileSearch => "Files",
+            BuiltInFeature::Webcam => "Webcam",
+            BuiltInFeature::Dictation => "Dictation",
+            BuiltInFeature::DictationToAiHarness => "Dictate AI",
+            BuiltInFeature::DictationToFrontmostApp => "Dictate App",
+            BuiltInFeature::DictationToNotes => "Dictate Notes",
+            BuiltInFeature::Settings => "Settings",
+            BuiltInFeature::AcpHistory => "History",
+        }
+    }
 }
 // --- merged from part_001.rs ---
 /// Get the list of enabled built-in entries based on configuration
@@ -2576,6 +2816,124 @@ mod tests {
             webcam.description,
             "Open the webcam prompt and capture a photo"
         );
+    }
+
+    #[test]
+    fn test_builtin_enter_labels_use_action_specific_phrasing() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let open_notes = entries
+            .iter()
+            .find(|e| e.id == "builtin/open-notes")
+            .unwrap();
+        assert_eq!(open_notes.default_action_text(), "Open Notes");
+
+        let quick_capture = entries
+            .iter()
+            .find(|e| e.id == "builtin/quick-capture")
+            .unwrap();
+        assert_eq!(quick_capture.default_action_text(), "Start Quick Capture");
+
+        let file_search = entries
+            .iter()
+            .find(|e| e.id == "builtin/file-search")
+            .unwrap();
+        assert_eq!(file_search.default_action_text(), "Search Files");
+
+        let configure_openai = entries
+            .iter()
+            .find(|e| e.id == "builtin/configure-openai-api")
+            .unwrap();
+        assert_eq!(
+            configure_openai.default_action_text(),
+            "Configure OpenAI API Key"
+        );
+
+        let stop_all = entries
+            .iter()
+            .find(|e| e.id == "builtin/stop-all-processes")
+            .unwrap();
+        assert_eq!(stop_all.default_action_text(), "Stop All Running Scripts");
+
+        let clipboard = entries
+            .iter()
+            .find(|e| e.id == "builtin/clipboard-history")
+            .unwrap();
+        assert_eq!(clipboard.default_action_text(), "Open Clipboard History");
+
+        let volume = entries
+            .iter()
+            .find(|e| e.id == "builtin/volume-25")
+            .unwrap();
+        assert_eq!(volume.default_action_text(), "Set Volume to 25%");
+
+        let send_browser_tab = entries
+            .iter()
+            .find(|e| e.id == "builtin/send-browser-tab-to-ai")
+            .unwrap();
+        assert_eq!(send_browser_tab.default_action_text(), "Send Tab to AI");
+
+        let inspect_context = entries
+            .iter()
+            .find(|e| e.id == "builtin/inspect-current-context")
+            .unwrap();
+        assert_eq!(
+            inspect_context.default_action_text(),
+            "Copy Current Context"
+        );
+
+        let webcam = entries.iter().find(|e| e.id == "builtin/webcam").unwrap();
+        assert_eq!(webcam.default_action_text(), "Open Webcam");
+    }
+
+    #[test]
+    fn test_builtin_footer_labels_stay_compact() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        for entry in entries {
+            let word_count = entry.footer_action_text().split_whitespace().count();
+            assert!(
+                word_count <= 2,
+                "footer label '{}' for '{}' should stay compact",
+                entry.footer_action_text(),
+                entry.name
+            );
+        }
+
+        let openai = get_builtin_entries(&config)
+            .into_iter()
+            .find(|e| e.id == "builtin/configure-openai-api")
+            .unwrap();
+        assert_eq!(openai.footer_action_text(), "OpenAI Key");
+
+        let theme = get_builtin_entries(&config)
+            .into_iter()
+            .find(|e| e.id == "builtin/choose-theme")
+            .unwrap();
+        assert_eq!(theme.footer_action_text(), "Theme");
+    }
+
+    #[test]
+    fn test_menu_bar_entries_use_menu_specific_enter_label() {
+        let entry = BuiltInEntry::new_with_group(
+            "menubar-com.apple.Safari-file-new-tab",
+            "File → New Tab",
+            "Safari  ⌘T",
+            vec!["file".into(), "new tab".into(), "safari".into()],
+            BuiltInFeature::MenuBarAction(MenuBarActionInfo {
+                bundle_id: "com.apple.Safari".into(),
+                menu_path: vec!["File".into(), "New Tab".into()],
+                enabled: true,
+                shortcut: Some("⌘T".into()),
+            }),
+            Some("file".into()),
+            BuiltInGroup::MenuBar,
+        );
+
+        assert_eq!(entry.default_action_text(), "Execute Menu Item");
+        assert_eq!(entry.footer_action_text(), "Menu Item");
     }
     #[test]
     fn test_file_search_feature_equality() {
