@@ -20,6 +20,7 @@ pub(crate) mod client;
 pub(crate) mod config;
 pub(crate) mod context;
 pub(crate) mod events;
+pub(crate) mod export;
 pub(crate) mod handlers;
 pub(crate) mod history;
 pub(crate) mod history_attachment;
