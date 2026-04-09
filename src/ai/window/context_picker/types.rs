@@ -31,6 +31,17 @@ pub enum ContextPickerItemKind {
     /// A Claude Code agent slash command (e.g. `/compact`, `/clear`).
     /// Acceptance inserts the command text and optionally submits.
     SlashCommand(String),
+    /// A plugin-owned skill from the slash picker.
+    /// Distinct from `SlashCommand` — acceptance attaches the skill as a
+    /// context part (FilePath to SKILL.md) instead of inserting literal
+    /// slash text. Carries plugin identity so duplicate `skill_id` values
+    /// from different plugins remain visually and semantically distinct.
+    PluginSkill {
+        plugin_id: String,
+        plugin_title: String,
+        skill_id: String,
+        path: std::path::PathBuf,
+    },
     /// Opens a full built-in view as a portal for rich browsing.
     /// Selection in the portal attaches the result back to the ACP chat.
     Portal(PortalKind),
@@ -106,6 +117,7 @@ impl ContextPickerState {
                         ContextPickerItemKind::File(_) => "file",
                         ContextPickerItemKind::Folder(_) => "folder",
                         ContextPickerItemKind::SlashCommand(_) => "slash_command",
+                        ContextPickerItemKind::PluginSkill { .. } => "plugin_skill",
                         ContextPickerItemKind::Portal(_) => "portal",
                     },
                     score: item.score,

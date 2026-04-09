@@ -566,9 +566,12 @@ impl AiApp {
                     path: path.to_string_lossy().to_string(),
                     label: item.label.to_string(),
                 },
-                ContextPickerItemKind::SlashCommand(_) | ContextPickerItemKind::Portal(_) => {
-                    // SlashCommand and Portal items are ACP-only; the window
-                    // picker should never encounter them, but handle gracefully.
+                ContextPickerItemKind::SlashCommand(_)
+                | ContextPickerItemKind::PluginSkill { .. }
+                | ContextPickerItemKind::Portal(_) => {
+                    // SlashCommand, PluginSkill, and Portal items are ACP-only;
+                    // the window picker should never encounter them, but handle
+                    // gracefully.
                     return;
                 }
             };
@@ -961,6 +964,88 @@ fn slash_command_description(name: &str, discovered_description: &str) -> String
     }
 }
 
+/// Append picker items for plugin-owned skills into `items`.
+///
+/// Plugin skills get their own `ContextPickerItemKind::PluginSkill` variant
+/// so the acceptance path can attach them as context rather than inserting
+/// literal slash text. The label shows the skill title, and the meta shows
+/// the plugin source so duplicate `skill_id` values from different plugins
+/// remain visually distinct.
+fn extend_plugin_skill_picker_items(
+    query_lower: &str,
+    skills: &[crate::plugins::PluginSkill],
+    items: &mut Vec<ContextPickerItem>,
+) {
+    for skill in skills {
+        let name_lower = skill.skill_id.to_lowercase();
+        let title_lower = skill.title.to_lowercase();
+
+        let score = if query_lower.is_empty() {
+            50
+        } else if name_lower.starts_with(query_lower) || title_lower.starts_with(query_lower) {
+            90
+        } else if name_lower.contains(query_lower) || title_lower.contains(query_lower) {
+            50
+        } else if match_query_chars(query_lower, &name_lower).is_some()
+            || match_query_chars(query_lower, &title_lower).is_some()
+        {
+            10
+        } else {
+            continue;
+        };
+
+        let source = if skill.plugin_title.is_empty() {
+            &skill.plugin_id
+        } else {
+            &skill.plugin_title
+        };
+
+        let label_text = skill.title.clone();
+        let meta_text = format!("{source} · /{}", skill.skill_id);
+
+        let label_hits = if query_lower.is_empty() {
+            Vec::new()
+        } else {
+            match_query_chars(query_lower, &label_text).unwrap_or_default()
+        };
+        let meta_hits = if query_lower.is_empty() {
+            Vec::new()
+        } else {
+            // Match within the slash portion for highlight continuity
+            match_query_chars_in_display_meta(query_lower, &meta_text).unwrap_or_default()
+        };
+
+        items.push(ContextPickerItem {
+            id: SharedString::from(format!(
+                "plugin-skill:{}:{}",
+                skill.plugin_id, skill.skill_id
+            )),
+            label: SharedString::from(label_text),
+            description: SharedString::from(if skill.description.is_empty() {
+                format!("Skill from {source}")
+            } else {
+                let desc_chars: Vec<char> = skill.description.chars().collect();
+                if desc_chars.len() > 80 {
+                    let truncated: String = desc_chars.into_iter().take(77).collect();
+                    format!("{truncated}\u{2026}")
+                } else {
+                    skill.description.clone()
+                }
+            }),
+            meta: SharedString::from(meta_text),
+            kind: ContextPickerItemKind::PluginSkill {
+                plugin_id: skill.plugin_id.clone(),
+                plugin_title: skill.plugin_title.clone(),
+                skill_id: skill.skill_id.clone(),
+                path: skill.path.clone(),
+            },
+            score,
+            label_highlight_indices: label_hits,
+            meta_highlight_indices: meta_hits,
+        });
+    }
+}
+
 /// Sort items by section priority then score (descending).
 fn sort_picker_items(items: &mut [ContextPickerItem]) {
     items.sort_by(|a, b| {
@@ -1044,6 +1129,43 @@ where
         command_count,
         item_count = items.len(),
         "ai_context_picker_slash_items_built"
+    );
+    log_top_ranked_items(&items);
+
+    items
+}
+
+/// Build a ranked list of picker items for slash mode that includes both
+/// literal agent slash commands AND plugin-owned skills.
+///
+/// Built-in commands produce `SlashCommand` items (inserted as `/{cmd}`).
+/// Plugin skills produce `PluginSkill` items (attached as context parts).
+/// The two kinds are visually and semantically distinct in the picker.
+pub fn build_slash_picker_items_with_skills<'a, I>(
+    query: &str,
+    agent_commands: I,
+    plugin_skills: &[crate::plugins::PluginSkill],
+) -> Vec<ContextPickerItem>
+where
+    I: IntoIterator<Item = (&'a str, &'a str)>,
+{
+    let query_lower = query.to_lowercase();
+    let commands: Vec<(&str, &str)> = agent_commands.into_iter().collect();
+    let command_count = commands.len();
+    let skill_count = plugin_skills.len();
+    let mut items = Vec::with_capacity(command_count + skill_count);
+
+    extend_agent_slash_command_items(&query_lower, commands, &mut items);
+    extend_plugin_skill_picker_items(&query_lower, plugin_skills, &mut items);
+    sort_picker_items(&mut items);
+
+    tracing::info!(
+        target: "ai",
+        query = %query,
+        command_count,
+        skill_count,
+        item_count = items.len(),
+        "ai_context_picker_slash_items_with_skills_built"
     );
     log_top_ranked_items(&items);
 
@@ -1175,8 +1297,9 @@ fn section_priority(kind: &ContextPickerItemKind) -> u8 {
     match kind {
         ContextPickerItemKind::BuiltIn(_) => 0,
         ContextPickerItemKind::SlashCommand(_) => 1,
-        ContextPickerItemKind::File(_) => 2,
-        ContextPickerItemKind::Folder(_) => 3,
+        ContextPickerItemKind::PluginSkill { .. } => 2,
+        ContextPickerItemKind::File(_) => 3,
+        ContextPickerItemKind::Folder(_) => 4,
         ContextPickerItemKind::Portal(_) => 0,
     }
 }

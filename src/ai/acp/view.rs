@@ -36,6 +36,7 @@ use crate::ai::window::context_picker::types::{
 };
 use crate::ai::window::context_picker::{
     build_picker_items, build_slash_picker_items, build_slash_picker_items_with_descriptions,
+    build_slash_picker_items_with_skills,
 };
 
 /// Active @-mention session state for the ACP inline context picker.
@@ -179,7 +180,13 @@ pub(crate) struct AcpChatView {
     /// Cmd+F search: (query, current_match_index). None = search hidden.
     pub(crate) search_state: Option<(String, usize)>,
     /// Cached slash commands (name, description) discovered at creation.
+    /// Contains only built-in agent commands — plugin skills are cached
+    /// separately in `cached_plugin_skills`.
     cached_slash_commands: Vec<(String, String)>,
+    /// Plugin-owned skills discovered at creation. Kept separate from
+    /// `cached_slash_commands` so the picker can create distinct
+    /// `PluginSkill` items that carry plugin identity through to acceptance.
+    cached_plugin_skills: Vec<crate::plugins::PluginSkill>,
     /// Handle to the deferred slash command discovery task.
     _slash_discovery_task: Task<()>,
     /// Active @-mention picker session (None = picker hidden).
@@ -318,6 +325,11 @@ impl AcpChatView {
             ContextPickerItemKind::BuiltIn(_) | ContextPickerItemKind::SlashCommand(_) => {
                 item.id.to_string()
             }
+            ContextPickerItemKind::PluginSkill {
+                plugin_id,
+                skill_id,
+                ..
+            } => format!("plugin-skill:{plugin_id}:{skill_id}"),
             ContextPickerItemKind::File(_) => format!("file:{}", item.label),
             ContextPickerItemKind::Folder(_) => format!("folder:{}", item.label),
             ContextPickerItemKind::Portal(_) => item.id.to_string(),
@@ -1389,10 +1401,11 @@ impl AcpChatView {
             cx.background_executor()
                 .timer(Duration::from_millis(1))
                 .await;
-            let commands = Self::discover_slash_commands();
+            let (commands, skills) = Self::discover_slash_commands_and_skills();
             let _ = cx.update(|cx| {
                 this.update(cx, |view, cx| {
                     view.cached_slash_commands = commands;
+                    view.cached_plugin_skills = skills;
                     view.refresh_mention_session(cx);
                     cx.notify();
                 })
@@ -1416,6 +1429,7 @@ impl AcpChatView {
             model_selector_selected_index: 0,
             search_state: None,
             cached_slash_commands: Vec::new(),
+            cached_plugin_skills: Vec::new(),
             _slash_discovery_task: slash_task,
             mention_session: None,
             mention_popup_parent_window: None,
@@ -1465,6 +1479,7 @@ impl AcpChatView {
             model_selector_selected_index: 0,
             search_state: None,
             cached_slash_commands: Vec::new(),
+            cached_plugin_skills: Vec::new(),
             _slash_discovery_task: noop_slash,
             mention_session: None,
             mention_popup_parent_window: None,
@@ -1483,12 +1498,17 @@ impl AcpChatView {
         }
     }
 
-    /// Scan plugin skill directories for slash command candidates, combine with
-    /// built-in Claude Code commands. Returns (name, description) tuples.
+    /// Discover built-in slash commands and plugin skills separately.
     ///
-    /// Uses `discover_plugin_skills()` so skill enumeration is routed through
-    /// plugin ownership instead of hand-scanning `kit/*/skills/`.
-    fn discover_slash_commands() -> Vec<(String, String)> {
+    /// Returns `(commands, plugin_skills)`:
+    /// - `commands`: built-in Claude Code slash commands + user-level `.claude/skills/`
+    /// - `plugin_skills`: plugin-discovered skills with full plugin identity
+    ///
+    /// Plugin skills are kept separate so the picker can create distinct
+    /// `PluginSkill` items that preserve plugin identity all the way through
+    /// ranking, rendering, and acceptance.
+    fn discover_slash_commands_and_skills(
+    ) -> (Vec<(String, String)>, Vec<crate::plugins::PluginSkill>) {
         let mut commands: Vec<(String, String)> = Self::DEFAULT_SLASH_COMMANDS
             .iter()
             .map(|s| (s.to_string(), String::new()))
@@ -1499,32 +1519,25 @@ impl AcpChatView {
 
         // Discover skills from all plugin roots via the canonical plugin index.
         // Use plugin-qualified key for dedup so two plugins with the same
-        // skill_id both appear in the slash picker.
+        // skill_id both appear in the picker as distinct PluginSkill items.
+        let mut plugin_skills: Vec<crate::plugins::PluginSkill> = Vec::new();
+        let mut skill_seen: std::collections::HashSet<String> = std::collections::HashSet::new();
         if let Ok(index) = crate::plugins::discover_plugins() {
             if let Ok(skills) = crate::plugins::discover_plugin_skills(&index) {
-                for skill in &skills {
+                for skill in skills {
                     let qualified_key = format!("{}:{}", skill.plugin_id, skill.skill_id);
-                    if seen.contains(&qualified_key) {
+                    if skill_seen.contains(&qualified_key) {
                         continue;
                     }
-
-                    // Truncate long descriptions for the menu without slicing
-                    // through a multibyte UTF-8 codepoint.
-                    let desc_chars: Vec<char> = skill.description.chars().collect();
-                    let desc = if desc_chars.len() > 80 {
-                        let truncated: String = desc_chars.into_iter().take(77).collect();
-                        format!("{truncated}\u{2026}")
-                    } else {
-                        skill.description.clone()
-                    };
-
-                    seen.insert(qualified_key);
-                    commands.push((skill.skill_id.clone(), desc));
+                    skill_seen.insert(qualified_key);
+                    plugin_skills.push(skill);
                 }
             }
         }
 
-        // Also scan .claude/skills for user-level Claude Code skills
+        // Also scan .claude/skills for user-level Claude Code skills.
+        // These are literal slash commands (not plugin skills) because they
+        // don't have plugin identity — they go through the SlashCommand path.
         let kit_path = crate::setup::get_kit_path();
         let claude_skills_dir = kit_path.join(".claude").join("skills");
         if let Ok(entries) = std::fs::read_dir(&claude_skills_dir) {
@@ -1550,6 +1563,24 @@ impl AcpChatView {
             }
         }
 
+        (commands, plugin_skills)
+    }
+
+    /// Backward-compatible wrapper that flattens plugin skills into the
+    /// command list. Used only by `resolved_slash_commands` when the
+    /// agent announces its own command list.
+    fn discover_slash_commands() -> Vec<(String, String)> {
+        let (mut commands, skills) = Self::discover_slash_commands_and_skills();
+        for skill in skills {
+            let desc_chars: Vec<char> = skill.description.chars().collect();
+            let desc = if desc_chars.len() > 80 {
+                let truncated: String = desc_chars.into_iter().take(77).collect();
+                format!("{truncated}\u{2026}")
+            } else {
+                skill.description.clone()
+            };
+            commands.push((skill.skill_id, desc));
+        }
         commands
     }
 
@@ -3099,21 +3130,23 @@ impl AcpChatView {
                     ContextPickerTrigger::Mention => build_picker_items(trigger, &query),
                     ContextPickerTrigger::Slash => {
                         if available_commands.is_empty() {
-                            build_slash_picker_items_with_descriptions(
+                            build_slash_picker_items_with_skills(
                                 &query,
                                 self.cached_slash_commands
                                     .iter()
                                     .map(|(name, description)| {
                                         (name.as_str(), description.as_str())
                                     }),
+                                &self.cached_plugin_skills,
                             )
                         } else {
                             let resolved = self.resolved_slash_commands(&available_commands);
-                            build_slash_picker_items_with_descriptions(
+                            build_slash_picker_items_with_skills(
                                 &query,
                                 resolved.iter().map(|(name, description)| {
                                     (name.as_str(), description.as_str())
                                 }),
+                                &self.cached_plugin_skills,
                             )
                         }
                     }
@@ -3392,6 +3425,65 @@ impl AcpChatView {
             }
         }
 
+        // ── Plugin skills: attach SKILL.md as a context part ──────────────
+        if let ContextPickerItemKind::PluginSkill {
+            plugin_id,
+            plugin_title,
+            skill_id,
+            ref path,
+        } = item.kind
+        {
+            let source = if plugin_title.is_empty() {
+                &plugin_id
+            } else {
+                &plugin_title
+            };
+            let path_text = path.to_string_lossy().to_string();
+            let label = format!("{source}/{skill_id}");
+            let inline_token = format!("@skill:{label}");
+
+            let part = crate::ai::message_parts::AiContextPart::FilePath {
+                path: path_text.clone(),
+                label: label.clone(),
+            };
+
+            let replacement = format!("{inline_token} ");
+            let current_text = self.live_thread().read(cx).input.text().to_string();
+            let next_text = Self::replace_text_in_char_range(
+                &current_text,
+                session.trigger_range.clone(),
+                &replacement,
+            );
+            let next_cursor = Self::caret_after_replacement(&session.trigger_range, &replacement);
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_picker_plugin_skill_attached",
+                plugin_id = %plugin_id,
+                skill_id = %skill_id,
+                source = %source,
+                path = %path_text,
+            );
+
+            if let Some(ref mut accepted) = self.last_accepted_item {
+                accepted.cursor_after = next_cursor;
+            }
+
+            self.live_thread().update(cx, |thread, cx| {
+                thread.input.set_text(next_text);
+                thread.input.set_cursor(next_cursor);
+                thread.add_context_part(part.clone(), cx);
+                cx.notify();
+            });
+
+            // Register typed alias so inline sync can resolve the token.
+            self.typed_mention_aliases
+                .insert(inline_token.clone(), part);
+            self.sync_mention_popup_window_from_cached_parent(cx);
+            cx.notify();
+            return;
+        }
+
         // ── Build context part; decide if inline-mention sync applies ──
         let (part, inline_text, allow_inline_sync) = match &item.kind {
             ContextPickerItemKind::BuiltIn(kind) => (
@@ -3419,7 +3511,10 @@ impl AcpChatView {
                     session.trigger == ContextPickerTrigger::Mention,
                 )
             }
-            ContextPickerItemKind::SlashCommand(_) => return,
+            ContextPickerItemKind::SlashCommand(_) | ContextPickerItemKind::PluginSkill { .. } => {
+                // Both handled above via early-return paths before this match.
+                return;
+            }
             ContextPickerItemKind::Portal(portal_kind) => {
                 // For AcpHistory portals, stash the remaining input text as the
                 // prefilter query before clearing the trigger text.

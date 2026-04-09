@@ -1,7 +1,7 @@
 use super::types::{ContextPickerItemKind, ContextPickerState, ContextPickerTrigger};
 use super::{
-    build_picker_items, build_slash_picker_items, extract_context_picker_query, match_query_chars,
-    score_builtin,
+    build_picker_items, build_slash_picker_items, build_slash_picker_items_with_skills,
+    extract_context_picker_query, match_query_chars, score_builtin,
 };
 use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKind};
 
@@ -1117,4 +1117,197 @@ fn context_picker_visible_range_uses_shared_dropdown_contract() {
     use crate::components::inline_dropdown::inline_dropdown_visible_range;
     assert_eq!(inline_dropdown_visible_range(0, 4, 8), 0..4);
     assert_eq!(inline_dropdown_visible_range(6, 20, 8), 2..10);
+}
+
+// ── Plugin skill picker tests ──────────────────────────────────────────
+
+fn make_test_skill(
+    plugin_id: &str,
+    plugin_title: &str,
+    skill_id: &str,
+) -> crate::plugins::PluginSkill {
+    crate::plugins::PluginSkill {
+        plugin_id: plugin_id.to_string(),
+        plugin_title: plugin_title.to_string(),
+        skill_id: skill_id.to_string(),
+        path: std::path::PathBuf::from(format!("/test/{plugin_id}/skills/{skill_id}/SKILL.md")),
+        title: format!("{skill_id} Title"),
+        description: format!("Description for {skill_id}"),
+    }
+}
+
+#[test]
+fn plugin_skills_appear_as_plugin_skill_kind_not_slash_command() {
+    let skills = vec![make_test_skill("authoring", "Authoring", "scriptlets")];
+    let items = build_slash_picker_items_with_skills(
+        "",
+        [("compact", ""), ("clear", "")].into_iter(),
+        &skills,
+    );
+
+    let slash_count = items
+        .iter()
+        .filter(|i| matches!(i.kind, ContextPickerItemKind::SlashCommand(_)))
+        .count();
+    let skill_count = items
+        .iter()
+        .filter(|i| matches!(i.kind, ContextPickerItemKind::PluginSkill { .. }))
+        .count();
+
+    assert_eq!(slash_count, 2, "Built-in commands should be SlashCommand");
+    assert_eq!(skill_count, 1, "Plugin skills should be PluginSkill");
+}
+
+#[test]
+fn plugin_skill_meta_shows_plugin_source() {
+    let skills = vec![make_test_skill("authoring", "Authoring", "scriptlets")];
+    let items = build_slash_picker_items_with_skills("", std::iter::empty(), &skills);
+
+    let skill_item = items
+        .iter()
+        .find(|i| matches!(i.kind, ContextPickerItemKind::PluginSkill { .. }))
+        .expect("Should find plugin skill item");
+
+    assert!(
+        skill_item.meta.contains("Authoring"),
+        "Meta should contain plugin title, got: {}",
+        skill_item.meta
+    );
+    assert!(
+        skill_item.meta.contains("/scriptlets"),
+        "Meta should contain slash-prefixed skill_id, got: {}",
+        skill_item.meta
+    );
+}
+
+#[test]
+fn plugin_skill_id_carries_plugin_qualifier() {
+    let skills = vec![make_test_skill("authoring", "Authoring", "scriptlets")];
+    let items = build_slash_picker_items_with_skills("", std::iter::empty(), &skills);
+
+    let skill_item = items
+        .iter()
+        .find(|i| matches!(i.kind, ContextPickerItemKind::PluginSkill { .. }))
+        .expect("Should find plugin skill item");
+
+    assert_eq!(
+        skill_item.id.as_ref(),
+        "plugin-skill:authoring:scriptlets",
+        "ID should be plugin-qualified"
+    );
+}
+
+#[test]
+fn duplicate_skill_ids_from_different_plugins_are_distinct() {
+    let skills = vec![
+        make_test_skill("plugin-a", "Plugin A", "deploy"),
+        make_test_skill("plugin-b", "Plugin B", "deploy"),
+    ];
+    let items = build_slash_picker_items_with_skills("", std::iter::empty(), &skills);
+
+    let skill_items: Vec<_> = items
+        .iter()
+        .filter(|i| matches!(i.kind, ContextPickerItemKind::PluginSkill { .. }))
+        .collect();
+
+    assert_eq!(
+        skill_items.len(),
+        2,
+        "Both plugins' deploy skills should appear"
+    );
+
+    // Verify they have different IDs
+    let ids: Vec<_> = skill_items.iter().map(|i| i.id.to_string()).collect();
+    assert_ne!(
+        ids[0], ids[1],
+        "Plugin skills with same skill_id should have different picker IDs"
+    );
+
+    // Verify they show different plugin sources in meta
+    let metas: Vec<_> = skill_items.iter().map(|i| i.meta.to_string()).collect();
+    assert!(metas[0].contains("Plugin A") || metas[1].contains("Plugin A"));
+    assert!(metas[0].contains("Plugin B") || metas[1].contains("Plugin B"));
+}
+
+#[test]
+fn plugin_skill_query_filters_by_skill_id() {
+    let skills = vec![
+        make_test_skill("authoring", "Authoring", "scriptlets"),
+        make_test_skill("tools", "Tools", "deploy"),
+    ];
+    let items = build_slash_picker_items_with_skills("scri", std::iter::empty(), &skills);
+
+    let skill_items: Vec<_> = items
+        .iter()
+        .filter(|i| matches!(i.kind, ContextPickerItemKind::PluginSkill { .. }))
+        .collect();
+
+    assert_eq!(skill_items.len(), 1, "Only scriptlets should match 'scri'");
+    assert!(skill_items[0].id.contains("scriptlets"));
+}
+
+#[test]
+fn plugin_skill_query_filters_by_title() {
+    let skills = vec![crate::plugins::PluginSkill {
+        plugin_id: "authoring".to_string(),
+        plugin_title: "Authoring".to_string(),
+        skill_id: "scriptlets".to_string(),
+        path: std::path::PathBuf::from("/test/SKILL.md"),
+        title: "Scriptlet Authoring".to_string(),
+        description: String::new(),
+    }];
+    let items = build_slash_picker_items_with_skills("author", std::iter::empty(), &skills);
+
+    let skill_items: Vec<_> = items
+        .iter()
+        .filter(|i| matches!(i.kind, ContextPickerItemKind::PluginSkill { .. }))
+        .collect();
+
+    assert_eq!(
+        skill_items.len(),
+        1,
+        "'author' should match skill title 'Scriptlet Authoring'"
+    );
+}
+
+#[test]
+fn builtin_slash_commands_unaffected_by_plugin_skills() {
+    let skills = vec![make_test_skill("authoring", "Authoring", "scriptlets")];
+    let items = build_slash_picker_items_with_skills(
+        "com",
+        [
+            ("compact", "Compact the conversation"),
+            ("clear", "Clear conversation"),
+        ]
+        .into_iter(),
+        &skills,
+    );
+
+    let first = items.first().expect("Should have results for 'com'");
+    match &first.kind {
+        ContextPickerItemKind::SlashCommand(command) => assert_eq!(command, "compact"),
+        other => panic!("Expected SlashCommand(compact), got {:?}", other),
+    }
+}
+
+#[test]
+fn plugin_skill_snapshot_uses_plugin_skill_section() {
+    let skills = vec![make_test_skill("authoring", "Authoring", "scriptlets")];
+    let items = build_slash_picker_items_with_skills("", std::iter::empty(), &skills);
+
+    let state = ContextPickerState::new(ContextPickerTrigger::Slash, String::new(), items);
+    let snapshot = state.snapshot();
+    let skill_entry = snapshot
+        .items
+        .iter()
+        .find(|i| i.id.contains("plugin-skill"));
+    assert!(
+        skill_entry.is_some(),
+        "Snapshot should contain plugin-skill item"
+    );
+    assert_eq!(
+        skill_entry.expect("checked above").section,
+        "plugin_skill",
+        "Plugin skill section label should be 'plugin_skill'"
+    );
 }
