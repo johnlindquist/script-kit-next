@@ -429,7 +429,43 @@ pub fn inject_text_into_notes(cx: &mut App, text: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to update notes window: {e}"))
 }
 
-/// Close the notes window
+/// Restore the launcher surface after Notes closes.
+///
+/// Called by both `close_notes_window` (external callers) and the keyboard
+/// close paths (Escape / Cmd+W) which already have the window object and
+/// do the remove inline to avoid reentrancy.
+pub(super) fn restore_launcher_after_notes_close(_cx: &mut App) {
+    let should_restore_main = !crate::is_main_window_visible();
+
+    tracing::info!(
+        target: "script_kit::keyboard",
+        event = "notes_close_restore_launcher_attempt",
+        should_restore_main,
+        "Restoring launcher after Notes close"
+    );
+
+    // Clear the global handle so other code knows Notes is closed
+    {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        if let Ok(mut g) = slot.lock() {
+            *g = None;
+        }
+    }
+
+    if should_restore_main {
+        crate::set_main_window_visible(true);
+        crate::platform::activate_main_window();
+    }
+
+    tracing::info!(
+        target: "script_kit::keyboard",
+        event = "notes_close_restore_launcher_complete",
+        restored_main = should_restore_main,
+        "Notes close restore finished"
+    );
+}
+
+/// Close the notes window and restore the launcher surface if it was hidden.
 pub fn close_notes_window(cx: &mut App) {
     // SAFETY: Release lock BEFORE calling handle.update() to prevent deadlock
     // If handle.update() causes Drop to fire synchronously and tries to acquire
@@ -440,13 +476,16 @@ pub fn close_notes_window(cx: &mut App) {
     };
 
     if let Some(handle) = handle {
-        let _ = handle.update(cx, |_, window, _| {
+        let _ = handle.update(cx, |_, window, cx| {
             // Save window bounds before closing
             let wb = window.window_bounds();
             crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Notes, wb);
+            window.close_all_dialogs(cx);
             window.remove_window();
         });
     }
+
+    restore_launcher_after_notes_close(cx);
 }
 
 /// Check if the notes window is currently open
