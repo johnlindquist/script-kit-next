@@ -191,32 +191,43 @@ fn plain_tab_in_script_list_routes_to_acp_in_standard_startup() {
 
     assert!(
         source.contains("matches!(this.current_view, AppView::ScriptList)")
-            && source.contains("this.open_tab_ai_acp_with_entry_intent(entry_intent, cx);"),
-        "Plain Tab in ScriptList must route through the ACP entry path in startup.rs"
+            && source.contains("this.try_route_plain_tab_to_acp_context_capture(cx)"),
+        "Plain Tab in ScriptList must route through the ACP handoff helper in startup.rs"
     );
 }
 
 #[test]
 fn plain_tab_routes_raw_launcher_text_and_submits_to_detached_acp() {
-    let startup = fs::read_to_string("src/app_impl/startup.rs")
-        .expect("Failed to read src/app_impl/startup.rs");
-    let startup_new_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
-        .expect("Failed to read src/app_impl/startup_new_tab.rs");
+    let source = fs::read_to_string("src/app_impl/tab_ai_mode.rs")
+        .expect("Failed to read src/app_impl/tab_ai_mode.rs");
 
-    for (label, source) in [
-        ("startup.rs", startup.as_str()),
-        ("startup_new_tab.rs", startup_new_tab.as_str()),
-    ] {
-        assert!(
-            source.contains("this.filter_text") && source.contains(".trim()"),
-            "{label} must derive the entry intent from raw ScriptList filter text"
-        );
-        assert!(
-            source.contains("get_detached_acp_view_entity()")
-                && source.contains("thread.submit_input(cx)"),
-            "{label} must submit launcher text to an existing detached ACP chat"
-        );
-    }
+    assert!(
+        source.contains("self.filter_text.trim()"),
+        "Plain Tab ACP helper must derive the entry intent from raw ScriptList filter text"
+    );
+    assert!(
+        source.contains("self.open_tab_ai_acp_with_entry_intent(entry_intent, cx);"),
+        "Plain Tab ACP helper must route non-detached launches through ACP-only entry"
+    );
+    assert!(
+        source.contains("get_detached_acp_view_entity()")
+            && source.contains("thread.submit_input(cx)"),
+        "Plain Tab ACP helper must submit launcher text to an existing detached ACP chat"
+    );
+}
+
+#[test]
+fn legacy_simulate_key_tab_uses_plain_tab_acp_helper() {
+    let runtime_match = fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
+        .expect("Failed to read src/main_entry/runtime_stdin_match_simulate_key.rs");
+    let app_run_setup = fs::read_to_string("src/main_entry/app_run_setup.rs")
+        .expect("Failed to read src/main_entry/app_run_setup.rs");
+
+    assert!(
+        runtime_match.contains("try_route_plain_tab_to_acp_context_capture")
+            && app_run_setup.contains("try_route_plain_tab_to_acp_context_capture"),
+        "Legacy stdin simulateKey Tab path must reuse the plain Tab ACP helper in both include sources"
+    );
 }
 
 #[test]
