@@ -11,13 +11,14 @@
                 }
 
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
-                // Keep launcher navigation scoped to the main window so notes/AI/detached ACP/actions
+                // Keep main list arrow routing scoped to the main window so notes/AI/actions
                 // windows receive their own navigation key events.
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_ai = crate::ai::is_ai_window(window);
                 let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                if is_notes || is_ai || is_detached_acp || is_actions {
+                let skip_secondary = is_notes || is_ai || is_detached_acp || is_actions;
+                if skip_secondary {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "arrow_interceptor_skipped_secondary_window",
@@ -25,6 +26,8 @@
                         is_ai,
                         is_detached_acp,
                         is_actions,
+                        skip_secondary,
+                        detached_acp_explicit_skip = is_detached_acp && !is_ai,
                     );
                     return;
                 }
@@ -650,12 +653,15 @@
                     return;
                 }
 
-                // Skip processing if this keystroke is from a secondary window
+                // Skip processing if this keystroke is from a secondary window.
+                // Observe detached ACP explicitly so runtime proof can tell whether
+                // `is_ai_window()` already subsumes it.
                 let is_notes = crate::notes::is_notes_window(window);
                 let is_ai = crate::ai::is_ai_window(window);
                 let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
-                if is_notes || is_ai || is_detached_acp || is_actions {
+                let skip_secondary = is_notes || is_ai || is_detached_acp || is_actions;
+                if skip_secondary {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "home_end_interceptor_skipped_secondary_window",
@@ -663,6 +669,8 @@
                         is_ai,
                         is_detached_acp,
                         is_actions,
+                        skip_secondary,
+                        detached_acp_explicit_skip = is_detached_acp && !is_ai,
                     );
                     return;
                 }
