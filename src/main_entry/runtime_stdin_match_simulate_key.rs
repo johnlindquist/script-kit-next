@@ -20,12 +20,10 @@
                                             // Handle keys in fallback mode
                                             match key_lower.as_str() {
                                                 "tab" => {
-                                                    // Tab with filter text opens inline AI chat (even in fallback mode)
-                                                    if !view.filter_text.is_empty() && !view.show_actions_popup {
-                                                        let query = view.filter_text.clone();
-                                                        view.filter_text.clear();
-                                                        view.show_inline_ai_chat(Some(query), ctx);
-                                                    }
+                                                    let _ = view
+                                                        .try_route_plain_tab_to_acp_context_capture(
+                                                            ctx,
+                                                        );
                                                 }
                                                 "up" | "arrowup" => {
                                                     if view.fallback_selected_index > 0 {
@@ -54,12 +52,10 @@
                                         } else {
                                             match key_lower.as_str() {
                                                 "tab" => {
-                                                    // Tab with filter text opens inline AI chat
-                                                    if !view.filter_text.is_empty() && !view.show_actions_popup {
-                                                        let query = view.filter_text.clone();
-                                                        view.filter_text.clear();
-                                                        view.show_inline_ai_chat(Some(query), ctx);
-                                                    }
+                                                    let _ = view
+                                                        .try_route_plain_tab_to_acp_context_capture(
+                                                            ctx,
+                                                        );
                                                 }
                                                 "up" | "arrowup" => {
                                                     // Use move_selection_up to properly skip section headers

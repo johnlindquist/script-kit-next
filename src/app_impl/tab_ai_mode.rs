@@ -672,6 +672,65 @@ impl ScriptListApp {
         (focused_target, visible_targets)
     }
 
+    /// Route a plain Tab press from Script List into ACP.
+    ///
+    /// Non-empty launcher input is forwarded as raw ACP composer text and
+    /// auto-submitted. Empty launcher input only opens ACP and waits.
+    pub(crate) fn try_route_plain_tab_to_acp_context_capture(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.show_actions_popup || self.tab_ai_save_offer_state.is_some() {
+            return false;
+        }
+
+        let source_view = self.app_view_name();
+        let entry_intent = matches!(self.current_view, AppView::ScriptList)
+            .then(|| self.filter_text.trim())
+            .filter(|text| !text.is_empty())
+            .map(str::to_string);
+
+        if let Some(intent) = entry_intent.clone() {
+            if let Some(entity) = crate::ai::acp::chat_window::get_detached_acp_view_entity() {
+                if let Err(error) = crate::ai::acp::chat_window::open_chat_window(cx) {
+                    tracing::debug!(%error, "failed to focus detached chat window");
+                } else {
+                    entity.update(cx, |chat, cx| {
+                        chat.live_thread().update(cx, |thread, cx| {
+                            thread.set_input(intent.clone(), cx);
+                            if let Err(error) = thread.submit_input(cx) {
+                                tracing::warn!(
+                                    target: "script_kit::tab_ai",
+                                    event = "tab_ai_plain_tab_detached_submit_failed",
+                                    error = %error,
+                                );
+                            }
+                        });
+                    });
+
+                    tracing::info!(
+                        target: "script_kit::tab_ai",
+                        event = "tab_ai_plain_tab_submitted_to_detached_acp",
+                        source_view = %source_view,
+                        input_len = intent.len(),
+                    );
+                    return true;
+                }
+            }
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_plain_tab_routed_to_acp",
+            source_view = %source_view,
+            auto_submit = entry_intent.is_some(),
+            input_len = entry_intent.as_ref().map(|text| text.len()).unwrap_or(0),
+        );
+
+        self.open_tab_ai_acp_with_entry_intent(entry_intent, cx);
+        true
+    }
+
     /// Returns `true` when the current view should treat global `Cmd+Enter`
     /// as launcher-style "send this context to AI".
     fn supports_global_cmd_enter_ai_entry(view: &AppView) -> bool {
