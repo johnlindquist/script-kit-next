@@ -387,7 +387,7 @@ fn slash_mode_highlights_align_with_meta_text() {
     let items = build_slash_picker_items("com", ["compact", "clear", "help"]);
     let current = items
         .iter()
-        .find(|i| matches!(&i.kind, ContextPickerItemKind::SlashCommand(command) if command == "compact"))
+        .find(|i| matches!(&i.kind, ContextPickerItemKind::SlashCommand(command) if command.slash_name() == "compact"))
         .expect("/compact should match 'com' in slash mode");
 
     let meta_bare = current.meta.trim_start_matches('/');

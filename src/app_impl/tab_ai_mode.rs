@@ -175,9 +175,14 @@ impl ScriptListApp {
             crate::ai::acp::build_staged_skill_prompt(&skill.title, owner, &skill.path);
 
         tracing::info!(
+            event = "acp_skill_context_staged",
             plugin_id = %skill.plugin_id,
             skill_id = %skill.skill_id,
-            "acp_skill_context_staged"
+            skill_title = %skill.title,
+            owner,
+            path = %skill.path.display(),
+            prompt_len = initial_input.len(),
+            "Staged plugin skill prompt for ACP session"
         );
 
         self.open_tab_ai_acp_with_entry_intent(Some(initial_input), cx);

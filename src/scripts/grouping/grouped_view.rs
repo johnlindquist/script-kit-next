@@ -17,6 +17,16 @@ struct PluginGroupSection {
     indices: Vec<usize>,
 }
 
+/// Intra-section type ordering: skills first, then scripts, then scriptlets.
+fn plugin_section_type_order(result: &SearchResult) -> u8 {
+    match result {
+        SearchResult::Skill(_) => 0,
+        SearchResult::Script(_) => 1,
+        SearchResult::Scriptlet(_) => 2,
+        _ => 3,
+    }
+}
+
 /// Returns `(grouping_key, display_label)` for plugin-owned result types.
 /// Uses plugin_title for display when available; falls back to the grouping key.
 fn plugin_group_identity(result: &SearchResult) -> Option<(String, String)> {
@@ -240,9 +250,32 @@ pub(super) fn build_grouped_view_results(
         indices.sort_by_cached_key(|&idx| results[idx].name().to_lowercase());
     };
 
-    // Sort items within each plugin section
-    for section in plugin_groups.values_mut() {
-        sort_alphabetically(&mut section.indices);
+    // Sort items within each plugin section: skills first, then scripts, then scriptlets,
+    // with alphabetical sub-ordering within each type group.
+    for (plugin_key, section) in plugin_groups.iter_mut() {
+        section.indices.sort_by(|a, b| {
+            let type_a = plugin_section_type_order(&results[*a]);
+            let type_b = plugin_section_type_order(&results[*b]);
+            type_a.cmp(&type_b).then_with(|| {
+                results[*a]
+                    .name()
+                    .to_lowercase()
+                    .cmp(&results[*b].name().to_lowercase())
+            })
+        });
+        let skill_count = section
+            .indices
+            .iter()
+            .filter(|&&idx| matches!(results[idx], SearchResult::Skill(_)))
+            .count();
+        tracing::info!(
+            event = "main_menu_plugin_section_sorted",
+            plugin_key = %plugin_key,
+            label = %section.label,
+            item_count = section.indices.len(),
+            skill_count,
+            "Sorted plugin section with skills promoted to the top"
+        );
     }
     sort_alphabetically(&mut commands_indices);
     sort_alphabetically(&mut apps_indices);

@@ -21,9 +21,9 @@ fn result_type_order(r: &SearchResult) -> i32 {
         SearchResult::BuiltIn(_) => 0, // Built-ins first
         SearchResult::App(_) => 1,     // Apps second
         SearchResult::Window(_) => 2,  // Windows third
-        SearchResult::Script(_) => 3,
-        SearchResult::Scriptlet(_) => 4,
-        SearchResult::Skill(_) => 5, // Skills after scriptlets, before agents
+        SearchResult::Skill(_) => 3,   // Skills promoted above scripts/scriptlets
+        SearchResult::Script(_) => 4,
+        SearchResult::Scriptlet(_) => 5,
         SearchResult::Agent(_) => 6,
         SearchResult::Fallback(_) => 7, // Fallbacks always last
     }
@@ -209,6 +209,22 @@ pub fn fuzzy_search_unified_all_with_skills(
         }
         other => other,
     });
+
+    // Emit post-sort top-skill signal for observability
+    if let Some((rank, SearchResult::Skill(sm))) = results
+        .iter()
+        .enumerate()
+        .find(|(_, result)| matches!(result, SearchResult::Skill(_)))
+    {
+        tracing::info!(
+            event = "main_menu_top_skill_rank_after_sort",
+            rank,
+            plugin_id = %sm.skill.plugin_id,
+            skill_id = %sm.skill.skill_id,
+            score = sm.score,
+            "Top-ranked skill position after unified search sort"
+        );
+    }
 
     // Log sort and total timing
     if !query.is_empty() {

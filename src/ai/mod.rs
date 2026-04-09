@@ -140,7 +140,7 @@ pub use self::context_mentions::{
 pub use self::window::context_picker::types::ContextPickerTrigger;
 pub use self::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerItemSnapshot, ContextPickerSection,
-    ContextPickerSnapshot, ContextPickerState,
+    ContextPickerSnapshot, ContextPickerState, SlashCommandPayload,
 };
 pub use self::window::context_picker::{
     build_picker_items, build_slash_picker_items, score_builtin, score_builtin_with_trigger,

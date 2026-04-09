@@ -1279,7 +1279,7 @@ fn slash_picker_loading_and_empty_states_are_inert() {
     );
     assert_eq!(empty.id.as_ref(), "slash-empty");
     assert!(
-        empty.label.contains("No commands"),
+        empty.label.contains("No slash commands"),
         "Empty label should indicate no results: {}",
         empty.label
     );

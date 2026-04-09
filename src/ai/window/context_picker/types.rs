@@ -58,6 +58,26 @@ impl SlashCommandPayload {
         }
     }
 
+    /// Formatted meta string for the picker row, showing the slash name
+    /// and owner context. Default commands show just the slash name;
+    /// plugin and Claude skills include the owner label.
+    pub fn picker_owner_meta(&self) -> String {
+        match self {
+            Self::Default { name } => format!("/{name}"),
+            Self::PluginSkill(skill) => {
+                let owner = if skill.plugin_title.is_empty() {
+                    skill.plugin_id.as_str()
+                } else {
+                    skill.plugin_title.as_str()
+                };
+                format!("/{} \u{b7} {} skill", skill.skill_id, owner)
+            }
+            Self::ClaudeCodeSkill { skill_id, .. } => {
+                format!("/{skill_id} \u{b7} Claude Code skill")
+            }
+        }
+    }
+
     /// Human-readable owner label for display in the picker meta column.
     pub fn owner_label(&self) -> String {
         match self {
