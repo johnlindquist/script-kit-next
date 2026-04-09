@@ -1,40 +1,5 @@
 use crate::action_helpers::{ActionOutcomeStatus, DispatchContext, DispatchOutcome};
-
-const ACP_CHAT_CONVERSATION_HEADING: &str = "# ACP Chat Conversation\n\n";
-
-fn acp_thread_role_label(
-    role: &crate::ai::acp::thread::AcpThreadMessageRole,
-) -> &'static str {
-    match role {
-        crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
-        crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Assistant**",
-        crate::ai::acp::thread::AcpThreadMessageRole::Thought => "**Thinking**",
-        crate::ai::acp::thread::AcpThreadMessageRole::Tool => "**Tool**",
-        crate::ai::acp::thread::AcpThreadMessageRole::System => "**System**",
-        crate::ai::acp::thread::AcpThreadMessageRole::Error => "**Error**",
-    }
-}
-
-/// Build a markdown document from ACP thread messages. Returns `None` if no
-/// messages have non-empty renderable body text.
-fn build_acp_conversation_markdown(
-    messages: &[crate::ai::acp::thread::AcpThreadMessage],
-) -> Option<String> {
-    let mut md = String::from(ACP_CHAT_CONVERSATION_HEADING);
-    let mut wrote_any = false;
-    for msg in messages {
-        let body = msg.body.trim();
-        if body.is_empty() {
-            continue;
-        }
-        md.push_str(acp_thread_role_label(&msg.role));
-        md.push_str("\n\n");
-        md.push_str(body);
-        md.push_str("\n\n---\n\n");
-        wrote_any = true;
-    }
-    wrote_any.then_some(md)
-}
+use crate::ai::acp::export::build_acp_conversation_markdown;
 
 /// A code block extracted from markdown with optional language hint.
 struct CodeBlock {

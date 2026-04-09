@@ -1,4 +1,4 @@
-//! Detachable AI chat window.
+//! Detachable ACP Chat window.
 //!
 //! Creates a separate PopUp window for the ACP chat that persists
 //! independently from the main Script Kit panel.
@@ -13,7 +13,7 @@ use gpui::{
 use super::thread::AcpThread;
 use super::view::AcpChatView;
 
-/// State for the detached AI chat window.
+/// State for the detached ACP Chat window.
 struct ChatWindowState {
     handle: AnyWindowHandle,
     /// The live AcpChatView entity inside the detached window, if opened with a thread.
@@ -23,10 +23,10 @@ struct ChatWindowState {
     automation_id: Option<String>,
 }
 
-/// Global handle to the detached AI chat window.
+/// Global handle to the detached ACP Chat window.
 static CHAT_WINDOW: OnceLock<Mutex<Option<ChatWindowState>>> = OnceLock::new();
 
-/// Check if the detached AI chat window is open.
+/// Check if the detached ACP Chat window is open.
 pub fn is_chat_window_open() -> bool {
     let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
     let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
@@ -98,7 +98,7 @@ fn chat_window_options(inherit_bounds: Option<gpui::Bounds<gpui::Pixels>>) -> Wi
     }
 }
 
-/// Open (or focus) the detached AI chat window with a placeholder.
+/// Open (or focus) the detached ACP Chat window with a placeholder.
 pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
     // If already open, just focus it
     let existing = {
@@ -156,7 +156,7 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Open the detached AI chat window with an existing AcpThread entity.
+/// Open the detached ACP Chat window with an existing AcpThread entity.
 /// This is used when "Detach to Window" transfers a live conversation.
 ///
 /// If `inherit_bounds` is provided, the detached window opens at those bounds
@@ -305,7 +305,7 @@ pub fn open_detached_mention_picker(cx: &mut App) -> bool {
     })
 }
 
-/// Close the detached AI chat window.
+/// Close the detached ACP Chat window.
 #[allow(dead_code)]
 pub fn close_chat_window(cx: &mut App) {
     let existing = {
@@ -615,21 +615,9 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
             if let Some(entity) = entity_weak.upgrade() {
                 let maybe_markdown = {
                     let view = entity.read(cx);
-                    view.thread().map(|thread| {
+                    view.thread().and_then(|thread| {
                         let messages = thread.read(cx).messages.clone();
-                        let mut md = String::from("# AI Chat Conversation\n\n");
-                        for msg in &messages {
-                            let role_label = match msg.role {
-                                super::thread::AcpThreadMessageRole::User => "**You**",
-                                super::thread::AcpThreadMessageRole::Assistant => "**Claude Code**",
-                                super::thread::AcpThreadMessageRole::Thought => "**Thinking**",
-                                super::thread::AcpThreadMessageRole::Tool => "**Tool**",
-                                super::thread::AcpThreadMessageRole::System => "**System**",
-                                super::thread::AcpThreadMessageRole::Error => "**Error**",
-                            };
-                            md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
-                        }
-                        md
+                        super::export::build_acp_conversation_markdown(&messages)
                     })
                 };
                 if let Some(md) = maybe_markdown {
@@ -757,7 +745,7 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
 }
 
 /// Window title used internally for NSWindow matching (not displayed — titlebar is None).
-const ACP_CHAT_WINDOW_TITLE: &str = "Script Kit AI Chat";
+const ACP_CHAT_WINDOW_TITLE: &str = "Script Kit ACP Chat";
 
 /// Configure vibrancy on the ACP chat window to match the main window appearance.
 ///
@@ -839,7 +827,7 @@ impl gpui::Render for ChatWindowPlaceholder {
             .flex_col()
             .items_center()
             .justify_center()
-            .child(div().text_base().opacity(0.7).child("AI Chat Window"))
+            .child(div().text_base().opacity(0.7).child("ACP Chat Window"))
             .child(
                 div()
                     .pt(px(8.0))
