@@ -1156,6 +1156,27 @@ impl ScriptListApp {
                     let view = entity.read(cx);
                     view.thread().map(|thread| thread.read(cx).messages.clone())
                 };
+                let message_count = messages.as_ref().map(Vec::len).unwrap_or(0);
+
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_save_as_note_started",
+                    message_count,
+                    "Starting ACP save-as-note"
+                );
+
+                if message_count == 0 {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "acp_save_as_note_blocked",
+                        reason = "no_messages",
+                        "ACP save-as-note blocked"
+                    );
+                    let mut o = DispatchOutcome::success();
+                    o.user_message = Some("No messages to save".to_string());
+                    return o;
+                }
+
                 let mut md = String::from("# AI Chat Conversation\n\n");
                 for msg in messages.unwrap_or_default() {
                     let role_label = match msg.role {
@@ -1168,31 +1189,31 @@ impl ScriptListApp {
                     };
                     md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
                 }
-                if md == "# AI Chat Conversation\n\n" {
-                    tracing::warn!(
-                        event = "notes_acp_handoff_blocked",
-                        reason = "empty_conversation",
-                        "Blocked Notes/ACP handoff"
-                    );
-                    let mut o = DispatchOutcome::success();
-                    o.user_message = Some("No messages to save".to_string());
-                    return o;
-                }
-                let char_count = md.chars().count();
-                if let Err(e) = crate::notes::save_note_with_content(cx, md) {
-                    tracing::warn!(%e, "acp_save_as_note_failed");
-                    let mut o = DispatchOutcome::success();
-                    o.user_message = Some(format!("Failed to save note: {e}"));
-                    o
-                } else {
-                    tracing::info!(
-                        event = "acp_save_as_note",
-                        char_count,
-                        "Saved ACP content as note"
-                    );
-                    let mut o = DispatchOutcome::success();
-                    o.user_message = Some("Conversation saved as note".to_string());
-                    o
+
+                match crate::notes::save_note_with_content(cx, md) {
+                    Ok(_) => {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_save_as_note_succeeded",
+                            message_count,
+                            "ACP save-as-note completed"
+                        );
+                        let mut o = DispatchOutcome::success();
+                        o.user_message = Some("Saved conversation to Notes".to_string());
+                        o
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_save_as_note_failed",
+                            message_count,
+                            error = %e,
+                            "ACP save-as-note failed"
+                        );
+                        let mut o = DispatchOutcome::success();
+                        o.user_message = Some(format!("Failed to save note: {e}"));
+                        o
+                    }
                 }
             }
             "acp_show_history" => {

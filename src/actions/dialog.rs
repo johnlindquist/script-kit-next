@@ -1280,17 +1280,6 @@ impl ActionsDialog {
         );
         let config = ActionsDialogConfig::default();
 
-        logging::log(
-            "ACTIONS",
-            &format!(
-                "ActionsDialog created for ACP chat: host={:?}, selected_agent={:?}, catalog_count={}, root_actions={}",
-                host,
-                context.selected_agent_id,
-                context.catalog_entries.len(),
-                root_route.actions.len(),
-            ),
-        );
-
         let mut dialog = Self::from_actions_with_context(
             focus_handle,
             on_select,
@@ -1319,6 +1308,15 @@ impl ActionsDialog {
                 context.selected_model_id,
                 host,
             ),
+        );
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_actions_menu_routes_registered",
+            host = ?host,
+            has_models = !context.available_models.is_empty(),
+            model_count = context.available_models.len(),
+            "Registered ACP Actions Menu drill-down routes"
         );
 
         dialog
