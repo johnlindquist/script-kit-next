@@ -26,6 +26,8 @@ const FOOTER_HINT_FONT_SIZE: f64 = 12.5;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_FONT_WEIGHT_LIGHT: f64 = 0.18;
 #[cfg(target_os = "macos")]
+const FOOTER_HINT_TEXT_ALIGN_LEFT: usize = 0;
+#[cfg(target_os = "macos")]
 const FOOTER_HINT_BUTTON_ID_PREFIX: &str = "script-kit-footer-button-";
 #[cfg(target_os = "macos")]
 const FOOTER_LEFT_INFO_ID: &str = "script-kit-footer-left-info";
@@ -651,7 +653,12 @@ unsafe fn layout_footer_left_info(
         systemFontOfSize: FOOTER_HINT_FONT_SIZE
         weight: FOOTER_HINT_FONT_WEIGHT_LIGHT
     ];
-    let label = make_footer_hint_text_field(&info.model_name, font, text_color);
+    let label = make_footer_hint_text_field(
+        &info.model_name,
+        font,
+        text_color,
+        FOOTER_HINT_TEXT_ALIGN_LEFT,
+    );
     if label != nil {
         let label_size: NSSize = msg_send![label, fittingSize];
         let label_y = ((bounds.size.height - label_size.height) / 2.0).round();
@@ -813,8 +820,18 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
         return nil;
     }
 
-    let key_field = make_footer_hint_text_field(button_cfg.key, font, text_color);
-    let label_field = make_footer_hint_text_field(button_cfg.label.as_ref(), font, text_color);
+    let key_field = make_footer_hint_text_field(
+        button_cfg.key,
+        font,
+        text_color,
+        FOOTER_HINT_TEXT_ALIGN_LEFT,
+    );
+    let label_field = make_footer_hint_text_field(
+        button_cfg.label.as_ref(),
+        font,
+        text_color,
+        FOOTER_HINT_TEXT_ALIGN_LEFT,
+    );
     if key_field == nil || label_field == nil {
         return nil;
     }
@@ -828,14 +845,17 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     let content_y = ((item_height - content_height) / 2.0).round();
     let key_y = (content_y + FOOTER_HINT_PADDING_Y).round();
     let label_y = (content_y + FOOTER_HINT_PADDING_Y).round();
-    let key_x = (item_width - FOOTER_HINT_PADDING_X - key_size.width).max(FOOTER_HINT_PADDING_X);
-    let label_width = (key_x - FOOTER_HINT_KEY_LABEL_GAP - FOOTER_HINT_PADDING_X).max(0.0);
+    let content_width = label_size.width + FOOTER_HINT_KEY_LABEL_GAP + key_size.width;
+    let content_x = ((item_width - content_width) / 2.0)
+        .max(FOOTER_HINT_PADDING_X)
+        .round();
+    let key_x = (content_x + label_size.width + FOOTER_HINT_KEY_LABEL_GAP).round();
 
     let _: () = msg_send![
         label_field,
         setFrame: NSRect::new(
-            NSPoint::new(FOOTER_HINT_PADDING_X, label_y),
-            NSSize::new(label_width, label_size.height)
+            NSPoint::new(content_x, label_y),
+            NSSize::new(label_size.width, label_size.height)
         )
     ];
     let _: () = msg_send![
@@ -920,7 +940,12 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
 }
 
 #[cfg(target_os = "macos")]
-unsafe fn make_footer_hint_text_field(text: &str, font: id, text_color: id) -> id {
+unsafe fn make_footer_hint_text_field(
+    text: &str,
+    font: id,
+    text_color: id,
+    alignment: usize,
+) -> id {
     use objc::{class, msg_send, sel, sel_impl};
 
     let field: id = msg_send![class!(NSTextField), alloc];
@@ -946,6 +971,7 @@ unsafe fn make_footer_hint_text_field(text: &str, font: id, text_color: id) -> i
     if text_color != nil {
         let _: () = msg_send![field, setTextColor: text_color];
     }
+    let _: () = msg_send![field, setAlignment: alignment];
     let _: () = msg_send![field, setLineBreakMode: 4usize];
     let _: () = msg_send![field, setUsesSingleLineMode: YES];
     let _: () = msg_send![field, sizeToFit];

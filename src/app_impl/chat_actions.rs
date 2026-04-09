@@ -34,7 +34,7 @@ impl ScriptListApp {
                     event = "execute_chat_action",
                     action = "continue_in_chat",
                     reuses = "handle_continue_in_chat",
-                    "Handoff to mini AI window via existing continue_in_chat path"
+                    "Handoff to harness terminal via existing continue_in_chat path"
                 );
                 if let AppView::ChatPrompt { entity, .. } = &self.current_view {
                     entity.update(cx, |chat, cx| {

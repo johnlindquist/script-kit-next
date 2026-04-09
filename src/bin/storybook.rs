@@ -6,10 +6,9 @@
 //!
 //! ```bash
 //! cargo run --bin storybook
-//! cargo run --bin storybook -- --story "button"
-//! cargo run --bin storybook -- --story "header-variations" --screenshot
-//! cargo run --bin storybook -- --story "footer-layout-variations" --compare --variant scriptkit-branded
-//! cargo run --bin storybook -- --adopt --story footer-layout-variations --variant minimal
+//! cargo run --bin storybook -- --story "main-menu"
+//! cargo run --bin storybook -- --story "main-menu" --screenshot
+//! cargo run --bin storybook -- --catalog-json
 //! ```
 //!
 //! # Exit Codes
@@ -227,16 +226,7 @@ fn main() {
                 eprintln!("  -h, --help           Show this help message");
                 eprintln!();
                 eprintln!("Available stories:");
-                eprintln!("  button           - Button component variants");
-                eprintln!("  toast            - Toast notification component");
-                eprintln!("  form-fields      - Form input components");
-                eprintln!("  list-item        - List item component");
-                eprintln!("  scrollbar        - Scrollbar component");
-                eprintln!("  design-tokens    - Design system tokens");
-                eprintln!("  header-variations - Header component variants");
-                eprintln!("  footer-layout-variations - Footer layout variants (compare-ready)");
-                eprintln!("  header-design-variations - Header layout variants (compare-ready)");
-                eprintln!("  actions-window           - Actions dialog variants (compare-ready)");
+                eprintln!("  main-menu        - Current launcher main menu");
                 std::process::exit(0);
             }
             _ => {}

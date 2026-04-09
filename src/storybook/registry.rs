@@ -53,7 +53,7 @@ pub fn all_categories() -> Vec<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{first_story_with_multiple_variants, stories_by_surface};
+    use super::{all_categories, first_story_with_multiple_variants, stories_by_surface};
     use crate::storybook::StorySurface;
 
     #[test]
@@ -65,48 +65,40 @@ mod tests {
 
     #[test]
     fn comparable_story_helper_only_returns_valid_entries() {
-        if let Some(entry) = first_story_with_multiple_variants() {
-            assert!(entry.story.variants().len() > 1);
-        }
-    }
-
-    #[test]
-    fn footer_surface_has_compare_ready_story() {
         assert!(
-            stories_by_surface(StorySurface::Footer)
-                .into_iter()
-                .any(|entry| entry.story.variants().len() > 1),
-            "Footer surface should expose at least one compare-ready story"
+            first_story_with_multiple_variants().is_none(),
+            "the reset storybook should not expose compare-ready stories"
         );
     }
 
     #[test]
-    fn header_surface_has_compare_ready_story() {
+    fn main_menu_surface_has_single_story() {
         assert!(
-            stories_by_surface(StorySurface::Header)
+            stories_by_surface(StorySurface::MainMenu)
                 .into_iter()
-                .any(|entry| entry.story.variants().len() > 1),
-            "Header surface should expose at least one compare-ready story"
+                .any(|entry| entry.story.id() == "main-menu"),
+            "Main Menu surface should expose the canonical main-menu story"
         );
     }
 
     #[test]
-    fn input_surface_has_compare_ready_story() {
+    fn other_surfaces_are_empty_after_storybook_reset() {
         assert!(
-            stories_by_surface(StorySurface::Input)
-                .into_iter()
-                .any(|entry| entry.story.variants().len() > 1),
-            "Input surface should expose at least one compare-ready story"
+            stories_by_surface(StorySurface::Footer).is_empty(),
+            "Footer stories should be removed from the reset storybook"
+        );
+        assert!(
+            stories_by_surface(StorySurface::Header).is_empty(),
+            "Header stories should be removed from the reset storybook"
+        );
+        assert!(
+            stories_by_surface(StorySurface::ActionDialog).is_empty(),
+            "Action dialog stories should be removed from the reset storybook"
         );
     }
 
     #[test]
-    fn action_dialog_surface_has_compare_ready_story() {
-        assert!(
-            stories_by_surface(StorySurface::ActionDialog)
-                .into_iter()
-                .any(|entry| entry.story.variants().len() > 1),
-            "ActionDialog surface should expose at least one compare-ready story"
-        );
+    fn reset_storybook_exposes_single_launcher_category() {
+        assert_eq!(all_categories(), vec!["Launcher"]);
     }
 }

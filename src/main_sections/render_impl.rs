@@ -57,7 +57,7 @@ impl Render for ScriptListApp {
             self.go_back_or_close(window, cx);
         }
 
-        // Check for inline chat continue (Continue in AI Chat → hide main window)
+        // Check for inline chat continue (Continue in Harness Terminal → hide main window)
         if self.inline_chat_continue_receiver.try_recv().is_ok() {
             crate::logging::log(
                 "CHAT",

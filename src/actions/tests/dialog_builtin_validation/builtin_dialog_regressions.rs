@@ -3351,7 +3351,7 @@ mod from_dialog_builtin_action_validation_tests_34 {
             .as_ref()
             .unwrap()
             .to_lowercase()
-            .contains("ai harness"));
+            .contains("harness terminal"));
     }
     
     #[test]

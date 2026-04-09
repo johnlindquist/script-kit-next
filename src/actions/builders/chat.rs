@@ -164,8 +164,8 @@ pub fn get_chat_context_actions(info: &ChatPromptInfo) -> Vec<Action> {
     actions.push(
         Action::new(
             "chat:continue_in_chat",
-            "Continue in AI Chat",
-            Some("Opens the AI harness terminal (compatibility)".to_string()),
+            "Continue in Harness Terminal",
+            Some("Opens the PTY-backed harness terminal (compatibility)".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘↵")
