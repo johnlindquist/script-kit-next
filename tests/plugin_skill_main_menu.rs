@@ -294,3 +294,182 @@ fn skill_default_action_text_is_open_skill() {
     });
     assert_eq!(result.get_default_action_text(), "Open Skill");
 }
+
+// ── Skill promotion: equal-score tiebreak ─────────────────────────────
+
+#[test]
+fn equal_score_skill_sorts_before_scriptlet() {
+    // When a skill and a scriptlet match the same query with equal scores,
+    // the skill must rank ahead due to the promoted type ordering.
+    let scripts: Vec<Arc<Script>> = vec![];
+    let scriptlets = vec![make_scriptlet("review-diff", "tools")];
+    let skills = vec![make_skill("authoring", "review", "Review")];
+
+    let results =
+        fuzzy_search_unified_all_with_skills(&scripts, &scriptlets, &[], &[], &skills, "review");
+
+    let positions: Vec<(&str, &str)> = results
+        .iter()
+        .map(|r| {
+            (
+                match r {
+                    SearchResult::Skill(_) => "Skill",
+                    SearchResult::Scriptlet(_) => "Scriptlet",
+                    SearchResult::Script(_) => "Script",
+                    _ => "Other",
+                },
+                r.name(),
+            )
+        })
+        .collect();
+
+    // Find the first Skill and the first Scriptlet
+    let skill_pos = positions.iter().position(|(t, _)| *t == "Skill");
+    let scriptlet_pos = positions.iter().position(|(t, _)| *t == "Scriptlet");
+
+    assert!(
+        skill_pos.is_some(),
+        "Skill should appear in results: {:?}",
+        positions
+    );
+    assert!(
+        scriptlet_pos.is_some(),
+        "Scriptlet should appear in results: {:?}",
+        positions
+    );
+    assert!(
+        skill_pos.unwrap() < scriptlet_pos.unwrap(),
+        "Skill should sort before Scriptlet at equal score. Positions: {:?}",
+        positions
+    );
+}
+
+#[test]
+fn equal_score_skill_sorts_before_script() {
+    let scripts = vec![make_script("review-code", "main")];
+    let scriptlets: Vec<Arc<Scriptlet>> = vec![];
+    let skills = vec![make_skill("authoring", "review", "Review")];
+
+    let results =
+        fuzzy_search_unified_all_with_skills(&scripts, &scriptlets, &[], &[], &skills, "review");
+
+    let skill_pos = results
+        .iter()
+        .position(|r| matches!(r, SearchResult::Skill(_)));
+    let script_pos = results
+        .iter()
+        .position(|r| matches!(r, SearchResult::Script(_)));
+
+    assert!(skill_pos.is_some(), "Skill should appear in results");
+    assert!(script_pos.is_some(), "Script should appear in results");
+    assert!(
+        skill_pos.unwrap() < script_pos.unwrap(),
+        "Skill should sort before Script at equal score"
+    );
+}
+
+// ── Grouped view: skill-first within plugin sections ──────────────────
+
+#[test]
+fn grouped_view_skills_before_scripts_in_plugin_section() {
+    use script_kit_gpui::config::SuggestedConfig;
+    use script_kit_gpui::frecency::FrecencyStore;
+    use script_kit_gpui::scripts::get_grouped_results;
+
+    let scripts = vec![make_script("hello-world", "authoring")];
+    let scriptlets = vec![make_scriptlet("open-docs", "authoring")];
+    let skills = vec![
+        make_skill("authoring", "scriptlets", "Script Authoring"),
+        make_skill("authoring", "scriptlet-edit", "Scriptlet Edit"),
+    ];
+
+    let frecency = FrecencyStore::new();
+    let suggested = SuggestedConfig {
+        enabled: false,
+        ..Default::default()
+    };
+
+    let (grouped, results) = get_grouped_results(
+        &scripts,
+        &scriptlets,
+        &[],
+        &[],
+        &skills,
+        &frecency,
+        "",
+        &suggested,
+        &[],
+        None,
+    );
+
+    // Find the "authoring" plugin section items
+    let authoring_items: Vec<&str> = grouped
+        .iter()
+        .skip_while(|item| {
+            // Skip until we find the AUTHORING section header
+            match item {
+                script_kit_gpui::list_item::GroupedListItem::SectionHeader(header, _) => {
+                    !header.to_uppercase().contains("AUTHORING")
+                }
+                _ => true,
+            }
+        })
+        .skip(1) // skip the header itself
+        .take_while(|item| matches!(item, script_kit_gpui::list_item::GroupedListItem::Item(_)))
+        .filter_map(|item| {
+            if let script_kit_gpui::list_item::GroupedListItem::Item(idx) = item {
+                Some(results[*idx].name())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    // Skills must come before scripts and scriptlets in the section
+    let first_non_skill = authoring_items.iter().position(|name| {
+        // Check if this is NOT a skill
+        !skills.iter().any(|s| s.title.as_str() == *name)
+    });
+    let last_skill = authoring_items
+        .iter()
+        .rposition(|name| skills.iter().any(|s| s.title.as_str() == *name));
+
+    if let (Some(first_non_skill_pos), Some(last_skill_pos)) = (first_non_skill, last_skill) {
+        assert!(
+            last_skill_pos < first_non_skill_pos,
+            "All skills must appear before non-skills in plugin section. Order: {:?}",
+            authoring_items
+        );
+    }
+}
+
+// ── Slash picker: picker_owner_meta format ────────────────────────────
+
+#[test]
+fn slash_picker_owner_meta_formats() {
+    use script_kit_gpui::ai::SlashCommandPayload;
+
+    let default = SlashCommandPayload::Default {
+        name: "compact".to_string(),
+    };
+    assert_eq!(default.picker_owner_meta(), "/compact");
+
+    let plugin = SlashCommandPayload::PluginSkill(PluginSkill {
+        plugin_id: "alpha".to_string(),
+        plugin_title: "Alpha Tools".to_string(),
+        skill_id: "review".to_string(),
+        path: PathBuf::from("/alpha/skills/review/SKILL.md"),
+        title: "Review".to_string(),
+        description: String::new(),
+    });
+    assert_eq!(
+        plugin.picker_owner_meta(),
+        "/review \u{b7} Alpha Tools skill"
+    );
+
+    let claude = SlashCommandPayload::ClaudeCodeSkill {
+        skill_id: "plan".to_string(),
+        skill_path: PathBuf::from("/tmp/plan/SKILL.md"),
+    };
+    assert_eq!(claude.picker_owner_meta(), "/plan \u{b7} Claude Code skill");
+}

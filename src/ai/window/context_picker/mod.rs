@@ -949,10 +949,7 @@ fn extend_agent_slash_command_items_with_payloads<'a, I>(
             continue;
         };
 
-        let meta_str = match payload {
-            types::SlashCommandPayload::Default { .. } => format!("/{name}"),
-            _ => format!("/{name} \u{b7} {}", payload.owner_label()),
-        };
+        let meta_str = payload.picker_owner_meta();
         let label_hits = if query_lower.is_empty() {
             Vec::new()
         } else {
@@ -968,6 +965,7 @@ fn extend_agent_slash_command_items_with_payloads<'a, I>(
             item_id = %payload.stable_id(),
             slash_name = %name,
             owner = %payload.owner_label(),
+            meta = %meta_str,
             "acp_slash_picker_entry_built"
         );
 
@@ -1262,16 +1260,19 @@ fn section_priority(kind: &ContextPickerItemKind) -> u8 {
 
 // ── Slash picker loading and empty-state rows ───────────────────────
 
-/// Build a non-actionable "Discovering skills…" placeholder row.
+/// Build a non-actionable "Discovering plugin skills…" placeholder row.
 ///
 /// Shown when the ACP slash picker opens before async discovery completes
 /// (i.e. `cached_slash_commands` is still empty).
 pub(crate) fn slash_picker_loading_row() -> ContextPickerItem {
-    tracing::debug!("acp_slash_picker_loading");
+    tracing::debug!(
+        event = "acp_slash_picker_loading",
+        "Building slash picker loading row"
+    );
     ContextPickerItem {
         id: SharedString::from("slash-loading"),
-        label: SharedString::from("Discovering skills\u{2026}"),
-        description: SharedString::from("Scanning plugins and Claude skills"),
+        label: SharedString::from("Discovering plugin skills\u{2026}"),
+        description: SharedString::from("Scanning installed plugins and Claude Code skills"),
         meta: SharedString::from(""),
         kind: ContextPickerItemKind::Inert,
         score: 0,
@@ -1280,16 +1281,19 @@ pub(crate) fn slash_picker_loading_row() -> ContextPickerItem {
     }
 }
 
-/// Build a non-actionable "No commands or skills found" row.
+/// Build a non-actionable "No slash commands or skills found" row.
 ///
 /// Shown when async discovery completed but the catalog is empty
 /// (no defaults, no plugins, no Claude skills were found).
 pub(crate) fn slash_picker_empty_row() -> ContextPickerItem {
-    tracing::debug!("acp_slash_picker_empty_state");
+    tracing::debug!(
+        event = "acp_slash_picker_empty_state",
+        "Building slash picker empty row"
+    );
     ContextPickerItem {
         id: SharedString::from("slash-empty"),
-        label: SharedString::from("No commands or skills found"),
-        description: SharedString::from("Try another slash name or plugin skill"),
+        label: SharedString::from("No slash commands or skills found"),
+        description: SharedString::from("Install a plugin skill or try a built-in slash command"),
         meta: SharedString::from(""),
         kind: ContextPickerItemKind::Inert,
         score: 0,
@@ -1298,18 +1302,23 @@ pub(crate) fn slash_picker_empty_row() -> ContextPickerItem {
     }
 }
 
-/// Build a non-actionable "No matching commands" row.
+/// Build a non-actionable "No matching skills or commands" row.
 ///
 /// Shown when the discovered catalog is non-empty but the current query
 /// filters every entry to zero. This is distinct from the empty catalog
 /// state (`slash_picker_empty_row`) and the loading state
 /// (`slash_picker_loading_row`).
 pub(crate) fn slash_picker_no_match_row() -> ContextPickerItem {
-    tracing::debug!("acp_slash_picker_no_match");
+    tracing::debug!(
+        event = "acp_slash_picker_no_match",
+        "Building slash picker no-match row"
+    );
     ContextPickerItem {
         id: SharedString::from("slash-no-match"),
-        label: SharedString::from("No matching commands"),
-        description: SharedString::from("No commands or skills match the current query"),
+        label: SharedString::from("No matching skills or commands"),
+        description: SharedString::from(
+            "Try another slash name or choose a different plugin skill",
+        ),
         meta: SharedString::from(""),
         kind: ContextPickerItemKind::Inert,
         score: 0,

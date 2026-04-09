@@ -295,11 +295,30 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::Skill(skill_match) => {
                         // Skills always open ACP Chat with the selected skill staged
+                        let owner = if skill_match.skill.plugin_title.is_empty() {
+                            skill_match.skill.plugin_id.as_str()
+                        } else {
+                            skill_match.skill.plugin_title.as_str()
+                        };
                         tracing::info!(
+                            event = "acp_skill_launch_requested",
                             plugin_id = %skill_match.skill.plugin_id,
                             skill_id = %skill_match.skill.skill_id,
                             path = %skill_match.skill.path.display(),
-                            "acp_skill_launch_requested"
+                            owner,
+                            "Skill selected from main menu"
+                        );
+                        self.show_hud(
+                            format!("Opening {} \u{b7} {}", owner, skill_match.skill.title),
+                            Some(HUD_MEDIUM_MS),
+                            cx,
+                        );
+                        tracing::info!(
+                            event = "acp_skill_launch_hud_shown",
+                            plugin_id = %skill_match.skill.plugin_id,
+                            skill_id = %skill_match.skill.skill_id,
+                            owner,
+                            "Displayed ACP skill launch HUD"
                         );
                         self.open_acp_with_selected_skill(&skill_match.skill, cx);
                     }
