@@ -90,6 +90,8 @@ const EMBEDDED_EXAMPLE_PATH_PICKER: &str =
 const EMBEDDED_EXAMPLES_README: &str = include_str!("../../kit-init/examples/README.md");
 /// Examples START_HERE launchpad
 const EMBEDDED_EXAMPLES_START_HERE: &str = include_str!("../../kit-init/examples/START_HERE.md");
+/// Skill: notes — working with the Notes window and automation targets
+const EMBEDDED_SKILL_NOTES: &str = include_str!("../../kit-init/skills/notes/SKILL.md");
 /// Skill: agent authoring (compatibility — skills are now the preferred reusable AI unit)
 const EMBEDDED_SKILL_AGENTS: &str = include_str!("../../kit-init/skills/agents/SKILL.md");
 /// Default ACP agent catalog (seeded on first run — provider/catalog selection, not plugin skills)
@@ -736,6 +738,12 @@ pub fn ensure_kit_setup() -> SetupResult {
         EMBEDDED_SKILL_TROUBLESHOOTING,
         &mut warnings,
         "kit/authoring/skills/troubleshooting/SKILL.md",
+    );
+    write_string_if_changed(
+        &authoring_skills.join("notes").join("SKILL.md"),
+        EMBEDDED_SKILL_NOTES,
+        &mut warnings,
+        "kit/authoring/skills/notes/SKILL.md",
     );
     write_string_if_changed(
         &authoring_skills.join("agents").join("SKILL.md"),

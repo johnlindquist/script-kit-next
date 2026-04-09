@@ -1500,6 +1500,10 @@ impl AcpChatView {
         // Discover skills from all plugin roots via the canonical plugin index.
         // Use plugin-qualified key for dedup so two plugins with the same
         // skill_id both appear in the slash picker.
+        // Track slash-name owners for collision detection.
+        let mut owners_by_slash: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+
         if let Ok(index) = crate::plugins::discover_plugins() {
             if let Ok(skills) = crate::plugins::discover_plugin_skills(&index) {
                 for skill in &skills {
@@ -1508,19 +1512,57 @@ impl AcpChatView {
                         continue;
                     }
 
+                    let plugin_title = if skill.plugin_title.is_empty() {
+                        skill.plugin_id.clone()
+                    } else {
+                        skill.plugin_title.clone()
+                    };
+
+                    owners_by_slash
+                        .entry(skill.skill_id.clone())
+                        .or_default()
+                        .push(plugin_title.clone());
+
+                    // Plugin-scoped description so duplicate skill slugs are
+                    // visually distinguishable in the ACP slash menu.
+                    let raw_desc = if skill.description.is_empty() {
+                        format!("Plugin: {}", plugin_title)
+                    } else {
+                        format!("{} \u{2014} {}", plugin_title, skill.description)
+                    };
+
                     // Truncate long descriptions for the menu without slicing
                     // through a multibyte UTF-8 codepoint.
-                    let desc_chars: Vec<char> = skill.description.chars().collect();
+                    let desc_chars: Vec<char> = raw_desc.chars().collect();
                     let desc = if desc_chars.len() > 80 {
                         let truncated: String = desc_chars.into_iter().take(77).collect();
                         format!("{truncated}\u{2026}")
                     } else {
-                        skill.description.clone()
+                        raw_desc
                     };
+
+                    tracing::info!(
+                        plugin_id = %skill.plugin_id,
+                        plugin_title = %plugin_title,
+                        skill_id = %skill.skill_id,
+                        slash_name = %skill.skill_id,
+                        "acp_slash_skill_cataloged"
+                    );
 
                     seen.insert(qualified_key);
                     commands.push((skill.skill_id.clone(), desc));
                 }
+            }
+        }
+
+        // Warn about slash-name collisions across plugins
+        for (slash_name, owners) in &owners_by_slash {
+            if owners.len() > 1 {
+                tracing::warn!(
+                    slash_name = %slash_name,
+                    owners = ?owners,
+                    "acp_slash_skill_name_collision"
+                );
             }
         }
 
@@ -1558,25 +1600,48 @@ impl AcpChatView {
             return self.cached_slash_commands.clone();
         }
 
-        let cached: std::collections::HashMap<&str, &str> = self
+        let available_set: std::collections::HashSet<&str> =
+            available_commands.iter().map(|s| s.as_str()).collect();
+
+        // Collect all cached entries whose name matches an available command,
+        // preserving duplicates so plugin skills with the same slug from
+        // different plugins both appear as separate picker rows.
+        let mut result: Vec<(String, String)> = Vec::new();
+        let mut seen_names: std::collections::HashMap<&str, usize> =
+            std::collections::HashMap::new();
+
+        for (name, description) in &self.cached_slash_commands {
+            if available_set.contains(name.as_str()) {
+                *seen_names.entry(name.as_str()).or_default() += 1;
+                result.push((name.clone(), description.clone()));
+            }
+        }
+
+        // Include agent-reported commands that aren't in our cache
+        let cached_names: std::collections::HashSet<&str> = self
             .cached_slash_commands
             .iter()
-            .map(|(name, description)| (name.as_str(), description.as_str()))
+            .map(|(n, _)| n.as_str())
             .collect();
+        for cmd in available_commands {
+            if !cached_names.contains(cmd.as_str()) {
+                result.push((cmd.clone(), String::new()));
+            }
+        }
 
-        available_commands
-            .iter()
-            .map(|name| {
-                (
-                    name.clone(),
-                    cached
-                        .get(name.as_str())
-                        .copied()
-                        .unwrap_or_default()
-                        .to_string(),
-                )
-            })
-            .collect()
+        // Log when resolution encounters duplicate names — this means the
+        // bare-name join would have silently collapsed plugin-scoped rows.
+        for (name, count) in &seen_names {
+            if *count > 1 {
+                tracing::warn!(
+                    slash_name = %name,
+                    cached_count = count,
+                    "acp_slash_resolution_ambiguous"
+                );
+            }
+        }
+
+        result
     }
 
     /// Consume Tab / Shift+Tab. When a permission card is active,

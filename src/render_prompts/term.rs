@@ -76,12 +76,39 @@ fn is_term_prompt_actions_toggle_shortcut(has_cmd: bool, has_shift: bool, key: &
 }
 
 #[inline]
+fn terminal_return_hint_label(return_view: Option<&AppView>) -> &'static str {
+    match return_view {
+        Some(AppView::ScriptList) => "⌘W Main Menu",
+        Some(AppView::AcpChatView { .. }) => "⌘W ACP",
+        Some(_) => "⌘W Return",
+        None => "⌘W Close",
+    }
+}
+
+#[inline]
+fn terminal_escape_hint_label(return_view: Option<&AppView>) -> Option<&'static str> {
+    match return_view {
+        Some(_) => Some("Esc stays in tool"),
+        None => None,
+    }
+}
+
+#[inline]
 fn render_terminal_prompt_hint_strip(
     route: Option<&crate::ai::TabAiApplyBackRoute>,
     return_view: Option<&AppView>,
 ) -> AnyElement {
     let show_script_verification_hint = return_view.is_some();
     let can_apply_back = route.is_some() && return_view.is_some();
+    let return_label = terminal_return_hint_label(return_view);
+
+    tracing::debug!(
+        target: "script_kit::keyboard",
+        event = "quick_terminal_hint_strip_rendered",
+        return_label,
+        can_apply_back,
+        show_script_verification_hint,
+    );
 
     let mut items: Vec<String> = Vec::new();
 
@@ -93,7 +120,11 @@ fn render_terminal_prompt_hint_strip(
         items.push("⌘↩ Apply".to_string());
     }
 
-    items.push("⌘W Close".to_string());
+    if let Some(escape_label) = terminal_escape_hint_label(return_view) {
+        items.push(escape_label.to_string());
+    }
+
+    items.push(return_label.to_string());
 
     let leading = if show_script_verification_hint {
         let theme = crate::theme::get_cached_theme();
@@ -612,5 +643,19 @@ mod term_prompt_render_tests {
         assert!(is_term_prompt_actions_toggle_shortcut(true, true, "K"));
         assert!(!is_term_prompt_actions_toggle_shortcut(true, false, "k"));
         assert!(!is_term_prompt_actions_toggle_shortcut(false, true, "k"));
+    }
+
+    #[test]
+    fn test_terminal_return_hint_label_reflects_return_destination() {
+        assert_eq!(terminal_return_hint_label(Some(&AppView::ScriptList)), "⌘W Main Menu");
+        assert_eq!(terminal_return_hint_label(None), "⌘W Close");
+        // Any non-ScriptList saved view should say "Return"
+        assert!(terminal_return_hint_label(Some(&AppView::ScriptList)).contains("Main Menu"));
+    }
+
+    #[test]
+    fn test_terminal_escape_hint_present_only_with_return_view() {
+        assert!(terminal_escape_hint_label(Some(&AppView::ScriptList)).is_some());
+        assert!(terminal_escape_hint_label(None).is_none());
     }
 }

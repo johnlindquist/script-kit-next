@@ -10,6 +10,7 @@ Plugin-owned skills for working with Script Kit. Each subdirectory contains a `S
 | [scriptlets](scriptlets/SKILL.md) | Markdown extension bundles with embedded commands |
 | [agents](agents/SKILL.md) | Creating agent files (compatibility — prefer skills for new work) |
 | [config](config/SKILL.md) | Configuration, theming, and workspace setup |
+| [notes](notes/SKILL.md) | Working with the Notes window — creation, search, and automation |
 | [troubleshooting](troubleshooting/SKILL.md) | Common issues, debugging, and log inspection |
 
 ## How to Use
