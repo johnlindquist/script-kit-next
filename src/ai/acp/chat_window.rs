@@ -365,10 +365,9 @@ pub fn toggle_detached_actions(cx: &mut App) {
         tracing::info!(
             target: "script_kit::keyboard",
             event = "detached_actions_toggle_result",
-            route_owner = "detached_chat",
-            restored_chat_focus = true,
             actions_window_open_before,
             actions_window_open_after = actions::is_actions_window_open(),
+            has_view_entity = true,
         );
         return;
     }
@@ -503,8 +502,6 @@ pub fn toggle_detached_actions(cx: &mut App) {
     tracing::info!(
         target: "script_kit::keyboard",
         event = "detached_actions_toggle_result",
-        route_owner = "detached_chat",
-        restored_chat_focus = false,
         actions_window_open_before,
         actions_window_open_after = crate::actions::is_actions_window_open(),
         has_view_entity = view_weak.is_some(),
@@ -615,21 +612,8 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
             if let Some(entity) = entity_weak.upgrade() {
                 let maybe_markdown = {
                     let view = entity.read(cx);
-                    view.thread().map(|thread| {
-                        let messages = thread.read(cx).messages.clone();
-                        let mut md = String::from("# AI Chat Conversation\n\n");
-                        for msg in &messages {
-                            let role_label = match msg.role {
-                                super::thread::AcpThreadMessageRole::User => "**You**",
-                                super::thread::AcpThreadMessageRole::Assistant => "**Claude Code**",
-                                super::thread::AcpThreadMessageRole::Thought => "**Thinking**",
-                                super::thread::AcpThreadMessageRole::Tool => "**Tool**",
-                                super::thread::AcpThreadMessageRole::System => "**System**",
-                                super::thread::AcpThreadMessageRole::Error => "**Error**",
-                            };
-                            md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
-                        }
-                        md
+                    view.thread().and_then(|thread| {
+                        super::build_acp_conversation_markdown(&thread.read(cx).messages)
                     })
                 };
                 if let Some(md) = maybe_markdown {
@@ -757,7 +741,7 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
 }
 
 /// Window title used internally for NSWindow matching (not displayed — titlebar is None).
-const ACP_CHAT_WINDOW_TITLE: &str = "Script Kit AI Chat";
+const ACP_CHAT_WINDOW_TITLE: &str = "Script Kit ACP Chat";
 
 /// Configure vibrancy on the ACP chat window to match the main window appearance.
 ///
@@ -839,13 +823,13 @@ impl gpui::Render for ChatWindowPlaceholder {
             .flex_col()
             .items_center()
             .justify_center()
-            .child(div().text_base().opacity(0.7).child("AI Chat Window"))
+            .child(div().text_base().opacity(0.7).child("ACP Chat Window"))
             .child(
                 div()
                     .pt(px(8.0))
                     .text_sm()
                     .opacity(0.45)
-                    .child("Detached chat \u{2014} full implementation coming soon"),
+                    .child("Detached ACP chat \u{2014} full implementation coming soon"),
             )
             .child(
                 div()
