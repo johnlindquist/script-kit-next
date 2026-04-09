@@ -12,25 +12,13 @@ fn variation_ids_are_unique() {
 }
 
 #[test]
-fn story_variants_cover_every_id() {
+fn story_variants_cover_the_single_current_snapshot() {
     let stable_ids: Vec<_> = main_menu_story_variants()
         .into_iter()
         .map(|variant| variant.stable_id())
         .collect();
 
-    assert_eq!(
-        stable_ids,
-        vec![
-            "raycast-classic".to_string(),
-            "compact-dense".to_string(),
-            "spotlight".to_string(),
-            "two-line".to_string(),
-            "minimal-flat".to_string(),
-            "big-cards".to_string(),
-            "terminal".to_string(),
-            "neon".to_string(),
-        ]
-    );
+    assert_eq!(stable_ids, vec!["current-main-menu".to_string()]);
 }
 
 #[test]
@@ -44,12 +32,18 @@ fn variation_lookup_round_trips() {
 }
 
 #[test]
-fn story_variants_have_surface_prop() {
+fn story_variants_have_surface_and_runtime_snapshot_props() {
     for variant in main_menu_story_variants() {
         assert_eq!(
             variant.props.get("surface").map(String::as_str),
             Some("main-menu"),
             "variant {} missing surface=main-menu prop",
+            variant.stable_id()
+        );
+        assert_eq!(
+            variant.props.get("representation").map(String::as_str),
+            Some("runtime-snapshot"),
+            "variant {} missing representation=runtime-snapshot prop",
             variant.stable_id()
         );
     }

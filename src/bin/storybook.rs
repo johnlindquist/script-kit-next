@@ -22,6 +22,7 @@ use script_kit_gpui::storybook::{
     all_stories, save_selected_story_variant, StoryBrowser, StorybookJsonError,
     StorybookJsonErrorBody,
 };
+use script_kit_gpui::theme;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -246,6 +247,10 @@ fn main() {
     let start_compare_for_window = start_compare;
 
     gpui_platform::application().run(move |cx| {
+        gpui_component::init(cx);
+        theme::init_theme_cache();
+        theme::sync_gpui_component_theme(cx);
+
         // Create window options
         let window_size = size(px(1200.), px(800.));
         let options = WindowOptions {
