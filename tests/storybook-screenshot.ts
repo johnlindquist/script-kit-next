@@ -59,7 +59,7 @@ async function captureStorybookScreenshot(storyName?: string): Promise<string> {
 }
 
 // Main
-const storyName = process.argv[2] || 'header-variations';
+const storyName = process.argv[2] || 'main-menu';
 captureStorybookScreenshot(storyName)
     .then(path => {
         console.log(`\nScreenshot captured: ${path}`);

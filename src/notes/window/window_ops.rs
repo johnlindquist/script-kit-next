@@ -79,13 +79,14 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
         // Window exists - check if it's valid and close it (toggle OFF)
         // Lock is released, safe to call handle.update()
         if handle
-            .update(cx, |_, window, _cx| {
+            .update(cx, |_, window, cx| {
                 // Save bounds before closing (fixes bounds persistence on toggle close)
                 let wb = window.window_bounds();
                 crate::window_state::save_window_from_gpui(
                     crate::window_state::WindowRole::Notes,
                     wb,
                 );
+                window.close_all_dialogs(cx);
                 window.remove_window();
             })
             .is_ok()
@@ -94,18 +95,17 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
             // They use a global singleton, so we close it via the actions module
             crate::actions::close_actions_window(cx);
             logging::log("PANEL", "Notes window was open - closing (toggle OFF)");
+            tracing::info!(
+                target: "script_kit::keyboard",
+                event = "notes_toggle_off_restore_launcher_requested"
+            );
             // Clear the stored handle
             let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
             if let Ok(mut g) = slot.lock() {
                 *g = None;
             }
 
-            // NOTE: We intentionally do NOT call cx.hide() here.
-            // Closing Notes should not affect the main window's ability to be shown.
-            // The main window hotkey handles its own visibility state.
-            // If the user wants to hide everything, they can press the main hotkey
-            // when the main window is visible.
-
+            restore_launcher_after_notes_close(cx);
             return Ok(());
         }
         // Window handle was invalid, fall through to create new window
@@ -440,13 +440,60 @@ pub fn close_notes_window(cx: &mut App) {
     };
 
     if let Some(handle) = handle {
-        let _ = handle.update(cx, |_, window, _| {
+        match handle.update(cx, |_, window, cx| {
             // Save window bounds before closing
             let wb = window.window_bounds();
             crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Notes, wb);
+            window.close_all_dialogs(cx);
             window.remove_window();
-        });
+        }) {
+            Ok(()) => {
+                tracing::info!(
+                    target: "script_kit::keyboard",
+                    event = "notes_helper_close_restore_launcher_requested"
+                );
+                restore_launcher_after_notes_close(cx);
+            }
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::keyboard",
+                    event = "notes_helper_close_failed",
+                    error = ?error
+                );
+            }
+        }
     }
+}
+
+/// Restore the main launcher window after Notes closes.
+///
+/// Notes hides the main window on open (`set_main_window_visible(false)` +
+/// `defer_hide_main_window`). This function reverses that: it marks the main
+/// window visible, brings it to front, and makes it key so the user lands
+/// back on whatever launcher surface was active before Notes opened.
+///
+/// The launcher surface is NOT reset — `current_view` and focus target are
+/// preserved across the Notes session, so the user returns to the exact
+/// view they left (ScriptList, embedded ACP, FileSearch, etc.).
+pub(crate) fn restore_launcher_after_notes_close(_cx: &mut App) {
+    // Only restore if the main window is currently hidden.
+    // If it's already visible (e.g. Notes was opened without hiding it),
+    // there's nothing to restore.
+    if crate::is_main_window_visible() {
+        tracing::debug!(
+            target: "script_kit::keyboard",
+            event = "notes_restore_skipped_already_visible"
+        );
+        return;
+    }
+
+    crate::set_main_window_visible(true);
+    crate::platform::show_main_window_without_activation();
+
+    tracing::info!(
+        target: "script_kit::keyboard",
+        event = "notes_restore_launcher_completed"
+    );
 }
 
 /// Check if the notes window is currently open

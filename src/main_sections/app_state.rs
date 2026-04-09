@@ -326,7 +326,7 @@ struct ScriptListApp {
     /// Checked by timer to trigger view reset
     inline_chat_escape_receiver: mpsc::Receiver<()>,
     /// Sender for inline chat continue signals
-    /// The ChatPrompt continue callback uses this to signal "Continue in AI Chat"
+    /// The ChatPrompt continue callback uses this to signal "Continue in Harness Terminal"
     #[allow(dead_code)]
     inline_chat_continue_sender: mpsc::SyncSender<()>,
     /// Receiver for inline chat continue signals

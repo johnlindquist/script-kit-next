@@ -131,48 +131,44 @@ mod tests {
     use crate::storybook::StorySelectionStore;
 
     #[test]
-    fn catalog_snapshot_includes_compare_ready_story_metadata() {
+    fn catalog_snapshot_includes_main_menu_story_metadata() {
         let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
-        let header_story = snapshot
+        let main_menu_story = snapshot
             .stories
             .iter()
-            .find(|story| story.story_id == "header-design-variations")
-            .expect("header-design-variations story should be registered");
+            .find(|story| story.story_id == "main-menu")
+            .expect("main-menu story should be registered");
 
-        assert_eq!(header_story.surface, "Header");
-        assert!(header_story.comparable);
-        assert!(header_story
+        assert_eq!(main_menu_story.surface, "Main Menu");
+        assert!(!main_menu_story.comparable);
+        assert!(main_menu_story
             .variants
             .iter()
-            .any(|variant| variant.id == "current-production"));
-        assert!(header_story
-            .variants
-            .iter()
-            .any(|variant| variant.id == "raycast-style"));
+            .any(|variant| variant.id == "current-main-menu"));
     }
 
     #[test]
     fn catalog_snapshot_marks_persisted_selection() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("actions-window", "compact");
+        store.set_selected_variant("main-menu", "current-main-menu");
 
         let snapshot = build_story_catalog_snapshot(&store);
-        let actions_story = snapshot
+        let main_menu_story = snapshot
             .stories
             .iter()
-            .find(|story| story.story_id == "actions-window")
-            .expect("actions-window story should be registered");
+            .find(|story| story.story_id == "main-menu")
+            .expect("main-menu story should be registered");
 
         assert_eq!(
-            actions_story.selected_variant_id.as_deref(),
-            Some("compact")
+            main_menu_story.selected_variant_id.as_deref(),
+            Some("current-main-menu")
         );
     }
 
     #[test]
     fn catalog_snapshot_serializes_to_camel_case_json() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("actions-window", "compact");
+        store.set_selected_variant("main-menu", "current-main-menu");
         let snapshot = build_story_catalog_snapshot(&store);
         let json = serde_json::to_string(&snapshot).expect("serialize catalog snapshot");
 
@@ -184,111 +180,71 @@ mod tests {
     }
 
     #[test]
-    fn catalog_snapshot_surfaces_include_header_and_action_dialog() {
+    fn catalog_snapshot_surfaces_only_include_main_menu() {
         let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
 
-        let header_surface = snapshot
+        let main_menu_surface = snapshot
             .surfaces
             .iter()
-            .find(|s| s.surface == "Header")
-            .expect("Header surface should be present");
-        assert!(header_surface.comparable_story_count >= 1);
-
-        let action_surface = snapshot
-            .surfaces
-            .iter()
-            .find(|s| s.surface == "Action Dialog")
-            .expect("Action Dialog surface should be present");
-        assert!(action_surface.comparable_story_count >= 1);
+            .find(|s| s.surface == "Main Menu")
+            .expect("Main Menu surface should be present");
+        assert_eq!(main_menu_surface.story_count, 1);
+        assert_eq!(main_menu_surface.comparable_story_count, 0);
+        assert_eq!(snapshot.surfaces.len(), 1);
     }
 
     #[test]
-    fn catalog_snapshot_surfaces_include_input() {
-        let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
-
-        let input_surface = snapshot
-            .surfaces
-            .iter()
-            .find(|s| s.surface == "Input")
-            .expect("Input surface should be present");
-
-        assert!(input_surface.comparable_story_count >= 1);
-    }
-
-    #[test]
-    fn catalog_snapshot_marks_persisted_footer_and_input_selections() {
+    fn catalog_snapshot_marks_persisted_main_menu_selection() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("footer-layout-variations", "minimal");
-        store.set_selected_variant("input-design-variations", "search-icon");
+        store.set_selected_variant("main-menu", "current-main-menu");
 
         let snapshot = build_story_catalog_snapshot(&store);
 
-        let footer_story = snapshot
+        let main_menu_story = snapshot
             .stories
             .iter()
-            .find(|story| story.story_id == "footer-layout-variations")
-            .expect("footer-layout-variations story should be registered");
+            .find(|story| story.story_id == "main-menu")
+            .expect("main-menu story should be registered");
         assert_eq!(
-            footer_story.selected_variant_id.as_deref(),
-            Some("minimal"),
-            "Footer story should reflect persisted 'minimal' selection"
-        );
-
-        let input_story = snapshot
-            .stories
-            .iter()
-            .find(|story| story.story_id == "input-design-variations")
-            .expect("input-design-variations story should be registered");
-        assert_eq!(
-            input_story.selected_variant_id.as_deref(),
-            Some("search-icon"),
-            "Input story should reflect persisted 'search-icon' selection"
+            main_menu_story.selected_variant_id.as_deref(),
+            Some("current-main-menu"),
+            "Main menu story should reflect the persisted selection"
         );
     }
 
     #[test]
-    fn catalog_snapshot_unset_selections_are_none() {
+    fn catalog_snapshot_unset_selection_is_none() {
         let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
 
-        let footer_story = snapshot
+        let main_menu_story = snapshot
             .stories
             .iter()
-            .find(|story| story.story_id == "footer-layout-variations")
-            .expect("footer-layout-variations story should be registered");
+            .find(|story| story.story_id == "main-menu")
+            .expect("main-menu story should be registered");
         assert_eq!(
-            footer_story.selected_variant_id, None,
-            "Footer story should have no selection when store is empty"
-        );
-
-        let input_story = snapshot
-            .stories
-            .iter()
-            .find(|story| story.story_id == "input-design-variations")
-            .expect("input-design-variations story should be registered");
-        assert_eq!(
-            input_story.selected_variant_id, None,
-            "Input story should have no selection when store is empty"
+            main_menu_story.selected_variant_id, None,
+            "Main menu story should have no selection when store is empty"
         );
     }
 
     #[test]
     fn catalog_snapshot_includes_variant_props() {
         let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
-        let header_story = snapshot
+        let main_menu_story = snapshot
             .stories
             .iter()
-            .find(|story| story.story_id == "header-design-variations")
-            .expect("header-design-variations story should be registered");
+            .find(|story| story.story_id == "main-menu")
+            .expect("main-menu story should be registered");
 
-        let compact = header_story
+        let current = main_menu_story
             .variants
             .iter()
-            .find(|v| v.id == "compact")
-            .expect("compact variant should exist");
+            .find(|v| v.id == "current-main-menu")
+            .expect("current-main-menu variant should exist");
 
         assert!(
-            !compact.props.is_empty(),
-            "compact variant should have props"
+            !current.props.is_empty(),
+            "current main-menu variant should have props"
         );
     }
 }

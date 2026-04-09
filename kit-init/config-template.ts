@@ -274,7 +274,7 @@ export default {
   // ===========================================================================
   // Claude Code CLI Provider & Tab AI
   // ===========================================================================
-  // Controls both the AI Chat provider and the Tab AI harness launch settings.
+  // Controls both the ACP Chat provider and the Tab AI harness launch settings.
   // When Tab AI is invoked, Script Kit writes context to ~/.scriptkit/context/
   // and spawns the claude CLI with --append-system-prompt and the user intent.
 

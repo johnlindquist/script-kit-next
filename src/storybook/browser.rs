@@ -147,21 +147,21 @@ impl StoryBrowser {
     /// Configure the browser for the in-app design explorer.
     ///
     /// If a preferred surface has a comparable story (>1 variant), use it.
-    /// Otherwise, fall back to the first story that exposes >1 variant.
+    /// Otherwise, fall back to the first available story and stay in single mode.
     pub fn configure_for_design_explorer(&mut self, preferred_surface: Option<StorySurface>) {
         if let Some(surface) = preferred_surface {
-            if let Some(entry) = stories_by_surface(surface)
-                .into_iter()
-                .find(|entry| entry.story.variants().len() > 1)
-            {
+            if let Some(entry) = stories_by_surface(surface).into_iter().next() {
                 tracing::info!(
                     event = "design_explorer_configured",
                     surface = %surface.label(),
                     story_id = %entry.story.id(),
+                    comparable = entry.story.variants().len() > 1,
                     "Configured design explorer with preferred surface story"
                 );
                 let _ = self.select_story(entry.story.id());
-                let _ = self.open_compare_mode();
+                if entry.story.variants().len() > 1 {
+                    let _ = self.open_compare_mode();
+                }
                 return;
             }
         }
@@ -175,10 +175,19 @@ impl StoryBrowser {
             );
             let _ = self.select_story(entry.story.id());
             let _ = self.open_compare_mode();
+        } else if let Some(entry) = self.stories.first() {
+            tracing::info!(
+                event = "design_explorer_configured",
+                story_id = %entry.story.id(),
+                fallback = true,
+                comparable = false,
+                "Configured design explorer with single-story fallback"
+            );
+            let _ = self.select_story(entry.story.id());
         } else {
             tracing::warn!(
                 event = "design_explorer_no_comparable_story",
-                "No story with multiple variants found for design explorer"
+                "No stories found for design explorer"
             );
         }
     }
@@ -1173,29 +1182,19 @@ mod tests {
     // --- Compare-mode transition tests ---
 
     #[test]
-    fn compare_mode_requires_multiple_variants() {
-        // Single-variant stories should not enter compare mode
+    fn compare_mode_is_unavailable_in_reset_catalog() {
         for entry in all_stories() {
-            let variants = entry.story.variants();
-            if variants.len() <= 1 {
-                // Browser would stay in Single mode — just confirm the invariant
-                assert!(
-                    variants.len() <= 1,
-                    "Story {} should not be compare-ready with {} variant(s)",
-                    entry.story.id(),
-                    variants.len()
-                );
-            }
+            assert_eq!(
+                entry.story.variants().len(),
+                1,
+                "reset storybook should only expose single-variant stories"
+            );
         }
 
-        // Multi-variant stories should be compare-eligible
-        let comparable = first_story_with_multiple_variants();
         assert!(
-            comparable.is_some(),
-            "At least one story must have multiple variants for compare mode"
+            first_story_with_multiple_variants().is_none(),
+            "reset storybook should not expose compare-ready stories"
         );
-        let entry = comparable.expect("checked above");
-        assert!(entry.story.variants().len() > 1);
     }
 
     #[test]
@@ -1223,63 +1222,6 @@ mod tests {
     }
 
     #[test]
-    fn variant_navigation_wraps_around() {
-        // Simulates move_variant_left and move_variant_right wrapping behavior
-        let entry =
-            first_story_with_multiple_variants().expect("need a comparable story for this test");
-        let count = entry.story.variants().len();
-        assert!(count > 1, "need >1 variant");
-
-        // Right wrapping: starting at last, moving right goes to 0
-        let mut index = count - 1;
-        index = (index + 1) % count;
-        assert_eq!(index, 0, "right wrap should go to 0");
-
-        // Left wrapping: starting at 0, moving left goes to count - 1
-        index = 0;
-        index = if index == 0 { count - 1 } else { index - 1 };
-        assert_eq!(index, count - 1, "left wrap should go to last");
-    }
-
-    #[test]
-    fn variant_navigation_full_cycle_left() {
-        let entry = first_story_with_multiple_variants().expect("need a comparable story");
-        let count = entry.story.variants().len();
-
-        // Walk left from index 0 through all variants and back to 0
-        let mut index: usize = 0;
-        for step in 0..count {
-            index = if index == 0 { count - 1 } else { index - 1 };
-            assert!(
-                index < count,
-                "step {} produced out-of-bounds index {}",
-                step,
-                index
-            );
-        }
-        assert_eq!(index, 0, "full left cycle should return to start");
-    }
-
-    #[test]
-    fn variant_navigation_full_cycle_right() {
-        let entry = first_story_with_multiple_variants().expect("need a comparable story");
-        let count = entry.story.variants().len();
-
-        // Walk right from index 0 through all variants and back to 0
-        let mut index: usize = 0;
-        for step in 0..count {
-            index = (index + 1) % count;
-            assert!(
-                index < count,
-                "step {} produced out-of-bounds index {}",
-                step,
-                index
-            );
-        }
-        assert_eq!(index, 0, "full right cycle should return to start");
-    }
-
-    #[test]
     fn variant_navigation_noop_for_single_variant() {
         // Find a single-variant story
         let single = all_stories().find(|e| e.story.variants().len() <= 1);
@@ -1292,54 +1234,6 @@ mod tests {
             }
             // The method returns early when count <= 1, so index stays 0
             assert_eq!(index, 0, "single-variant story should not navigate");
-        }
-    }
-
-    #[test]
-    fn shortcut_keys_map_to_correct_variant_indices() {
-        let entry = first_story_with_multiple_variants()
-            .expect("need a comparable story for shortcut test");
-        let variants = entry.story.variants();
-
-        // Keys 1-9 map to indices 0-8 (1-indexed display, 0-indexed internal)
-        for (key_num, expected_index) in [(1u32, 0usize), (2, 1)] {
-            if expected_index < variants.len() {
-                let index = key_num.saturating_sub(1) as usize;
-                assert_eq!(
-                    index, expected_index,
-                    "key {} should map to index {}",
-                    key_num, expected_index
-                );
-            }
-        }
-
-        // Out-of-range key should be ignored (no panic)
-        let oob_key = 9u32;
-        let oob_index = oob_key.saturating_sub(1) as usize;
-        assert!(
-            variants.get(oob_index).is_none() || oob_index < variants.len(),
-            "out-of-range key should either miss or hit a valid variant"
-        );
-    }
-
-    #[test]
-    fn shortcut_keys_cover_all_available_variants() {
-        let entry = first_story_with_multiple_variants()
-            .expect("need a comparable story for shortcut coverage test");
-        let variants = entry.story.variants();
-
-        // Every variant with index < 9 should be reachable by its number key
-        for (expected_index, variant) in variants.iter().enumerate().take(9) {
-            let key_num = (expected_index as u32) + 1;
-            let mapped_index = key_num.saturating_sub(1) as usize;
-            assert_eq!(
-                mapped_index,
-                expected_index,
-                "key {} should reach variant '{}' at index {}",
-                key_num,
-                variant.stable_id(),
-                expected_index
-            );
         }
     }
 
@@ -1359,42 +1253,39 @@ mod tests {
     #[test]
     fn adoption_updates_store_without_mutating_unrelated_stories() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("footer-layout-variations", "raycast-exact");
-        store.set_selected_variant("input-design-variations", "bare");
+        store.set_selected_variant("main-menu", "current-main-menu");
+        store.set_selected_variant("legacy-story", "legacy-variant");
 
-        // Simulate adopting a new footer variant (what adopt_selected_variant does)
-        store.set_selected_variant("footer-layout-variations", "minimal");
+        store.set_selected_variant("main-menu", "current-main-menu");
 
-        // Footer changed
         assert_eq!(
-            store.selected_variant("footer-layout-variations"),
-            Some("minimal")
+            store.selected_variant("main-menu"),
+            Some("current-main-menu")
         );
-        // Input untouched
         assert_eq!(
-            store.selected_variant("input-design-variations"),
-            Some("bare")
+            store.selected_variant("legacy-story"),
+            Some("legacy-variant")
         );
     }
 
     #[test]
     fn adoption_then_reset_restores_persisted_variant() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("footer-layout-variations", "status-bar");
+        store.set_selected_variant("main-menu", "current-main-menu");
 
-        let footer_stories = stories_by_surface(StorySurface::Footer);
-        let footer_entry = footer_stories
+        let main_menu_stories = stories_by_surface(StorySurface::MainMenu);
+        let main_menu_entry = main_menu_stories
             .iter()
-            .find(|e| e.story.id() == "footer-layout-variations")
-            .expect("footer story must exist");
+            .find(|e| e.story.id() == "main-menu")
+            .expect("main-menu story must exist");
 
-        let variants = footer_entry.story.variants();
-        let resolved = resolve_variant_index("footer-layout-variations", &variants, &store);
+        let variants = main_menu_entry.story.variants();
+        let resolved = resolve_variant_index("main-menu", &variants, &store);
 
         let resolved_variant = &variants[resolved];
         assert_eq!(
             resolved_variant.stable_id(),
-            "status-bar",
+            "current-main-menu",
             "reset_variant_selection should restore the persisted variant"
         );
     }
@@ -1402,16 +1293,16 @@ mod tests {
     #[test]
     fn adoption_with_unknown_variant_falls_back_to_first() {
         let mut store = StorySelectionStore::default();
-        store.set_selected_variant("footer-layout-variations", "does-not-exist");
+        store.set_selected_variant("main-menu", "does-not-exist");
 
-        let footer_stories = stories_by_surface(StorySurface::Footer);
-        let footer_entry = footer_stories
+        let main_menu_stories = stories_by_surface(StorySurface::MainMenu);
+        let main_menu_entry = main_menu_stories
             .iter()
-            .find(|e| e.story.id() == "footer-layout-variations")
-            .expect("footer story must exist");
+            .find(|e| e.story.id() == "main-menu")
+            .expect("main-menu story must exist");
 
-        let variants = footer_entry.story.variants();
-        let resolved = resolve_variant_index("footer-layout-variations", &variants, &store);
+        let variants = main_menu_entry.story.variants();
+        let resolved = resolve_variant_index("main-menu", &variants, &store);
 
         assert_eq!(
             resolved, 0,
@@ -1423,62 +1314,47 @@ mod tests {
     fn adoption_with_empty_store_selects_first_variant() {
         let store = StorySelectionStore::default();
 
-        let footer_stories = stories_by_surface(StorySurface::Footer);
-        let footer_entry = footer_stories
+        let main_menu_stories = stories_by_surface(StorySurface::MainMenu);
+        let main_menu_entry = main_menu_stories
             .iter()
-            .find(|e| e.story.id() == "footer-layout-variations")
-            .expect("footer story must exist");
+            .find(|e| e.story.id() == "main-menu")
+            .expect("main-menu story must exist");
 
-        let variants = footer_entry.story.variants();
-        let resolved = resolve_variant_index("footer-layout-variations", &variants, &store);
+        let variants = main_menu_entry.story.variants();
+        let resolved = resolve_variant_index("main-menu", &variants, &store);
 
         assert_eq!(resolved, 0, "empty store should default to first variant");
     }
 
     #[test]
-    fn configure_for_design_explorer_prefers_surface_with_compare_story() {
-        // Verify that each known surface has at least one comparable story
-        for surface in [
-            StorySurface::Footer,
-            StorySurface::Input,
-            StorySurface::Header,
-            StorySurface::ActionDialog,
-        ] {
-            let stories = stories_by_surface(surface);
-            let comparable = stories.iter().any(|entry| entry.story.variants().len() > 1);
-            assert!(
-                comparable,
-                "{:?} surface should have at least one compare-ready story",
-                surface
-            );
-        }
+    fn configure_for_design_explorer_falls_back_to_single_story() {
+        let stories: Vec<_> = all_stories().collect();
+        assert_eq!(stories.len(), 1);
+        assert_eq!(stories[0].story.id(), "main-menu");
     }
 
     #[test]
     fn sequential_adoptions_preserve_latest_per_story() {
         let mut store = StorySelectionStore::default();
 
-        // Adopt multiple times for the same story
-        store.set_selected_variant("footer-layout-variations", "raycast-exact");
-        store.set_selected_variant("footer-layout-variations", "minimal");
-        store.set_selected_variant("footer-layout-variations", "invisible");
+        store.set_selected_variant("main-menu", "current-main-menu");
+        store.set_selected_variant("main-menu", "current-main-menu");
+        store.set_selected_variant("main-menu", "current-main-menu");
 
         assert_eq!(
-            store.selected_variant("footer-layout-variations"),
-            Some("invisible"),
+            store.selected_variant("main-menu"),
+            Some("current-main-menu"),
             "last adoption should win"
         );
 
-        // Adopt for a different story in between
-        store.set_selected_variant("input-design-variations", "search-icon");
+        store.set_selected_variant("legacy-story", "legacy-variant");
         assert_eq!(
-            store.selected_variant("input-design-variations"),
-            Some("search-icon")
+            store.selected_variant("legacy-story"),
+            Some("legacy-variant")
         );
-        // Footer still has its latest
         assert_eq!(
-            store.selected_variant("footer-layout-variations"),
-            Some("invisible")
+            store.selected_variant("main-menu"),
+            Some("current-main-menu")
         );
     }
 }
