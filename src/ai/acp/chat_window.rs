@@ -354,7 +354,7 @@ pub(crate) fn activate_chat_window(cx: &mut App) {
 /// detached context, positioned relative to the detached chat window.
 /// After selection, the detached chat re-gains focus.
 pub fn toggle_detached_actions(cx: &mut App) {
-    use crate::actions::{self, ActionsDialog, ActionsDialogConfig, WindowPosition};
+    use crate::actions::{self, ActionsDialog, WindowPosition};
 
     let actions_window_open_before = actions::is_actions_window_open();
 
