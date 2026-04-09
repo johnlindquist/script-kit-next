@@ -93,6 +93,18 @@ fn test_tab_interceptor_matches_tab_key_case_insensitive() {
 }
 
 #[test]
+fn plain_tab_in_script_list_routes_to_acp_in_startup_new_tab() {
+    let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
+        .expect("Failed to read src/app_impl/startup_new_tab.rs");
+
+    assert!(
+        startup_tab.contains("matches!(this.current_view, AppView::ScriptList)")
+            && startup_tab.contains("this.open_tab_ai_acp_with_entry_intent(entry_intent, cx);"),
+        "Plain Tab in ScriptList must route through the ACP entry path in startup_new_tab.rs"
+    );
+}
+
+#[test]
 fn test_generate_script_from_current_app_routes_to_harness() {
     let builtin_execution = fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("Failed to read src/app_execute/builtin_execution.rs");
@@ -170,6 +182,41 @@ fn quick_terminal_tab_is_written_directly_to_pty_in_standard_startup() {
         source.contains("term.terminal.input(bytes)"),
         "QuickTerminal Tab handling must write raw bytes to the PTY"
     );
+}
+
+#[test]
+fn plain_tab_in_script_list_routes_to_acp_in_standard_startup() {
+    let source = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
+
+    assert!(
+        source.contains("matches!(this.current_view, AppView::ScriptList)")
+            && source.contains("this.open_tab_ai_acp_with_entry_intent(entry_intent, cx);"),
+        "Plain Tab in ScriptList must route through the ACP entry path in startup.rs"
+    );
+}
+
+#[test]
+fn plain_tab_routes_raw_launcher_text_and_submits_to_detached_acp() {
+    let startup = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
+    let startup_new_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
+        .expect("Failed to read src/app_impl/startup_new_tab.rs");
+
+    for (label, source) in [
+        ("startup.rs", startup.as_str()),
+        ("startup_new_tab.rs", startup_new_tab.as_str()),
+    ] {
+        assert!(
+            source.contains("this.filter_text") && source.contains(".trim()"),
+            "{label} must derive the entry intent from raw ScriptList filter text"
+        );
+        assert!(
+            source.contains("get_detached_acp_view_entity()")
+                && source.contains("thread.submit_input(cx)"),
+            "{label} must submit launcher text to an existing detached ACP chat"
+        );
+    }
 }
 
 #[test]
