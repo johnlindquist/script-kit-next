@@ -215,6 +215,84 @@ fn test_notes_keyboard_stops_propagation_when_escape_closes_actions_panel() {
 }
 
 #[test]
+fn test_notes_keyboard_stops_propagation_for_cmd_k_actions_toggle() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    let branch = "key if key.eq_ignore_ascii_case(\"k\") => {";
+    let branch_start = KEYBOARD_SOURCE
+        .find(branch)
+        .expect("Expected cmd+k branch in keyboard.rs");
+    let branch_slice =
+        &KEYBOARD_SOURCE[branch_start..(branch_start + 512).min(KEYBOARD_SOURCE.len())];
+
+    let open_idx = branch_slice
+        .find("self.open_actions_panel(window, cx);")
+        .expect("Expected open_actions_panel call in cmd+k branch");
+    let stop_idx = branch_slice
+        .find("cx.stop_propagation();")
+        .expect("Expected cx.stop_propagation call in cmd+k branch");
+
+    assert!(
+        open_idx < stop_idx,
+        "Cmd+K branch should stop propagation after toggling the actions panel"
+    );
+}
+
+#[test]
+fn test_notes_keyboard_stops_propagation_for_cmd_p_browse_toggle() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    let branch = "key if key.eq_ignore_ascii_case(\"p\") => {";
+    let branch_start = KEYBOARD_SOURCE
+        .find(branch)
+        .expect("Expected cmd+p branch in keyboard.rs");
+    let branch_slice =
+        &KEYBOARD_SOURCE[branch_start..(branch_start + 640).min(KEYBOARD_SOURCE.len())];
+
+    let open_idx = branch_slice
+        .find("self.open_browse_panel(window, cx);")
+        .expect("Expected open_browse_panel call in cmd+p branch");
+    let stop_idx = branch_slice
+        .rfind("cx.stop_propagation();")
+        .expect("Expected cx.stop_propagation call in cmd+p branch");
+
+    assert!(
+        open_idx < stop_idx,
+        "Cmd+P branch should stop propagation after toggling the browse panel"
+    );
+}
+
+#[test]
+fn test_save_note_with_content_activates_existing_notes_window() {
+    const WINDOW_OPS_SOURCE: &str = include_str!("window_ops.rs");
+    let helper_start = WINDOW_OPS_SOURCE
+        .find("pub fn save_note_with_content")
+        .expect("Expected save_note_with_content helper in window_ops.rs");
+    let helper_slice = &WINDOW_OPS_SOURCE[helper_start..];
+
+    assert!(
+        helper_slice.contains("window.activate_window();"),
+        "save_note_with_content should activate the existing Notes window during ACP handoff"
+    );
+}
+
+#[test]
+fn test_notes_window_registers_automation_parent_for_actions_popup() {
+    const WINDOW_OPS_SOURCE: &str = include_str!("window_ops.rs");
+
+    assert!(
+        WINDOW_OPS_SOURCE.contains("upsert_runtime_window_handle(\"notes\""),
+        "Notes window should register its runtime handle so shared actions popups can target it"
+    );
+    assert!(
+        WINDOW_OPS_SOURCE.contains("AutomationWindowKind::Notes"),
+        "Notes window should register itself as a Notes automation window"
+    );
+    assert!(
+        WINDOW_OPS_SOURCE.contains("remove_automation_window(\"notes\")"),
+        "Notes window close paths should clear its automation registration"
+    );
+}
+
+#[test]
 fn test_notes_keyboard_stops_propagation_at_start_of_global_escape_chain() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
     assert!(

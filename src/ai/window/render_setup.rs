@@ -115,7 +115,7 @@ impl AiApp {
                     .text_color(cx.theme().muted_foreground.opacity(OPACITY_ACCENT_MEDIUM))
                     .child("or"),
             )
-            // Open ACP agent catalog button
+            // Add ACP agent button
             .child(
                 div()
                     .id("open-acp-catalog-btn")
@@ -148,7 +148,7 @@ impl AiApp {
                             .text_sm()
                             .font_weight(gpui::FontWeight::MEDIUM)
                             .text_color(cx.theme().muted_foreground)
-                            .child("Open ACP Agent Catalog"),
+                            .child("Add ACP Agent"),
                     ),
             )
             // ACP setup feedback (shown when setup state changes)

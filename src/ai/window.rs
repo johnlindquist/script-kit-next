@@ -1,7 +1,7 @@
-//! AI Chat Window
+//! Deprecated Legacy AI Chat Window
 //!
-//! A separate floating window for AI chat, built with gpui-component.
-//! This is completely independent from the main Script Kit launcher window.
+//! A deprecated floating AI window retained only for compatibility flows.
+//! ACP Chat is the primary AI chat surface for Script Kit GPUI.
 
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate, Utc};

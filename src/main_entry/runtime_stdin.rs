@@ -734,40 +734,26 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 }
                             }
                             ExternalCommand::OpenAi => {
-                                logging::log("STDIN", "Opening AI window via stdin command");
-                                if let Err(e) = ai::open_ai_window(ctx) {
-                                    logging::log("STDIN", &format!("Failed to open AI window: {}", e));
-                                }
+                                logging::log("STDIN", "Opening ACP Chat via openAi compatibility alias");
+                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenMiniAi => {
-                                logging::log("STDIN", "Opening mini AI window via stdin command");
-                                if let Err(e) = ai::open_mini_ai_window(ctx) {
-                                    logging::log("STDIN", &format!("Failed to open mini AI window: {}", e));
-                                }
+                                logging::log("STDIN", "Opening ACP Chat via openMiniAi compatibility alias");
+                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenAiWithMockData => {
-                                logging::log("STDIN", "Opening AI window with mock data via stdin command");
-                                // First insert mock data
-                                if let Err(e) = ai::insert_mock_data() {
-                                    logging::log("STDIN", &format!("Failed to insert mock data: {}", e));
-                                } else {
-                                    logging::log("STDIN", "Mock data inserted successfully");
-                                }
-                                // Then open the window
-                                if let Err(e) = ai::open_ai_window(ctx) {
-                                    logging::log("STDIN", &format!("Failed to open AI window: {}", e));
-                                }
+                                logging::log(
+                                    "STDIN",
+                                    "Ignoring deprecated mock-data AI alias and opening ACP Chat",
+                                );
+                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenMiniAiWithMockData => {
-                                logging::log("STDIN", "Opening mini AI window with mock data via stdin command");
-                                if let Err(e) = ai::insert_mock_data() {
-                                    logging::log("STDIN", &format!("Failed to insert mock data: {}", e));
-                                } else {
-                                    logging::log("STDIN", "Mock data inserted successfully");
-                                }
-                                if let Err(e) = ai::open_mini_ai_window(ctx) {
-                                    logging::log("STDIN", &format!("Failed to open mini AI window: {}", e));
-                                }
+                                logging::log(
+                                    "STDIN",
+                                    "Ignoring deprecated mini mock-data AI alias and opening ACP Chat",
+                                );
+                                view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::ShowAiCommandBar => {
                                 logging::log("STDIN", "Showing AI command bar via stdin command");

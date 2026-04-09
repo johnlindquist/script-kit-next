@@ -98,8 +98,8 @@ pub fn get_clipboard_history_context_actions(entry: &ClipboardEntryInfo) -> Vec<
     actions.push(
         Action::new(
             "clip:clipboard_attach_to_ai",
-            "Attach to AI Chat",
-            Some("Sends this entry to the AI chat window".to_string()),
+            "Attach to ACP Chat",
+            Some("Sends this entry to ACP Chat".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌃⌘A")

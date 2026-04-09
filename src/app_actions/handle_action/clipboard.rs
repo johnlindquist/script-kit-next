@@ -229,7 +229,7 @@ impl ScriptListApp {
                     category = "AI",
                     entry_id = %entry.id,
                     content_type = ?entry.content_type,
-                    "Attaching clipboard entry to AI chat"
+                    "Attaching clipboard entry to ACP Chat"
                 );
 
                 let deferred_action = match entry.content_type {

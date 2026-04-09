@@ -58,6 +58,17 @@ fn calculate_top_right_bounds(width: f32, height: f32, padding: f32) -> gpui::Bo
     }
 }
 
+fn notes_automation_bounds(
+    bounds: gpui::Bounds<gpui::Pixels>,
+) -> crate::protocol::AutomationWindowBounds {
+    crate::protocol::AutomationWindowBounds {
+        x: f32::from(bounds.origin.x) as f64,
+        y: f32::from(bounds.origin.y) as f64,
+        width: f32::from(bounds.size.width) as f64,
+        height: f32::from(bounds.size.height) as f64,
+    }
+}
+
 /// Toggle the notes window (open if closed, close if open)
 pub fn open_notes_window(cx: &mut App) -> Result<()> {
     use crate::logging;
@@ -104,6 +115,8 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
             if let Ok(mut g) = slot.lock() {
                 *g = None;
             }
+            crate::windows::remove_automation_window("notes");
+            crate::windows::remove_runtime_window_handle("notes");
 
             restore_launcher_after_notes_close(cx);
             return Ok(());
@@ -192,6 +205,28 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
     // and let the PopUp window handle focus naturally.
     crate::platform::defer_hide_main_window(cx);
 
+    // Store the window handle (release lock immediately)
+    {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        if let Ok(mut g) = slot.lock() {
+            *g = Some(handle);
+        }
+    }
+
+    let notes_any: gpui::AnyWindowHandle = handle.into();
+    crate::windows::upsert_runtime_window_handle("notes", notes_any);
+    crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+        id: "notes".to_string(),
+        kind: crate::protocol::AutomationWindowKind::Notes,
+        title: Some("Notes".to_string()),
+        focused: true,
+        visible: true,
+        semantic_surface: Some("notes".to_string()),
+        bounds: Some(notes_automation_bounds(bounds)),
+        parent_window_id: None,
+        parent_kind: None,
+    });
+
     // Focus the editor input in the Notes window
     // Release lock before calling update
     let notes_app_entity = notes_app_holder.lock().ok().and_then(|mut g| g.take());
@@ -238,14 +273,6 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
                 cx.notify();
             });
         });
-    }
-
-    // Store the window handle (release lock immediately)
-    {
-        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
-        if let Ok(mut g) = slot.lock() {
-            *g = Some(handle);
-        }
     }
 
     // Configure as floating panel (always on top) after window is created
@@ -343,7 +370,13 @@ pub fn save_note_with_content(cx: &mut App, content: String) -> Result<()> {
 
     // If window exists, create note in the existing window
     if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app.clone()) {
+        if crate::is_main_window_visible() {
+            crate::set_main_window_visible(false);
+            crate::platform::defer_hide_main_window(cx);
+        }
+
         let result = handle.update(cx, |_root, window, cx| {
+            window.activate_window();
             notes_app.update(cx, |app, cx| {
                 app.create_note_with_content(content.clone(), window, cx)
             })
@@ -438,6 +471,8 @@ pub fn close_notes_window(cx: &mut App) {
         let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
         slot.lock().ok().and_then(|mut g| g.take())
     };
+    crate::windows::remove_automation_window("notes");
+    crate::windows::remove_runtime_window_handle("notes");
 
     if let Some(handle) = handle {
         match handle.update(cx, |_, window, cx| {

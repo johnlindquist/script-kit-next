@@ -9,18 +9,16 @@
 //! ├── message_parts.rs - MCP/file context-part composition
 //! ├── context_contract.rs - Shared context contract enforcement
 //! ├── current_app_automation_memory.rs - Bundle-scoped prior-automation memory
-//! ├── model.rs / storage.rs / providers.rs - Legacy AI window data + BYOK providers
-//! └── window/      - Legacy AI window UI and interactions
+//! ├── model.rs / storage.rs / providers.rs - Deprecated legacy AI window data + BYOK providers
+//! └── window/      - Deprecated legacy AI window UI and interactions
 //! ```
 //!
-//! # Primary Tab AI contract
+//! # Primary ACP Chat contract
 //!
-//! - Entry path: `open_tab_ai_chat()` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
-//! - Surface: `AppView::QuickTerminalView` rendered by `TermPrompt`
-//! - Submission modes: `TabAiHarnessSubmissionMode::PasteOnly` and `TabAiHarnessSubmissionMode::Submit`
-//! - Submission shape: flat text-native `Script Kit context` block + optional artifact authoring guidance
-//! - Capture profile: `CaptureContextOptions::tab_ai_submit()` for the landed PTY path
-//! - Legacy chat/window code still exists, but it is not the default Tab AI surface.
+//! - User-facing AI chat surface: ACP Chat
+//! - Entry points should route to `open_tab_ai_acp_with_entry_intent(...)` when they need the canonical chat UI
+//! - Compatibility-named `tab_ai_*` helpers and harness/context types still back ACP Chat plumbing
+//! - The legacy `window/` module remains only for deprecated compatibility flows and should not be used for new entry points
 
 // Re-exports intentionally cover the module's API surface.
 #![allow(unused_imports)]

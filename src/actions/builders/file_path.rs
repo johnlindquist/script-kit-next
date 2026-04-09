@@ -446,13 +446,13 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
         }
         actions.push(command.to_action(file_info));
 
-        // Attach to AI Chat — inserted after open_in_terminal for files only
+        // Attach to ACP Chat — inserted after open_in_terminal for files only
         if command.action_id == "open_in_terminal" && !file_info.is_dir {
             actions.push(
                 Action::new(
                     "file:attach_to_ai",
-                    "Attach to AI Chat",
-                    Some("Attaches this file to the AI chat window".to_string()),
+                    "Attach to ACP Chat",
+                    Some("Attaches this file to ACP Chat".to_string()),
                     ActionCategory::ScriptContext,
                 )
                 .with_shortcut("\u{2303}\u{2318}A")
