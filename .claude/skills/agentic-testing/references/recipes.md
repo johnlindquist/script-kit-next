@@ -8,6 +8,8 @@ Named patterns agents select based on what they changed.
 
 **When:** Changes to script list rendering, footer, search, or built-in entries.
 
+**Fast path:** `make smoke-main-menu`
+
 **Steps:**
 1. Build: `cargo build`
 2. Start session: `bash scripts/agentic/session.sh start default`
@@ -142,13 +144,12 @@ Named patterns agents select based on what they changed.
 **When:** Any change — run as a smoke test.
 
 **Steps:**
-1. `cargo check && cargo clippy --lib -- -D warnings`
-2. `cargo nextest run --lib` (with 30s timeout)
-3. Build, start session, show, capture main menu
-4. Read PNG → verify basic rendering intact
+1. `make smoke-main-menu`
+2. If the change is not covered by the launcher smoke path, add the smallest targeted check for the touched area
+3. Escalate to repo-wide test gates only when the smoke proof is inconclusive or the risk warrants it
 
-**Pass:** All gates pass, main menu renders.
-**Fail:** Compilation error, clippy warning, test failure, or visual regression.
+**Pass:** Smoke verification proves the real runtime surface still works.
+**Fail:** Build failure, session failure, screenshot failure, log mismatch, or obvious visual regression.
 
 ---
 

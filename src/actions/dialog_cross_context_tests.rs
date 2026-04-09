@@ -1073,7 +1073,7 @@ fn command_bar_config_notes_style_specific_fields() {
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);
-    assert!(!config.dialog_config.show_footer);
+    assert!(config.dialog_config.show_footer);
     // Close behaviors default to true
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
@@ -1475,5 +1475,5 @@ fn actions_dialog_config_default_values() {
     assert!(matches!(config.section_style, SectionStyle::Headers));
     assert!(matches!(config.anchor, AnchorPosition::Bottom));
     assert!(!config.show_icons);
-    assert!(!config.show_footer);
+    assert!(config.show_footer);
 }

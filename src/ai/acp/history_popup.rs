@@ -390,7 +390,7 @@ impl AcpHistoryPopupWindow {
         close_history_popup_window(cx);
     }
 
-    /// Cmd+Enter: resume (load) the session into the ACP thread.
+    /// Enter: resume (load) the session into the ACP thread.
     fn resume_session(&self, entry: &AcpHistoryPopupEntry, cx: &mut App) {
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -606,12 +606,12 @@ impl Render for AcpHistoryPopupWindow {
                                 .get(this.snapshot.selected_index)
                                 .cloned()
                             {
-                                if has_cmd {
-                                    this.resume_session(&entry, cx);
-                                } else if has_shift {
+                                if has_shift {
                                     this.attach_transcript(&entry, cx);
-                                } else {
+                                } else if has_cmd {
                                     this.attach_summary(&entry, cx);
+                                } else {
+                                    this.resume_session(&entry, cx);
                                 }
                             }
                             cx.stop_propagation();
@@ -884,9 +884,9 @@ impl Render for AcpHistoryPopupWindow {
                     .child(div().w_full().child(crate::components::HintStrip::new(vec![
                         "Type to Search".into(),
                         "\u{2191}\u{2193} Navigate".into(),
-                        "\u{21B5} Attach Summary".into(),
+                        "\u{21B5} Resume".into(),
                         "\u{21E7}\u{21B5} Attach Transcript".into(),
-                        "\u{2318}\u{21B5} Resume".into(),
+                        "\u{2318}\u{21B5} Attach Summary".into(),
                         "Esc Close".into(),
                     ]))),
             )

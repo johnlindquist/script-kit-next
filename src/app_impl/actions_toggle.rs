@@ -148,6 +148,7 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
         ActionsDialogHost::FormPrompt => "FormPrompt",
         ActionsDialogHost::WebcamPrompt => "WebcamPrompt",
         ActionsDialogHost::AppLauncher => "AppLauncher",
+        ActionsDialogHost::BuiltinList => "BuiltinList",
         ActionsDialogHost::AcpChat => "AcpChat",
         ActionsDialogHost::AcpHistory => "AcpHistory",
     }
@@ -354,6 +355,14 @@ impl ScriptListApp {
 
         if matches!(&self.current_view, AppView::AcpChatView { .. }) {
             self.toggle_actions(cx, window);
+            return true;
+        }
+
+        if let AppView::PathPrompt { entity, .. } = &self.current_view {
+            let entity = entity.clone();
+            entity.update(cx, |prompt, cx| {
+                prompt.toggle_actions(cx);
+            });
             return true;
         }
 
@@ -1289,7 +1298,7 @@ mod terminal_command_shortcut_tests {
         assert_eq!(config.section_style, SectionStyle::Headers);
         assert_eq!(config.anchor, AnchorPosition::Top);
         assert!(config.show_icons);
-        assert!(!config.show_footer, "Mini mode actions should not show footer");
+        assert!(config.show_footer, "Mini mode actions should show the shared footer");
     }
 
     #[test]

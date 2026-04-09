@@ -34,14 +34,15 @@ pub use self::scheduling::register_scheduled_scripts;
 pub use self::scriptlet_loader::{load_scriptlets, read_scriptlets_from_file};
 #[allow(unused_imports)]
 pub use self::search::{
-    compute_match_indices_for_result, fuzzy_search_builtins, fuzzy_search_unified,
-    fuzzy_search_unified_all, NucleoCtx,
+    compute_match_indices_for_result, fuzzy_search_builtins, fuzzy_search_skills,
+    fuzzy_search_unified, fuzzy_search_unified_all, fuzzy_search_unified_all_with_skills,
+    NucleoCtx,
 };
 #[allow(unused_imports)]
 pub use self::types::{
     preview_cache_is_valid, preview_match_signature, AgentMatch, AppMatch, BuiltInMatch,
     FallbackConfig, FallbackMatch, MatchIndices, Script, ScriptContentMatch, ScriptMatch,
-    ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult, WindowMatch,
+    ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult, SkillMatch, WindowMatch,
 };
 
 #[cfg(test)]

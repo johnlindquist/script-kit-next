@@ -115,7 +115,7 @@ const FOOTER_VARIATIONS: [FooterVariationSpec; 5] = [
         primary_shortcut: "↵",
         secondary_label: "Actions",
         secondary_shortcut: "⌘K",
-        helper_text: Some("Tab AI"),
+        helper_text: Some("⌘↵ AI"),
         info_label: Some("Built-in"),
         left_slot_text: None,
         right_slot_text: None,
@@ -133,7 +133,7 @@ const FOOTER_VARIATIONS: [FooterVariationSpec; 5] = [
         helper_text: None,
         info_label: None,
         left_slot_text: None,
-        right_slot_text: Some("↵ Open   ⌘K Actions   Tab AI"),
+        right_slot_text: Some("↵ Open   ⌘K Actions   ⌘↵ AI"),
     },
     FooterVariationSpec {
         id: FooterVariationId::StatusBar,

@@ -159,7 +159,7 @@ impl Default for ActionsDialogConfig {
             section_style: SectionStyle::default(),
             anchor: AnchorPosition::default(),
             show_icons: false,
-            show_footer: false,
+            show_footer: true,
             search_placeholder: None,
             show_context_header: true,
         }

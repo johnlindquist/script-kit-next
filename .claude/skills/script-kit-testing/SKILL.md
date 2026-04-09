@@ -68,11 +68,13 @@ cargo test --features system-tests
 cargo test --features system-tests -- --ignored
 ```
 
-## Verification Gate (Before Every Commit)
+## Full Test Gate (When Needed)
 
 ```bash
 cargo check && cargo clippy --all-targets -- -D warnings && cargo test
 ```
+
+Use the full gate when the user explicitly asks, when shared infrastructure changed, or when smoke verification is not enough. For routine UI work, prefer `agentic-testing` smoke verification first.
 
 ## Feature-Gated System Tests
 

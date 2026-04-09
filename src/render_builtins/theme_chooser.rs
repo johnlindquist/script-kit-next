@@ -1547,10 +1547,17 @@ impl ScriptListApp {
             ));
 
         // ── Footer: canonical three-key hint strip per .impeccable.md ──
-        let footer = crate::components::prompt_layout_shell::render_simple_hint_strip(
-            Self::theme_chooser_hint_items(),
-            None,
-        );
+        let footer = if matches!(
+            crate::footer_popup::active_main_window_footer_surface(),
+            Some("theme_chooser")
+        ) {
+            crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
+        } else {
+            crate::components::prompt_layout_shell::render_simple_hint_strip(
+                Self::theme_chooser_hint_items(),
+                None,
+            )
+        };
 
         // ── Empty state when filter has no matches ─────────────────
         if filtered_count == 0 {

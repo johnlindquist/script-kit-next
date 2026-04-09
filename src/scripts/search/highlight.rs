@@ -200,6 +200,23 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
 
             indices
         }
+        SearchResult::Skill(sm) => {
+            let mut indices = MatchIndices::default();
+
+            let (name_matched, name_indices) = highlight_ctx.indices_for(&sm.skill.title);
+            if name_matched {
+                indices.name_indices = name_indices;
+            }
+
+            if !sm.skill.description.is_empty() {
+                let (desc_matched, desc_indices) = highlight_ctx.indices_for(&sm.skill.description);
+                if desc_matched {
+                    indices.description_indices = desc_indices;
+                }
+            }
+
+            indices
+        }
         SearchResult::Agent(am) => {
             let mut indices = MatchIndices::default();
 

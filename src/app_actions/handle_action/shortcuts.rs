@@ -52,10 +52,10 @@ impl ScriptListApp {
                             let command_name = m.app.name.clone();
                             self.show_shortcut_recorder(command_id, command_name, cx);
                         }
-                        scripts::SearchResult::Window(_) => {
+                        scripts::SearchResult::Window(_) | scripts::SearchResult::Skill(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
-                                "Window shortcuts not supported - windows are transient",
+                                "Shortcuts not supported for this item type",
                             );
                         }
                         scripts::SearchResult::Fallback(m) => match &m.fallback {
@@ -107,6 +107,7 @@ impl ScriptListApp {
                         scripts::SearchResult::Agent(m) => {
                             Some(format!("agent/{}", m.agent.name))
                         }
+                        scripts::SearchResult::Skill(_) => None,
                         scripts::SearchResult::Window(_) => None,
                         scripts::SearchResult::Fallback(m) => {
                             Some(format!("fallback/{}", m.fallback.name()))
@@ -184,10 +185,10 @@ impl ScriptListApp {
                         scripts::SearchResult::Agent(m) => {
                             (format!("agent/{}", m.agent.name), m.agent.name.clone())
                         }
-                        scripts::SearchResult::Window(_) => {
+                        scripts::SearchResult::Window(_) | scripts::SearchResult::Skill(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
-                                "Window aliases not supported - windows are transient",
+                                "Aliases not supported for this item type",
                             );
                         }
                         scripts::SearchResult::Fallback(m) => (
@@ -231,6 +232,7 @@ impl ScriptListApp {
                         scripts::SearchResult::Agent(m) => {
                             Some(format!("agent/{}", m.agent.name))
                         }
+                        scripts::SearchResult::Skill(_) => None,
                         scripts::SearchResult::Window(_) => None,
                         scripts::SearchResult::Fallback(m) => {
                             Some(format!("fallback/{}", m.fallback.name()))

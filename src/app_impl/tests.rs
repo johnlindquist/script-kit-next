@@ -45,16 +45,13 @@ fn test_calculate_fallback_error_message_includes_expression_and_recovery() {
 }
 
 #[test]
-fn test_shift_tab_routes_through_harness_entry_intent() {
+fn test_shift_tab_no_longer_routes_through_harness_entry_intent() {
     let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
         .expect("Failed to read src/app_impl/startup_new_tab.rs");
 
     assert!(
-        startup_tab.contains("if has_shift")
-            && startup_tab
-                .contains("submit_to_current_or_new_tab_ai_harness_from_text"),
-        "Shift+Tab in ScriptList should route through the quick-submit planner. \
-         Missing expected branch in startup_new_tab.rs"
+        !startup_tab.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+        "Shift+Tab in ScriptList should no longer route through the quick-submit planner"
     );
 }
 
@@ -74,14 +71,13 @@ fn test_generate_script_builtin_routes_to_harness_terminal() {
 }
 
 #[test]
-fn test_tab_routes_to_harness_terminal_in_startup_new_tab() {
+fn test_cmd_enter_routes_to_harness_terminal_in_startup_new_tab() {
     let startup_tab = fs::read_to_string("src/app_impl/startup_new_tab.rs")
         .expect("Failed to read src/app_impl/startup_new_tab.rs");
 
     assert!(
-        startup_tab.contains("open_tab_ai_chat(cx)")
-            || startup_tab.contains("open_tab_ai_chat_with_entry_intent("),
-        "Tab in startup_new_tab.rs should route to the harness terminal"
+        startup_tab.contains("try_route_global_cmd_enter_to_acp_context_capture"),
+        "Cmd+Enter in startup_new_tab.rs should route through the global AI-entry helper"
     );
 }
 
@@ -147,17 +143,13 @@ fn test_emoji_picker_arrow_interceptor_consumes_left_right_keys_before_input() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn script_list_shift_tab_routes_into_harness_entry_intent_in_standard_startup() {
+fn script_list_shift_tab_no_longer_routes_into_harness_entry_intent_in_standard_startup() {
     let source = fs::read_to_string("src/app_impl/startup.rs")
         .expect("Failed to read src/app_impl/startup.rs");
 
     assert!(
-        source.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
-        "Shift+Tab in ScriptList must route the filter text through the quick-submit planner"
-    );
-    assert!(
-        !source.contains("dispatch_ai_script_generation_from_query(query, cx)"),
-        "Standard startup must not keep the legacy Shift+Tab script-generation path"
+        !source.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+        "Shift+Tab in ScriptList must no longer route the filter text through the quick-submit planner"
     );
 }
 

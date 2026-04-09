@@ -174,6 +174,7 @@ impl ScriptListApp {
             &self.scriptlets,
             &self.builtin_entries,
             &self.apps,
+            &self.skills,
             &self.frecency_store,
             &self.computed_filter_text,
             &suggested_config,

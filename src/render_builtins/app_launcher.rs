@@ -370,16 +370,27 @@ impl ScriptListApp {
             ),
         );
 
-        crate::components::render_minimal_list_prompt_shell(
+        let footer = if matches!(
+            crate::footer_popup::active_main_window_footer_surface(),
+            Some("app_launcher")
+        ) {
+            Some(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
+        } else {
+            Some(crate::components::render_simple_hint_strip(
+                vec![
+                    gpui::SharedString::from("↵ Launch"),
+                    gpui::SharedString::from("Esc Back"),
+                ],
+                None,
+            ))
+        };
+
+        crate::components::render_minimal_list_prompt_shell_with_footer(
             design_visual.radius_lg,
             crate::ui_foundation::get_vibrancy_background(&self.theme),
             header,
             content,
-            vec![
-                gpui::SharedString::from("↵ Launch"),
-                gpui::SharedString::from("Esc Back"),
-            ],
-            None,
+            footer,
         )
         .text_color(rgb(text_primary))
         .font_family(design_typography.font_family)

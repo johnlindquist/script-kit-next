@@ -1,6 +1,6 @@
 # Fast dev commands — `make test` runs 10k+ tests in ~12s via nextest
 
-.PHONY: test check lint verify ship-check run bundle test-all test-system test-slow
+.PHONY: test check lint verify ship-check run bundle test-all test-system test-slow smoke-main-menu
 
 # Default: fast parallel tests (nextest)
 test:
@@ -41,3 +41,7 @@ test-system:
 # Slow tests only
 test-slow:
 	cargo test --features slow-tests
+
+# Plugin/skill smoke: discovery → search → ACP staging contract
+smoke-main-menu:
+	cargo nextest run --test smoke_main_menu --test plugin_inventory --test plugin_skill_search --test plugin_skill_launch --test plugin_skill_main_menu --test agent_workspace_contract

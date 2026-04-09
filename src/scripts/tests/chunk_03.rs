@@ -351,6 +351,7 @@ fn test_fuzzy_search_unified_scripts_first() {
         SearchResult::App(_) => panic!("Script should be first"),
         SearchResult::Window(_) => panic!("Script should be first"),
         SearchResult::Agent(_) => panic!("Script should be first"),
+        SearchResult::Skill(_) => panic!("Script should be first"),
         SearchResult::Fallback(_) => panic!("Script should be first"),
     }
 }

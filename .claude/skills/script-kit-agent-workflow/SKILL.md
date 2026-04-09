@@ -1,11 +1,11 @@
 ---
 name: script-kit-agent-workflow
-description: Autonomous fix-verify workflow for Script Kit GPUI. Use when fixing bugs, making changes, or completing tasks. Covers the mandatory build-test-verify loop, logging modes, and session completion protocol.
+description: Autonomous fix-verify workflow for Script Kit GPUI. Use when fixing bugs, making changes, or completing tasks. Covers the fast smoke-test-first loop, logging modes, and session completion protocol.
 ---
 
 # Script Kit Agent Workflow
 
-Mandatory workflow for all code changes. Do NOT ask users to test. Do NOT skip verification.
+Default workflow for code changes. Do NOT ask users to test. Do NOT skip verification.
 
 ## Quick-Start Checklist (Do First)
 
@@ -15,7 +15,7 @@ Mandatory workflow for all code changes. Do NOT ask users to test. Do NOT skip v
 4. Update bead status when starting/completing work
 5. Include `correlation_id` in all log entries/spans
 6. UI changes: test via stdin JSON protocol (never CLI args)
-7. Before every commit: `cargo check && cargo clippy --all-targets -- -D warnings && cargo test`
+7. Before every commit, run only the checks the user asked for or the task actually needs
 
 ## The Fix-Verify Loop
 
@@ -27,8 +27,8 @@ Mandatory workflow for all code changes. Do NOT ask users to test. Do NOT skip v
 2. FIX: Make the code change
    - Keep changes minimal and focused
 
-3. BUILD: Compile and verify
-   cargo check && cargo clippy --all-targets -- -D warnings
+3. BUILD: Compile the smallest valid target
+   cargo build
 
 4. LAUNCH: Run the app with logging
    echo '{"type":"show"}' | SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1
@@ -37,11 +37,12 @@ Mandatory workflow for all code changes. Do NOT ask users to test. Do NOT skip v
    grep -i "keyword" ~/.scriptkit/logs/script-kit-gpui.jsonl
 
 6. VISUAL VERIFY (if UI change):
-   - Write test script with captureScreenshot()
+   - Prefer `agentic-testing` against the real runtime surface
+   - Use `make smoke-main-menu` for main window/footer work
    - Save PNG to ./test-screenshots/
    - READ the PNG file to actually verify
 
-7. RUN TESTS: cargo test
+7. RUN TARGETED TESTS: only when they are relevant to the touched area
 ```
 
 ## Log Modes
@@ -66,32 +67,29 @@ Mandatory workflow for all code changes. Do NOT ask users to test. Do NOT skip v
 
 - Explored codebase before fixing
 - Made targeted fix based on understanding
-- `cargo check` + `cargo clippy` pass
+- Build succeeds for the touched surface
 - Launched app and checked relevant logs
 - Logs confirm the change took effect
-- `cargo test` passes
+- Any targeted checks requested by the task pass
 - (If visual) Screenshot captured AND read
 - Any local verification session/process explicitly stopped before handoff
 
 ## Session Completion ("Landing the Plane")
 
-Work is not done until `git push` succeeds.
+Work is done when the requested change is implemented and verified.
 
 1. File issues for remaining work
-2. If code changed: run quality gates (check/clippy/test)
+2. If code changed: run the smallest verification that proves the change
 3. Update issue status
-4. Push to remote:
-   ```bash
-   git pull --rebase && git push && git status
-   ```
-5. Clean up (stashes/branches)
-6. Verify everything committed + pushed
+4. Commit only if the user asks
+5. Push only if the user asks
+6. Clean up local verification processes/sessions
 7. Hand off context for next session
 
 Rules:
-- Never stop before pushing
-- Never say "ready to push when you are"
-- If push fails: resolve and retry until success
+- Never skip verification
+- Never push unless the user asked for it
+- Never leave verification processes running
 
 ## References
 

@@ -674,14 +674,14 @@ pub(crate) fn render_hint_strip_leading_text(
         .into_any_element()
 }
 
-/// Number of footer hints the design spec mandates: `↵ Run`, `⌘K Actions`, `Tab AI`.
+/// Number of footer hints the design spec mandates: `↵ Run`, `⌘↵ AI`, `⌘K Actions`.
 pub(crate) const UNIVERSAL_PROMPT_HINT_COUNT: usize = 3;
 
 /// The canonical three-key footer hints from `.impeccable.md`.
 #[allow(dead_code)]
 #[inline]
 pub(crate) fn universal_prompt_hints() -> Vec<SharedString> {
-    vec!["↵ Run".into(), "⌘K Actions".into(), "Tab AI".into()]
+    vec!["↵ Run".into(), "⌘↵ AI".into(), "⌘K Actions".into()]
 }
 
 /// Zero-argument renderer for the canonical three-key footer.
@@ -706,7 +706,7 @@ pub(crate) fn render_native_main_window_footer_spacer() -> AnyElement {
 
 /// Renderer for the canonical three-key footer with click handlers.
 ///
-/// `on_run` fires for "↵ Run", `on_actions` for "⌘K Actions", `on_ai` for "Tab AI".
+/// `on_run` fires for "↵ Run", `on_ai` for "⌘↵ AI", `on_actions` for "⌘K Actions".
 #[allow(dead_code)]
 pub(crate) fn render_universal_prompt_hint_strip_clickable(
     on_run: impl Fn(&gpui::ClickEvent, &mut gpui::Window, &mut gpui::App) + 'static,
@@ -715,8 +715,8 @@ pub(crate) fn render_universal_prompt_hint_strip_clickable(
 ) -> AnyElement {
     crate::components::HintStrip::new(universal_prompt_hints())
         .on_hint_click(0, on_run)
-        .on_hint_click(1, on_actions)
-        .on_hint_click(2, on_ai)
+        .on_hint_click(1, on_ai)
+        .on_hint_click(2, on_actions)
         .into_any_element()
 }
 
@@ -788,7 +788,7 @@ pub(crate) fn emit_prompt_hint_audit(surface: &'static str, hints: &[SharedStrin
             target: "script_kit::prompt_chrome",
             event = "prompt_hint_contract_violation",
             surface = audit.surface,
-            expected = "↵ Run | ⌘K Actions | Tab AI",
+            expected = "↵ Run | ⌘↵ AI | ⌘K Actions",
             actual = %audit.hints_joined,
             "prompt footer diverged from universal three-key contract"
         );
@@ -1302,8 +1302,8 @@ mod prompt_layout_shell_tests {
         let hints = super::universal_prompt_hints();
         assert_eq!(hints.len(), super::UNIVERSAL_PROMPT_HINT_COUNT);
         assert_eq!(hints[0].as_ref(), "↵ Run");
-        assert_eq!(hints[1].as_ref(), "⌘K Actions");
-        assert_eq!(hints[2].as_ref(), "Tab AI");
+        assert_eq!(hints[1].as_ref(), "⌘↵ AI");
+        assert_eq!(hints[2].as_ref(), "⌘K Actions");
     }
 
     #[test]

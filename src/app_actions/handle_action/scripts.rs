@@ -90,6 +90,7 @@ impl ScriptListApp {
                         scripts::SearchResult::Agent(m) => Some(m.agent.path.clone()),
                         scripts::SearchResult::Scriptlet(_) => None,
                         scripts::SearchResult::BuiltIn(_) => None,
+                        scripts::SearchResult::Skill(_) => None,
                         scripts::SearchResult::App(_) => None,
                         scripts::SearchResult::Window(_) => None,
                         scripts::SearchResult::Fallback(_) => None,

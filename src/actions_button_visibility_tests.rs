@@ -223,6 +223,32 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_native_footer_uses_cmd_enter_for_ai_and_drops_tab_hint() {
+        let content = fs::read_to_string("src/app_impl/ui_window.rs")
+            .expect("Failed to read src/app_impl/ui_window.rs");
+
+        assert!(
+            content.contains("FooterButtonConfig::new(FooterAction::Ai, \"⌘↵\", \"AI\")"),
+            "native footer should advertise AI with ⌘↵"
+        );
+        assert!(
+            !content.contains("FooterButtonConfig::new(FooterAction::Ai, \"⇥\", \"AI\")"),
+            "native footer should no longer advertise Tab for AI"
+        );
+
+        let ai_pos = content
+            .find("FooterButtonConfig::new(FooterAction::Ai, \"⌘↵\", \"AI\")")
+            .expect("native footer AI button must exist");
+        let run_pos = content
+            .find("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Run\")")
+            .expect("native footer Run button must exist");
+        assert!(
+            run_pos < ai_pos,
+            "native footer should list ↵ Run before ⌘↵ AI"
+        );
+    }
+
     /// Fails if the native footer Actions dispatch stops using the shared toggle
     /// dispatcher. The shared dispatcher (`dispatch_main_window_footer_action` →
     /// `dispatch_actions_toggle_for_current_view`) handles the has_actions()

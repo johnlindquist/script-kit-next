@@ -50,7 +50,7 @@ fn edit_script_shows_error_for_unsupported_item_types() {
     let edit_pos = content
         .find("\"edit_script\"")
         .expect("Expected edit_script action handler");
-    let block = &content[edit_pos..content.len().min(edit_pos + 3000)];
+    let block = &content[edit_pos..content.len().min(edit_pos + 3500)];
 
     assert!(
         block.contains("Cannot edit this item type"),

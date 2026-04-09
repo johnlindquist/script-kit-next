@@ -27,6 +27,12 @@ const FOOTER_HINT_FONT_SIZE: f64 = 12.0;
 const FOOTER_HINT_FONT_WEIGHT_SEMIBOLD: f64 = 0.3;
 #[cfg(target_os = "macos")]
 const FOOTER_HINT_BUTTON_ID_PREFIX: &str = "script-kit-footer-button-";
+#[cfg(target_os = "macos")]
+const FOOTER_LEFT_INFO_ID: &str = "script-kit-footer-left-info";
+#[cfg(target_os = "macos")]
+const FOOTER_STREAMING_DOT_SIZE: f64 = 6.0;
+#[cfg(target_os = "macos")]
+const FOOTER_LEFT_DOT_LABEL_GAP: f64 = 6.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum FooterAction {
@@ -74,15 +80,29 @@ impl FooterAction {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Optional left-side info for the native footer (streaming dot + model name).
+#[derive(Clone, Debug, Default)]
+pub(crate) struct FooterLeftInfo {
+    /// When true, show the pulsing dot animation.
+    pub is_streaming: bool,
+    /// Model display name (e.g. "Claude Sonnet 4"). Empty = hide label.
+    pub model_name: String,
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct MainWindowFooterConfig {
     pub surface: &'static str,
     pub buttons: Vec<FooterButtonConfig>,
+    pub left_info: Option<FooterLeftInfo>,
 }
 
 impl MainWindowFooterConfig {
     pub(crate) fn new(surface: &'static str, buttons: Vec<FooterButtonConfig>) -> Self {
-        Self { surface, buttons }
+        Self {
+            surface,
+            buttons,
+            left_info: None,
+        }
     }
 }
 
@@ -290,6 +310,21 @@ unsafe fn ensure_main_footer_host(ns_window: id) {
         let _: () = msg_send![footer_view, addSubview: hints_view];
     }
 
+    // Left-info container (streaming dot + model label)
+    let left_info_view: id = msg_send![class!(NSView), alloc];
+    let left_info_view: id = msg_send![
+        left_info_view,
+        initWithFrame: footer_left_info_frame(content_bounds.size.width)
+    ];
+    if left_info_view != nil {
+        let left_info_id = ns_string(FOOTER_LEFT_INFO_ID);
+        if left_info_id != nil {
+            let _: () = msg_send![left_info_view, setIdentifier: left_info_id];
+        }
+        let _: () = msg_send![left_info_view, setAutoresizingMask: NSViewWidthSizable];
+        let _: () = msg_send![footer_view, addSubview: left_info_view];
+    }
+
     let _: () = msg_send![
         content_view,
         addSubview: footer_view
@@ -392,13 +427,23 @@ unsafe fn refresh_main_footer_host(ns_window: id, config: &MainWindowFooterConfi
         }
     }
 
+    let alpha = crate::window_resize::mini_layout::HINT_TEXT_OPACITY as f64;
+    let text_color = ns_color_from_hex_with_alpha(theme.colors.text.primary, alpha);
+
     let hints_view = find_subview_by_identifier(footer_view, FOOTER_HINTS_ID);
     if hints_view != nil {
         let _: () = msg_send![hints_view, setFrame: footer_hints_frame(content_bounds.size.width)];
-
-        let alpha = crate::window_resize::mini_layout::HINT_TEXT_OPACITY as f64;
-        let text_color = ns_color_from_hex_with_alpha(theme.colors.text.primary, alpha);
         layout_footer_hints(hints_view, text_color, &config.buttons);
+    }
+
+    // Left info (streaming dot + model name)
+    let left_info_view = find_subview_by_identifier(footer_view, FOOTER_LEFT_INFO_ID);
+    if left_info_view != nil {
+        let _: () = msg_send![
+            left_info_view,
+            setFrame: footer_left_info_frame(content_bounds.size.width)
+        ];
+        layout_footer_left_info(left_info_view, config.left_info.as_ref(), text_color);
     }
 
     tracing::info!(
@@ -478,6 +523,148 @@ fn footer_hints_frame(width: f64) -> cocoa::foundation::NSRect {
         cocoa::foundation::NSPoint::new(FOOTER_HINT_SIDE_INSET, 0.0),
         cocoa::foundation::NSSize::new(width - (FOOTER_HINT_SIDE_INSET * 2.0), footer_height()),
     )
+}
+
+#[cfg(target_os = "macos")]
+fn footer_left_info_frame(width: f64) -> cocoa::foundation::NSRect {
+    cocoa::foundation::NSRect::new(
+        cocoa::foundation::NSPoint::new(FOOTER_HINT_SIDE_INSET, 0.0),
+        cocoa::foundation::NSSize::new(width / 2.0, footer_height()),
+    )
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn layout_footer_left_info(
+    left_info_view: id,
+    left_info: Option<&FooterLeftInfo>,
+    text_color: id,
+) {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    // SAFETY: `left_info_view` is a live NSView managed by the footer host on
+    // the AppKit main thread. We remove and recreate subviews to match state.
+
+    // Remove all existing subviews (rebuild each refresh, like hints do).
+    let subviews: id = msg_send![left_info_view, subviews];
+    if subviews != nil {
+        let count: usize = msg_send![subviews, count];
+        for i in (0..count).rev() {
+            let child: id = msg_send![subviews, objectAtIndex: i];
+            if child != nil {
+                let _: () = msg_send![child, removeFromSuperview];
+            }
+        }
+    }
+
+    let Some(info) = left_info else { return };
+    if info.model_name.is_empty() {
+        return;
+    }
+
+    let bounds: NSRect = msg_send![left_info_view, bounds];
+    let mut x = 0.0_f64;
+
+    // ── Streaming dot ──
+    if info.is_streaming {
+        let dot_y = ((bounds.size.height - FOOTER_STREAMING_DOT_SIZE) / 2.0).round();
+        let dot_view: id = msg_send![class!(NSView), alloc];
+        let dot_view: id = msg_send![
+            dot_view,
+            initWithFrame: NSRect::new(
+                NSPoint::new(x, dot_y),
+                NSSize::new(FOOTER_STREAMING_DOT_SIZE, FOOTER_STREAMING_DOT_SIZE),
+            )
+        ];
+        if dot_view != nil {
+            let _: () = msg_send![dot_view, setWantsLayer: YES];
+            let dot_layer: id = msg_send![dot_view, layer];
+            if dot_layer != nil {
+                let _: () = msg_send![dot_layer, setCornerRadius: FOOTER_STREAMING_DOT_SIZE / 2.0];
+
+                // Accent color for the dot
+                let theme = crate::theme::get_cached_theme();
+                let accent_ns = ns_color_from_hex_with_alpha(theme.colors.accent.selected, 1.0);
+                if accent_ns != nil {
+                    // SAFETY: `accent_ns` is a valid NSColor from the theme.
+                    let cg: id = msg_send![accent_ns, CGColor];
+                    if cg != nil {
+                        let _: () = msg_send![dot_layer, setBackgroundColor: cg];
+                    }
+                }
+
+                add_pulsing_opacity_animation(dot_layer);
+            }
+            let _: () = msg_send![left_info_view, addSubview: dot_view];
+            x += FOOTER_STREAMING_DOT_SIZE + FOOTER_LEFT_DOT_LABEL_GAP;
+        }
+    }
+
+    // ── Model name label ──
+    let font: id = msg_send![
+        class!(NSFont),
+        systemFontOfSize: FOOTER_HINT_FONT_SIZE
+        weight: FOOTER_HINT_FONT_WEIGHT_SEMIBOLD
+    ];
+    let label = make_footer_hint_text_field(&info.model_name, font, text_color);
+    if label != nil {
+        let label_size: NSSize = msg_send![label, fittingSize];
+        let label_y = ((bounds.size.height - label_size.height) / 2.0).round();
+        let _: () = msg_send![
+            label,
+            setFrame: NSRect::new(
+                NSPoint::new(x, label_y),
+                NSSize::new(label_size.width, label_size.height),
+            )
+        ];
+        let _: () = msg_send![left_info_view, addSubview: label];
+    }
+}
+
+/// Attach a repeating CABasicAnimation that pulses a layer's opacity between
+/// 0.5 and 1.0 over a 1.2 s cycle (0.6 s each way, autoreverses).
+#[cfg(target_os = "macos")]
+unsafe fn add_pulsing_opacity_animation(layer: id) {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    // SAFETY: `layer` is a live CALayer. We create a CABasicAnimation on
+    // the "opacity" keypath with autoreversal for a sine-like pulse.
+    let key_path = ns_string("opacity");
+    if key_path == nil {
+        return;
+    }
+
+    let anim: id = msg_send![class!(CABasicAnimation), animationWithKeyPath: key_path];
+    if anim == nil {
+        return;
+    }
+
+    let from_value: id = msg_send![class!(NSNumber), numberWithFloat: 0.5_f32];
+    let to_value: id = msg_send![class!(NSNumber), numberWithFloat: 1.0_f32];
+
+    let _: () = msg_send![anim, setFromValue: from_value];
+    let _: () = msg_send![anim, setToValue: to_value];
+    let _: () = msg_send![anim, setDuration: 0.6_f64]; // half-cycle; autoreverses
+    let _: () = msg_send![anim, setAutoreverses: YES];
+    let _: () = msg_send![anim, setRepeatCount: f32::INFINITY];
+
+    // Use ease-in-ease-out for a smooth sine-like curve.
+    let timing_name = ns_string("easeInEaseOut");
+    if timing_name != nil {
+        // SAFETY: Standard CoreAnimation timing function lookup.
+        let timing: id = msg_send![
+            class!(CAMediaTimingFunction),
+            functionWithName: timing_name
+        ];
+        if timing != nil {
+            let _: () = msg_send![anim, setTimingFunction: timing];
+        }
+    }
+
+    let anim_key = ns_string("pulseOpacity");
+    if anim_key != nil {
+        let _: () = msg_send![layer, addAnimation: anim forKey: anim_key];
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -657,20 +844,20 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     let label_y = (content_y + FOOTER_HINT_PADDING_Y).round();
 
     let _: () = msg_send![
-        key_field,
+        label_field,
         setFrame: NSRect::new(
-            NSPoint::new(FOOTER_HINT_PADDING_X, key_y),
-            NSSize::new(key_size.width, key_size.height)
+            NSPoint::new(FOOTER_HINT_PADDING_X, label_y),
+            NSSize::new(label_size.width, label_size.height)
         )
     ];
     let _: () = msg_send![
-        label_field,
+        key_field,
         setFrame: NSRect::new(
             NSPoint::new(
-                FOOTER_HINT_PADDING_X + key_size.width + FOOTER_HINT_KEY_LABEL_GAP,
-                label_y
+                FOOTER_HINT_PADDING_X + label_size.width + FOOTER_HINT_KEY_LABEL_GAP,
+                key_y
             ),
-            NSSize::new(label_size.width, label_size.height)
+            NSSize::new(key_size.width, key_size.height)
         )
     ];
     let _: () = msg_send![container, setWantsLayer: YES];
@@ -734,8 +921,8 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
         }
     }
 
-    let _: () = msg_send![container, addSubview: key_field];
     let _: () = msg_send![container, addSubview: label_field];
+    let _: () = msg_send![container, addSubview: key_field];
     if button != nil {
         let _: () = msg_send![container, addSubview: button];
     }

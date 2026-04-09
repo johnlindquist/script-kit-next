@@ -52,7 +52,7 @@ fn command_bar_config_default_values() {
         AnchorPosition::Bottom
     ));
     assert!(!config.dialog_config.show_icons);
-    assert!(!config.dialog_config.show_footer);
+    assert!(config.dialog_config.show_footer);
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
     assert!(config.close_on_click_outside);
@@ -74,7 +74,7 @@ fn command_bar_config_main_menu_style() {
         AnchorPosition::Bottom
     ));
     assert!(!config.dialog_config.show_icons);
-    assert!(!config.dialog_config.show_footer);
+    assert!(config.dialog_config.show_footer);
     // Inherits default close behaviors
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
@@ -94,7 +94,7 @@ fn command_bar_config_ai_style() {
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);
-    assert!(!config.dialog_config.show_footer);
+    assert!(config.dialog_config.show_footer);
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
     assert!(config.close_on_click_outside);
@@ -116,7 +116,7 @@ fn command_bar_config_no_search() {
         AnchorPosition::Bottom
     ));
     assert!(!config.dialog_config.show_icons);
-    assert!(!config.dialog_config.show_footer);
+    assert!(config.dialog_config.show_footer);
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn command_bar_config_notes_style() {
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);
-    assert!(!config.dialog_config.show_footer);
+    assert!(config.dialog_config.show_footer);
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
     assert!(config.close_on_click_outside);

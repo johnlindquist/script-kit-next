@@ -724,6 +724,74 @@ fn render_focused_info_for_result(
                 .child(focused_info_divider(style))
                 .child(focused_info_type_indicator("Fallback", style));
         }
+
+        scripts::SearchResult::Skill(skill_match) => {
+            let skill = &skill_match.skill;
+
+            // Source indicator
+            let mut path_div = div()
+                .flex()
+                .flex_row()
+                .text_xs()
+                .font_family(t.font_family_mono)
+                .pb(px(s.padding_xs))
+                .overflow_x_hidden()
+                .child(
+                    div()
+                        .text_color(rgba((style.text_muted << 8) | 0x99))
+                        .child("skill: "),
+                );
+
+            path_div = path_div.child(
+                div()
+                    .text_color(rgba((style.text_muted << 8) | 0x99))
+                    .child(format!("{}/{}", skill.plugin_id, skill.skill_id)),
+            );
+
+            content = content.child(path_div);
+
+            // Name header
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(skill.title.clone()),
+            );
+
+            // Description
+            if !skill.description.is_empty() {
+                content = content.child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(style.text_secondary))
+                        .pb(px(s.padding_md))
+                        .child(skill.description.clone()),
+                );
+            }
+
+            // Plugin badge
+            content = content.child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .flex_wrap()
+                    .gap(px(s.gap_sm))
+                    .pb(px(s.padding_sm))
+                    .child(focused_info_badge(
+                        &format!("plugin: {}", skill.plugin_title),
+                        style.badge_bg_rgba,
+                        style.badge_border_rgba,
+                        style.badge_text_hex,
+                    )),
+            );
+
+            // Divider + Type indicator
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Skill", style));
+        }
     }
 
     content
@@ -881,6 +949,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Agent(m) => {
                         Some(format!("agent:{}", m.agent.path.to_string_lossy()))
                     }
+                    scripts::SearchResult::Skill(_) => None, // Skills don't track frecency
                     scripts::SearchResult::Fallback(_) => None, // Fallbacks don't track frecency
                 };
 
@@ -985,6 +1054,19 @@ impl ScriptListApp {
                             ScriptInfo::new(
                                 &m.agent.name,
                                 format!("agent:{}", m.agent.path.to_string_lossy()),
+                            )
+                            .with_frecency(is_suggested, frecency_path),
+                        )
+                    }
+                    scripts::SearchResult::Skill(m) => {
+                        // Skills use plugin_id/skill_id as identifier
+                        // is_script=false: skills aren't editable scripts
+                        Some(
+                            ScriptInfo::with_action_verb(
+                                &m.skill.title,
+                                format!("skill:{}:{}", m.skill.plugin_id, m.skill.skill_id),
+                                false,
+                                "Open",
                             )
                             .with_frecency(is_suggested, frecency_path),
                         )

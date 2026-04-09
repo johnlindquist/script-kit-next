@@ -30,35 +30,38 @@ The repo wiki in `wiki/` is part of the agent workflow for this project. Future 
   - Page authors own the summary paragraph(s), `## Key Facts`, and optional sections after `## Related Pages`.
 - Re-ingest with `bun scripts/wiki/ingest.ts --root . --snapshot <git-sha> --config wiki/sources.json` instead of hand-editing snapshot copies under `wiki/raw/`.
 
-## Verification Gate (Mandatory)
+## Verification
 
-Every code change must pass before reporting success:
+Use the smallest verification that proves the requested change.
 
-```bash
-make verify
-```
-
-If the change affects the distributable macOS app, run the ship path too:
+- Default to fast smoke verification that finishes in under 30 seconds. On a warm build, `make smoke` and `make smoke-main-menu` should usually finish in about 7-11 seconds.
+- For UI changes, prefer the `agentic-testing` workflow against the real runtime surface.
+- For main window and footer work, use:
 
 ```bash
-make ship-check
+make smoke-main-menu
 ```
 
-After the gate passes, verify the change actually works:
-- **Logic changes**: check logs with `SCRIPT_KIT_AI_LOG=1`
-- **UI changes**: capture screenshot AND read the PNG to confirm visually
-- **Never** report success without running verification
+- `make smoke` is the default shortcut for routine launcher UI verification.
+- For other UI changes, use the equivalent `agentic-testing` flow: build, launch via `session.sh`, exercise the real entry path, capture a screenshot, read the PNG, then stop the session.
+- For logic changes, run targeted checks for the touched area instead of the full repository gate unless the user explicitly asks for broader coverage.
+- Reserve `make verify` for release work, CI debugging, build/test infrastructure changes, or when the user explicitly asks for the full gate.
+- AI agents must never run `make ship-check`.
+- `make ship-check` is human-only release validation and should run only when a human explicitly asks for packaging or distribution validation.
+- Do not run multiple UI smoke sessions in parallel against the same default session or window target. Parallel smoke runs can clobber each other unless each run uses a unique session name and isolated capture target.
+- Never report success without runtime verification evidence.
 
 ## Build & Test
 
 | Action | Command |
 |--------|---------|
+| Smoke (main menu/footer) | `make smoke-main-menu` |
 | Check | `cargo check` |
 | Format check | `cargo fmt --check` |
 | Lint | `cargo clippy --lib -- -D warnings` |
 | Test | `cargo nextest run --no-fail-fast` |
-| Verify | `make verify` |
-| Ship check | `make ship-check` |
+| Verify (full gate) | `make verify` |
+| Ship check (human-only, do not run as an AI agent) | `make ship-check` |
 | Test (system) | `cargo test --features system-tests` |
 | Test (slow) | `cargo test --features slow-tests` |
 | Run | `echo '{"type":"show"}' \| SCRIPT_KIT_AI_LOG=1 ./target/debug/script-kit-gpui 2>&1` |
@@ -82,6 +85,7 @@ After the gate passes, verify the change actually works:
   If raw matching is needed, always match both variants: `"up" | "arrowup"`, `"enter" | "Enter"`, etc.
 
 ### UI Testing
+- Prefer `agentic-testing` for UI verification; it counts as the default smoke test.
 - **Never** pass scripts as CLI args — use stdin JSON protocol
 - Always use `SCRIPT_KIT_AI_LOG=1` for compact log output
 - After screenshots, **read the PNG file** to verify
@@ -496,12 +500,12 @@ debugging instrumentation.
 
 ## Session Completion
 
-Work is not done until `git push` succeeds.
+Work is done when the requested change is implemented and verified.
 
-1. Run verification gate (check/clippy/test)
-2. Commit with descriptive message
-3. `git pull --rebase && git push && git status`
-4. Never say "ready to push when you are" — just push
+1. Run the smallest verification that proves the change on the real surface
+2. Summarize what changed and what was verified
+3. Commit only if the user asks
+4. Push only if the user asks
 
 ## Skills (Loaded On-Demand)
 
@@ -521,7 +525,7 @@ Detailed guidance lives in `.claude/skills/` — load only when relevant:
 | `script-kit-scripting` | Script metadata, scriptlet bundles |
 | `script-kit-hive` | Task management, beads, issue tracking |
 
-**When to load skills:** If editing `src/platform/` load `gpui-patterns`. If editing `src/prompts/` or `src/render_prompts/` load `gpui-patterns`. If writing tests load `script-kit-testing`. If adding protocol messages load `script-kit-architecture`. If debugging UI load `script-kit-ui-testing` + `visual-test`.
+**When to load skills:** If editing `src/platform/` load `gpui-patterns`. If editing `src/prompts/` or `src/render_prompts/` load `gpui-patterns`. If writing tests load `script-kit-testing`. If adding protocol messages load `script-kit-architecture`. If debugging UI load `script-kit-ui-testing` + `visual-test`. For routine UI and behavior verification, load `agentic-testing` first.
 
 ## References
 

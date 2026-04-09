@@ -9,7 +9,7 @@ Files in this directory are embedded into the Script Kit binary and copied to `~
 | `GUIDE.md` | `~/.scriptkit/GUIDE.md` | Comprehensive user tutorial |
 | `config-template.ts` | `~/.scriptkit/kit/config.ts` | Default configuration |
 | `theme.example.json` | `~/.scriptkit/kit/theme.json` | Default theme |
-| `skills/**` | `~/.scriptkit/kit/authoring/skills/**` | Agent-readable skills loaded from authoring plugin |
+| `skills/**` | `~/.scriptkit/kit/authoring/skills/**` | Plugin-owned skills loaded from the authoring plugin |
 
 ## Behavior
 

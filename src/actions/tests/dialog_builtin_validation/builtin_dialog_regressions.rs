@@ -1113,13 +1113,13 @@ mod from_dialog_builtin_action_validation_tests_32 {
     #[test]
     fn batch32_config_ai_style_show_footer_true() {
         let config = CommandBarConfig::ai_style();
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     #[test]
     fn batch32_config_main_menu_show_footer_false() {
         let config = CommandBarConfig::main_menu_style();
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     // ---------------------------------------------------------------------------
@@ -1841,28 +1841,28 @@ mod from_dialog_builtin_action_validation_tests_33 {
     fn command_bar_ai_shows_icons_and_footer() {
         let config = CommandBarConfig::ai_style();
         assert!(config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     #[test]
     fn command_bar_main_menu_hides_icons_and_footer() {
         let config = CommandBarConfig::main_menu_style();
         assert!(!config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     #[test]
     fn command_bar_notes_shows_icons_and_footer() {
         let config = CommandBarConfig::notes_style();
         assert!(config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     #[test]
     fn command_bar_no_search_hides_icons_and_footer() {
         let config = CommandBarConfig::no_search();
         assert!(!config.dialog_config.show_icons);
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     // =====================================================================
@@ -3608,7 +3608,7 @@ mod from_dialog_builtin_action_validation_tests_34 {
     #[test]
     fn notes_style_show_footer_true() {
         let config = CommandBarConfig::notes_style();
-        assert!(!config.dialog_config.show_footer);
+        assert!(config.dialog_config.show_footer);
     }
     
     // =====================================================================

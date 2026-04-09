@@ -136,9 +136,9 @@ fn text_color_with_opacity(primary: u32, opacity: f32) -> u32 {
     ((primary & 0x00FF_FFFF) << 8) | alpha_from_opacity(opacity)
 }
 
-/// A parsed hint: either an icon+label pair or plain text.
+/// A parsed hint: either a text+shortcut pair or plain text.
 enum HintElement {
-    /// One or more keyboard glyph icons or text keycaps followed by a text label.
+    /// A text label paired with one or more trailing keyboard glyph icons or keycaps.
     KeyHint {
         parts: Vec<KeyHintPart>,
         label: SharedString,
@@ -495,11 +495,11 @@ fn is_boundary_or_end(rest: &str) -> bool {
 
 /// Parse a hint string and extract a leading keyboard glyph if present.
 ///
-/// Recognized patterns (all map to SVG icons):
-/// - `"↵ Run"`, `"⏎ Send"`, `"↩ Send"` → Return icon + label
-/// - `"⌘K Actions"`, `"⌘⇧↵ Send"` → icon sequence + rest
-/// - `"Tab AI"` → Tab icon + label
-/// - `"Esc Back"` → Esc text keycap + rest
+/// Recognized patterns (all map to SVG icons, rendered after the label):
+/// - `"↵ Run"`, `"⏎ Send"`, `"↩ Send"` → label + Return icon
+/// - `"⌘K Actions"`, `"⌘⇧↵ Send"` → label + icon sequence
+/// - `"⌘↵ AI"` → label + command + return icons
+/// - `"Esc Back"` → label + Esc text keycap
 fn parse_hint(hint: &str) -> HintElement {
     let mut rest = hint;
     let mut parts = Vec::new();
@@ -564,7 +564,7 @@ fn parse_hint(hint: &str) -> HintElement {
     }
 }
 
-/// Render a single hint element (icon+label or plain text) with a pre-computed RGBA color.
+/// Render a single hint element (text+shortcut or plain text) with a pre-computed RGBA color.
 fn render_hint_element(element: HintElement, text_rgba: u32) -> AnyElement {
     render_hint_element_hsla(element, rgba(text_rgba).into())
 }
@@ -575,6 +575,22 @@ fn render_hint_element_hsla(element: HintElement, color: gpui::Hsla) -> AnyEleme
         HintElement::KeyHint { parts, label } => {
             let theme = crate::theme::get_cached_theme();
             let keycap_bg = theme.colors.text.primary.with_opacity(KEYCAP_BG_OPACITY);
+
+            let mut hint_row = div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(KEY_ICON_LABEL_GAP));
+
+            if !label.is_empty() {
+                hint_row = hint_row.child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(color)
+                        .child(label),
+                );
+            }
 
             let mut keys_row = div()
                 .flex()
@@ -603,22 +619,7 @@ fn render_hint_element_hsla(element: HintElement, color: gpui::Hsla) -> AnyEleme
                 });
             }
 
-            let mut hint_row = div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(KEY_ICON_LABEL_GAP))
-                .child(keys_row);
-
-            if !label.is_empty() {
-                hint_row = hint_row.child(
-                    div()
-                        .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(color)
-                        .child(label),
-                );
-            }
+            hint_row = hint_row.child(keys_row);
 
             hint_row.into_any_element()
         }
@@ -698,7 +699,7 @@ impl RenderOnce for HintStrip {
 /// Render a list of hint strings as icon-aware elements in a flex row.
 ///
 /// This is the shared entry point for any footer that needs keyboard glyph icons.
-/// Callers supply the hints (e.g. `["↵ Run", "⌘K Actions", "Tab AI"]`) and the
+/// Callers supply the hints (e.g. `["↵ Run", "⌘K Actions", "⌘↵ AI"]`) and the
 /// pre-computed RGBA text color. Returns a right-aligned flex row `AnyElement`.
 ///
 /// Use this instead of rendering hint strings as plain text — it replaces Unicode

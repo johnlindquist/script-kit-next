@@ -59,7 +59,7 @@ fn shortcut_add_shows_error_for_window_type() {
     let actions = super::read_all_handle_action_sources();
 
     assert!(
-        actions.contains("Window shortcuts not supported - windows are transient"),
+        actions.contains("Shortcuts not supported for this item type"),
         "Expected shortcut actions to show error toast for Window type"
     );
 }
@@ -184,7 +184,7 @@ fn alias_add_shows_error_for_window_type() {
     let actions = super::read_all_handle_action_sources();
 
     assert!(
-        actions.contains("Window aliases not supported - windows are transient"),
+        actions.contains("Aliases not supported for this item type"),
         "Expected alias actions to show error toast for Window type"
     );
 }

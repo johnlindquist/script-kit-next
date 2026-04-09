@@ -135,10 +135,22 @@ impl Render for PathPrompt {
             "path_prompt_chrome_checkpoint"
         );
 
-        let container =
-            crate::components::render_minimal_list_prompt_scaffold(header, content, hints, None)
-                .id(gpui::ElementId::Name("window:path".into()))
-                .text_color(gpui::rgb(text_primary));
+        let native_footer_active = matches!(
+            crate::footer_popup::active_main_window_footer_surface(),
+            Some("path_prompt")
+        );
+
+        let footer = if native_footer_active {
+            Some(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
+        } else {
+            Some(crate::components::render_simple_hint_strip(hints, None))
+        };
+
+        let container = crate::components::render_minimal_list_prompt_shell_with_footer(
+            0.0, None, header, content, footer,
+        )
+        .id(gpui::ElementId::Name("window:path".into()))
+        .text_color(gpui::rgb(text_primary));
 
         FocusablePrompt::new(container)
             .key_context("path_prompt")
