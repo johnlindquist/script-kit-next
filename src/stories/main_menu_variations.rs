@@ -1,23 +1,22 @@
 use gpui::*;
 
 use crate::storybook::{
-    main_menu_story_variants, render_main_menu_story_preview, story_container, story_item,
-    story_section, Story, StorySurface, StoryVariant,
+    main_menu_story_variants, render_main_menu_story_preview, Story, StorySurface, StoryVariant,
 };
 
-pub struct MainMenuVariationsStory;
+pub struct MainMenuStory;
 
-impl Story for MainMenuVariationsStory {
+impl Story for MainMenuStory {
     fn id(&self) -> &'static str {
-        "main-menu-variations"
+        "main-menu"
     }
 
     fn name(&self) -> &'static str {
-        "Main Menu Variations"
+        "Main Menu"
     }
 
     fn category(&self) -> &'static str {
-        "Layouts"
+        "Launcher"
     }
 
     fn surface(&self) -> StorySurface {
@@ -29,18 +28,7 @@ impl Story for MainMenuVariationsStory {
     }
 
     fn render(&self) -> AnyElement {
-        let variants = main_menu_story_variants();
-
-        story_container()
-            .child(story_section("Main Menu Compositions").children(
-                variants.into_iter().enumerate().map(|(index, variant)| {
-                    story_item(
-                        &format!("{}. {}", index + 1, variant.name),
-                        render_main_menu_story_preview(&variant.stable_id()),
-                    )
-                }),
-            ))
-            .into_any_element()
+        render_main_menu_story_preview("current-main-menu")
     }
 
     fn variants(&self) -> Vec<StoryVariant> {
@@ -50,13 +38,13 @@ impl Story for MainMenuVariationsStory {
 
 #[cfg(test)]
 mod tests {
-    use super::MainMenuVariationsStory;
+    use super::MainMenuStory;
     use crate::storybook::{Story, StorySurface};
 
     #[test]
-    fn main_menu_story_is_compare_ready() {
-        let story = MainMenuVariationsStory;
+    fn main_menu_story_is_single_surface_snapshot() {
+        let story = MainMenuStory;
         assert_eq!(story.surface(), StorySurface::MainMenu);
-        assert!(story.variants().len() > 1);
+        assert_eq!(story.variants().len(), 1);
     }
 }
