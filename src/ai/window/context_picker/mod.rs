@@ -1282,13 +1282,34 @@ pub(crate) fn slash_picker_loading_row() -> ContextPickerItem {
 
 /// Build a non-actionable "No commands or skills found" row.
 ///
-/// Shown when the slash query filters out all discovered commands.
+/// Shown when async discovery completed but the catalog is empty
+/// (no defaults, no plugins, no Claude skills were found).
 pub(crate) fn slash_picker_empty_row() -> ContextPickerItem {
     tracing::debug!("acp_slash_picker_empty_state");
     ContextPickerItem {
         id: SharedString::from("slash-empty"),
         label: SharedString::from("No commands or skills found"),
         description: SharedString::from("Try another slash name or plugin skill"),
+        meta: SharedString::from(""),
+        kind: ContextPickerItemKind::Inert,
+        score: 0,
+        label_highlight_indices: Vec::new(),
+        meta_highlight_indices: Vec::new(),
+    }
+}
+
+/// Build a non-actionable "No matching commands" row.
+///
+/// Shown when the discovered catalog is non-empty but the current query
+/// filters every entry to zero. This is distinct from the empty catalog
+/// state (`slash_picker_empty_row`) and the loading state
+/// (`slash_picker_loading_row`).
+pub(crate) fn slash_picker_no_match_row() -> ContextPickerItem {
+    tracing::debug!("acp_slash_picker_no_match");
+    ContextPickerItem {
+        id: SharedString::from("slash-no-match"),
+        label: SharedString::from("No matching commands"),
+        description: SharedString::from("No commands or skills match the current query"),
         meta: SharedString::from(""),
         kind: ContextPickerItemKind::Inert,
         score: 0,

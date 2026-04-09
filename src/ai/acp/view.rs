@@ -37,6 +37,7 @@ use crate::ai::window::context_picker::types::{
 use crate::ai::window::context_picker::{
     build_picker_items, build_slash_picker_items, build_slash_picker_items_with_descriptions,
     build_slash_picker_items_with_payloads, slash_picker_empty_row, slash_picker_loading_row,
+    slash_picker_no_match_row,
 };
 
 /// Active @-mention session state for the ACP inline context picker.
@@ -1653,9 +1654,21 @@ impl AcpChatView {
         let mut seen: std::collections::HashSet<String> =
             commands.iter().map(|e| e.qualified_key()).collect();
 
-        // Track slash-name owners for collision detection.
+        // Seed collision tracker with default slash names so plugin/Claude
+        // collisions against built-ins are detected.
+        let default_names: std::collections::HashSet<String> =
+            commands.iter().map(|e| e.name.clone()).collect();
         let mut owners_by_slash: std::collections::HashMap<String, Vec<String>> =
             std::collections::HashMap::new();
+        for entry in &commands {
+            owners_by_slash
+                .entry(entry.name.clone())
+                .or_default()
+                .push(entry.source.owner_label());
+        }
+
+        // Track plugin slash names for Claude-vs-plugin collision detection.
+        let mut plugin_names: std::collections::HashSet<String> = std::collections::HashSet::new();
 
         if let Ok(index) = crate::plugins::discover_plugins() {
             if let Ok(skills) = crate::plugins::discover_plugin_skills(&index) {
@@ -1663,10 +1676,20 @@ impl AcpChatView {
                     let entry = SlashCommandEntry::plugin_skill(skill);
                     let owner = entry.source.owner_label();
 
+                    plugin_names.insert(entry.name.clone());
                     owners_by_slash
                         .entry(entry.name.clone())
                         .or_default()
                         .push(owner);
+
+                    if default_names.contains(&entry.name) {
+                        tracing::warn!(
+                            plugin_id = %skill.plugin_id,
+                            skill_id = %skill.skill_id,
+                            slash_name = %entry.name,
+                            "acp_slash_plugin_collides_with_default"
+                        );
+                    }
 
                     if seen.insert(entry.qualified_key()) {
                         tracing::info!(
@@ -1677,17 +1700,6 @@ impl AcpChatView {
                         commands.push(entry);
                     }
                 }
-            }
-        }
-
-        // Warn about slash-name collisions across plugins
-        for (slash_name, owners) in &owners_by_slash {
-            if owners.len() > 1 {
-                tracing::warn!(
-                    slash_name = %slash_name,
-                    owners = ?owners,
-                    "acp_slash_skill_name_collision"
-                );
             }
         }
 
@@ -1709,11 +1721,42 @@ impl AcpChatView {
                     .and_then(|content| parse_skill_description(&content))
                     .unwrap_or_default();
 
-                let slash_entry = SlashCommandEntry::claude_code_skill(name, desc, skill_md);
+                let slash_entry =
+                    SlashCommandEntry::claude_code_skill(name.clone(), desc, skill_md);
+
+                owners_by_slash
+                    .entry(name.clone())
+                    .or_default()
+                    .push("Claude Code".to_string());
+
+                if plugin_names.contains(&name) {
+                    tracing::warn!(
+                        skill_id = %name,
+                        "acp_slash_claude_collides_with_plugin"
+                    );
+                }
+                if default_names.contains(&name) {
+                    tracing::warn!(
+                        skill_id = %name,
+                        "acp_slash_claude_collides_with_default"
+                    );
+                }
 
                 if seen.insert(slash_entry.qualified_key()) {
                     commands.push(slash_entry);
                 }
+            }
+        }
+
+        // Final cross-source collision pass: warn when multiple distinct
+        // owners share the same bare slash name.
+        for (slash_name, owners) in &owners_by_slash {
+            if owners.len() > 1 {
+                tracing::warn!(
+                    slash_name = %slash_name,
+                    owners = ?owners,
+                    "acp_slash_skill_name_collision"
+                );
             }
         }
 
@@ -3290,20 +3333,26 @@ impl AcpChatView {
                             } else {
                                 self.resolved_slash_commands(&available_commands)
                             };
-                            let payloads: Vec<(SlashCommandPayload, String)> = entries
-                                .iter()
-                                .map(|e| (e.to_payload(), e.description.clone()))
-                                .collect();
-                            let mut items = build_slash_picker_items_with_payloads(
-                                &query,
-                                payloads.iter().map(|(p, d)| (p, d.as_str())),
-                            );
-                            if items.is_empty() {
-                                // Query filtered out everything — show explicit
-                                // empty state instead of an unexplained blank.
-                                items.push(slash_picker_empty_row());
+                            if entries.is_empty() {
+                                // Discovery completed but catalog is empty
+                                // (no defaults, no plugins, no Claude skills).
+                                vec![slash_picker_empty_row()]
+                            } else {
+                                let payloads: Vec<(SlashCommandPayload, String)> = entries
+                                    .iter()
+                                    .map(|e| (e.to_payload(), e.description.clone()))
+                                    .collect();
+                                let mut items = build_slash_picker_items_with_payloads(
+                                    &query,
+                                    payloads.iter().map(|(p, d)| (p, d.as_str())),
+                                );
+                                if items.is_empty() {
+                                    // Non-empty catalog filtered to zero by
+                                    // query — distinct from empty catalog.
+                                    items.push(slash_picker_no_match_row());
+                                }
+                                items
                             }
-                            items
                         }
                     }
                 };

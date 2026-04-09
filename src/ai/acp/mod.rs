@@ -38,44 +38,6 @@ pub(crate) mod view;
 #[cfg(test)]
 mod tests;
 
-const ACP_CHAT_CONVERSATION_HEADING: &str = "# ACP Chat Conversation\n\n";
-
-fn acp_thread_role_label(role: &thread::AcpThreadMessageRole) -> &'static str {
-    match role {
-        thread::AcpThreadMessageRole::User => "**You**",
-        thread::AcpThreadMessageRole::Assistant => "**Assistant**",
-        thread::AcpThreadMessageRole::Thought => "**Thinking**",
-        thread::AcpThreadMessageRole::Tool => "**Tool**",
-        thread::AcpThreadMessageRole::System => "**System**",
-        thread::AcpThreadMessageRole::Error => "**Error**",
-    }
-}
-
-/// Build a markdown export for ACP Chat messages.
-///
-/// Returns `None` when every message body is empty after trimming.
-pub(crate) fn build_acp_conversation_markdown(
-    messages: &[thread::AcpThreadMessage],
-) -> Option<String> {
-    let mut markdown = String::from(ACP_CHAT_CONVERSATION_HEADING);
-    let mut wrote_any = false;
-
-    for message in messages {
-        let body = message.body.trim();
-        if body.is_empty() {
-            continue;
-        }
-
-        markdown.push_str(acp_thread_role_label(&message.role));
-        markdown.push_str("\n\n");
-        markdown.push_str(body);
-        markdown.push_str("\n\n---\n\n");
-        wrote_any = true;
-    }
-
-    wrote_any.then_some(markdown)
-}
-
 pub(crate) use catalog::{
     default_acp_agents_path, AcpAgentAuthState, AcpAgentCatalogEntry, AcpAgentCatalogFile,
     AcpAgentConfigState, AcpAgentInstallState, AcpAgentSource,
