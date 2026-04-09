@@ -11,12 +11,21 @@
                 }
 
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
-                // Keep main list arrow routing scoped to the main window so notes/AI/actions
+                // Keep launcher navigation scoped to the main window so notes/AI/detached ACP/actions
                 // windows receive their own navigation key events.
-                if crate::notes::is_notes_window(window)
-                    || crate::ai::is_ai_window(window)
-                    || crate::actions::is_actions_window(window)
-                {
+                let is_notes = crate::notes::is_notes_window(window);
+                let is_ai = crate::ai::is_ai_window(window);
+                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_actions = crate::actions::is_actions_window(window);
+                if is_notes || is_ai || is_detached_acp || is_actions {
+                    tracing::debug!(
+                        target: "script_kit::keyboard",
+                        event = "arrow_interceptor_skipped_secondary_window",
+                        is_notes,
+                        is_ai,
+                        is_detached_acp,
+                        is_actions,
+                    );
                     return;
                 }
 
@@ -642,10 +651,19 @@
                 }
 
                 // Skip processing if this keystroke is from a secondary window
-                if crate::notes::is_notes_window(window)
-                    || crate::ai::is_ai_window(window)
-                    || crate::actions::is_actions_window(window)
-                {
+                let is_notes = crate::notes::is_notes_window(window);
+                let is_ai = crate::ai::is_ai_window(window);
+                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_actions = crate::actions::is_actions_window(window);
+                if is_notes || is_ai || is_detached_acp || is_actions {
+                    tracing::debug!(
+                        target: "script_kit::keyboard",
+                        event = "home_end_interceptor_skipped_secondary_window",
+                        is_notes,
+                        is_ai,
+                        is_detached_acp,
+                        is_actions,
+                    );
                     return;
                 }
 

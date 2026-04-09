@@ -365,9 +365,10 @@ pub fn toggle_detached_actions(cx: &mut App) {
         tracing::info!(
             target: "script_kit::keyboard",
             event = "detached_actions_toggle_result",
+            route_owner = "detached_chat",
+            restored_chat_focus = true,
             actions_window_open_before,
             actions_window_open_after = actions::is_actions_window_open(),
-            has_view_entity = true,
         );
         return;
     }
@@ -502,6 +503,8 @@ pub fn toggle_detached_actions(cx: &mut App) {
     tracing::info!(
         target: "script_kit::keyboard",
         event = "detached_actions_toggle_result",
+        route_owner = "detached_chat",
+        restored_chat_focus = false,
         actions_window_open_before,
         actions_window_open_after = crate::actions::is_actions_window_open(),
         has_view_entity = view_weak.is_some(),
