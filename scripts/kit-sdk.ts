@@ -1329,7 +1329,7 @@ export interface Config {
   notesHotkey?: HotkeyConfig;
 
   /**
-   * Hotkey for opening the AI chat window.
+   * Hotkey for opening ACP Chat.
    * Falls back to Cmd+Shift+Space when enabled and unset.
    *
    * @default undefined
@@ -2087,8 +2087,13 @@ interface LayoutInfoResultMessage {
 }
 
 // =============================================================================
-// AI CHAT SDK API Message Types
+// ACP Chat SDK API Message Types
 // =============================================================================
+
+/** Typed context part for ACP Chat — matches Rust AiContextPartInput */
+type AiContextPartInput =
+  | { kind: 'resourceUri'; uri: string; label: string }
+  | { kind: 'filePath'; path: string; label: string };
 
 interface AiIsOpenMessage {
   type: 'aiIsOpen';
@@ -2150,6 +2155,7 @@ interface AiStartChatMessage {
   image?: string;
   modelId?: string;
   noResponse?: boolean;
+  parts?: AiContextPartInput[];
 }
 
 interface AiChatCreatedMessage {
@@ -2183,6 +2189,7 @@ interface AiSendMessageMessage {
   chatId: string;
   content: string;
   image?: string;
+  parts?: AiContextPartInput[];
 }
 
 interface AiMessageSentMessage {
@@ -2333,6 +2340,8 @@ interface AiChatOptions {
   modelId?: string;
   /** If true, don't trigger AI response */
   noResponse?: boolean;
+  /** Typed context parts to attach (resource URIs or file paths) */
+  parts?: AiContextPartInput[];
 }
 
 interface AiStartChatResult {
@@ -3353,7 +3362,7 @@ declare global {
   // - Stream responses from any API (Anthropic, OpenAI, local models, etc.)
   // - Control the conversation flow programmatically
   //
-  // For the separate floating AI window with built-in BYOK AI providers,
+  // For ACP Chat with built-in BYOK AI providers,
   // see the ai* functions below (aiStartChat, aiFocus, etc.)
   // =============================================================================
 
@@ -3384,7 +3393,7 @@ declare global {
    * This design lets you use ANY AI provider, including local models, custom APIs,
    * or the Vercel AI SDK. The SDK only provides the chat UI; generation is up to you.
    *
-   * For the separate floating AI window with built-in AI providers (BYOK),
+   * For ACP Chat with built-in AI providers (BYOK),
    * see aiStartChat(), aiFocus(), and other ai* functions.
    *
    * @param options - Chat configuration with optional callbacks
@@ -3517,53 +3526,53 @@ declare global {
   function getLayoutInfo(): Promise<LayoutInfo>;
 
   // =============================================================================
-  // AI Chat Window SDK API (Separate Floating Window)
+  // ACP Chat SDK API
   // =============================================================================
   //
-  // These functions control the **separate floating AI chat window** which:
-  // - Opens as its own window (not in the main Script Kit window)
-  // - Has built-in BYOK (Bring Your Own Key) AI providers (Anthropic, OpenAI)
+  // These functions control **ACP Chat** — Script Kit's built-in AI chat surface:
+  // - BYOK (Bring Your Own Key) AI providers (Anthropic, OpenAI)
   // - Manages its own chat history in SQLite
   // - Provides streaming responses automatically
+  // - Supports typed context parts (resource URIs, file paths)
   //
   // For an **inline chat UI** in the main window where YOU control AI generation,
   // use the chat() function instead. See TIER 4A above.
   // =============================================================================
 
-  /** Check if the AI chat window is currently open */
+  /** Check if ACP Chat is currently open */
   function aiIsOpen(): Promise<{ isOpen: boolean; activeChatId?: string }>;
 
-  /** Get information about the currently active chat in the AI window */
+  /** Get information about the currently active chat in ACP Chat */
   function aiGetActiveChat(): Promise<AiChatInfo | null>;
 
-  /** List all chats from AI chat storage */
+  /** List all chats from ACP Chat storage */
   function aiListChats(limit?: number, includeDeleted?: boolean): Promise<AiChatInfo[]>;
 
   /** Get messages from a specific chat or the active chat */
   function aiGetConversation(chatId?: string, limit?: number): Promise<AiMessageInfo[]>;
 
-  /** Start a new AI chat conversation with an initial message */
+  /** Start a new ACP Chat conversation with an initial message */
   function aiStartChat(message: string, options?: AiChatOptions): Promise<AiStartChatResult>;
 
-  /** Append a message to an existing chat without triggering AI response */
+  /** Append a message to an existing chat without triggering a response */
   function aiAppendMessage(chatId: string, content: string, role: 'user' | 'assistant' | 'system'): Promise<string>;
 
   /** Send a message to an existing chat and trigger an AI response */
-  function aiSendMessage(chatId: string, content: string, imagePath?: string): Promise<{ userMessageId: string; streamingStarted: boolean }>;
+  function aiSendMessage(chatId: string, content: string, imagePath?: string, parts?: AiContextPartInput[]): Promise<{ userMessageId: string; streamingStarted: boolean }>;
 
   /** Set or update the system prompt for a chat */
   function aiSetSystemPrompt(chatId: string, prompt: string): Promise<void>;
 
-  /** Focus the AI chat window, opening it if necessary */
+  /** Focus ACP Chat, opening it if necessary */
   function aiFocus(): Promise<{ wasOpen: boolean }>;
 
   /** Get the current streaming status for a chat */
   function aiGetStreamingStatus(chatId?: string): Promise<{ isStreaming: boolean; chatId?: string; partialContent?: string }>;
 
-  /** Delete a chat from AI chat storage */
+  /** Delete a chat from ACP Chat storage */
   function aiDeleteChat(chatId: string, permanent?: boolean): Promise<void>;
 
-  /** Subscribe to AI chat events for real-time streaming updates */
+  /** Subscribe to ACP Chat events for real-time streaming updates */
   function aiOn(eventType: AiEventType, handler: AiEventHandler, chatId?: string): Promise<() => void>;
 
   /**
@@ -6143,13 +6152,13 @@ globalThis.getLayoutInfo = async function getLayoutInfo(): Promise<LayoutInfo> {
 };
 
 // =============================================================================
-// AI Chat SDK API
+// ACP Chat SDK API
 // =============================================================================
 
 /**
- * Check if the AI chat window is currently open.
+ * Check if ACP Chat is currently open.
  *
- * @returns Object indicating if window is open and the active chat ID if any
+ * @returns Object indicating if ACP Chat is open and the active chat ID if any
  */
 globalThis.aiIsOpen = async function aiIsOpen(): Promise<{ isOpen: boolean; activeChatId?: string }> {
   const requestId = nextId();
@@ -6181,8 +6190,8 @@ globalThis.aiIsOpen = async function aiIsOpen(): Promise<{ isOpen: boolean; acti
 };
 
 /**
- * Get information about the currently active chat in the AI window.
- * Works directly from SQLite storage - window doesn't need to be open.
+ * Get information about the currently active chat in ACP Chat.
+ * Works directly from SQLite storage — ACP Chat doesn't need to be open.
  *
  * @returns Chat info if there's an active chat, null otherwise
  */
@@ -6213,8 +6222,8 @@ globalThis.aiGetActiveChat = async function aiGetActiveChat(): Promise<AiChatInf
 };
 
 /**
- * List all chats from the AI chat storage.
- * Works directly from SQLite storage - window doesn't need to be open.
+ * List all chats from ACP Chat storage.
+ * Works directly from SQLite storage — ACP Chat doesn't need to be open.
  *
  * @param limit - Maximum number of chats to return (default: 50)
  * @param includeDeleted - If true, include soft-deleted chats (default: false)
@@ -6254,7 +6263,7 @@ globalThis.aiListChats = async function aiListChats(
 
 /**
  * Get messages from a specific chat or the active chat.
- * Works directly from SQLite storage - window doesn't need to be open.
+ * Works directly from SQLite storage — ACP Chat doesn't need to be open.
  *
  * @param chatId - Specific chat ID, or omit to use active chat
  * @param limit - Maximum number of messages to return (default: 100)
@@ -6294,11 +6303,11 @@ globalThis.aiGetConversation = async function aiGetConversation(
 };
 
 /**
- * Start a new AI chat conversation with an initial message.
- * Opens the AI window if not already open.
+ * Start a new ACP Chat conversation with an initial message.
+ * Opens ACP Chat if it is not already open.
  *
  * @param message - The initial message to send
- * @param options - Optional configuration for the chat
+ * @param options - Optional configuration (system prompt, model, context parts)
  * @returns Information about the created chat
  */
 globalThis.aiStartChat = async function aiStartChat(
@@ -6358,6 +6367,7 @@ globalThis.aiStartChat = async function aiStartChat(
       image: imageBase64,
       modelId: options?.modelId,
       noResponse: options?.noResponse ?? false,
+      parts: options?.parts,
     };
     send(sendMessage);
   });
@@ -6412,12 +6422,14 @@ globalThis.aiAppendMessage = async function aiAppendMessage(
  * @param chatId - The chat to send to
  * @param content - The message content
  * @param imagePath - Optional path to an image to attach
+ * @param parts - Optional typed context parts to attach
  * @returns The user message ID and whether streaming started
  */
 globalThis.aiSendMessage = async function aiSendMessage(
   chatId: string,
   content: string,
-  imagePath?: string
+  imagePath?: string,
+  parts?: AiContextPartInput[]
 ): Promise<{ userMessageId: string; streamingStarted: boolean }> {
   const requestId = nextId();
 
@@ -6459,6 +6471,7 @@ globalThis.aiSendMessage = async function aiSendMessage(
       chatId,
       content,
       image: imageBase64,
+      parts,
     };
     send(sendMsg);
   });
@@ -6497,9 +6510,9 @@ globalThis.aiSetSystemPrompt = async function aiSetSystemPrompt(
 };
 
 /**
- * Focus the AI chat window, opening it if necessary.
+ * Focus ACP Chat, opening it if necessary.
  *
- * @returns Whether the window was already open
+ * @returns Whether ACP Chat was already open
  */
 globalThis.aiFocus = async function aiFocus(): Promise<{ wasOpen: boolean }> {
   const requestId = nextId();
@@ -6568,7 +6581,7 @@ globalThis.aiGetStreamingStatus = async function aiGetStreamingStatus(
 };
 
 /**
- * Delete a chat from the AI chat storage.
+ * Delete a chat from ACP Chat storage.
  *
  * @param chatId - The chat to delete
  * @param permanent - If true, permanently delete; otherwise soft-delete (default: false)
@@ -6603,7 +6616,7 @@ globalThis.aiDeleteChat = async function aiDeleteChat(
 const aiSubscriptions = new Map<string, { eventTypes: AiEventType[]; handler: AiEventHandler }>();
 
 /**
- * Subscribe to AI chat events for real-time streaming updates.
+ * Subscribe to ACP Chat events for real-time streaming updates.
  *
  * @param eventType - The event type to subscribe to
  * @param handler - Callback function for events
