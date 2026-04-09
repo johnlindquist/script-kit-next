@@ -67,17 +67,14 @@ impl NotesApp {
         // Open the command bar (CommandBar handles window creation internally)
         self.command_bar.open_centered(window, cx);
 
-        // CRITICAL: Focus main focus_handle so keyboard events route to us
-        // The ActionsWindow is a visual-only popup - it does NOT take keyboard focus.
-        // macOS popup windows often don't receive keyboard events properly.
-        self.focus_handle.focus(window, cx);
-
-        // Update state flags
+        // Update state flags (before focus request so current_focus_surface() reflects the new state)
         self.show_actions_panel = true;
         self.show_browse_panel = false;
         self.browse_panel = None;
 
-        cx.notify();
+        // Route through NotesFocusSurface for structured logging and consistent focus management.
+        // The ActionsWindow is a visual-only popup — it does NOT take keyboard focus.
+        self.request_focus_surface(focus::NotesFocusSurface::ActionsPanel, window, cx);
     }
 
     pub(super) fn close_actions_panel(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -87,12 +84,8 @@ impl NotesApp {
         self.show_actions_panel = false;
         self.actions_panel = None;
 
-        // Refocus the editor after closing the actions panel
-        self.editor_state.update(cx, |state, cx| {
-            state.focus(window, cx);
-        });
-
-        cx.notify();
+        // Route through NotesFocusSurface for structured logging and consistent focus management.
+        self.request_focus_surface(focus::NotesFocusSurface::Editor, window, cx);
     }
 
     pub(super) fn ensure_actions_panel_height(&mut self, window: &mut Window, row_count: usize) {
@@ -402,16 +395,14 @@ impl NotesApp {
             });
         }
 
-        // CRITICAL: Focus main focus_handle so keyboard events route to us
-        // The ActionsWindow is a visual-only popup - it does NOT take keyboard focus.
-        self.focus_handle.focus(window, cx);
-
-        // Update state flags
+        // Update state flags (before focus request so current_focus_surface() reflects the new state)
         self.show_browse_panel = true;
         self.show_actions_panel = false;
         self.browse_panel = None; // Clear legacy browse panel
 
-        cx.notify();
+        // Route through NotesFocusSurface for structured logging and consistent focus management.
+        // The ActionsWindow is a visual-only popup — it does NOT take keyboard focus.
+        self.request_focus_surface(focus::NotesFocusSurface::BrowsePanel, window, cx);
     }
 
     /// Handle note selection from browse panel
@@ -491,12 +482,8 @@ impl NotesApp {
         self.show_browse_panel = false;
         self.browse_panel = None;
 
-        // Refocus the editor after closing the browse panel
-        self.editor_state.update(cx, |state, cx| {
-            state.focus(window, cx);
-        });
-
-        cx.notify();
+        // Route through NotesFocusSurface for structured logging and consistent focus management.
+        self.request_focus_surface(focus::NotesFocusSurface::Editor, window, cx);
     }
 
     /// Toggle the search bar visibility
