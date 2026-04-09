@@ -200,6 +200,37 @@ fn part_to_inline_token_returns_typed_token_for_ambient() {
     assert_eq!(part_to_inline_token(&part), Some("@env:test".to_string()));
 }
 
+#[test]
+fn part_to_inline_token_uses_focused_target_name_instead_of_prefixed_chip_label() {
+    let part = AiContextPart::FocusedTarget {
+        target: crate::ai::tab_context::TabAiTargetContext {
+            source: "ScriptList".to_string(),
+            kind: "builtin".to_string(),
+            semantic_id: "choice:0:theme-designer".to_string(),
+            label: "Theme Designer".to_string(),
+            metadata: None,
+        },
+        label: "Command: Theme Designer".to_string(),
+    };
+
+    assert_eq!(
+        part_to_inline_token(&part),
+        Some("@cmd:\"Theme Designer\"".to_string())
+    );
+}
+
+#[test]
+fn part_to_inline_token_strips_known_prefixes_from_ambient_labels() {
+    let part = AiContextPart::AmbientContext {
+        label: "Context: Browser URL".to_string(),
+    };
+
+    assert_eq!(
+        part_to_inline_token(&part),
+        Some("@env:\"Browser URL\"".to_string())
+    );
+}
+
 // ── Provider-backed token coverage ───────────────────────────────
 
 #[test]

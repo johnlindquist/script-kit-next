@@ -1361,10 +1361,8 @@ fn acp_slash_picker_duplicate_rows_show_owner_labels() {
         beta_row.meta
     );
     // Default rows should NOT show owner in meta.
-    let all_items = build_slash_picker_items_with_payloads(
-        "",
-        payloads.iter().map(|(p, d)| (p, d.as_str())),
-    );
+    let all_items =
+        build_slash_picker_items_with_payloads("", payloads.iter().map(|(p, d)| (p, d.as_str())));
     let clear_row = all_items
         .iter()
         .find(|i| i.id.as_ref() == "slash-cmd:default:clear")

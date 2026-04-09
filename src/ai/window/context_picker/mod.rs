@@ -1107,8 +1107,7 @@ where
     I: IntoIterator<Item = (&'a types::SlashCommandPayload, &'a str)>,
 {
     let query_lower = query.to_lowercase();
-    let commands: Vec<(&types::SlashCommandPayload, &str)> =
-        payload_commands.into_iter().collect();
+    let commands: Vec<(&types::SlashCommandPayload, &str)> = payload_commands.into_iter().collect();
     let command_count = commands.len();
     let mut items = Vec::with_capacity(command_count);
 

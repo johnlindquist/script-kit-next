@@ -10,10 +10,6 @@ fn app_shell_footer_colors(theme: &crate::theme::Theme) -> PromptFooterColors {
     PromptFooterColors::from_theme(theme)
 }
 
-fn script_list_footer_primary_label() -> &'static str {
-    "Run"
-}
-
 fn script_list_footer_info_label(
     window_tweaker_enabled: bool,
     is_dark_mode: bool,
@@ -175,7 +171,8 @@ impl ScriptListApp {
         // Unified color, typography, and spacing resolution
         // Shell uses theme-first so non-default design variants keep the active
         // theme's colors while still using the variant's spacing and shape tokens.
-        let color_resolver = crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
+        let color_resolver =
+            crate::theme::ColorResolver::new_for_shell(&self.theme, self.current_design);
         let typography_resolver =
             crate::theme::TypographyResolver::new_theme_first(&self.theme, self.current_design);
         let spacing_resolver = crate::theme::SpacingResolver::new(self.current_design);
@@ -707,10 +704,7 @@ impl ScriptListApp {
                         }
                         "k" => {
                             // Cmd+K - Toggle actions menu (routed through shared dispatcher)
-                            logging::log(
-                                "KEY",
-                                "Shortcut Cmd+K -> handle_cmd_k_actions_toggle",
-                            );
+                            logging::log("KEY", "Shortcut Cmd+K -> handle_cmd_k_actions_toggle");
                             this.handle_cmd_k_actions_toggle(window, cx);
                             return;
                         }
@@ -821,12 +815,11 @@ impl ScriptListApp {
                 // which fires before the Input component can consume them. This allows
                 // input history navigation + list navigation to work correctly.
                 match key_str {
-                    key
-                        if sk_is_key_enter(key)
-                            && event.keystroke.modifiers.platform
-                            && !event.keystroke.modifiers.shift
-                            && !event.keystroke.modifiers.alt
-                            && !event.keystroke.modifiers.control =>
+                    key if sk_is_key_enter(key)
+                        && event.keystroke.modifiers.platform
+                        && !event.keystroke.modifiers.shift
+                        && !event.keystroke.modifiers.alt
+                        && !event.keystroke.modifiers.control =>
                     {
                         if this.try_route_global_cmd_enter_to_acp_context_capture(cx) {
                             cx.stop_propagation();
@@ -932,40 +925,36 @@ impl ScriptListApp {
                                         .focus_bordered(false),
                                 ),
                             )
-                            // "Ask AI [⌘↵]" keyboard hint - styled as non-clickable to match behavior
-                            .when(!is_mini, |d| {
-                                d.child(
-                                    div()
-                                        .id("ask-ai-button")
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .gap(px(ASK_AI_BUTTON_GAP))
-                                        .px(px(ASK_AI_BUTTON_PADDING_X))
-                                        .py(px(ASK_AI_BUTTON_PADDING_Y))
-                                        .rounded(px(ASK_AI_BUTTON_RADIUS))
-                                        .bg(rgba(chrome.accent_badge_bg_rgba))
-                                        .cursor_default()
-                                        // "Ask AI" text - YELLOW (accent)
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .text_color(rgb(chrome.accent_badge_text_hex))
-                                                .child("Ask AI"),
-                                        )
-                                        // "⌘↵" badge - grey background via chrome contract (no border)
-                                        .child(
-                                            div()
-                                                .px(px(TAB_BADGE_PADDING_X))
-                                                .py(px(TAB_BADGE_PADDING_Y))
-                                                .rounded(px(TAB_BADGE_RADIUS))
-                                                .bg(rgba(chrome.badge_bg_rgba))
-                                                .text_xs()
-                                                .text_color(rgb(chrome.badge_text_hex))
-                                                .child("⌘↵"),
-                                        ),
-                                )
-                            }),
+                            // "Ask [⇥]" keyboard hint
+                            .child(
+                                div()
+                                    .id("ask-ai-button")
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(ASK_AI_BUTTON_GAP))
+                                    .cursor_default()
+                                    .opacity(0.4)
+                                    // "Ask" text
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .text_color(rgb(chrome.badge_text_hex))
+                                            .child("Ask"),
+                                    )
+                                    // "⇥" badge - bordered keycap
+                                    .child(
+                                        div()
+                                            .px(px(TAB_BADGE_PADDING_X))
+                                            .py(px(TAB_BADGE_PADDING_Y))
+                                            .rounded(px(TAB_BADGE_RADIUS))
+                                            .border_1()
+                                            .border_color(rgba(chrome.badge_bg_rgba))
+                                            .text_xs()
+                                            .text_color(rgb(chrome.badge_text_hex))
+                                            .child("⇥"),
+                                    ),
+                            ),
                     )
             })
             // Divider between header and list content
@@ -1114,16 +1103,20 @@ impl ScriptListApp {
 
         // Footer: Universal three-key hint strip — ↵ Run · ⌘K Actions · ⌘↵ AI
         {
-            let hints = crate::components::universal_prompt_hints();
+            let primary_label = self.main_window_primary_action_label();
+            let hints =
+                crate::components::universal_prompt_hints_with_primary_label(&primary_label);
             crate::components::emit_prompt_hint_audit("render_script_list::full", &hints);
             tracing::info!(
                 target: "script_kit::prompt_chrome",
                 event = "script_list_footer_unified",
                 mode = "full",
-                "Script list footer rendered with universal three-key footer"
+                primary_label = %primary_label,
+                "Script list footer rendered with selected enter-action label"
             );
             let gpui_footer =
-                crate::components::render_universal_prompt_hint_strip_clickable(
+                crate::components::render_universal_prompt_hint_strip_clickable_with_primary_label(
+                    &primary_label,
                     cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
                         this.execute_selected(cx);
                     }),
@@ -1187,7 +1180,6 @@ mod render_script_list_footer_tests {
         app_shell_footer_colors, inline_calc_list_item_hint_text_color,
         inline_calc_list_item_result_text_color, inline_calc_list_item_selected_overlay_rgba,
         inline_calc_list_item_title, script_list_footer_info_label,
-        script_list_footer_primary_label,
     };
     use crate::designs::DesignVariant;
     use crate::theme::ColorResolver;
@@ -1204,8 +1196,9 @@ mod render_script_list_footer_tests {
     }
 
     #[test]
-    fn test_script_list_footer_primary_label_is_generic_run() {
-        assert_eq!(script_list_footer_primary_label(), "Run");
+    fn test_universal_prompt_hints_support_custom_primary_label() {
+        let hints = crate::components::universal_prompt_hints_with_primary_label("Open App");
+        assert_eq!(hints[0].as_ref(), "↵ Open App");
     }
 
     #[test]
