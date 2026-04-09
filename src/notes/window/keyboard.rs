@@ -389,7 +389,14 @@ impl NotesApp {
                         cx.stop_propagation();
                     }
                 }
-                key if key.eq_ignore_ascii_case("w") => {
+                key if key.eq_ignore_ascii_case("w") && !modifiers.shift => {
+                    tracing::info!(
+                        target: "script_kit::keyboard",
+                        event = "notes_cmd_w_close",
+                        focus_surface = ?self.current_focus_surface(),
+                        show_search = self.show_search,
+                        focus_mode = self.focus_mode,
+                    );
                     self.command_bar.close_app(cx);
                     self.note_switcher.close_app(cx);
                     let wb = window.window_bounds();
@@ -400,6 +407,7 @@ impl NotesApp {
                     window.close_all_dialogs(cx);
                     window.remove_window();
                     super::window_ops::restore_launcher_after_notes_close(cx);
+                    cx.stop_propagation();
                 }
                 "." => {
                     if modifiers.shift {
