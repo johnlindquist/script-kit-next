@@ -82,7 +82,7 @@ pub enum NotesAction {
     PermanentlyDeleteNote,
     /// Enable auto-sizing (window grows/shrinks with content)
     EnableAutoSizing,
-    /// Send the current note content to ACP Chat
+    /// Send the current note content to AI chat
     SendToAi,
     /// Panel was cancelled (Escape pressed)
     Cancel,
@@ -125,7 +125,7 @@ impl NotesAction {
             NotesAction::RestoreNote => "Restore Note",
             NotesAction::PermanentlyDeleteNote => "Delete Permanently",
             NotesAction::EnableAutoSizing => "Enable Auto-Sizing",
-            NotesAction::SendToAi => "Send to ACP Chat",
+            NotesAction::SendToAi => "Send to AI",
             NotesAction::Cancel => "Cancel",
         }
     }

@@ -5163,13 +5163,16 @@ impl AcpChatView {
         // ── Cmd+K → open actions dialog ──────
         if modifiers.platform && crate::ui_foundation::is_key_k(key) {
             let detached_window_open = crate::ai::acp::chat_window::is_chat_window_open();
+            let is_detached_host = crate::ai::acp::chat_window::is_chat_window(window);
             tracing::debug!(
                 target: "script_kit::keyboard",
                 event = "acp_cmd_k_route",
                 detached_window_open,
-                route = if detached_window_open { "detached_local" } else { "propagate_to_main_window" },
+                is_detached_host,
+                host = if is_detached_host { "detached" } else { "embedded" },
+                route = if is_detached_host { "detached_local" } else { "propagate_to_main_window" },
             );
-            if detached_window_open {
+            if is_detached_host {
                 // Detached window: open actions popup directly
                 tracing::info!(
                     target: "script_kit::keyboard",
@@ -5578,18 +5581,23 @@ impl Render for AcpChatView {
 
                     // Cmd+W in detached window: close the window directly.
                     // In the main panel, Cmd+W is handled by the interceptor.
-                    if modifiers.platform && key.eq_ignore_ascii_case("w")
-                        && crate::ai::acp::chat_window::is_chat_window_open()
-                    {
-                        let wb = window.window_bounds();
-                        crate::window_state::save_window_from_gpui(
-                            crate::window_state::WindowRole::AcpChat,
-                            wb,
-                        );
-                        crate::ai::acp::chat_window::clear_chat_window_handle();
-                        window.remove_window();
-                        cx.stop_propagation();
-                        return;
+                    if modifiers.platform && key.eq_ignore_ascii_case("w") {
+                        let is_detached_host = crate::ai::acp::chat_window::is_chat_window(window);
+                        if is_detached_host {
+                            tracing::info!(
+                                target: "script_kit::keyboard",
+                                event = "detached_acp_cmd_w_close_requested",
+                            );
+                            let wb = window.window_bounds();
+                            crate::window_state::save_window_from_gpui(
+                                crate::window_state::WindowRole::AcpChat,
+                                wb,
+                            );
+                            crate::ai::acp::chat_window::clear_chat_window_handle();
+                            window.remove_window();
+                            cx.stop_propagation();
+                            return;
+                        }
                     }
 
                     this.handle_key_down(event, window, cx);

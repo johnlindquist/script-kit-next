@@ -639,7 +639,7 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         Action::new(
             "acp_save_as_note",
             "Save as Note",
-            Some("Create or update a note from the current ACP content".to_string()),
+            Some("Save the conversation to Notes".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("\u{21e7}\u{2318}S")
@@ -815,12 +815,6 @@ pub(crate) fn get_acp_chat_actions_with_agents(
 pub const ACP_CHANGE_AGENT_ACTION_ID: &str = "acp:change_agent";
 /// Action ID for the root-level "Change Model" entry that pushes the model picker.
 pub const ACP_CHANGE_MODEL_ACTION_ID: &str = "acp:change_model";
-
-/// Stable root labels and descriptions for ACP Actions Menu parity across hosts.
-const ACP_CHANGE_AGENT_LABEL: &str = "Change Agent";
-const ACP_CHANGE_AGENT_DESCRIPTION: &str = "Pick the ACP agent for this chat";
-const ACP_CHANGE_MODEL_LABEL: &str = "Change Model";
-const ACP_CHANGE_MODEL_DESCRIPTION: &str = "Pick the ACP model for this chat";
 /// Route ID for the ACP root actions menu.
 pub const ACP_ROOT_ROUTE_ID: &str = "acp:root";
 /// Route ID for the agent picker sub-route.
@@ -862,11 +856,11 @@ pub(crate) fn get_acp_chat_root_actions(
 
     let mut actions = vec![Action::new(
         ACP_CHANGE_AGENT_ACTION_ID,
-        ACP_CHANGE_AGENT_LABEL,
+        "Change Agent",
         Some(
             selected_agent
                 .map(|e| format!("Current: {}", e.display_name))
-                .unwrap_or_else(|| ACP_CHANGE_AGENT_DESCRIPTION.to_string()),
+                .unwrap_or_else(|| "Choose the ACP agent for this chat".to_string()),
         ),
         ActionCategory::ScriptContext,
     )
@@ -877,11 +871,11 @@ pub(crate) fn get_acp_chat_root_actions(
         actions.push(
             Action::new(
                 ACP_CHANGE_MODEL_ACTION_ID,
-                ACP_CHANGE_MODEL_LABEL,
+                "Change Model",
                 Some(
                     selected_model
                         .map(|entry| format!("Current: {}", acp_model_display_name(entry)))
-                        .unwrap_or_else(|| ACP_CHANGE_MODEL_DESCRIPTION.to_string()),
+                        .unwrap_or_else(|| "Select the ACP model for this chat".to_string()),
                 ),
                 ActionCategory::ScriptContext,
             )
@@ -983,25 +977,9 @@ fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> 
 }
 
 fn filter_acp_actions_for_host(host: AcpActionsDialogHost, actions: Vec<Action>) -> Vec<Action> {
-    let host_label = match host {
-        AcpActionsDialogHost::Shared => "shared",
-        AcpActionsDialogHost::Detached => "detached",
-    };
     actions
         .into_iter()
-        .filter(|action| {
-            let supported = acp_action_supported_in_host(host, &action.id);
-            if !supported {
-                tracing::warn!(
-                    event = "acp_actions_menu_filtered",
-                    host = host_label,
-                    action_id = %action.id,
-                    reason = "unsupported_in_host",
-                    "Filtered unsupported ACP Actions Menu item"
-                );
-            }
-            supported
-        })
+        .filter(|action| acp_action_supported_in_host(host, &action.id))
         .collect()
 }
 
@@ -1013,39 +991,22 @@ pub(crate) fn get_acp_chat_root_route_for_host(
     selected_model_id: Option<&str>,
     host: AcpActionsDialogHost,
 ) -> crate::actions::ActionsDialogRoute {
-    let host_label = match host {
-        AcpActionsDialogHost::Shared => "shared",
-        AcpActionsDialogHost::Detached => "detached",
-    };
     let context_title = selected_agent_id
         .and_then(|id| catalog_entries.iter().find(|e| e.id.as_ref() == id))
         .map(|e| e.display_name.to_string())
         .or_else(|| Some("AI Chat".to_string()));
 
-    let actions = filter_acp_actions_for_host(
-        host,
-        get_acp_chat_root_actions(
-            catalog_entries,
-            selected_agent_id,
-            available_models,
-            selected_model_id,
-        ),
-    );
-
-    let agent_count = catalog_entries.len();
-    let model_count = available_models.len();
-    tracing::info!(
-        event = "acp_actions_menu_built",
-        host = host_label,
-        agent_count,
-        model_count,
-        action_count = actions.len(),
-        "Built ACP Actions Menu"
-    );
-
     crate::actions::ActionsDialogRoute {
         id: ACP_ROOT_ROUTE_ID.to_string(),
-        actions,
+        actions: filter_acp_actions_for_host(
+            host,
+            get_acp_chat_root_actions(
+                catalog_entries,
+                selected_agent_id,
+                available_models,
+                selected_model_id,
+            ),
+        ),
         context_title,
         search_placeholder: Some("Search ACP actions...".to_string()),
         initial_selected_action_id: Some(ACP_CHANGE_AGENT_ACTION_ID.to_string()),

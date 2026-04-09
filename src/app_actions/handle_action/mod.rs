@@ -64,21 +64,10 @@ const CLIPBOARD_CACHE_SIZE: usize = 100;
 
 enum DeferredAiWindowAction {
     OpenOnly,
-    SetInput {
-        text: String,
-        submit: bool,
-    },
-    SetInputWithImage {
-        text: String,
-        image_base64: String,
-        submit: bool,
-    },
-    AddAttachment {
-        path: String,
-    },
-    ApplyPreset {
-        preset_id: String,
-    },
+    SetInput { text: String, submit: bool },
+    SetInputWithImage { text: String, image_base64: String, submit: bool },
+    AddAttachment { path: String },
+    ApplyPreset { preset_id: String },
 }
 
 impl DeferredAiWindowAction {
@@ -101,11 +90,7 @@ impl DeferredAiWindowAction {
                 ai::set_ai_input(cx, &text, submit)?;
                 Ok("set_input")
             }
-            Self::SetInputWithImage {
-                text,
-                image_base64,
-                submit,
-            } => {
+            Self::SetInputWithImage { text, image_base64, submit } => {
                 ai::set_ai_input_with_image(cx, &text, &image_base64, submit)?;
                 Ok("set_input_with_image")
             }
@@ -130,7 +115,11 @@ impl ScriptListApp {
     /// The optional `error_code` is logged for machine-readable diagnostics but
     /// never shown to the user.  Use the stable constants from
     /// `crate::action_helpers` (e.g. `ERROR_LAUNCH_FAILED`).
-    fn show_error_toast(&mut self, message: impl Into<String>, cx: &mut Context<Self>) {
+    fn show_error_toast(
+        &mut self,
+        message: impl Into<String>,
+        cx: &mut Context<Self>,
+    ) {
         self.show_error_toast_with_code(message, None, cx);
     }
 
@@ -150,7 +139,8 @@ impl ScriptListApp {
             );
         }
         self.toast_manager.push(
-            components::toast::Toast::error(msg, &self.theme).duration_ms(Some(TOAST_ERROR_MS)),
+            components::toast::Toast::error(msg, &self.theme)
+                .duration_ms(Some(TOAST_ERROR_MS)),
         );
         cx.notify();
     }
@@ -202,15 +192,22 @@ impl ScriptListApp {
     /// platform is a warning, not an error.  Internally logs with the
     /// `unsupported_platform` error code.
     #[cfg_attr(target_os = "macos", allow(dead_code))]
-    fn show_unsupported_platform_toast(&mut self, feature: &str, cx: &mut Context<Self>) {
+    fn show_unsupported_platform_toast(
+        &mut self,
+        feature: &str,
+        cx: &mut Context<Self>,
+    ) {
         tracing::warn!(
             error_code = crate::action_helpers::ERROR_UNSUPPORTED_PLATFORM,
             feature = feature,
             "Unsupported platform"
         );
         self.toast_manager.push(
-            components::toast::Toast::warning(unsupported_platform_message(feature), &self.theme)
-                .duration_ms(Some(TOAST_WARNING_MS)),
+            components::toast::Toast::warning(
+                unsupported_platform_message(feature),
+                &self.theme,
+            )
+            .duration_ms(Some(TOAST_WARNING_MS)),
         );
         cx.notify();
     }
@@ -238,7 +235,12 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) {
         self.hide_main_and_reset(cx);
-        self.open_ai_window_after_already_hidden(source_action, trace_id, deferred_action, cx);
+        self.open_ai_window_after_already_hidden(
+            source_action,
+            trace_id,
+            deferred_action,
+            cx,
+        );
     }
 
     fn open_ai_window_after_already_hidden(
@@ -319,7 +321,10 @@ impl ScriptListApp {
                             duration_ms = started_at.elapsed().as_millis() as u64,
                             "Failed to open AI window after hiding main window"
                         );
-                        this.show_error_toast(format!("Failed to send to AI Chat: {}", error), cx);
+                        this.show_error_toast(
+                            format!("Failed to send to AI Chat: {}", error),
+                            cx,
+                        );
                     });
                 }
             }
@@ -576,10 +581,18 @@ impl ScriptListApp {
     /// user-facing message.  Success, NoEffect, and Cancelled outcomes
     /// produce no feedback here — success HUDs are the handler's
     /// responsibility since only the handler knows the right message.
-    fn show_outcome_feedback(&mut self, outcome: &DispatchOutcome, cx: &mut Context<Self>) {
+    fn show_outcome_feedback(
+        &mut self,
+        outcome: &DispatchOutcome,
+        cx: &mut Context<Self>,
+    ) {
         if outcome.status == ActionOutcomeStatus::Error {
             if let Some(ref msg) = outcome.user_message {
-                self.show_error_toast_with_code(msg.clone(), outcome.error_code, cx);
+                self.show_error_toast_with_code(
+                    msg.clone(),
+                    outcome.error_code,
+                    cx,
+                );
             }
         }
     }
@@ -591,13 +604,6 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
-        tracing::info!(
-            event = "acp_actions_menu_selected",
-            host = "shared",
-            action_id,
-            "Selected ACP Actions Menu item"
-        );
-
         let AppView::AcpChatView { ref entity } = self.current_view else {
             return DispatchOutcome::not_handled();
         };
@@ -605,24 +611,22 @@ impl ScriptListApp {
         if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
             let Some((current_selected_model_id, model_display_name)) = ({
                 let view = entity.read(cx);
-                view.thread()
-                    .map(|thread| {
-                        let thread = thread.read(cx);
-                        let current_selected_model_id =
-                            thread.selected_model_id().map(str::to_string);
-                        let model_display_name = thread
-                            .available_models()
-                            .iter()
-                            .find(|entry| entry.id == model_id)
-                            .map(|entry| {
-                                entry
-                                    .display_name
-                                    .clone()
-                                    .unwrap_or_else(|| entry.id.clone())
-                            })?;
-                        Some((current_selected_model_id, model_display_name))
-                    })
-                    .flatten()
+                view.thread().map(|thread| {
+                    let thread = thread.read(cx);
+                    let current_selected_model_id = thread.selected_model_id().map(str::to_string);
+                    let model_display_name = thread
+                        .available_models()
+                        .iter()
+                        .find(|entry| entry.id == model_id)
+                        .map(|entry| {
+                            entry
+                                .display_name
+                                .clone()
+                                .unwrap_or_else(|| entry.id.clone())
+                        })?;
+                    Some((current_selected_model_id, model_display_name))
+                })
+                .flatten()
             }) else {
                 return DispatchOutcome::error(
                     crate::action_helpers::ERROR_ACTION_FAILED,
@@ -632,7 +636,8 @@ impl ScriptListApp {
 
             if current_selected_model_id.as_deref() == Some(model_id) {
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some(format!("ACP is already using {model_display_name}"));
+                outcome.user_message =
+                    Some(format!("ACP is already using {model_display_name}"));
                 return outcome;
             }
 
@@ -690,7 +695,8 @@ impl ScriptListApp {
 
             if current_selected_agent_id.as_deref() == Some(agent_id) {
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some(format!("ACP is already using {agent_display_name}"));
+                outcome.user_message =
+                    Some(format!("ACP is already using {agent_display_name}"));
                 return outcome;
             }
 
@@ -741,9 +747,8 @@ impl ScriptListApp {
             self.open_tab_ai_chat(cx);
 
             let mut outcome = DispatchOutcome::success();
-            outcome.user_message = Some(format!(
-                "Switching ACP agent to {agent_display_name}\u{2026}"
-            ));
+            outcome.user_message =
+                Some(format!("Switching ACP agent to {agent_display_name}\u{2026}"));
             return outcome;
         }
 
@@ -771,7 +776,8 @@ impl ScriptListApp {
                 if let Some(text) = last_response {
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
                     let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some("Copied last response to clipboard".to_string());
+                    outcome.user_message =
+                        Some("Copied last response to clipboard".to_string());
                     outcome
                 } else {
                     DispatchOutcome::not_handled()
@@ -899,7 +905,10 @@ impl ScriptListApp {
                             .iter()
                             .rev()
                             .find(|m| {
-                                matches!(m.role, crate::ai::acp::thread::AcpThreadMessageRole::User)
+                                matches!(
+                                    m.role,
+                                    crate::ai::acp::thread::AcpThreadMessageRole::User
+                                )
                             })
                             .map(|m| m.body.to_string())
                     })
@@ -973,7 +982,10 @@ impl ScriptListApp {
                                 }
                             })
                             .unwrap_or_else(|| {
-                                format!("ai-script-{}", chrono::Utc::now().format("%H%M%S"))
+                                format!(
+                                    "ai-script-{}",
+                                    chrono::Utc::now().format("%H%M%S")
+                                )
                             });
 
                         let path = crate::setup::get_kit_path()
@@ -986,13 +998,15 @@ impl ScriptListApp {
                             tracing::warn!(%e, "acp_save_as_script_failed");
                         } else {
                             let mut o = DispatchOutcome::success();
-                            o.user_message = Some(format!("Saved as {name}.{ext}"));
+                            o.user_message =
+                                Some(format!("Saved as {name}.{ext}"));
                             return o;
                         }
                     }
                 }
                 let mut o = DispatchOutcome::success();
-                o.user_message = Some("No code block found in last response".to_string());
+                o.user_message =
+                    Some("No code block found in last response".to_string());
                 o
             }
             "acp_run_last_code" => {
@@ -1092,7 +1106,11 @@ impl ScriptListApp {
                                             format!("```\n{stdout}\n```")
                                         }
                                     } else {
-                                        let out = if stderr.is_empty() { stdout } else { stderr };
+                                        let out = if stderr.is_empty() {
+                                            stdout
+                                        } else {
+                                            stderr
+                                        };
                                         format!("Error (exit {}):\n```\n{out}\n```", output.status)
                                     }
                                 }
@@ -1132,9 +1150,7 @@ impl ScriptListApp {
                     for msg in &messages {
                         let role_label = match msg.role {
                             crate::ai::acp::thread::AcpThreadMessageRole::User => "**You**",
-                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant => {
-                                "**Assistant**"
-                            }
+                            crate::ai::acp::thread::AcpThreadMessageRole::Assistant => "**Assistant**",
                             crate::ai::acp::thread::AcpThreadMessageRole::Thought => "**Thinking**",
                             crate::ai::acp::thread::AcpThreadMessageRole::Tool => "**Tool**",
                             crate::ai::acp::thread::AcpThreadMessageRole::System => "**System**",
@@ -1144,7 +1160,8 @@ impl ScriptListApp {
                     }
                     cx.write_to_clipboard(gpui::ClipboardItem::new_string(md));
                     let mut outcome = DispatchOutcome::success();
-                    outcome.user_message = Some("Conversation copied as markdown".to_string());
+                    outcome.user_message =
+                        Some("Conversation copied as markdown".to_string());
                     outcome
                 } else {
                     DispatchOutcome::not_handled()
@@ -1169,27 +1186,16 @@ impl ScriptListApp {
                     md.push_str(&format!("{role_label}\n\n{}\n\n---\n\n", msg.body));
                 }
                 if md == "# AI Chat Conversation\n\n" {
-                    tracing::warn!(
-                        event = "notes_acp_handoff_blocked",
-                        reason = "empty_conversation",
-                        "Blocked Notes/ACP handoff"
-                    );
                     let mut o = DispatchOutcome::success();
                     o.user_message = Some("No messages to save".to_string());
                     return o;
                 }
-                let char_count = md.chars().count();
                 if let Err(e) = crate::notes::save_note_with_content(cx, md) {
                     tracing::warn!(%e, "acp_save_as_note_failed");
                     let mut o = DispatchOutcome::success();
                     o.user_message = Some(format!("Failed to save note: {e}"));
                     o
                 } else {
-                    tracing::info!(
-                        event = "acp_save_as_note",
-                        char_count,
-                        "Saved ACP content as note"
-                    );
                     let mut o = DispatchOutcome::success();
                     o.user_message = Some("Conversation saved as note".to_string());
                     o
@@ -1285,11 +1291,13 @@ impl ScriptListApp {
                     event = "actions_detach_acp_requested",
                     has_inherited_bounds = true,
                 );
-                if let Err(e) = crate::ai::acp::chat_window::open_chat_window_with_thread(
-                    thread,
-                    inherit_bounds,
-                    cx,
-                ) {
+                if let Err(e) =
+                    crate::ai::acp::chat_window::open_chat_window_with_thread(
+                        thread,
+                        inherit_bounds,
+                        cx,
+                    )
+                {
                     tracing::warn!(%e, "acp_detach_window_failed");
                     DispatchOutcome::success()
                 } else {
@@ -1348,16 +1356,9 @@ impl ScriptListApp {
             None
         };
         // Clipboard actions handle their own transitions and notifications.
-        let clipboard_outcome =
-            self.handle_clipboard_action(&action_id_stripped, selected_clipboard_entry, &dctx, cx);
+        let clipboard_outcome = self.handle_clipboard_action(&action_id_stripped, selected_clipboard_entry, &dctx, cx);
         if clipboard_outcome.was_handled() {
-            log_dispatch_outcome(
-                &action_id_stripped,
-                &dctx.trace_id,
-                "clipboard",
-                &clipboard_outcome,
-                &start,
-            );
+            log_dispatch_outcome(&action_id_stripped, &dctx.trace_id, "clipboard", &clipboard_outcome, &start);
             self.show_outcome_feedback(&clipboard_outcome, cx);
             return;
         }
@@ -1389,19 +1390,12 @@ impl ScriptListApp {
                             if o.was_handled() {
                                 ("scriptlet", o)
                             } else {
-                                let o =
-                                    self.handle_acp_chat_action(&action_id_stripped, window, cx);
+                                let o = self.handle_acp_chat_action(&action_id_stripped, window, cx);
                                 if o.was_handled() {
                                     ("acp_chat", o)
                                 } else {
                                     // SDK actions as final fallback — thread trace_id from dctx
-                                    (
-                                        "sdk_fallback",
-                                        self.trigger_sdk_action_with_trace(
-                                            &action_id_stripped,
-                                            &dctx.trace_id,
-                                        ),
-                                    )
+                                    ("sdk_fallback", self.trigger_sdk_action_with_trace(&action_id_stripped, &dctx.trace_id))
                                 }
                             }
                         }
@@ -1410,13 +1404,7 @@ impl ScriptListApp {
             }
         };
 
-        log_dispatch_outcome(
-            &action_id_stripped,
-            &dctx.trace_id,
-            handler,
-            &outcome,
-            &start,
-        );
+        log_dispatch_outcome(&action_id_stripped, &dctx.trace_id, handler, &outcome, &start);
         self.show_outcome_feedback(&outcome, cx);
         cx.notify();
     }
