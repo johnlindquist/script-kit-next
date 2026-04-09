@@ -236,6 +236,11 @@ Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` vi
 - Internal silent prewarm may seed the PTY ahead of time, but that is a single-use implementation detail rather than a documented warm multi-turn surface.
 - Recovery — if the harness crashes or exits, the next Tab entry respawns it.
 
+**ACP Chat vs harness terminal:**
+- Plain `Tab` opens the harness terminal, not ACP Chat.
+- ACP Chat is opened explicitly from skills or ACP SDK entry points (`aiStartChat()`, `aiFocus()`).
+- Do not describe plain Tab as opening ACP Chat.
+
 **Do not describe as current behavior:**
 - Do not describe the old inline chat entity or custom streaming UI as the primary Tab AI surface
 - Do not describe the old inline chat or custom streaming UI as the default path

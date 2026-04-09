@@ -1079,9 +1079,11 @@ Script Kit includes ACP Chat — a built-in AI chat surface that uses your own A
 
 ### Opening ACP Chat
 
-- **Tab** from the launcher opens ACP Chat with current context
+- **From script**: Use `aiStartChat()` to create or continue an ACP Chat conversation
+- **Focus existing ACP Chat**: Use `aiFocus()`
+- **From skills**: Selecting a skill opens ACP Chat
 - **Hotkey**: `Cmd+Shift+Space` (default, configurable)
-- **From script**: Use `aiStartChat()` or `aiFocus()` — see [SDK Reference](#sdk-quick-reference)
+- **Tab behavior**: Plain `Tab` from the launcher opens the PTY-backed harness terminal, not ACP Chat
 
 ### API Key Setup
 
@@ -1118,22 +1120,33 @@ Set one of these environment variables:
 - **Model picker** to select AI models
 - **Chat history** with sidebar navigation
 - **Multi-provider support** (Anthropic Claude, OpenAI GPT)
-- **Context injection** — Tab from the launcher captures desktop context automatically
+- **Context injection** — the harness terminal captures desktop context automatically via Tab
 
 ### ACP Chat SDK
 
 Scripts can programmatically create and manage ACP Chat conversations:
 
 ```typescript
-// Start a new chat
-const result = await aiStartChat("Summarize the last commit", {
+// Start a new chat with context parts
+const result = await aiStartChat("Summarize this context", {
   systemPrompt: "Be concise",
   modelId: "claude-3-5-sonnet-20241022",
+  parts: [{ kind: "resourceUri", uri: "kit://context?profile=minimal", label: "Current Context" }],
 });
 console.log(result.chatId); // use for follow-up messages
 
-// Send a follow-up message
-await aiSendMessage(result.chatId, "Now explain the diff");
+// Send a follow-up with a file attachment
+await aiSendMessage(result.chatId, "Now review this file", undefined, [
+  { kind: "filePath", path: "/tmp/example.rs", label: "example.rs" },
+]);
+
+// Append a message without triggering AI response
+await aiAppendMessage(result.chatId, "System note", "system");
+
+// Subscribe to streaming events
+const unsub = await aiOn("streamChunk", (event) => {
+  console.log(event.chunk);
+}, result.chatId);
 
 // Query chat state
 const isOpen = await aiIsOpen();
@@ -1446,10 +1459,12 @@ export SK_PATH=~/Projects/my-app/.kit
 | `aiGetActiveChat()` | Get the active chat info |
 | `aiListChats(limit?, includeDeleted?)` | List all chats |
 | `aiGetConversation(chatId?, limit?)` | Get messages from a chat |
-| `aiStartChat(message, options?)` | Start a new ACP Chat conversation |
-| `aiSendMessage(chatId, content, imagePath?)` | Send a follow-up message |
+| `aiStartChat(message, options?)` | Start a new ACP Chat conversation (supports `parts` for context) |
+| `aiAppendMessage(chatId, content, role)` | Append a message without triggering a response |
+| `aiSendMessage(chatId, content, imagePath?, parts?)` | Send a follow-up message (supports `parts` for context) |
+| `aiOn(eventType, handler, chatId?)` | Subscribe to ACP Chat events |
 | `aiSetSystemPrompt(chatId, prompt)` | Set the system prompt for a chat |
-| `aiFocus()` | Focus the ACP Chat window |
+| `aiFocus()` | Focus ACP Chat |
 | `aiGetStreamingStatus(chatId?)` | Check if a chat is currently streaming |
 | `aiDeleteChat(chatId, permanent?)` | Delete a chat |
 
