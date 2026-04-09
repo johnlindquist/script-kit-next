@@ -318,6 +318,51 @@ impl SearchResult {
         }
     }
 
+    /// Returns a plugin-qualified launcher command ID for alias/shortcut persistence.
+    ///
+    /// Format: `{category}/{plugin_id}:{name}` for scripts/scriptlets so that
+    /// two plugins exposing the same script name produce distinct IDs.
+    /// Built-ins, apps, and fallbacks keep their existing single-segment identifier.
+    /// Skills and windows return `None` (non-bindable).
+    pub fn launcher_command_id(&self) -> Option<String> {
+        match self {
+            SearchResult::Script(sm) => {
+                let owner = if sm.script.plugin_id.is_empty() {
+                    sm.script.kit_name.as_deref().unwrap_or("main")
+                } else {
+                    sm.script.plugin_id.as_str()
+                };
+                Some(format!("script/{}:{}", owner, sm.script.name))
+            }
+            SearchResult::Scriptlet(sm) => {
+                let owner = if sm.scriptlet.plugin_id.is_empty() {
+                    sm.scriptlet.group.as_deref().unwrap_or("main")
+                } else {
+                    sm.scriptlet.plugin_id.as_str()
+                };
+                Some(format!("scriptlet/{}:{}", owner, sm.scriptlet.name))
+            }
+            SearchResult::BuiltIn(bm) => Some(bm.entry.id.clone()),
+            SearchResult::App(am) => Some(
+                am.app
+                    .bundle_id
+                    .as_ref()
+                    .map(|bundle_id| format!("app/{bundle_id}"))
+                    .unwrap_or_else(|| {
+                        format!("app/{}", am.app.name.to_lowercase().replace(' ', "-"))
+                    }),
+            ),
+            SearchResult::Window(_) | SearchResult::Skill(_) | SearchResult::Agent(_) => None,
+            SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
+        }
+    }
+
+    /// Returns the display name for this result, used alongside `launcher_command_id`
+    /// for shortcut recorder / alias input labels.
+    pub fn launcher_command_name(&self) -> String {
+        self.name().to_string()
+    }
+
     /// Get a colored type tag for display as a pill badge during search mode.
     /// Returns (label, color) where color is a u32 hex RGB value.
     /// Each type gets a distinct, muted color for visual scanning.

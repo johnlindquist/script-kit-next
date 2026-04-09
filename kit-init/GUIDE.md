@@ -1227,6 +1227,15 @@ Notes are currently exposed to scripts through the automation protocol rather th
 
 Use the semantic IDs `panel:notes-window` and `input:notes-editor`. Do not read or write `~/.scriptkit/db/notes.sqlite` directly from scripts.
 
+### ACP Handoffs
+
+Use the Notes UI actions for cross-surface handoffs:
+
+- **Send to ACP Chat** — opens or focuses ACP Chat with the active note content
+- **Save as Note** — creates or updates a note from ACP-generated content
+
+These are UI actions, not JavaScript globals. The current public Notes script surface is the automation target (`kind: notes`) unless real Notes functions are added to `scripts/kit-sdk.ts`.
+
 ---
 
 ## File Watching

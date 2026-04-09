@@ -69,34 +69,11 @@ impl ScriptListApp {
     // See toast_manager.rs for the queue and main.rs for the flush logic.
 
     /// Get the command ID for a search result, used for config lookups (shortcuts, etc.)
+    ///
+    /// Delegates to `SearchResult::launcher_command_id()` so that the read path
+    /// is consistent with the write path in the shortcut/alias action handlers.
     fn get_command_id_for_result(result: &scripts::SearchResult) -> Option<String> {
-        match result {
-            scripts::SearchResult::Script(m) => {
-                // Script command ID: "script/{name}" (without extension)
-                Some(format!("script/{}", m.script.name))
-            }
-            scripts::SearchResult::Scriptlet(m) => {
-                // Scriptlet command ID: "scriptlet/{name}"
-                Some(format!("scriptlet/{}", m.scriptlet.name))
-            }
-            scripts::SearchResult::BuiltIn(m) => {
-                // Built-in entries already carry canonical builtin/{id} IDs.
-                Some(m.entry.id.clone())
-            }
-            scripts::SearchResult::App(m) => {
-                // App command ID: "app/{bundle_id}" or "app/{name}"
-                if let Some(ref bundle_id) = m.app.bundle_id {
-                    Some(format!("app/{}", bundle_id))
-                } else {
-                    Some(format!(
-                        "app/{}",
-                        m.app.name.to_lowercase().replace(' ', "-")
-                    ))
-                }
-            }
-            // Window, Agent, and Fallback don't support shortcuts
-            _ => None,
-        }
+        result.launcher_command_id()
     }
 
     /// Render the preview panel showing details of the selected script/scriptlet.

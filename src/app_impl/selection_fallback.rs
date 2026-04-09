@@ -103,7 +103,51 @@ impl ScriptListApp {
                 }
             }
 
-            // Find the script/scriptlet by path
+            // Handle plugin-qualified script command IDs: "script/{plugin_id}:{name}"
+            if let Some(identifier) = command_id.strip_prefix("script/") {
+                let found = if let Some((plugin_id, name)) = identifier.split_once(':') {
+                    self.scripts.iter().find(|s| {
+                        s.name == name
+                            && (s.plugin_id == plugin_id
+                                || (s.plugin_id.is_empty()
+                                    && s.kit_name.as_deref() == Some(plugin_id)))
+                    })
+                } else {
+                    self.scripts.iter().find(|s| s.name == identifier)
+                };
+                if let Some(script) = found {
+                    tracing::info!(
+                        alias = %alias,
+                        command_id = %command_id,
+                        "alias_script_match_resolved"
+                    );
+                    return Some(AliasMatch::Script(script.clone()));
+                }
+            }
+
+            // Handle plugin-qualified scriptlet command IDs: "scriptlet/{plugin_id}:{name}"
+            if let Some(identifier) = command_id.strip_prefix("scriptlet/") {
+                let found = if let Some((plugin_id, name)) = identifier.split_once(':') {
+                    self.scriptlets.iter().find(|s| {
+                        s.name == name
+                            && (s.plugin_id == plugin_id
+                                || (s.plugin_id.is_empty()
+                                    && s.group.as_deref() == Some(plugin_id)))
+                    })
+                } else {
+                    self.scriptlets.iter().find(|s| s.name == identifier)
+                };
+                if let Some(scriptlet) = found {
+                    tracing::info!(
+                        alias = %alias,
+                        command_id = %command_id,
+                        "alias_scriptlet_match_resolved"
+                    );
+                    return Some(AliasMatch::Scriptlet(scriptlet.clone()));
+                }
+            }
+
+            // Legacy: find script/scriptlet by path (metadata-defined aliases store paths)
             for script in &self.scripts {
                 if script.path.to_string_lossy() == *command_id {
                     logging::log(
@@ -114,7 +158,7 @@ impl ScriptListApp {
                 }
             }
 
-            // Check scriptlets by file_path or name
+            // Legacy: check scriptlets by file_path or name
             for scriptlet in &self.scriptlets {
                 let scriptlet_path = scriptlet.file_path.as_ref().unwrap_or(&scriptlet.name);
                 if scriptlet_path == command_id {

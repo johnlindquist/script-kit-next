@@ -959,16 +959,33 @@ impl ScriptListApp {
                     .map(|path| self.frecency_store.get_score(path) >= min_score)
                     .unwrap_or(false);
 
+                // Pre-compute launcher command ID and override lookups before the match
+                // to avoid partial-move borrow issues within match arms.
+                let launcher_cmd_id = result.launcher_command_id();
+                let shortcut_overrides = crate::shortcuts::get_cached_shortcut_overrides();
+                let alias_overrides = crate::aliases::get_cached_alias_overrides();
+                let override_shortcut = launcher_cmd_id
+                    .as_ref()
+                    .and_then(|id| shortcut_overrides.get(id).map(|s| s.to_string()));
+                let override_alias = launcher_cmd_id
+                    .as_ref()
+                    .and_then(|id| alias_overrides.get(id).cloned());
+
                 match result {
-                    scripts::SearchResult::Script(m) => Some(
-                        ScriptInfo::with_shortcut_and_alias(
-                            &m.script.name,
-                            m.script.path.to_string_lossy(),
-                            m.script.shortcut.clone(),
-                            m.script.alias.clone(),
+                    scripts::SearchResult::Script(m) => {
+                        // Launcher-managed overrides take precedence over inline metadata.
+                        let shortcut = override_shortcut.or_else(|| m.script.shortcut.clone());
+                        let alias = override_alias.or_else(|| m.script.alias.clone());
+                        Some(
+                            ScriptInfo::with_shortcut_and_alias(
+                                &m.script.name,
+                                m.script.path.to_string_lossy(),
+                                shortcut,
+                                alias,
+                            )
+                            .with_frecency(is_suggested, frecency_path),
                         )
-                        .with_frecency(is_suggested, frecency_path),
-                    ),
+                    }
                     scripts::SearchResult::Scriptlet(m) => {
                         // Scriptlets use the markdown file path for edit/reveal actions
                         // Extract the path without anchor for file operations
@@ -978,12 +995,15 @@ impl ScriptListApp {
                             .as_ref()
                             .map(|p| p.split('#').next().unwrap_or(p).to_string())
                             .unwrap_or_else(|| format!("scriptlet:{}", &m.scriptlet.name));
+                        // Launcher-managed overrides take precedence over inline metadata.
+                        let shortcut = override_shortcut.or_else(|| m.scriptlet.shortcut.clone());
+                        let alias = override_alias.or_else(|| m.scriptlet.alias.clone());
                         Some(
                             ScriptInfo::scriptlet(
                                 &m.scriptlet.name,
                                 markdown_path,
-                                m.scriptlet.shortcut.clone(),
-                                m.scriptlet.alias.clone(),
+                                shortcut,
+                                alias,
                             )
                             .with_frecency(is_suggested, frecency_path),
                         )
@@ -991,21 +1011,14 @@ impl ScriptListApp {
                     scripts::SearchResult::BuiltIn(m) => {
                         // Built-ins use their id as identifier
                         // is_script=false: no editable file, hide "Edit Script" etc.
-                        // Look up shortcut and alias from overrides for dynamic action menu
-                        // Uses cached versions to avoid file I/O on every render
-                        let command_id = m.entry.id.clone();
-                        let shortcut_overrides = crate::shortcuts::get_cached_shortcut_overrides();
-                        let alias_overrides = crate::aliases::get_cached_alias_overrides();
-                        let shortcut = shortcut_overrides.get(&command_id).map(|s| s.to_string());
-                        let alias = alias_overrides.get(&command_id).cloned();
                         Some(
                             ScriptInfo::with_all(
                                 &m.entry.name,
                                 format!("builtin:{}", &m.entry.id),
                                 false,
                                 "Run",
-                                shortcut,
-                                alias,
+                                override_shortcut,
+                                override_alias,
                             )
                             .with_frecency(is_suggested, frecency_path),
                         )
@@ -1013,24 +1026,13 @@ impl ScriptListApp {
                     scripts::SearchResult::App(m) => {
                         // Apps use their path as identifier
                         // is_app=true: enables app-specific actions (Finder, Process, Copy)
-                        // Look up shortcut and alias from overrides for dynamic action menu
-                        // Uses cached versions to avoid file I/O on every render
-                        let command_id = if let Some(ref bundle_id) = m.app.bundle_id {
-                            format!("app/{}", bundle_id)
-                        } else {
-                            format!("app/{}", m.app.name.to_lowercase().replace(' ', "-"))
-                        };
-                        let shortcut_overrides = crate::shortcuts::get_cached_shortcut_overrides();
-                        let alias_overrides = crate::aliases::get_cached_alias_overrides();
-                        let shortcut = shortcut_overrides.get(&command_id).map(|s| s.to_string());
-                        let alias = alias_overrides.get(&command_id).cloned();
                         Some(
                             ScriptInfo::app(
                                 &m.app.name,
                                 m.app.path.to_string_lossy().to_string(),
                                 m.app.bundle_id.clone(),
-                                shortcut,
-                                alias,
+                                override_shortcut,
+                                override_alias,
                             )
                             .with_frecency(is_suggested, frecency_path),
                         )

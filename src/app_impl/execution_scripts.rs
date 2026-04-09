@@ -514,10 +514,23 @@ impl ScriptListApp {
         if let Ok((category, identifier)) = crate::config::parse_command_id(command_id) {
             match category {
                 crate::config::CommandCategory::Script => {
-                    if let Some(script) = self.scripts.iter().find(|s| s.name == identifier) {
+                    // Plugin-qualified: "script/{plugin_id}:{name}"
+                    // Legacy: "script/{name}" (no colon)
+                    let script = if let Some((plugin_id, name)) = identifier.split_once(':') {
+                        self.scripts.iter().find(|s| {
+                            s.name == name
+                                && (s.plugin_id == plugin_id
+                                    || (s.plugin_id.is_empty()
+                                        && s.kit_name.as_deref() == Some(plugin_id)))
+                        })
+                    } else {
+                        self.scripts.iter().find(|s| s.name == identifier)
+                    };
+                    if let Some(script) = script {
                         tracing::info!(
                             command_id = %command_id,
                             script = %script.name,
+                            plugin_id = %script.plugin_id,
                             "script_command_resolved"
                         );
                         let path = script.path.to_string_lossy().to_string();
@@ -529,7 +542,19 @@ impl ScriptListApp {
                 }
                 crate::config::CommandCategory::Scriptlet => {
                     logging::bench_log("scriptlet_lookup_start");
-                    if let Some(scriptlet) = self.scriptlets.iter().find(|s| s.name == identifier) {
+                    // Plugin-qualified: "scriptlet/{plugin_id}:{name}"
+                    // Legacy: "scriptlet/{name}" (no colon)
+                    let scriptlet = if let Some((plugin_id, name)) = identifier.split_once(':') {
+                        self.scriptlets.iter().find(|s| {
+                            s.name == name
+                                && (s.plugin_id == plugin_id
+                                    || (s.plugin_id.is_empty()
+                                        && s.group.as_deref() == Some(plugin_id)))
+                        })
+                    } else {
+                        self.scriptlets.iter().find(|s| s.name == identifier)
+                    };
+                    if let Some(scriptlet) = scriptlet {
                         logging::bench_log("scriptlet_found");
                         let scriptlet_clone = scriptlet.clone();
                         tracing::info!(command_id = %command_id, "scriptlet_command_resolved");
