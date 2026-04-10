@@ -186,6 +186,8 @@ impl NotesApp {
             last_save_confirmed: None,
             action_feedback: None,
             pending_focus_surface: None,
+            surface_mode: NotesSurfaceMode::default(),
+            embedded_acp_chat: None,
         }
     }
 

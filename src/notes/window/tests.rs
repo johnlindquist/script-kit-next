@@ -507,6 +507,27 @@ fn test_notes_render_does_not_apply_pending_focus_surface_in_render() {
 }
 
 #[test]
+fn test_notes_acp_focus_surface_targets_embedded_chat_focus_handle() {
+    const FOCUS_SOURCE: &str = include_str!("focus.rs");
+    assert!(
+        FOCUS_SOURCE.contains("let focus_handle = acp_entity.read(cx).focus_handle(cx);")
+            && FOCUS_SOURCE.contains("window.focus(&focus_handle, cx);"),
+        "Notes ACP focus surface should focus the embedded ACP view handle"
+    );
+}
+
+#[test]
+fn test_notes_acp_actions_close_requests_embedded_chat_refocus() {
+    const ACP_HOST_SOURCE: &str = include_str!("acp_host.rs");
+    assert!(
+        ACP_HOST_SOURCE.contains(
+            "app.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);"
+        ),
+        "Closing the Notes-hosted ACP actions popup should restore ACP focus"
+    );
+}
+
+#[test]
 fn test_delete_dialog_requests_dialog_focus_surface_before_opening() {
     const NOTES_SOURCE: &str = include_str!("notes.rs");
     assert!(

@@ -27,6 +27,7 @@ pub(crate) mod handlers;
 pub(crate) mod history;
 pub(crate) mod history_attachment;
 pub(crate) mod history_popup;
+pub(crate) mod hosted;
 pub(crate) mod model_selector_popup;
 pub(crate) mod permission_broker;
 pub(crate) mod picker_popup;
@@ -137,6 +138,7 @@ pub(crate) fn open_or_focus_chat_with_input(
                 ui_thread_id: uuid::Uuid::new_v4().to_string(),
                 cwd,
                 initial_input: Some(input),
+                initial_context_parts: Vec::new(),
                 display_name: agent_display_name.into(),
                 selected_agent: launch_resolution.selected_agent.clone(),
                 available_agents: launch_resolution.catalog_entries.clone(),

@@ -6,6 +6,8 @@ pub(super) enum NotesFocusSurface {
     ActionsPanel,
     BrowsePanel,
     Dialog,
+    /// Embedded ACP chat inside the Notes window.
+    AcpChat,
 }
 
 impl NotesApp {
@@ -14,6 +16,8 @@ impl NotesApp {
             NotesFocusSurface::ActionsPanel
         } else if self.note_switcher.is_open() || self.show_browse_panel {
             NotesFocusSurface::BrowsePanel
+        } else if self.surface_mode == NotesSurfaceMode::Acp {
+            NotesFocusSurface::AcpChat
         } else {
             NotesFocusSurface::Editor
         }
@@ -42,6 +46,14 @@ impl NotesApp {
         cx.notify();
     }
 
+    /// Apply any deferred focus request that was set outside a window context
+    /// (e.g., from an async action dispatch that only had `&mut App`).
+    pub(super) fn drain_pending_focus(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(surface) = self.pending_focus_surface.take() {
+            self.apply_focus_surface(surface, window, cx);
+        }
+    }
+
     /// Restore keyboard focus to the appropriate surface after a dialog
     /// is dismissed (cancel or confirm).
     pub(super) fn restore_primary_focus_after_dialog(
@@ -53,6 +65,8 @@ impl NotesApp {
             NotesFocusSurface::ActionsPanel
         } else if self.note_switcher.is_open() || self.show_browse_panel {
             NotesFocusSurface::BrowsePanel
+        } else if self.surface_mode == NotesSurfaceMode::Acp {
+            NotesFocusSurface::AcpChat
         } else {
             NotesFocusSurface::Editor
         };
@@ -87,6 +101,14 @@ impl NotesApp {
             }
             NotesFocusSurface::Dialog => {
                 // Dialog manages its own focus — no action needed
+            }
+            NotesFocusSurface::AcpChat => {
+                if let Some(acp_entity) = self.embedded_acp_chat.as_ref() {
+                    let focus_handle = acp_entity.read(cx).focus_handle(cx);
+                    window.focus(&focus_handle, cx);
+                } else {
+                    self.focus_handle.focus(window, cx);
+                }
             }
         }
 

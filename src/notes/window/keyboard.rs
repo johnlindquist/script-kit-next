@@ -262,6 +262,44 @@ impl NotesApp {
             return;
         }
 
+        // In ACP mode, intercept host-owned shortcuts before propagating to ACP.
+        if self.surface_mode == NotesSurfaceMode::Acp {
+            if is_key_escape(key) {
+                self.switch_to_notes_surface(window, cx);
+                cx.stop_propagation();
+                return;
+            }
+            if modifiers.platform {
+                // Cmd+K: toggle Notes-hosted ACP actions.
+                if key.eq_ignore_ascii_case("k") {
+                    self.toggle_acp_actions(window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+                // Cmd+W: close the Notes window (same as Notes mode).
+                if key.eq_ignore_ascii_case("w") && !modifiers.shift {
+                    self.save_current_note();
+                    if let Some(ref entity) = self.embedded_acp_chat {
+                        entity.update(cx, |chat, cx| {
+                            chat.prepare_for_host_hide(cx);
+                        });
+                    }
+                    let wb = window.window_bounds();
+                    crate::window_state::save_window_from_gpui(
+                        crate::window_state::WindowRole::Notes,
+                        wb,
+                    );
+                    window.remove_window();
+                    super::window_ops::restore_launcher_after_notes_close(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+            }
+            // All other keys propagate to the ACP chat view.
+            cx.propagate();
+            return;
+        }
+
         if is_key_escape(key) {
             cx.stop_propagation();
             if self.show_shortcuts_help {
