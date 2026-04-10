@@ -316,13 +316,13 @@ fn notes_acp_handoff_emits_structured_logs() {
         "Notes handler must emit notes_acp_handoff_blocked for empty notes"
     );
     assert!(
-        panels.contains("open_or_focus_chat_with_input"),
-        "Notes handoff must route through the shared ACP open/focus helper"
+        panels.contains("request_explicit_acp_handoff_from_secondary_window"),
+        "Notes handoff must route through the canonical explicit-target secondary-window path"
     );
     let acp_mod = include_str!("../src/ai/acp/mod.rs");
     assert!(
         acp_mod.contains("pub(crate) fn open_or_focus_chat_with_input("),
-        "ACP staging helper must exist for secondary-window handoffs"
+        "ACP staging helper must exist for non-explicit-target secondary-window handoffs"
     );
     assert!(
         acp_mod.contains("chat_window::open_chat_window_with_thread"),
