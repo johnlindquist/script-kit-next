@@ -19,6 +19,9 @@ struct TabAiLaunchRequest {
     source_view: AppView,
     /// Optional user intent (from Shift+Tab typed query).
     entry_intent: Option<String>,
+    /// Plain launcher Tab should submit only the current text and never
+    /// translate the focused row into an ACP context chip.
+    suppress_focused_part: bool,
     /// Quick-submit plan from the deterministic planner (fallback / dictation).
     quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
     /// UI snapshot taken synchronously before the view switch.
@@ -132,6 +135,15 @@ impl ScriptListApp {
         entry_intent: Option<String>,
         cx: &mut Context<Self>,
     ) {
+        self.open_tab_ai_acp_with_options(entry_intent, false, cx);
+    }
+
+    fn open_tab_ai_acp_with_options(
+        &mut self,
+        entry_intent: Option<String>,
+        suppress_focused_part: bool,
+        cx: &mut Context<Self>,
+    ) {
         if self.tab_ai_save_offer_state.is_some() {
             return;
         }
@@ -166,6 +178,7 @@ impl ScriptListApp {
 
         self.begin_tab_ai_harness_entry(
             entry_intent,
+            suppress_focused_part,
             None,
             crate::ai::TabAiCaptureKind::DefaultContext,
             true,
@@ -206,6 +219,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view: self.current_view.clone(),
             entry_intent: None,
+            suppress_focused_part: false,
             quick_submit_plan: None,
             ui_snapshot,
             invocation_receipt,
@@ -443,7 +457,7 @@ impl ScriptListApp {
             }
         }
 
-        self.begin_tab_ai_harness_entry(entry_intent, None, capture_kind, false, cx);
+        self.begin_tab_ai_harness_entry(entry_intent, false, None, capture_kind, false, cx);
     }
 
     /// Open the harness with a pre-computed quick-submit plan.
@@ -460,7 +474,7 @@ impl ScriptListApp {
         }
         let capture_kind = plan.capture_kind_enum();
         let intent = Some(plan.submission_intent().to_string());
-        self.begin_tab_ai_harness_entry(intent, Some(plan), capture_kind, false, cx);
+        self.begin_tab_ai_harness_entry(intent, false, Some(plan), capture_kind, false, cx);
     }
 
     /// Route raw text (from Auto Submit fallback or dictation) through the
@@ -563,6 +577,7 @@ impl ScriptListApp {
             self.begin_tab_ai_harness_entry_from_source_view(
                 source_view,
                 entry_intent,
+                false,
                 Some(plan),
                 capture_kind,
                 false,
@@ -637,6 +652,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view,
             entry_intent: Some(entry_intent),
+            suppress_focused_part: false,
             quick_submit_plan: Some(plan),
             ui_snapshot,
             invocation_receipt,
@@ -771,12 +787,11 @@ impl ScriptListApp {
     }
 
     /// Format a canonical chip label from a resolved target.
+    ///
+    /// Delegates to the shared `format_explicit_target_chip_label` so Notes,
+    /// actions, and the main-window ACP openings all produce the same text.
     fn format_tab_ai_focused_chip_label(target: &crate::ai::TabAiTargetContext) -> String {
-        format!(
-            "{}: {}",
-            Self::tab_ai_chip_prefix_for_kind(&target.kind),
-            target.label
-        )
+        crate::ai::format_explicit_target_chip_label(target)
     }
 
     /// Resolve targets for a view and emit a structured audit log.
@@ -855,7 +870,7 @@ impl ScriptListApp {
             input_len = entry_intent.as_ref().map(|text| text.len()).unwrap_or(0),
         );
 
-        self.open_tab_ai_acp_with_entry_intent(entry_intent, cx);
+        self.open_tab_ai_acp_with_options(entry_intent, true, cx);
         true
     }
 
@@ -865,7 +880,6 @@ impl ScriptListApp {
         matches!(
             view,
             AppView::ScriptList
-                | AppView::FileSearchView { .. }
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
@@ -880,6 +894,7 @@ impl ScriptListApp {
                 | AppView::SettingsView { .. }
                 | AppView::FavoritesBrowseView { .. }
                 | AppView::CurrentAppCommandsView { .. }
+                | AppView::FileSearchView { .. }
         )
     }
 
@@ -954,6 +969,7 @@ impl ScriptListApp {
     fn begin_tab_ai_harness_entry(
         &mut self,
         entry_intent: Option<String>,
+        suppress_focused_part: bool,
         quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
         capture_kind: crate::ai::TabAiCaptureKind,
         force_acp_surface: bool,
@@ -962,6 +978,7 @@ impl ScriptListApp {
         self.begin_tab_ai_harness_entry_from_source_view(
             self.current_view.clone(),
             entry_intent,
+            suppress_focused_part,
             quick_submit_plan,
             capture_kind,
             force_acp_surface,
@@ -979,6 +996,7 @@ impl ScriptListApp {
         &mut self,
         source_view: AppView,
         entry_intent: Option<String>,
+        suppress_focused_part: bool,
         quick_submit_plan: Option<crate::ai::TabAiQuickSubmitPlan>,
         capture_kind: crate::ai::TabAiCaptureKind,
         force_acp_surface: bool,
@@ -1026,6 +1044,7 @@ impl ScriptListApp {
         let request = TabAiLaunchRequest {
             source_view,
             entry_intent,
+            suppress_focused_part,
             quick_submit_plan,
             ui_snapshot,
             invocation_receipt,
@@ -1071,6 +1090,7 @@ impl ScriptListApp {
         let should_stage_focused_part = Self::should_stage_focused_part_for_request(
             &request.source_view,
             pending_script_list_trigger,
+            request.suppress_focused_part,
         );
         // let use_ask_anything_fallback = self.should_use_tab_ai_ask_anything_fallback(
         let use_ask_anything_fallback = self
@@ -1290,7 +1310,12 @@ impl ScriptListApp {
     fn should_stage_focused_part_for_request(
         source_view: &AppView,
         pending_script_list_trigger: Option<char>,
+        suppress_focused_part: bool,
     ) -> bool {
+        if suppress_focused_part {
+            return false;
+        }
+
         if !matches!(source_view, AppView::ScriptList) {
             return true;
         }
@@ -5160,14 +5185,17 @@ mod tests {
         assert!(!ScriptListApp::should_stage_focused_part_for_request(
             &AppView::ScriptList,
             Some('@'),
+            false,
         ));
         assert!(!ScriptListApp::should_stage_focused_part_for_request(
             &AppView::ScriptList,
             Some('/'),
+            false,
         ));
         assert!(ScriptListApp::should_stage_focused_part_for_request(
             &AppView::ScriptList,
             None,
+            false,
         ));
         assert!(ScriptListApp::should_stage_focused_part_for_request(
             &AppView::ThemeChooserView {
@@ -5175,6 +5203,12 @@ mod tests {
                 selected_index: 0,
             },
             Some('@'),
+            false,
+        ));
+        assert!(!ScriptListApp::should_stage_focused_part_for_request(
+            &AppView::ScriptList,
+            None,
+            true,
         ));
     }
 

@@ -198,3 +198,29 @@ pub fn take_pending_explicit_acp_target() -> Option<TabAiTargetContext> {
         .get()
         .and_then(|storage| storage.lock().take())
 }
+
+/// Build the canonical chip label used by explicit ACP target handoffs.
+///
+/// Notes, actions, and any future secondary surfaces should use this instead
+/// of formatting bespoke labels locally. The main-window ACP entry also
+/// delegates here so all chip labels share a single source of truth.
+pub(crate) fn format_explicit_target_chip_label(target: &TabAiTargetContext) -> String {
+    let prefix = match target.kind.as_str() {
+        "file" => "File",
+        "directory" => "Folder",
+        "search_query" => "Search",
+        "input" => "Input",
+        "clipboard_entry" => "Clipboard",
+        "script" | "scriptlet" | "builtin" => "Command",
+        "window" => "Window",
+        "app" => "App",
+        "process" => "Process",
+        "menu_command" => "Menu Command",
+        "action" => "Action",
+        "note" => "Note",
+        "agent" => "Agent",
+        "fallback" => "Suggestion",
+        _ => "Selection",
+    };
+    format!("{}: {}", prefix, target.label)
+}

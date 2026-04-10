@@ -220,34 +220,13 @@ impl NotesApp {
                 self.enable_auto_sizing(window, cx);
             }
             NotesAction::SendToAi => {
-                let content = self.editor_state.read(cx).value().to_string();
-                if content.trim().is_empty() {
-                    tracing::warn!(
-                        event = "notes_acp_handoff_blocked",
-                        reason = "empty_note",
-                        "Blocked Notes/ACP handoff"
-                    );
-                    self.show_action_feedback("Note is empty", true);
-                } else {
-                    // Switch to embedded ACP inside the Notes window.
-                    if let Err(e) =
-                        self.open_or_focus_embedded_acp(Some(content.clone()), window, cx)
-                    {
-                        tracing::warn!(
-                            event = "notes_acp_handoff_blocked",
-                            reason = %format!("embedded_acp_failed: {e}"),
-                            "Blocked Notes/ACP handoff"
-                        );
-                        self.show_action_feedback("Failed to open ACP", true);
-                    } else {
-                        tracing::info!(
-                            event = "notes_send_to_acp",
-                            char_count = content.chars().count(),
-                            mode = "embedded",
-                            "Switched to embedded ACP in Notes window"
-                        );
-                    }
+                let opened =
+                    self.open_selected_note_in_embedded_acp("NotesAction::SendToAi", window, cx);
+                self.close_actions_panel(window, cx);
+                if opened {
+                    self.show_action_feedback("Sent to ACP Chat", false);
                 }
+                return;
             }
             NotesAction::Cancel => {
                 // Panel was cancelled, nothing to do
@@ -523,5 +502,181 @@ impl NotesApp {
         }
 
         cx.notify();
+    }
+
+    /// Build a canonical ACP target for the currently selected note or
+    /// unsaved draft content.
+    pub(super) fn build_selected_note_target_for_ai(
+        &self,
+        cx: &Context<Self>,
+    ) -> Option<crate::ai::TabAiTargetContext> {
+        let content = self.editor_state.read(cx).value().to_string();
+        let selected_note = self
+            .selected_note_id
+            .and_then(|selected_id| self.notes.iter().find(|note| note.id == selected_id));
+
+        // Require either a saved note or non-empty draft content.
+        if selected_note.is_none() && content.trim().is_empty() {
+            return None;
+        }
+
+        let selected_note_id = selected_note.map(|note| note.id.as_str().to_string());
+        let semantic_note_id = selected_note_id
+            .clone()
+            .unwrap_or_else(|| "draft".to_string());
+
+        let title = selected_note
+            .map(|note| note.title.trim().to_string())
+            .filter(|title| !title.is_empty())
+            .unwrap_or_else(|| "Untitled Note".to_string());
+
+        let preview = selected_note
+            .map(|note| Self::strip_markdown_for_preview(&note.preview()))
+            .unwrap_or_else(|| Self::strip_markdown_for_preview(&content));
+
+        let is_pinned = selected_note.map(|note| note.is_pinned).unwrap_or(false);
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_selected_note_target_built",
+            note_id = %semantic_note_id,
+            title = %title,
+            content_len = content.len(),
+            has_saved_note = selected_note_id.is_some(),
+        );
+
+        Some(crate::ai::TabAiTargetContext {
+            source: "Notes".to_string(),
+            kind: "note".to_string(),
+            semantic_id: crate::protocol::generate_semantic_id("note", 0, &semantic_note_id),
+            label: title.clone(),
+            metadata: Some(serde_json::json!({
+                "noteId": selected_note_id,
+                "title": title,
+                "content": content,
+                "preview": preview,
+                "isPinned": is_pinned,
+                "viewMode": format!("{:?}", self.view_mode),
+            })),
+        })
+    }
+
+    /// Stage a canonical note target as a `FocusedTarget` chip into the
+    /// Notes-hosted embedded ACP thread.
+    fn stage_note_target_in_embedded_acp(
+        &mut self,
+        source: &'static str,
+        target: crate::ai::TabAiTargetContext,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        let label = crate::ai::format_explicit_target_chip_label(&target);
+        let semantic_id = target.semantic_id.clone();
+
+        let Some(entity) = self.embedded_acp_chat.as_ref().cloned() else {
+            return Err("Notes ACP chat entity unavailable".to_string());
+        };
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_embedded_acp_target_staged",
+            source,
+            semantic_id = %semantic_id,
+            label = %label,
+        );
+
+        entity
+            .update(cx, move |chat, cx| {
+                if chat.is_setup_mode() {
+                    return Err("ACP Chat is in setup mode".to_string());
+                }
+
+                // Reused embedded ACP sessions must not keep stale note text
+                // in the composer.
+                chat.set_input(String::new(), cx);
+
+                chat.live_thread().update(cx, move |thread, cx| {
+                    thread.add_context_part(
+                        crate::ai::message_parts::AiContextPart::FocusedTarget { target, label },
+                        cx,
+                    );
+                });
+
+                Ok::<(), String>(())
+            })
+            .map_err(|error| error.to_string())?;
+
+        Ok(())
+    }
+
+    /// Open the Notes-hosted embedded ACP surface and stage the selected
+    /// note (or unsaved draft) as a canonical `FocusedTarget` chip.
+    ///
+    /// Returns `true` if the embedded ACP was opened and the target staged,
+    /// `false` if no note was selected or the ACP surface could not open.
+    pub(super) fn open_selected_note_in_embedded_acp(
+        &mut self,
+        source: &'static str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(target) = self.build_selected_note_target_for_ai(cx) else {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "notes_embedded_acp_switch_skipped",
+                source,
+                reason = "no_selected_note",
+            );
+            self.show_action_feedback("No note selected", true);
+            return false;
+        };
+
+        let reused_existing_session = self.embedded_acp_chat.is_some();
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_embedded_acp_switch_requested",
+            source,
+            reused_existing_session,
+            semantic_id = %target.semantic_id,
+        );
+
+        let open_result = if reused_existing_session {
+            self.relaunch_embedded_acp(None, window, cx)
+        } else {
+            self.open_or_focus_embedded_acp(None, window, cx)
+        };
+
+        match open_result {
+            Ok(()) => {
+                if let Err(error) = self.stage_note_target_in_embedded_acp(source, target, cx) {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "notes_embedded_acp_target_stage_failed",
+                        source,
+                        error = %error,
+                    );
+                    self.show_action_feedback("ACP unavailable", true);
+                    return false;
+                }
+
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "notes_embedded_acp_switch_completed",
+                    source,
+                    reused_existing_session,
+                );
+                true
+            }
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "notes_embedded_acp_switch_failed",
+                    source,
+                    error = %error,
+                );
+                self.show_action_feedback("ACP unavailable", true);
+                false
+            }
+        }
     }
 }
