@@ -746,7 +746,7 @@ impl StoryBrowser {
                         let description = variant.description.clone().unwrap_or_default();
                         let is_selected = index == self.selected_variant_index;
                         let is_adopted = adopted_variant.as_deref() == Some(variant_id.as_str());
-                        let preview_content = story.story.render_variant(&variant);
+                        let preview_content = story.story.render_compare_variant(&variant);
 
                         let mut card = div()
                             .w(px(CARD_WIDTH))

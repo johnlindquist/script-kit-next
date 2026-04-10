@@ -12,13 +12,20 @@ fn variation_ids_are_unique() {
 }
 
 #[test]
-fn story_variants_cover_the_single_current_snapshot() {
+fn story_variants_cover_all_three_variants() {
     let stable_ids: Vec<_> = main_menu_story_variants()
         .into_iter()
         .map(|variant| variant.stable_id())
         .collect();
 
-    assert_eq!(stable_ids, vec!["current-main-menu".to_string()]);
+    assert_eq!(
+        stable_ids,
+        vec![
+            "current-main-menu".to_string(),
+            "empty-state".to_string(),
+            "selected-result".to_string(),
+        ]
+    );
 }
 
 #[test]
@@ -32,18 +39,18 @@ fn variation_lookup_round_trips() {
 }
 
 #[test]
-fn story_variants_have_surface_and_runtime_snapshot_props() {
+fn story_variants_have_surface_and_runtime_fixture_props() {
     for variant in main_menu_story_variants() {
         assert_eq!(
             variant.props.get("surface").map(String::as_str),
-            Some("main-menu"),
-            "variant {} missing surface=main-menu prop",
+            Some("mainMenu"),
+            "variant {} missing surface=mainMenu prop",
             variant.stable_id()
         );
         assert_eq!(
             variant.props.get("representation").map(String::as_str),
-            Some("runtime-snapshot"),
-            "variant {} missing representation=runtime-snapshot prop",
+            Some("runtimeFixture"),
+            "variant {} missing representation=runtimeFixture prop",
             variant.stable_id()
         );
     }

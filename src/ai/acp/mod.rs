@@ -138,7 +138,6 @@ pub(crate) fn open_or_focus_chat_with_input(
                 ui_thread_id: uuid::Uuid::new_v4().to_string(),
                 cwd,
                 initial_input: Some(input),
-                initial_context_parts: Vec::new(),
                 display_name: agent_display_name.into(),
                 selected_agent: launch_resolution.selected_agent.clone(),
                 available_agents: launch_resolution.catalog_entries.clone(),

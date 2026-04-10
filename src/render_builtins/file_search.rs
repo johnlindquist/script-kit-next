@@ -1119,10 +1119,10 @@ impl ScriptListApp {
             )
         };
 
-        // Footer: strict three-key pattern. The AI entry chords remain
-        // "Explain" / "Plan next steps" via ⌘↵ / ⌘⇧↵ on the key handler,
-        // while the visible footer stays within the canonical three-slot
-        // contract.
+        // Footer: strict three-key pattern. The AI entry chords
+        // ⌘↵ (Explain) / ⌘⇧↵ (Plan) are now visible in the footer
+        // so users can discover them without guessing.
+        let ai_hint = "⌘↵ Explain · ⌘⇧↵ Plan";
         let file_search_hints = if self.is_in_attachment_portal() {
             // Portal mode: simplified footer indicating attach context.
             let primary = if selected_file
@@ -1147,24 +1147,24 @@ impl ScriptListApp {
             };
             vec![
                 primary.into(),
-                "⌘↵ AI".into(),
+                ai_hint.into(),
                 "\u{2318}K Actions".into(),
             ]
         } else if self.file_search_current_dir.is_some() {
             vec![
                 "\u{21b5} Browse".into(),
-                "⌘↵ AI".into(),
+                ai_hint.into(),
                 "\u{2318}K Actions".into(),
             ]
         } else if is_loading {
-            vec!["⌘↵ AI".into(), "Searching".into(), "\u{2318}F Focus".into()]
+            vec![ai_hint.into(), "Searching".into(), "\u{2318}F Focus".into()]
         } else {
             let primary = if is_directory_query {
                 "\u{21b5} Browse"
             } else {
                 "\u{21b5} Run"
             };
-            vec![primary.into(), "⌘↵ AI".into(), "\u{2318}F Focus".into()]
+            vec![primary.into(), ai_hint.into(), "\u{2318}F Focus".into()]
         };
 
 

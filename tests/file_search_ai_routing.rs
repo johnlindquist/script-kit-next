@@ -38,13 +38,16 @@ fn tab_ai_mode_has_file_search_intent_builder() {
 }
 
 #[test]
-fn file_search_mini_hints_advertise_ai_chord() {
+fn file_search_hints_advertise_real_ai_chords() {
     let source = fs::read_to_string("src/render_builtins/file_search.rs")
         .expect("Failed to read src/render_builtins/file_search.rs");
 
-    // The mini hint strip must advertise the updated explain / plan copy.
     assert!(
-        source.contains("Explain") && source.contains("Plan next steps"),
-        "mini file search hints must include the updated explain / plan copy"
+        source.contains("⌘↵ Explain"),
+        "file search hints must advertise ⌘↵ Explain chord"
+    );
+    assert!(
+        source.contains("⌘⇧↵ Plan"),
+        "file search hints must advertise ⌘⇧↵ Plan chord"
     );
 }

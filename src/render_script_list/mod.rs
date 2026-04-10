@@ -925,7 +925,7 @@ impl ScriptListApp {
                                         .focus_bordered(false),
                                 ),
                             )
-                            // "Ask [⇥]" keyboard hint
+                            // "Ask [⇥] [⌘↩]" keyboard hints
                             .child(
                                 div()
                                     .id("ask-ai-button")
@@ -953,6 +953,18 @@ impl ScriptListApp {
                                             .text_xs()
                                             .text_color(rgb(chrome.badge_text_hex))
                                             .child("⇥"),
+                                    )
+                                    // "⌘↩" badge - bordered keycap
+                                    .child(
+                                        div()
+                                            .px(px(TAB_BADGE_PADDING_X))
+                                            .py(px(TAB_BADGE_PADDING_Y))
+                                            .rounded(px(TAB_BADGE_RADIUS))
+                                            .border_1()
+                                            .border_color(rgba(chrome.badge_bg_rgba))
+                                            .text_xs()
+                                            .text_color(rgb(chrome.badge_text_hex))
+                                            .child("⌘↩"),
                                     ),
                             ),
                     )

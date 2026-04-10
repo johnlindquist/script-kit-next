@@ -520,9 +520,8 @@ fn test_notes_acp_focus_surface_targets_embedded_chat_focus_handle() {
 fn test_notes_acp_actions_close_requests_embedded_chat_refocus() {
     const ACP_HOST_SOURCE: &str = include_str!("acp_host.rs");
     assert!(
-        ACP_HOST_SOURCE.contains(
-            "app.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);"
-        ),
+        ACP_HOST_SOURCE
+            .contains("app.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);"),
         "Closing the Notes-hosted ACP actions popup should restore ACP focus"
     );
 }

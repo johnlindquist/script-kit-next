@@ -1,7 +1,8 @@
 use gpui::*;
 
 use crate::storybook::{
-    main_menu_story_variants, render_main_menu_story_preview, Story, StorySurface, StoryVariant,
+    main_menu_story_variants, render_main_menu_compare_thumbnail, render_main_menu_story_preview,
+    Story, StorySurface, StoryVariant,
 };
 
 pub struct MainMenuStory;
@@ -27,6 +28,10 @@ impl Story for MainMenuStory {
         render_main_menu_story_preview(&variant.stable_id())
     }
 
+    fn render_compare_variant(&self, variant: &StoryVariant) -> AnyElement {
+        render_main_menu_compare_thumbnail(&variant.stable_id())
+    }
+
     fn render(&self) -> AnyElement {
         render_main_menu_story_preview("current-main-menu")
     }
@@ -42,9 +47,9 @@ mod tests {
     use crate::storybook::{Story, StorySurface};
 
     #[test]
-    fn main_menu_story_is_single_surface_snapshot() {
+    fn main_menu_story_is_compare_ready() {
         let story = MainMenuStory;
         assert_eq!(story.surface(), StorySurface::MainMenu);
-        assert_eq!(story.variants().len(), 1);
+        assert_eq!(story.variants().len(), 3);
     }
 }

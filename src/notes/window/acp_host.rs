@@ -263,24 +263,6 @@ impl NotesApp {
     }
 }
 
-/// Extract the current draft input text from a Notes-hosted ACP chat view.
-///
-/// Returns `None` if the embedded session is still in setup mode or if the
-/// current composer input is empty/whitespace-only.
-fn current_notes_acp_draft_input(
-    entity: &Entity<crate::ai::acp::view::AcpChatView>,
-    cx: &gpui::App,
-) -> Option<String> {
-    let view = entity.read(cx);
-    match &view.session {
-        crate::ai::acp::AcpChatSession::Setup(_) => None,
-        crate::ai::acp::AcpChatSession::Live(thread) => {
-            let text = thread.read(cx).input.text().to_string();
-            (!text.trim().is_empty()).then_some(text)
-        }
-    }
-}
-
 /// Dispatch an ACP action from the Notes-hosted actions dialog popup.
 ///
 /// Called from the async spawn inside `toggle_acp_actions`.  Receives
@@ -323,55 +305,6 @@ fn dispatch_notes_acp_action(
         tracing::warn!(event = "notes_acp_action_no_view", action_id = %action_id);
         return;
     };
-
-    if let Some(agent_id) = crate::actions::acp_switch_agent_id_from_action(action_id) {
-        let selected_agent_id = agent_id.to_string();
-        let draft_input = current_notes_acp_draft_input(&acp_entity, cx);
-
-        tracing::info!(
-            event = "notes_acp_switch_agent_requested",
-            selected_agent_id = %selected_agent_id,
-            has_draft_input = draft_input.is_some(),
-        );
-
-        if let Err(error) =
-            crate::ai::acp::persist_preferred_acp_agent_id_sync(Some(selected_agent_id.clone()))
-        {
-            tracing::warn!(
-                event = "notes_acp_switch_agent_persist_failed",
-                selected_agent_id = %selected_agent_id,
-                error = %error,
-            );
-            return;
-        }
-
-        entity.update(cx, |app: &mut NotesApp, cx| {
-            if let Some(ref existing) = app.embedded_acp_chat {
-                existing.update(cx, |chat, cx| {
-                    chat.prepare_for_host_hide(cx);
-                });
-            }
-            app.embedded_acp_chat = None;
-
-            match app.open_or_focus_embedded_acp(draft_input.clone(), window, cx) {
-                Ok(()) => {
-                    tracing::info!(
-                        event = "notes_acp_switch_agent_relaunched",
-                        selected_agent_id = %selected_agent_id,
-                    );
-                }
-                Err(error) => {
-                    app.switch_to_notes_surface(window, cx);
-                    tracing::warn!(
-                        event = "notes_acp_switch_agent_relaunch_failed",
-                        selected_agent_id = %selected_agent_id,
-                        error = %error,
-                    );
-                }
-            }
-        });
-        return;
-    }
 
     // Handle model switch.
     if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
