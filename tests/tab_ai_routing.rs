@@ -127,17 +127,18 @@ fn tab_ai_uses_persistent_harness_session_state() {
 // =========================================================================
 
 #[test]
-fn cmd_enter_routing_preserves_file_search_local_ownership() {
-    let file_search_pos = TAB_SOURCE
-        .find("AppView::FileSearchView")
-        .expect("FileSearch Tab handling must exist");
-    let chat_pos = TAB_SOURCE
-        .find("try_route_global_cmd_enter_to_acp_context_capture")
-        .expect("global Cmd+Enter ACP route must exist");
-
+fn cmd_enter_routing_file_search_uses_shared_global_route() {
+    // FileSearch plain Cmd+Enter now routes through the same shared global
+    // ACP context-capture path as other launcher surfaces. The global route
+    // fires in the startup interceptor, and FileSearch is eligible because
+    // supports_global_cmd_enter_ai_entry includes FileSearchView.
     assert!(
-        file_search_pos < chat_pos,
-        "FileSearch local handling must come before global Cmd+Enter AI routing"
+        TAB_SOURCE.contains("try_route_global_cmd_enter_to_acp_context_capture"),
+        "global Cmd+Enter ACP route must exist in startup interceptor"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("AppView::FileSearchView { .. }"),
+        "FileSearchView must be eligible for the shared global Cmd+Enter route"
     );
 }
 
@@ -697,8 +698,9 @@ fn script_list_cmd_enter_fallback_routes_to_shared_acp_helper() {
 #[test]
 fn script_list_cmd_enter_fallback_comment_matches_shortcut_contract() {
     assert!(
-        SCRIPT_LIST_SOURCE.contains("\"Ask AI [⌘↵]\""),
-        "render_script_list header hint should advertise Cmd+Enter"
+        SCRIPT_LIST_SOURCE.contains(".child(\"Ask\")")
+            && SCRIPT_LIST_SOURCE.contains(".child(\"⌘↩\")"),
+        "render_script_list header hint should advertise Cmd+Enter with the Ask label and keycap badge"
     );
     assert!(
         SCRIPT_LIST_SOURCE.contains("press ⌘↵ to ask AI"),
