@@ -220,12 +220,34 @@ impl NotesApp {
                 self.enable_auto_sizing(window, cx);
             }
             NotesAction::SendToAi => {
-                let handed_off = self.handoff_selected_note_to_acp("NotesAction::SendToAi", cx);
-                self.close_actions_panel(window, cx);
-                if handed_off {
-                    self.show_action_feedback("Sent to ACP Chat", false);
+                let content = self.editor_state.read(cx).value().to_string();
+                if content.trim().is_empty() {
+                    tracing::warn!(
+                        event = "notes_acp_handoff_blocked",
+                        reason = "empty_note",
+                        "Blocked Notes/ACP handoff"
+                    );
+                    self.show_action_feedback("Note is empty", true);
+                } else {
+                    // Switch to embedded ACP inside the Notes window.
+                    if let Err(e) =
+                        self.open_or_focus_embedded_acp(Some(content.clone()), window, cx)
+                    {
+                        tracing::warn!(
+                            event = "notes_acp_handoff_blocked",
+                            reason = %format!("embedded_acp_failed: {e}"),
+                            "Blocked Notes/ACP handoff"
+                        );
+                        self.show_action_feedback("Failed to open ACP", true);
+                    } else {
+                        tracing::info!(
+                            event = "notes_send_to_acp",
+                            char_count = content.chars().count(),
+                            mode = "embedded",
+                            "Switched to embedded ACP in Notes window"
+                        );
+                    }
                 }
-                return;
             }
             NotesAction::Cancel => {
                 // Panel was cancelled, nothing to do
@@ -501,72 +523,5 @@ impl NotesApp {
         }
 
         cx.notify();
-    }
-
-    /// Build a canonical ACP target for the currently selected note.
-    pub(super) fn build_selected_note_target_for_ai(
-        &self,
-        cx: &Context<Self>,
-    ) -> Option<crate::ai::TabAiTargetContext> {
-        let note_id = self.selected_note_id?;
-        let note = self.notes.iter().find(|n| n.id == note_id)?;
-        let content = self.editor_state.read(cx).value().to_string();
-        let title = if note.title.trim().is_empty() {
-            "Untitled Note".to_string()
-        } else {
-            note.title.clone()
-        };
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "notes_selected_note_target_built",
-            note_id = %note_id.as_str(),
-            title = %title,
-            content_len = content.len(),
-        );
-
-        Some(crate::ai::TabAiTargetContext {
-            source: "Notes".to_string(),
-            kind: "note".to_string(),
-            semantic_id: crate::protocol::generate_semantic_id("note", 0, &note_id.as_str()),
-            label: title.clone(),
-            metadata: Some(serde_json::json!({
-                "noteId": note_id.as_str(),
-                "title": title,
-                "content": content,
-                "preview": Self::strip_markdown_for_preview(&note.preview()),
-                "isPinned": note.is_pinned,
-                "viewMode": format!("{:?}", self.view_mode),
-            })),
-        })
-    }
-
-    /// Hand off the selected note to ACP Chat via the canonical secondary-window path.
-    ///
-    /// Returns `true` if a target was enqueued, `false` if no note was selected.
-    pub(super) fn handoff_selected_note_to_acp(
-        &mut self,
-        source: &'static str,
-        cx: &Context<Self>,
-    ) -> bool {
-        let Some(target) = self.build_selected_note_target_for_ai(cx) else {
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "notes_acp_handoff_blocked",
-                source,
-                reason = "no_selected_note",
-            );
-            self.show_action_feedback("No note selected", true);
-            return false;
-        };
-
-        crate::ai::request_explicit_acp_handoff_from_secondary_window(target, source, true);
-
-        tracing::info!(
-            target: "script_kit::tab_ai",
-            event = "notes_send_to_acp",
-            source,
-        );
-        true
     }
 }

@@ -298,26 +298,8 @@ impl NotesApp {
             dialog
         });
 
-        let activation_dialog = dialog.clone();
         let notes_entity = cx.entity().downgrade();
         dialog.update(cx, |dialog, _cx| {
-            dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| {
-                match activation {
-                    crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
-                        crate::actions::resize_actions_window(cx, &activation_dialog);
-                    }
-                    crate::actions::ActionsDialogActivation::Executed { should_close, .. } => {
-                        if should_close {
-                            let on_close = activation_dialog.read(cx).on_close.clone();
-                            if let Some(on_close) = on_close {
-                                on_close(cx);
-                            }
-                            crate::actions::close_actions_window(cx);
-                        }
-                    }
-                    crate::actions::ActionsDialogActivation::NoSelection => {}
-                }
-            }));
             dialog.set_on_close(std::sync::Arc::new(move |cx| {
                 if let Some(entity) = notes_entity.upgrade() {
                     entity.update(cx, |app, cx| {
@@ -576,7 +558,6 @@ fn dispatch_notes_acp_action(
         });
         return;
     }
-
     // Handle model switch.
     if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
         acp_entity.update(cx, |chat, cx| {
