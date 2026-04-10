@@ -300,22 +300,12 @@ fn render_multiline_line(
             continue;
         }
 
-        let mut token_node = div().flex().flex_row().items_start();
-        for (offset, ch) in token.text.chars().enumerate() {
-            let char_index = token.start + offset;
-            if selection_range.is_none() && char_index == cursor {
-                token_node = token_node.child(render_cursor(config));
-            }
-
-            token_node = token_node.child(render_multiline_char(
-                ch,
-                char_index,
-                selection_range,
-                config,
-            ));
-        }
-
-        line = line.child(token_node);
+        line = line.child(render_multiline_token_runs(
+            &token,
+            cursor,
+            selection_range,
+            config,
+        ));
     }
 
     line
@@ -373,6 +363,81 @@ fn render_multiline_char(
     }
 
     node
+}
+
+fn render_multiline_token_runs(
+    token: &MultilineToken,
+    cursor: usize,
+    selection_range: Option<(usize, usize)>,
+    config: &TextInputRenderConfig<'_>,
+) -> Div {
+    let mut token_node = div().flex().flex_row().items_start();
+    let mut run_text = String::new();
+    let mut run_selected = false;
+    let mut run_color = config.text_color;
+
+    for (offset, ch) in token.text.chars().enumerate() {
+        let char_index = token.start + offset;
+        if selection_range.is_none() && char_index == cursor {
+            token_node = flush_multiline_run(
+                token_node,
+                &mut run_text,
+                run_selected,
+                run_color,
+                config,
+            );
+            token_node = token_node.child(render_cursor(config));
+        }
+
+        let is_selected = selection_range
+            .is_some_and(|(start, end)| (start..end).contains(&char_index));
+        let color = color_for_char(config.highlight_ranges, char_index).unwrap_or(config.text_color);
+
+        if run_text.is_empty() {
+            run_selected = is_selected;
+            run_color = color;
+        } else if run_selected != is_selected || (!is_selected && run_color != color) {
+            token_node = flush_multiline_run(
+                token_node,
+                &mut run_text,
+                run_selected,
+                run_color,
+                config,
+            );
+            run_selected = is_selected;
+            run_color = color;
+        }
+
+        run_text.push(ch);
+    }
+
+    flush_multiline_run(token_node, &mut run_text, run_selected, run_color, config)
+}
+
+fn flush_multiline_run(
+    node: Div,
+    run_text: &mut String,
+    selected: bool,
+    color: u32,
+    config: &TextInputRenderConfig<'_>,
+) -> Div {
+    if run_text.is_empty() {
+        return node;
+    }
+
+    let text = format_segment(run_text, config.transform);
+    run_text.clear();
+
+    if selected {
+        node.child(
+            div()
+                .bg(rgba((config.selection_color << 8) | config.selection_alpha))
+                .text_color(rgb(config.selection_text_color))
+                .child(text),
+        )
+    } else {
+        node.child(div().text_color(rgb(color)).child(text))
+    }
 }
 
 fn color_for_char(highlights: &[TextHighlightRange], char_index: usize) -> Option<u32> {
