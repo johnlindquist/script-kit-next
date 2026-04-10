@@ -217,6 +217,25 @@ pub(crate) fn typed_mention_prefix_for_dir() -> &'static str {
     "dir"
 }
 
+/// Map a focused-target kind to a typed mention prefix.
+pub(crate) fn typed_mention_prefix_for_target_kind(kind: &str) -> &'static str {
+    match kind {
+        "script" => "script",
+        "scriptlet" => "scriptlet",
+        "builtin" | "menu_command" => "cmd",
+        "search_query" => "search",
+        "input" => "input",
+        "clipboard_entry" => "clipboard",
+        "window" => "window",
+        "app" => "app",
+        "process" => "process",
+        "agent" => "agent",
+        "skill" => "skill",
+        "fallback" => "suggestion",
+        _ => "cmd",
+    }
+}
+
 /// Extract a short display name from a file path: filename without extension,
 /// truncated to `TYPED_MENTION_NAME_MAX_LEN` characters.
 pub(crate) fn typed_mention_display_name(path: &str) -> String {
@@ -442,9 +461,13 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
                 return Some(format_typed_mention_token(prefix, &name));
             }
 
-            // Non-file targets use @cmd: prefix.
+            // Non-file targets use kind-specific prefixes so script, scriptlet,
+            // app, and other ACP attachments stay distinguishable inline.
             let name = typed_mention_label_name(&target.label);
-            Some(format_typed_mention_token("cmd", &name))
+            Some(format_typed_mention_token(
+                typed_mention_prefix_for_target_kind(&target.kind),
+                &name,
+            ))
         }
         AiContextPart::AmbientContext { label } => {
             let name = typed_mention_label_name(label);

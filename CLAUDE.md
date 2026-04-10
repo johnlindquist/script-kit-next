@@ -314,7 +314,7 @@ Composable context attachments for ACP Chat flows with deterministic resolution 
 The PTY-backed Tab AI path renders in `AppView::QuickTerminalView` via `TermPrompt` when verification-bearing or harness-native flows select the quick-terminal surface.
 
 **Entry path:**
-- `open_tab_ai_chat()` routes through `begin_tab_ai_harness_entry()` and `open_tab_ai_harness_terminal_from_request()` when the quick-terminal surface is selected.
+- `open_tab_ai_acp_with_entry_intent(...)` routes through `begin_tab_ai_harness_entry()` and `open_tab_ai_harness_terminal_from_request()` when the quick-terminal surface is selected.
 - `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens the same PTY-backed surface and submits that filter text as user intent through `TabAiHarnessSubmissionMode::Submit`.
 - `Tab` / `Shift+Tab` inside `AppView::QuickTerminalView` are forwarded to the PTY. Do not describe them as focus-navigation keys once the harness terminal is open.
 
@@ -397,7 +397,7 @@ ACP Chat (`AppView::AcpChatView`) is the primary and only AI chat surface. Inter
 These remain for non-primary flows and historical data. Do not describe them as the default Tab entry path.
 
 **Harness lifecycle:**
-- Each Tab press writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/skills/`, and spawns a fresh `claude` process with `--append-system-prompt` and the user intent as CLI args.
+- Each Tab press writes `~/.scriptkit/context/latest.md`, enumerates plugin-owned skill bundles under `~/.scriptkit/kit/*/skills/`, and spawns a fresh `claude` process with `--append-system-prompt` and the user intent as CLI args.
 - No warm/prewarm session — each invocation is a one-shot spawn rendered in QuickTerminalView.
 
 - Recovery — if the harness crashes or exits, the next Tab entry respawns it.

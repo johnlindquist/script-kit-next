@@ -51,14 +51,14 @@ fn infer_scriptlet_from_md_hash() {
 
 #[test]
 fn infer_extension_from_path() {
-    let choice = choice("My Extension", "/home/user/extensions/my-ext", None);
+    let choice = choice("My Scriptlet", "/home/user/scriptlets/my-ext", None);
     let metadata = ChoiceDisplayMetadata::from_choice(&choice);
 
     assert_eq!(
         metadata
             .item_type
-            .expect("expected /extensions/ path to infer Extension"),
-        "Extension"
+            .expect("expected /scriptlets/ path to infer Scriptlet"),
+        "Scriptlet"
     );
 }
 

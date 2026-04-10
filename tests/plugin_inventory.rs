@@ -11,7 +11,7 @@ fn make_container(tmp: &std::path::Path, plugins: &[(&str, Option<&str>)]) -> st
     for (id, manifest_json) in plugins {
         let plugin_root = container.join(id);
         fs::create_dir_all(plugin_root.join("scripts")).expect("create scripts dir");
-        fs::create_dir_all(plugin_root.join("extensions")).expect("create extensions dir");
+        fs::create_dir_all(plugin_root.join("scriptlets")).expect("create scriptlets dir");
         if let Some(json) = manifest_json {
             fs::write(plugin_root.join("plugin.json"), json).expect("write plugin.json");
         }
@@ -211,7 +211,7 @@ fn skills_parse_title_from_frontmatter() {
     fs::create_dir_all(&skill).expect("mkdir");
     fs::write(
         skill.join("SKILL.md"),
-        "---\ntitle: Scriptlet Authoring\ndescription: Create markdown extension bundles\n---\n# Body",
+        "---\ntitle: Scriptlet Authoring\ndescription: Create markdown scriptlet bundles\n---\n# Body",
     )
     .expect("write");
     let manifest = r#"{"id":"authoring","title":"Authoring"}"#;
@@ -221,7 +221,7 @@ fn skills_parse_title_from_frontmatter() {
     let skills = discover_plugin_skills(&index).expect("skills");
     assert_eq!(skills.len(), 1);
     assert_eq!(skills[0].title, "Scriptlet Authoring");
-    assert_eq!(skills[0].description, "Create markdown extension bundles");
+    assert_eq!(skills[0].description, "Create markdown scriptlet bundles");
     assert_eq!(skills[0].plugin_title, "Authoring");
     assert_eq!(skills[0].plugin_id, "authoring");
 }

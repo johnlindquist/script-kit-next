@@ -315,6 +315,27 @@ fn notes_acp_handoff_emits_structured_logs() {
         panels.contains("notes_acp_handoff_blocked"),
         "Notes handler must emit notes_acp_handoff_blocked for empty notes"
     );
+    assert!(
+        panels.contains("open_or_focus_chat_with_input"),
+        "Notes handoff must route through the shared ACP open/focus helper"
+    );
+    let acp_mod = include_str!("../src/ai/acp/mod.rs");
+    assert!(
+        acp_mod.contains("pub(crate) fn open_or_focus_chat_with_input("),
+        "ACP staging helper must exist for secondary-window handoffs"
+    );
+    assert!(
+        acp_mod.contains("chat_window::open_chat_window_with_thread"),
+        "ACP helper must open a real ACP chat window instead of the deprecated AI window"
+    );
+    assert!(
+        !panels.contains("crate::ai::open_ai_window(cx)"),
+        "Notes handoff must not open the deprecated AI window"
+    );
+    assert!(
+        !panels.contains("crate::ai::set_ai_input(cx, &content, false)"),
+        "Notes handoff must not target the deprecated AI window input API"
+    );
 
     let handler = include_str!("../src/app_actions/handle_action/mod.rs");
     assert!(

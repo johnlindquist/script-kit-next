@@ -250,8 +250,8 @@ fn ai_open_and_new_conversation_use_deferred_helper() {
         "Expected legacy AI window aliases to be centralized via is_legacy_harness_alias"
     );
     assert!(
-        content.contains("self.open_tab_ai_chat(cx);"),
-        "Expected legacy AI window aliases to route to the shared Tab AI entry point"
+        content.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
+        "Expected legacy AI window aliases to route to ACP Chat"
     );
 }
 
@@ -263,8 +263,8 @@ fn ai_clear_conversation_uses_deferred_helper() {
         "Expected ClearConversation to be classified as a legacy harness alias"
     );
     assert!(
-        content.contains("format!(\"ai_{cmd:?}_routed_to_harness\")"),
-        "Expected legacy AI aliases to report a routed_to_harness success outcome"
+        content.contains("format!(\"ai_{cmd:?}_routed_to_acp_chat\")"),
+        "Expected legacy AI aliases to report a routed_to_acp_chat success outcome"
     );
 }
 
@@ -272,8 +272,8 @@ fn ai_clear_conversation_uses_deferred_helper() {
 fn ai_clear_conversation_shows_hud_on_success() {
     let content = builtin_execution_content();
     assert!(
-        content.contains("format!(\"ai_{cmd:?}_routed_to_harness\")"),
-        "Expected ClearConversation success to be reported through the routed_to_harness outcome"
+        content.contains("format!(\"ai_{cmd:?}_routed_to_acp_chat\")"),
+        "Expected ClearConversation success to be reported through the routed_to_acp_chat outcome"
     );
 }
 

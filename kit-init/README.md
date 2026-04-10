@@ -14,6 +14,6 @@ Files in this directory are embedded into the Script Kit binary and copied to `~
 ## Behavior
 
 - User-owned files (config, theme) are only created if they don't exist (never overwritten)
-- App-managed files (SDK, skills, extensions) are refreshed if content has changed
+- App-managed files (SDK, skills, scriptlets) are refreshed if content has changed
 - Embedded at compile time via `include_str!()` in `src/setup/mod.rs`
 - Build system watches these files for changes (`build.rs`)

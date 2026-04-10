@@ -808,6 +808,27 @@ fn footer_hint_slot_width(action: FooterAction) -> f64 {
     }
 }
 
+fn footer_hint_content_layout(
+    action: FooterAction,
+    item_width: f64,
+    label_width: f64,
+    key_width: f64,
+) -> (f64, f64, f64) {
+    let content_width = label_width + FOOTER_HINT_KEY_LABEL_GAP + key_width;
+
+    if matches!(action, FooterAction::Run) {
+        let key_x = (item_width - FOOTER_HINT_PADDING_X - key_width).round();
+        let label_x = (key_x - FOOTER_HINT_KEY_LABEL_GAP - label_width)
+            .max(0.0)
+            .round();
+        return (label_x, key_x, content_width);
+    }
+
+    let label_x = ((item_width - content_width) / 2.0).max(0.0).round();
+    let key_x = (label_x + label_width + FOOTER_HINT_KEY_LABEL_GAP).round();
+    (label_x, key_x, content_width)
+}
+
 #[cfg(target_os = "macos")]
 unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_color: id) -> id {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
@@ -851,15 +872,18 @@ unsafe fn make_footer_hint_item(button_cfg: &FooterButtonConfig, font: id, text_
     let content_y = ((item_height - content_height) / 2.0).round();
     let key_y = (content_y + FOOTER_HINT_PADDING_Y).round();
     let label_y = (content_y + FOOTER_HINT_PADDING_Y).round();
-    let key_x = (item_width - FOOTER_HINT_PADDING_X - key_size.width).round();
-    let label_x = FOOTER_HINT_PADDING_X.round();
-    let label_width = (key_x - FOOTER_HINT_KEY_LABEL_GAP - label_x).max(0.0);
+    let (label_x, key_x, _) = footer_hint_content_layout(
+        button_cfg.action,
+        item_width,
+        label_size.width,
+        key_size.width,
+    );
 
     let _: () = msg_send![
         label_field,
         setFrame: NSRect::new(
             NSPoint::new(label_x, label_y),
-            NSSize::new(label_width, label_size.height)
+            NSSize::new(label_size.width, label_size.height)
         )
     ];
     let _: () = msg_send![
@@ -984,7 +1008,7 @@ unsafe fn make_footer_hint_text_field(
 
 #[cfg(test)]
 mod footer_layout_tests {
-    use super::{footer_hint_slot_width, FooterAction};
+    use super::{footer_hint_content_layout, footer_hint_slot_width, FooterAction};
 
     #[test]
     fn footer_hint_slot_widths_are_stable_per_action() {
@@ -1002,6 +1026,32 @@ mod footer_layout_tests {
         assert!(
             footer_hint_slot_width(FooterAction::Run) > footer_hint_slot_width(FooterAction::Ai)
         );
+    }
+
+    #[test]
+    fn footer_hint_content_group_is_centered_within_slot() {
+        let item_width = 96.0;
+        let label_width = 34.0;
+        let key_width = 18.0;
+
+        let (label_x, key_x, content_width) =
+            footer_hint_content_layout(FooterAction::Actions, item_width, label_width, key_width);
+        let left_padding = label_x;
+        let right_padding = item_width - (key_x + key_width);
+
+        assert_eq!(content_width, label_width + 3.0 + key_width);
+        assert!((left_padding - right_padding).abs() <= 1.0);
+    }
+
+    #[test]
+    fn run_hint_keeps_key_glyph_anchored_to_trailing_padding() {
+        let short = footer_hint_content_layout(FooterAction::Run, 96.0, 20.0, 18.0);
+        let long = footer_hint_content_layout(FooterAction::Run, 140.0, 64.0, 18.0);
+
+        assert_eq!(short.1, 74.0);
+        assert_eq!(long.1, 118.0);
+        assert_eq!(96.0 - (short.1 + 18.0), 4.0);
+        assert_eq!(140.0 - (long.1 + 18.0), 4.0);
     }
 }
 

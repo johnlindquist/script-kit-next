@@ -17,9 +17,9 @@ Use this plain-text route first:
 - Use for Script Kit UI, Bun APIs, files, HTTP, or multi-step logic
 - Write to `~/.scriptkit/kit/main/scripts/<name>.ts`
 
-### Extension bundle / scriptlet bundle
+### Scriptlet bundle
 - Use for snippets, text expansion, quick shell commands, or grouped helpers
-- Write to `~/.scriptkit/kit/main/extensions/<name>.md`
+- Write to `~/.scriptkit/kit/main/scriptlets/<name>.md`
 
 ### Skill (preferred reusable AI unit)
 - Use for reusable AI instructions that open ACP Chat when selected from the main menu
@@ -30,8 +30,6 @@ Use this plain-text route first:
 - Use only when you need a specific backend suffix or legacy mdflow features
 - Write to `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
 - For new reusable AI work, prefer creating a skill instead
-
-Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact.
 
 ## Guardrails
 
@@ -52,7 +50,8 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 - Skills overview → `~/.scriptkit/kit/authoring/skills/README.md`
 - Agent details (compatibility) → `~/.scriptkit/kit/authoring/skills/agents/SKILL.md`
 - Script example → `~/.scriptkit/kit/examples/scripts/hello-world.ts`
-- Bundle starter → `~/.scriptkit/kit/examples/extensions/starter.md`
+- Skill examples → `~/.scriptkit/kit/examples/skills/`
+- Bundle starter → `~/.scriptkit/kit/examples/scriptlets/starter.md`
 - Agent example → `~/.scriptkit/kit/examples/agents/review-pr.claude.md`
 
 ## Directory Layout
@@ -66,7 +65,7 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 │   ├── main/
 │   │   ├── plugin.json            ← plugin manifest
 │   │   ├── scripts/               ← PUT NEW SCRIPTS HERE
-│   │   ├── extensions/            ← markdown scriptlet bundles
+│   │   ├── scriptlets/            ← markdown scriptlet bundles
 │   │   ├── skills/                ← AI skills (preferred reusable AI unit)
 │   │   └── agents/                ← legacy agent definitions (compatibility)
 │   ├── authoring/
@@ -80,7 +79,8 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 │   ├── examples/
 │   │   ├── plugin.json
 │   │   ├── scripts/               ← runnable .ts examples
-│   │   ├── extensions/            ← built-in scriptlet bundles
+│   │   ├── skills/                ← example ACP-first skills
+│   │   ├── scriptlets/            ← built-in scriptlet bundles
 │   │   └── agents/                ← mdflow agent examples
 │   ├── config.ts                  ← user configuration
 │   ├── theme.json                 ← theme colors
@@ -101,8 +101,8 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 - Save to `kit/main/scripts/*.ts`
 - Use Bun APIs: `Bun.file()`, `Bun.write()`, and `` $`command` ``
 
-### Extension Bundle / Scriptlet Bundle Rules
-- Save one markdown file to `kit/main/extensions/*.md`
+### Scriptlet Bundle Rules
+- Save one markdown file to `kit/main/scriptlets/*.md`
 - Prefer `metadata` code fences for new bundles
 - Use `import "@scriptkit/sdk";` only inside `tool:<name>` fences, as the first line of that fence
 - Do not put `export const metadata` at the top of the markdown file
@@ -124,10 +124,10 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 ## Avoid These Mistakes
 
 - Do not create more than one artifact for one request
-- Do not put scripts in `extensions/` or `agents/`
+- Do not put scripts in `scriptlets/` or `agents/`
 - Do not put bundles in `scripts/`
-- Do not put agents in `scripts/` or `extensions/`
-- Do not put skills in `scripts/` or `extensions/` — skills are `SKILL.md` directories under `skills/`
+- Do not put agents in `scripts/` or `scriptlets/`
+- Do not put skills in `scripts/` or `scriptlets/` — skills are `SKILL.md` directories under `skills/`
 - Do not create new agents when a skill would work — agents are a compatibility path
 - Do not use CommonJS or the old v1 SDK package
 - Do not edit `sdk/`
@@ -180,18 +180,21 @@ await notify("Task complete!");
 
 Read `kit/authoring/skills/` for detailed guidance on:
 - **script-authoring** — creating and structuring scripts
-- **scriptlets** — markdown extension bundles with embedded commands
+- **scriptlets** — markdown scriptlet bundles with embedded commands
 - **agents** — mdflow-backed agent files
 - **config** — configuration and theming
 - **troubleshooting** — common issues and debugging
 
 ## Examples
 
-See `kit/examples/scripts/` for working examples:
+See `kit/examples/` for working examples:
 - `hello-world.ts` — basic prompt and display
 - `choose-from-list.ts` — rich choices with preview
 - `clipboard-transform.ts` — clipboard read/transform/write
 - `path-picker.ts` — file system operations
+- `skills/review-pr/` — findings-first review skill
+- `skills/plan-feature/` — feature planning skill
+- `skills/explain-code/` — code explanation skill
 
 ## Configuration
 
@@ -214,7 +217,7 @@ Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` vi
 - The footer hint strip advertises only `⌘W Close`.
 
 **Runtime contract:**
-- Entry path: `open_tab_ai_chat()` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
+- Entry path: `open_tab_ai_acp_with_entry_intent(...)` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
 - Harness session state: `TabAiHarnessSessionState`
 - Harness config: `claudeCode` block in `~/.scriptkit/kit/config.ts`
 - Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
@@ -232,7 +235,7 @@ Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` vi
 - The richer `tab_ai()` profile with screenshots is reserved for a future Claude-specific SDK path.
 
 **Harness lifecycle:**
-- Each explicit quick-terminal open writes `~/.scriptkit/context/latest.md`, enumerates `~/.scriptkit/kit/authoring/skills/`, and behaves as a one-shot spawn rendered in `QuickTerminalView`.
+- Each explicit quick-terminal open writes `~/.scriptkit/context/latest.md`, enumerates plugin-owned skills under `~/.scriptkit/kit/*/skills/`, and behaves as a one-shot spawn rendered in `QuickTerminalView`.
 - Internal silent prewarm may seed the PTY ahead of time, but that is a single-use implementation detail rather than a documented warm multi-turn surface.
 - Recovery — if the harness crashes or exits, the next Tab entry respawns it.
 
@@ -254,4 +257,4 @@ Script Kit watches and auto-reloads:
 | `kit/config.ts` | Reloads configuration |
 | `kit/theme.json` | Applies new theme |
 | `kit/main/scripts/*.ts` | Updates script list |
-| `kit/main/extensions/*.md` | Updates extensions |
+| `kit/main/scriptlets/*.md` | Updates extensions |

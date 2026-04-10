@@ -47,8 +47,8 @@ Total: ~50-200μs per script + ~100-500μs base overhead
 
 ```
 Timeline:
-1. Glob ~/.scriptkit/scriptlets/*.md             ~200-500μs
-2. Glob ~/.scriptkit/kenvs/*/scriptlets/*.md     ~200-500μs
+1. Glob ~/.scriptkit/kit/*/scriptlets/*.md (plugin-scoped)   ~200-500μs
+2. Parse nested scriptlet bundles and companion `.actions.md` relationships ~200-500μs
 3. For each .md file:
    a. Read file content                     ~50-200μs
    b. Parse markdown sections               ~10-50μs (linear scan)
@@ -278,7 +278,7 @@ pub struct ScriptWatcher {
     // Uses notify crate with recommended_watcher()
     // Watches:
     //   - ~/.scriptkit/scripts (recursive)
-    //   - ~/.scriptkit/scriptlets (recursive)
+    //   - ~/.scriptkit/kit/*/scriptlets (recursive)
 }
 ```
 

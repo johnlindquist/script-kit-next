@@ -1,19 +1,19 @@
-//! Script and Extension Creation Module
+//! Script and Scriptlet Creation Module
 //!
-//! This module provides functions to create new scripts and extensions
+//! This module provides functions to create new scripts and scriptlets
 //! in the Script Kit environment, as well as opening files in the configured editor.
 //!
 //! # Usage
 //!
 //! ```rust,ignore
-//! use script_kit_gpui::script_creation::{create_new_script, create_new_extension, open_in_editor};
+//! use script_kit_gpui::script_creation::{create_new_script, create_new_scriptlet, open_in_editor};
 //! use script_kit_gpui::config::Config;
 //!
 //! // Create a new script
 //! let script_path = create_new_script("my-script")?;
 //!
-//! // Create a new extension
-//! let extension_path = create_new_extension("my-extension")?;
+//! // Create a new scriptlet bundle
+//! let scriptlet_path = create_new_scriptlet("my-scriptlet")?;
 //!
 //! // Open in editor
 //! let config = Config::default();
@@ -44,9 +44,9 @@ pub fn plugin_dir(plugin_id: &str) -> PathBuf {
 pub fn scripts_dir_for_plugin(plugin_id: &str) -> PathBuf {
     plugin_dir(plugin_id).join("scripts")
 }
-/// Extensions directory for a given plugin.
-pub fn extensions_dir_for_plugin(plugin_id: &str) -> PathBuf {
-    plugin_dir(plugin_id).join("extensions")
+/// Scriptlets directory for a given plugin.
+pub fn scriptlets_dir_for_plugin(plugin_id: &str) -> PathBuf {
+    plugin_dir(plugin_id).join("scriptlets")
 }
 /// Agents directory for a given plugin.
 pub fn agents_dir_for_plugin(plugin_id: &str) -> PathBuf {
@@ -60,17 +60,17 @@ pub fn skills_dir_for_plugin(plugin_id: &str) -> PathBuf {
 pub fn scripts_dir() -> PathBuf {
     scripts_dir_for_plugin("main")
 }
-/// Extensions directory under the active Script Kit workspace (default: `kit/main/extensions`).
-pub fn extensions_dir() -> PathBuf {
-    extensions_dir_for_plugin("main")
+/// Scriptlets directory under the active Script Kit workspace (default: `kit/main/scriptlets`).
+pub fn scriptlets_dir() -> PathBuf {
+    scriptlets_dir_for_plugin("main")
 }
 /// Create a new script in a specific plugin's scripts directory.
 pub fn create_new_script_in_plugin(plugin_id: &str, name: &str) -> Result<PathBuf> {
     create_new_script_in_dir(name, &scripts_dir_for_plugin(plugin_id))
 }
-/// Create a new extension in a specific plugin's extensions directory.
-pub fn create_new_extension_in_plugin(plugin_id: &str, name: &str) -> Result<PathBuf> {
-    create_new_extension_in_dir(name, &extensions_dir_for_plugin(plugin_id))
+/// Create a new scriptlet in a specific plugin's scriptlets directory.
+pub fn create_new_scriptlet_in_plugin(plugin_id: &str, name: &str) -> Result<PathBuf> {
+    create_new_scriptlet_in_dir(name, &scriptlets_dir_for_plugin(plugin_id))
 }
 fn validate_sanitized_name(
     original_name: &str,
@@ -247,10 +247,10 @@ await div(md(`## ${{result}}`));
 "#
     )
 }
-/// Generate the extension template as markdown with embedded code.
+/// Generate the scriptlet template as markdown with embedded code.
 ///
-/// Extensions are markdown files with code blocks that can be executed.
-fn generate_extension_template(name: &str) -> String {
+/// Scriptlets are markdown files with code blocks that can be executed.
+fn generate_scriptlet_template(name: &str) -> String {
     let title = name_to_title(name);
     format!(
         r#"---
@@ -336,55 +336,55 @@ fn create_new_script_in_dir(name: &str, scripts_dir: &Path) -> Result<PathBuf> {
 
     Ok(script_path)
 }
-/// Create a new extension file in ~/.scriptkit/kit/main/extensions/
+/// Create a new scriptlet file in ~/.scriptkit/kit/main/scriptlets/
 ///
 /// # Arguments
 ///
-/// * `name` - The name of the extension (will be sanitized for filename)
+/// * `name` - The name of the scriptlet bundle (will be sanitized for filename)
 ///
 /// # Returns
 ///
-/// The path to the created extension file.
+/// The path to the created scriptlet file.
 ///
 /// # Errors
 ///
 /// Returns an error if:
-/// - The extensions directory cannot be created
+/// - The scriptlets directory cannot be created
 /// - A valid filename cannot be derived from the provided name
 /// - The file cannot be written
-#[instrument(name = "create_new_extension", skip_all, fields(name = %name))]
-pub fn create_new_extension(name: &str) -> Result<PathBuf> {
-    create_new_extension_in_dir(name, &extensions_dir())
+#[instrument(name = "create_new_scriptlet", skip_all, fields(name = %name))]
+pub fn create_new_scriptlet(name: &str) -> Result<PathBuf> {
+    create_new_scriptlet_in_dir(name, &scriptlets_dir())
 }
-fn create_new_extension_in_dir(name: &str, extensions_dir: &Path) -> Result<PathBuf> {
+fn create_new_scriptlet_in_dir(name: &str, scriptlets_dir: &Path) -> Result<PathBuf> {
     let sanitized_name = sanitize_name(name);
-    validate_sanitized_name(name, &sanitized_name, "md", "Extension")?;
+    validate_sanitized_name(name, &sanitized_name, "md", "Scriptlet bundle")?;
 
-    // Ensure the extensions directory exists
-    fs::create_dir_all(extensions_dir).with_context(|| {
+    // Ensure the scriptlets directory exists
+    fs::create_dir_all(scriptlets_dir).with_context(|| {
         format!(
-            "Failed to create extensions directory: {}",
-            extensions_dir.display()
+            "Failed to create scriptlets directory: {}",
+            scriptlets_dir.display()
         )
     })?;
 
-    let (extension_path, created_name) = create_unique_templated_file(
+    let (scriptlet_path, created_name) = create_unique_templated_file(
         name,
         &sanitized_name,
-        extensions_dir,
+        scriptlets_dir,
         "md",
-        "extension",
-        generate_extension_template,
+        "scriptlet bundle",
+        generate_scriptlet_template,
     )?;
 
     info!(
-        path = %extension_path.display(),
+        path = %scriptlet_path.display(),
         name = %created_name,
         requested_name = %name,
-        "Created new extension"
+        "Created new scriptlet bundle"
     );
 
-    Ok(extension_path)
+    Ok(scriptlet_path)
 }
 /// Open a file in the configured editor.
 ///
@@ -554,8 +554,8 @@ mod tests {
     }
 
     #[test]
-    fn test_generate_extension_template() {
-        let template = generate_extension_template("my-extension");
+    fn test_generate_scriptlet_template() {
+        let template = generate_scriptlet_template("my-extension");
         assert!(template.starts_with("---"));
         assert!(template.contains("name: My Extension"));
         assert!(template.contains("description: \"Grouped lightweight helpers\""));
@@ -588,8 +588,8 @@ mod tests {
     }
 
     #[test]
-    fn test_create_new_extension_empty_name() {
-        let result = create_new_extension("");
+    fn test_create_new_scriptlet_empty_name() {
+        let result = create_new_scriptlet("");
         assert!(result.is_err());
         assert!(result
             .unwrap_err()
@@ -617,18 +617,18 @@ mod tests {
     }
 
     #[test]
-    fn test_create_extension_integration() {
+    fn test_create_scriptlet_integration() {
         let temp_dir = tempdir().unwrap();
-        let extensions_dir = temp_dir.path().join("extensions");
-        let extension_path =
-            create_new_extension_in_dir("test-extension", &extensions_dir).unwrap();
+        let scriptlets_dir = temp_dir.path().join("scriptlets");
+        let scriptlet_path =
+            create_new_scriptlet_in_dir("test-extension", &scriptlets_dir).unwrap();
 
         // Verify the file was created
-        assert!(extension_path.exists());
-        assert_eq!(extension_path.file_name().unwrap(), "test-extension.md");
+        assert!(scriptlet_path.exists());
+        assert_eq!(scriptlet_path.file_name().unwrap(), "test-extension.md");
 
         // Verify the content is markdown with metadata fences
-        let content = fs::read_to_string(&extension_path).unwrap();
+        let content = fs::read_to_string(&scriptlet_path).unwrap();
         assert!(content.contains("name: Test Extension"));
         assert!(content.contains("```metadata"));
     }
@@ -648,12 +648,12 @@ mod tests {
     }
 
     #[test]
-    fn test_create_new_extension_in_dir_generates_unique_name_when_base_exists() {
+    fn test_create_new_scriptlet_in_dir_generates_unique_name_when_base_exists() {
         let temp_dir = tempdir().unwrap();
-        let extensions_dir = temp_dir.path().join("extensions");
+        let scriptlets_dir = temp_dir.path().join("scriptlets");
 
-        let first = create_new_extension_in_dir("my-extension", &extensions_dir).unwrap();
-        let second = create_new_extension_in_dir("my-extension", &extensions_dir).unwrap();
+        let first = create_new_scriptlet_in_dir("my-extension", &scriptlets_dir).unwrap();
+        let second = create_new_scriptlet_in_dir("my-extension", &scriptlets_dir).unwrap();
 
         assert_eq!(first.file_name().unwrap(), "my-extension.md");
         assert_eq!(second.file_name().unwrap(), "my-extension-1.md");

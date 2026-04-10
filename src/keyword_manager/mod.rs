@@ -120,7 +120,7 @@ impl KeywordManager {
         }
     }
 
-    /// Load scriptlets with keyword metadata from ~/.scriptkit/kit/*/extensions/
+    /// Load scriptlets with keyword metadata from ~/.scriptkit/kit/*/scriptlets/
     ///
     /// This scans all markdown files and registers any scriptlet that has
     /// an `keyword` metadata field as a trigger.
@@ -128,7 +128,7 @@ impl KeywordManager {
     pub fn load_scriptlets(&mut self) -> Result<usize> {
         info!("Loading scriptlets with keyword triggers");
 
-        // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
+        // Use load_scriptlets() to load from ALL kits (kit/*/scriptlets/*.md)
         let scriptlets = load_scriptlets();
         let mut loaded_count = 0;
 

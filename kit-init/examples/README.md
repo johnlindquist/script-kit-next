@@ -6,7 +6,7 @@ Use this README for browsing and pattern study after the artifact type is alread
 Working examples demonstrating Script Kit patterns. Plugins are the package boundary. Learn by reading, then create your own in the matching workspace directory:
 
 - scripts → `~/.scriptkit/kit/main/scripts/`
-- extension / scriptlet bundles → `~/.scriptkit/kit/main/extensions/`
+- scriptlet bundles → `~/.scriptkit/kit/main/scriptlets/`
 - skills (preferred reusable AI unit) → `~/.scriptkit/kit/main/skills/<name>/SKILL.md`
 - mdflow agents (compatibility) → `~/.scriptkit/kit/main/agents/`
 
@@ -15,11 +15,9 @@ Working examples demonstrating Script Kit patterns. Plugins are the package boun
 | Goal | Copy from | Write to | Read next |
 |------|-----------|----------|-----------|
 | New script | `scripts/hello-world.ts` | `~/.scriptkit/kit/main/scripts/<name>.ts` | `~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md` |
-| New extension / scriptlet bundle | `extensions/starter.md` | `~/.scriptkit/kit/main/extensions/<name>.md` | `~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md` |
-| New skill (preferred AI unit) | n/a | `~/.scriptkit/kit/main/skills/<name>/SKILL.md` | `~/.scriptkit/kit/authoring/skills/README.md` |
+| New scriptlet bundle | `scriptlets/starter.md` | `~/.scriptkit/kit/main/scriptlets/<name>.md` | `~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md` |
+| New skill (preferred AI unit) | `skills/review-pr/` | `~/.scriptkit/kit/main/skills/<name>/SKILL.md` | `~/.scriptkit/kit/authoring/skills/README.md` |
 | New mdflow agent (compatibility) | `agents/review-pr.claude.md` | `~/.scriptkit/kit/main/agents/<name>.<backend>.md` | `~/.scriptkit/kit/authoring/skills/agents/SKILL.md` |
-
-In this repo, "extension bundle" and "scriptlet bundle" mean the same thing.
 
 Pick one artifact, copy one starter, save it under `kit/main/`, then stop. Do not create multiple artifact types for one request.
 
@@ -32,7 +30,7 @@ Pick one artifact, copy one starter, save it under `kit/main/`, then stop. Do no
 | `clipboard-transform.ts` | Clipboard read/transform/write workflow |
 | `path-picker.ts` | File picker and Bun file operations |
 
-## Extensions (`extensions/`)
+## Scriptlets (`scriptlets/`)
 
 Reference markdown bundles copied from the built-in examples kit.
 
@@ -43,17 +41,27 @@ Reference markdown bundles copied from the built-in examples kit.
 | `main.md` | Core scriptlet patterns |
 | `advanced.md` | Richer bundle patterns and edge cases |
 
-Copy patterns from these files into `~/.scriptkit/kit/main/extensions/`.
+Copy patterns from these files into `~/.scriptkit/kit/main/scriptlets/`.
 
-### Focused Extensions
+### Focused Scriptlets
 
 Nested bundles demonstrating feature-specific patterns. Each lives in its own subdirectory.
 
 | Directory | Pattern Demonstrated | Skill |
 |-----------|---------------------|-------|
-| `extensions/acp-chat/main.md` | ACP-oriented extension helpers | [acp-chat](~/.scriptkit/kit/authoring/skills/acp-chat/SKILL.md) |
-| `extensions/custom-actions/main.md` | Shared Actions Menu patterns with companion `.actions.md` | [custom-actions](~/.scriptkit/kit/authoring/skills/custom-actions/SKILL.md) |
-| `extensions/notes/main.md` | Notes automation as an extension bundle | [notes](~/.scriptkit/kit/authoring/skills/notes/SKILL.md) |
+| `scriptlets/acp-chat/main.md` | ACP-oriented scriptlet helpers | [acp-chat](~/.scriptkit/kit/authoring/skills/acp-chat/SKILL.md) |
+| `scriptlets/custom-actions/main.md` | Shared Actions Menu patterns with companion `.actions.md` | [custom-actions](~/.scriptkit/kit/authoring/skills/custom-actions/SKILL.md) |
+| `scriptlets/notes/main.md` | Notes automation as a scriptlet bundle | [notes](~/.scriptkit/kit/authoring/skills/notes/SKILL.md) |
+
+## Skills (`skills/`)
+
+Reference skills that can be copied into `~/.scriptkit/kit/main/skills/` and selected from the main menu.
+
+| Directory | Pattern Demonstrated |
+|-----------|---------------------|
+| `skills/review-pr/` | Findings-first code review skill for diffs and checked-out PRs |
+| `skills/plan-feature/` | Implementation planning skill with scope, risks, and verification |
+| `skills/explain-code/` | Code-orientation skill that traces flow and contracts across files |
 
 ## Agents (Compatibility) (`agents/`)
 
@@ -72,8 +80,8 @@ Copy any example to your workspace:
 
 ```bash
 cp ~/.scriptkit/kit/examples/scripts/hello-world.ts ~/.scriptkit/kit/main/scripts/my-script.ts
-cp ~/.scriptkit/kit/examples/extensions/starter.md ~/.scriptkit/kit/main/extensions/my-bundle.md
-mkdir -p ~/.scriptkit/kit/main/skills/my-skill  # skills are the preferred reusable AI unit
+cp ~/.scriptkit/kit/examples/scriptlets/starter.md ~/.scriptkit/kit/main/scriptlets/my-bundle.md
+mkdir -p ~/.scriptkit/kit/main/skills && cp -R ~/.scriptkit/kit/examples/skills/review-pr ~/.scriptkit/kit/main/skills/review-pr  # skills are the preferred reusable AI unit
 cp ~/.scriptkit/kit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md  # compatibility
 ```
 

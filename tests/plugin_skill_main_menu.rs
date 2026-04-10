@@ -40,7 +40,7 @@ fn make_scriptlet(name: &str, plugin_id: &str) -> Arc<Scriptlet> {
         shortcut: None,
         keyword: None,
         group: None,
-        file_path: Some(format!("/extensions/{}.md#slug", name)),
+        file_path: Some(format!("/scriptlets/{}.md#slug", name)),
         command: Some(name.to_string()),
         alias: None,
     })

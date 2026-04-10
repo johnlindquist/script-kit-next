@@ -552,6 +552,22 @@ fn parse_hint(hint: &str) -> HintElement {
             continue;
         }
 
+        // After a modifier (⌘, ⇧, etc.), a single uppercase letter followed by
+        // a space or end-of-string is a key character, not part of the label.
+        // e.g. "⌘K Actions" → [⌘ icon, K keycap] + label "Actions"
+        if !parts.is_empty() {
+            if let Some(ch) = rest.chars().next() {
+                if ch.is_ascii_uppercase() {
+                    let after = &rest[ch.len_utf8()..];
+                    if after.is_empty() || after.starts_with(' ') {
+                        parts.push(KeyHintPart::Keycap(ch.to_string().into()));
+                        rest = after;
+                        continue;
+                    }
+                }
+            }
+        }
+
         break;
     }
 

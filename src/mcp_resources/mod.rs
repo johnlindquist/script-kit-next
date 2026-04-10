@@ -717,7 +717,7 @@ fn build_sdk_reference_document() -> SdkReferenceDocument {
         schema_version: SDK_REFERENCE_SCHEMA_VERSION,
         sdk_package: "@scriptkit/sdk".into(),
         script_directory: "~/.scriptkit/kit/main/scripts/ (default personal plugin; all plugins under kit/*/scripts/ are discovered)".into(),
-        scriptlet_pattern: "~/.scriptkit/kit/*/extensions/*.md".into(),
+        scriptlet_pattern: "~/.scriptkit/kit/*/scriptlets/*.md".into(),
         metadata_format:
             "export const metadata = { name: \"My Script\", description: \"What it does\" }".into(),
         functions: build_sdk_function_refs(),
@@ -2806,7 +2806,7 @@ mod tests {
         let doc = build_sdk_reference_document();
         assert!(doc.metadata_format.contains("export const metadata"));
         assert!(doc.script_directory.contains("kit/main/scripts"));
-        assert!(doc.scriptlet_pattern.contains("extensions"));
+        assert!(doc.scriptlet_pattern.contains("scriptlets"));
     }
 
     #[test]

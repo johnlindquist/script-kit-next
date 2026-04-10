@@ -98,5 +98,7 @@ Include:
 ## Related Skills
 
 - [acp-chat](../acp-chat/SKILL.md) — programmatic ACP Chat workflows using the ACP SDK
+- [custom-actions](../custom-actions/SKILL.md) — expose script helpers through the Actions Menu
+- [notes](../notes/SKILL.md) — automate the Notes window from scripts
 - [script-authoring](../script-authoring/SKILL.md) — create and manage TypeScript scripts
-- [scriptlets](../scriptlets/SKILL.md) — package scripts as extension bundles
+- [scriptlets](../scriptlets/SKILL.md) — package scripts as scriptlet bundles

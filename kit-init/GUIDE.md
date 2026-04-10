@@ -10,7 +10,7 @@ Welcome to Script Kit! This guide will help you get started and master the power
 2. [Directory Structure](#directory-structure)
 3. [Writing Scripts](#writing-scripts)
 4. [SDK Functions (Core)](#sdk-functions-core)
-5. [Extensions](#extensions)
+5. [Scriptlets](#scriptlets)
 6. [Configuration](#configuration-configts)
 7. [Themes](#themes-themejson)
 8. [Built-in Features](#built-in-features)
@@ -83,20 +83,23 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 ├── CLAUDE.md                    # Canonical harness instructions
 ├── AGENTS.md                    # SDK reference for agentic authoring
 ├── GUIDE.md                     # User guide
-├── skills/
-│   ├── script-authoring/SKILL.md
-│   ├── scriptlets/SKILL.md
-│   ├── agents/SKILL.md
-│   ├── config/SKILL.md
-│   └── troubleshooting/SKILL.md
-├── examples/
-│   ├── scripts/
-│   ├── extensions/
-│   └── agents/
 ├── kit/
+│   ├── authoring/
+│   │   ├── skills/
+│   │   │   ├── script-authoring/SKILL.md
+│   │   │   ├── scriptlets/SKILL.md
+│   │   │   ├── agents/SKILL.md
+│   │   │   ├── config/SKILL.md
+│   │   │   └── troubleshooting/SKILL.md
+│   │   ├── plugin.json
+│   ├── examples/
+│   │   ├── scripts/
+│   │   ├── scriptlets/
+│   │   └── agents/
 │   ├── main/
 │   │   ├── scripts/
-│   │   ├── extensions/
+│   │   ├── scriptlets/
+│   │   ├── skills/
 │   │   └── agents/
 │   ├── config.ts
 │   ├── theme.json
@@ -114,7 +117,8 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 | Directory | Purpose |
 |-----------|---------|
 | `kit/main/scripts/` | Your primary scripts - create `.ts` files here |
-| `kit/main/extensions/` | Markdown extension files with shell commands |
+| `kit/main/scriptlets/` | Markdown scriptlet files with shell commands |
+| `kit/main/skills/` | Reusable ACP workflows (preferred reusable AI unit) |
 | `kit/main/agents/` | AI agent definitions |
 | `sdk/` | Runtime SDK (auto-extracted, don't edit) |
 | `db/` | SQLite databases for Notes and AI |
@@ -436,13 +440,13 @@ Best regards,
 
 ---
 
-## Extensions (Scriptlets)
+## Scriptlets
 
-Extensions (also called "scriptlets") are markdown files containing one or more mini-scripts. They're perfect for quick automations that don't need a full TypeScript file, and support multiple command types including bash, TypeScript, AppleScript, and more.
+Scriptlets are markdown files containing one or more mini-scripts. They're perfect for quick automations that don't need a full TypeScript file, and support multiple command types including bash, TypeScript, AppleScript, and more.
 
-### Creating an Extension File
+### Creating a Scriptlet File
 
-Create a `.md` file in `~/.scriptkit/kit/main/extensions/`:
+Create a `.md` file in `~/.scriptkit/kit/main/scriptlets/`:
 
 ~~~md
 ---
@@ -607,15 +611,15 @@ All three scriptlets appear in Script Kit as separate commands, grouped under "Q
 
 ## Shared Actions
 
-Shared actions let you define reusable actions that automatically apply to ALL scriptlets in an extension file. This is perfect for common operations like "Copy URL", "Open in Browser", etc.
+Shared actions let you define reusable actions that automatically apply to ALL scriptlets in a scriptlet file. This is perfect for common operations like "Copy URL", "Open in Browser", etc.
 
 ### Creating Shared Actions
 
-Create a companion `.actions.md` file with the same base name as your extension:
+Create a companion `.actions.md` file with the same base name as your scriptlet bundle:
 
 ```
-~/.scriptkit/kit/main/extensions/
-├── quicklinks.md           # Main extension file
+~/.scriptkit/kit/main/scriptlets/
+├── quicklinks.md           # Main scriptlet file
 └── quicklinks.actions.md   # Shared actions for all quicklinks
 ```
 
@@ -696,9 +700,9 @@ echo "Custom copy for this link: {{content}}" | pbcopy
 
 ### Built-in Shared Actions
 
-Script Kit ships with shared actions for several built-in extensions:
+Script Kit ships with shared actions for several built-in scriptlets:
 
-| Extension | Shared Actions |
+| Scriptlet | Shared Actions |
 |-----------|---------------|
 | Quick Links | Copy URL, Open in Safari/Chrome/Firefox |
 | CleanShot | Copy URL scheme, Open Settings |
@@ -706,12 +710,12 @@ Script Kit ships with shared actions for several built-in extensions:
 
 ### Creating Your Own Shared Actions
 
-1. Create your extension file: `my-tools.md`
+1. Create your scriptlet file: `my-tools.md`
 2. Create the companion: `my-tools.actions.md`
 3. Add H3 actions with optional shortcuts and descriptions
 4. Use `{{content}}` to access the parent scriptlet's code
 
-Example for a code snippets extension:
+Example for a code snippets scriptlet bundle:
 
 ```markdown
 # Snippet Actions
@@ -895,7 +899,7 @@ Common key codes:
 ### Common Mistakes
 
 - Putting skills at the workspace root instead of in `~/.scriptkit/kit/authoring/skills/`
-- Editing `~/.scriptkit/config.ts` instead of `~/.scriptkit/kit/config.ts`
+- Editing `~/.scriptkit/config.ts` instead of `~/.scriptkit/kit/config.ts` (legacy path)
 - Using `command` / `control` instead of `meta` / `ctrl`
 - Putting dictation microphone selection in `config.ts` instead of `kit/settings.json`
 
@@ -1248,7 +1252,7 @@ Script Kit automatically watches for changes and reloads:
 |------|--------------|
 | `kit/main/scripts/*.ts` | Scripts reload in launcher |
 | `kit/main/scripts/*.js` | Scripts reload in launcher |
-| `kit/main/extensions/*.md` | Extensions reload in launcher |
+| `kit/main/scriptlets/*.md` | Scriptlets reload in launcher |
 | `kit/config.ts` | Most settings reload live (hotkey needs restart) |
 | `kit/theme.json` | Theme reloads live (no restart) |
 
@@ -1286,14 +1290,14 @@ Beyond the default `main/` kit, you can add additional kits under `~/.scriptkit/
 ~/.scriptkit/kit/
 ├── main/              # Default kit
 │   ├── scripts/
-│   ├── extensions/
+│   ├── scriptlets/
 │   └── agents/
 ├── work/              # Work scripts
 │   ├── scripts/
-│   └── extensions/
+│   └── scriptlets/
 ├── personal/          # Personal scripts
 │   ├── scripts/
-│   └── extensions/
+│   └── scriptlets/
 └── experiments/       # Experimental scripts
     └── scripts/
 ```

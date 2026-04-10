@@ -6,7 +6,7 @@ pub mod types;
 pub use discovery::discover_plugins;
 #[allow(unused_imports)]
 pub use discovery::{
-    discover_plugins_in, plugin_agents_dir, plugin_extensions_dir, plugin_scripts_dir,
+    discover_plugins_in, plugin_agents_dir, plugin_scriptlets_dir, plugin_scripts_dir,
     plugin_skills_dir, plugins_container_dir,
 };
 pub use manifest::read_plugin_manifest;

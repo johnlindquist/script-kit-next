@@ -29,47 +29,47 @@ const EMBEDDED_PACKAGE_JSON: &str = r#"{
 const EMBEDDED_GUIDE_MD: &str = include_str!("../../kit-init/GUIDE.md");
 /// Embedded CleanShot X extension (built-in extension that ships with the app)
 const EMBEDDED_CLEANSHOT_EXTENSION: &str =
-    include_str!("../../kit-init/extensions/cleanshot/main.md");
+    include_str!("../../kit-init/scriptlets/cleanshot/main.md");
 /// Embedded CleanShot X shared actions (built-in actions for all cleanshot scriptlets)
 const EMBEDDED_CLEANSHOT_ACTIONS: &str =
-    include_str!("../../kit-init/extensions/cleanshot/main.actions.md");
+    include_str!("../../kit-init/scriptlets/cleanshot/main.actions.md");
 /// Embedded 1Password extension (built-in extension that ships with the app)
 const EMBEDDED_1PASSWORD_EXTENSION: &str =
-    include_str!("../../kit-init/extensions/1password/main.md");
+    include_str!("../../kit-init/scriptlets/1password/main.md");
 /// Embedded Quick Links extension (built-in extension that ships with the app)
 const EMBEDDED_QUICKLINKS_EXTENSION: &str =
-    include_str!("../../kit-init/extensions/quicklinks/main.md");
+    include_str!("../../kit-init/scriptlets/quicklinks/main.md");
 /// Embedded Quick Links shared actions (built-in actions for all quicklinks scriptlets)
 const EMBEDDED_QUICKLINKS_ACTIONS: &str =
-    include_str!("../../kit-init/extensions/quicklinks/main.actions.md");
+    include_str!("../../kit-init/scriptlets/quicklinks/main.actions.md");
 /// Embedded Window Management extension (built-in extension that ships with the app)
 const EMBEDDED_WINDOW_MANAGEMENT_EXTENSION: &str =
-    include_str!("../../kit-init/extensions/window-management/main.md");
+    include_str!("../../kit-init/scriptlets/window-management/main.md");
 /// Embedded AI Text Tools extension (built-in extension that ships with the app)
 const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
-    include_str!("../../kit-init/extensions/ai-text-tools/main.md");
+    include_str!("../../kit-init/scriptlets/ai-text-tools/main.md");
 /// Embedded ACP Chat example extension (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLE_EXTENSION_ACP_CHAT: &str =
-    include_str!("../../kit-init/extensions/examples/acp-chat.md");
+    include_str!("../../kit-init/scriptlets/examples/acp-chat.md");
 /// Embedded Custom Actions example extension (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS: &str =
-    include_str!("../../kit-init/extensions/examples/custom-actions.md");
+    include_str!("../../kit-init/scriptlets/examples/custom-actions.md");
 /// Embedded Custom Actions shared actions (built-in companion actions for custom-actions example)
 const EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS_ACTIONS: &str =
-    include_str!("../../kit-init/extensions/custom-actions/main.actions.md");
+    include_str!("../../kit-init/scriptlets/custom-actions/main.actions.md");
 /// Embedded Notes example extension (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLE_EXTENSION_NOTES: &str =
-    include_str!("../../kit-init/extensions/examples/notes.md");
+    include_str!("../../kit-init/scriptlets/examples/notes.md");
 /// Embedded Examples extension - main scriptlet examples (built-in extension that ships with the app)
-const EMBEDDED_EXAMPLES_MAIN: &str = include_str!("../../kit-init/extensions/examples/main.md");
+const EMBEDDED_EXAMPLES_MAIN: &str = include_str!("../../kit-init/scriptlets/examples/main.md");
 /// Embedded Examples extension - advanced scriptlet examples (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLES_ADVANCED: &str =
-    include_str!("../../kit-init/extensions/examples/advanced.md");
+    include_str!("../../kit-init/scriptlets/examples/advanced.md");
 /// Embedded Examples extension - howto guide (built-in extension that ships with the app)
-const EMBEDDED_EXAMPLES_HOWTO: &str = include_str!("../../kit-init/extensions/examples/howto.md");
+const EMBEDDED_EXAMPLES_HOWTO: &str = include_str!("../../kit-init/scriptlets/examples/howto.md");
 /// Embedded Examples extension - minimal starter bundle
 const EMBEDDED_EXAMPLES_STARTER: &str =
-    include_str!("../../kit-init/extensions/examples/starter.md");
+    include_str!("../../kit-init/scriptlets/examples/starter.md");
 /// Root-level CLAUDE.md for the ~/.scriptkit workspace (the harness cwd)
 const EMBEDDED_ROOT_CLAUDE_MD: &str = include_str!("../../kit-init/ROOT_CLAUDE.md");
 /// Root-level AGENTS.md SDK reference for the ~/.scriptkit workspace
@@ -98,6 +98,15 @@ const EMBEDDED_EXAMPLE_CLIPBOARD_TRANSFORM: &str =
 /// Example script: path-picker
 const EMBEDDED_EXAMPLE_PATH_PICKER: &str =
     include_str!("../../kit-init/examples/scripts/path-picker.ts");
+/// Example skill: review-pr
+const EMBEDDED_EXAMPLE_SKILL_REVIEW_PR: &str =
+    include_str!("../../kit-init/examples/skills/review-pr/SKILL.md");
+/// Example skill: plan-feature
+const EMBEDDED_EXAMPLE_SKILL_PLAN_FEATURE: &str =
+    include_str!("../../kit-init/examples/skills/plan-feature/SKILL.md");
+/// Example skill: explain-code
+const EMBEDDED_EXAMPLE_SKILL_EXPLAIN_CODE: &str =
+    include_str!("../../kit-init/examples/skills/explain-code/SKILL.md");
 /// Examples README
 const EMBEDDED_EXAMPLES_README: &str = include_str!("../../kit-init/examples/README.md");
 /// Examples START_HERE launchpad
@@ -175,7 +184,7 @@ pub fn get_kit_path() -> PathBuf {
 /// This function handles one-time migration from the old directory structure:
 /// - Moves ~/.kenv contents to ~/.scriptkit
 /// - Moves ~/.kenv/scripts to ~/.scriptkit/kit/main/scripts
-/// - Moves ~/.kenv/scriptlets to ~/.scriptkit/kit/main/extensions
+/// - Moves ~/.kenv/scriptlets to ~/.scriptkit/kit/main/scriptlets
 /// - Creates a symlink ~/.kenv -> ~/.scriptkit for backwards compatibility
 ///
 /// Returns true if migration was performed, false if not needed
@@ -202,15 +211,15 @@ pub fn migrate_from_kenv() -> bool {
 
     // Create the new structure (under kit/ subdirectory)
     let main_scripts = new_scriptkit.join("kit").join("main").join("scripts");
-    let main_extensions = new_scriptkit.join("kit").join("main").join("extensions");
+    let main_scriptlets = new_scriptkit.join("kit").join("main").join("scriptlets");
 
     if let Err(e) = fs::create_dir_all(&main_scripts) {
         warn!(error = %e, "Failed to create main/scripts directory");
         return false;
     }
 
-    if let Err(e) = fs::create_dir_all(&main_extensions) {
-        warn!(error = %e, "Failed to create main/extensions directory");
+    if let Err(e) = fs::create_dir_all(&main_scriptlets) {
+        warn!(error = %e, "Failed to create main/scriptlets directory");
         return false;
     }
 
@@ -235,14 +244,14 @@ pub fn migrate_from_kenv() -> bool {
         }
     }
 
-    // Move scriptlets from ~/.kenv/scriptlets to ~/.scriptkit/kit/main/extensions
+    // Move scriptlets from ~/.kenv/scriptlets to ~/.scriptkit/kit/main/scriptlets
     let old_scriptlets = old_kenv.join("scriptlets");
     if old_scriptlets.exists() && old_scriptlets.is_dir() {
         if let Ok(entries) = fs::read_dir(&old_scriptlets) {
             for entry in entries.flatten() {
                 let old_path = entry.path();
                 let file_name = old_path.file_name().unwrap_or_default();
-                let new_path = main_extensions.join(file_name);
+                let new_path = main_scriptlets.join(file_name);
 
                 if let Err(e) = fs::rename(&old_path, &new_path) {
                     warn!(
@@ -368,11 +377,11 @@ pub fn migrate_from_kenv() -> bool {
 /// ├── kit/                       # All kits container (for easy version control)
 /// │   ├── main/                  # Default user kit
 /// │   │   ├── scripts/           # User scripts (.ts, .js files)
-/// │   │   ├── extensions/         # Markdown extension files
+/// │   │   ├── scriptlets/         # Markdown scriptlet bundles
 /// │   │   └── agents/             # AI agent definitions (.md)
 /// │   └── custom-kit/            # Additional custom kits
 /// │       ├── scripts/
-/// │       ├── extensions/
+/// │       ├── scriptlets/
 /// │       └── agents/
 /// │   ├── package.json           # Node.js module config (type: module for top-level await)
 /// │   └── tsconfig.json          # TypeScript path mappings
@@ -427,7 +436,7 @@ pub fn ensure_kit_setup() -> SetupResult {
         };
     }
 
-    // Plugin roots: each plugin gets {scripts,extensions,agents,skills} + plugin.json
+    // Plugin roots: each plugin gets {scripts,scriptlets,agents,skills} + plugin.json
     ensure_plugin_root(
         &kit_dir,
         "main",
@@ -485,6 +494,9 @@ pub fn ensure_kit_setup() -> SetupResult {
         &mut warnings,
     );
 
+    // Migrate legacy plugin-scoped extensions/ directories to scriptlets/.
+    migrate_plugin_extensions_to_scriptlets(&kit_dir, &mut warnings);
+
     // Non-plugin infrastructure directories
     let required_dirs = [
         // Context bundle directory for Tab AI argv-based launch
@@ -514,13 +526,13 @@ pub fn ensure_kit_setup() -> SetupResult {
     let cleanshot_path = kit_dir
         .join("kit")
         .join("cleanshot")
-        .join("extensions")
+        .join("scriptlets")
         .join("main.md");
     write_string_if_changed(
         &cleanshot_path,
         EMBEDDED_CLEANSHOT_EXTENSION,
         &mut warnings,
-        "kit/cleanshot/extensions/main.md",
+        "kit/cleanshot/scriptlets/main.md",
     );
 
     // App-managed: Built-in CleanShot X shared actions (refresh if changed)
@@ -528,13 +540,13 @@ pub fn ensure_kit_setup() -> SetupResult {
     let cleanshot_actions_path = kit_dir
         .join("kit")
         .join("cleanshot")
-        .join("extensions")
+        .join("scriptlets")
         .join("main.actions.md");
     write_string_if_changed(
         &cleanshot_actions_path,
         EMBEDDED_CLEANSHOT_ACTIONS,
         &mut warnings,
-        "kit/cleanshot/extensions/main.actions.md",
+        "kit/cleanshot/scriptlets/main.actions.md",
     );
 
     // App-managed: Built-in 1Password extension (refresh if changed)
@@ -542,13 +554,13 @@ pub fn ensure_kit_setup() -> SetupResult {
     let onepassword_path = kit_dir
         .join("kit")
         .join("1password")
-        .join("extensions")
+        .join("scriptlets")
         .join("main.md");
     write_string_if_changed(
         &onepassword_path,
         EMBEDDED_1PASSWORD_EXTENSION,
         &mut warnings,
-        "kit/1password/extensions/main.md",
+        "kit/1password/scriptlets/main.md",
     );
 
     // App-managed: Built-in Quick Links extension (refresh if changed)
@@ -556,13 +568,13 @@ pub fn ensure_kit_setup() -> SetupResult {
     let quicklinks_path = kit_dir
         .join("kit")
         .join("quicklinks")
-        .join("extensions")
+        .join("scriptlets")
         .join("main.md");
     write_string_if_changed(
         &quicklinks_path,
         EMBEDDED_QUICKLINKS_EXTENSION,
         &mut warnings,
-        "kit/quicklinks/extensions/main.md",
+        "kit/quicklinks/scriptlets/main.md",
     );
 
     // App-managed: Built-in Quick Links shared actions (refresh if changed)
@@ -570,13 +582,13 @@ pub fn ensure_kit_setup() -> SetupResult {
     let quicklinks_actions_path = kit_dir
         .join("kit")
         .join("quicklinks")
-        .join("extensions")
+        .join("scriptlets")
         .join("main.actions.md");
     write_string_if_changed(
         &quicklinks_actions_path,
         EMBEDDED_QUICKLINKS_ACTIONS,
         &mut warnings,
-        "kit/quicklinks/extensions/main.actions.md",
+        "kit/quicklinks/scriptlets/main.actions.md",
     );
 
     // App-managed: Built-in Window Management extension (refresh if changed)
@@ -584,13 +596,13 @@ pub fn ensure_kit_setup() -> SetupResult {
     let window_management_path = kit_dir
         .join("kit")
         .join("window-management")
-        .join("extensions")
+        .join("scriptlets")
         .join("main.md");
     write_string_if_changed(
         &window_management_path,
         EMBEDDED_WINDOW_MANAGEMENT_EXTENSION,
         &mut warnings,
-        "kit/window-management/extensions/main.md",
+        "kit/window-management/scriptlets/main.md",
     );
 
     // App-managed: Built-in AI Text Tools extension (refresh if changed)
@@ -598,41 +610,41 @@ pub fn ensure_kit_setup() -> SetupResult {
     let ai_text_tools_path = kit_dir
         .join("kit")
         .join("ai-text-tools")
-        .join("extensions")
+        .join("scriptlets")
         .join("main.md");
     write_string_if_changed(
         &ai_text_tools_path,
         EMBEDDED_AI_TEXT_TOOLS_EXTENSION,
         &mut warnings,
-        "kit/ai-text-tools/extensions/main.md",
+        "kit/ai-text-tools/scriptlets/main.md",
     );
 
     // App-managed: Built-in Examples extension (refresh if changed)
     // This extension ships with the app and provides complete scriptlet pattern reference
-    let examples_dir = kit_dir.join("kit").join("examples").join("extensions");
+    let examples_dir = kit_dir.join("kit").join("examples").join("scriptlets");
     write_string_if_changed(
         &examples_dir.join("main.md"),
         EMBEDDED_EXAMPLES_MAIN,
         &mut warnings,
-        "kit/examples/extensions/main.md",
+        "kit/examples/scriptlets/main.md",
     );
     write_string_if_changed(
         &examples_dir.join("advanced.md"),
         EMBEDDED_EXAMPLES_ADVANCED,
         &mut warnings,
-        "kit/examples/extensions/advanced.md",
+        "kit/examples/scriptlets/advanced.md",
     );
     write_string_if_changed(
         &examples_dir.join("howto.md"),
         EMBEDDED_EXAMPLES_HOWTO,
         &mut warnings,
-        "kit/examples/extensions/howto.md",
+        "kit/examples/scriptlets/howto.md",
     );
     write_string_if_changed(
         &examples_dir.join("starter.md"),
         EMBEDDED_EXAMPLES_STARTER,
         &mut warnings,
-        "kit/examples/extensions/starter.md",
+        "kit/examples/scriptlets/starter.md",
     );
 
     // App-managed: Built-in ACP Chat example extension (refresh if changed)
@@ -640,7 +652,7 @@ pub fn ensure_kit_setup() -> SetupResult {
         &examples_dir.join("acp-chat").join("main.md"),
         EMBEDDED_EXAMPLE_EXTENSION_ACP_CHAT,
         &mut warnings,
-        "kit/examples/extensions/acp-chat/main.md",
+        "kit/examples/scriptlets/acp-chat/main.md",
     );
 
     // App-managed: Built-in Custom Actions example extension (refresh if changed)
@@ -648,13 +660,13 @@ pub fn ensure_kit_setup() -> SetupResult {
         &examples_dir.join("custom-actions").join("main.md"),
         EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS,
         &mut warnings,
-        "kit/examples/extensions/custom-actions/main.md",
+        "kit/examples/scriptlets/custom-actions/main.md",
     );
     write_string_if_changed(
         &examples_dir.join("custom-actions").join("main.actions.md"),
         EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS_ACTIONS,
         &mut warnings,
-        "kit/examples/extensions/custom-actions/main.actions.md",
+        "kit/examples/scriptlets/custom-actions/main.actions.md",
     );
 
     // App-managed: Built-in Notes example extension (refresh if changed)
@@ -662,7 +674,7 @@ pub fn ensure_kit_setup() -> SetupResult {
         &examples_dir.join("notes").join("main.md"),
         EMBEDDED_EXAMPLE_EXTENSION_NOTES,
         &mut warnings,
-        "kit/examples/extensions/notes/main.md",
+        "kit/examples/scriptlets/notes/main.md",
     );
 
     // User-owned: config.ts (only create if missing)
@@ -851,31 +863,58 @@ pub fn ensure_kit_setup() -> SetupResult {
         &mut warnings,
         "kit/examples/scripts/path-picker.ts",
     );
+    write_string_if_changed(
+        &examples_plugin
+            .join("skills")
+            .join("review-pr")
+            .join("SKILL.md"),
+        EMBEDDED_EXAMPLE_SKILL_REVIEW_PR,
+        &mut warnings,
+        "kit/examples/skills/review-pr/SKILL.md",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("skills")
+            .join("plan-feature")
+            .join("SKILL.md"),
+        EMBEDDED_EXAMPLE_SKILL_PLAN_FEATURE,
+        &mut warnings,
+        "kit/examples/skills/plan-feature/SKILL.md",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("skills")
+            .join("explain-code")
+            .join("SKILL.md"),
+        EMBEDDED_EXAMPLE_SKILL_EXPLAIN_CODE,
+        &mut warnings,
+        "kit/examples/skills/explain-code/SKILL.md",
+    );
 
     // App-managed: Example extension references (refresh if changed)
     write_string_if_changed(
-        &examples_plugin.join("extensions").join("main.md"),
+        &examples_plugin.join("scriptlets").join("main.md"),
         EMBEDDED_EXAMPLES_MAIN,
         &mut warnings,
-        "kit/examples/extensions/main.md",
+        "kit/examples/scriptlets/main.md",
     );
     write_string_if_changed(
-        &examples_plugin.join("extensions").join("advanced.md"),
+        &examples_plugin.join("scriptlets").join("advanced.md"),
         EMBEDDED_EXAMPLES_ADVANCED,
         &mut warnings,
-        "kit/examples/extensions/advanced.md",
+        "kit/examples/scriptlets/advanced.md",
     );
     write_string_if_changed(
-        &examples_plugin.join("extensions").join("howto.md"),
+        &examples_plugin.join("scriptlets").join("howto.md"),
         EMBEDDED_EXAMPLES_HOWTO,
         &mut warnings,
-        "kit/examples/extensions/howto.md",
+        "kit/examples/scriptlets/howto.md",
     );
     write_string_if_changed(
-        &examples_plugin.join("extensions").join("starter.md"),
+        &examples_plugin.join("scriptlets").join("starter.md"),
         EMBEDDED_EXAMPLES_STARTER,
         &mut warnings,
-        "kit/examples/extensions/starter.md",
+        "kit/examples/scriptlets/starter.md",
     );
 
     // App-managed: Example agents (refresh if changed)
@@ -1038,6 +1077,90 @@ fn ensure_dir(path: &Path, warnings: &mut Vec<String>) {
         debug!(path = %path.display(), "Created directory");
     }
 }
+
+/// Migrate legacy plugin-scoped `extensions/` directories to `scriptlets/`.
+fn migrate_plugin_extensions_to_scriptlets(kit_dir: &Path, warnings: &mut Vec<String>) {
+    let plugins_root = kit_dir.join("kit");
+    let Ok(entries) = fs::read_dir(&plugins_root) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        let plugin_root = entry.path();
+        if !plugin_root.is_dir() {
+            continue;
+        }
+
+        let legacy_dir = plugin_root.join("extensions");
+        if !legacy_dir.exists() || !legacy_dir.is_dir() {
+            continue;
+        }
+
+        let scriptlets_dir = plugin_root.join("scriptlets");
+        if !scriptlets_dir.exists() {
+            match fs::rename(&legacy_dir, &scriptlets_dir) {
+                Ok(()) => {
+                    info!(
+                        plugin_root = %plugin_root.display(),
+                        "Migrated legacy extensions directory to scriptlets"
+                    );
+                    continue;
+                }
+                Err(error) => {
+                    warnings.push(format!(
+                        "Failed to rename legacy extensions directory {} to {}: {}",
+                        legacy_dir.display(),
+                        scriptlets_dir.display(),
+                        error
+                    ));
+                    continue;
+                }
+            }
+        }
+
+        let Ok(legacy_entries) = fs::read_dir(&legacy_dir) else {
+            warnings.push(format!(
+                "Failed to read legacy extensions directory {} during migration",
+                legacy_dir.display()
+            ));
+            continue;
+        };
+
+        for legacy_entry in legacy_entries.flatten() {
+            let legacy_path = legacy_entry.path();
+            let Some(file_name) = legacy_path.file_name() else {
+                continue;
+            };
+            let target_path = scriptlets_dir.join(file_name);
+
+            if target_path.exists() {
+                warnings.push(format!(
+                    "Skipped legacy scriptlet {} because {} already exists",
+                    legacy_path.display(),
+                    target_path.display()
+                ));
+                continue;
+            }
+
+            if let Err(error) = fs::rename(&legacy_path, &target_path) {
+                warnings.push(format!(
+                    "Failed to migrate legacy scriptlet {} to {}: {}",
+                    legacy_path.display(),
+                    target_path.display(),
+                    error
+                ));
+            }
+        }
+
+        if let Err(error) = fs::remove_dir(&legacy_dir) {
+            debug!(
+                error = %error,
+                path = %legacy_dir.display(),
+                "Legacy extensions directory not removed after migration"
+            );
+        }
+    }
+}
 /// Ensure a plugin root exists with its standard subdirectories and a `plugin.json` manifest.
 fn ensure_plugin_root(
     kit_dir: &Path,
@@ -1048,7 +1171,7 @@ fn ensure_plugin_root(
 ) {
     let root = kit_dir.join("kit").join(plugin_id);
     ensure_dir(&root.join("scripts"), warnings);
-    ensure_dir(&root.join("extensions"), warnings);
+    ensure_dir(&root.join("scriptlets"), warnings);
     ensure_dir(&root.join("agents"), warnings);
     ensure_dir(&root.join("skills"), warnings);
 
@@ -1437,7 +1560,7 @@ fn bun_exe_name() -> &'static str {
 fn create_sample_files(kit_dir: &Path, warnings: &mut Vec<String>) {
     // Create sample files in the main kit (under kit/ subdirectory)
     let main_scripts_dir = kit_dir.join("kit").join("main").join("scripts");
-    let main_extensions_dir = kit_dir.join("kit").join("main").join("extensions");
+    let main_scriptlets_dir = kit_dir.join("kit").join("main").join("scriptlets");
     let main_agents_dir = kit_dir.join("kit").join("main").join("agents");
 
     // Create hello-world.ts script
@@ -1493,10 +1616,10 @@ await div(`
         }
     }
 
-    // Create hello-world.md extension
-    let hello_extension_path = main_extensions_dir.join("hello-world.md");
-    if !hello_extension_path.exists() {
-        let hello_extension = r#"# Hello World Extensions
+    // Create hello-world.md scriptlet bundle
+    let hello_scriptlet_path = main_scriptlets_dir.join("hello-world.md");
+    if !hello_scriptlet_path.exists() {
+        let hello_scriptlet = r#"# Hello World Scriptlets
 
 Quick shell commands you can run from Script Kit.
 Each code block is a separate scriptlet that appears in the menu.
@@ -1568,14 +1691,14 @@ echo "OS: $(sw_vers -productName) $(sw_vers -productVersion)"
 echo "Shell: $SHELL"
 ```
 "#;
-        if let Err(e) = fs::write(&hello_extension_path, hello_extension) {
+        if let Err(e) = fs::write(&hello_scriptlet_path, hello_scriptlet) {
             warnings.push(format!(
-                "Failed to create sample extension {}: {}",
-                hello_extension_path.display(),
+                "Failed to create sample scriptlet bundle {}: {}",
+                hello_scriptlet_path.display(),
                 e
             ));
         } else {
-            info!(path = %hello_extension_path.display(), "Created sample extension");
+            info!(path = %hello_scriptlet_path.display(), "Created sample scriptlet bundle");
         }
     }
 
@@ -1622,7 +1745,7 @@ Welcome to Script Kit! This directory contains your scripts, configuration, and 
 ├── kit/                    # All kits (version control friendly)
 │   ├── main/               # Your default kit
 │   │   ├── scripts/        # TypeScript/JavaScript scripts (.ts, .js)
-│   │   ├── extensions/     # Markdown extension files (.md)
+│   │   ├── scriptlets/     # Markdown scriptlet bundles (.md)
 │   │   └── agents/         # AI agent definitions (.md)
 │   ├── package.json        # Node.js module config (enables top-level await)
 │   └── tsconfig.json       # TypeScript path mappings
@@ -1642,7 +1765,7 @@ Script Kit watches these files and reloads automatically:
 | `kit/config.ts` | Reloads configuration (hotkeys, settings) |
 | `kit/theme.json` | Applies new theme colors immediately |
 | `kit/main/scripts/*.ts` | Updates script list and metadata |
-| `kit/main/extensions/*.md` | Updates extension list |
+| `kit/main/scriptlets/*.md` | Updates scriptlet list |
 
 ## Scripts
 
@@ -1826,14 +1949,14 @@ mod tests {
     }
 
     /// Test that kit directory structure uses kit/ subdirectory
-    /// Expected structure: ~/.scriptkit/kit/main/scripts, ~/.scriptkit/kit/main/extensions
+    /// Expected structure: ~/.scriptkit/kit/main/scripts, ~/.scriptkit/kit/main/scriptlets
     #[test]
     fn test_kit_directory_uses_kit_subdirectory() {
         with_sk_path(|kit_root| {
             let result = ensure_kit_setup();
 
             let kit_main_scripts = kit_root.join("kit").join("main").join("scripts");
-            let kit_main_extensions = kit_root.join("kit").join("main").join("extensions");
+            let kit_main_extensions = kit_root.join("kit").join("main").join("scriptlets");
 
             assert!(
                 kit_main_scripts.exists(),
@@ -1842,7 +1965,7 @@ mod tests {
             );
             assert!(
                 kit_main_extensions.exists(),
-                "Expected kit/main/extensions to exist at {:?}",
+                "Expected kit/main/scriptlets to exist at {:?}",
                 kit_main_extensions
             );
 
@@ -1957,7 +2080,7 @@ mod tests {
     /// ├── kit/
     /// │   ├── main/
     /// │   │   ├── scripts/
-    /// │   │   ├── extensions/
+    /// │   │   ├── scriptlets/
     /// │   │   └── agents/
     /// │   ├── config.ts
     /// │   ├── theme.json
@@ -2001,8 +2124,8 @@ mod tests {
             "kit/main/scripts/ should exist"
         );
         assert!(
-            main_dir.join("extensions").exists(),
-            "kit/main/extensions/ should exist"
+            main_dir.join("scriptlets").exists(),
+            "kit/main/scriptlets/ should exist"
         );
         assert!(
             main_dir.join("agents").exists(),
@@ -2122,15 +2245,15 @@ mod tests {
         );
 
         // Verify CleanShot X built-in extension
-        let cleanshot_dir = kit_dir.join("cleanshot").join("extensions");
+        let cleanshot_dir = kit_dir.join("cleanshot").join("scriptlets");
         assert!(
             cleanshot_dir.exists(),
-            "kit/cleanshot/extensions/ should exist"
+            "kit/cleanshot/scriptlets/ should exist"
         );
         let cleanshot_extension = cleanshot_dir.join("main.md");
         assert!(
             cleanshot_extension.exists(),
-            "kit/cleanshot/extensions/main.md should exist"
+            "kit/cleanshot/scriptlets/main.md should exist"
         );
         let cleanshot_content = fs::read_to_string(&cleanshot_extension).unwrap();
         assert!(
@@ -2147,15 +2270,15 @@ mod tests {
         );
 
         // Verify 1Password built-in extension
-        let onepassword_dir = kit_dir.join("1password").join("extensions");
+        let onepassword_dir = kit_dir.join("1password").join("scriptlets");
         assert!(
             onepassword_dir.exists(),
-            "kit/1password/extensions/ should exist"
+            "kit/1password/scriptlets/ should exist"
         );
         let onepassword_extension = onepassword_dir.join("main.md");
         assert!(
             onepassword_extension.exists(),
-            "kit/1password/extensions/main.md should exist"
+            "kit/1password/scriptlets/main.md should exist"
         );
         let onepassword_content = fs::read_to_string(&onepassword_extension).unwrap();
         assert!(
@@ -2172,15 +2295,15 @@ mod tests {
         );
 
         // Verify Quick Links built-in extension
-        let quicklinks_dir = kit_dir.join("quicklinks").join("extensions");
+        let quicklinks_dir = kit_dir.join("quicklinks").join("scriptlets");
         assert!(
             quicklinks_dir.exists(),
-            "kit/quicklinks/extensions/ should exist"
+            "kit/quicklinks/scriptlets/ should exist"
         );
         let quicklinks_extension = quicklinks_dir.join("main.md");
         assert!(
             quicklinks_extension.exists(),
-            "kit/quicklinks/extensions/main.md should exist"
+            "kit/quicklinks/scriptlets/main.md should exist"
         );
         let quicklinks_content = fs::read_to_string(&quicklinks_extension).unwrap();
         assert!(
@@ -2219,7 +2342,7 @@ mod tests {
         // Verify documented paths actually exist
         let documented_paths = [
             ("kit/main/scripts", "~/.scriptkit/kit/main/scripts/"),
-            ("kit/main/extensions", "~/.scriptkit/kit/main/extensions/"),
+            ("kit/main/scriptlets", "~/.scriptkit/kit/main/scriptlets/"),
             ("kit/config.ts", "~/.scriptkit/kit/config.ts"),
             ("kit/theme.json", "~/.scriptkit/kit/theme.json"),
             ("sdk/kit-sdk.ts", "~/.scriptkit/sdk/"),

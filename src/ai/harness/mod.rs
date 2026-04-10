@@ -2279,7 +2279,7 @@ mod tests {
     #[test]
     fn authoring_guidance_block_mentions_scriptlet_bundle() {
         let block = build_tab_ai_artifact_authoring_guidance_block();
-        assert!(block.contains("Extension bundle / scriptlet bundle"));
+        assert!(block.contains("### Scriptlet bundle"));
     }
 
     #[test]
@@ -2287,8 +2287,8 @@ mod tests {
         let block = build_tab_ai_artifact_authoring_guidance_block();
         assert!(block.contains("--- Script Kit artifact authoring guidance ---"));
         assert!(block.contains("--- end artifact authoring guidance ---"));
-        assert!(block.contains("Extension bundle / scriptlet bundle"));
-        assert!(block.contains("extensions/starter.md"));
+        assert!(block.contains("### Scriptlet bundle"));
+        assert!(block.contains("scriptlets/starter.md"));
         assert!(block.contains("scripts/hello-world.ts"));
         assert!(block.contains("`tool:<name>`"));
         assert!(block.contains("_sk_*"));
@@ -2319,7 +2319,7 @@ mod tests {
         let block = build_tab_ai_artifact_authoring_guidance_block();
         assert!(block.contains("Fast Picks"));
         assert!(block.contains("~/.scriptkit/kit/main/scripts/clipboard-cleanup.ts"));
-        assert!(block.contains("~/.scriptkit/kit/main/extensions/snippets.md"));
+        assert!(block.contains("~/.scriptkit/kit/main/scriptlets/snippets.md"));
         assert!(block.contains("~/.scriptkit/kit/main/agents/review-pr.claude.md"));
     }
 

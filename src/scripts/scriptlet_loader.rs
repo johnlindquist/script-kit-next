@@ -1,7 +1,7 @@
 //! Scriptlet loading and parsing
 //!
 //! This module provides functions for loading scriptlets from markdown files
-//! in the ~/.scriptkit/kit/*/extensions/ directories.
+//! in the ~/.scriptkit/kit/*/scriptlets/ directories.
 
 mod loading;
 mod parsing;

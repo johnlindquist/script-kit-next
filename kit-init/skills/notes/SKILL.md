@@ -104,13 +104,14 @@ These are UI actions, not JavaScript globals. The current public Notes script su
 
 ## Related Examples
 
-- `~/.scriptkit/kit/examples/extensions/notes.md` — copy-ready Notes automation payloads for `getElements`, `waitFor`, and `batch`
+- **Canonical**: `~/.scriptkit/kit/examples/scriptlets/notes/main.md` — copy-ready Notes automation payloads for `getElements`, `waitFor`, and `batch`
+- **Compatibility mirror**: `~/.scriptkit/kit/examples/scriptlets/notes.md` — auto-generated flat copy of the canonical source
 
 ## Related Skills
 
 - [acp-chat](../acp-chat/SKILL.md) — send note content into ACP Chat and continue there
 - [custom-actions](../custom-actions/SKILL.md) — expose note-related actions in the Actions Menu
-- [scriptlets](../scriptlets/SKILL.md) — package Notes automation helpers as extension bundles
+- [scriptlets](../scriptlets/SKILL.md) — package Notes automation helpers as scriptlet bundles
 
 ## Done When
 

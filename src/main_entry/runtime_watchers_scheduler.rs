@@ -47,6 +47,31 @@
             cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                 use watcher::ScriptReloadEvent;
                 let mut idle_count = 0u32;
+                let is_skill_file = |path: &std::path::Path| {
+                    let file_name = match path.file_name().and_then(|name| name.to_str()) {
+                        Some(name) => name,
+                        None => return false,
+                    };
+
+                    if file_name != "SKILL.md" {
+                        return false;
+                    }
+
+                    let skill_root = match path.parent() {
+                        Some(parent) => parent,
+                        None => return false,
+                    };
+
+                    let skills_root = match skill_root.parent() {
+                        Some(parent) => parent,
+                        None => return false,
+                    };
+
+                    skills_root
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        == Some("skills")
+                };
 
                 loop {
                     // Adaptive polling: 200ms when active, up to 2000ms when idle
@@ -65,10 +90,18 @@
                         had_events = true;
                         match event {
                             ScriptReloadEvent::FileChanged(path) | ScriptReloadEvent::FileCreated(path) => {
-                                // Check if it's a scriptlet file (markdown in scriptlets directory)
+                                // Check if it's a scriptlet file or a skill definition file
+                                let is_skill = is_skill_file(&path);
                                 let is_scriptlet = path.extension().map(|e| e == "md").unwrap_or(false);
 
-                                if is_scriptlet {
+                                if is_skill {
+                                    logging::log("APP", &format!("Skill file changed: {}", path.display()));
+                                    let _ = cx.update(|cx| {
+                                        app_entity_for_scripts.update(cx, |view, ctx| {
+                                            view.refresh_skills(ctx);
+                                        });
+                                    });
+                                } else if is_scriptlet {
                                     logging::log("APP", &format!("Scriptlet file changed: {}", path.display()));
                                     let path_clone = path.clone();
                                     let _ = cx.update(|cx| {
@@ -93,9 +126,17 @@
                                 }
                             }
                             ScriptReloadEvent::FileDeleted(path) => {
+                                let is_skill = is_skill_file(&path);
                                 let is_scriptlet = path.extension().map(|e| e == "md").unwrap_or(false);
 
-                                if is_scriptlet {
+                                if is_skill {
+                                    logging::log("APP", &format!("Skill file deleted: {}", path.display()));
+                                    let _ = cx.update(|cx| {
+                                        app_entity_for_scripts.update(cx, |view, ctx| {
+                                            view.refresh_skills(ctx);
+                                        });
+                                    });
+                                } else if is_scriptlet {
                                     logging::log("APP", &format!("Scriptlet file deleted: {}", path.display()));
                                     let path_clone = path.clone();
                                     let _ = cx.update(|cx| {
@@ -124,6 +165,7 @@
                                 let _ = cx.update(|cx| {
                                     app_entity_for_scripts.update(cx, |view, ctx| {
                                         view.refresh_scripts(ctx);
+                                        view.refresh_skills(ctx);
                                     });
                                 });
                             }

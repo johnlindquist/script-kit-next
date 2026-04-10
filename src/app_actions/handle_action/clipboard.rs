@@ -969,17 +969,13 @@ impl ScriptListApp {
                     default_keyword
                 };
 
-                // Create snippet file in extensions directory
-                let kenv = dirs::home_dir()
-                    .map(|h| h.join(".kenv"))
-                    .unwrap_or_else(|| std::path::PathBuf::from("/"));
-                let extensions_dir = kenv.join("extensions");
-                let snippets_file = extensions_dir.join("clipboard-snippets.md");
+                // Save snippets into the default main plugin's scriptlets directory.
+                let scriptlets_dir = crate::script_creation::scriptlets_dir();
+                let snippets_file = scriptlets_dir.join("clipboard-snippets.md");
 
-                // Ensure extensions directory exists
-                if !extensions_dir.exists() {
-                    if let Err(e) = std::fs::create_dir_all(&extensions_dir) {
-                        tracing::error!(error = %e, "failed to create extensions dir");
+                if !scriptlets_dir.exists() {
+                    if let Err(e) = std::fs::create_dir_all(&scriptlets_dir) {
+                        tracing::error!(error = %e, "failed to create scriptlets dir");
                         self.show_error_toast(
                             format!("Failed to create snippets: {}", e),
                             cx,

@@ -63,10 +63,11 @@ Use `kit://context?profile=minimal` for current desktop context.
 
 ## Related Examples
 
-- `~/.scriptkit/kit/examples/extensions/acp-chat.md` — start chats, attach typed context parts, and inspect streaming status
+- **Canonical**: `~/.scriptkit/kit/examples/scriptlets/acp-chat/main.md` — start chats, attach typed context parts, and inspect streaming status
+- **Compatibility mirror**: `~/.scriptkit/kit/examples/scriptlets/acp-chat.md` — auto-generated flat copy of the canonical source
 
 ## Related Skills
 
 - [custom-actions](../custom-actions/SKILL.md) — expose ACP helpers through the Actions Menu
 - [notes](../notes/SKILL.md) — hand off note content into ACP Chat
-- [scriptlets](../scriptlets/SKILL.md) — package ACP helpers as extension bundles
+- [scriptlets](../scriptlets/SKILL.md) — package ACP helpers as scriptlet bundles

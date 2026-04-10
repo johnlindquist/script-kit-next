@@ -14,6 +14,8 @@
 //! - `handlers` — Client-side handler implementing the ACP `Client` trait.
 //! - `client` — ACP runtime: subprocess lifecycle, initialize, session/prompt loop.
 
+use gpui::AppContext as _;
+
 pub(crate) mod catalog;
 pub(crate) mod chat_window;
 pub(crate) mod client;
@@ -76,3 +78,81 @@ pub(crate) use view::{
     build_staged_skill_prompt, AcpChatSession, AcpChatView, AcpHistoryResumeRequest,
     AcpRetryRequest,
 };
+
+pub(crate) fn open_or_focus_chat_with_input(
+    input: String,
+    cx: &mut gpui::App,
+) -> Result<(), String> {
+    if let Some(entity) = chat_window::get_detached_acp_view_entity() {
+        entity
+            .update(cx, |chat, cx| {
+                if chat.is_setup_mode() {
+                    return Err("ACP Chat is in setup mode".to_string());
+                }
+                chat.set_input(input, cx);
+                Ok::<(), String>(())
+            })
+            .map_err(|error| error.to_string())?;
+        chat_window::activate_chat_window(cx);
+        return Ok(());
+    }
+
+    if chat_window::is_chat_window_open() {
+        chat_window::close_chat_window(cx);
+    }
+
+    let catalog = load_acp_agent_catalog_entries()
+        .map_err(|error| format!("Failed to load ACP catalog: {error}"))?;
+    let preferred_agent_id = load_preferred_acp_agent_id();
+    let requirements = AcpLaunchRequirements::default();
+    let launch_resolution =
+        resolve_acp_launch_with_requirements(&catalog, preferred_agent_id.as_deref(), requirements);
+
+    if !launch_resolution.is_ready() {
+        return Err(setup_title_for_resolution(&launch_resolution).to_string());
+    }
+
+    let agent = launch_resolution
+        .selected_agent
+        .as_ref()
+        .and_then(|entry| entry.config.clone())
+        .ok_or_else(|| "Resolved ACP agent is missing configuration".to_string())?;
+    let agent_display_name = agent.display_name().to_string();
+    let agent_models = agent.models.clone();
+    let persisted_model = crate::config::load_user_preferences().ai.selected_model_id;
+    let default_model_id = persisted_model
+        .filter(|id| agent_models.iter().any(|model| model.id == *id))
+        .or_else(|| agent_models.first().map(|model| model.id.clone()));
+
+    let (broker, permission_rx) = AcpPermissionBroker::new();
+    let connection = AcpConnection::spawn_with_approval(agent, Some(broker.approval_fn()))
+        .map_err(|error| format!("Failed to start ACP connection: {error}"))?;
+    let cwd = crate::setup::get_kit_path();
+
+    let thread = cx.new(|cx| {
+        AcpThread::new(
+            std::sync::Arc::new(connection),
+            permission_rx,
+            AcpThreadInit {
+                ui_thread_id: uuid::Uuid::new_v4().to_string(),
+                cwd,
+                initial_input: Some(input),
+                display_name: agent_display_name.into(),
+                selected_agent: launch_resolution.selected_agent.clone(),
+                available_agents: launch_resolution.catalog_entries.clone(),
+                launch_requirements: requirements,
+                available_models: agent_models,
+                selected_model_id: default_model_id,
+            },
+            cx,
+        )
+    });
+
+    thread.update(cx, |thread, cx| {
+        thread.mark_context_bootstrap_ready(cx);
+    });
+
+    chat_window::open_chat_window_with_thread(thread, None, cx)
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}

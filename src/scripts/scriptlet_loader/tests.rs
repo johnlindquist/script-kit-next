@@ -85,10 +85,10 @@ fn test_read_scriptlets_keeps_first_scriptlet_when_file_starts_with_heading() {
     }
 
     let temp_dir = TempDir::new().expect("create temp dir");
-    let extensions_dir = temp_dir.path().join("kit").join("main").join("extensions");
-    fs::create_dir_all(&extensions_dir).expect("create extensions dir");
+    let scriptlets_dir = temp_dir.path().join("kit").join("main").join("scriptlets");
+    fs::create_dir_all(&scriptlets_dir).expect("create scriptlets dir");
 
-    let scriptlet_file = extensions_dir.join("scriptlets.md");
+    let scriptlet_file = scriptlets_dir.join("scriptlets.md");
     fs::write(
         &scriptlet_file,
         r#"## First Scriptlet

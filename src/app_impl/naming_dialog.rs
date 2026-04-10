@@ -14,7 +14,7 @@ impl ScriptListApp {
     ) {
         let (target_directory, extension) = match target {
             prompts::NamingTarget::Script => (script_creation::scripts_dir(), "ts"),
-            prompts::NamingTarget::Extension => (script_creation::extensions_dir(), "md"),
+            prompts::NamingTarget::Extension => (script_creation::scriptlets_dir(), "md"),
         };
 
         let id = format!("naming-{}", target.as_str());
@@ -99,9 +99,7 @@ impl ScriptListApp {
 
         let create_result = match result.target {
             prompts::NamingTarget::Script => script_creation::create_new_script(&filename_stem),
-            prompts::NamingTarget::Extension => {
-                script_creation::create_new_extension(&filename_stem)
-            }
+            prompts::NamingTarget::Extension => script_creation::create_new_scriptlet(&filename_stem),
         };
 
         match create_result {

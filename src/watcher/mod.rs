@@ -312,7 +312,7 @@ fn is_relevant_script_file(path: &std::path::Path) -> bool {
         }
     }
 
-    // Check for relevant extensions
+    // Check for relevant scriptlets
     matches!(
         path.extension().and_then(|ext| ext.to_str()),
         Some("ts") | Some("js") | Some("md")
@@ -381,16 +381,18 @@ fn flush_expired(
 struct KitWatchPaths {
     kit_path: PathBuf,
     scripts_paths: Vec<PathBuf>,
-    extensions_paths: Vec<PathBuf>,
+    scriptlets_paths: Vec<PathBuf>,
     agents_paths: Vec<PathBuf>,
+    skills_paths: Vec<PathBuf>,
 }
 /// Discovers all kit subdirectories under ~/.scriptkit/kit/
-/// Returns paths to all scripts/, extensions/, and agents/ directories that should be watched
+/// Returns paths to all scripts/, scriptlets/, agents/, and skills/ directories that should be watched
 fn discover_kit_watch_paths() -> KitWatchPaths {
     let kit_path = crate::setup::get_kit_path().join("kit");
     let mut scripts_paths = Vec::new();
-    let mut extensions_paths = Vec::new();
+    let mut scriptlets_paths = Vec::new();
     let mut agents_paths = Vec::new();
+    let mut skills_paths = Vec::new();
 
     if let Ok(entries) = std::fs::read_dir(&kit_path) {
         for entry in entries.flatten() {
@@ -404,19 +406,25 @@ fn discover_kit_watch_paths() -> KitWatchPaths {
                 }
 
                 let scripts_dir = path.join("scripts");
-                let extensions_dir = path.join("extensions");
+                let scriptlets_dir = path.join("scriptlets");
                 let agents_dir = path.join("agents");
+                let skills_dir = path.join("skills");
 
                 // Add scripts directory if it exists
                 if scripts_dir.exists() {
                     scripts_paths.push(scripts_dir);
                 }
 
-                // Add extensions directory (even if it doesn't exist yet, we'll track it)
-                extensions_paths.push(extensions_dir);
+                // Add scriptlets directory (even if it doesn't exist yet, we'll track it)
+                scriptlets_paths.push(scriptlets_dir);
 
                 // Add agents directory (even if it doesn't exist yet, we'll track it)
                 agents_paths.push(agents_dir);
+
+                // Add skills directory if it exists
+                if skills_dir.exists() {
+                    skills_paths.push(skills_dir);
+                }
             }
         }
     }
@@ -424,16 +432,18 @@ fn discover_kit_watch_paths() -> KitWatchPaths {
     info!(
         kit_path = %kit_path.display(),
         scripts_count = scripts_paths.len(),
-        extensions_count = extensions_paths.len(),
+        scriptlets_count = scriptlets_paths.len(),
         agents_count = agents_paths.len(),
+        skills_count = skills_paths.len(),
         "Discovered kit directories to watch"
     );
 
     KitWatchPaths {
         kit_path,
         scripts_paths,
-        extensions_paths,
+        scriptlets_paths,
         agents_paths,
+        skills_paths,
     }
 }
 // --- merged from part_003.rs ---

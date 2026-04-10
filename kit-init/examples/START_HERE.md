@@ -25,12 +25,12 @@ Good matches:
 - `make a GitHub helper`
 - `make a file rename workflow`
 
-### Extension bundle / scriptlet bundle
+### Scriptlet bundle
 
 Use a bundle when the request is a snippet, text expansion, quick shell command, or a small grouped helper set.
 
-Copy from: `extensions/starter.md`
-Write to: `~/.scriptkit/kit/main/extensions/<name>.md`
+Copy from: `scriptlets/starter.md`
+Write to: `~/.scriptkit/kit/main/scriptlets/<name>.md`
 
 Good matches:
 - `make a bundle of text snippets`
@@ -40,6 +40,11 @@ Good matches:
 ### Skill (preferred reusable AI unit)
 
 Use a skill when the request is reusable AI instructions, a reviewer, a planner, or any model-backed automation that should appear in the main menu and open ACP Chat.
+
+Copy from a nearby example under `skills/`:
+- `skills/review-pr/`
+- `skills/plan-feature/`
+- `skills/explain-code/`
 
 Write to: `~/.scriptkit/kit/main/skills/<name>/SKILL.md`
 
@@ -60,14 +65,12 @@ Write to: `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
 Good matches:
 - `make an agent that reviews staged changes using a specific CLI backend`
 
-Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact.
-
-> **Generic vs focused examples:** Generic extension examples are flat files (`extensions/starter.md`, `howto.md`, etc.). Focused feature examples are nested bundles with their own subdirectory and may include companion `.actions.md` files (e.g., `extensions/acp-chat/main.md`, `extensions/custom-actions/main.md`).
+> **Generic vs focused examples:** Generic scriptlet examples are flat files (`scriptlets/starter.md`, `howto.md`, etc.). Focused feature examples are nested bundles with their own subdirectory and may include companion `.actions.md` files (e.g., `scriptlets/acp-chat/main.md`, `scriptlets/custom-actions/main.md`).
 
 ## When the request says "command", "helper", or "tool"
 
 Pick **Script** if it needs UI, Bun, files, HTTP, or multiple steps.
-Pick **Extension bundle / scriptlet bundle** if it is a snippet, text expansion, quick shell command, or a small grouped helper set.
+Pick **Scriptlet bundle** if it is a snippet, text expansion, quick shell command, or a small grouped helper set.
 Pick **Skill** if it is reusable AI instructions or model-backed automation (preferred over agents).
 Pick **mdflow agent** only if it requires a specific backend suffix or legacy mdflow features.
 
@@ -83,7 +86,7 @@ Pick **mdflow agent** only if it requires a specific backend suffix or legacy md
 ## Fast Picks
 
 - `make a clipboard cleanup command` → `~/.scriptkit/kit/main/scripts/clipboard-cleanup.ts`
-- `make a bundle of text snippets` → `~/.scriptkit/kit/main/extensions/snippets.md`
+- `make a bundle of text snippets` → `~/.scriptkit/kit/main/scriptlets/snippets.md`
 - `make a skill for reviewing PRs` → `~/.scriptkit/kit/main/skills/review-pr/SKILL.md`
 - `make an agent for a specific CLI backend` → `~/.scriptkit/kit/main/agents/review-pr.claude.md` (compatibility)
 
@@ -129,8 +132,8 @@ const url3 = await arg("URL 3");
 
 ```bash
 cp ~/.scriptkit/kit/examples/scripts/hello-world.ts ~/.scriptkit/kit/main/scripts/my-script.ts
-cp ~/.scriptkit/kit/examples/extensions/starter.md ~/.scriptkit/kit/main/extensions/my-bundle.md
-mkdir -p ~/.scriptkit/kit/main/skills/my-skill && cp ~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md ~/.scriptkit/kit/main/skills/my-skill/SKILL.md
+cp ~/.scriptkit/kit/examples/scriptlets/starter.md ~/.scriptkit/kit/main/scriptlets/my-bundle.md
+mkdir -p ~/.scriptkit/kit/main/skills && cp -R ~/.scriptkit/kit/examples/skills/review-pr ~/.scriptkit/kit/main/skills/review-pr
 cp ~/.scriptkit/kit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md  # compatibility
 ```
 
@@ -161,7 +164,7 @@ if (isVerify) {
 }
 ```
 
-### Extension bundle / scriptlet bundle → `~/.scriptkit/kit/main/extensions/<name>.md`
+### Scriptlet bundle → `~/.scriptkit/kit/main/scriptlets/<name>.md`
 
 ~~~md
 ---
@@ -238,7 +241,7 @@ Return:
 - Save only under `~/.scriptkit/kit/main/`.
 - For scripts, start with `import "@scriptkit/sdk";`.
 - Prefer `home(...)` for user-relative paths instead of `env.HOME`.
-- For extension bundles / scriptlet bundles, prefer `metadata` code fences.
+- For scriptlet bundles, prefer `metadata` code fences.
 - For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
 - For reusable AI work, create a skill (`skills/<name>/SKILL.md`), not an agent.
 - For agents (compatibility only), use underscore-prefixed `_sk_*` metadata keys.

@@ -119,6 +119,10 @@ impl ScriptListApp {
         // Match what close_actions_popup does for FileSearch host
         let app_entity = cx.entity().clone();
         dialog.update(cx, |d, _cx| {
+            d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                app_entity.clone(),
+                ActionsDialogHost::FileSearch,
+            ));
             d.set_on_close(std::sync::Arc::new(move |cx| {
                 let app_entity = app_entity.clone();
                 cx.defer(move |cx| {
@@ -275,6 +279,10 @@ impl ScriptListApp {
             // Set up the on_close callback to restore focus when escape is pressed
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
+                d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                    app_entity.clone(),
+                    ActionsDialogHost::ClipboardHistory,
+                ));
                 d.set_on_close(std::sync::Arc::new(move |cx| {
                     let app_entity = app_entity.clone();
                     cx.defer(move |cx| {

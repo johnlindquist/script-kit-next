@@ -147,7 +147,20 @@ impl ScriptListApp {
             }
         }
 
-        if self.try_reuse_embedded_acp_view(entry_intent.clone(), cx) {
+        let normalized_entry_intent = entry_intent
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let has_cached_retry_request = self
+            .embedded_acp_chat
+            .as_ref()
+            .is_some_and(|entity| entity.read(cx).has_retry_request());
+
+        if Self::should_reuse_embedded_acp_view_for_open(
+            normalized_entry_intent,
+            has_cached_retry_request,
+        ) && self.try_reuse_embedded_acp_view(entry_intent.clone(), cx)
+        {
             return;
         }
 
@@ -340,6 +353,13 @@ impl ScriptListApp {
         );
         cx.notify();
         true
+    }
+
+    fn should_reuse_embedded_acp_view_for_open(
+        entry_intent: Option<&str>,
+        has_cached_retry_request: bool,
+    ) -> bool {
+        entry_intent.is_some() && !has_cached_retry_request
     }
 
     /// Entry point with explicit capture kind.
@@ -1282,14 +1302,18 @@ impl ScriptListApp {
     ///
     /// Returns `None` if the current view is not an `AcpChatView` or if no
     /// retry request has been queued.
-    fn take_acp_retry_request_from_current_view(
+    fn take_acp_retry_request_for_open(
         &mut self,
         cx: &mut Context<Self>,
     ) -> Option<crate::ai::acp::AcpRetryRequest> {
-        let AppView::AcpChatView { entity } = &self.current_view else {
-            return None;
-        };
-        entity.update(cx, |view, _cx| view.take_retry_request())
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            return entity.update(cx, |view, _cx| view.take_retry_request());
+        }
+
+        self.embedded_acp_chat
+            .as_ref()
+            .cloned()
+            .and_then(|entity| entity.update(cx, |view, _cx| view.take_retry_request()))
     }
 
     pub(crate) fn open_embedded_acp_history_popup(
@@ -1437,7 +1461,7 @@ impl ScriptListApp {
 
         // Check for an explicit retry payload from a setup card before
         // falling back to persisted preference and entry-path derivation.
-        let retry_request = self.take_acp_retry_request_from_current_view(cx);
+        let retry_request = self.take_acp_retry_request_for_open(cx);
 
         let preferred_agent_id = retry_request
             .as_ref()
@@ -5153,6 +5177,19 @@ mod tests {
             .as_deref(),
             Some("explain this code")
         );
+    }
+
+    #[test]
+    fn embedded_acp_reuse_requires_entry_intent_and_no_cached_retry_request() {
+        assert!(!ScriptListApp::should_reuse_embedded_acp_view_for_open(
+            None, false,
+        ));
+        assert!(ScriptListApp::should_reuse_embedded_acp_view_for_open(
+            Some("explain this"), false,
+        ));
+        assert!(!ScriptListApp::should_reuse_embedded_acp_view_for_open(
+            Some("switch agent"), true,
+        ));
     }
 
     #[test]

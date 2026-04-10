@@ -368,6 +368,9 @@ pub enum ActionsDialogActivation {
     NoSelection,
 }
 
+pub(crate) type ActivationCallback =
+    Arc<dyn Fn(ActionsDialogActivation, &mut Window, &mut gpui::App) + Send + Sync>;
+
 /// The result of pressing Escape in the dialog.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActionsDialogEscapeOutcome {
@@ -436,6 +439,8 @@ pub struct ActionsDialog {
     /// Callback for when the dialog is closed (escape pressed, window dismissed)
     /// Used to notify the main app to restore focus
     pub on_close: Option<CloseCallback>,
+    /// Callback for mouse-triggered activations that need parent window handling.
+    on_activation: Option<ActivationCallback>,
     // ── Route / back-stack state ─────────────────────────────────────────────
     /// Stack of route states (empty = no route-based navigation active).
     route_stack: Vec<ActionsDialogRouteState>,
@@ -630,6 +635,7 @@ impl ActionsDialog {
             skip_track_focus: false,
             match_main_window_background: true,
             on_close: None,
+            on_activation: None,
             route_stack: Vec::new(),
             drill_down_routes: HashMap::new(),
             mouse_armed_row: None,
@@ -998,6 +1004,11 @@ impl ActionsDialog {
     /// Align the dialog background alpha with the main window vibrancy tint.
     pub fn set_match_main_window_background(&mut self, match_main_window_background: bool) {
         self.match_main_window_background = match_main_window_background;
+    }
+
+    /// Set the callback for row-click activations that need parent window handling.
+    pub(crate) fn set_on_activation(&mut self, callback: ActivationCallback) {
+        self.on_activation = Some(callback);
     }
 
     /// Set the callback for when the dialog is closed (escape pressed, window dismissed)
@@ -2101,10 +2112,10 @@ impl ActionsDialog {
         ix: usize,
         event: &gpui::ClickEvent,
         cx: &mut Context<Self>,
-    ) {
+    ) -> Option<ActionsDialogActivation> {
         // Ignore clicks on section headers
         if !matches!(self.grouped_items.get(ix), Some(GroupedActionItem::Item(_))) {
-            return;
+            return None;
         }
 
         let was_selected = self.selected_index == ix;
@@ -2140,8 +2151,10 @@ impl ActionsDialog {
 
         if should_submit {
             self.clear_mouse_submit_arm();
-            let _ = self.activate_selected(cx);
+            return Some(self.activate_selected(cx));
         }
+
+        None
     }
 
     /// Create box shadow for the overlay popup
@@ -2877,10 +2890,21 @@ impl Render for ActionsDialog {
                                             })
                                             .on_click({
                                                 let entity = entity.clone();
-                                                move |event, _window, cx| {
-                                                    entity.update(cx, |this, cx| {
-                                                        this.handle_row_click(ix, event, cx);
-                                                    });
+                                                move |event, window, cx| {
+                                                    let (activation, callback) = entity.update(
+                                                        cx,
+                                                        |this, cx| {
+                                                            (
+                                                                this.handle_row_click(ix, event, cx),
+                                                                this.on_activation.clone(),
+                                                            )
+                                                        },
+                                                    );
+                                                    if let (Some(activation), Some(callback)) =
+                                                        (activation, callback)
+                                                    {
+                                                        callback(activation, window, cx);
+                                                    }
                                                 }
                                             });
 

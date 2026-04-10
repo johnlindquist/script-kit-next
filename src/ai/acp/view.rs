@@ -628,7 +628,8 @@ impl AcpChatView {
                     {
                         crate::ai::context_mentions::format_inline_file_token(path)
                     } else {
-                        format!("@cmd:{label}")
+                        crate::ai::context_mentions::part_to_inline_token(&mention.part)
+                            .unwrap_or_else(|| format!("@cmd:{label}"))
                     }
                 }
                 _ => continue,
@@ -4333,6 +4334,10 @@ impl AcpChatView {
     /// to consume an explicit relaunch payload ahead of fallback preference.
     pub(crate) fn take_retry_request(&mut self) -> Option<AcpRetryRequest> {
         self.pending_retry_request.take()
+    }
+
+    pub(crate) fn has_retry_request(&self) -> bool {
+        self.pending_retry_request.is_some()
     }
 
     /// Stage a history resume request so the next ACP open path loads
