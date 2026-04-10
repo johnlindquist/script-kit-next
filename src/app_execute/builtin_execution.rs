@@ -29,11 +29,7 @@ const BUILTIN_DICTATION_MODEL_HIDE: &str = "builtin/dictation-model-hide";
 ///
 /// `prompt_id` already contains the `builtin:` prefix (e.g. `builtin:select-microphone`).
 fn builtin_choice_semantic_id(prompt_id: &str, index: usize, value: &str) -> String {
-    crate::protocol::generate_semantic_id(
-        &format!("{prompt_id}:choice"),
-        index,
-        value,
-    )
+    crate::protocol::generate_semantic_id(&format!("{prompt_id}:choice"), index, value)
 }
 
 /// Typed progress events sent from the blocking download thread to the
@@ -125,11 +121,7 @@ struct DictationModelUiEmitter {
 }
 
 impl DictationModelUiEmitter {
-    fn should_emit(
-        &self,
-        now: std::time::Instant,
-        next: &DictationModelUiSnapshot,
-    ) -> bool {
+    fn should_emit(&self, now: std::time::Instant, next: &DictationModelUiSnapshot) -> bool {
         const HEARTBEAT: std::time::Duration = std::time::Duration::from_millis(300);
 
         let Some(last_snapshot) = self.last_snapshot.as_ref() else {
@@ -178,8 +170,8 @@ static DICTATION_MODEL_PROMPT_STATUS: std::sync::OnceLock<
     parking_lot::Mutex<crate::dictation::DictationModelStatus>,
 > = std::sync::OnceLock::new();
 
-fn dictation_model_prompt_status() -> &'static parking_lot::Mutex<crate::dictation::DictationModelStatus>
-{
+fn dictation_model_prompt_status(
+) -> &'static parking_lot::Mutex<crate::dictation::DictationModelStatus> {
     DICTATION_MODEL_PROMPT_STATUS.get_or_init(|| {
         parking_lot::Mutex::new(crate::dictation::DictationModelStatus::NotDownloaded)
     })
@@ -330,7 +322,6 @@ fn emoji_picker_label(emoji: &script_kit_gpui::emoji::Emoji) -> String {
     format!("{}  {}", emoji.emoji, emoji.name)
 }
 
-
 impl ScriptListApp {
     fn spawn_send_screen_to_ai_after_hide(&mut self, trace_id: &str, cx: &mut Context<Self>) {
         let trace_id = trace_id.to_string();
@@ -433,7 +424,11 @@ impl ScriptListApp {
         .detach();
     }
 
-    fn spawn_send_focused_window_to_ai_after_hide(&mut self, trace_id: &str, cx: &mut Context<Self>) {
+    fn spawn_send_focused_window_to_ai_after_hide(
+        &mut self,
+        trace_id: &str,
+        cx: &mut Context<Self>,
+    ) {
         let trace_id = trace_id.to_string();
 
         tracing::info!(
@@ -799,11 +794,7 @@ impl ScriptListApp {
         );
     }
 
-    fn spawn_send_browser_tab_to_ai_after_hide(
-        &mut self,
-        trace_id: &str,
-        cx: &mut Context<Self>,
-    ) {
+    fn spawn_send_browser_tab_to_ai_after_hide(&mut self, trace_id: &str, cx: &mut Context<Self>) {
         self.spawn_capture_text_to_ai_after_already_hidden(
             "SendBrowserTabToAi",
             trace_id,
@@ -1189,13 +1180,7 @@ impl ScriptListApp {
                 }
             };
 
-            self.handle_system_action_result(
-                result,
-                action_type,
-                dctx,
-                start.elapsed(),
-                cx,
-            )
+            self.handle_system_action_result(result, action_type, dctx, start.elapsed(), cx)
         }
 
         #[cfg(not(target_os = "macos"))]
@@ -1386,7 +1371,12 @@ impl ScriptListApp {
 
             // Spawn a task to show confirmation dialog via shared parent dialog helper
             cx.spawn(async move |this, cx| {
-                match crate::confirm::confirm_with_parent_dialog(cx, confirm_options, &dctx_owned.trace_id).await
+                match crate::confirm::confirm_with_parent_dialog(
+                    cx,
+                    confirm_options,
+                    &dctx_owned.trace_id,
+                )
+                .await
                 {
                     Ok(true) => {
                         let _ = this.update(cx, |this, cx| {
@@ -1499,8 +1489,14 @@ impl ScriptListApp {
             cx,
         );
 
-        self.theme_chooser_scroll_handle
-            .scroll_to_item(start_index, ScrollStrategy::Nearest);
+        let item_count = theme::presets::presets_cached().len();
+        let old_count = self.theme_chooser_list_state.item_count();
+        if old_count != item_count {
+            self.theme_chooser_list_state
+                .splice(0..old_count, item_count);
+        }
+        self.theme_chooser_list_state
+            .scroll_to_reveal_item(start_index);
     }
 
     fn open_mini_main_window(&mut self, cx: &mut Context<Self>) {
@@ -1518,8 +1514,8 @@ impl ScriptListApp {
         let (grouped_items, _) = self.get_grouped_results_cached();
         let item_count = grouped_items.len();
         // Skip section headers — select first actual item so cmd+k works immediately
-        let first_selectable = crate::list_item::GroupedListState::from_items(&grouped_items)
-            .first_selectable;
+        let first_selectable =
+            crate::list_item::GroupedListState::from_items(&grouped_items).first_selectable;
         self.selected_index = first_selectable;
         tracing::info!(
             event = "open_mini_main_window",
@@ -1832,9 +1828,9 @@ impl ScriptListApp {
 
                 let explorer = cx.new(|cx| {
                     let mut browser = script_kit_gpui::storybook::StoryBrowser::new(cx);
-                    browser.configure_for_design_explorer(
-                        Some(script_kit_gpui::storybook::StorySurface::MainMenu),
-                    );
+                    browser.configure_for_design_explorer(Some(
+                        script_kit_gpui::storybook::StorySurface::MainMenu,
+                    ));
                     browser.open_compare_mode();
                     let _ = browser.select_variant_id("current-main-menu");
                     tracing::info!(
@@ -2119,17 +2115,11 @@ impl ScriptListApp {
 
                     AiCommandType::SendFocusedWindowToAi => {
                         self.open_tab_ai_chat_with_capture_kind(
-                            Some(
-                                "Capture and analyze the focused window."
-                                    .to_string(),
-                            ),
+                            Some("Capture and analyze the focused window.".to_string()),
                             crate::ai::TabAiCaptureKind::FocusedWindow,
                             cx,
                         );
-                        Self::builtin_success(
-                            dctx,
-                            "ai_send_focused_window_routed_to_harness",
-                        )
+                        Self::builtin_success(dctx, "ai_send_focused_window_routed_to_harness")
                     }
 
                     AiCommandType::SendScreenAreaToAi => {
@@ -2151,8 +2141,7 @@ impl ScriptListApp {
                     AiCommandType::SendSelectedTextToAi => {
                         self.open_tab_ai_chat_with_capture_kind(
                             Some(
-                                "Use the current selected text as the primary subject."
-                                    .to_string(),
+                                "Use the current selected text as the primary subject.".to_string(),
                             ),
                             crate::ai::TabAiCaptureKind::SelectedText,
                             cx,
@@ -2382,10 +2371,7 @@ impl ScriptListApp {
                             "unexpected AiCommandType variant {cmd:?} reached legacy alias arm"
                         );
                         self.open_tab_ai_acp_with_entry_intent(None, cx);
-                        Self::builtin_success(
-                            dctx,
-                            format!("ai_{cmd:?}_routed_to_harness"),
-                        )
+                        Self::builtin_success(dctx, format!("ai_{cmd:?}_routed_to_harness"))
                     }
                 }
             }
@@ -2660,7 +2646,8 @@ impl ScriptListApp {
                             prompt_id = BUILTIN_MIC_SELECT_PROMPT_ID,
                             choice_count = choice_count,
                             selected_index = start_index,
-                            semantic_ids_populated = choices.iter().all(|c| c.semantic_id.is_some()),
+                            semantic_ids_populated =
+                                choices.iter().all(|c| c.semantic_id.is_some()),
                             "opened_builtin_microphone_prompt"
                         );
                         self.opened_from_main_menu = true;
@@ -2676,10 +2663,7 @@ impl ScriptListApp {
                             placeholder: "Select microphone...".to_string(),
                             choices,
                         };
-                        resize_to_view_sync(
-                            ViewType::ArgPromptWithChoices,
-                            choice_count,
-                        );
+                        resize_to_view_sync(ViewType::ArgPromptWithChoices, choice_count);
                         cx.notify();
 
                         Self::builtin_success(dctx, "select_microphone")
@@ -2818,10 +2802,8 @@ impl ScriptListApp {
                                 Self::builtin_success(dctx, "inspect_current_context")
                             }
                             Err(e) => {
-                                let message = format!(
-                                    "Failed to serialize context snapshot: {}",
-                                    e
-                                );
+                                let message =
+                                    format!("Failed to serialize context snapshot: {}", e);
                                 tracing::error!(
                                     trace_id = %dctx.trace_id,
                                     error = %e,
@@ -2838,9 +2820,8 @@ impl ScriptListApp {
                         }
                     }
                     UtilityCommandType::TraceCurrentAppIntent => {
-                        let raw_query_owned = query_override
-                            .unwrap_or(&self.filter_text)
-                            .to_string();
+                        let raw_query_owned =
+                            query_override.unwrap_or(&self.filter_text).to_string();
                         let effective_query =
                             crate::menu_bar::current_app_commands::normalize_trace_current_app_intent_request(
                                 Some(&raw_query_owned),
@@ -2881,7 +2862,9 @@ impl ScriptListApp {
                                             "current_app_intent_trace.copied"
                                         );
 
-                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                            json,
+                                        ));
                                         self.show_hud(
                                             format!(
                                                 "Copied app intent trace: {} ({} exact / {} filtered)",
@@ -2896,8 +2879,10 @@ impl ScriptListApp {
                                         Self::builtin_success(dctx, "trace_current_app_intent")
                                     }
                                     Err(e) => {
-                                        let message =
-                                            format!("Failed to serialize current app intent trace: {}", e);
+                                        let message = format!(
+                                            "Failed to serialize current app intent trace: {}",
+                                            e
+                                        );
                                         tracing::error!(
                                             trace_id = %dctx.trace_id,
                                             error = %e,
@@ -2955,7 +2940,8 @@ impl ScriptListApp {
                                 }
                             };
 
-                        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot() {
+                        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot()
+                        {
                             Ok(snapshot) => {
                                 let selected_text = crate::selected_text::get_selected_text()
                                     .ok()
@@ -2993,7 +2979,9 @@ impl ScriptListApp {
                                             "verify_current_app_recipe.completed"
                                         );
 
-                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+                                        cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                            json,
+                                        ));
                                         self.show_hud(
                                             crate::menu_bar::current_app_commands::build_current_app_command_verification_hud_message(
                                                 &verification,
@@ -3057,9 +3045,11 @@ impl ScriptListApp {
                                 }
                             };
 
-                        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot() {
+                        match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot()
+                        {
                             Ok(snapshot) => {
-                                let (entries, snapshot_receipt) = snapshot.clone().into_entries_with_receipt();
+                                let (entries, snapshot_receipt) =
+                                    snapshot.clone().into_entries_with_receipt();
 
                                 let selected_text = crate::selected_text::get_selected_text()
                                     .ok()
@@ -3132,7 +3122,8 @@ impl ScriptListApp {
 
                                 match replay_receipt.action.as_str() {
                                     "execute_entry" => {
-                                        let Some(entry_index) = replay_receipt.selected_entry_index else {
+                                        let Some(entry_index) = replay_receipt.selected_entry_index
+                                        else {
                                             let message =
                                                 "Replay Current App Recipe resolved to execute_entry without an entry index"
                                                     .to_string();
@@ -3177,7 +3168,10 @@ impl ScriptListApp {
                                             cx,
                                         );
 
-                                        Self::builtin_success(dctx, "replay_current_app_recipe_open_palette")
+                                        Self::builtin_success(
+                                            dctx,
+                                            "replay_current_app_recipe_open_palette",
+                                        )
                                     }
                                     "generate_script" => {
                                         self.spawn_generate_script_from_recipe_after_hide(
@@ -3221,9 +3215,8 @@ impl ScriptListApp {
                         }
                     }
                     UtilityCommandType::TurnThisIntoCommand => {
-                        let raw_query_owned = query_override
-                            .unwrap_or(&self.filter_text)
-                            .to_string();
+                        let raw_query_owned =
+                            query_override.unwrap_or(&self.filter_text).to_string();
 
                         let effective_query =
                             crate::menu_bar::current_app_commands::normalize_turn_this_into_a_command_request(
@@ -3233,7 +3226,8 @@ impl ScriptListApp {
 
                         if effective_query.is_empty() {
                             let message =
-                                "Type what you want to automate after \"Turn This Into a Command\"".to_string();
+                                "Type what you want to automate after \"Turn This Into a Command\""
+                                    .to_string();
                             self.show_error_toast(message.clone(), cx);
                             Self::builtin_error(
                                 dctx,
@@ -3255,9 +3249,10 @@ impl ScriptListApp {
                                         .ok()
                                         .filter(|text| !text.trim().is_empty());
 
-                                    let browser_url = crate::platform::get_focused_browser_tab_url()
-                                        .ok()
-                                        .filter(|url| !url.trim().is_empty());
+                                    let browser_url =
+                                        crate::platform::get_focused_browser_tab_url()
+                                            .ok()
+                                            .filter(|url| !url.trim().is_empty());
 
                                     let recipe =
                                         crate::menu_bar::current_app_commands::build_current_app_command_recipe(
@@ -3284,7 +3279,9 @@ impl ScriptListApp {
                                                 "turn_this_into_command.recipe_copied"
                                             );
 
-                                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(json));
+                                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                                json,
+                                            ));
 
                                             self.show_hud(
                                                 format!(
@@ -3345,9 +3342,8 @@ impl ScriptListApp {
                         }
                     }
                     UtilityCommandType::DoInCurrentApp => {
-                        let raw_query_owned = query_override
-                            .unwrap_or(&self.filter_text)
-                            .to_string();
+                        let raw_query_owned =
+                            query_override.unwrap_or(&self.filter_text).to_string();
                         tracing::info!(
                             trace_id = %dctx.trace_id,
                             raw_query = %raw_query_owned,
@@ -3371,7 +3367,8 @@ impl ScriptListApp {
                         match crate::menu_bar::load_frontmost_menu_snapshot() {
                             Ok(snapshot) => {
                                 let snapshot_for_recipe = snapshot.clone();
-                                let (entries, snapshot_receipt) = snapshot.into_entries_with_receipt();
+                                let (entries, snapshot_receipt) =
+                                    snapshot.into_entries_with_receipt();
 
                                 if entries.is_empty() && trimmed_query.is_empty() {
                                     let message = format!(
@@ -3583,7 +3580,8 @@ impl ScriptListApp {
                                 }
                             }
                             Err(e) => {
-                                let message = format!("Failed to load frontmost app menu bar: {}", e);
+                                let message =
+                                    format!("Failed to load frontmost app menu bar: {}", e);
                                 self.show_error_toast(message.clone(), cx);
                                 Self::builtin_error(
                                     dctx,
@@ -3831,10 +3829,7 @@ impl ScriptListApp {
                             "Parakeet model not downloaded, opening consent prompt"
                         );
                         self.open_dictation_model_prompt(cx);
-                        return Self::builtin_success(
-                            dctx,
-                            "dictation_model_prompt_opened",
-                        );
+                        return Self::builtin_success(dctx, "dictation_model_prompt_opened");
                     }
 
                     if let Err(error) = self.ensure_dictation_delivery_target_available() {
@@ -3844,10 +3839,7 @@ impl ScriptListApp {
                             error = %error_text,
                             "Dictation start preflight failed"
                         );
-                        self.show_error_toast(
-                            format!("Dictation unavailable: {error_text}"),
-                            cx,
-                        );
+                        self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
                         return Self::builtin_success(dctx, "dictation_preflight_failed");
                     }
                 }
@@ -3941,15 +3933,11 @@ impl ScriptListApp {
                             );
                         }
                         self.open_dictation_model_prompt(cx);
-                        return Self::builtin_success(
-                            dctx,
-                            "dictation_model_prompt_opened",
-                        );
+                        return Self::builtin_success(dctx, "dictation_model_prompt_opened");
                     }
 
                     let target = self.resolve_dictation_target_with_override(true);
-                    if let Err(error) =
-                        self.ensure_dictation_delivery_target_available_for(target)
+                    if let Err(error) = self.ensure_dictation_delivery_target_available_for(target)
                     {
                         let error_text = error.to_string();
                         tracing::error!(
@@ -3957,10 +3945,7 @@ impl ScriptListApp {
                             error = %error_text,
                             "Dictation-to-AI start preflight failed"
                         );
-                        self.show_error_toast(
-                            format!("Dictation unavailable: {error_text}"),
-                            cx,
-                        );
+                        self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
                         return Self::builtin_success(dctx, "dictation_preflight_failed");
                     }
                 }
@@ -4058,15 +4043,11 @@ impl ScriptListApp {
                             );
                         }
                         self.open_dictation_model_prompt(cx);
-                        return Self::builtin_success(
-                            dctx,
-                            "dictation_model_prompt_opened",
-                        );
+                        return Self::builtin_success(dctx, "dictation_model_prompt_opened");
                     }
 
                     let target = crate::dictation::DictationTarget::ExternalApp;
-                    if let Err(error) =
-                        self.ensure_dictation_delivery_target_available_for(target)
+                    if let Err(error) = self.ensure_dictation_delivery_target_available_for(target)
                     {
                         let error_text = error.to_string();
                         tracing::error!(
@@ -4075,10 +4056,7 @@ impl ScriptListApp {
                             ?target,
                             "Dictation-to-app start preflight failed"
                         );
-                        self.show_error_toast(
-                            format!("Dictation unavailable: {error_text}"),
-                            cx,
-                        );
+                        self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
                         return Self::builtin_success(dctx, "dictation_preflight_failed");
                     }
                 }
@@ -4171,15 +4149,11 @@ impl ScriptListApp {
                             );
                         }
                         self.open_dictation_model_prompt(cx);
-                        return Self::builtin_success(
-                            dctx,
-                            "dictation_model_prompt_opened",
-                        );
+                        return Self::builtin_success(dctx, "dictation_model_prompt_opened");
                     }
 
                     let target = crate::dictation::DictationTarget::NotesEditor;
-                    if let Err(error) =
-                        self.ensure_dictation_delivery_target_available_for(target)
+                    if let Err(error) = self.ensure_dictation_delivery_target_available_for(target)
                     {
                         let error_text = error.to_string();
                         tracing::error!(
@@ -4188,10 +4162,7 @@ impl ScriptListApp {
                             ?target,
                             "Dictation-to-notes start preflight failed"
                         );
-                        self.show_error_toast(
-                            format!("Dictation unavailable: {error_text}"),
-                            cx,
-                        );
+                        self.show_error_toast(format!("Dictation unavailable: {error_text}"), cx);
                         return Self::builtin_success(dctx, "dictation_preflight_failed");
                     }
                 }
@@ -4370,9 +4341,7 @@ impl ScriptListApp {
         cx.spawn(async move |this, cx| {
             let transcript_result = cx
                 .background_executor()
-                .spawn(async move {
-                    crate::dictation::transcribe_captured_audio(&chunks)
-                })
+                .spawn(async move { crate::dictation::transcribe_captured_audio(&chunks) })
                 .await;
             let _ = this.update(cx, |this, cx| {
                 Self::handle_dictation_transcript(
@@ -4544,10 +4513,7 @@ impl ScriptListApp {
                             error = %error_text,
                             "Failed to resolve frontmost-app dictation target"
                         );
-                        self.show_error_toast(
-                            format!("Dictation paste failed: {error_text}"),
-                            cx,
-                        );
+                        self.show_error_toast(format!("Dictation paste failed: {error_text}"), cx);
                         self.schedule_dictation_overlay_close(
                             cx,
                             std::time::Duration::from_millis(150),
@@ -4700,10 +4666,7 @@ impl ScriptListApp {
             }
             Ok(None) => {
                 // No speech detected — close overlay quietly.
-                self.schedule_dictation_overlay_close(
-                    cx,
-                    std::time::Duration::from_millis(150),
-                );
+                self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(150));
                 self.schedule_dictation_transcriber_cleanup(
                     cx,
                     std::time::Duration::from_secs(300),
@@ -4725,9 +4688,15 @@ impl ScriptListApp {
 
                 if error_text.contains("Parakeet model not downloaded") {
                     let _ = crate::dictation::close_dictation_overlay(cx);
-                    self.dispatch_window_event(crate::window_orchestrator::WindowEvent::AbortDictation, cx);
+                    self.dispatch_window_event(
+                        crate::window_orchestrator::WindowEvent::AbortDictation,
+                        cx,
+                    );
                     self.open_dictation_model_prompt(cx);
-                    self.schedule_dictation_transcriber_cleanup(cx, std::time::Duration::from_secs(300));
+                    self.schedule_dictation_transcriber_cleanup(
+                        cx,
+                        std::time::Duration::from_secs(300),
+                    );
                     return;
                 } else {
                     self.show_error_toast(
@@ -4744,10 +4713,7 @@ impl ScriptListApp {
                     },
                     cx,
                 );
-                self.schedule_dictation_overlay_close(
-                    cx,
-                    std::time::Duration::from_millis(800),
-                );
+                self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(800));
                 self.schedule_dictation_transcriber_cleanup(
                     cx,
                     std::time::Duration::from_secs(300),
@@ -4790,11 +4756,9 @@ impl ScriptListApp {
         *parakeet_model_download_cancel_slot().lock() = Some(cancel.clone());
         // Shallow channel — cosmetic updates use try_send so the download
         // thread is never blocked on UI repaints.
-        let (progress_tx, progress_rx) =
-            async_channel::bounded::<DictationModelProgressEvent>(4);
-        let ui_emitter = std::sync::Arc::new(parking_lot::Mutex::new(
-            DictationModelUiEmitter::default(),
-        ));
+        let (progress_tx, progress_rx) = async_channel::bounded::<DictationModelProgressEvent>(4);
+        let ui_emitter =
+            std::sync::Arc::new(parking_lot::Mutex::new(DictationModelUiEmitter::default()));
 
         // Spawn a concurrent reader that updates the in-prompt progress
         // display as events arrive.  HUD only shows when the rich prompt
@@ -4823,14 +4787,13 @@ impl ScriptListApp {
                                 cx,
                             );
                             if !prompt_visible {
-                                let summary =
-                                    crate::dictation::download::format_progress_summary(
-                                        percentage,
-                                        downloaded_bytes,
-                                        total_bytes,
-                                        speed_bytes_per_sec,
-                                        eta_seconds,
-                                    );
+                                let summary = crate::dictation::download::format_progress_summary(
+                                    percentage,
+                                    downloaded_bytes,
+                                    total_bytes,
+                                    speed_bytes_per_sec,
+                                    eta_seconds,
+                                );
                                 this.show_hud(
                                     format!("Downloading model\u{2026} {summary}"),
                                     Some(HUD_SHORT_MS),
@@ -4864,9 +4827,8 @@ impl ScriptListApp {
                 .spawn({
                     let cancel = cancel.clone();
                     async move {
-                        let speed_tracker = std::sync::Arc::new(parking_lot::Mutex::new(
-                            SpeedTracker::new(),
-                        ));
+                        let speed_tracker =
+                            std::sync::Arc::new(parking_lot::Mutex::new(SpeedTracker::new()));
                         let ui_emitter = ui_emitter.clone();
                         crate::dictation::download::download_parakeet_model(
                             {
@@ -4882,7 +4844,10 @@ impl ScriptListApp {
                                                 tracker.update(progress.downloaded);
                                                 tracker.speed_bytes_per_sec()
                                             };
-                                            let eta = crate::dictation::download::estimate_eta_seconds(progress, speed);
+                                            let eta =
+                                                crate::dictation::download::estimate_eta_seconds(
+                                                    progress, speed,
+                                                );
 
                                             let snapshot =
                                                 DictationModelUiSnapshot::downloading(pct, eta);
@@ -4955,27 +4920,20 @@ impl ScriptListApp {
                     .store(false, std::sync::atomic::Ordering::Release);
                 match result {
                     Ok(_path) => {
-                        tracing::info!(
-                            category = "DICTATION",
-                            "Parakeet model download complete"
-                        );
+                        tracing::info!(category = "DICTATION", "Parakeet model download complete");
                         this.update_dictation_model_prompt_if_visible(
                             crate::dictation::DictationModelStatus::Available,
                             cx,
                         );
                         this.show_hud(
-                            "Dictation model ready \u{2014} press hotkey to dictate"
-                                .to_string(),
+                            "Dictation model ready \u{2014} press hotkey to dictate".to_string(),
                             Some(HUD_MEDIUM_MS),
                             cx,
                         );
                     }
                     Err(error) if error.to_string().contains("cancelled") => {
                         let cancelled = "model download cancelled".to_string();
-                        tracing::info!(
-                            category = "DICTATION",
-                            "Parakeet model download cancelled"
-                        );
+                        tracing::info!(category = "DICTATION", "Parakeet model download cancelled");
                         this.update_dictation_model_prompt_if_visible(
                             crate::dictation::DictationModelStatus::DownloadFailed(cancelled),
                             cx,
@@ -5021,9 +4979,8 @@ impl ScriptListApp {
     ) -> (String, String, Vec<Choice>) {
         use crate::dictation::DictationModelStatus;
 
-        let archive_size = crate::dictation::download::format_bytes(
-            crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE,
-        );
+        let archive_size =
+            crate::dictation::download::format_bytes(crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE);
 
         match status {
             DictationModelStatus::NotDownloaded => (
@@ -5259,9 +5216,7 @@ impl ScriptListApp {
                 self.start_parakeet_model_download(cx);
             }
             BUILTIN_DICTATION_MODEL_CANCEL => {
-                if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS
-                    .load(std::sync::atomic::Ordering::Acquire)
-                {
+                if PARAKEET_MODEL_DOWNLOAD_IN_PROGRESS.load(std::sync::atomic::Ordering::Acquire) {
                     tracing::info!(
                         category = "DICTATION",
                         "User requested Parakeet model download cancellation"
@@ -5283,10 +5238,7 @@ impl ScriptListApp {
                 }
             }
             BUILTIN_DICTATION_MODEL_HIDE => {
-                tracing::info!(
-                    category = "DICTATION",
-                    "User hid Parakeet model prompt"
-                );
+                tracing::info!(category = "DICTATION", "User hid Parakeet model prompt");
                 self.reset_to_script_list(cx);
             }
             _ => {
@@ -5306,9 +5258,7 @@ impl ScriptListApp {
     /// - a Script Kit prompt is active and can accept dictated text, or
     /// - the frontmost-app tracker already has a previously tracked external target.
     fn ensure_dictation_delivery_target_available(&self) -> anyhow::Result<()> {
-        if self.can_accept_dictation_into_main_filter()
-            || self.can_accept_dictation_into_prompt()
-        {
+        if self.can_accept_dictation_into_main_filter() || self.can_accept_dictation_into_prompt() {
             return Ok(());
         }
         Self::ensure_dictation_frontmost_target_available()
@@ -5520,10 +5470,10 @@ impl ScriptListApp {
 #[cfg(test)]
 mod builtin_execution_ai_feedback_tests {
     use super::{
-        AI_CAPTURE_HIDE_SETTLE_MS, ai_capture_hide_settle_duration,
-        ai_command_keeps_main_window_visible, ai_command_uses_hide_then_capture_flow,
-        ai_open_failure_message, created_file_path_for_feedback, emoji_picker_label,
-        favorites_loaded_message,
+        ai_capture_hide_settle_duration, ai_command_keeps_main_window_visible,
+        ai_command_uses_hide_then_capture_flow, ai_open_failure_message,
+        created_file_path_for_feedback, emoji_picker_label, favorites_loaded_message,
+        AI_CAPTURE_HIDE_SETTLE_MS,
     };
     use crate::builtins::AiCommandType;
     use script_kit_gpui::emoji::{Emoji, EmojiCategory};
@@ -5542,12 +5492,8 @@ mod builtin_execution_ai_feedback_tests {
         assert!(ai_command_keeps_main_window_visible(
             &AiCommandType::SendScreenToAi
         ));
-        assert!(ai_command_keeps_main_window_visible(
-            &AiCommandType::OpenAi
-        ));
-        assert!(ai_command_keeps_main_window_visible(
-            &AiCommandType::MiniAi
-        ));
+        assert!(ai_command_keeps_main_window_visible(&AiCommandType::OpenAi));
+        assert!(ai_command_keeps_main_window_visible(&AiCommandType::MiniAi));
         assert!(ai_command_keeps_main_window_visible(
             &AiCommandType::NewConversation
         ));
@@ -5642,7 +5588,6 @@ mod builtin_execution_ai_feedback_tests {
         assert_eq!(emoji_picker_label(&emoji), "🚀  rocket");
     }
 
-
     #[test]
     fn test_created_file_path_for_feedback_returns_same_path_when_already_absolute() {
         let absolute_path = PathBuf::from("/tmp/new-script.ts");
@@ -5702,9 +5647,7 @@ mod dictation_model_prompt_tests {
     #[test]
     fn failed_prompt_offers_retry() {
         let (title, placeholder, choices) = ScriptListApp::build_dictation_model_prompt(
-            crate::dictation::DictationModelStatus::DownloadFailed(
-                "network timeout".to_string(),
-            ),
+            crate::dictation::DictationModelStatus::DownloadFailed("network timeout".to_string()),
         );
         assert_eq!(title, "Dictation model download failed");
         assert_eq!(placeholder, "network timeout");
