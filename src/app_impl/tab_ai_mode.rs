@@ -173,6 +173,61 @@ impl ScriptListApp {
         );
     }
 
+    /// Open ACP Chat with an explicit focused target, bypassing view-based
+    /// auto-resolution. Used by Cmd+Enter from surfaces that own plain Enter
+    /// locally (action menus, Notes) and want to hand off a canonical
+    /// `FocusedTarget` chip to ACP without re-resolving from the current view.
+    pub(crate) fn open_tab_ai_acp_with_explicit_target(
+        &mut self,
+        target: crate::ai::TabAiTargetContext,
+        cx: &mut Context<Self>,
+    ) {
+        if self.tab_ai_save_offer_state.is_some() {
+            return;
+        }
+
+        let label = Self::format_tab_ai_focused_chip_label(&target);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "tab_ai_explicit_target_acp_open",
+            item_source = %target.source,
+            item_kind = %target.kind,
+            semantic_id = %target.semantic_id,
+            label = %label,
+        );
+
+        let focused_part =
+            Some(crate::ai::message_parts::AiContextPart::FocusedTarget { target, label });
+
+        // Minimal snapshot for the launch request — we already know the target.
+        let (ui_snapshot, invocation_receipt) = self.snapshot_tab_ai_ui(cx);
+        self.tab_ai_harness_capture_generation += 1;
+
+        let request = TabAiLaunchRequest {
+            source_view: self.current_view.clone(),
+            entry_intent: None,
+            quick_submit_plan: None,
+            ui_snapshot,
+            invocation_receipt,
+            capture_kind: crate::ai::TabAiCaptureKind::DefaultContext,
+            capture_generation: self.tab_ai_harness_capture_generation,
+        };
+
+        // No ambient capture needed — explicit target path skips desktop snapshot.
+        let (_tx, rx) =
+            async_channel::bounded::<Result<TabAiDeferredCaptureArtifacts, String>>(1);
+
+        self.open_tab_ai_acp_view_from_request_impl(
+            request,
+            rx,
+            focused_part,
+            false, // use_ask_anything_fallback
+            None,  // explicit_ambient_chip_label
+            true,  // force_acp_surface
+            cx,
+        );
+    }
+
     /// Open ACP Chat with a selected plugin skill staged as context.
     ///
     /// The skill's SKILL.md content is read and staged as the initial prompt
@@ -695,7 +750,7 @@ impl ScriptListApp {
     }
 
     /// Map a target kind to its human-readable chip prefix.
-    fn tab_ai_chip_prefix_for_kind(kind: &str) -> &'static str {
+    pub(crate) fn tab_ai_chip_prefix_for_kind(kind: &str) -> &'static str {
         match kind {
             "file" => "File",
             "directory" => "Folder",
@@ -1602,6 +1657,7 @@ impl ScriptListApp {
                     ui_thread_id: uuid::Uuid::new_v4().to_string(),
                     cwd,
                     initial_input: acp_initial_input.clone(),
+                    initial_context_parts: Vec::new(),
                     display_name: agent_display_name.into(),
                     selected_agent: acp_launch_resolution.selected_agent.clone(),
                     available_agents: acp_launch_resolution.catalog_entries.clone(),
