@@ -285,6 +285,78 @@ impl Default for Note {
     }
 }
 
+// ── Context Cart types ──────────────────────────────────────────────
+
+/// Payload for a single context cart item attached to a note session.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum NoteCartItemPayload {
+    /// Raw text: terminal log, pasted snippet, URL, or note body.
+    Text {
+        text: String,
+        source: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mime_type: Option<String>,
+    },
+    /// A local file path attachment.
+    File { path: String },
+    /// An MCP resource URI (e.g. `kit://context?profile=minimal`).
+    Resource { uri: String },
+}
+
+/// A single item in a note's context cart.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NoteCartItem {
+    pub id: String,
+    pub note_id: NoteId,
+    pub label: String,
+    pub payload: NoteCartItemPayload,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub sort_order: i32,
+}
+
+impl NoteCartItem {
+    /// Convert this cart item into a canonical `AiContextPart` for ACP handoff.
+    pub fn to_ai_context_part(&self) -> crate::ai::message_parts::AiContextPart {
+        match &self.payload {
+            NoteCartItemPayload::Text {
+                text,
+                source,
+                mime_type,
+            } => crate::ai::message_parts::AiContextPart::TextBlock {
+                label: self.label.clone(),
+                source: source.clone(),
+                text: text.clone(),
+                mime_type: mime_type.clone(),
+            },
+            NoteCartItemPayload::File { path } => {
+                crate::ai::message_parts::AiContextPart::FilePath {
+                    path: path.clone(),
+                    label: self.label.clone(),
+                }
+            }
+            NoteCartItemPayload::Resource { uri } => {
+                crate::ai::message_parts::AiContextPart::ResourceUri {
+                    uri: uri.clone(),
+                    label: self.label.clone(),
+                }
+            }
+        }
+    }
+
+    /// A deterministic dedup key based on canonical payload content.
+    pub fn dedup_key(&self) -> String {
+        match &self.payload {
+            NoteCartItemPayload::Text { text, source, .. } => {
+                format!("text:{source}:{text}")
+            }
+            NoteCartItemPayload::File { path } => format!("file:{path}"),
+            NoteCartItemPayload::Resource { uri } => format!("resource:{uri}"),
+        }
+    }
+}
+
 /// Export format for notes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportFormat {
