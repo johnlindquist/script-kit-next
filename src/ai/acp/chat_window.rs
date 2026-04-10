@@ -6,8 +6,8 @@
 use std::sync::{Mutex, OnceLock};
 
 use gpui::{
-    px, AnyWindowHandle, App, AppContext as _, Entity, WeakEntity, WindowBounds, WindowKind,
-    WindowOptions,
+    px, AnyWindowHandle, App, AppContext as _, Entity, Focusable, WeakEntity, WindowBounds,
+    WindowKind, WindowOptions,
 };
 
 use super::thread::AcpThread;
@@ -208,6 +208,14 @@ pub fn open_chat_window_with_thread(
             view.set_on_close_requested(move |_window, cx| {
                 close_chat_window(cx);
             });
+            view.set_on_open_history_command(move |_window, cx| {
+                let _ = open_picker_in_detached_chat_window(cx, |view, window, cx| {
+                    let parent_handle = window.window_handle();
+                    let parent_bounds = window.bounds();
+                    let display_id = window.display(cx).map(|display| display.id());
+                    view.open_history_popup_from_host(parent_handle, parent_bounds, display_id, cx);
+                });
+            });
         });
         // Capture weak reference to the view entity for action dispatch.
         if let Ok(mut slot) = view_entity_slot_inner.lock() {
@@ -336,13 +344,24 @@ pub fn close_chat_window(cx: &mut App) {
 
 /// Activate (bring to front) the detached chat window.
 pub(crate) fn activate_chat_window(cx: &mut App) {
-    let handle = {
+    let state = {
         let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
-        slot.lock().ok().and_then(|g| g.as_ref().map(|s| s.handle))
+        slot.lock().ok().and_then(|g| {
+            g.as_ref().map(|s| {
+                (
+                    s.handle,
+                    s.view_entity.as_ref().and_then(|weak| weak.upgrade()),
+                )
+            })
+        })
     };
-    if let Some(handle) = handle {
-        let _ = handle.update(cx, |_root, window, _cx| {
+    if let Some((handle, view_entity)) = state {
+        let _ = handle.update(cx, |_root, window, cx| {
             window.activate_window();
+            if let Some(ref entity) = view_entity {
+                let focus_handle = entity.read(cx).focus_handle(cx);
+                window.focus(&focus_handle, cx);
+            }
         });
         tracing::info!(event = "acp_chat_window_activated");
     }

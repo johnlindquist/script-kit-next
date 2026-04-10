@@ -44,6 +44,7 @@ pub use builders::{
     FileSearchSortMode, NewChatModelInfo, NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
 };
 pub use command_bar::{CommandBar, CommandBarConfig};
+pub(crate) use dialog::matching_action_id_for_keystroke;
 pub(crate) use dialog::AcpActionsDialogContext;
 pub use dialog::{
     ActionsDialog, ActionsDialogActivation, ActionsDialogEscapeOutcome, ActionsDialogRoute,

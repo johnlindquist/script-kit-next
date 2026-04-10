@@ -424,6 +424,28 @@ impl NotesApp {
                         cx.stop_propagation();
                     }
                 }
+                key if key.eq_ignore_ascii_case("a") => {
+                    if modifiers.shift {
+                        if self.surface_mode == NotesSurfaceMode::Acp {
+                            self.request_focus_surface(
+                                focus::NotesFocusSurface::AcpChat,
+                                window,
+                                cx,
+                            );
+                            cx.stop_propagation();
+                            return;
+                        }
+
+                        if self.open_selected_note_in_embedded_acp(
+                            "NotesWindowCmdShiftA",
+                            window,
+                            cx,
+                        ) {
+                            cx.stop_propagation();
+                            return;
+                        }
+                    }
+                }
                 key if key.eq_ignore_ascii_case("n") => {
                     if modifiers.shift {
                         self.create_note_from_clipboard(window, cx);
