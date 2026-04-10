@@ -1660,6 +1660,7 @@ impl ScriptListApp {
                     ui_thread_id: uuid::Uuid::new_v4().to_string(),
                     cwd,
                     initial_input: acp_initial_input.clone(),
+                    initial_context_parts: Vec::new(),
                     display_name: agent_display_name.into(),
                     selected_agent: acp_launch_resolution.selected_agent.clone(),
                     available_agents: acp_launch_resolution.catalog_entries.clone(),
