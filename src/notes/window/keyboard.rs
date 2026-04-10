@@ -377,17 +377,6 @@ impl NotesApp {
 
         if modifiers.platform {
             match key {
-                // Cmd+Enter: hand off selected note to ACP Chat.
-                // Must precede plain Enter and other platform shortcuts.
-                key if is_key_enter(key)
-                    && !modifiers.shift
-                    && !modifiers.control
-                    && !modifiers.alt =>
-                {
-                    if self.handoff_selected_note_to_acp("NotesWindowCmdEnter", cx) {
-                        cx.stop_propagation();
-                    }
-                }
                 key if key.eq_ignore_ascii_case("k") => {
                     if self.command_bar.is_open() || self.show_actions_panel {
                         self.close_actions_panel(window, cx);
