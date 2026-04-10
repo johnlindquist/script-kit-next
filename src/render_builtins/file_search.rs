@@ -493,10 +493,36 @@ impl ScriptListApp {
                         // (interceptor fires BEFORE input component can capture Tab)
                         _ if is_key_enter(key) => {
                             if has_cmd {
-                                // ⌘↵ / ⌘⇧↵ → launch AI harness with file context.
-                                // Falls back to query-level intent when no row is selected,
-                                // so this is never a dead keypress in mini file search.
                                 let has_shift = event.keystroke.modifiers.shift;
+                                // Snapshot selection status before mutable borrows.
+                                let has_selection = get_selected_file().is_some();
+
+                                // Plain ⌘↵ (no Shift): prefer the shared launcher
+                                // route so FileSearch converges on the same ACP
+                                // context-capture path as other main-window surfaces.
+                                if !has_shift {
+                                    tracing::info!(
+                                        target: "script_kit::tab_ai",
+                                        event = "file_search_cmd_enter_global_route_attempted",
+                                        has_selection,
+                                    );
+
+                                    if this.try_route_global_cmd_enter_to_acp_context_capture(cx) {
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+                                }
+
+                                // ⌘⇧↵ or shared-route fallback: use the local
+                                // selection-or-query helper for file-specific AI.
+                                if has_shift {
+                                    tracing::info!(
+                                        target: "script_kit::tab_ai",
+                                        event = "file_search_cmd_shift_enter_local_ai",
+                                        has_selection,
+                                    );
+                                }
+
                                 let ai_args = if let AppView::FileSearchView {
                                     ref query,
                                     selected_index,

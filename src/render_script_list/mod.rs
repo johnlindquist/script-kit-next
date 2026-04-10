@@ -1073,6 +1073,13 @@ impl ScriptListApp {
             ));
 
             if state_changed {
+                tracing::info!(
+                    target: "script_kit::prompt_chrome",
+                    event = "script_list_mini_ai_hint_rendered",
+                    tab_hint = true,
+                    cmd_enter_hint = true,
+                    "Mini ScriptList header rendered Ask AI keyboard hints"
+                );
                 let total_elapsed = render_list_start.elapsed();
                 tracing::info!(
                     target: "RENDER_PERF",
