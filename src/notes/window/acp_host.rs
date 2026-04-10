@@ -73,7 +73,99 @@ impl NotesApp {
         cx.notify();
     }
 
-    /// Wire ACP host callbacks (toggle-actions, close) to Notes-owned handlers.
+    /// Open the ACP history popup anchored to the Notes window.
+    ///
+    /// Returns `true` if the popup was opened, `false` if no embedded ACP
+    /// view exists.
+    pub(super) fn open_embedded_acp_history_popup(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(entity) = self.embedded_acp_chat.as_ref().cloned() else {
+            tracing::info!(event = "notes_acp_history_popup_requested", opened = false);
+            return false;
+        };
+
+        let parent_handle = window.window_handle();
+        let parent_bounds = window.bounds();
+        let display_id = window.display(cx).map(|display| display.id());
+
+        entity.update(cx, |view, cx| {
+            view.open_history_popup_from_host(parent_handle, parent_bounds, display_id, cx);
+        });
+
+        tracing::info!(event = "notes_acp_history_popup_requested", opened = true);
+        true
+    }
+
+    /// Handle a portal open request from the embedded ACP context picker.
+    ///
+    /// Static helper so it can be called from the `set_on_open_portal` closure
+    /// without holding an immutable borrow on `NotesApp` while also needing
+    /// `&mut App`.
+    ///
+    /// `AcpHistory` is supported in Notes because ACP already stages the query.
+    /// The other portal kinds still require main-panel view switching and
+    /// should stop here without detaching or re-routing ownership.
+    fn handle_acp_portal_static(
+        chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
+        kind: crate::ai::window::context_picker::types::PortalKind,
+        cx: &mut gpui::App,
+    ) {
+        use crate::ai::window::context_picker::types::PortalKind;
+
+        let Some(chat) = chat else {
+            tracing::info!(
+                event = "notes_acp_portal_requested",
+                kind = ?kind,
+                opened = false,
+                reason = "no_embedded_acp_view",
+            );
+            return;
+        };
+
+        match kind {
+            PortalKind::AcpHistory => {
+                let query = chat.update(cx, |view, _cx| {
+                    view.take_pending_history_portal_query().unwrap_or_default()
+                });
+
+                let hits = crate::ai::acp::history::search_history(&query, 12);
+
+                tracing::info!(
+                    event = "notes_acp_portal_requested",
+                    kind = "AcpHistory",
+                    opened = true,
+                    query = %query,
+                    hit_count = hits.len(),
+                );
+
+                chat.update(cx, |view, cx| {
+                    view.open_history_portal_with_entries(query, hits, cx);
+                });
+            }
+            PortalKind::FileSearch => {
+                tracing::info!(
+                    event = "notes_acp_portal_requested",
+                    kind = "FileSearch",
+                    opened = false,
+                    reason = "unsupported_in_notes_host",
+                );
+            }
+            PortalKind::ClipboardHistory => {
+                tracing::info!(
+                    event = "notes_acp_portal_requested",
+                    kind = "ClipboardHistory",
+                    opened = false,
+                    reason = "unsupported_in_notes_host",
+                );
+            }
+        }
+    }
+
+    /// Wire ACP host callbacks (toggle-actions, close, history, portals)
+    /// to Notes-owned handlers.
     fn wire_acp_host_callbacks(
         &self,
         view: &Entity<crate::ai::acp::view::AcpChatView>,
@@ -94,13 +186,38 @@ impl NotesApp {
         });
 
         // Close: return to Notes editor rather than closing the window.
-        let close_entity = notes_entity;
+        let close_entity = notes_entity.clone();
         view.update(cx, |chat, _cx| {
             chat.set_on_close_requested(move |window, cx| {
                 if let Some(entity) = close_entity.upgrade() {
                     entity.update(cx, |app, cx| {
                         app.switch_to_notes_surface(window, cx);
                     });
+                }
+            });
+        });
+
+        // History command (Cmd+P): open Notes-anchored history popup.
+        let history_entity = notes_entity.clone();
+        view.update(cx, |chat, _cx| {
+            chat.set_on_open_history_command(move |window, cx| {
+                if let Some(entity) = history_entity.upgrade() {
+                    entity.update(cx, |app, cx| {
+                        let _ = app.open_embedded_acp_history_popup(window, cx);
+                    });
+                }
+            });
+        });
+
+        // Portal requests (@history, @file, @clipboard): route through
+        // Notes-owned handler which supports AcpHistory and logs-and-stops
+        // for unsupported kinds.
+        let portal_entity = notes_entity;
+        view.update(cx, |chat, _cx| {
+            chat.set_on_open_portal(move |kind, cx| {
+                if let Some(entity) = portal_entity.upgrade() {
+                    let chat_entity = entity.read(cx).embedded_acp_chat.clone();
+                    Self::handle_acp_portal_static(chat_entity, kind, cx);
                 }
             });
         });
@@ -321,6 +438,15 @@ fn dispatch_notes_acp_action(
         event = "notes_acp_action_dispatched",
         action_id = %action_id,
     );
+
+    // For `acp_show_history`, open the Notes-anchored history popup.
+    if action_id == "acp_show_history" {
+        let opened = entity.update(cx, |app: &mut NotesApp, cx| {
+            app.open_embedded_acp_history_popup(window, cx)
+        });
+        tracing::info!(event = "notes_acp_action_show_history", opened);
+        return;
+    }
 
     // For `acp_close`, route to the Notes host to switch surfaces.
     if action_id == "acp_close" {

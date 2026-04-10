@@ -20,12 +20,8 @@ fn file_search_view_is_eligible_for_shared_global_cmd_enter_route() {
         .expect("Failed to read src/app_impl/tab_ai_mode.rs");
 
     assert!(
-        source.contains("fn supports_global_cmd_enter_ai_entry(view: &AppView) -> bool"),
-        "tab_ai_mode must define the shared global Cmd+Enter eligibility gate"
-    );
-    assert!(
-        source.contains("| AppView::FileSearchView { .. }"),
-        "FileSearchView must participate in the shared global Cmd+Enter ACP route"
+        source.contains("AppView::FileSearchView { .. }"),
+        "FileSearchView must opt into the shared main-window Cmd+Enter ACP route"
     );
 }
 

@@ -19,8 +19,8 @@
 
 use gpui::*;
 use script_kit_gpui::storybook::{
-    all_stories, save_selected_story_variant, StoryBrowser, StorybookJsonError,
-    StorybookJsonErrorBody,
+    all_stories, load_adopted_surface_resolution_snapshot, save_selected_story_variant,
+    StoryBrowser, StorybookJsonError, StorybookJsonErrorBody,
 };
 use script_kit_gpui::theme;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -210,6 +210,9 @@ fn main() {
             "--catalog-json" => {
                 print_story_catalog_json_and_exit();
             }
+            "--surface-resolution-json" => {
+                print_surface_resolution_json_and_exit();
+            }
             "--help" | "-h" => {
                 eprintln!("Script Kit Storybook - Component Preview Tool");
                 eprintln!();
@@ -224,6 +227,9 @@ fn main() {
                 );
                 eprintln!("  -c, --screenshot     Capture screenshot and exit");
                 eprintln!("  --catalog-json       Print compare-ready story catalog as JSON");
+                eprintln!(
+                    "  --surface-resolution-json  Print adopted live-surface resolutions as JSON"
+                );
                 eprintln!("  -h, --help           Show this help message");
                 eprintln!();
                 eprintln!("Available stories:");
@@ -400,6 +406,28 @@ fn print_story_catalog_json_and_exit() -> ! {
                 "catalog_load_failed",
                 format!("{error:#}"),
                 "Run `cargo check` and verify story registration compiles before requesting --catalog-json.",
+                2,
+            );
+        }
+    }
+}
+
+fn build_surface_resolution_json() -> Result<String, Box<dyn std::error::Error>> {
+    let snapshot = load_adopted_surface_resolution_snapshot()?;
+    Ok(serde_json::to_string_pretty(&snapshot)?)
+}
+
+fn print_surface_resolution_json_and_exit() -> ! {
+    match build_surface_resolution_json() {
+        Ok(json) => {
+            println!("{json}");
+            std::process::exit(0);
+        }
+        Err(error) => {
+            print_json_error_and_exit(
+                "surface_resolution_load_failed",
+                format!("{error:#}"),
+                "Run `cargo check` and ensure adopted surface exports compile before requesting --surface-resolution-json.",
                 2,
             );
         }

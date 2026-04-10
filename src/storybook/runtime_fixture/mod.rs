@@ -26,11 +26,26 @@ pub fn runtime_fixture_manifest_path(surface: &str, variant_id: &str) -> PathBuf
 }
 
 /// Return the image path for a given surface + variant.
-fn runtime_fixture_image_path(surface: &str, variant_id: &str) -> PathBuf {
+pub fn runtime_fixture_image_path(surface: &str, variant_id: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join(FIXTURES_DIR)
         .join(surface)
         .join(format!("{variant_id}.png"))
+}
+
+/// Cheaply probe whether the fixture image and manifest exist for a surface + variant.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeFixturePresence {
+    pub image_present: bool,
+    pub manifest_present: bool,
+}
+
+pub fn describe_runtime_fixture(surface: &str, variant_id: &str) -> RuntimeFixturePresence {
+    RuntimeFixturePresence {
+        image_present: runtime_fixture_image_path(surface, variant_id).is_file(),
+        manifest_present: runtime_fixture_manifest_path(surface, variant_id).is_file(),
+    }
 }
 
 /// Load and parse a fixture manifest from disk.
@@ -74,10 +89,14 @@ pub fn render_runtime_fixture(
             render_fixture_snapshot(snapshot, compact)
         }
         None => {
+            let image_path = runtime_fixture_image_path(surface, variant_id);
+            let manifest_path = runtime_fixture_manifest_path(surface, variant_id);
             tracing::warn!(
                 event = "storybook_runtime_fixture_missing",
                 surface,
                 variant_id,
+                image_path = %image_path.display(),
+                manifest_path = %manifest_path.display(),
                 "Storybook runtime fixture missing"
             );
             render_fixture_missing_state(surface, variant_id).into_any_element()
@@ -245,5 +264,23 @@ mod tests {
     fn load_missing_manifest_returns_error() {
         let result = load_runtime_fixture_manifest("nonexistent-surface", "nonexistent-variant");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn describe_missing_fixture_reports_both_absent() {
+        let presence = describe_runtime_fixture("nonexistent-surface", "nonexistent-variant");
+        assert!(!presence.image_present);
+        assert!(!presence.manifest_present);
+    }
+
+    #[test]
+    fn describe_fixture_serializes_camel_case() {
+        let presence = RuntimeFixturePresence {
+            image_present: true,
+            manifest_present: false,
+        };
+        let json = serde_json::to_string(&presence).expect("serialize");
+        assert!(json.contains("\"imagePresent\""));
+        assert!(json.contains("\"manifestPresent\""));
     }
 }

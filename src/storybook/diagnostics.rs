@@ -8,7 +8,11 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use std::collections::BTreeMap;
 
-use super::{all_stories, load_story_selections, selection_store_path, StorySelectionStore};
+use super::adoption::SurfaceSelectionResolution;
+use super::{
+    all_stories, load_story_selections, resolve_main_menu_variant, resolve_mini_ai_chat_style,
+    resolve_notes_window_style, selection_store_path, StorySelectionStore,
+};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -67,8 +71,8 @@ pub fn build_story_catalog_snapshot(selection_store: &StorySelectionStore) -> St
                 counter.1 += 1;
             }
 
+            let story_id_str = story.id().to_string();
             StoryCatalogEntry {
-                story_id: story.id().to_string(),
                 name: story.name().to_string(),
                 category: story.category().to_string(),
                 surface,
@@ -78,13 +82,20 @@ pub fn build_story_catalog_snapshot(selection_store: &StorySelectionStore) -> St
                     .map(str::to_owned),
                 variants: variants
                     .into_iter()
-                    .map(|variant| StoryVariantSummary {
-                        id: variant.stable_id(),
-                        name: variant.name,
-                        description: variant.description,
-                        props: variant.props.into_iter().collect(),
+                    .map(|variant| {
+                        let variant_id = variant.stable_id();
+                        let mut props: BTreeMap<String, String> =
+                            variant.props.into_iter().collect();
+                        augment_runtime_fixture_props(&story_id_str, &variant_id, &mut props);
+                        StoryVariantSummary {
+                            id: variant_id,
+                            name: variant.name,
+                            description: variant.description,
+                            props,
+                        }
                     })
                     .collect(),
+                story_id: story_id_str,
             }
         })
         .collect();
@@ -103,10 +114,24 @@ pub fn build_story_catalog_snapshot(selection_store: &StorySelectionStore) -> St
         )
         .collect();
 
+    let runtime_fixture_variant_count = stories
+        .iter()
+        .flat_map(|story| story.variants.iter())
+        .filter(|variant| is_runtime_fixture_variant(variant))
+        .count();
+    let missing_runtime_fixture_variant_count = stories
+        .iter()
+        .flat_map(|story| story.variants.iter())
+        .filter(|variant| is_runtime_fixture_variant(variant))
+        .filter(|variant| runtime_fixture_is_incomplete(variant))
+        .count();
+
     tracing::info!(
         event = "story_catalog_snapshot_built",
         story_count = stories.len(),
         comparable_story_count,
+        runtime_fixture_variant_count,
+        missing_runtime_fixture_variant_count,
         "Built story catalog snapshot"
     );
 
@@ -123,6 +148,122 @@ pub fn load_story_catalog_snapshot() -> Result<StoryCatalogSnapshot> {
     let selection_store = load_story_selections()
         .context("failed to load design explorer selections while building story catalog")?;
     Ok(build_story_catalog_snapshot(&selection_store))
+}
+
+// ─── Adopted Surface Resolution Snapshot ───────────────────────────────
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AdoptedSurfaceResolutionEntry {
+    pub story_id: String,
+    pub surface: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requested_variant_id: Option<String>,
+    pub resolved_variant_id: String,
+    pub fallback_used: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AdoptedSurfaceResolutionSnapshot {
+    pub selection_store_path: String,
+    pub surface_count: usize,
+    pub surfaces: Vec<AdoptedSurfaceResolutionEntry>,
+}
+
+pub fn build_adopted_surface_resolution_snapshot(
+    selection_store: &StorySelectionStore,
+) -> AdoptedSurfaceResolutionSnapshot {
+    let (_, main_menu_resolution) =
+        resolve_main_menu_variant(selection_store.selected_variant("main-menu"));
+    let (_, mini_ai_chat_resolution) =
+        resolve_mini_ai_chat_style(selection_store.selected_variant("mini-ai-chat-variations"));
+    let (_, notes_window_resolution) =
+        resolve_notes_window_style(selection_store.selected_variant("notes-window"));
+
+    let mut surfaces = vec![
+        surface_resolution_entry("Main Menu", main_menu_resolution),
+        surface_resolution_entry("Mini ACP Chat", mini_ai_chat_resolution),
+        surface_resolution_entry("Notes Window", notes_window_resolution),
+    ];
+    surfaces.sort_by(|left, right| left.story_id.cmp(&right.story_id));
+
+    tracing::info!(
+        event = "adopted_surface_resolution_snapshot_built",
+        surface_count = surfaces.len(),
+        "Built adopted surface resolution snapshot"
+    );
+
+    AdoptedSurfaceResolutionSnapshot {
+        selection_store_path: selection_store_path().display().to_string(),
+        surface_count: surfaces.len(),
+        surfaces,
+    }
+}
+
+pub fn load_adopted_surface_resolution_snapshot() -> Result<AdoptedSurfaceResolutionSnapshot> {
+    let selection_store = load_story_selections().context(
+        "failed to load design explorer selections while building adopted surface resolutions",
+    )?;
+    Ok(build_adopted_surface_resolution_snapshot(&selection_store))
+}
+
+fn surface_resolution_entry(
+    surface: &str,
+    resolution: SurfaceSelectionResolution,
+) -> AdoptedSurfaceResolutionEntry {
+    AdoptedSurfaceResolutionEntry {
+        story_id: resolution.story_id,
+        surface: surface.to_string(),
+        requested_variant_id: resolution.requested_variant_id,
+        resolved_variant_id: resolution.resolved_variant_id,
+        fallback_used: resolution.fallback_used,
+    }
+}
+
+// ─── Runtime Fixture Completeness Helpers ──────────────────────────────
+
+fn runtime_fixture_surface_for_story(story_id: &str) -> Option<&'static str> {
+    match story_id {
+        "main-menu" => Some("main-menu"),
+        "notes-window" => Some("notes-window"),
+        _ => None,
+    }
+}
+
+fn augment_runtime_fixture_props(
+    story_id: &str,
+    variant_id: &str,
+    props: &mut BTreeMap<String, String>,
+) {
+    if props.get("representation").map(String::as_str) != Some("runtimeFixture") {
+        return;
+    }
+    let Some(surface) = runtime_fixture_surface_for_story(story_id) else {
+        return;
+    };
+    let presence = super::runtime_fixture::describe_runtime_fixture(surface, variant_id);
+    props.insert(
+        "fixtureImagePresent".to_string(),
+        presence.image_present.to_string(),
+    );
+    props.insert(
+        "fixtureManifestPresent".to_string(),
+        presence.manifest_present.to_string(),
+    );
+}
+
+fn is_runtime_fixture_variant(variant: &StoryVariantSummary) -> bool {
+    variant.props.get("representation").map(String::as_str) == Some("runtimeFixture")
+}
+
+fn runtime_fixture_is_incomplete(variant: &StoryVariantSummary) -> bool {
+    variant.props.get("fixtureImagePresent").map(String::as_str) != Some("true")
+        || variant
+            .props
+            .get("fixtureManifestPresent")
+            .map(String::as_str)
+            != Some("true")
 }
 
 #[cfg(test)]
@@ -267,5 +408,170 @@ mod tests {
             !current.props.is_empty(),
             "current main-menu variant should have props"
         );
+    }
+
+    // ─── Surface Resolution Snapshot Tests ──────────────────────────────
+
+    #[test]
+    fn resolution_snapshot_includes_all_surfaces() {
+        let snapshot = build_adopted_surface_resolution_snapshot(&StorySelectionStore::default());
+        assert_eq!(snapshot.surface_count, 3);
+        assert_eq!(snapshot.surfaces.len(), 3);
+
+        let story_ids: Vec<&str> = snapshot
+            .surfaces
+            .iter()
+            .map(|s| s.story_id.as_str())
+            .collect();
+        assert!(story_ids.contains(&"main-menu"));
+        assert!(story_ids.contains(&"mini-ai-chat-variations"));
+        assert!(story_ids.contains(&"notes-window"));
+    }
+
+    #[test]
+    fn resolution_snapshot_no_fallback_when_empty_store() {
+        let snapshot = build_adopted_surface_resolution_snapshot(&StorySelectionStore::default());
+        for entry in &snapshot.surfaces {
+            assert!(
+                !entry.fallback_used,
+                "fallback should not be used for {} with empty store",
+                entry.story_id
+            );
+            assert!(
+                entry.requested_variant_id.is_none(),
+                "requested_variant_id should be None for {} with empty store",
+                entry.story_id
+            );
+        }
+    }
+
+    #[test]
+    fn resolution_snapshot_tracks_persisted_selection() {
+        let mut store = StorySelectionStore::default();
+        store.set_selected_variant("main-menu", "empty-state");
+
+        let snapshot = build_adopted_surface_resolution_snapshot(&store);
+        let main_menu = snapshot
+            .surfaces
+            .iter()
+            .find(|s| s.story_id == "main-menu")
+            .expect("main-menu surface should be present");
+
+        assert_eq!(
+            main_menu.requested_variant_id.as_deref(),
+            Some("empty-state")
+        );
+        assert_eq!(main_menu.resolved_variant_id, "empty-state");
+        assert!(!main_menu.fallback_used);
+    }
+
+    #[test]
+    fn resolution_snapshot_detects_fallback_on_unknown_variant() {
+        let mut store = StorySelectionStore::default();
+        store.set_selected_variant("main-menu", "nonexistent-variant");
+
+        let snapshot = build_adopted_surface_resolution_snapshot(&store);
+        let main_menu = snapshot
+            .surfaces
+            .iter()
+            .find(|s| s.story_id == "main-menu")
+            .expect("main-menu surface should be present");
+
+        assert_eq!(
+            main_menu.requested_variant_id.as_deref(),
+            Some("nonexistent-variant")
+        );
+        assert_eq!(main_menu.resolved_variant_id, "current-main-menu");
+        assert!(main_menu.fallback_used);
+    }
+
+    #[test]
+    fn resolution_snapshot_serializes_to_camel_case_json() {
+        let snapshot = build_adopted_surface_resolution_snapshot(&StorySelectionStore::default());
+        let json = serde_json::to_string(&snapshot).expect("serialize resolution snapshot");
+
+        assert!(json.contains("\"selectionStorePath\""));
+        assert!(json.contains("\"surfaceCount\""));
+        assert!(json.contains("\"storyId\""));
+        assert!(json.contains("\"resolvedVariantId\""));
+        assert!(json.contains("\"fallbackUsed\""));
+    }
+
+    // ─── Runtime Fixture Completeness Tests ─────────────────────────────
+
+    #[test]
+    fn catalog_main_menu_variants_have_fixture_presence_props() {
+        let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
+        let main_menu = snapshot
+            .stories
+            .iter()
+            .find(|s| s.story_id == "main-menu")
+            .expect("main-menu story should exist");
+
+        for variant in &main_menu.variants {
+            assert_eq!(
+                variant.props.get("representation").map(String::as_str),
+                Some("runtimeFixture"),
+                "main-menu variant {} should have representation=runtimeFixture",
+                variant.id
+            );
+            assert!(
+                variant.props.contains_key("fixtureImagePresent"),
+                "main-menu variant {} should have fixtureImagePresent prop",
+                variant.id
+            );
+            assert!(
+                variant.props.contains_key("fixtureManifestPresent"),
+                "main-menu variant {} should have fixtureManifestPresent prop",
+                variant.id
+            );
+        }
+    }
+
+    #[test]
+    fn catalog_notes_window_variants_have_fixture_presence_props() {
+        let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
+        let notes = snapshot
+            .stories
+            .iter()
+            .find(|s| s.story_id == "notes-window")
+            .expect("notes-window story should exist");
+
+        for variant in &notes.variants {
+            assert_eq!(
+                variant.props.get("representation").map(String::as_str),
+                Some("runtimeFixture"),
+                "notes-window variant {} should have representation=runtimeFixture",
+                variant.id
+            );
+            assert!(
+                variant.props.contains_key("fixtureImagePresent"),
+                "notes-window variant {} should have fixtureImagePresent prop",
+                variant.id
+            );
+            assert!(
+                variant.props.contains_key("fixtureManifestPresent"),
+                "notes-window variant {} should have fixtureManifestPresent prop",
+                variant.id
+            );
+        }
+    }
+
+    #[test]
+    fn catalog_non_runtime_fixture_variants_have_no_fixture_props() {
+        let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
+        let mini_ai_chat = snapshot
+            .stories
+            .iter()
+            .find(|s| s.story_id == "mini-ai-chat-variations")
+            .expect("mini-ai-chat-variations story should exist");
+
+        for variant in &mini_ai_chat.variants {
+            assert!(
+                !variant.props.contains_key("fixtureImagePresent"),
+                "mini-ai-chat variant {} should NOT have fixtureImagePresent (no runtimeFixture representation)",
+                variant.id
+            );
+        }
     }
 }
