@@ -351,6 +351,7 @@ mod editor_formatting;
 mod editor_ops_a;
 mod editor_ops_b;
 mod focus;
+pub(crate) mod style;
 use focus::NotesFocusSurface;
 mod init;
 mod keyboard;

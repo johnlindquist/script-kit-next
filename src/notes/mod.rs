@@ -40,7 +40,7 @@ mod markdown;
 mod markdown_highlighting;
 mod model;
 mod storage;
-mod window;
+pub(crate) mod window;
 
 // Re-export actions panel types for use by window.rs
 #[allow(unused_imports)]

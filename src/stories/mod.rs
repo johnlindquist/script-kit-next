@@ -8,6 +8,7 @@ mod footer_layout_variations;
 mod input_design_variations;
 mod main_menu_variations;
 mod mini_ai_chat_variations;
+mod notes_window_variations;
 
 use crate::storybook::StoryEntry;
 use std::sync::LazyLock;
@@ -17,6 +18,7 @@ pub use footer_layout_variations::FooterLayoutVariationsStory;
 pub use input_design_variations::InputDesignVariationsStory;
 pub use main_menu_variations::MainMenuStory;
 pub use mini_ai_chat_variations::MiniAiChatVariationsStory;
+pub use notes_window_variations::NotesWindowVariationsStory;
 
 /// Static storage for all stories.
 static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
@@ -26,6 +28,7 @@ static ALL_STORIES: LazyLock<Vec<StoryEntry>> = LazyLock::new(|| {
         StoryEntry::new(Box::new(FooterLayoutVariationsStory)),
         StoryEntry::new(Box::new(InputDesignVariationsStory)),
         StoryEntry::new(Box::new(MiniAiChatVariationsStory)),
+        StoryEntry::new(Box::new(NotesWindowVariationsStory)),
     ]
 });
 
