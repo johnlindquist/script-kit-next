@@ -250,6 +250,12 @@ fn main() {
         gpui_component::init(cx);
         theme::init_theme_cache();
         theme::sync_gpui_component_theme(cx);
+        cx.on_window_closed(|cx, _window_id| {
+            if cx.windows().is_empty() {
+                cx.quit();
+            }
+        })
+        .detach();
 
         // Create window options
         let window_size = size(px(1200.), px(800.));
