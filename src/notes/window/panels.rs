@@ -229,23 +229,23 @@ impl NotesApp {
                     );
                     self.show_action_feedback("Note is empty", true);
                 } else {
-                    // Open ACP Chat and set input to note content
+                    // Switch to embedded ACP inside the Notes window.
                     if let Err(e) =
-                        crate::ai::acp::open_or_focus_chat_with_input(content.clone(), cx)
+                        self.open_or_focus_embedded_acp(Some(content.clone()), window, cx)
                     {
                         tracing::warn!(
                             event = "notes_acp_handoff_blocked",
-                            reason = %format!("acp_handoff_failed: {e}"),
+                            reason = %format!("embedded_acp_failed: {e}"),
                             "Blocked Notes/ACP handoff"
                         );
-                        self.show_action_feedback("Failed to send to ACP Chat", true);
+                        self.show_action_feedback("Failed to open ACP", true);
                     } else {
                         tracing::info!(
                             event = "notes_send_to_acp",
                             char_count = content.chars().count(),
-                            "Sent active note to ACP Chat"
+                            mode = "embedded",
+                            "Switched to embedded ACP in Notes window"
                         );
-                        self.show_action_feedback("Sent to ACP Chat", false);
                     }
                 }
             }

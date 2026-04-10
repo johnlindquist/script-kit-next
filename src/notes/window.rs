@@ -178,6 +178,20 @@ pub enum NotesViewMode {
     Trash,
 }
 
+/// Which surface is currently visible inside the Notes window.
+///
+/// The Notes window is a persistent host that can show either the editor
+/// or an embedded ACP chat.  Switching modes does not destroy state — the
+/// inactive surface is hidden, not dropped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NotesSurfaceMode {
+    /// The Notes editor (default).
+    #[default]
+    Notes,
+    /// An embedded ACP chat session inside the Notes window.
+    Acp,
+}
+
 /// Sort mode for the notes list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NotesSortMode {
@@ -344,8 +358,17 @@ pub struct NotesApp {
     /// Pending focus surface request — applied in the next render frame.
     /// Used to defer focus changes until after dialog dismissal completes.
     pending_focus_surface: Option<focus::NotesFocusSurface>,
+
+    // ── ACP host surface ──────────────────────────────────────────────
+    /// Which surface is currently visible (Notes editor or embedded ACP).
+    surface_mode: NotesSurfaceMode,
+
+    /// Cached ACP chat entity — survives mode switches so conversation state
+    /// is preserved when toggling between Notes and ACP.
+    embedded_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
 }
 
+mod acp_host;
 mod clipboard_ops;
 mod editor_formatting;
 mod editor_ops_a;
@@ -371,6 +394,7 @@ mod traits;
 mod vibrancy;
 mod window_ops;
 
+pub use acp_host::close_notes_embedded_acp;
 pub use window_ops::{
     close_notes_window, get_notes_app_entity_and_handle, get_notes_editor_text,
     inject_text_into_notes, is_notes_window, is_notes_window_open, open_notes_window,

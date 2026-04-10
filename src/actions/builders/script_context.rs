@@ -954,6 +954,10 @@ pub(crate) fn get_acp_model_picker_actions(
 pub(crate) enum AcpActionsDialogHost {
     /// Shared ACP surface in the main Script Kit panel — all actions available.
     Shared,
+    /// Notes-hosted ACP surface — subset that works inside the Notes window.
+    /// `acp_close` returns to the Notes editor rather than closing a window.
+    /// `acp_save_as_note` is excluded because the user is already in Notes.
+    Notes,
     /// Detached ACP chat window — only actions that work without the main panel.
     Detached,
 }
@@ -961,6 +965,26 @@ pub(crate) enum AcpActionsDialogHost {
 fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> bool {
     match host {
         AcpActionsDialogHost::Shared => true,
+        AcpActionsDialogHost::Notes => {
+            // Notes-hosted: same as Detached but without `acp_save_as_note`
+            // (already in Notes) and keeping `acp_close` (returns to editor).
+            matches!(
+                action_id,
+                "acp:change_agent"
+                    | "acp:change_model"
+                    | "acp_copy_last_response"
+                    | "acp_retry_last"
+                    | "acp_export_markdown"
+                    | "acp_scroll_to_top"
+                    | "acp_scroll_to_bottom"
+                    | "acp_expand_all"
+                    | "acp_collapse_all"
+                    | "acp_new_conversation"
+                    | "acp_clear_history"
+                    | "acp_close"
+            ) || action_id.starts_with(ACP_SWITCH_AGENT_ACTION_PREFIX)
+                || action_id.starts_with(ACP_SWITCH_MODEL_ACTION_PREFIX)
+        }
         AcpActionsDialogHost::Detached => {
             matches!(
                 action_id,
@@ -986,6 +1010,7 @@ fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> 
 fn filter_acp_actions_for_host(host: AcpActionsDialogHost, actions: Vec<Action>) -> Vec<Action> {
     let host_label = match host {
         AcpActionsDialogHost::Shared => "shared",
+        AcpActionsDialogHost::Notes => "notes",
         AcpActionsDialogHost::Detached => "detached",
     };
     actions
@@ -1016,6 +1041,7 @@ pub(crate) fn get_acp_chat_root_route_for_host(
 ) -> crate::actions::ActionsDialogRoute {
     let host_label = match host {
         AcpActionsDialogHost::Shared => "shared",
+        AcpActionsDialogHost::Notes => "notes",
         AcpActionsDialogHost::Detached => "detached",
     };
     let context_title = selected_agent_id

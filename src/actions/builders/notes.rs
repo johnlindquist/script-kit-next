@@ -213,8 +213,8 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         actions.push(
             Action::new(
                 "send_to_ai",
-                "Send to ACP Chat",
-                Some("Open or focus ACP Chat with the active note content".to_string()),
+                "Switch to ACP",
+                Some("Open ACP inside the Notes window with the active note content".to_string()),
                 ActionCategory::ScriptContext,
             )
             .with_shortcut("⇧⌘A")
