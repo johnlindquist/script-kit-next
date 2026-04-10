@@ -1,14 +1,18 @@
 //! Source-contract tests for launcher AI hint visibility.
 //!
-//! Locks the invariant that the launcher header badge advertises both
-//! Tab and Cmd+Enter for ACP Chat entry, in both mini and full modes.
+//! Locks the invariant that the launcher header badge advertises Tab
+//! for ACP Chat entry, while Cmd+Enter remains footer-only.
 
 use std::fs;
 
+fn launcher_hint_source() -> String {
+    fs::read_to_string("src/components/launcher_ask_ai_hint.rs")
+        .expect("Failed to read src/components/launcher_ask_ai_hint.rs")
+}
+
 #[test]
-fn launcher_header_advertises_tab_and_cmd_enter() {
-    let source = fs::read_to_string("src/render_script_list/mod.rs")
-        .expect("Failed to read src/render_script_list/mod.rs");
+fn launcher_header_advertises_tab_without_cmd_enter() {
+    let source = launcher_hint_source();
 
     assert!(
         source.contains("Ask"),
@@ -19,14 +23,15 @@ fn launcher_header_advertises_tab_and_cmd_enter() {
         "Launcher header must show Tab badge"
     );
     assert!(
-        source.contains("⌘↩"),
-        "Launcher header must show Cmd+Enter badge"
+        !source.contains(".child(\"⌘↩\")"),
+        "Launcher header must not duplicate the Cmd+Enter badge"
     );
 }
 
 #[test]
-fn mini_script_list_shows_tab_and_cmd_enter_ai_hints() {
-    let source = fs::read_to_string("src/render_script_list/mod.rs")
+fn mini_script_list_shows_tab_ai_hint_without_cmd_enter_badge() {
+    let source = launcher_hint_source();
+    let script_list = fs::read_to_string("src/render_script_list/mod.rs")
         .expect("Failed to read src/render_script_list/mod.rs");
 
     assert!(
@@ -38,12 +43,44 @@ fn mini_script_list_shows_tab_and_cmd_enter_ai_hints() {
         "Mini ScriptList must keep the Tab Ask-AI hint visible"
     );
     assert!(
-        source.contains(".child(\"⌘↩\")"),
-        "Mini ScriptList must keep the Cmd+Enter Ask-AI hint visible"
+        !source.contains(".child(\"⌘↩\")"),
+        "Mini ScriptList header must not keep the Cmd+Enter Ask-AI hint visible"
     );
     assert!(
-        source.contains("script_list_mini_ai_hint_rendered"),
+        script_list.contains("script_list_mini_ai_hint_rendered"),
         "Mini ScriptList must emit a structured hint-render log"
+    );
+}
+
+#[test]
+fn mini_script_list_hint_log_marks_only_tab_affordance_in_header() {
+    let source = fs::read_to_string("src/render_script_list/mod.rs")
+        .expect("Failed to read src/render_script_list/mod.rs");
+
+    assert!(
+        source.contains("script_list_mini_ai_hint_rendered"),
+        "mini ScriptList must emit a structured Ask AI hint render log"
+    );
+    assert!(
+        source.contains("tab_hint = true") && source.contains("cmd_enter_hint = false"),
+        "mini ScriptList hint log must record that only the Tab affordance remains in the header"
+    );
+}
+
+#[test]
+fn runtime_and_storybook_share_launcher_ask_hint_renderer() {
+    let script_list = fs::read_to_string("src/render_script_list/mod.rs")
+        .expect("Failed to read src/render_script_list/mod.rs");
+    let storybook = fs::read_to_string("src/storybook/main_menu_variations/mod.rs")
+        .expect("Failed to read src/storybook/main_menu_variations/mod.rs");
+
+    assert!(
+        script_list.contains("render_launcher_ask_ai_hint(chrome)"),
+        "ScriptList should use the shared launcher ask-hint renderer"
+    );
+    assert!(
+        storybook.contains("render_launcher_ask_ai_hint(chrome)"),
+        "Main menu storybook should use the shared launcher ask-hint renderer"
     );
 }
 

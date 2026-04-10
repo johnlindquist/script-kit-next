@@ -37,6 +37,7 @@ mod form_fields_tests;
 pub mod hint_strip;
 pub(crate) mod inline_dropdown;
 pub mod inline_prompt_input;
+pub(crate) mod launcher_ask_ai_hint;
 pub mod minimal_prompt_shell;
 pub(crate) mod overlay_modal;
 pub mod prompt_container;
@@ -75,6 +76,8 @@ pub(crate) use inline_dropdown::{
 };
 #[allow(unused_imports)]
 pub use inline_prompt_input::InlinePromptInput;
+#[allow(unused_imports)]
+pub(crate) use launcher_ask_ai_hint::render_launcher_ask_ai_hint;
 #[allow(unused_imports)]
 pub use minimal_prompt_shell::MinimalPromptShell;
 #[allow(unused_imports)]
