@@ -31,12 +31,8 @@ impl ScriptListApp {
             AppView::ChatPrompt { .. } => {
                 ActionsSupport::SharedDialog(ActionsDialogHost::ChatPrompt)
             }
-            AppView::ArgPrompt { .. } => {
-                ActionsSupport::SharedDialog(ActionsDialogHost::ArgPrompt)
-            }
-            AppView::DivPrompt { .. } => {
-                ActionsSupport::SharedDialog(ActionsDialogHost::DivPrompt)
-            }
+            AppView::ArgPrompt { .. } => ActionsSupport::SharedDialog(ActionsDialogHost::ArgPrompt),
+            AppView::DivPrompt { .. } => ActionsSupport::SharedDialog(ActionsDialogHost::DivPrompt),
             AppView::EditorPrompt { .. } => {
                 ActionsSupport::SharedDialog(ActionsDialogHost::EditorPrompt)
             }
@@ -49,9 +45,7 @@ impl ScriptListApp {
             AppView::WebcamView { .. } => {
                 ActionsSupport::SharedDialog(ActionsDialogHost::WebcamPrompt)
             }
-            AppView::AcpChatView { .. } => {
-                ActionsSupport::SharedDialog(ActionsDialogHost::AcpChat)
-            }
+            AppView::AcpChatView { .. } => ActionsSupport::SharedDialog(ActionsDialogHost::AcpChat),
             AppView::AcpHistoryView { .. } => {
                 ActionsSupport::SharedDialog(ActionsDialogHost::AcpHistory)
             }
@@ -392,24 +386,11 @@ impl ScriptListApp {
         // Check if keystroke matches any action shortcut in the dialog
         // This allows Cmd+E, Cmd+L, etc. to execute the corresponding action
         let keystroke_shortcut = shortcuts::keystroke_to_shortcut(key, modifiers);
-
-        // Read dialog actions and look for matching shortcut
-        // First pass: find the match (if any) while holding the borrow
-        let matched_action_id: Option<String> = {
+        let matched_action_id = {
             let dialog_ref = dialog.read(cx);
-            dialog_ref.actions.iter().find_map(|action| {
-                action.shortcut.as_ref().and_then(|display_shortcut| {
-                    let normalized = Self::normalize_display_shortcut(display_shortcut);
-                    if normalized == keystroke_shortcut {
-                        Some(action.id.clone())
-                    } else {
-                        None
-                    }
-                })
-            })
-        }; // dialog_ref borrow released here
+            crate::actions::matching_action_id_for_keystroke(&dialog_ref.actions, key, modifiers)
+        };
 
-        // Second pass: execute the action if found (borrow released)
         if let Some(action_id) = matched_action_id {
             logging::log(
                 "ACTIONS",
@@ -419,10 +400,43 @@ impl ScriptListApp {
                 ),
             );
 
-            // Built-in actions always close the dialog
-            self.close_actions_popup(host, window, cx);
-
-            return ActionsRoute::Execute { action_id };
+            match dialog.update(cx, |d, cx| d.activate_action_id(action_id.clone(), cx)) {
+                crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+                    crate::actions::notify_actions_window(cx);
+                    crate::actions::resize_actions_window(cx, dialog);
+                    let (route_id, search_placeholder, route_depth, escape_hint) = {
+                        let dialog_ref = dialog.read(cx);
+                        (
+                            dialog_ref.current_route_id().map(str::to_string),
+                            dialog_ref.current_search_placeholder().map(str::to_string),
+                            dialog_ref.route_depth(),
+                            dialog_ref.route_hint_label(),
+                        )
+                    };
+                    tracing::info!(
+                        target: "script_kit::actions",
+                        host = ?host,
+                        route_id = ?route_id,
+                        route_depth,
+                        escape_hint,
+                        search_placeholder = ?search_placeholder,
+                        "actions_dialog_route_visible"
+                    );
+                    return ActionsRoute::Handled;
+                }
+                crate::actions::ActionsDialogActivation::Executed {
+                    action_id,
+                    should_close,
+                } => {
+                    if should_close {
+                        self.close_actions_popup(host, window, cx);
+                    }
+                    return ActionsRoute::Execute { action_id };
+                }
+                crate::actions::ActionsDialogActivation::NoSelection => {
+                    return ActionsRoute::Handled;
+                }
+            }
         }
 
         // Modal behavior: swallow all other keys while popup is open
@@ -495,8 +509,7 @@ impl ScriptListApp {
     /// before the click handler fires `toggle_actions`. Without this debounce
     /// the toggle would see the dialog as closed and immediately reopen it.
     pub(crate) fn was_actions_recently_closed(&self) -> bool {
-        const ACTIONS_CLOSE_DEBOUNCE: std::time::Duration =
-            std::time::Duration::from_millis(300);
+        const ACTIONS_CLOSE_DEBOUNCE: std::time::Duration = std::time::Duration::from_millis(300);
         self.actions_closed_at
             .map(|t| t.elapsed() < ACTIONS_CLOSE_DEBOUNCE)
             .unwrap_or(false)
@@ -756,13 +769,11 @@ mod actions_dialog_wiring_regression_tests {
             .expect("jump-key section missing");
 
         assert!(
-            route_fn[up_start..down_start]
-                .contains("crate::actions::notify_actions_window(cx);"),
+            route_fn[up_start..down_start].contains("crate::actions::notify_actions_window(cx);"),
             "up branch must notify the actions window"
         );
         assert!(
-            route_fn[down_start..jump_start]
-                .contains("crate::actions::notify_actions_window(cx);"),
+            route_fn[down_start..jump_start].contains("crate::actions::notify_actions_window(cx);"),
             "down branch must notify the actions window"
         );
     }

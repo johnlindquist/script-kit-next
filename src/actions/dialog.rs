@@ -117,6 +117,28 @@ fn action_shortcut_tokens_for_render(action: &Action) -> Option<std::borrow::Cow
     ))
 }
 
+fn action_matches_keystroke_shortcut(action: &Action, normalized_keystroke_shortcut: &str) -> bool {
+    action.shortcut.as_ref().is_some_and(|display_shortcut| {
+        crate::components::hint_strip::canonical_shortcut_hint(display_shortcut)
+            == normalized_keystroke_shortcut
+    })
+}
+
+pub(crate) fn matching_action_id_for_keystroke(
+    actions: &[Action],
+    key: &str,
+    modifiers: &gpui::Modifiers,
+) -> Option<String> {
+    let keystroke_shortcut = crate::shortcuts::keystroke_to_shortcut(key, modifiers);
+    actions.iter().find_map(|action| {
+        if action_matches_keystroke_shortcut(action, &keystroke_shortcut) {
+            Some(action.id.clone())
+        } else {
+            None
+        }
+    })
+}
+
 pub(crate) fn is_destructive_action(action: &Action) -> bool {
     let id = action.id.as_str();
 
@@ -1011,6 +1033,10 @@ impl ActionsDialog {
         self.on_activation = Some(callback);
     }
 
+    pub(crate) fn on_activation_callback(&self) -> Option<ActivationCallback> {
+        self.on_activation.clone()
+    }
+
     /// Set the callback for when the dialog is closed (escape pressed, window dismissed)
     /// Used to notify the main app to restore focus
     pub fn set_on_close(&mut self, callback: CloseCallback) {
@@ -1145,6 +1171,14 @@ impl ActionsDialog {
             return ActionsDialogActivation::NoSelection;
         };
 
+        self.activate_action_id(action_id, cx)
+    }
+
+    pub(crate) fn activate_action_id(
+        &mut self,
+        action_id: String,
+        cx: &mut Context<Self>,
+    ) -> ActionsDialogActivation {
         // Check for a registered drill-down route
         if let Some(route) = self.drill_down_routes.get(&action_id).cloned() {
             let route_id = route.id.clone();
@@ -3491,8 +3525,8 @@ fn emit_actions_dialog_runtime_audit(audit: &ActionsDialogRuntimeAudit) {
 mod tests {
     use super::{
         action_subtitle_for_display, actions_dialog_scrollbar_viewport_height,
-        is_destructive_action, should_render_section_separator, ActionsDialog,
-        ActionsDialogChromeAudit, ActionsDialogRuntimeAudit,
+        is_destructive_action, matching_action_id_for_keystroke, should_render_section_separator,
+        ActionsDialog, ActionsDialogChromeAudit, ActionsDialogRuntimeAudit,
     };
     use crate::actions::types::{Action, ActionCategory, SectionStyle};
 
@@ -3627,6 +3661,46 @@ mod tests {
         assert_eq!(action_subtitle_for_display(&action_with_description), None);
         assert_eq!(
             action_subtitle_for_display(&action_without_description),
+            None
+        );
+    }
+
+    #[test]
+    fn test_matching_action_id_for_keystroke_uses_canonical_shortcut_normalization() {
+        let actions = vec![
+            Action::new(
+                "history",
+                "Conversation History",
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘P"),
+            Action::new(
+                "copy_last_response",
+                "Copy Last Response",
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⇧⌘C"),
+        ];
+
+        let mut cmd_only = gpui::Modifiers::default();
+        cmd_only.platform = true;
+        assert_eq!(
+            matching_action_id_for_keystroke(&actions, "p", &cmd_only),
+            Some("history".to_string())
+        );
+
+        let mut shift_cmd = gpui::Modifiers::default();
+        shift_cmd.platform = true;
+        shift_cmd.shift = true;
+        assert_eq!(
+            matching_action_id_for_keystroke(&actions, "c", &shift_cmd),
+            Some("copy_last_response".to_string())
+        );
+
+        assert_eq!(
+            matching_action_id_for_keystroke(&actions, "x", &cmd_only),
             None
         );
     }

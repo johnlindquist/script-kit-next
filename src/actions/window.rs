@@ -193,6 +193,14 @@ fn actions_window_key_intent(
     if is_key_escape(key) {
         return Some(ActionsWindowKeyIntent::Close);
     }
+    if modifiers.platform
+        && !modifiers.shift
+        && !modifiers.control
+        && !modifiers.alt
+        && key.eq_ignore_ascii_case("k")
+    {
+        return Some(ActionsWindowKeyIntent::Close);
+    }
     if is_key_backspace(key) || key.eq_ignore_ascii_case("delete") {
         return Some(ActionsWindowKeyIntent::Backspace);
     }
@@ -374,6 +382,67 @@ impl ActionsWindow {
             this.request_close(window, cx, "focus_lost", false);
         }));
     }
+
+    fn handle_dialog_activation(
+        &mut self,
+        activation: super::dialog::ActionsDialogActivation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        close_reason: &'static str,
+    ) {
+        let callback = self.dialog.read(cx).on_activation_callback();
+        if let Some(callback) = callback {
+            let activation = activation.clone();
+            window.defer(cx, move |window, cx| {
+                callback(activation, window, cx);
+            });
+            return;
+        }
+
+        match activation {
+            super::dialog::ActionsDialogActivation::DrillDownPushed { .. } => {
+                let (route_id, search_placeholder, route_depth, escape_hint) = {
+                    let dialog = self.dialog.read(cx);
+                    (
+                        dialog.current_route_id().map(str::to_string),
+                        dialog.current_search_placeholder().map(str::to_string),
+                        dialog.route_depth(),
+                        dialog.route_hint_label(),
+                    )
+                };
+                tracing::info!(
+                    target: "script_kit::actions",
+                    host = "detached_actions_window",
+                    route_id = ?route_id,
+                    route_depth,
+                    escape_hint,
+                    search_placeholder = ?search_placeholder,
+                    "actions_dialog_route_visible"
+                );
+                let dialog = self.dialog.clone();
+                cx.spawn(async move |_this, cx| {
+                    cx.update(|cx| {
+                        resize_actions_window(cx, &dialog);
+                    })
+                })
+                .detach();
+            }
+            super::dialog::ActionsDialogActivation::Executed {
+                action_id,
+                should_close,
+            } => {
+                tracing::info!(
+                    event = "actions_window_execute_selected",
+                    action = %action_id,
+                    should_close,
+                );
+                if should_close {
+                    self.request_close(window, cx, close_reason, true);
+                }
+            }
+            super::dialog::ActionsDialogActivation::NoSelection => {}
+        }
+    }
 }
 
 impl Focusable for ActionsWindow {
@@ -509,49 +578,8 @@ impl Render for ActionsWindow {
                     }
                 }
                 Some(ActionsWindowKeyIntent::ExecuteSelected) => {
-                    match this.dialog.update(cx, |d, cx| d.activate_selected(cx)) {
-                        super::dialog::ActionsDialogActivation::DrillDownPushed { .. } => {
-                            let (route_id, search_placeholder, route_depth, escape_hint) = {
-                                let dialog = this.dialog.read(cx);
-                                (
-                                    dialog.current_route_id().map(str::to_string),
-                                    dialog.current_search_placeholder().map(str::to_string),
-                                    dialog.route_depth(),
-                                    dialog.route_hint_label(),
-                                )
-                            };
-                            tracing::info!(
-                                target: "script_kit::actions",
-                                host = "detached_actions_window",
-                                route_id = ?route_id,
-                                route_depth,
-                                escape_hint,
-                                search_placeholder = ?search_placeholder,
-                                "actions_dialog_route_visible"
-                            );
-                            let dialog = this.dialog.clone();
-                            cx.spawn(async move |_this, cx| {
-                                cx.update(|cx| {
-                                    resize_actions_window(cx, &dialog);
-                                })
-                            })
-                            .detach();
-                        }
-                        super::dialog::ActionsDialogActivation::Executed {
-                            action_id,
-                            should_close,
-                        } => {
-                            tracing::info!(
-                                event = "actions_window_execute_selected",
-                                action = %action_id,
-                                should_close,
-                            );
-                            if should_close {
-                                this.request_close(window, cx, "execute_selected", true);
-                            }
-                        }
-                        super::dialog::ActionsDialogActivation::NoSelection => {}
-                    }
+                    let activation = this.dialog.update(cx, |d, cx| d.activate_selected(cx));
+                    this.handle_dialog_activation(activation, window, cx, "execute_selected");
                 }
                 Some(ActionsWindowKeyIntent::Close) => {
                     let outcome = this.dialog.update(cx, |d, cx| d.handle_escape(cx));
@@ -613,7 +641,32 @@ impl Render for ActionsWindow {
                     });
                     cx.notify();
                 }
-                None => {}
+                None => {
+                    let matched_action_id = {
+                        let dialog = this.dialog.read(cx);
+                        crate::actions::matching_action_id_for_keystroke(
+                            &dialog.actions,
+                            key,
+                            modifiers,
+                        )
+                    };
+                    if let Some(action_id) = matched_action_id {
+                        tracing::info!(
+                            target: "script_kit::actions",
+                            event = "actions_window_shortcut_matched",
+                            action_id = %action_id,
+                            key = %key,
+                            platform = modifiers.platform,
+                            shift = modifiers.shift,
+                            control = modifiers.control,
+                            alt = modifiers.alt,
+                        );
+                        let activation = this
+                            .dialog
+                            .update(cx, |d, cx| d.activate_action_id(action_id, cx));
+                        this.handle_dialog_activation(activation, window, cx, "shortcut_execute");
+                    }
+                }
             }
         });
 
@@ -723,6 +776,8 @@ mod window_lifecycle_tests {
     #[test]
     fn test_actions_window_key_intent_maps_required_confirm_and_cancel_key_variants() {
         let no_mods = gpui::Modifiers::default();
+        let mut cmd_only = gpui::Modifiers::default();
+        cmd_only.platform = true;
 
         assert_eq!(
             actions_window_key_intent("enter", &no_mods),
@@ -739,6 +794,10 @@ mod window_lifecycle_tests {
         );
         assert_eq!(
             actions_window_key_intent("Escape", &no_mods),
+            Some(ActionsWindowKeyIntent::Close)
+        );
+        assert_eq!(
+            actions_window_key_intent("k", &cmd_only),
             Some(ActionsWindowKeyIntent::Close)
         );
     }

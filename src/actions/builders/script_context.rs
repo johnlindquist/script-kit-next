@@ -1009,6 +1009,13 @@ fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> 
     }
 }
 
+fn acp_action_shortcut_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> bool {
+    match host {
+        AcpActionsDialogHost::Detached => true,
+        AcpActionsDialogHost::Shared | AcpActionsDialogHost::Notes => action_id != "acp_close",
+    }
+}
+
 fn filter_acp_actions_for_host(host: AcpActionsDialogHost, actions: Vec<Action>) -> Vec<Action> {
     let host_label = match host {
         AcpActionsDialogHost::Shared => "shared",
@@ -1029,6 +1036,14 @@ fn filter_acp_actions_for_host(host: AcpActionsDialogHost, actions: Vec<Action>)
                 );
             }
             supported
+        })
+        .map(|mut action| {
+            if !acp_action_shortcut_supported_in_host(host, &action.id) {
+                action.shortcut = None;
+                action.shortcut_tokens = None;
+                action.shortcut_lower = None;
+            }
+            action
         })
         .collect()
 }
@@ -1499,6 +1514,36 @@ mod tests {
             display_name: Some(display_name.to_string()),
             context_window: None,
         }
+    }
+
+    #[test]
+    fn test_acp_close_shortcut_is_only_advertised_for_detached_host() {
+        let shared =
+            get_acp_chat_root_route_for_host(&[], None, &[], None, AcpActionsDialogHost::Shared);
+        let notes =
+            get_acp_chat_root_route_for_host(&[], None, &[], None, AcpActionsDialogHost::Notes);
+        let detached =
+            get_acp_chat_root_route_for_host(&[], None, &[], None, AcpActionsDialogHost::Detached);
+
+        let shared_close = shared
+            .actions
+            .iter()
+            .find(|action| action.id == "acp_close")
+            .expect("shared acp_close action should exist");
+        let notes_close = notes
+            .actions
+            .iter()
+            .find(|action| action.id == "acp_close")
+            .expect("notes acp_close action should exist");
+        let detached_close = detached
+            .actions
+            .iter()
+            .find(|action| action.id == "acp_close")
+            .expect("detached acp_close action should exist");
+
+        assert!(shared_close.shortcut.is_none());
+        assert!(notes_close.shortcut.is_none());
+        assert_eq!(detached_close.shortcut.as_deref(), Some("⌘W"));
     }
 
     #[test]
