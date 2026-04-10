@@ -164,6 +164,42 @@ impl ScriptListApp {
         let grouped_items = grouped_items.clone();
         let flat_results = flat_results.clone();
 
+        // --- Storybook live-spec override (read-only, no state mutation) ---
+        // grouped_items / flat_results are Arc<[T]> from cache; when the storybook
+        // spec requires overrides we swap them for fresh Vecs wrapped in Arc.
+        #[cfg(feature = "storybook")]
+        let (grouped_items, flat_results, selected_index_for_render, filter_text_for_render) = {
+            let live_spec = crate::storybook::adopted_main_menu_live_spec();
+            let mut si = self.selected_index;
+            let mut ft = self.filter_text.clone();
+            let gi;
+            let fr;
+            if live_spec.force_empty_results {
+                gi = std::sync::Arc::<[GroupedListItem]>::from(Vec::new());
+                fr = std::sync::Arc::<[scripts::SearchResult]>::from(Vec::new());
+                ft = live_spec
+                    .filter_text_override
+                    .unwrap_or("storybook-empty")
+                    .to_string();
+                si = 0;
+            } else {
+                if live_spec.prefer_first_result_selected {
+                    if let Some(ix) = grouped_items
+                        .iter()
+                        .position(|item| matches!(item, GroupedListItem::Item(_)))
+                    {
+                        si = ix;
+                    }
+                }
+                gi = grouped_items;
+                fr = flat_results;
+            }
+            (gi, fr, si, ft)
+        };
+        #[cfg(not(feature = "storybook"))]
+        let (selected_index_for_render, filter_text_for_render) =
+            (self.selected_index, self.filter_text.clone());
+
         // Get design tokens for current design variant
         let tokens = get_tokens(self.current_design);
         let design_visual = tokens.visual();
@@ -231,7 +267,7 @@ impl ScriptListApp {
             // appends fallbacks to the results. We only get here if there are truly
             // no results at all (including no fallbacks).
             use crate::designs::icon_variations::IconName;
-            if self.filter_text.is_empty() {
+            if filter_text_for_render.is_empty() {
                 div()
                     .w_full()
                     .h_full()
@@ -264,13 +300,13 @@ impl ScriptListApp {
                     .into_any_element()
             } else {
                 // Filtering but no results (including no fallbacks) - shouldn't normally happen
-                let filter_display = if self.filter_text.chars().count() > 30 {
+                let filter_display = if filter_text_for_render.chars().count() > 30 {
                     format!(
                         "{}...",
-                        crate::utils::truncate_str_chars(&self.filter_text, 27)
+                        crate::utils::truncate_str_chars(&filter_text_for_render, 27)
                     )
                 } else {
-                    self.filter_text.clone()
+                    filter_text_for_render.clone()
                 };
                 div()
                     .w_full()
@@ -366,8 +402,11 @@ impl ScriptListApp {
             let current_design = self.current_design;
 
             // Track filter for closure logging and highlighting
-            let filter_for_closure = self.filter_text.clone();
-            let filter_for_highlight = self.filter_text.clone();
+            let filter_for_closure = filter_text_for_render.clone();
+            let filter_for_highlight = filter_text_for_render.clone();
+
+            // Capture selected index for render (may be overridden by storybook live spec)
+            let selected_for_list_closure = selected_index_for_render;
 
             let variable_height_list =
                 list(self.main_list_state.clone(), move |ix, _window, cx| {
@@ -375,7 +414,7 @@ impl ScriptListApp {
 
                     // Access entity state inside the closure
                     entity.update(cx, |this, cx| {
-                        let current_selected = this.selected_index;
+                        let current_selected = selected_for_list_closure;
                         let current_hovered = this.hovered_index;
 
                         if let Some(grouped_item) = grouped_items_clone.get(ix) {
