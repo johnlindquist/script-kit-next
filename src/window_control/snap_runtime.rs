@@ -4,9 +4,10 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use gpui::{App, AsyncApp};
 
+use super::snap_mode::{current_snap_mode, SnapMode};
 use super::snap_overlay::{hide_snap_overlay, show_snap_overlay};
 use super::snap_session::{
-    begin_snap_session, build_overlay_model, cancel_snap_session, finish_snap_session,
+    begin_snap_session, build_overlay_scene, cancel_snap_session, finish_snap_session,
     poll_window_bounds, prime_snap_session, tick_snap_session, update_session_display, SnapSession,
 };
 
@@ -38,6 +39,15 @@ pub fn is_snap_runtime_active() -> bool {
 /// Start a live snap runtime: begin tracking the frontmost external window
 /// and render the desktop overlay.
 pub fn start_snap_runtime(cx: &mut App) -> Result<()> {
+    if current_snap_mode() == SnapMode::Off {
+        tracing::info!(
+            target: "script_kit::snap_runtime",
+            event = "snap_runtime_start_blocked_mode_off",
+            "snap runtime not started because snap mode is Off"
+        );
+        return Ok(());
+    }
+
     if is_snap_runtime_active() {
         tracing::info!(
             target: "script_kit::snap_runtime",
@@ -49,7 +59,7 @@ pub fn start_snap_runtime(cx: &mut App) -> Result<()> {
 
     let mut session = begin_snap_session()?;
     prime_snap_session(&mut session, Instant::now());
-    show_snap_overlay(build_overlay_model(&session), cx)?;
+    show_snap_overlay(build_overlay_scene(&session), cx)?;
 
     tracing::info!(
         target: "script_kit::snap_runtime",
@@ -105,9 +115,9 @@ pub fn tick_snap_runtime(cx: &mut App) -> Result<bool> {
         return Ok(false);
     };
 
-    update_session_display(&mut runtime.session, current_bounds.x, current_bounds.y);
+    update_session_display(&mut runtime.session, &current_bounds);
     let phase = tick_snap_session(&mut runtime.session, current_bounds, Instant::now());
-    let overlay_model = build_overlay_model(&runtime.session);
+    let overlay_scene = build_overlay_scene(&runtime.session);
 
     tracing::info!(
         target: "script_kit::snap_runtime",
@@ -124,7 +134,7 @@ pub fn tick_snap_runtime(cx: &mut App) -> Result<bool> {
 
     // Release lock before overlay update.
     drop(guard);
-    show_snap_overlay(overlay_model, cx)?;
+    show_snap_overlay(overlay_scene, cx)?;
 
     Ok(true)
 }

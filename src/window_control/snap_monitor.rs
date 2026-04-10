@@ -15,6 +15,7 @@ use gpui::{App, AsyncApp};
 use super::ax::{get_window_position, get_window_size};
 use super::cache::get_cached_window;
 use super::query::{get_frontmost_window_of_previous_app, has_accessibility_permission};
+use super::snap_mode::{current_snap_mode, SnapMode};
 use super::snap_runtime::{finish_snap_runtime, is_snap_runtime_active, start_snap_runtime};
 use super::types::{Bounds, WindowInfo};
 
@@ -65,6 +66,12 @@ fn should_start_runtime(armed: DragArmState, current_bounds: Option<Bounds>) -> 
 
 fn handle_snap_monitor_event(event: SnapMonitorEvent, cx: &mut App) -> Result<()> {
     if !has_accessibility_permission() {
+        return Ok(());
+    }
+
+    // Gate: when snap mode is Off, ignore press/drag (but still handle release
+    // to clean up a runtime that was started before the mode changed).
+    if current_snap_mode() == SnapMode::Off && !matches!(event, SnapMonitorEvent::Released) {
         return Ok(());
     }
 
