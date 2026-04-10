@@ -51,6 +51,20 @@ fn ensure_notes_schema(conn: &Connection) -> Result<()> {
         CREATE INDEX IF NOT EXISTS idx_notes_deleted_at ON notes(deleted_at);
         CREATE INDEX IF NOT EXISTS idx_notes_is_pinned ON notes(is_pinned);
 
+        CREATE TABLE IF NOT EXISTS note_cart_items (
+            id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            label TEXT NOT NULL DEFAULT '',
+            payload_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_note_cart_items_note_id_sort
+            ON note_cart_items(note_id, sort_order, updated_at DESC);
+
         CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
             title,
             content,
@@ -427,6 +441,135 @@ pub fn prune_old_deleted_notes(days: u32) -> Result<usize> {
     }
 
     Ok(count)
+}
+
+// ── Cart item persistence ───────────────────────────────────────────
+
+/// Save a cart item (insert or update).
+pub fn save_note_cart_item(item: &super::model::NoteCartItem) -> Result<()> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let payload_json =
+        serde_json::to_string(&item.payload).context("Failed to serialize cart item payload")?;
+
+    conn.execute(
+        r#"
+        INSERT INTO note_cart_items (id, note_id, label, payload_json, created_at, updated_at, sort_order)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+        ON CONFLICT(id) DO UPDATE SET
+            label = excluded.label,
+            payload_json = excluded.payload_json,
+            updated_at = excluded.updated_at,
+            sort_order = excluded.sort_order
+        "#,
+        params![
+            item.id,
+            item.note_id.as_str(),
+            item.label,
+            payload_json,
+            item.created_at.to_rfc3339(),
+            item.updated_at.to_rfc3339(),
+            item.sort_order,
+        ],
+    )
+    .context("Failed to save cart item")?;
+
+    debug!(cart_item_id = %item.id, note_id = %item.note_id, "Cart item saved");
+    Ok(())
+}
+
+/// List all cart items for a note, ordered by sort_order ascending.
+pub fn list_note_cart_items(note_id: NoteId) -> Result<Vec<super::model::NoteCartItem>> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, note_id, label, payload_json, created_at, updated_at, sort_order
+            FROM note_cart_items
+            WHERE note_id = ?1
+            ORDER BY sort_order ASC, updated_at DESC
+            "#,
+        )
+        .context("Failed to prepare list_note_cart_items query")?;
+
+    let items = stmt
+        .query_map(params![note_id.as_str()], row_to_cart_item)
+        .context("Failed to query cart items")?
+        .collect::<Result<Vec<_>, _>>()
+        .context("Failed to collect cart items")?;
+
+    debug!(note_id = %note_id, count = items.len(), "Retrieved cart items");
+    Ok(items)
+}
+
+/// Delete a cart item by ID.
+pub fn delete_note_cart_item(item_id: &str) -> Result<()> {
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    conn.execute(
+        "DELETE FROM note_cart_items WHERE id = ?1",
+        params![item_id],
+    )
+    .context("Failed to delete cart item")?;
+
+    info!(cart_item_id = %item_id, "Cart item deleted");
+    Ok(())
+}
+
+/// Convert a database row to a NoteCartItem.
+fn row_to_cart_item(row: &rusqlite::Row) -> rusqlite::Result<super::model::NoteCartItem> {
+    let id: String = row.get(0)?;
+    let note_id_str: String = row.get(1)?;
+    let label: String = row.get(2)?;
+    let payload_json: String = row.get(3)?;
+    let created_at_str: String = row.get(4)?;
+    let updated_at_str: String = row.get(5)?;
+    let sort_order: i32 = row.get(6)?;
+
+    let note_id = NoteId::parse(&note_id_str).ok_or_else(|| {
+        rusqlite::Error::FromSqlConversionFailure(
+            1,
+            rusqlite::types::Type::Text,
+            format!("Invalid note_id UUID in note_cart_items: {note_id_str}").into(),
+        )
+    })?;
+
+    let payload: super::model::NoteCartItemPayload =
+        serde_json::from_str(&payload_json).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(
+                3,
+                rusqlite::types::Type::Text,
+                Box::new(e),
+            )
+        })?;
+
+    let created_at = DateTime::parse_from_rfc3339(&created_at_str)
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(|_| Utc::now());
+
+    let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(|_| Utc::now());
+
+    Ok(super::model::NoteCartItem {
+        id,
+        note_id,
+        label,
+        payload,
+        created_at,
+        updated_at,
+        sort_order,
+    })
 }
 
 /// Convert a database row to a Note

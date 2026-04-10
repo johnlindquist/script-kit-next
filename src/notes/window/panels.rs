@@ -608,6 +608,227 @@ impl NotesApp {
         Ok(())
     }
 
+    /// Build a full cart payload for the selected note: the note body as the
+    /// first `TextBlock`, then persisted `NoteCartItem`s in sort_order.
+    ///
+    /// Returns an ordered `Vec<AiContextPart>` ready for batch handoff to
+    /// primary ACP Chat.
+    pub(super) fn build_selected_note_cart_parts_for_ai(
+        &self,
+        cx: &Context<Self>,
+    ) -> Result<Vec<crate::ai::message_parts::AiContextPart>, String> {
+        let content = self.editor_state.read(cx).value().to_string();
+        let selected_note = self
+            .selected_note_id
+            .and_then(|id| self.notes.iter().find(|n| n.id == id));
+
+        // Require either a saved note or non-empty draft content.
+        if selected_note.is_none() && content.trim().is_empty() {
+            return Err("No note selected and no draft content".to_string());
+        }
+
+        let selected_note_id = selected_note.map(|n| n.id.as_str().to_string());
+        let semantic_note_id = selected_note_id
+            .clone()
+            .unwrap_or_else(|| "draft".to_string());
+        let title = selected_note
+            .map(|n| n.title.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .unwrap_or_else(|| "Untitled Note".to_string());
+
+        let mut parts = Vec::new();
+
+        // 1. Note body as the first TextBlock part.
+        if !content.trim().is_empty() {
+            parts.push(crate::ai::message_parts::AiContextPart::TextBlock {
+                label: title.clone(),
+                source: format!("notes://{}", semantic_note_id),
+                text: content,
+                mime_type: Some("text/markdown".to_string()),
+            });
+        }
+
+        // 2. Persisted cart items in sort_order.
+        if let Some(note_id) = selected_note.map(|n| n.id) {
+            match crate::notes::storage::list_note_cart_items(note_id) {
+                Ok(items) => {
+                    for item in &items {
+                        parts.push(item.to_ai_context_part());
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "notes_cart_items_load_failed",
+                        note_id = %note_id,
+                        error = %err,
+                    );
+                }
+            }
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_cart_parts_built",
+            note_id = %semantic_note_id,
+            part_count = parts.len(),
+        );
+
+        Ok(parts)
+    }
+
+    /// Open primary ACP Chat with the full cart payload from the selected note.
+    ///
+    /// Returns `true` if the handoff was initiated, `false` on failure.
+    pub(super) fn open_selected_note_cart_in_primary_acp(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let parts = match self.build_selected_note_cart_parts_for_ai(cx) {
+            Ok(p) if p.is_empty() => {
+                self.show_action_feedback("Nothing to send", true);
+                return false;
+            }
+            Ok(p) => p,
+            Err(err) => {
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "notes_cart_handoff_skipped",
+                    reason = %err,
+                );
+                self.show_action_feedback("No note selected", true);
+                return false;
+            }
+        };
+
+        let part_count = parts.len();
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_cart_open_primary_acp_requested",
+            item_count = part_count,
+        );
+
+        if self.embedded_acp_chat.is_none() {
+            let requirements = crate::ai::acp::preflight::AcpLaunchRequirements::default();
+            let view = match crate::ai::acp::hosted::spawn_hosted_view(None, requirements, cx) {
+                Ok(view) => view,
+                Err(err) => {
+                    tracing::warn!(
+                        target: "script_kit::tab_ai",
+                        event = "notes_cart_handoff_open_failed",
+                        error = %err,
+                    );
+                    self.show_action_feedback("ACP unavailable", true);
+                    return false;
+                }
+            };
+            let notes_entity = cx.entity().downgrade();
+            let toggle_entity = notes_entity.clone();
+            let close_entity = notes_entity.clone();
+            let history_entity = notes_entity;
+
+            view.update(cx, |chat, _cx| {
+                chat.set_footer_host(crate::ai::acp::view::AcpFooterHost::External);
+
+                chat.set_on_toggle_actions(move |window, cx| {
+                    if let Some(entity) = toggle_entity.upgrade() {
+                        entity.update(cx, |app, cx| {
+                            app.toggle_acp_actions(window, cx);
+                        });
+                    }
+                });
+
+                chat.set_on_close_requested(move |window, cx| {
+                    if let Some(entity) = close_entity.upgrade() {
+                        entity.update(cx, |app, cx| {
+                            app.switch_to_notes_surface(window, cx);
+                        });
+                    }
+                });
+
+                chat.set_on_open_history_command(move |window, cx| {
+                    if let Some(entity) = history_entity.upgrade() {
+                        entity.update(cx, |app, cx| {
+                            let _ = app.open_embedded_acp_history_popup(window, cx);
+                        });
+                    }
+                });
+            });
+            self.embedded_acp_chat = Some(view);
+        }
+
+        self.surface_mode = NotesSurfaceMode::Acp;
+        self.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);
+        cx.notify();
+
+        let Some(entity) = self.embedded_acp_chat.as_ref().cloned() else {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "notes_cart_handoff_missing_embedded_chat",
+            );
+            self.show_action_feedback("ACP unavailable", true);
+            return false;
+        };
+
+        let stage_result = entity.update(cx, move |chat, cx| {
+            if chat.is_setup_mode() {
+                return Err("ACP Chat is in setup mode".to_string());
+            }
+
+            chat.set_input(String::new(), cx);
+
+            let current_text = chat.live_thread().read(cx).input.text().to_string();
+            let mut staged_text = current_text;
+            let mut staged_aliases = Vec::new();
+
+            for part in parts {
+                let inline_token = crate::ai::context_mentions::part_to_inline_token(&part)
+                    .unwrap_or_else(|| format!("@{}", part.label()));
+                if !staged_text.is_empty() && !staged_text.ends_with(' ') {
+                    staged_text.push(' ');
+                }
+                staged_text.push_str(&inline_token);
+                staged_text.push(' ');
+                staged_aliases.push((inline_token, part));
+            }
+
+            chat.live_thread().update(cx, |thread, cx| {
+                for (_, part) in &staged_aliases {
+                    thread.add_context_part(part.clone(), cx);
+                }
+                thread.input.set_text(staged_text.clone());
+                thread.input.set_cursor(staged_text.len());
+                cx.notify();
+            });
+
+            for (inline_token, part) in staged_aliases {
+                chat.register_typed_alias(inline_token.clone(), part);
+                chat.register_inline_owned_token(inline_token);
+            }
+
+            Ok::<(), String>(())
+        });
+
+        if let Err(err) = stage_result {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "notes_cart_handoff_stage_failed",
+                error = %err,
+            );
+            self.show_action_feedback("ACP unavailable", true);
+            return false;
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_cart_open_primary_acp_completed",
+            item_count = part_count,
+        );
+
+        true
+    }
+
     /// Open the Notes-hosted embedded ACP surface and stage the selected
     /// note (or unsaved draft) as a canonical `FocusedTarget` chip.
     ///
