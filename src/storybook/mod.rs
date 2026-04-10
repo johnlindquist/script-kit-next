@@ -75,8 +75,9 @@ pub use integrated_surface_shell::{
 };
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use main_menu_variations::{
-    main_menu_story_variants, render_main_menu_compare_thumbnail, render_main_menu_story_preview,
-    MainMenuVariationId,
+    adopted_main_menu_variant, main_menu_story_variants, render_main_menu_compare_thumbnail,
+    render_main_menu_story_preview, resolve_main_menu_variant, MainMenuSurface,
+    MainMenuVariationId, SPECS as MAIN_MENU_VARIATION_SPECS,
 };
 pub use mini_ai_chat_presenter::{
     render_mini_ai_chat_presentation, MiniAiChatPresentationMessage, MiniAiChatPresentationModel,

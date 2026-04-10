@@ -32,6 +32,7 @@ mod context_contract_integration_tests;
 pub(crate) mod context_mentions;
 pub(crate) mod context_picker_row;
 pub(crate) mod current_app_automation_memory;
+pub(crate) mod explicit_target_handoff;
 pub(crate) mod harness;
 pub mod message_parts;
 pub(crate) mod model;
@@ -135,6 +136,7 @@ pub use self::context_contract::{
 pub use self::context_mentions::{
     mention_range_at_cursor, parse_inline_context_mentions, InlineContextMention,
 };
+pub(crate) use self::explicit_target_handoff::request_explicit_acp_handoff_from_secondary_window;
 pub use self::window::context_picker::types::ContextPickerTrigger;
 pub use self::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerItemSnapshot, ContextPickerSection,

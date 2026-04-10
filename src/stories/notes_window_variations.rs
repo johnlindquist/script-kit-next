@@ -1,8 +1,8 @@
 use gpui::*;
 
 use crate::storybook::{
-    notes_window_story_variants, render_notes_window_story_preview, Story, StorySurface,
-    StoryVariant,
+    notes_window_story_variants, render_notes_window_compare_thumbnail,
+    render_notes_window_story_preview, Story, StorySurface, StoryVariant,
 };
 
 pub struct NotesWindowVariationsStory;
@@ -26,6 +26,10 @@ impl Story for NotesWindowVariationsStory {
 
     fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
         render_notes_window_story_preview(&variant.stable_id())
+    }
+
+    fn render_compare_variant(&self, variant: &StoryVariant) -> AnyElement {
+        render_notes_window_compare_thumbnail(&variant.stable_id())
     }
 
     fn render(&self) -> AnyElement {

@@ -19,6 +19,12 @@ pub trait Story: Send + Sync {
     fn render_variant(&self, _variant: &StoryVariant) -> AnyElement {
         self.render()
     }
+    /// Render a compact compare-mode thumbnail for a variant.
+    /// Defaults to `render_variant()` but surfaces can override to
+    /// provide a compact representation suited to side-by-side grids.
+    fn render_compare_variant(&self, variant: &StoryVariant) -> AnyElement {
+        self.render_variant(variant)
+    }
     fn variants(&self) -> Vec<StoryVariant> {
         vec![StoryVariant::default_named("default", "Default")]
     }

@@ -496,9 +496,15 @@ impl Render for ActionsWindow {
                             action_id = %action.id,
                             semantic_id = %target.semantic_id,
                         );
-                        // Enqueue the target for the main window to pick up
-                        // after the actions popup closes.
-                        crate::ai::enqueue_explicit_acp_target(target);
+                        // Use the shared secondary-window handoff helper to enqueue
+                        // the target. Pass show_main_window=false because request_close
+                        // already handles activate_main_window with the correct timing
+                        // (before defer_close, not after).
+                        crate::ai::request_explicit_acp_handoff_from_secondary_window(
+                            target,
+                            "DetachedActionsWindow",
+                            false,
+                        );
                         this.request_close(window, cx, "send_to_acp", true);
                     }
                 }
