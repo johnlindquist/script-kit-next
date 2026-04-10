@@ -377,6 +377,17 @@ impl NotesApp {
 
         if modifiers.platform {
             match key {
+                // Cmd+Enter: open embedded ACP with selected note as canonical target.
+                // Must precede plain Enter and other platform shortcuts.
+                key if is_key_enter(key)
+                    && !modifiers.shift
+                    && !modifiers.control
+                    && !modifiers.alt =>
+                {
+                    if self.open_selected_note_in_embedded_acp("NotesWindowCmdEnter", window, cx) {
+                        cx.stop_propagation();
+                    }
+                }
                 key if key.eq_ignore_ascii_case("k") => {
                     if self.command_bar.is_open() || self.show_actions_panel {
                         self.close_actions_panel(window, cx);

@@ -206,13 +206,34 @@ fn plain_tab_routes_raw_launcher_text_and_submits_to_detached_acp() {
         "Plain Tab ACP helper must derive the entry intent from raw ScriptList filter text"
     );
     assert!(
-        source.contains("self.open_tab_ai_acp_with_entry_intent(entry_intent, cx);"),
-        "Plain Tab ACP helper must route non-detached launches through ACP-only entry"
+        source.contains("self.open_tab_ai_acp_with_options(entry_intent, true, cx);"),
+        "Plain Tab ACP helper must suppress focused-choice staging on non-detached ACP launches"
     );
     assert!(
         source.contains("get_detached_acp_view_entity()")
             && source.contains("thread.submit_input(cx)"),
         "Plain Tab ACP helper must submit launcher text to an existing detached ACP chat"
+    );
+}
+
+#[test]
+fn plain_tab_suppresses_focused_part_staging_but_cmd_enter_does_not() {
+    let source = fs::read_to_string("src/app_impl/tab_ai_mode.rs")
+        .expect("Failed to read src/app_impl/tab_ai_mode.rs");
+
+    assert!(
+        source.contains("suppress_focused_part: bool"),
+        "Tab AI launch requests must carry a focused-part suppression flag"
+    );
+    assert!(
+        source.contains("if suppress_focused_part {")
+            && source.contains("request.suppress_focused_part"),
+        "Focused-part routing must honor the suppression flag during ACP launch"
+    );
+    assert!(
+        source.contains("self.open_tab_ai_acp_with_options(entry_intent, true, cx);")
+            && source.contains("self.open_tab_ai_acp_with_options(entry_intent, false, cx);"),
+        "Plain Tab should suppress focused-choice staging while the shared ACP entry path should not"
     );
 }
 
