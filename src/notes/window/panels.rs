@@ -552,7 +552,7 @@ impl NotesApp {
         let Some(target) = self.build_selected_note_target_for_ai(cx) else {
             tracing::info!(
                 target: "script_kit::tab_ai",
-                event = "notes_acp_handoff_skipped",
+                event = "notes_acp_handoff_blocked",
                 source,
                 reason = "no_selected_note",
             );
@@ -564,7 +564,7 @@ impl NotesApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "notes_acp_handoff_enqueued",
+            event = "notes_send_to_acp",
             source,
         );
         true
