@@ -17,9 +17,9 @@ pub fn plugin_scripts_dir(plugin_id: &str) -> PathBuf {
     plugins_container_dir().join(plugin_id).join("scripts")
 }
 
-/// Return the extensions directory for a given plugin.
-pub fn plugin_extensions_dir(plugin_id: &str) -> PathBuf {
-    plugins_container_dir().join(plugin_id).join("extensions")
+/// Return the scriptlets directory for a given plugin.
+pub fn plugin_scriptlets_dir(plugin_id: &str) -> PathBuf {
+    plugins_container_dir().join(plugin_id).join("scriptlets")
 }
 
 /// Return the skills directory for a given plugin.

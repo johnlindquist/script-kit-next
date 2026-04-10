@@ -17,12 +17,12 @@ type ScriptGenericWatcher =
     GenericWatcher<ScriptReloadEvent, Sender<ScriptReloadEvent>, ScriptWatcherSpec>;
 type DiscoverKitWatchPaths = Arc<dyn Fn() -> super::KitWatchPaths + Send + Sync>;
 
-/// Watches ~/.scriptkit/kit/*/scripts, ~/.scriptkit/kit/*/extensions, and
-/// ~/.scriptkit/kit/*/agents directories for changes.
+/// Watches ~/.scriptkit/kit/*/scripts, ~/.scriptkit/kit/*/scriptlets,
+/// ~/.scriptkit/kit/*/agents, and ~/.scriptkit/kit/*/skills directories for changes.
 ///
 /// Uses per-file trailing-edge debounce with storm coalescing.
 /// Includes supervisor restart with exponential backoff on transient errors.
-/// Dynamically watches extensions and agents directories when they appear.
+/// Dynamically watches scriptlets, agents, and skills directories when they appear.
 pub struct ScriptWatcher {
     watcher: ScriptGenericWatcher,
 }
@@ -64,11 +64,13 @@ pub(crate) struct ScriptWatcherSpec {
     full_reload_at: Option<Instant>,
     kit_path: PathBuf,
     tracked_scripts_paths: HashSet<PathBuf>,
-    tracked_extensions_paths: HashSet<PathBuf>,
+    tracked_scriptlets_paths: HashSet<PathBuf>,
     tracked_agents_paths: HashSet<PathBuf>,
+    tracked_skills_paths: HashSet<PathBuf>,
     watching_scripts: HashSet<PathBuf>,
-    watching_extensions: HashSet<PathBuf>,
+    watching_scriptlets: HashSet<PathBuf>,
     watching_agents: HashSet<PathBuf>,
+    watching_skills: HashSet<PathBuf>,
     discover_paths: DiscoverKitWatchPaths,
 }
 
@@ -88,23 +90,27 @@ impl ScriptWatcherSpec {
             full_reload_at: None,
             kit_path: crate::setup::get_kit_path().join("kit"),
             tracked_scripts_paths: HashSet::new(),
-            tracked_extensions_paths: HashSet::new(),
+            tracked_scriptlets_paths: HashSet::new(),
             tracked_agents_paths: HashSet::new(),
+            tracked_skills_paths: HashSet::new(),
             watching_scripts: HashSet::new(),
-            watching_extensions: HashSet::new(),
+            watching_scriptlets: HashSet::new(),
             watching_agents: HashSet::new(),
+            watching_skills: HashSet::new(),
             discover_paths,
         }
     }
 
     fn register_kit_dirs(&mut self, kit_dir: &Path) {
         let scripts_dir = kit_dir.join("scripts");
-        let extensions_dir = kit_dir.join("extensions");
+        let scriptlets_dir = kit_dir.join("scriptlets");
         let agents_dir = kit_dir.join("agents");
+        let skills_dir = kit_dir.join("skills");
 
         self.tracked_scripts_paths.insert(scripts_dir);
-        self.tracked_extensions_paths.insert(extensions_dir);
+        self.tracked_scriptlets_paths.insert(scriptlets_dir);
         self.tracked_agents_paths.insert(agents_dir);
+        self.tracked_skills_paths.insert(skills_dir);
     }
 
     fn watch_path_if_exists(
@@ -158,18 +164,18 @@ impl ScriptWatcherSpec {
             }
         }
 
-        for extensions_path in self.tracked_extensions_paths.clone() {
-            if self.watching_extensions.contains(&extensions_path) {
+        for scriptlets_path in self.tracked_scriptlets_paths.clone() {
+            if self.watching_scriptlets.contains(&scriptlets_path) {
                 continue;
             }
 
             if Self::watch_path_if_exists(
                 watcher,
-                extensions_path.as_path(),
+                scriptlets_path.as_path(),
                 RecursiveMode::Recursive,
-                "extensions",
+                "scriptlets",
             ) {
-                self.watching_extensions.insert(extensions_path);
+                self.watching_scriptlets.insert(scriptlets_path);
             }
         }
 
@@ -185,6 +191,21 @@ impl ScriptWatcherSpec {
                 "agents",
             ) {
                 self.watching_agents.insert(agents_path);
+            }
+        }
+
+        for skills_path in self.tracked_skills_paths.clone() {
+            if self.watching_skills.contains(&skills_path) {
+                continue;
+            }
+
+            if Self::watch_path_if_exists(
+                watcher,
+                skills_path.as_path(),
+                RecursiveMode::Recursive,
+                "skills",
+            ) {
+                self.watching_skills.insert(skills_path);
             }
         }
     }
@@ -344,11 +365,13 @@ impl WatcherSpec<ScriptReloadEvent> for ScriptWatcherSpec {
         self.full_reload_at = None;
 
         self.tracked_scripts_paths.clear();
-        self.tracked_extensions_paths.clear();
+        self.tracked_scriptlets_paths.clear();
         self.tracked_agents_paths.clear();
+        self.tracked_skills_paths.clear();
         self.watching_scripts.clear();
-        self.watching_extensions.clear();
+        self.watching_scriptlets.clear();
         self.watching_agents.clear();
+        self.watching_skills.clear();
 
         let paths = (self.discover_paths)();
         self.kit_path = paths.kit_path.clone();
@@ -357,14 +380,20 @@ impl WatcherSpec<ScriptReloadEvent> for ScriptWatcherSpec {
             self.tracked_scripts_paths.insert(scripts_path);
         }
 
-        for extensions_path in paths.extensions_paths {
-            if let Some(kit_dir) = extensions_path.parent() {
+        for scriptlets_path in paths.scriptlets_paths {
+            if let Some(kit_dir) = scriptlets_path.parent() {
                 self.register_kit_dirs(kit_dir);
             }
         }
 
         for agents_path in paths.agents_paths {
             if let Some(kit_dir) = agents_path.parent() {
+                self.register_kit_dirs(kit_dir);
+            }
+        }
+
+        for skills_path in paths.skills_paths {
+            if let Some(kit_dir) = skills_path.parent() {
                 self.register_kit_dirs(kit_dir);
             }
         }
@@ -391,10 +420,12 @@ impl WatcherSpec<ScriptReloadEvent> for ScriptWatcherSpec {
         info!(
             watcher = "scripts",
             scripts_watching = self.watching_scripts.len(),
-            extensions_watching = self.watching_extensions.len(),
-            extensions_total = self.tracked_extensions_paths.len(),
+            scriptlets_watching = self.watching_scriptlets.len(),
+            scriptlets_total = self.tracked_scriptlets_paths.len(),
             agents_watching = self.watching_agents.len(),
             agents_total = self.tracked_agents_paths.len(),
+            skills_watching = self.watching_skills.len(),
+            skills_total = self.tracked_skills_paths.len(),
             "Script watcher setup complete"
         );
 
@@ -476,26 +507,31 @@ mod tests {
         fs::create_dir_all(&kit_path).expect("kit root should be created for test");
 
         let mut scripts_paths = Vec::new();
-        let mut extensions_paths = Vec::new();
+        let mut scriptlets_paths = Vec::new();
         let mut agents_paths = Vec::new();
+        let mut skills_paths = Vec::new();
 
         for kit_name in kits {
             let kit_dir = kit_path.join(kit_name);
             let scripts_dir = kit_dir.join("scripts");
-            let extensions_dir = kit_dir.join("extensions");
+            let scriptlets_dir = kit_dir.join("scriptlets");
             let agents_dir = kit_dir.join("agents");
+            let skills_dir = kit_dir.join("skills");
 
             fs::create_dir_all(&scripts_dir).expect("scripts dir should be created for test");
+            fs::create_dir_all(&skills_dir).expect("skills dir should be created for test");
             scripts_paths.push(scripts_dir);
-            extensions_paths.push(extensions_dir);
+            scriptlets_paths.push(scriptlets_dir);
             agents_paths.push(agents_dir);
+            skills_paths.push(skills_dir);
         }
 
         KitWatchPaths {
             kit_path,
             scripts_paths,
-            extensions_paths,
+            scriptlets_paths,
             agents_paths,
+            skills_paths,
         }
     }
 
@@ -504,8 +540,9 @@ mod tests {
         let temp = TempDir::new().expect("tempdir should be created");
         let first = mk_paths(&temp, &["alpha"]);
         let second = mk_paths(&temp, &["alpha", "beta"]);
-        let second_beta_extensions = second.kit_path.join("beta").join("extensions");
+        let second_beta_scriptlets = second.kit_path.join("beta").join("scriptlets");
         let second_beta_agents = second.kit_path.join("beta").join("agents");
+        let second_beta_skills = second.kit_path.join("beta").join("skills");
 
         let discover_calls = Arc::new(AtomicUsize::new(0));
         let queue = Arc::new(Mutex::new(VecDeque::from(vec![first, second])));
@@ -532,9 +569,10 @@ mod tests {
 
         assert_eq!(discover_calls.load(Ordering::Relaxed), 2);
         assert!(spec
-            .tracked_extensions_paths
-            .contains(&second_beta_extensions));
+            .tracked_scriptlets_paths
+            .contains(&second_beta_scriptlets));
         assert!(spec.tracked_agents_paths.contains(&second_beta_agents));
+        assert!(spec.tracked_skills_paths.contains(&second_beta_skills));
     }
 
     #[test]
@@ -548,8 +586,9 @@ mod tests {
             Arc::new(move || KitWatchPaths {
                 kit_path: kit_root.clone(),
                 scripts_paths: Vec::new(),
-                extensions_paths: Vec::new(),
+                scriptlets_paths: Vec::new(),
                 agents_paths: Vec::new(),
+                skills_paths: Vec::new(),
             })
         };
 
@@ -560,11 +599,13 @@ mod tests {
 
         let new_kit_dir = kit_root.join("fresh-kit");
         let new_scripts_dir = new_kit_dir.join("scripts");
-        let new_extensions_dir = new_kit_dir.join("extensions");
+        let new_scriptlets_dir = new_kit_dir.join("scriptlets");
         let new_agents_dir = new_kit_dir.join("agents");
+        let new_skills_dir = new_kit_dir.join("skills");
         fs::create_dir_all(&new_scripts_dir).expect("scripts dir should be created for test");
-        fs::create_dir_all(&new_extensions_dir).expect("extensions dir should be created for test");
+        fs::create_dir_all(&new_scriptlets_dir).expect("scriptlets dir should be created for test");
         fs::create_dir_all(&new_agents_dir).expect("agents dir should be created for test");
+        fs::create_dir_all(&new_skills_dir).expect("skills dir should be created for test");
 
         let event = notify::Event {
             kind: notify::EventKind::Create(notify::event::CreateKind::Folder),
@@ -575,8 +616,9 @@ mod tests {
         let emitted = spec.on_notify_with_watcher(event, &mut watcher);
         assert!(emitted.is_empty());
         assert!(spec.watching_scripts.contains(&new_scripts_dir));
-        assert!(spec.watching_extensions.contains(&new_extensions_dir));
+        assert!(spec.watching_scriptlets.contains(&new_scriptlets_dir));
         assert!(spec.watching_agents.contains(&new_agents_dir));
+        assert!(spec.watching_skills.contains(&new_skills_dir));
     }
 
     #[test]

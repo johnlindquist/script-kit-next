@@ -83,6 +83,99 @@ impl ScriptListApp {
         )
     }
 
+    pub(crate) fn make_actions_dialog_activation_callback(
+        app_entity: Entity<Self>,
+        host: ActionsDialogHost,
+    ) -> std::sync::Arc<
+        dyn Fn(crate::actions::ActionsDialogActivation, &mut Window, &mut gpui::App) + Send + Sync,
+    > {
+        std::sync::Arc::new(move |activation, window, cx| {
+            let app_entity = app_entity.clone();
+            window.defer(cx, move |window, cx| {
+                let _ = app_entity.update(cx, |app, cx| {
+                    app.handle_actions_dialog_activation(host, activation.clone(), window, cx);
+                });
+            });
+        })
+    }
+
+    pub(crate) fn handle_actions_dialog_activation(
+        &mut self,
+        host: ActionsDialogHost,
+        activation: crate::actions::ActionsDialogActivation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match activation {
+            crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+                crate::actions::notify_actions_window(cx);
+                if let Some(dialog) = self.actions_dialog.as_ref() {
+                    crate::actions::resize_actions_window(cx, dialog);
+                    let (route_id, search_placeholder, route_depth, escape_hint) = {
+                        let dialog_ref = dialog.read(cx);
+                        (
+                            dialog_ref.current_route_id().map(str::to_string),
+                            dialog_ref.current_search_placeholder().map(str::to_string),
+                            dialog_ref.route_depth(),
+                            dialog_ref.route_hint_label(),
+                        )
+                    };
+                    tracing::info!(
+                        target: "script_kit::actions",
+                        host = ?host,
+                        route_id = ?route_id,
+                        route_depth,
+                        escape_hint,
+                        search_placeholder = ?search_placeholder,
+                        "actions_dialog_route_visible"
+                    );
+                }
+            }
+            crate::actions::ActionsDialogActivation::Executed {
+                action_id,
+                should_close,
+            } => {
+                logging::log(
+                    "ACTIONS",
+                    &format!(
+                        "Actions dialog executing action: {} (close={}, host={:?})",
+                        action_id, should_close, host
+                    ),
+                );
+
+                if should_close {
+                    self.close_actions_popup(host, window, cx);
+                }
+
+                match host {
+                    ActionsDialogHost::ChatPrompt => {
+                        self.execute_chat_action(&action_id, cx);
+                    }
+                    ActionsDialogHost::ArgPrompt => {
+                        self.trigger_action_by_name(&action_id, cx);
+                    }
+                    ActionsDialogHost::WebcamPrompt => {
+                        let start = std::time::Instant::now();
+                        let dctx =
+                            crate::action_helpers::DispatchContext::for_builtin("builtin/webcam");
+                        let outcome = self.execute_webcam_action(&action_id, &dctx, cx);
+                        Self::log_builtin_outcome(
+                            "builtin/webcam",
+                            &dctx,
+                            "webcam_action",
+                            &outcome,
+                            &start,
+                        );
+                    }
+                    _ => {
+                        self.handle_action(action_id, window, cx);
+                    }
+                }
+            }
+            crate::actions::ActionsDialogActivation::NoSelection => {}
+        }
+    }
+
     pub(crate) fn route_key_to_actions_dialog(
         &mut self,
         key: &str,

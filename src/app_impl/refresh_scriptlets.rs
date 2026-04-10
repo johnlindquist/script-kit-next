@@ -138,6 +138,15 @@ fn plan_script_hotkey_refresh(
                 new_shortcut,
             })
         })
+    .collect()
+}
+
+fn load_plugin_skills() -> Vec<std::sync::Arc<crate::plugins::PluginSkill>> {
+    crate::plugins::discover_plugins()
+        .and_then(|index| crate::plugins::discover_plugin_skills(&index))
+        .unwrap_or_default()
+        .into_iter()
+        .map(std::sync::Arc::new)
         .collect()
 }
 
@@ -301,6 +310,38 @@ impl ScriptListApp {
         .detach();
     }
 
+    pub(crate) fn refresh_skills(&mut self, cx: &mut Context<Self>) {
+        let before_count = self.skills.len();
+        self.skills = load_plugin_skills();
+
+        self.invalidate_filter_cache();
+        self.invalidate_grouped_cache();
+
+        self.sync_list_state();
+        self.selected_index = 0;
+        self.validate_selection_bounds(cx);
+        self.main_list_state.scroll_to_reveal_item(self.selected_index);
+        self.last_scrolled_index = Some(self.selected_index);
+
+        if before_count != self.skills.len() {
+            logging::log(
+                "APP",
+                &format!(
+                    "Plugin skills refreshed: {} -> {} available",
+                    before_count,
+                    self.skills.len()
+                ),
+            );
+        } else {
+            logging::log(
+                "APP",
+                &format!("Plugin skills refreshed: {} available", self.skills.len()),
+            );
+        }
+
+        cx.notify();
+    }
+
     fn apply_loaded_scripts_and_scriptlets(
         &mut self,
         loaded_scripts: Vec<std::sync::Arc<scripts::Script>>,
@@ -314,7 +355,7 @@ impl ScriptListApp {
         apply_script_hotkey_refresh(&hotkey_refresh_actions);
 
         self.scripts = loaded_scripts;
-        // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
+        // Use load_scriptlets() to load from ALL kits (kit/*/scriptlets/*.md)
         self.scriptlets = loaded_scriptlets;
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();

@@ -26,7 +26,7 @@ impl ScriptListApp {
 
                 let scriptlets_handle = scope.spawn(|| {
                     let start = std::time::Instant::now();
-                    // Use load_scriptlets() to load from ALL kits (kit/*/extensions/*.md)
+                    // Use load_scriptlets() to load from ALL kits (kit/*/scriptlets/*.md)
                     // This includes built-in extensions like CleanShot and user extensions
                     let loaded = scripts::load_scriptlets();
                     (loaded, start.elapsed())
@@ -105,7 +105,7 @@ impl ScriptListApp {
         logging::log(
             "APP",
             &format!(
-                "Loaded {} scriptlets from ~/.scriptkit/kit/*/extensions",
+                "Loaded {} scriptlets from ~/.scriptkit/kit/*/scriptlets",
                 scriptlets.len()
             ),
         );

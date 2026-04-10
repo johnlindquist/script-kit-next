@@ -35,7 +35,7 @@ What's changed:
 - No bundled utilities (file helpers, clipboard wrappers, etc.)
 - No `kit` global with hundreds of helpers
 - Scripts must explicitly import dependencies via Bun
-- Configuration is TypeScript-based (`~/.scriptkit/config.ts`)
+- Configuration is TypeScript-based (`~/.scriptkit/kit/config.ts`)
 
 ## Quick Start
 
@@ -59,7 +59,7 @@ What's changed:
 
 2. **Create the kit directory**
    ```bash
-   mkdir -p ~/.scriptkit/scripts
+   mkdir -p ~/.scriptkit/kit/main
    ```
 
 3. **Build and run**
@@ -75,7 +75,7 @@ What's changed:
 
 4. **Configure your hotkey** (optional)
    
-   Create `~/.scriptkit/config.ts`:
+   Create `~/.scriptkit/kit/config.ts`:
    ```typescript
    export default {
      hotkey: {
@@ -87,13 +87,15 @@ What's changed:
 
 ### Your First Script
 
-Create `~/.scriptkit/scripts/hello.ts`:
+Create `~/.scriptkit/kit/main/scripts/hello.ts`:
 
 ```typescript
-metadata = {
+import "@scriptkit/sdk";
+
+export const metadata = {
   name: "Hello World",
   description: "My first script"
-}
+};
 
 const name = await arg("What's your name?");
 await div(`<h1 class="text-4xl p-8">Hello, ${name}!</h1>`);
@@ -159,7 +161,7 @@ Then use them in your scripts:
 import { z } from "zod";
 import { groupBy } from "lodash-es";
 
-metadata = {
+export const metadata = {
   name: "Process Data",
   description: "Using external packages"
 }
@@ -172,10 +174,10 @@ await div(`<pre>${JSON.stringify(groupBy(parsed.items, x => x[0]), null, 2)}</pr
 
 ### Script Metadata
 
-Use the global `metadata` variable to define script properties:
+Use `export const metadata = { ... }` to define script properties:
 
 ```typescript
-metadata = {
+export const metadata = {
   name: "My Script",
   description: "What it does",
   author: "Your Name",
@@ -184,16 +186,16 @@ metadata = {
   // Additional options:
   // hidden: true,        // Hide from script list
   // tags: ["utility"],   // Categorize scripts
-}
+};
 
 // Your code here...
 ```
 
-> **Note:** The global `metadata` variable is typed as `ScriptMetadata`, providing TypeScript type checking and IDE support. Comment-based metadata (`// Name:`, `// Description:`) still works for backwards compatibility.
+> **Note:** The `export const metadata` object is typed as `ScriptMetadata`, providing TypeScript type checking and IDE support. Comment-based metadata (`// Name:`, `// Description:`) is a compatibility-only pattern.
 
 ## Configuration
 
-### `~/.scriptkit/config.ts`
+### `~/.scriptkit/kit/config.ts`
 
 ```typescript
 export default {
@@ -235,7 +237,7 @@ claudeCode: {
 }
 ```
 
-Each Tab press writes context to `~/.scriptkit/context/latest.md`, enumerates skills from `~/.scriptkit/skills/`, and spawns a fresh `claude` process with the context and user intent as CLI arguments. If the harness crashes or exits, the next Tab press spawns a new one.
+Each Tab press writes context to `~/.scriptkit/context/latest.md`, discovers plugin-owned skills from `~/.scriptkit/kit/*/skills/`, and spawns a fresh `claude` process with the context and user intent as CLI arguments. If the harness crashes or exits, the next Tab press spawns a new one.
 
 ### Environment Variables (API Keys)
 
@@ -301,10 +303,17 @@ script-kit-gpui/
 ├── tests/
 │   ├── smoke/             # End-to-end tests
 │   └── sdk/               # SDK method tests
-└── ~/.scriptkit/               # User's scripts and config
-    ├── scripts/           # Your scripts live here
-    ├── config.ts          # Configuration
-    └── theme.json         # Theme customization
+└── ~/.scriptkit/               # User workspace (plugin-based)
+    └── kit/
+        ├── main/          # Primary plugin
+        │   ├── scripts/    # Executable TypeScript scripts
+        │   ├── scriptlets/ # Scriptlet bundles
+        │   ├── skills/     # ACP-first reusable AI units
+        │   └── agents/     # Legacy agent definitions (compatibility)
+        ├── config.ts       # Configuration
+        ├── theme.json      # Theme customization
+        ├── package.json
+        └── tsconfig.json
 ```
 
 ### Running Tests

@@ -1,8 +1,8 @@
 # Script Kit SDK Reference
 
-Complete reference for AI agents creating Script Kit artifacts: scripts, extension bundles, skills, and mdflow agents. Plugins are the package boundary; skills are the preferred reusable AI unit.
+Complete reference for AI agents creating Script Kit artifacts: scripts, scriptlet bundles, skills, and mdflow agents. Plugins are the package boundary; skills are the preferred reusable AI unit.
 
-> **Package**: `@scriptkit/sdk` — **Runtime**: Bun — **Write under**: `~/.scriptkit/kit/main/{scripts,extensions,skills,agents}`
+> **Package**: `@scriptkit/sdk` — **Runtime**: Bun — **Write under**: `~/.scriptkit/kit/main/{scripts,scriptlets,skills,agents}`
 
 ## One-Shot First
 
@@ -18,9 +18,9 @@ Use this plain-text route first:
 - Use for Script Kit UI, Bun APIs, files, HTTP, or multi-step logic
 - Write to `~/.scriptkit/kit/main/scripts/<name>.ts`
 
-### Extension bundle / scriptlet bundle
+### Scriptlet bundle
 - Use for snippets, text expansion, quick shell commands, or grouped helpers
-- Write to `~/.scriptkit/kit/main/extensions/<name>.md`
+- Write to `~/.scriptkit/kit/main/scriptlets/<name>.md`
 
 ### Skill (preferred reusable AI unit)
 - Use for reusable AI instructions that open ACP Chat when selected from the main menu
@@ -31,8 +31,6 @@ Use this plain-text route first:
 - Use only when you need a specific backend suffix or legacy mdflow features
 - Write to `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
 - For new reusable AI work, prefer creating a skill instead
-
-Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same artifact.
 
 ## Guardrails
 
@@ -53,7 +51,8 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 - Skills overview → `~/.scriptkit/kit/authoring/skills/README.md`
 - Agent details (compatibility) → `~/.scriptkit/kit/authoring/skills/agents/SKILL.md`
 - Script example → `~/.scriptkit/kit/examples/scripts/hello-world.ts`
-- Bundle starter → `~/.scriptkit/kit/examples/extensions/starter.md`
+- Skill examples → `~/.scriptkit/kit/examples/skills/`
+- Bundle starter → `~/.scriptkit/kit/examples/scriptlets/starter.md`
 - Agent example → `~/.scriptkit/kit/examples/agents/review-pr.claude.md`
 
 ## Artifact-Specific Rules
@@ -63,8 +62,8 @@ Script Kit uses **extension bundle** and **scriptlet bundle** to mean the same a
 - Use `export const metadata = { name, description }`
 - Use Bun APIs instead of Node-only APIs
 
-### Extension bundle / scriptlet bundle
-- Save one markdown file under `~/.scriptkit/kit/main/extensions/`
+### Scriptlet bundle
+- Save one markdown file under `~/.scriptkit/kit/main/scriptlets/`
 - Prefer `metadata` code fences for new bundles
 - `tool:<name>` fences must begin with `import "@scriptkit/sdk";`
 - Do not add `export const metadata` at the top of the markdown file
@@ -217,7 +216,7 @@ await open("https://example.com");       // Open URL/file in default app
 
 For first-pass authoring, copy the minimal starter above. The rest of this section is detailed reference.
 
-Markdown files at `~/.scriptkit/kit/main/extensions/*.md`:
+Markdown files at `~/.scriptkit/kit/main/scriptlets/*.md`:
 
 ~~~markdown
 ---
@@ -316,7 +315,7 @@ export default {
 | Purpose | Path |
 |---------|------|
 | Scripts | `~/.scriptkit/kit/main/scripts/*.ts` |
-| Extensions | `~/.scriptkit/kit/main/extensions/*.md` |
+| Extensions | `~/.scriptkit/kit/main/scriptlets/*.md` |
 | Skills (preferred AI unit) | `~/.scriptkit/kit/main/skills/<name>/SKILL.md` |
 | Agents (compatibility) | `~/.scriptkit/kit/main/agents/*.md` |
 | Config | `~/.scriptkit/kit/config.ts` |
@@ -325,7 +324,8 @@ export default {
 | Logs | `~/.scriptkit/logs/` |
 | Authoring skills | `~/.scriptkit/kit/authoring/skills/` |
 | Examples (scripts) | `~/.scriptkit/kit/examples/scripts/` |
-| Examples (extensions) | `~/.scriptkit/kit/examples/extensions/` |
+| Examples (skills) | `~/.scriptkit/kit/examples/skills/` |
+| Examples (scriptlets) | `~/.scriptkit/kit/examples/scriptlets/` |
 | Examples (agents) | `~/.scriptkit/kit/examples/agents/` |
 
 ## Tab AI — Quick Terminal with Flat Context Injection
@@ -368,10 +368,10 @@ Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` vi
 ## Avoid These Mistakes
 
 - Do not create more than one artifact for one request
-- Do not put scripts in `extensions/` or `agents/`
+- Do not put scripts in `scriptlets/` or `agents/`
 - Do not put bundles in `scripts/`
-- Do not put agents in `scripts/` or `extensions/`
-- Do not put skills in `scripts/` or `extensions/` — skills are `SKILL.md` directories under `skills/`
+- Do not put agents in `scripts/` or `scriptlets/`
+- Do not put skills in `scripts/` or `scriptlets/` — skills are `SKILL.md` directories under `skills/`
 - Do not create new agents when a skill would work — agents are a compatibility path
 - Do not use CommonJS or the old v1 SDK package
 - Do not use Node.js `fs` / `child_process` — use Bun APIs

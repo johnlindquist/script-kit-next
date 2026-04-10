@@ -108,8 +108,8 @@ fn test_ai_builtins_route_to_tab_ai_harness_after_upstream_hide() {
     );
 
     assert!(
-        ai_chat_branch.contains("self.open_tab_ai_chat(cx);"),
-        "AI chat builtin should route to the Tab AI harness"
+        ai_chat_branch.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
+        "AI chat builtin should route to ACP Chat"
     );
     assert!(
         ai_command_branch.contains("open_tab_ai_chat_with_entry_intent(")

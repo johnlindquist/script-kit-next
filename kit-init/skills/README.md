@@ -7,9 +7,9 @@ Plugin-owned skills for working with Script Kit. Each subdirectory contains a `S
 | Skill | Purpose |
 |-------|---------|
 | [script-authoring](script-authoring/SKILL.md) | Creating, structuring, and running TypeScript scripts |
-| [scriptlets](scriptlets/SKILL.md) | Markdown extension bundles with embedded commands |
+| [scriptlets](scriptlets/SKILL.md) | Markdown scriptlet bundles with embedded commands |
 | [acp-chat](acp-chat/SKILL.md) | Programmatic ACP Chat flows, typed context parts, streaming, and chat lifecycle operations |
-| [custom-actions](custom-actions/SKILL.md) | Actions Menu commands in scripts and shared extension companion `.actions.md` files |
+| [custom-actions](custom-actions/SKILL.md) | Actions Menu commands in scripts and shared scriptlet companion `.actions.md` files |
 | [agents](agents/SKILL.md) | Creating agent files (compatibility — prefer skills for new work) |
 | [config](config/SKILL.md) | Configuration, theming, and workspace setup |
 | [notes](notes/SKILL.md) | Working with the Notes window — creation, search, and automation |
@@ -19,7 +19,7 @@ Plugin-owned skills for working with Script Kit. Each subdirectory contains a `S
 
 Sample request → expected artifact:
 - "make a clipboard cleanup command" → `~/.scriptkit/kit/main/scripts/clipboard-cleanup.ts`
-- "make a bundle of text snippets" → `~/.scriptkit/kit/main/extensions/snippets.md`
+- "make a bundle of text snippets" → `~/.scriptkit/kit/main/scriptlets/snippets.md`
 - "make a skill for reviewing PRs" → `~/.scriptkit/kit/main/skills/review-pr/SKILL.md`
 
 Read the relevant `SKILL.md` before performing a task. Each skill contains:
@@ -32,6 +32,6 @@ Read the relevant `SKILL.md` before performing a task. Each skill contains:
 
 Plugins are the package boundary in Script Kit. Each plugin under `~/.scriptkit/kit/<plugin>/` owns:
 - `scripts/` — TypeScript scripts (direct execution)
-- `extensions/` — Markdown scriptlet bundles (direct execution)
+- `scriptlets/` — Markdown scriptlet bundles (direct execution)
 - `skills/` — AI skills (open ACP Chat when selected)
 - `agents/` — Legacy agent files (compatibility only)

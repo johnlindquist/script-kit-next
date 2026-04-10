@@ -81,7 +81,7 @@ let config = config::load_config();
 ```
 
 **What it does**:
-1. Runs `bun build ~/.scriptkit/config.ts` (~100-200ms)
+1. Runs `bun build ~/.scriptkit/kit/config.ts` (~100-200ms)
 2. Runs `bun -e "import config..."` to evaluate (~100-200ms)
 
 **Impact**: 200-600ms of startup time, doubled due to duplicate call.
@@ -98,8 +98,8 @@ let config = config::load_config();
 **Location**: `src/scripts.rs`
 
 **What it does**:
-- `read_scripts()`: Globs `~/.scriptkit/scripts/*.ts`, reads each file for metadata
-- `read_scriptlets()`: Reads `~/.scriptkit/scriptlets.md`, parses markdown
+- `read_scripts()`: Loads `~/.scriptkit/kit/*/scripts/*.ts` via plugin discovery and reads each file for metadata
+- `read_scriptlets()`: Reads `~/.scriptkit/kit/*/scriptlets/*.md`, parses markdown scriptlet bundles
 
 **Impact**: Linear with script count. 100 scripts ≈ 200ms.
 

@@ -256,7 +256,8 @@ const url3 = await arg("URL 3");
 
 ## Related Skills
 
-- [scriptlets](../scriptlets/SKILL.md) — package scripts as extension bundles
+- [scriptlets](../scriptlets/SKILL.md) — package scripts as scriptlet bundles
 - [acp-chat](../acp-chat/SKILL.md) — programmatic ACP Chat workflows using the ACP SDK
 - [custom-actions](../custom-actions/SKILL.md) — expose script helpers through the Actions Menu
+- [notes](../notes/SKILL.md) — automate the Notes window from scripts
 - [agents](../agents/SKILL.md) — mdflow-backed agent files (compatibility path)

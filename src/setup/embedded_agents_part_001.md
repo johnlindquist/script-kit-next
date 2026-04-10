@@ -105,7 +105,7 @@ if (files.length === 0) {
 | Path | Purpose |
 |------|---------|
 | `~/.scriptkit/kit/main/scripts/` | Your scripts |
-| `~/.scriptkit/kit/main/extensions/` | Your extensions |
+| `~/.scriptkit/kit/main/scriptlets/` | Your scriptlets |
 | `~/.scriptkit/kit/main/skills/` | Your AI skills (preferred reusable AI unit) |
 | `~/.scriptkit/kit/main/agents/` | Legacy AI agent definitions (compatibility) |
 | `~/.scriptkit/kit/config.ts` | Configuration |

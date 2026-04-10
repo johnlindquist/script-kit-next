@@ -769,9 +769,9 @@ fn submit_with_scriptlet_authoring_intent_includes_artifact_authoring_guidance()
     .expect("submission should build");
 
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
-    assert!(submission.contains("~/.scriptkit/kit/main/extensions/<name>.md"));
+    assert!(submission.contains("~/.scriptkit/kit/main/scriptlets/<name>.md"));
     assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
-    assert!(submission.contains("~/.scriptkit/kit/examples/extensions/"));
+    assert!(submission.contains("~/.scriptkit/kit/examples/scriptlets/"));
     assert!(submission.contains("User intent:\nCreate a scriptlet bundle that copies today's date"));
 }
 

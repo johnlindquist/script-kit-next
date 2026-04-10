@@ -379,31 +379,22 @@ fn render_multiline_token_runs(
     for (offset, ch) in token.text.chars().enumerate() {
         let char_index = token.start + offset;
         if selection_range.is_none() && char_index == cursor {
-            token_node = flush_multiline_run(
-                token_node,
-                &mut run_text,
-                run_selected,
-                run_color,
-                config,
-            );
+            token_node =
+                flush_multiline_run(token_node, &mut run_text, run_selected, run_color, config);
             token_node = token_node.child(render_cursor(config));
         }
 
-        let is_selected = selection_range
-            .is_some_and(|(start, end)| (start..end).contains(&char_index));
-        let color = color_for_char(config.highlight_ranges, char_index).unwrap_or(config.text_color);
+        let is_selected =
+            selection_range.is_some_and(|(start, end)| (start..end).contains(&char_index));
+        let color =
+            color_for_char(config.highlight_ranges, char_index).unwrap_or(config.text_color);
 
         if run_text.is_empty() {
             run_selected = is_selected;
             run_color = color;
         } else if run_selected != is_selected || (!is_selected && run_color != color) {
-            token_node = flush_multiline_run(
-                token_node,
-                &mut run_text,
-                run_selected,
-                run_color,
-                config,
-            );
+            token_node =
+                flush_multiline_run(token_node, &mut run_text, run_selected, run_color, config);
             run_selected = is_selected;
             run_color = color;
         }

@@ -1333,7 +1333,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/new-extension",
             "New Scriptlet Bundle",
-            "Create a new extension bundle with YAML frontmatter and scriptlet examples",
+            "Create a new scriptlet bundle with YAML frontmatter and scriptlet examples",
             vec![
                 "new",
                 "scriptlet",
@@ -2650,14 +2650,14 @@ mod tests {
                 .keywords
                 .iter()
                 .any(|k| k.eq_ignore_ascii_case("scriptlet")),
-            "New Extension entry should be discoverable via 'scriptlet'"
+            "New Scriptlet entry should be discoverable via 'scriptlet'"
         );
         assert!(
             new_extension
                 .keywords
                 .iter()
                 .any(|k| k.eq_ignore_ascii_case("frontmatter")),
-            "New Extension entry should be discoverable via 'frontmatter'"
+            "New Scriptlet entry should be discoverable via 'frontmatter'"
         );
     }
     #[test]

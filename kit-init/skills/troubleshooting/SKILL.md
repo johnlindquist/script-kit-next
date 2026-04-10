@@ -67,7 +67,7 @@ SCRIPT_KIT_AI_LOG=1 ~/.scriptkit/cache/Script\ Kit.app/Contents/MacOS/script-kit
 
 ### Extensions Not Loading
 
-1. **Check file location**: Must be in `~/.scriptkit/kit/main/extensions/*.md`
+1. **Check file location**: Must be in `~/.scriptkit/kit/main/scriptlets/*.md`
 2. **Check frontmatter**: Must have `---\nname: ...\n---` at the top
 3. **Check fence syntax**: Use `` ```bash ``, `` ```tool:name ``, or `` ```template:name ``
 4. **Check for syntax errors** in `tool:` scriptlets
@@ -107,7 +107,7 @@ bun run typecheck
 |------|-------|
 | App logs | `~/.scriptkit/logs/script-kit-gpui.jsonl` |
 | Scripts | `~/.scriptkit/kit/main/scripts/` |
-| Extensions | `~/.scriptkit/kit/main/extensions/` |
+| Extensions | `~/.scriptkit/kit/main/scriptlets/` |
 | Config | `~/.scriptkit/kit/config.ts` |
 | Theme | `~/.scriptkit/kit/theme.json` |
 | SDK (read-only) | `~/.scriptkit/sdk/kit-sdk.ts` |

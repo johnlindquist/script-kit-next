@@ -220,6 +220,40 @@ fn part_to_inline_token_uses_focused_target_name_instead_of_prefixed_chip_label(
 }
 
 #[test]
+fn part_to_inline_token_distinguishes_script_and_scriptlet_targets() {
+    let script = AiContextPart::FocusedTarget {
+        target: crate::ai::tab_context::TabAiTargetContext {
+            source: "ScriptList".to_string(),
+            kind: "script".to_string(),
+            semantic_id: "choice:0:daily-notes".to_string(),
+            label: "Daily Notes".to_string(),
+            metadata: None,
+        },
+        label: "Command: Daily Notes".to_string(),
+    };
+
+    let scriptlet = AiContextPart::FocusedTarget {
+        target: crate::ai::tab_context::TabAiTargetContext {
+            source: "ScriptList".to_string(),
+            kind: "scriptlet".to_string(),
+            semantic_id: "choice:1:quick-copy".to_string(),
+            label: "Quick Copy".to_string(),
+            metadata: None,
+        },
+        label: "Command: Quick Copy".to_string(),
+    };
+
+    assert_eq!(
+        part_to_inline_token(&script),
+        Some("@script:\"Daily Notes\"".to_string())
+    );
+    assert_eq!(
+        part_to_inline_token(&scriptlet),
+        Some("@scriptlet:\"Quick Copy\"".to_string())
+    );
+}
+
+#[test]
 fn part_to_inline_token_strips_known_prefixes_from_ambient_labels() {
     let part = AiContextPart::AmbientContext {
         label: "Context: Browser URL".to_string(),

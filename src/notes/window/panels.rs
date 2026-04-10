@@ -230,17 +230,12 @@ impl NotesApp {
                     self.show_action_feedback("Note is empty", true);
                 } else {
                     // Open ACP Chat and set input to note content
-                    if let Err(e) = crate::ai::open_ai_window(cx) {
+                    if let Err(e) =
+                        crate::ai::acp::open_or_focus_chat_with_input(content.clone(), cx)
+                    {
                         tracing::warn!(
                             event = "notes_acp_handoff_blocked",
-                            reason = %format!("open_failed: {e}"),
-                            "Blocked Notes/ACP handoff"
-                        );
-                        self.show_action_feedback("Failed to open ACP Chat", true);
-                    } else if let Err(e) = crate::ai::set_ai_input(cx, &content, false) {
-                        tracing::warn!(
-                            event = "notes_acp_handoff_blocked",
-                            reason = %format!("set_input_failed: {e}"),
+                            reason = %format!("acp_handoff_failed: {e}"),
                             "Blocked Notes/ACP handoff"
                         );
                         self.show_action_feedback("Failed to send to ACP Chat", true);

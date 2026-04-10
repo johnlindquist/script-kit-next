@@ -2,7 +2,7 @@
 //!
 //! This module provides functionality for:
 //! - Loading scripts from ~/.scriptkit/*/scripts/
-//! - Loading scriptlets from ~/.scriptkit/*/scriptlets/
+//! - Loading scriptlets from ~/.scriptkit/kit/*/scriptlets/
 //! - Fuzzy search across scripts, scriptlets, built-ins, apps, and windows
 //! - Grouping results by frecency and type
 //! - Registering scheduled scripts

@@ -1,20 +1,20 @@
 ---
 name: custom-actions
-description: Add Actions Menu commands to scripts and extension bundles with setActions() and companion .actions.md files.
+description: Add Actions Menu commands to scripts and scriptlet bundles with setActions() and companion .actions.md files.
 ---
 
 # Custom Actions
 
-Use this skill when the user wants Actions Menu commands (Cmd+K), script-local actions via `setActions()`, or shared extension actions via `<bundle>.actions.md`.
+Use this skill when the user wants Actions Menu commands (Cmd+K), script-local actions via `setActions()`, or shared scriptlet actions via `<bundle>.actions.md`.
 
 ## Write Here
 
 For scripts:
 `~/.scriptkit/kit/main/scripts/<name>.ts`
 
-For extension bundles:
-`~/.scriptkit/kit/main/extensions/<bundle>.md`
-`~/.scriptkit/kit/main/extensions/<bundle>.actions.md`
+For scriptlet bundles:
+`~/.scriptkit/kit/main/scriptlets/<bundle>.md`
+`~/.scriptkit/kit/main/scriptlets/<bundle>.actions.md`
 
 ## Script Example
 
@@ -43,7 +43,7 @@ await setActions([
 await arg("Type something");
 ```
 
-## Extension Companion File
+## Scriptlet Companion File
 
 Parent bundle:
 
@@ -83,8 +83,10 @@ open -a Safari "{{content}}"
 
 ## Related Examples
 
-- `~/.scriptkit/kit/examples/extensions/custom-actions.md` — parent bundle entries that receive shared actions
-- `~/.scriptkit/kit/examples/extensions/custom-actions.actions.md` — companion Actions Menu definitions using `{{content}}`
+- **Canonical**: `~/.scriptkit/kit/examples/scriptlets/custom-actions/main.md` — parent bundle entries that receive shared actions
+- **Canonical**: `~/.scriptkit/kit/examples/scriptlets/custom-actions/main.actions.md` — companion Actions Menu definitions using `{{content}}`
+- **Flat mirror**: `~/.scriptkit/kit/examples/scriptlets/custom-actions.md`
+- **Flat mirror**: `~/.scriptkit/kit/examples/scriptlets/custom-actions.actions.md`
 
 ## Related Skills
 

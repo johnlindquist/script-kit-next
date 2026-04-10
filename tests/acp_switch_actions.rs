@@ -35,7 +35,7 @@ fn acp_action_handler_switches_agents_by_persisting_and_reopening() {
         "switch-agent action must persist the selected ACP agent"
     );
     assert!(
-        ACTION_HANDLER_SOURCE.contains("self.open_tab_ai_chat(cx);"),
+        ACTION_HANDLER_SOURCE.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
         "switch-agent action must reopen ACP chat after changing the agent"
     );
 }

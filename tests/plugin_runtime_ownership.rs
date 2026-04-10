@@ -1,8 +1,8 @@
 //! Plugin runtime ownership tests.
 //!
-//! Validates that script loading and extension-command loading both consume
+//! Validates that script loading and scriptlet-command loading both consume
 //! `discover_plugins()` and attach `plugin_id` and plugin-title fallback data
-//! to every runtime entrypoint. Also validates that duplicate extension groups
+//! to every runtime entrypoint. Also validates that duplicate scriptlet groups
 //! across different plugins preserve source attribution.
 
 use std::fs;
@@ -34,7 +34,7 @@ fn write_script(scripts_dir: &std::path::Path, filename: &str, name: &str) {
     fs::write(scripts_dir.join(filename), content).expect("write script");
 }
 
-/// Helper: create a minimal .md extension bundle with one scriptlet.
+/// Helper: create a minimal .md scriptlet bundle with one scriptlet.
 fn write_extension(extensions_dir: &std::path::Path, filename: &str, group: &str, cmd_name: &str) {
     fs::create_dir_all(extensions_dir).expect("create extensions dir");
     let content = format!("# {group}\n\n## {cmd_name}\n\n```bash\necho hello\n```\n");
@@ -230,7 +230,7 @@ fn source_name_falls_back_to_group_when_plugin_id_empty() {
 
 #[test]
 fn duplicate_group_names_across_plugins_keep_distinct_plugin_ids() {
-    // Two plugins with the same H1 group name in their extension bundles
+    // Two plugins with the same H1 group name in their scriptlet bundles
     let scriptlet_a = Arc::new(Scriptlet {
         name: "Copy URL".to_string(),
         description: None,

@@ -206,8 +206,9 @@ fn builtin_execution_routes_mini_ai_to_deferred_handoff() {
         "builtin_execution.rs must handle AiCommandType::MiniAi"
     );
     assert!(
-        source.contains("cmd.is_legacy_harness_alias()") && source.contains("self.open_tab_ai_chat(cx);"),
-        "builtin_execution.rs must route MiniAi through the shared legacy harness-alias entry point"
+        source.contains("cmd.is_legacy_harness_alias()")
+            && source.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
+        "builtin_execution.rs must route MiniAi through the shared ACP Chat compatibility entry point"
     );
 }
 

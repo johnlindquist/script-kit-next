@@ -631,6 +631,10 @@ impl ScriptListApp {
             // This ensures the same cleanup happens whether closing via Cmd+K toggle or Escape
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
+                d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                    app_entity.clone(),
+                    host,
+                ));
                 d.set_on_close(Self::make_actions_window_on_close_callback(
                     app_entity.clone(),
                     host,
@@ -731,6 +735,13 @@ impl ScriptListApp {
 
                     // Focus the dialog's internal focus handle
                     self.actions_dialog = Some(dialog.clone());
+                    let app_entity = cx.entity().clone();
+                    dialog.update(cx, |d, _cx| {
+                        d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                            app_entity,
+                            ActionsDialogHost::ArgPrompt,
+                        ));
+                    });
                     let dialog_focus_handle = dialog.read(cx).focus_handle.clone();
                     window.focus(&dialog_focus_handle, cx);
                     logging::log(
@@ -796,6 +807,10 @@ impl ScriptListApp {
             // Set up on_close callback — same pattern as toggle_chat_actions
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
+                d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                    app_entity.clone(),
+                    ActionsDialogHost::WebcamPrompt,
+                ));
                 d.set_on_close(Self::make_actions_window_on_close_callback(
                     app_entity.clone(),
                     ActionsDialogHost::WebcamPrompt,
@@ -869,6 +884,10 @@ impl ScriptListApp {
 
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
+                d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                    app_entity.clone(),
+                    ActionsDialogHost::TermPrompt,
+                ));
                 d.set_on_close(Self::make_actions_window_on_close_callback(
                     app_entity,
                     ActionsDialogHost::TermPrompt,
@@ -996,6 +1015,10 @@ impl ScriptListApp {
             // Set up the on_close callback to restore focus when escape is pressed in ActionsWindow
             let app_entity = cx.entity().clone();
             dialog.update(cx, |d, _cx| {
+                d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                    app_entity.clone(),
+                    ActionsDialogHost::ChatPrompt,
+                ));
                 d.set_on_close(Self::make_actions_window_on_close_callback(
                     app_entity.clone(),
                     ActionsDialogHost::ChatPrompt,

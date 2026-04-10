@@ -101,6 +101,36 @@ fn test_setup_seeds_root_agent_workspace() {
             kit_root
                 .join("kit")
                 .join("examples")
+                .join("skills")
+                .join("review-pr")
+                .join("SKILL.md")
+                .exists(),
+            "kit/examples/skills/review-pr/SKILL.md must exist"
+        );
+        assert!(
+            kit_root
+                .join("kit")
+                .join("examples")
+                .join("skills")
+                .join("plan-feature")
+                .join("SKILL.md")
+                .exists(),
+            "kit/examples/skills/plan-feature/SKILL.md must exist"
+        );
+        assert!(
+            kit_root
+                .join("kit")
+                .join("examples")
+                .join("skills")
+                .join("explain-code")
+                .join("SKILL.md")
+                .exists(),
+            "kit/examples/skills/explain-code/SKILL.md must exist"
+        );
+        assert!(
+            kit_root
+                .join("kit")
+                .join("examples")
                 .join("README.md")
                 .exists(),
             "kit/examples/README.md must exist"
@@ -149,9 +179,9 @@ fn test_setup_seeds_root_agent_workspace() {
             kit_root
                 .join("kit")
                 .join("main")
-                .join("extensions")
+                .join("scriptlets")
                 .exists(),
-            "kit/main/extensions/ must exist"
+            "kit/main/scriptlets/ must exist"
         );
         assert!(
             kit_root.join("kit").join("main").join("agents").exists(),
@@ -539,7 +569,7 @@ fn test_sdk_reference_run_command_is_cwd_safe() {
     );
 }
 
-/// script_creation::scripts_dir() and extensions_dir() must follow SK_PATH override.
+/// script_creation::scripts_dir() and scriptlets_dir() must follow SK_PATH override.
 #[test]
 fn test_script_creation_dirs_follow_sk_path_override() {
     use script_kit_gpui::script_creation;
@@ -550,30 +580,30 @@ fn test_script_creation_dirs_follow_sk_path_override() {
             kit_root.join("kit").join("main").join("scripts")
         );
         assert_eq!(
-            script_creation::extensions_dir(),
-            kit_root.join("kit").join("main").join("extensions")
+            script_creation::scriptlets_dir(),
+            kit_root.join("kit").join("main").join("scriptlets")
         );
     });
 }
 
-/// extensions/examples/howto.md must match the current harness authoring contract.
+/// scriptlets/howto.md must match the current harness authoring contract.
 #[test]
-fn test_extensions_howto_matches_current_harness_authoring_contract() {
+fn test_scriptlets_howto_matches_current_harness_authoring_contract() {
     with_temp_sk_path(|kit_root| {
         let _ = ensure_kit_setup();
         let howto = fs::read_to_string(
             kit_root
                 .join("kit")
                 .join("examples")
-                .join("extensions")
+                .join("scriptlets")
                 .join("howto.md"),
         )
-        .expect("read kit/examples/extensions/howto.md");
+        .expect("read kit/examples/scriptlets/howto.md");
 
-        assert!(howto.contains("~/.scriptkit/kit/main/extensions/"));
+        assert!(howto.contains("~/.scriptkit/kit/main/scriptlets/"));
         assert!(!howto.contains("YOUR-KIT-NAME"));
-        assert!(!howto.contains("kit/work/extensions"));
-        assert!(!howto.contains("kit/personal/extensions"));
+        assert!(!howto.contains("kit/work/scriptlets"));
+        assert!(!howto.contains("kit/personal/scriptlets"));
         assert!(howto.contains("tool:name"));
         assert!(!howto.contains("| `ts` | Runs TypeScript |"));
     });
@@ -628,15 +658,15 @@ fn test_sdk_reference_script_directory_mentions_plugin_discovery() {
         doc.script_directory
     );
     assert!(
-        doc.scriptlet_pattern.contains("kit/*/extensions/"),
+        doc.scriptlet_pattern.contains("kit/*/scriptlets/"),
         "scriptlet_pattern must use plugin-scoped glob: {}",
         doc.scriptlet_pattern
     );
 }
 
-/// kit://sdk-reference example scriptlet must follow current extension contract.
+/// kit://sdk-reference example scriptlet must follow the current scriptlet contract.
 #[test]
-fn test_sdk_reference_example_scriptlet_matches_current_extension_contract() {
+fn test_sdk_reference_example_scriptlet_matches_current_scriptlet_contract() {
     use script_kit_gpui::mcp_resources::{self, SdkReferenceDocument};
 
     let content = mcp_resources::read_resource("kit://sdk-reference", &[], &[], None)
@@ -657,7 +687,7 @@ fn test_sdk_reference_example_scriptlet_matches_current_extension_contract() {
 }
 
 /// Fresh setup must seed the full artifact authoring pack: skills, examples for scripts,
-/// extensions, and agents — all under plugin roots.
+/// scriptlets, and agents — all under plugin roots.
 #[test]
 fn test_seeded_workspace_has_full_artifact_authoring_pack() {
     with_temp_sk_path(|kit_root| {
@@ -668,9 +698,12 @@ fn test_seeded_workspace_has_full_artifact_authoring_pack() {
             "kit/authoring/skills/scriptlets/SKILL.md",
             "kit/authoring/skills/agents/SKILL.md",
             "kit/examples/scripts/hello-world.ts",
-            "kit/examples/extensions/main.md",
-            "kit/examples/extensions/advanced.md",
-            "kit/examples/extensions/howto.md",
+            "kit/examples/skills/review-pr/SKILL.md",
+            "kit/examples/skills/plan-feature/SKILL.md",
+            "kit/examples/skills/explain-code/SKILL.md",
+            "kit/examples/scriptlets/main.md",
+            "kit/examples/scriptlets/advanced.md",
+            "kit/examples/scriptlets/howto.md",
             "kit/examples/agents/review-pr.claude.md",
             "kit/examples/agents/plan-feature.i.gemini.md",
         ] {
@@ -697,21 +730,22 @@ fn test_root_docs_route_scripts_scriptlets_and_agents_to_real_paths() {
         for content in [&root_claude, &root_agents] {
             for needle in [
                 "~/.scriptkit/kit/main/scripts/",
-                "~/.scriptkit/kit/main/extensions/",
+                "~/.scriptkit/kit/main/scriptlets/",
                 "~/.scriptkit/kit/main/skills/",
                 "~/.scriptkit/kit/main/agents/",
                 "~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md",
                 "~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md",
                 "~/.scriptkit/kit/authoring/skills/agents/SKILL.md",
                 "~/.scriptkit/kit/examples/scripts/",
-                "~/.scriptkit/kit/examples/extensions/",
+                "~/.scriptkit/kit/examples/skills/",
+                "~/.scriptkit/kit/examples/scriptlets/",
                 "~/.scriptkit/kit/examples/agents/",
             ] {
                 assert!(content.contains(needle), "doc missing `{needle}`");
             }
         }
 
-        for needle in ["## Scripts", "## Extensions", "## Agents"] {
+        for needle in ["## Scripts", "## Skills", "## Scriptlets", "## Agents"] {
             assert!(
                 examples_readme.contains(needle),
                 "kit/examples/README.md missing `{needle}` section"

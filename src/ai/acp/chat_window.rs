@@ -472,7 +472,41 @@ pub fn toggle_detached_actions(cx: &mut App) {
         dialog
     });
 
+    let activation_dialog = dialog.clone();
     dialog.update(cx, |dialog, _cx| {
+        dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| match activation {
+            crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+                let (route_id, search_placeholder, route_depth, escape_hint) = {
+                    let dialog_ref = activation_dialog.read(cx);
+                    (
+                        dialog_ref.current_route_id().map(str::to_string),
+                        dialog_ref.current_search_placeholder().map(str::to_string),
+                        dialog_ref.route_depth(),
+                        dialog_ref.route_hint_label(),
+                    )
+                };
+                tracing::info!(
+                    target: "script_kit::actions",
+                    host = "detached_acp_actions_window",
+                    route_id = ?route_id,
+                    route_depth,
+                    escape_hint,
+                    search_placeholder = ?search_placeholder,
+                    "actions_dialog_route_visible"
+                );
+                crate::actions::resize_actions_window(cx, &activation_dialog);
+            }
+            crate::actions::ActionsDialogActivation::Executed { should_close, .. } => {
+                if should_close {
+                    let on_close = activation_dialog.read(cx).on_close.clone();
+                    if let Some(on_close) = on_close {
+                        on_close(cx);
+                    }
+                    crate::actions::close_actions_window(cx);
+                }
+            }
+            crate::actions::ActionsDialogActivation::NoSelection => {}
+        }));
         dialog.set_on_close(std::sync::Arc::new(|cx| {
             activate_chat_window(cx);
             tracing::info!(target: "script_kit::keyboard", event = "detached_actions_closed_restore_chat_focus");

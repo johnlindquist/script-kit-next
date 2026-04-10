@@ -241,7 +241,7 @@ const w = await widget(`<h1>Floating Widget</h1>`, {
 
 ## Scriptlet Format
 
-Extensions are markdown files with embedded commands. They live in `~/.scriptkit/kit/main/extensions/`.
+Scriptlets are markdown files with embedded commands. They live in `~/.scriptkit/kit/main/scriptlets/`.
 
 ### Basic Scriptlet
 

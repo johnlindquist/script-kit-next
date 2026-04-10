@@ -1,23 +1,23 @@
 ---
 name: scriptlets
-description: Create extension bundles (scriptlets) for text expansions, snippets, shell commands, and lightweight helpers in a single markdown file. Use when the user wants quick shortcuts or grouped utilities.
+description: Create scriptlet bundles for text expansions, snippets, shell commands, and lightweight helpers in a single markdown file. Use when the user wants quick shortcuts or grouped utilities.
 ---
 
-# Scriptlets (Extension Bundles)
+# Scriptlets
 
-Use an extension bundle when the user wants text expansions, snippets, quick shell commands, or several lightweight helpers grouped in one markdown file.
+Use a scriptlet bundle when the user wants text expansions, snippets, quick shell commands, or several lightweight helpers grouped in one markdown file.
 
 ## Write Here
 
-`~/.scriptkit/kit/main/extensions/<name>.md`
+`~/.scriptkit/kit/main/scriptlets/<name>.md`
 
-Do not create new user bundles in built-in kits or example kits.
+Do not create new user bundles in app-managed or example plugins.
 
 ## Read These Files In Order
 
-1. `~/.scriptkit/kit/examples/extensions/howto.md`
-2. `~/.scriptkit/kit/examples/extensions/main.md`
-3. `~/.scriptkit/kit/examples/extensions/advanced.md`
+1. `~/.scriptkit/kit/examples/scriptlets/howto.md`
+2. `~/.scriptkit/kit/examples/scriptlets/main.md`
+3. `~/.scriptkit/kit/examples/scriptlets/advanced.md`
 
 ## Canonical Bundle Shape
 
@@ -80,7 +80,7 @@ Prefer `metadata` code fences for:
 
 Legacy HTML comments still work, but do not generate them for new harness-authored bundles unless the user explicitly asks for legacy format.
 
-## Choose Script vs Extension Bundle
+## Choose Script vs Scriptlet Bundle
 
 Choose a `.ts` script when the request needs:
 - rich UI
@@ -88,7 +88,7 @@ Choose a `.ts` script when the request needs:
 - file/network workflows
 - external APIs
 
-Choose an extension bundle when the request is:
+Choose a scriptlet bundle when the request is:
 - a snippet
 - a text expansion
 - a quick shell command
@@ -98,8 +98,8 @@ Choose an extension bundle when the request is:
 
 To add shared actions to every command in a bundle, create a matching companion file:
 
-- Parent bundle: `~/.scriptkit/kit/main/extensions/<name>.md`
-- Shared actions: `~/.scriptkit/kit/main/extensions/<name>.actions.md`
+- Parent bundle: `~/.scriptkit/kit/main/scriptlets/<name>.md`
+- Shared actions: `~/.scriptkit/kit/main/scriptlets/<name>.actions.md`
 
 Use `{{content}}` inside the companion action to access the selected parent command content.
 
@@ -107,22 +107,24 @@ See [custom-actions](../custom-actions/SKILL.md) for the canonical pattern.
 
 ## Focused Feature Examples
 
-Generic examples are flat files under `~/.scriptkit/kit/examples/extensions/`. Focused feature examples are nested bundles:
+Generic examples are flat files under `~/.scriptkit/kit/examples/scriptlets/`. Focused feature examples are **nested bundles**:
 
-- `~/.scriptkit/kit/examples/extensions/acp-chat/main.md` — ACP-oriented extension helpers
-- `~/.scriptkit/kit/examples/extensions/custom-actions/main.md` — shared Actions Menu patterns
-- `~/.scriptkit/kit/examples/extensions/custom-actions/main.actions.md` — companion actions file
-- `~/.scriptkit/kit/examples/extensions/notes/main.md` — Notes automation as an extension bundle
+- `~/.scriptkit/kit/examples/scriptlets/acp-chat/main.md` — ACP-oriented scriptlet helpers
+- `~/.scriptkit/kit/examples/scriptlets/custom-actions/main.md` — shared Actions Menu patterns
+- `~/.scriptkit/kit/examples/scriptlets/custom-actions/main.actions.md` — companion actions file
+- `~/.scriptkit/kit/examples/scriptlets/notes/main.md` — Notes automation as a scriptlet bundle
+
+Flat mirrors (`~/.scriptkit/kit/examples/scriptlets/acp-chat.md`, `custom-actions.md`, `custom-actions.actions.md`, `notes.md`) are generated from the nested bundles above.
 
 ## Related Skills
 
-- [custom-actions](../custom-actions/SKILL.md) — shared Actions Menu patterns for extension bundles
-- [acp-chat](../acp-chat/SKILL.md) — ACP-oriented extension helpers
-- [notes](../notes/SKILL.md) — package Notes automation examples as extension bundles
+- [custom-actions](../custom-actions/SKILL.md) — shared Actions Menu patterns for scriptlet bundles
+- [acp-chat](../acp-chat/SKILL.md) — ACP-oriented scriptlet helpers
+- [notes](../notes/SKILL.md) — package Notes automation examples as scriptlet bundles
 
 ## Done When
 
-- the file lives in `~/.scriptkit/kit/main/extensions/`
+- the file lives in `~/.scriptkit/kit/main/scriptlets/`
 - each `##` heading is one scriptlet
 - the fence type matches the intended behavior
 - the bundle is the smallest artifact that fits

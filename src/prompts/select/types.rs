@@ -202,10 +202,10 @@ fn infer_script_type_from_lowercase(
     }
 
     if contains_any("extension")
-        || value_lower.contains("/extensions/")
+        || value_lower.contains("/scriptlets/")
         || value_lower.contains("/extension/")
     {
-        return Some("Extension");
+        return Some("Scriptlet");
     }
 
     if contains_any("agent") {
@@ -311,7 +311,7 @@ fn extract_script_type_token(token: &str) -> Option<String> {
         return Some("Scriptlet".to_string());
     }
     if lower == "extension" || lower.starts_with("type: extension") {
-        return Some("Extension".to_string());
+        return Some("Scriptlet".to_string());
     }
     if lower == "agent" || lower.starts_with("type: agent") {
         return Some("Agent".to_string());
