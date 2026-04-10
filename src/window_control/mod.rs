@@ -27,6 +27,7 @@ mod display;
 mod ffi;
 mod query;
 mod snap;
+mod snap_mode;
 mod snap_monitor;
 mod snap_overlay;
 mod snap_runtime;
@@ -41,6 +42,7 @@ pub use actions::{
     move_to_previous_display, move_window, resize_window, tile_window,
 };
 pub use query::{get_frontmost_window_of_previous_app, has_accessibility_permission, list_windows};
+pub use snap_mode::{current_snap_mode, set_snap_mode, SnapMode};
 pub use snap_monitor::install_snap_drag_monitor;
 #[allow(unused_imports)]
 pub use snap_runtime::{

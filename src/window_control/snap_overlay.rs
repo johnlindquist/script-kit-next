@@ -8,7 +8,7 @@ use gpui::{
 };
 
 use super::display::get_visible_display_bounds;
-use super::snap_session::{SnapOverlayModel, SnapOverlayTarget};
+use super::snap_session::{SnapOverlayModel, SnapOverlayScene, SnapOverlayTarget};
 use super::types::Bounds;
 
 #[cfg(target_os = "macos")]
@@ -225,8 +225,11 @@ pub fn ensure_snap_overlay_windows(cx: &mut App) -> Result<()> {
     Ok(())
 }
 
-/// Show the snap overlay on the matching display, clear all others.
-pub fn show_snap_overlay(model: SnapOverlayModel, cx: &mut App) -> Result<()> {
+/// Show the snap overlay scene, distributing models to matching display windows.
+///
+/// Each overlay window receives the model whose `display_bounds` matches its
+/// own, or `None` if no model in the scene covers that display.
+pub fn show_snap_overlay(scene: SnapOverlayScene, cx: &mut App) -> Result<()> {
     ensure_snap_overlay_windows(cx)?;
 
     let guard = SNAP_OVERLAY_WINDOWS
@@ -234,16 +237,24 @@ pub fn show_snap_overlay(model: SnapOverlayModel, cx: &mut App) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("snap overlay lock poisoned: {e}"))?;
 
     for overlay in guard.iter() {
-        let model_for_window = if overlay.display_bounds == model.display_bounds {
-            Some(model.clone())
-        } else {
-            None
-        };
+        let model_for_window = scene
+            .displays
+            .iter()
+            .find(|m| m.display_bounds == overlay.display_bounds)
+            .cloned();
 
         let _ = overlay.handle.update(cx, |view, _window, cx| {
             view.set_model(model_for_window, cx);
         });
     }
+
+    tracing::info!(
+        target: "script_kit::snap_overlay",
+        event = "snap_overlay_scene_updated",
+        display_count = scene.displays.len(),
+        ?scene.mode,
+        "updated snap overlay scene"
+    );
 
     Ok(())
 }
