@@ -24,8 +24,10 @@ mod layout;
 pub mod main_menu_variations;
 pub mod mini_ai_chat_presenter;
 pub mod mini_ai_chat_variations;
+pub mod notes_window_variations;
 pub(crate) mod playground_overlay_metrics;
 mod registry;
+pub mod runtime_fixture;
 mod selection;
 mod story;
 
@@ -85,9 +87,18 @@ pub use mini_ai_chat_variations::{
     MiniAiChatStyle, MiniAiChatSurface, MiniAiChatVariationId, MiniAiChatVariationSpec,
     SPECS as MINI_AI_CHAT_VARIATION_SPECS,
 };
+pub use notes_window_variations::{
+    adopted_notes_window_style, notes_window_story_variants, render_notes_window_compare_thumbnail,
+    render_notes_window_story_preview, resolve_notes_window_style, NotesWindowSurface,
+    NotesWindowVariationId, NotesWindowVariationSpec, SPECS as NOTES_WINDOW_VARIATION_SPECS,
+};
 pub use registry::{
     all_categories, all_stories, first_story_with_multiple_variants, stories_by_category,
     stories_by_surface, StoryEntry,
+};
+pub use runtime_fixture::{
+    load_runtime_fixture_manifest, render_runtime_fixture, runtime_fixture_manifest_path,
+    RuntimeFixtureManifest,
 };
 pub(crate) use selection::selection_store_path;
 pub use selection::{

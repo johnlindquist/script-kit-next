@@ -93,6 +93,19 @@ impl NotesApp {
             "Notes app initialized"
         );
 
+        // Log the adopted Notes window style for storybook parity verification.
+        let notes_style = style::adopted_style();
+        tracing::info!(
+            target: "notes",
+            event = "notes_window_style_applied",
+            titlebar_height = notes_style.titlebar_height,
+            footer_height = notes_style.footer_height,
+            editor_padding_x = notes_style.editor_padding_x,
+            editor_padding_y = notes_style.editor_padding_y,
+            chrome_opacity = notes_style.chrome_opacity,
+            "Applied Notes window style"
+        );
+
         // Pre-compute note switcher actions before moving notes into struct
         let note_switcher_actions = get_note_switcher_actions(
             &notes

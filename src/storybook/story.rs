@@ -37,6 +37,7 @@ pub enum StorySurface {
     FullPrompt,
     MainMenu,
     MiniAiChat,
+    NotesWindow,
 }
 
 impl StorySurface {
@@ -52,6 +53,7 @@ impl StorySurface {
             Self::FullPrompt => "Full Prompt",
             Self::MainMenu => "Main Menu",
             Self::MiniAiChat => "Mini ACP Chat",
+            Self::NotesWindow => "Notes Window",
         }
     }
 }
