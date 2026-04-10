@@ -697,10 +697,13 @@ fn script_list_cmd_enter_fallback_routes_to_shared_acp_helper() {
 
 #[test]
 fn script_list_cmd_enter_fallback_comment_matches_shortcut_contract() {
+    let launcher_hint_source = include_str!("../src/components/launcher_ask_ai_hint.rs");
+
     assert!(
-        SCRIPT_LIST_SOURCE.contains(".child(\"Ask\")")
-            && SCRIPT_LIST_SOURCE.contains(".child(\"⌘↩\")"),
-        "render_script_list header hint should advertise Cmd+Enter with the Ask label and keycap badge"
+        SCRIPT_LIST_SOURCE.contains("render_launcher_ask_ai_hint(chrome)")
+            && launcher_hint_source.contains(".child(\"Ask\")")
+            && !launcher_hint_source.contains(".child(\"⌘↩\")"),
+        "render_script_list header hint should use the shared Ask label renderer without duplicating the Cmd+Enter badge"
     );
     assert!(
         SCRIPT_LIST_SOURCE.contains("press ⌘↵ to ask AI"),

@@ -964,48 +964,8 @@ impl ScriptListApp {
                                         .focus_bordered(false),
                                 ),
                             )
-                            // "Ask [⇥] [⌘↩]" keyboard hints
-                            .child(
-                                div()
-                                    .id("ask-ai-button")
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(ASK_AI_BUTTON_GAP))
-                                    .cursor_default()
-                                    .opacity(0.4)
-                                    // "Ask" text
-                                    .child(
-                                        div()
-                                            .text_sm()
-                                            .text_color(rgb(chrome.badge_text_hex))
-                                            .child("Ask"),
-                                    )
-                                    // "⇥" badge - bordered keycap
-                                    .child(
-                                        div()
-                                            .px(px(TAB_BADGE_PADDING_X))
-                                            .py(px(TAB_BADGE_PADDING_Y))
-                                            .rounded(px(TAB_BADGE_RADIUS))
-                                            .border_1()
-                                            .border_color(rgba(chrome.badge_bg_rgba))
-                                            .text_xs()
-                                            .text_color(rgb(chrome.badge_text_hex))
-                                            .child("⇥"),
-                                    )
-                                    // "⌘↩" badge - bordered keycap
-                                    .child(
-                                        div()
-                                            .px(px(TAB_BADGE_PADDING_X))
-                                            .py(px(TAB_BADGE_PADDING_Y))
-                                            .rounded(px(TAB_BADGE_RADIUS))
-                                            .border_1()
-                                            .border_color(rgba(chrome.badge_bg_rgba))
-                                            .text_xs()
-                                            .text_color(rgb(chrome.badge_text_hex))
-                                            .child("⌘↩"),
-                                    ),
-                            ),
+                            // "Ask [⇥]" keyboard hint
+                            .child(crate::components::render_launcher_ask_ai_hint(chrome)),
                     )
             })
             // Divider between header and list content
@@ -1077,7 +1037,7 @@ impl ScriptListApp {
                     target: "script_kit::prompt_chrome",
                     event = "script_list_mini_ai_hint_rendered",
                     tab_hint = true,
-                    cmd_enter_hint = true,
+                    cmd_enter_hint = false,
                     "Mini ScriptList header rendered Ask AI keyboard hints"
                 );
                 let total_elapsed = render_list_start.elapsed();
