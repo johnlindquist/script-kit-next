@@ -1833,16 +1833,16 @@ impl ScriptListApp {
                 let explorer = cx.new(|cx| {
                     let mut browser = script_kit_gpui::storybook::StoryBrowser::new(cx);
                     browser.configure_for_design_explorer(
-                        Some(script_kit_gpui::storybook::StorySurface::NotesWindow),
+                        Some(script_kit_gpui::storybook::StorySurface::MainMenu),
                     );
                     browser.open_compare_mode();
-                    let _ = browser.select_variant_id("current");
+                    let _ = browser.select_variant_id("current-main-menu");
                     tracing::info!(
                         event = "design_explorer_opened",
-                        surface = "notes-window",
+                        surface = "main-menu",
                         preview_mode = "compare",
-                        variant_id = "current",
-                        "Opened in-app design explorer on the compare-ready Notes surface"
+                        variant_id = "current-main-menu",
+                        "Opened in-app design explorer on the compare-ready Main Menu surface"
                     );
                     browser
                 });
