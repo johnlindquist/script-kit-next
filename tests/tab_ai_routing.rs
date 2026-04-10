@@ -22,6 +22,10 @@ const BUILTIN_EXECUTION_SOURCE: &str = include_str!("../src/app_execute/builtin_
 const PROMPT_AI_SOURCE: &str = include_str!("../src/app_impl/prompt_ai.rs");
 const BUILTINS_SOURCE: &str = include_str!("../src/builtins/mod.rs");
 const SCREENSHOT_FILES_SOURCE: &str = include_str!("../src/ai/harness/screenshot_files.rs");
+const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/app_impl/actions_dialog.rs");
+const ACTIONS_WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
+const ACTIONS_DIALOG_RENDER_SOURCE: &str = include_str!("../src/actions/dialog.rs");
+const AI_MOD_SOURCE_FOR_ACTIONS: &str = include_str!("../src/ai/mod.rs");
 
 // =========================================================================
 // Primary contract: Tab → harness terminal (QuickTerminalView)
@@ -4606,5 +4610,170 @@ fn authoring_harness_submission_contains_verification_guidance() {
     assert!(
         output.contains("User intent:\nclipboard cleanup"),
         "authoring submission must include the user intent after guidance"
+    );
+}
+
+// =========================================================================
+// Cmd+Enter ACP handoff consistency contract
+// =========================================================================
+
+#[test]
+fn actions_dialog_cmd_enter_branch_precedes_plain_enter_execute() {
+    // The Cmd+Enter handler must appear BEFORE the generic is_key_enter(key)
+    // branch in route_key_to_actions_dialog. If it comes after, the platform
+    // modifier is never checked and Cmd+Enter is swallowed as plain Enter.
+    let cmd_enter_pos = ACTIONS_DIALOG_SOURCE
+        .find("tab_ai_actions_dialog_cmd_enter")
+        .expect("embedded actions dialog must have a tab_ai_actions_dialog_cmd_enter handler");
+    let plain_enter_pos = ACTIONS_DIALOG_SOURCE
+        .find("d.activate_selected(cx)")
+        .expect("embedded actions dialog must have the plain Enter activate_selected path");
+    assert!(
+        cmd_enter_pos < plain_enter_pos,
+        "Cmd+Enter ACP handoff must precede the generic Enter execute path in route_key_to_actions_dialog"
+    );
+}
+
+#[test]
+fn detached_actions_window_has_distinct_send_to_acp_intent() {
+    assert!(
+        ACTIONS_WINDOW_SOURCE.contains("SendToAcp"),
+        "detached actions window must define a SendToAcp key intent variant"
+    );
+    // In the actions_window_key_intent function, the Cmd+Enter → SendToAcp
+    // branch must appear before the plain Enter → ExecuteSelected branch.
+    let intent_fn_start = ACTIONS_WINDOW_SOURCE
+        .find("fn actions_window_key_intent(")
+        .expect("actions_window_key_intent function must exist");
+    let intent_fn = &ACTIONS_WINDOW_SOURCE[intent_fn_start..];
+    let send_to_acp_pos = intent_fn
+        .find("ActionsWindowKeyIntent::SendToAcp")
+        .expect("SendToAcp must be returned from actions_window_key_intent");
+    let execute_selected_pos = intent_fn
+        .find("ActionsWindowKeyIntent::ExecuteSelected")
+        .expect("ExecuteSelected must be returned from actions_window_key_intent");
+    assert!(
+        send_to_acp_pos < execute_selected_pos,
+        "SendToAcp must be returned before ExecuteSelected in actions_window_key_intent"
+    );
+}
+
+#[test]
+fn detached_actions_window_routes_cmd_enter_to_send_to_acp() {
+    // In the key intent function, Cmd+Enter must map to SendToAcp
+    let intent_fn_start = ACTIONS_WINDOW_SOURCE
+        .find("fn actions_window_key_intent(")
+        .expect("actions_window_key_intent function must exist");
+    let intent_fn = &ACTIONS_WINDOW_SOURCE[intent_fn_start..];
+    let next_fn = intent_fn[1..].find("\nfn ").unwrap_or(intent_fn.len());
+    let intent_fn = &intent_fn[..next_fn];
+
+    assert!(
+        intent_fn.contains("modifiers.platform"),
+        "actions_window_key_intent must check platform modifier for Cmd+Enter"
+    );
+    assert!(
+        intent_fn.contains("ActionsWindowKeyIntent::SendToAcp"),
+        "actions_window_key_intent must return SendToAcp for Cmd+Enter"
+    );
+}
+
+#[test]
+fn detached_actions_window_cmd_enter_enqueues_explicit_target() {
+    assert!(
+        ACTIONS_WINDOW_SOURCE.contains("enqueue_explicit_acp_target"),
+        "detached actions window SendToAcp handler must enqueue an explicit ACP target"
+    );
+    assert!(
+        ACTIONS_WINDOW_SOURCE.contains("tab_ai_actions_window_cmd_enter"),
+        "detached actions window must log the tab_ai_actions_window_cmd_enter event"
+    );
+}
+
+#[test]
+fn actions_footer_advertises_cmd_enter_ai_handoff() {
+    assert!(
+        ACTIONS_DIALOG_RENDER_SOURCE.contains("Ask AI"),
+        "actions dialog footer must include an Ask AI hint for Cmd+Enter"
+    );
+}
+
+#[test]
+fn tab_ai_mode_has_explicit_target_acp_open_method() {
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("fn open_tab_ai_acp_with_explicit_target("),
+        "tab_ai_mode must define open_tab_ai_acp_with_explicit_target for Cmd+Enter handoff"
+    );
+    // The method must stage a FocusedTarget chip, not synthesize prompt text
+    let fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_with_explicit_target(")
+        .expect("open_tab_ai_acp_with_explicit_target must exist");
+    let fn_body = &TAB_AI_MODE_SOURCE[fn_start..];
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        fn_body.contains("AiContextPart::FocusedTarget"),
+        "open_tab_ai_acp_with_explicit_target must stage a FocusedTarget chip"
+    );
+    assert!(
+        fn_body.contains("tab_ai_explicit_target_acp_open"),
+        "open_tab_ai_acp_with_explicit_target must emit the explicit-target log event"
+    );
+}
+
+#[test]
+fn ai_mod_has_build_action_target_for_ai() {
+    assert!(
+        AI_MOD_SOURCE_FOR_ACTIONS.contains("fn build_action_target_for_ai("),
+        "ai/mod.rs must define build_action_target_for_ai for canonical action targeting"
+    );
+    let fn_start = AI_MOD_SOURCE_FOR_ACTIONS
+        .find("fn build_action_target_for_ai(")
+        .expect("build_action_target_for_ai must exist");
+    let fn_body = &AI_MOD_SOURCE_FOR_ACTIONS[fn_start..];
+
+    assert!(
+        fn_body.contains("ActionsDialog"),
+        "build_action_target_for_ai must set source to ActionsDialog"
+    );
+    assert!(
+        fn_body.contains("generate_semantic_id"),
+        "build_action_target_for_ai must use generate_semantic_id for the semantic ID"
+    );
+}
+
+#[test]
+fn embedded_actions_cmd_enter_preserves_plain_enter_behavior() {
+    // The plain Enter activate_selected path must still exist and be reachable
+    let route_fn_start = ACTIONS_DIALOG_SOURCE
+        .find("fn route_key_to_actions_dialog(")
+        .expect("route_key_to_actions_dialog must exist");
+    let route_fn = &ACTIONS_DIALOG_SOURCE[route_fn_start..];
+
+    assert!(
+        route_fn.contains("activate_selected(cx)"),
+        "route_key_to_actions_dialog must still contain the plain Enter activate_selected path"
+    );
+    assert!(
+        route_fn.contains("ActionsRoute::Execute"),
+        "route_key_to_actions_dialog must still return ActionsRoute::Execute for plain Enter"
+    );
+}
+
+#[test]
+fn close_actions_popup_checks_pending_acp_target() {
+    let close_fn_start = ACTIONS_DIALOG_SOURCE
+        .find("fn close_actions_popup(")
+        .expect("close_actions_popup must exist");
+    let close_fn = &ACTIONS_DIALOG_SOURCE[close_fn_start..];
+
+    assert!(
+        close_fn.contains("take_pending_explicit_acp_target"),
+        "close_actions_popup must check for pending ACP handoff targets from the detached window"
+    );
+    assert!(
+        close_fn.contains("open_tab_ai_acp_with_explicit_target"),
+        "close_actions_popup must route pending targets to the explicit-target ACP opener"
     );
 }

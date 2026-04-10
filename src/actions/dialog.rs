@@ -3063,7 +3063,8 @@ impl Render for ActionsDialog {
         let footer_container = if self.config.show_footer {
             Some(div().w_full().child(crate::components::HintStrip::new(vec![
                 "↵ Run".into(),
-                "⌘K Actions".into(),
+                "⌘↩ Ask AI".into(),
+                self.route_hint_label().into(),
             ])))
         } else {
             None

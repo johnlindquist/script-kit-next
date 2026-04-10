@@ -268,6 +268,30 @@ impl ScriptListApp {
             return ActionsRoute::Handled;
         }
 
+        // Cmd+Enter: send selected action to ACP Chat as a canonical target chip.
+        // Must precede the generic Enter branch to avoid being swallowed.
+        if modifiers.platform
+            && !modifiers.shift
+            && !modifiers.control
+            && !modifiers.alt
+            && is_key_enter(key)
+        {
+            if let Some(action) = dialog.read(cx).get_selected_action().cloned() {
+                let host_label = format!("{:?}", host);
+                let target = crate::ai::build_action_target_for_ai(&action, &host_label);
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "tab_ai_actions_dialog_cmd_enter",
+                    host = %host_label,
+                    action_id = %action.id,
+                    semantic_id = %target.semantic_id,
+                );
+                self.close_actions_popup(host, window, cx);
+                self.open_tab_ai_acp_with_explicit_target(target, cx);
+                return ActionsRoute::Handled;
+            }
+        }
+
         if is_key_enter(key) {
             match dialog.update(cx, |d, cx| d.activate_selected(cx)) {
                 crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
@@ -548,6 +572,19 @@ impl ScriptListApp {
             ),
         );
         cx.notify();
+
+        // Check for a pending ACP handoff target enqueued by the detached
+        // actions window's Cmd+Enter handler. The slot is only populated
+        // when a secondary surface explicitly requested the handoff.
+        if let Some(target) = crate::ai::take_pending_explicit_acp_target() {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "tab_ai_pending_acp_target_picked_up",
+                item_source = %target.source,
+                semantic_id = %target.semantic_id,
+            );
+            self.open_tab_ai_acp_with_explicit_target(target, cx);
+        }
     }
 }
 

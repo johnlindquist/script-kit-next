@@ -119,6 +119,8 @@ enum ActionsWindowKeyIntent {
     MovePageUp,
     MovePageDown,
     ExecuteSelected,
+    /// Cmd+Enter: hand the selected action to ACP Chat as a canonical target.
+    SendToAcp,
     Close,
     Backspace,
     TypeChar(char),
@@ -175,6 +177,15 @@ fn actions_window_key_intent(
     }
     if key.eq_ignore_ascii_case("pagedown") {
         return Some(ActionsWindowKeyIntent::MovePageDown);
+    }
+    // Cmd+Enter must precede plain Enter to avoid being swallowed.
+    if modifiers.platform
+        && !modifiers.shift
+        && !modifiers.control
+        && !modifiers.alt
+        && is_key_enter(key)
+    {
+        return Some(ActionsWindowKeyIntent::SendToAcp);
     }
     if is_key_enter(key) {
         return Some(ActionsWindowKeyIntent::ExecuteSelected);
@@ -474,6 +485,22 @@ impl Render for ActionsWindow {
                             cx.notify();
                         }
                     });
+                }
+                Some(ActionsWindowKeyIntent::SendToAcp) => {
+                    if let Some(action) = this.dialog.read(cx).get_selected_action().cloned() {
+                        let target =
+                            crate::ai::build_action_target_for_ai(&action, "DetachedActionsWindow");
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "tab_ai_actions_window_cmd_enter",
+                            action_id = %action.id,
+                            semantic_id = %target.semantic_id,
+                        );
+                        // Enqueue the target for the main window to pick up
+                        // after the actions popup closes.
+                        crate::ai::enqueue_explicit_acp_target(target);
+                        this.request_close(window, cx, "send_to_acp", true);
+                    }
                 }
                 Some(ActionsWindowKeyIntent::ExecuteSelected) => {
                     match this.dialog.update(cx, |d, cx| d.activate_selected(cx)) {

@@ -147,3 +147,52 @@ pub use self::window::context_preflight::{
     estimate_tokens_from_text, preflight_state_from_receipt, status_from_decision,
     ContextPreflightSnapshot, ContextPreflightState, ContextPreflightStatus,
 };
+
+// ---------------------------------------------------------------------------
+// Pending explicit ACP target — cross-window handoff slot
+// ---------------------------------------------------------------------------
+
+use parking_lot::Mutex;
+use std::sync::OnceLock;
+
+/// Pending explicit ACP target from a secondary window (e.g. detached actions
+/// popup). The main window checks this after the secondary surface closes and
+/// hands the target to `open_tab_ai_acp_with_explicit_target`.
+static PENDING_EXPLICIT_ACP_TARGET: OnceLock<Mutex<Option<TabAiTargetContext>>> = OnceLock::new();
+
+/// Build a canonical ACP handoff target for an action-menu selection.
+pub(crate) fn build_action_target_for_ai(
+    action: &crate::actions::Action,
+    host_label: &str,
+) -> TabAiTargetContext {
+    TabAiTargetContext {
+        source: "ActionsDialog".to_string(),
+        kind: "action".to_string(),
+        semantic_id: crate::protocol::generate_semantic_id("action", 0, &action.id),
+        label: action.title.clone(),
+        metadata: Some(serde_json::json!({
+            "actionId": action.id,
+            "title": action.title,
+            "description": action.description,
+            "category": format!("{:?}", action.category),
+            "shortcut": action.shortcut,
+            "host": host_label,
+        })),
+    }
+}
+
+/// Enqueue a canonical target for ACP handoff from a secondary window.
+///
+/// The main window picks this up via `take_pending_explicit_acp_target` the
+/// next time it processes a close-actions-popup event.
+pub fn enqueue_explicit_acp_target(target: TabAiTargetContext) {
+    let storage = PENDING_EXPLICIT_ACP_TARGET.get_or_init(|| Mutex::new(None));
+    *storage.lock() = Some(target);
+}
+
+/// Take a pending ACP handoff target, if any, clearing the slot.
+pub fn take_pending_explicit_acp_target() -> Option<TabAiTargetContext> {
+    PENDING_EXPLICIT_ACP_TARGET
+        .get()
+        .and_then(|storage| storage.lock().take())
+}
