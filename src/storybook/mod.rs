@@ -55,7 +55,9 @@ pub use context_picker_popup_playground::{
     ContextPickerPopupSceneState, ContextPickerPopupTrigger,
 };
 pub use diagnostics::{
-    build_story_catalog_snapshot, load_story_catalog_snapshot, StoryCatalogEntry,
+    build_adopted_surface_resolution_snapshot, build_story_catalog_snapshot,
+    load_adopted_surface_resolution_snapshot, load_story_catalog_snapshot,
+    AdoptedSurfaceResolutionEntry, AdoptedSurfaceResolutionSnapshot, StoryCatalogEntry,
     StoryCatalogSnapshot, StorySurfaceSummary, StoryVariantSummary,
 };
 pub use footer_variations::{
@@ -76,9 +78,9 @@ pub use integrated_surface_shell::{
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
 pub use main_menu_variations::{
     adopted_main_menu_live_spec, adopted_main_menu_variant, main_menu_story_variants,
-    render_main_menu_compare_thumbnail, render_main_menu_story_preview,
-    resolve_main_menu_variant, MainMenuLiveSpec, MainMenuSurface, MainMenuVariationId,
-    MainMenuVariationSpec, SPECS as MAIN_MENU_VARIATION_SPECS,
+    render_main_menu_compare_thumbnail, render_main_menu_story_preview, resolve_main_menu_variant,
+    MainMenuLiveSpec, MainMenuSurface, MainMenuVariationId, MainMenuVariationSpec,
+    SPECS as MAIN_MENU_VARIATION_SPECS,
 };
 pub use mini_ai_chat_presenter::{
     render_mini_ai_chat_presentation, MiniAiChatPresentationMessage, MiniAiChatPresentationModel,
@@ -99,8 +101,9 @@ pub use registry::{
     stories_by_surface, StoryEntry,
 };
 pub use runtime_fixture::{
-    load_runtime_fixture_manifest, render_runtime_fixture, runtime_fixture_manifest_path,
-    RuntimeFixtureManifest,
+    describe_runtime_fixture, load_runtime_fixture_manifest, render_runtime_fixture,
+    runtime_fixture_image_path, runtime_fixture_manifest_path, RuntimeFixtureManifest,
+    RuntimeFixturePresence,
 };
 pub(crate) use selection::selection_store_path;
 pub use selection::{

@@ -967,7 +967,8 @@ fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> 
         AcpActionsDialogHost::Shared => true,
         AcpActionsDialogHost::Notes => {
             // Notes-hosted: same as Detached but without `acp_save_as_note`
-            // (already in Notes) and keeping `acp_close` (returns to editor).
+            // (already in Notes), keeping `acp_close` (returns to editor),
+            // and opening `acp_show_history` as a Notes-anchored popup.
             matches!(
                 action_id,
                 "acp:change_agent"
@@ -975,6 +976,7 @@ fn acp_action_supported_in_host(host: AcpActionsDialogHost, action_id: &str) -> 
                     | "acp_copy_last_response"
                     | "acp_retry_last"
                     | "acp_export_markdown"
+                    | "acp_show_history"
                     | "acp_scroll_to_top"
                     | "acp_scroll_to_bottom"
                     | "acp_expand_all"

@@ -129,6 +129,7 @@ pub fn notes_window_story_variants() -> Vec<StoryVariant> {
             StoryVariant::default_named(spec.id.as_str(), spec.id.name())
                 .description(spec.id.description())
                 .with_prop("surface", "notesWindow")
+                .with_prop("representation", "runtimeFixture")
                 .with_prop("variantId", spec.id.as_str())
                 .with_prop(
                     "titlebarHeight",
