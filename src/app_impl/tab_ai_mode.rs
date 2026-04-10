@@ -865,6 +865,7 @@ impl ScriptListApp {
         matches!(
             view,
             AppView::ScriptList
+                | AppView::FileSearchView { .. }
                 | AppView::ClipboardHistoryView { .. }
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
