@@ -5,7 +5,7 @@
 
 use std::{collections::HashSet, sync::OnceLock};
 
-use gpui::{IntoElement as _, ParentElement as _, Styled as _};
+use gpui::{prelude::FluentBuilder as _, IntoElement as _, ParentElement as _, Styled as _};
 use gpui_component::scroll::ScrollableElement as _;
 
 use super::adoption::{
@@ -186,7 +186,11 @@ pub fn render_main_menu_compare_thumbnail(stable_id: &str) -> gpui::AnyElement {
 
 #[derive(Clone)]
 enum MainMenuPreviewEntry {
-    Section { label: &'static str, count: usize },
+    Section {
+        label: &'static str,
+        count: usize,
+        icon: Option<&'static str>,
+    },
     Row(MainMenuPreviewRow),
 }
 
@@ -194,8 +198,7 @@ enum MainMenuPreviewEntry {
 struct MainMenuPreviewRow {
     title: String,
     subtitle: String,
-    leading_icon: String,
-    trailing_hint: String,
+    leading_icon: Option<String>,
     primary_action_label: String,
 }
 
@@ -245,18 +248,49 @@ fn render_main_menu_body(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::An
 fn render_main_menu_header(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::AnyElement {
     let theme = crate::theme::get_cached_theme();
     let chrome = crate::theme::AppChromeColors::from_theme(&theme);
+    let typography = crate::theme::TypographyResolver::new_theme_first(
+        &theme,
+        crate::designs::DesignVariant::Default,
+    );
     let search_text = live_spec.filter_text_override.unwrap_or("");
-    let show_placeholder = search_text.is_empty();
-    let input_text = if show_placeholder {
-        crate::panel::DEFAULT_PLACEHOLDER
+    let input_font_size = if compact {
+        15.0
     } else {
-        search_text
+        // Match the visual output of the bare gpui_component Input used by the
+        // live main menu. Raw `div().text_size(20)` renders too large.
+        16.0
     };
-    let input_color = if show_placeholder {
-        theme.colors.text.dimmed.to_rgb()
-    } else {
-        theme.colors.text.primary.to_rgb()
-    };
+    let mut input_content = gpui::div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .w_full()
+        .font_family(typography.primary_font().to_string())
+        .text_size(gpui::px(input_font_size))
+        .text_color(theme.colors.text.primary.to_rgb())
+        .child(
+            crate::components::text_input::render_text_input_cursor_selection(
+                crate::components::text_input::TextInputRenderConfig {
+                    cursor: search_text.len(),
+                    selection: None,
+                    cursor_visible: true,
+                    cursor_color: theme.colors.text.primary,
+                    text_color: theme.colors.text.primary,
+                    selection_color: theme.colors.accent.selected,
+                    selection_text_color: theme.colors.text.primary,
+                    ..crate::components::text_input::TextInputRenderConfig::default_for_prompt(
+                        search_text,
+                    )
+                },
+            ),
+        );
+    if search_text.is_empty() {
+        input_content = input_content.child(
+            gpui::div()
+                .text_color(theme.colors.text.dimmed.to_rgb())
+                .child(crate::panel::DEFAULT_PLACEHOLDER),
+        );
+    }
 
     let mut header = gpui::div()
         .w_full()
@@ -279,9 +313,12 @@ fn render_main_menu_header(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::
                 .child(
                     gpui::div()
                         .w_full()
-                        .text_size(gpui::px(if compact { 18.0 } else { 20.0 }))
-                        .text_color(input_color)
-                        .child(input_text),
+                        .h(gpui::px(
+                            crate::panel::CURSOR_HEIGHT_LG + (crate::panel::CURSOR_MARGIN_Y * 2.0),
+                        ))
+                        .flex()
+                        .items_center()
+                        .child(input_content),
                 ),
         );
 
@@ -294,7 +331,7 @@ fn render_main_menu_header(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::
 
 fn render_main_menu_rows(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::AnyElement {
     let theme = crate::theme::get_cached_theme();
-    let colors = crate::components::UnifiedListItemColors::from_theme(&theme);
+    let colors = crate::list_item::ListItemColors::from_theme(&theme);
     let entries = main_menu_preview_entries();
     let max_entries = if compact { 5 } else { usize::MAX };
     let mut real_row_index = 0usize;
@@ -307,37 +344,31 @@ fn render_main_menu_rows(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::An
         .overflow_y_scrollbar()
         .children(entries.iter().take(max_entries).map(|entry| {
             match entry {
-                MainMenuPreviewEntry::Section { label, count } => {
-                    crate::components::SectionHeader::new(*label)
-                        .count(*count)
-                        .colors(colors)
-                        .into_any_element()
+                MainMenuPreviewEntry::Section { label, count, icon } => {
+                    crate::list_item::render_section_header(
+                        &format!("{label} · {count}"),
+                        *icon,
+                        colors,
+                        false,
+                    )
+                    .into_any_element()
                 }
                 MainMenuPreviewEntry::Row(row) => {
                     let is_selected = live_spec.prefer_first_result_selected && real_row_index == 0;
                     real_row_index += 1;
 
-                    crate::components::UnifiedListItem::new(
-                        gpui::ElementId::Name(format!("main-menu-row-{real_row_index}").into()),
-                        crate::components::TextContent::plain(row.title.clone()),
-                    )
-                    .subtitle(crate::components::TextContent::plain(row.subtitle.clone()))
-                    .leading(crate::components::LeadingContent::Icon {
-                        name: row.leading_icon.clone().into(),
-                        color: None,
-                    })
-                    .trailing(crate::components::TrailingContent::Hint(
-                        row.trailing_hint.clone().into(),
-                    ))
-                    .density(crate::components::Density::Comfortable)
-                    .colors(colors)
-                    .state(crate::components::ItemState {
-                        is_selected,
-                        is_hovered: false,
-                        is_disabled: false,
-                    })
-                    .with_accent_bar(true)
-                    .into_any_element()
+                    let icon_kind = row
+                        .leading_icon
+                        .as_deref()
+                        .and_then(crate::list_item::IconKind::from_icon_hint);
+
+                    crate::list_item::ListItem::new(row.title.clone(), colors)
+                        .description(row.subtitle.clone())
+                        .icon_kind_opt(icon_kind)
+                        .selected(is_selected)
+                        .hovered(false)
+                        .with_accent_bar(true)
+                        .into_any_element()
                 }
             }
         }))
@@ -393,22 +424,99 @@ fn render_main_menu_footer(live_spec: MainMenuLiveSpec) -> gpui::AnyElement {
             })
             .unwrap_or("Run")
     };
+    let footer_text = theme
+        .colors
+        .text
+        .primary
+        .with_opacity(crate::window_resize::mini_layout::HINT_TEXT_OPACITY)
+        .to_rgb();
+    let shortcut_colors = crate::components::hint_strip::whisper_inline_shortcut_colors(
+        footer_text.into(),
+        theme.colors.text.primary.to_rgb(),
+        false,
+    );
 
     gpui::div()
         .w_full()
         .h_full()
         .border_t_1()
-        .border_color(theme.colors.ui.border.with_opacity(0.30))
+        .border_color(gpui::rgba(chrome.divider_rgba))
         .bg(gpui::rgba(chrome.window_surface_rgba))
         .child(
-            crate::components::render_universal_prompt_hint_strip_clickable_with_primary_label(
-                primary_label,
-                |_event, _window, _cx| {},
-                |_event, _window, _cx| {},
-                |_event, _window, _cx| {},
-            ),
+            gpui::div()
+                .w_full()
+                .h_full()
+                .px(gpui::px(
+                    crate::window_resize::mini_layout::HINT_STRIP_PADDING_X,
+                ))
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_end()
+                .gap(gpui::px(4.0))
+                .children(
+                    [
+                        ("↵", primary_label, 96.0_f32, true),
+                        ("⌘↵", "AI", 56.0_f32, false),
+                        ("⌘K", "Actions", 96.0_f32, false),
+                    ]
+                    .into_iter()
+                    .map(|(shortcut, label, width, align_end)| {
+                        let shortcut_tokens =
+                            crate::components::hint_strip::shortcut_tokens_from_hint(shortcut);
+
+                        gpui::div()
+                            .w(gpui::px(width))
+                            .h_full()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_center()
+                            .when(align_end, |d| d.justify_end())
+                            .child(
+                                gpui::div()
+                                    .px(gpui::px(4.0))
+                                    .py(gpui::px(2.0))
+                                    .rounded(gpui::px(4.0))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(gpui::px(3.0))
+                                    .child(
+                                        gpui::div()
+                                            .text_size(gpui::px(12.5))
+                                            .text_color(footer_text)
+                                            .child(label),
+                                    )
+                                    .child(
+                                        crate::components::hint_strip::render_inline_shortcut_keys(
+                                            shortcut_tokens.iter().map(|token| token.as_str()),
+                                            shortcut_colors,
+                                        ),
+                                    ),
+                            )
+                    }),
+                ),
         )
         .into_any_element()
+}
+
+fn preview_entry_icon(icon_hint: &str) -> Option<String> {
+    crate::list_item::IconKind::from_icon_hint(icon_hint).map(|_| icon_hint.to_string())
+}
+
+fn preview_row(
+    title: impl Into<String>,
+    subtitle: impl Into<String>,
+    leading_icon: Option<&str>,
+    primary_action_label: impl Into<String>,
+) -> MainMenuPreviewRow {
+    MainMenuPreviewRow {
+        title: title.into(),
+        subtitle: subtitle.into(),
+        leading_icon: leading_icon.and_then(preview_entry_icon),
+        primary_action_label: primary_action_label.into(),
+    }
 }
 
 fn main_menu_preview_entries() -> &'static [MainMenuPreviewEntry] {
@@ -423,84 +531,75 @@ fn build_main_menu_preview_entries() -> Vec<MainMenuPreviewEntry> {
     let mut seen_titles = HashSet::new();
 
     let suggested_rows = vec![
-        MainMenuPreviewRow {
-            title: "Theme Designer".to_string(),
-            subtitle: "Design your color theme with live preview".to_string(),
-            leading_icon: "Palette".to_string(),
-            trailing_hint: "Built-in".to_string(),
-            primary_action_label: "Open Theme Designer".to_string(),
-        },
-        MainMenuPreviewRow {
-            title: "Quit Script Kit".to_string(),
-            subtitle: "Quit the Script Kit application".to_string(),
-            leading_icon: "Command".to_string(),
-            trailing_hint: "Built-in".to_string(),
-            primary_action_label: "Quit Script Kit".to_string(),
-        },
-        MainMenuPreviewRow {
-            title: "Reset Window Positions".to_string(),
-            subtitle: "Reset all Script Kit windows to their default positions".to_string(),
-            leading_icon: "Command".to_string(),
-            trailing_hint: "Built-in".to_string(),
-            primary_action_label: "Reset Window Positions".to_string(),
-        },
-        MainMenuPreviewRow {
-            title: "Open Notes".to_string(),
-            subtitle: "Open the notes window".to_string(),
-            leading_icon: "Command".to_string(),
-            trailing_hint: "Built-in".to_string(),
-            primary_action_label: "Open Notes".to_string(),
-        },
-        MainMenuPreviewRow {
-            title: "Hello World".to_string(),
-            subtitle: "Basic starter script".to_string(),
-            leading_icon: "Code".to_string(),
-            trailing_hint: "Script".to_string(),
-            primary_action_label: "Run Hello World".to_string(),
-        },
-        MainMenuPreviewRow {
-            title: "Manage Downloads".to_string(),
-            subtitle: "Browse and manage your downloads folder".to_string(),
-            leading_icon: "Code".to_string(),
-            trailing_hint: "Script".to_string(),
-            primary_action_label: "Run Manage Downloads".to_string(),
-        },
-        MainMenuPreviewRow {
-            title: "Reverse Selected Text".to_string(),
-            subtitle: "Read the clipboard, transform text, and copy the result".to_string(),
-            leading_icon: "Code".to_string(),
-            trailing_hint: "Script".to_string(),
-            primary_action_label: "Run Reverse Selected Text".to_string(),
-        },
+        preview_row(
+            "Theme Designer",
+            "Design your color theme with live preview",
+            Some("Palette"),
+            "Open Theme Designer",
+        ),
+        preview_row(
+            "Quit Script Kit",
+            "Quit the Script Kit application",
+            Some("ArrowRightFromLine"),
+            "Quit Script Kit",
+        ),
+        preview_row(
+            "Reset Window Positions",
+            "Reset all Script Kit windows to their default positions",
+            Some("RefreshCw"),
+            "Reset Window Positions",
+        ),
+        preview_row(
+            "Open Notes",
+            "Open the notes window",
+            Some("NotebookPen"),
+            "Open Notes",
+        ),
+        preview_row(
+            "Hello World",
+            "Basic starter script",
+            Some("Code"),
+            "Run Hello World",
+        ),
+        preview_row(
+            "Manage Downloads",
+            "Browse and manage your downloads folder",
+            Some("Code"),
+            "Run Manage Downloads",
+        ),
+        preview_row(
+            "Reverse Selected Text",
+            "Read the clipboard, transform text, and copy the result",
+            Some("Code"),
+            "Run Reverse Selected Text",
+        ),
     ];
     seen_titles.extend(suggested_rows.iter().map(|row| row.title.clone()));
-    push_preview_section(&mut entries, "Suggested", suggested_rows);
+    push_preview_section(&mut entries, "Suggested", Some("Star"), suggested_rows);
 
     let script_rows: Vec<_> = crate::scripts::read_scripts()
         .into_iter()
         .filter(|script| seen_titles.insert(script.name.clone()))
         .take(8)
-        .map(|script| MainMenuPreviewRow {
-            title: script.name.clone(),
-            subtitle: script
-                .description
-                .clone()
-                .or_else(|| {
-                    script
-                        .plugin_title
-                        .clone()
-                        .map(|title| format!("Plugin: {title}"))
-                })
-                .unwrap_or_else(|| "Script".to_string()),
-            leading_icon: script.icon.clone().unwrap_or_else(|| "Code".to_string()),
-            trailing_hint: script
-                .shortcut
-                .clone()
-                .unwrap_or_else(|| "Script".to_string()),
-            primary_action_label: format!("Run {}", script.name),
+        .map(|script| {
+            preview_row(
+                script.name.clone(),
+                script
+                    .description
+                    .clone()
+                    .or_else(|| {
+                        script
+                            .plugin_title
+                            .clone()
+                            .map(|title| format!("Plugin: {title}"))
+                    })
+                    .unwrap_or_else(|| "Script".to_string()),
+                script.icon.as_deref().or(Some("Code")),
+                format!("Run {}", script.name),
+            )
         })
         .collect();
-    push_preview_section(&mut entries, "Scripts", script_rows);
+    push_preview_section(&mut entries, "Main", None, script_rows);
 
     let skill_rows: Vec<_> = crate::plugins::discover_plugins()
         .ok()
@@ -509,42 +608,44 @@ fn build_main_menu_preview_entries() -> Vec<MainMenuPreviewEntry> {
         .into_iter()
         .filter(|skill| seen_titles.insert(skill.title.clone()))
         .take(8)
-        .map(|skill| MainMenuPreviewRow {
-            title: skill.title.clone(),
-            subtitle: if skill.description.is_empty() {
-                format!("Plugin skill from {}", skill.plugin_title)
-            } else {
-                format!("{} · {}", skill.plugin_title, skill.description)
-            },
-            leading_icon: "Command".to_string(),
-            trailing_hint: skill.plugin_title.clone(),
-            primary_action_label: format!("Open {}", skill.title),
+        .map(|skill| {
+            preview_row(
+                skill.title.clone(),
+                if skill.description.is_empty() {
+                    format!("Plugin skill from {}", skill.plugin_title)
+                } else {
+                    format!("{} · {}", skill.plugin_title, skill.description)
+                },
+                Some("Sparkles"),
+                format!("Open {}", skill.title),
+            )
         })
         .collect();
-    push_preview_section(&mut entries, "Skills", skill_rows);
+    push_preview_section(&mut entries, "Skills", None, skill_rows);
 
     let scriptlet_rows: Vec<_> = crate::scripts::load_scriptlets()
         .into_iter()
         .filter(|scriptlet| seen_titles.insert(scriptlet.name.clone()))
         .take(8)
-        .map(|scriptlet| MainMenuPreviewRow {
-            title: scriptlet.name.clone(),
-            subtitle: scriptlet
-                .description
-                .clone()
-                .or_else(|| {
-                    scriptlet
-                        .group
-                        .clone()
-                        .map(|group| format!("Group: {group}"))
-                })
-                .unwrap_or_else(|| scriptlet.tool_display_name().to_string()),
-            leading_icon: "Code".to_string(),
-            trailing_hint: scriptlet.tool_display_name().to_string(),
-            primary_action_label: format!("Run {}", scriptlet.name),
+        .map(|scriptlet| {
+            preview_row(
+                scriptlet.name.clone(),
+                scriptlet
+                    .description
+                    .clone()
+                    .or_else(|| {
+                        scriptlet
+                            .group
+                            .clone()
+                            .map(|group| format!("Group: {group}"))
+                    })
+                    .unwrap_or_else(|| scriptlet.tool_display_name().to_string()),
+                Some("Code"),
+                format!("Run {}", scriptlet.name),
+            )
         })
         .collect();
-    push_preview_section(&mut entries, "Scriptlets", scriptlet_rows);
+    push_preview_section(&mut entries, "Scriptlets", None, scriptlet_rows);
 
     let config = crate::config::load_config();
     let builtin_rows: Vec<_> = crate::builtins::get_builtin_entries(&config.get_builtins())
@@ -552,17 +653,15 @@ fn build_main_menu_preview_entries() -> Vec<MainMenuPreviewEntry> {
         .filter(|entry| seen_titles.insert(entry.name.clone()))
         .take(8)
         .map(|entry| {
-            let title = entry.name.clone();
-            MainMenuPreviewRow {
-                title,
-                subtitle: entry.description,
-                leading_icon: entry.icon.unwrap_or_else(|| "Command".to_string()),
-                trailing_hint: "Built-in".to_string(),
-                primary_action_label: format!("Open {}", entry.name),
-            }
+            preview_row(
+                entry.name.clone(),
+                entry.description,
+                entry.icon.as_deref().or(Some("Command")),
+                format!("Open {}", entry.name),
+            )
         })
         .collect();
-    push_preview_section(&mut entries, "Built-ins", builtin_rows);
+    push_preview_section(&mut entries, "Built-ins", None, builtin_rows);
 
     entries
 }
@@ -570,6 +669,7 @@ fn build_main_menu_preview_entries() -> Vec<MainMenuPreviewEntry> {
 fn push_preview_section(
     entries: &mut Vec<MainMenuPreviewEntry>,
     label: &'static str,
+    icon: Option<&'static str>,
     rows: Vec<MainMenuPreviewRow>,
 ) {
     if rows.is_empty() {
@@ -579,6 +679,7 @@ fn push_preview_section(
     entries.push(MainMenuPreviewEntry::Section {
         label,
         count: rows.len(),
+        icon,
     });
     entries.extend(rows.into_iter().map(MainMenuPreviewEntry::Row));
 }
@@ -614,7 +715,7 @@ mod tests {
         let (live, resolution) = resolve_main_menu_variant(Some("nonexistent"));
         // Default (current-main-menu) has no overrides
         assert!(!live.force_empty_results);
-        assert!(!live.prefer_first_result_selected);
+        assert!(live.prefer_first_result_selected);
         assert!(resolution.fallback_used);
     }
 
@@ -622,6 +723,7 @@ mod tests {
     fn resolve_none_returns_current() {
         let (live, resolution) = resolve_main_menu_variant(None);
         assert!(!live.force_empty_results);
+        assert!(live.prefer_first_result_selected);
         assert!(!resolution.fallback_used);
     }
 
