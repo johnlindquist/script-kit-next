@@ -7,7 +7,8 @@ use gpui::{
     WindowOptions,
 };
 
-use super::display::get_visible_display_bounds;
+use super::display::get_native_display_descriptors;
+use super::snap_mode::SnapMode;
 use super::snap_session::{SnapOverlayModel, SnapOverlayScene, SnapOverlayTarget};
 use super::types::Bounds;
 
@@ -60,6 +61,76 @@ fn pixels_to_i32(value: Pixels) -> i32 {
     px_value.round() as i32
 }
 
+fn intersection_area(a: &Bounds, b: &Bounds) -> u64 {
+    let left = a.x.max(b.x);
+    let top = a.y.max(b.y);
+    let right = (a.x + a.width as i32).min(b.x + b.width as i32);
+    let bottom = (a.y + a.height as i32).min(b.y + b.height as i32);
+
+    if right <= left || bottom <= top {
+        return 0;
+    }
+
+    ((right - left) as u64) * ((bottom - top) as u64)
+}
+
+fn gpui_display_slot_for_native_index(
+    native_index: usize,
+    gpui_display_count: usize,
+) -> Option<(usize, &'static str)> {
+    if gpui_display_count == 0 {
+        return None;
+    }
+
+    if gpui_display_count == 1 {
+        return Some((0, "single_display"));
+    }
+
+    if native_index < gpui_display_count {
+        return Some((native_index, "index"));
+    }
+
+    None
+}
+
+fn matched_gpui_display_for_native_index(
+    native_index: usize,
+    native_full_bounds: &Bounds,
+    gpui_displays: &[(gpui::DisplayId, Bounds)],
+) -> Option<(gpui::DisplayId, Bounds, &'static str)> {
+    if let Some((gpui_index, strategy)) =
+        gpui_display_slot_for_native_index(native_index, gpui_displays.len())
+    {
+        if let Some((display_id, bounds)) = gpui_displays.get(gpui_index) {
+            return Some((*display_id, *bounds, strategy));
+        }
+    }
+
+    gpui_displays
+        .iter()
+        .max_by_key(|(_, gpui_bounds)| intersection_area(native_full_bounds, gpui_bounds))
+        .map(|(display_id, bounds)| (*display_id, *bounds, "overlap_fallback"))
+}
+
+fn same_display_bounds_set(existing: &[OverlayDisplayWindow], next: &[Bounds]) -> bool {
+    existing.len() == next.len()
+        && existing
+            .iter()
+            .zip(next.iter())
+            .all(|(existing, next)| existing.display_bounds == *next)
+}
+
+fn close_overlay_windows(overlay_windows: Vec<OverlayDisplayWindow>, cx: &mut App) {
+    for overlay in overlay_windows {
+        overlay
+            .handle
+            .update(cx, |_view, window, _cx| {
+                window.remove_window();
+            })
+            .ok();
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Overlay view
 // ---------------------------------------------------------------------------
@@ -86,6 +157,9 @@ impl SnapOverlayView {
             target: "script_kit::snap_overlay",
             event = "snap_overlay_model_updated",
             has_model = model.is_some(),
+            mode = model.as_ref().map(|m| format!("{:?}", m.mode)),
+            dominant = model.as_ref().map(|m| m.is_dominant),
+            target_count = model.as_ref().map(|m| m.targets.len()),
             ?active_tile,
             "updated snap overlay model"
         );
@@ -103,6 +177,13 @@ impl Render for SnapOverlayView {
 
         let display = model.display_bounds;
         let targets: Vec<SnapOverlayTarget> = model.targets.clone();
+        let (active_border, active_fill, inactive_border, scrim) = match model.mode {
+            SnapMode::Simple => (0x66D9E8FF, 0x66D9E826, 0x66D9E844, 0x00000010),
+            SnapMode::Expanded => (0xFFFFFFFF, 0xFFFFFF1A, 0xFFFFFF33, 0x00000010),
+            SnapMode::Precision => (0xF6AD55FF, 0xF6AD5522, 0xF6AD5540, 0x00000012),
+            SnapMode::Off => (0x00000000, 0x00000000, 0x00000000, 0x00000000),
+        };
+        let scrim = if model.is_dominant { scrim } else { scrim / 2 };
 
         div()
             .absolute()
@@ -110,22 +191,23 @@ impl Render for SnapOverlayView {
             .left(px(0.))
             .w(px(display.width as f32))
             .h(px(display.height as f32))
+            .bg(rgba(scrim))
             .children(targets.into_iter().map(move |target| {
                 let rel_x = (target.bounds.x - display.x) as f32;
                 let rel_y = (target.bounds.y - display.y) as f32;
 
                 let border = if target.active {
-                    0xFFFFFFAA
+                    active_border
                 } else {
-                    0xFFFFFF33
+                    inactive_border
                 };
                 let fill = if target.active {
-                    0xFFFFFF14
+                    active_fill
                 } else {
                     0x00000000
                 };
 
-                div()
+                let tile = div()
                     .absolute()
                     .left(px(rel_x))
                     .top(px(rel_y))
@@ -133,9 +215,14 @@ impl Render for SnapOverlayView {
                     .h(px(target.bounds.height as f32))
                     .rounded(px(10.))
                     .border_1()
-                    .border_dashed()
                     .border_color(rgba(border))
-                    .bg(rgba(fill))
+                    .bg(rgba(fill));
+
+                if target.active {
+                    tile
+                } else {
+                    tile.border_dashed()
+                }
             }))
     }
 }
@@ -152,32 +239,67 @@ pub fn ensure_snap_overlay_windows(cx: &mut App) -> Result<()> {
         .lock()
         .map_err(|e| anyhow::anyhow!("snap overlay lock poisoned: {e}"))?;
 
-    if !guard.is_empty() {
+    let native_displays = get_native_display_descriptors()
+        .context("failed to query native display descriptors for snap overlay")?;
+    let expected_visible_bounds: Vec<Bounds> = native_displays
+        .iter()
+        .map(|display| display.visible_bounds)
+        .collect();
+
+    if !guard.is_empty() && same_display_bounds_set(&guard, &expected_visible_bounds) {
         return Ok(());
     }
 
-    for display in cx.displays() {
-        let full = display.bounds();
-        let full_x = pixels_to_i32(full.origin.x);
-        let full_y = pixels_to_i32(full.origin.y);
-        let full_w = pixels_to_i32(full.size.width);
-        let full_h = pixels_to_i32(full.size.height);
+    let old_windows: Vec<_> = guard.drain(..).collect();
+    drop(guard);
+    close_overlay_windows(old_windows, cx);
 
-        let visible = get_visible_display_bounds(full_x + (full_w / 2), full_y + (full_h / 2));
+    let gpui_displays: Vec<_> = cx
+        .displays()
+        .iter()
+        .map(|display| {
+            let full = display.bounds();
+            (
+                display.id(),
+                Bounds {
+                    x: pixels_to_i32(full.origin.x),
+                    y: pixels_to_i32(full.origin.y),
+                    width: pixels_to_i32(full.size.width) as u32,
+                    height: pixels_to_i32(full.size.height) as u32,
+                },
+            )
+        })
+        .collect();
 
-        let local_x = visible.x - full_x;
-        let local_y = visible.y - full_y;
+    let mut overlay_windows = Vec::new();
+
+    for (native_index, native_display) in native_displays.into_iter().enumerate() {
+        let Some((display_id, gpui_full_bounds, mapping_strategy)) =
+            matched_gpui_display_for_native_index(
+                native_index,
+                &native_display.full_bounds,
+                &gpui_displays,
+            )
+        else {
+            continue;
+        };
+
+        let local_x = native_display.visible_bounds.x - native_display.full_bounds.x;
+        let local_y = native_display.visible_bounds.y - native_display.full_bounds.y;
 
         let overlay_bounds = gpui::Bounds {
             origin: point(px(local_x as f32), px(local_y as f32)),
-            size: size(px(visible.width as f32), px(visible.height as f32)),
+            size: size(
+                px(native_display.visible_bounds.width as f32),
+                px(native_display.visible_bounds.height as f32),
+            ),
         };
 
         let handle = cx
             .open_window(
                 WindowOptions {
                     window_bounds: Some(WindowBounds::Windowed(overlay_bounds)),
-                    display_id: Some(display.id()),
+                    display_id: Some(display_id),
                     titlebar: None,
                     window_background: WindowBackgroundAppearance::Transparent,
                     focus: false,
@@ -209,11 +331,36 @@ pub fn ensure_snap_overlay_windows(cx: &mut App) -> Result<()> {
             });
         }
 
-        guard.push(OverlayDisplayWindow {
-            display_bounds: visible,
+        tracing::info!(
+            target: "script_kit::snap_overlay",
+            event = "snap_overlay_window_mapped",
+            native_index,
+            mapping_strategy,
+            native_display_count = expected_visible_bounds.len(),
+            gpui_display_count = gpui_displays.len(),
+            visible_x = native_display.visible_bounds.x,
+            visible_y = native_display.visible_bounds.y,
+            visible_w = native_display.visible_bounds.width,
+            visible_h = native_display.visible_bounds.height,
+            native_full_x = native_display.full_bounds.x,
+            native_full_y = native_display.full_bounds.y,
+            gpui_full_x = gpui_full_bounds.x,
+            gpui_full_y = gpui_full_bounds.y,
+            gpui_full_w = gpui_full_bounds.width,
+            gpui_full_h = gpui_full_bounds.height,
+            "mapped native display descriptor to GPUI display for snap overlay"
+        );
+
+        overlay_windows.push(OverlayDisplayWindow {
+            display_bounds: native_display.visible_bounds,
             handle,
         });
     }
+
+    let mut guard = SNAP_OVERLAY_WINDOWS
+        .lock()
+        .map_err(|e| anyhow::anyhow!("snap overlay lock poisoned: {e}"))?;
+    *guard = overlay_windows;
 
     tracing::info!(
         target: "script_kit::snap_overlay",
@@ -278,4 +425,34 @@ pub fn hide_snap_overlay(cx: &mut App) -> Result<()> {
     );
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::gpui_display_slot_for_native_index;
+
+    #[test]
+    fn native_and_gpui_display_slots_align_by_index_when_counts_match() {
+        assert_eq!(gpui_display_slot_for_native_index(0, 3), Some((0, "index")));
+        assert_eq!(gpui_display_slot_for_native_index(1, 3), Some((1, "index")));
+        assert_eq!(gpui_display_slot_for_native_index(2, 3), Some((2, "index")));
+    }
+
+    #[test]
+    fn single_gpui_display_maps_everything_to_that_display() {
+        assert_eq!(
+            gpui_display_slot_for_native_index(0, 1),
+            Some((0, "single_display"))
+        );
+        assert_eq!(
+            gpui_display_slot_for_native_index(2, 1),
+            Some((0, "single_display"))
+        );
+    }
+
+    #[test]
+    fn out_of_range_native_index_uses_fallback_path() {
+        assert_eq!(gpui_display_slot_for_native_index(3, 3), None);
+        assert_eq!(gpui_display_slot_for_native_index(0, 0), None);
+    }
 }

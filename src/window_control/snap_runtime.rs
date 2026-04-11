@@ -4,11 +4,13 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use gpui::{App, AsyncApp};
 
+use super::snap::build_snap_targets_for_mode;
 use super::snap_mode::{current_snap_mode, SnapMode};
 use super::snap_overlay::{hide_snap_overlay, show_snap_overlay};
 use super::snap_session::{
     begin_snap_session, build_overlay_scene, cancel_snap_session, finish_snap_session,
-    poll_window_bounds, prime_snap_session, tick_snap_session, update_session_display, SnapSession,
+    poll_window_bounds, prime_snap_session, tick_snap_session, update_session_display,
+    SnapDisplayTargets, SnapSession,
 };
 
 /// Polling interval for tracking the dragged window (~60 fps).
@@ -183,6 +185,64 @@ pub fn cancel_snap_runtime(cx: &mut App) -> Result<()> {
     // Release lock before overlay call.
     drop(guard);
     hide_snap_overlay(cx)?;
+
+    Ok(())
+}
+
+/// Refresh the active runtime after a snap-mode change without losing the
+/// currently tracked window or overlay lifecycle.
+pub fn refresh_snap_runtime_for_mode(cx: &mut App) -> Result<()> {
+    let mut guard = ACTIVE_SNAP_RUNTIME
+        .lock()
+        .map_err(|e| anyhow::anyhow!("snap runtime lock poisoned: {e}"))?;
+
+    let Some(runtime) = guard.as_mut() else {
+        return Ok(());
+    };
+
+    let mode = current_snap_mode();
+    runtime.session.mode = mode;
+    runtime.session.all_display_targets = runtime
+        .session
+        .all_display_targets
+        .iter()
+        .map(|dt| SnapDisplayTargets {
+            display: dt.display,
+            targets: build_snap_targets_for_mode(&dt.display, mode),
+        })
+        .collect();
+
+    if let Some(dt) = runtime
+        .session
+        .all_display_targets
+        .iter()
+        .find(|dt| dt.display == runtime.session.display)
+    {
+        runtime.session.targets = dt.targets.clone();
+    } else if let Some(first) = runtime.session.all_display_targets.first() {
+        runtime.session.display = first.display;
+        runtime.session.targets = first.targets.clone();
+    } else {
+        runtime.session.targets.clear();
+    }
+
+    let current_bounds = runtime.session.last_window_bounds;
+    update_session_display(&mut runtime.session, &current_bounds);
+    let _ = tick_snap_session(&mut runtime.session, current_bounds, Instant::now());
+    let scene = build_overlay_scene(&runtime.session);
+
+    tracing::info!(
+        target: "script_kit::snap_runtime",
+        event = "snap_runtime_mode_refreshed",
+        window_id = runtime.session.window_id,
+        ?mode,
+        target_count = runtime.session.targets.len(),
+        display_count = runtime.session.all_display_targets.len(),
+        "refreshed snap runtime for snap mode change"
+    );
+
+    drop(guard);
+    show_snap_overlay(scene, cx)?;
 
     Ok(())
 }

@@ -42,10 +42,14 @@ pub use actions::{
     move_to_previous_display, move_window, resize_window, tile_window,
 };
 pub use query::{get_frontmost_window_of_previous_app, has_accessibility_permission, list_windows};
-pub use snap_mode::{current_snap_mode, set_snap_mode, SnapMode};
+#[allow(unused_imports)]
+pub use snap_mode::{
+    current_snap_mode, load_snap_mode_from_preferences, persist_snap_mode, set_snap_mode, SnapMode,
+};
 pub use snap_monitor::install_snap_drag_monitor;
 #[allow(unused_imports)]
 pub use snap_runtime::{
-    cancel_snap_runtime, finish_snap_runtime, is_snap_runtime_active, start_snap_runtime,
+    cancel_snap_runtime, finish_snap_runtime, is_snap_runtime_active,
+    refresh_snap_runtime_for_mode, start_snap_runtime,
 };
 pub use types::*;
