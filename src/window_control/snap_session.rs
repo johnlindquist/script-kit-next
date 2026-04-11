@@ -51,6 +51,10 @@ pub enum SnapSessionOutcome {
 pub struct SnapOverlayModel {
     /// Visible display bounds for positioning the overlay window.
     pub display_bounds: Bounds,
+    /// Snap mode used to build this overlay model.
+    pub mode: SnapMode,
+    /// Whether this display is the currently dominant/matched display.
+    pub is_dominant: bool,
     /// All snap targets with their active/inactive state.
     pub targets: Vec<SnapOverlayTarget>,
 }
@@ -251,6 +255,29 @@ pub fn update_session_display(session: &mut SnapSession, window_bounds: &Bounds)
     }
 }
 
+fn best_snap_match_from_display_targets(
+    dragged_window: &Bounds,
+    all_display_targets: &[SnapDisplayTargets],
+    min_overlap_ratio: f64,
+) -> Option<(Bounds, SnapMatch)> {
+    let mut best: Option<(Bounds, SnapMatch)> = None;
+
+    for display_targets in all_display_targets {
+        if let Some(candidate) =
+            best_snap_match(dragged_window, &display_targets.targets, min_overlap_ratio)
+        {
+            if best
+                .as_ref()
+                .is_none_or(|(_, current)| candidate.overlap_ratio > current.overlap_ratio)
+            {
+                best = Some((display_targets.display, candidate));
+            }
+        }
+    }
+
+    best
+}
+
 /// Advance the session by one tick with the current window bounds.
 ///
 /// Updates the active snap match and phase. Returns the updated phase.
@@ -270,8 +297,51 @@ pub fn tick_snap_session(
 
     // Recompute snap match when tracking.
     if session.has_moved {
-        session.active_match =
-            best_snap_match(&current_bounds, &session.targets, MIN_OVERLAP_RATIO);
+        if let Some((matched_display, matched)) = best_snap_match_from_display_targets(
+            &current_bounds,
+            &session.all_display_targets,
+            MIN_OVERLAP_RATIO,
+        ) {
+            if matched_display != session.display {
+                if let Some(dt) = session
+                    .all_display_targets
+                    .iter()
+                    .find(|dt| dt.display == matched_display)
+                {
+                    session.display = matched_display;
+                    session.targets = dt.targets.clone();
+                }
+
+                tracing::info!(
+                    target: "script_kit::snap_session",
+                    event = "snap_session_match_display_changed",
+                    session_id = session.session_id,
+                    display_x = matched_display.x,
+                    display_y = matched_display.y,
+                    display_w = matched_display.width,
+                    display_h = matched_display.height,
+                    tile = ?matched.target.tile,
+                    "switched snap session display from matched target"
+                );
+            }
+
+            session.active_match = Some(matched);
+        } else {
+            update_session_display(session, &current_bounds);
+            session.active_match =
+                best_snap_match(&current_bounds, &session.targets, MIN_OVERLAP_RATIO);
+        }
+
+        tracing::info!(
+            target: "script_kit::snap_session",
+            event = "snap_session_cross_display_match",
+            session_id = session.session_id,
+            matched = session.active_match.is_some(),
+            matched_tile = session.active_match.map(|m| format!("{:?}", m.target.tile)),
+            matched_bounds_x = session.active_match.map(|m| m.target.bounds.x),
+            matched_bounds_y = session.active_match.map(|m| m.target.bounds.y),
+            "evaluated cross-display snap match"
+        );
     }
 
     session.last_window_bounds = current_bounds;
@@ -309,17 +379,19 @@ pub fn tick_snap_session(
 ///
 /// The caller is responsible for passing this model to the overlay renderer.
 pub fn build_overlay_model(session: &SnapSession) -> SnapOverlayModel {
-    let active_tile = session.active_match.map(|m| m.target.tile);
+    let active_bounds = session.active_match.map(|m| m.target.bounds);
 
     SnapOverlayModel {
         display_bounds: session.display,
+        mode: session.mode,
+        is_dominant: true,
         targets: session
             .targets
             .iter()
             .map(|t| SnapOverlayTarget {
                 tile: t.tile,
                 bounds: t.bounds,
-                active: Some(t.tile) == active_tile,
+                active: Some(t.bounds) == active_bounds,
             })
             .collect(),
     }
@@ -328,7 +400,7 @@ pub fn build_overlay_model(session: &SnapSession) -> SnapOverlayModel {
 /// Build a complete overlay scene from the session state, with one model per
 /// connected display.  Only the dominant display's targets carry an active flag.
 pub fn build_overlay_scene(session: &SnapSession) -> SnapOverlayScene {
-    let active_tile = session.active_match.map(|m| m.target.tile);
+    let active_bounds = session.active_match.map(|m| m.target.bounds);
 
     let mut displays: Vec<_> = session
         .all_display_targets
@@ -337,13 +409,15 @@ pub fn build_overlay_scene(session: &SnapSession) -> SnapOverlayScene {
             let is_dominant = dt.display == session.display;
             SnapOverlayModel {
                 display_bounds: dt.display,
+                mode: session.mode,
+                is_dominant,
                 targets: dt
                     .targets
                     .iter()
                     .map(|t| SnapOverlayTarget {
                         tile: t.tile,
                         bounds: t.bounds,
-                        active: is_dominant && Some(t.tile) == active_tile,
+                        active: Some(t.bounds) == active_bounds,
                     })
                     .collect(),
             }
@@ -410,11 +484,27 @@ pub fn prime_snap_session(session: &mut SnapSession, now: Instant) {
     session.has_moved = true;
     session.last_movement_time = Some(now);
     session.phase = SnapSessionPhase::Tracking;
-    session.active_match = best_snap_match(
+    if let Some((matched_display, matched)) = best_snap_match_from_display_targets(
         &session.last_window_bounds,
-        &session.targets,
+        &session.all_display_targets,
         MIN_OVERLAP_RATIO,
-    );
+    ) {
+        if let Some(dt) = session
+            .all_display_targets
+            .iter()
+            .find(|dt| dt.display == matched_display)
+        {
+            session.display = matched_display;
+            session.targets = dt.targets.clone();
+        }
+        session.active_match = Some(matched);
+    } else {
+        session.active_match = best_snap_match(
+            &session.last_window_bounds,
+            &session.targets,
+            MIN_OVERLAP_RATIO,
+        );
+    }
 
     tracing::info!(
         target: "script_kit::snap_session",
@@ -551,6 +641,8 @@ mod tests {
 
         let model = build_overlay_model(&session);
         assert_eq!(model.display_bounds, session.display);
+        assert_eq!(model.mode, SnapMode::Expanded);
+        assert!(model.is_dominant);
 
         let active_targets: Vec<_> = model.targets.iter().filter(|t| t.active).collect();
         assert_eq!(active_targets.len(), 1);
@@ -733,11 +825,13 @@ mod tests {
 
         // Dominant display (display_a) should have one active target.
         let dominant_model = &scene.displays[0];
+        assert!(dominant_model.is_dominant);
         let active_count = dominant_model.targets.iter().filter(|t| t.active).count();
         assert_eq!(active_count, 1);
 
         // Non-dominant display (display_b) should have zero active targets.
         let other_model = &scene.displays[1];
+        assert!(!other_model.is_dominant);
         let active_count = other_model.targets.iter().filter(|t| t.active).count();
         assert_eq!(active_count, 0);
     }
@@ -763,5 +857,23 @@ mod tests {
         update_session_display(&mut session, &window_on_a);
 
         assert_eq!(session.display, original_display);
+    }
+
+    #[test]
+    fn tick_snap_session_switches_to_cross_display_match() {
+        let mut session = make_dual_display_session();
+        let now = Instant::now();
+
+        // This window lands on the left-half target of display_b and should
+        // switch the session to that display immediately.
+        let straddling = Bounds::new(1440, 24, 720, 876);
+        tick_snap_session(&mut session, straddling, now);
+
+        let active = session
+            .active_match
+            .expect("should match on second display");
+        assert_eq!(active.target.tile, TilePosition::LeftHalf);
+        assert_eq!(active.target.bounds.x, 1440);
+        assert_eq!(session.display, Bounds::new(1440, 24, 1440, 876));
     }
 }

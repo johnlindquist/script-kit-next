@@ -4,8 +4,24 @@ use tracing::debug;
 
 use super::types::*;
 
-/// Get bounds for all available displays
-pub(super) fn get_all_display_bounds() -> Result<Vec<Bounds>> {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct NativeDisplayDescriptor {
+    pub full_bounds: Bounds,
+    pub visible_bounds: Bounds,
+}
+
+fn bounds_from_cocoa_frame(frame: CGRect, primary_height: f64) -> Bounds {
+    let cg_y = primary_height - (frame.origin.y + frame.size.height);
+
+    Bounds {
+        x: frame.origin.x as i32,
+        y: cg_y as i32,
+        width: frame.size.width as u32,
+        height: frame.size.height as u32,
+    }
+}
+
+pub(super) fn get_native_display_descriptors() -> Result<Vec<NativeDisplayDescriptor>> {
     let mut displays = Vec::new();
 
     // SAFETY: objc messaging to NSScreen class methods. All returned pointers are
@@ -35,19 +51,25 @@ pub(super) fn get_all_display_bounds() -> Result<Vec<Bounds>> {
                 continue;
             }
 
+            let frame: CGRect = msg_send![screen, frame];
             let visible_frame: CGRect = msg_send![screen, visibleFrame];
-            let cg_y = primary_height - (visible_frame.origin.y + visible_frame.size.height);
 
-            displays.push(Bounds {
-                x: visible_frame.origin.x as i32,
-                y: cg_y as i32,
-                width: visible_frame.size.width as u32,
-                height: visible_frame.size.height as u32,
+            displays.push(NativeDisplayDescriptor {
+                full_bounds: bounds_from_cocoa_frame(frame, primary_height),
+                visible_bounds: bounds_from_cocoa_frame(visible_frame, primary_height),
             });
         }
     }
 
     Ok(displays)
+}
+
+/// Get bounds for all available displays
+pub(super) fn get_all_display_bounds() -> Result<Vec<Bounds>> {
+    Ok(get_native_display_descriptors()?
+        .into_iter()
+        .map(|display| display.visible_bounds)
+        .collect())
 }
 
 /// Get the visible display bounds (excluding menu bar and dock) for the display
