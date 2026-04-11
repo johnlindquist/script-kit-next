@@ -54,3 +54,9 @@ test-screenshots/
 .xorloop-sessions/
 .ai/
 TODOS.md
+
+# Scratch / ephemeral working dirs
+.tmp/
+
+# Vendored build caches
+vendor/**/.cache/

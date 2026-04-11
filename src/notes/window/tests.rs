@@ -362,6 +362,30 @@ fn test_notes_window_registers_automation_parent_for_actions_popup() {
 }
 
 #[test]
+fn test_notes_window_supports_close_without_launcher_restore() {
+    const WINDOW_OPS_SOURCE: &str = include_str!("window_ops.rs");
+
+    assert!(
+        WINDOW_OPS_SOURCE.contains("pub fn open_notes_window_without_launcher_restore"),
+        "Notes window should expose a launcher-open helper that keeps the launcher hidden on close"
+    );
+    assert!(
+        WINDOW_OPS_SOURCE.contains("restore_launcher_after_notes_close_if_needed(cx);"),
+        "Notes close paths should route through the conditional launcher-restore helper"
+    );
+}
+
+#[test]
+fn test_main_menu_notes_entries_use_no_restore_helper() {
+    const BUILTIN_SOURCE: &str = include_str!("../../app_execute/builtin_execution.rs");
+
+    assert!(
+        BUILTIN_SOURCE.contains("notes::open_notes_window_without_launcher_restore(cx)"),
+        "Main-menu Notes entry should open Notes without restoring the launcher on close"
+    );
+}
+
+#[test]
 fn test_notes_keyboard_stops_propagation_at_start_of_global_escape_chain() {
     const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
     assert!(

@@ -21,36 +21,52 @@ enum SettingsAction {
     ResetWindowPositions,
 }
 
+fn settings_item_matches_filter(item: &SettingsItem, filter: &str) -> bool {
+    if filter.is_empty() {
+        return true;
+    }
+
+    let filter_lower = filter.to_lowercase();
+    item.name.to_lowercase().contains(&filter_lower)
+        || item.description.to_lowercase().contains(&filter_lower)
+}
+
+fn filtered_settings_items<'a>(items: &'a [SettingsItem], filter: &str) -> Vec<&'a SettingsItem> {
+    items.iter()
+        .filter(|item| settings_item_matches_filter(item, filter))
+        .collect()
+}
+
 fn get_settings_items() -> Vec<SettingsItem> {
     let mut items = vec![
         SettingsItem {
             name: "Theme Designer",
             description: "Design your color theme with live preview",
-            icon: "🎨",
+            icon: "palette",
             action: SettingsAction::ChooseTheme,
         },
         SettingsItem {
             name: "Configure Vercel AI Gateway",
             description: "Set up the Vercel AI Gateway API key for ACP Chat",
-            icon: "🔑",
+            icon: "key-round",
             action: SettingsAction::ConfigureVercelApiKey,
         },
         SettingsItem {
             name: "Configure OpenAI API Key",
             description: "Set up the OpenAI API key for ACP Chat",
-            icon: "🔑",
+            icon: "key-round",
             action: SettingsAction::ConfigureOpenAiApiKey,
         },
         SettingsItem {
             name: "Configure Anthropic API Key",
             description: "Set up the Anthropic API key for ACP Chat",
-            icon: "🔑",
+            icon: "key-round",
             action: SettingsAction::ConfigureAnthropicApiKey,
         },
         SettingsItem {
             name: "Select Microphone",
             description: "Choose which microphone to use for dictation",
-            icon: "🎙️",
+            icon: "mic",
             action: SettingsAction::SelectMicrophone,
         },
     ];
@@ -61,7 +77,7 @@ fn get_settings_items() -> Vec<SettingsItem> {
         items.push(SettingsItem {
             name: "Disable Window Snapping",
             description: "Turn off drag snapping and snap overlays until a snap mode is re-enabled",
-            icon: "🚫",
+            icon: "ban",
             action: SettingsAction::DisableWindowSnapping,
         });
     }
@@ -71,7 +87,7 @@ fn get_settings_items() -> Vec<SettingsItem> {
             name: "Snap Mode: Simple",
             description:
                 "Use halves, quadrants, center, and almost-maximize targets while dragging windows",
-            icon: "◧",
+            icon: "square-split-horizontal",
             action: SettingsAction::SnapModeSimple,
         });
     }
@@ -81,7 +97,7 @@ fn get_settings_items() -> Vec<SettingsItem> {
             name: "Snap Mode: Expanded",
             description:
                 "Use halves, quadrants, thirds, and two-thirds targets while dragging windows",
-            icon: "▤",
+            icon: "columns-3",
             action: SettingsAction::SnapModeExpanded,
         });
     }
@@ -90,17 +106,16 @@ fn get_settings_items() -> Vec<SettingsItem> {
         items.push(SettingsItem {
             name: "Snap Mode: Precision",
             description: "Use the full snap grid including sixths for finer placements",
-            icon: "▦",
+            icon: "grid-3x2",
             action: SettingsAction::SnapModePrecision,
         });
     }
 
-    // Only show reset if there are saved positions
     if crate::window_state::has_custom_positions() {
         items.push(SettingsItem {
             name: "Reset Window Positions",
             description: "Restore all windows to default positions",
-            icon: "🔄",
+            icon: "refresh-cw",
             action: SettingsAction::ResetWindowPositions,
         });
     }
@@ -255,14 +270,17 @@ impl ScriptListApp {
         }
     }
 
-    /// Render the settings hub view with categorized configuration options.
-    fn render_settings(&mut self, selected_index: usize, cx: &mut Context<Self>) -> AnyElement {
+    /// Render the settings hub using the same contracted shell as other built-in views.
+    fn render_settings(
+        &mut self,
+        filter: String,
+        selected_index: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::exception(
-                "settings",
-                "settings_hub_with_categorized_options",
-            ),
+            &crate::components::PromptChromeAudit::minimal("settings", 2, false, false),
         );
+
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
@@ -270,13 +288,13 @@ impl ScriptListApp {
 
         let text_primary = self.theme.colors.text.primary;
         let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
+        let text_muted = self.theme.colors.text.muted;
 
         let items = get_settings_items();
-        let item_count = items.len();
+        let filtered_items = filtered_settings_items(&items, &filter);
+        let item_count = filtered_items.len();
         let list_colors = ListItemColors::from_theme(&self.theme);
 
-        // Key handler
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
@@ -287,48 +305,54 @@ impl ScriptListApp {
                 let key = event.keystroke.key.as_str();
                 let has_cmd = event.keystroke.modifiers.platform;
 
-                // ESC: go back/close
                 if is_key_escape(key) {
-                    this.go_back_or_close(window, cx);
+                    if !this.clear_builtin_view_filter(cx) {
+                        this.go_back_or_close(window, cx);
+                    }
                     cx.stop_propagation();
                     return;
                 }
 
-                // Cmd+W always closes window
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     this.close_and_reset_window(cx);
                     cx.stop_propagation();
                     return;
                 }
 
-                let current_selected =
-                    if let AppView::SettingsView { selected_index } = &this.current_view {
-                        *selected_index
-                    } else {
-                        return;
-                    };
+                let (current_filter, current_selected) = if let AppView::SettingsView {
+                    filter,
+                    selected_index,
+                } = &this.current_view
+                {
+                    (filter.clone(), *selected_index)
+                } else {
+                    return;
+                };
 
                 let settings_items = get_settings_items();
-                let settings_count = settings_items.len();
+                let filtered_items = filtered_settings_items(&settings_items, &current_filter);
+                let filtered_count = filtered_items.len();
 
                 if is_key_up(key) {
                     if current_selected > 0 {
-                        if let AppView::SettingsView { selected_index } = &mut this.current_view {
+                        if let AppView::SettingsView { selected_index, .. } = &mut this.current_view
+                        {
                             *selected_index = current_selected - 1;
                         }
                         cx.notify();
                     }
                     cx.stop_propagation();
                 } else if is_key_down(key) {
-                    if current_selected < settings_count.saturating_sub(1) {
-                        if let AppView::SettingsView { selected_index } = &mut this.current_view {
+                    if current_selected < filtered_count.saturating_sub(1) {
+                        if let AppView::SettingsView { selected_index, .. } = &mut this.current_view
+                        {
                             *selected_index = current_selected + 1;
                         }
                         cx.notify();
                     }
                     cx.stop_propagation();
                 } else if is_key_enter(key) {
-                    if let Some(item) = settings_items.get(current_selected) {
+                    if let Some(item) = filtered_items.get(current_selected) {
                         let action = item.action.clone();
                         this.execute_settings_action(&action, window, cx);
                     }
@@ -339,11 +363,10 @@ impl ScriptListApp {
             },
         );
 
-        // Build list items
         let entity = cx.entity().downgrade();
         let hovered = self.hovered_index;
 
-        let list_items: Vec<AnyElement> = items
+        let list_items: Vec<AnyElement> = filtered_items
             .iter()
             .enumerate()
             .map(|(ix, item)| {
@@ -352,7 +375,6 @@ impl ScriptListApp {
                 let action = item.action.clone();
                 let entity_click = entity.clone();
                 let entity_hover = entity.clone();
-                let name_str = format!("{} {}", item.icon, item.name);
                 let desc = item.description.to_string();
 
                 div()
@@ -385,7 +407,8 @@ impl ScriptListApp {
                         }
                     })
                     .child(
-                        ListItem::new(name_str, list_colors)
+                        ListItem::new(item.name.to_string(), list_colors)
+                            .icon_kind_opt(crate::list_item::IconKind::from_icon_hint(item.icon))
                             .description_opt(Some(desc))
                             .selected(is_selected)
                             .hovered(is_hovered)
@@ -394,6 +417,29 @@ impl ScriptListApp {
                     .into_any_element()
             })
             .collect();
+
+        let list_element: AnyElement = if item_count == 0 {
+            div()
+                .w_full()
+                .py(px(design_spacing.padding_xl))
+                .text_center()
+                .text_color(rgb(text_muted))
+                .font_family(design_typography.font_family)
+                .child(if filter.is_empty() {
+                    "No settings available"
+                } else {
+                    "No settings match your filter"
+                })
+                .into_any_element()
+        } else {
+            div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .min_h(px(0.))
+                .children(list_items)
+                .into_any_element()
+        };
 
         div()
             .flex()
@@ -406,35 +452,40 @@ impl ScriptListApp {
             .key_context("settings")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
-            // Header
             .child(
                 div()
                     .w_full()
-                    .px(px(design_spacing.padding_lg))
-                    .py(px(design_spacing.padding_md))
+                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
+                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
                     .flex()
                     .flex_row()
                     .items_center()
                     .gap_3()
                     .child(
-                        div()
-                            .text_size(px(design_typography.font_size_xl))
-                            .child("Script Kit Settings"),
+                        div().flex_1().flex().flex_row().items_center().child(
+                            Input::new(&self.gpui_input_state)
+                                .w_full()
+                                .h(px(28.))
+                                .px(px(0.))
+                                .py(px(0.))
+                                .with_size(Size::Size(px(design_typography.font_size_xl)))
+                                .appearance(false)
+                                .bordered(false)
+                                .focus_bordered(false),
+                        ),
                     )
-                    .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
-                        "{} option{}",
-                        item_count,
-                        if item_count == 1 { "" } else { "s" }
-                    ))),
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(rgb(text_dimmed))
+                            .child(format!(
+                                "{} setting{}",
+                                item_count,
+                                if item_count == 1 { "" } else { "s" }
+                            )),
+                    ),
             )
-            // Divider
-            .child(
-                div()
-                    .mx(px(design_spacing.padding_lg))
-                    .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
-            )
-            // Settings list
+            .child(crate::components::SectionDivider::new())
             .child(
                 div()
                     .flex_1()
@@ -442,9 +493,7 @@ impl ScriptListApp {
                     .w_full()
                     .overflow_hidden()
                     .py(px(design_spacing.padding_xs))
-                    .flex()
-                    .flex_col()
-                    .children(list_items),
+                    .child(list_element),
             )
             .child(
                 if matches!(
@@ -454,14 +503,13 @@ impl ScriptListApp {
                     crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(
                     )
                 } else {
-                    PromptFooter::new(
-                        PromptFooterConfig::new()
-                            .primary_label("Open")
-                            .primary_shortcut("↵")
-                            .show_secondary(false),
-                        PromptFooterColors::from_theme(&self.theme),
+                    crate::components::render_simple_hint_strip(
+                        vec![
+                            gpui::SharedString::from("↵ Open"),
+                            gpui::SharedString::from("Esc Back"),
+                        ],
+                        None,
                     )
-                    .into_any_element()
                 },
             )
             .into_any_element()

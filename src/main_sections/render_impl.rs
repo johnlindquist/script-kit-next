@@ -200,6 +200,7 @@ impl Render for ScriptListApp {
                 | AppView::FileSearchView { .. }
                 | AppView::ThemeChooserView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::AcpHistoryView { .. }
@@ -381,8 +382,11 @@ impl Render for ScriptListApp {
             } => self
                 .render_create_ai_preset(name, system_prompt, model, active_field, cx)
                 .into_any_element(),
-            AppView::SettingsView { selected_index } => {
-                self.render_settings(selected_index, cx)
+            AppView::SettingsView {
+                filter,
+                selected_index,
+            } => {
+                self.render_settings(filter, selected_index, cx)
             }
             AppView::FavoritesBrowseView {
                 filter,

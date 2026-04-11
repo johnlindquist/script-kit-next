@@ -147,7 +147,7 @@ fn tab_ai_mode_passes_preferred_agent_to_preflight() {
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("load_preferred_acp_agent_id"),
-        "tab_ai_mode must load the preferred agent from user preferences"
+        "tab_ai_mode must load the preferred agent from config-backed preferences"
     );
     assert!(
         TAB_AI_MODE_SOURCE.contains("persist_preferred_acp_agent_id"),

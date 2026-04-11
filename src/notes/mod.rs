@@ -62,5 +62,6 @@ pub(crate) use storage::{
 pub use window::{
     close_notes_embedded_acp, close_notes_window, get_notes_app_entity_and_handle,
     get_notes_editor_text, inject_text_into_notes, is_notes_window, is_notes_window_open,
-    open_notes_window, quick_capture, save_note_with_content, NotesApp, NotesSurfaceMode,
+    open_notes_window, open_notes_window_without_launcher_restore, quick_capture,
+    save_note_with_content, NotesApp, NotesSurfaceMode,
 };

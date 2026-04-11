@@ -377,7 +377,7 @@ fn recover_user_preferences_fields(value: Value, correlation_id: &str) -> Script
     let Some(object) = value.as_object() else {
         warn!(
             correlation_id = %correlation_id,
-            "User preferences root is not an object; using defaults"
+            "Legacy preference root is not an object; using defaults"
         );
         return ScriptKitUserPreferences::default();
     };
@@ -404,7 +404,7 @@ fn parse_user_preferences_json(json_str: &str, correlation_id: &str) -> ScriptKi
             warn!(
                 correlation_id = %correlation_id,
                 error = %error,
-                "User preferences JSON was invalid; using defaults"
+                "Legacy preference JSON was invalid; using defaults"
             );
             return ScriptKitUserPreferences::default();
         }
@@ -416,7 +416,7 @@ fn parse_user_preferences_json(json_str: &str, correlation_id: &str) -> ScriptKi
             warn!(
                 correlation_id = %correlation_id,
                 error = %error,
-                "User preferences parse failed; recovering valid fields"
+                "Legacy preference parse failed; recovering valid fields"
             );
             recover_user_preferences_fields(parsed_json, correlation_id)
         }
@@ -802,7 +802,10 @@ pub fn load_config() -> Config {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_bun_extract_command, parse_config_json, parse_user_preferences_json};
+    use super::{
+        build_bun_extract_command, load_user_preferences, parse_config_json,
+        parse_user_preferences_json, save_user_preferences,
+    };
     use crate::config::HotkeyConfig;
     use std::fs;
     use std::path::Path;
@@ -1001,6 +1004,77 @@ mod tests {
             super::super::defaults::DEFAULT_LAYOUT_MAX_HEIGHT
         );
         assert_eq!(preferences.theme.preset_id.as_deref(), Some("nord"));
+    }
+
+    #[test]
+    fn test_load_and_save_user_preferences_migrate_known_legacy_settings_into_config() {
+        let _lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+
+        let temp_dir = tempfile::tempdir().expect("create temp Script Kit dir");
+        let kit_dir = temp_dir.path().join("kit");
+        fs::create_dir_all(&kit_dir).expect("create kit dir");
+
+        let settings_path = kit_dir.join("settings.json");
+        fs::write(
+            &settings_path,
+            serde_json::to_string_pretty(&serde_json::json!({
+                "layout": { "standardHeight": 640, "maxHeight": 920 },
+                "theme": { "presetId": "nord" },
+                "dictation": { "selectedDeviceId": "usb-mic" },
+                "ai": {
+                    "selectedModelId": "gpt-5.4",
+                    "selectedAcpAgentId": "codex-acp"
+                },
+                "windowManagement": { "snapMode": "precision" }
+            }))
+            .expect("serialize legacy settings"),
+        )
+        .expect("write legacy settings");
+
+        let previous_sk_path = std::env::var(crate::setup::SK_PATH_ENV).ok();
+        std::env::set_var(crate::setup::SK_PATH_ENV, temp_dir.path());
+
+        let loaded = load_user_preferences();
+        assert_eq!(loaded.layout.standard_height, 640.0);
+        assert_eq!(loaded.layout.max_height, 920.0);
+        assert_eq!(loaded.theme.preset_id.as_deref(), Some("nord"));
+        assert_eq!(
+            loaded.dictation.selected_device_id.as_deref(),
+            Some("usb-mic")
+        );
+        assert_eq!(loaded.ai.selected_model_id.as_deref(), Some("gpt-5.4"));
+        assert_eq!(
+            loaded.ai.selected_acp_agent_id.as_deref(),
+            Some("codex-acp")
+        );
+        assert_eq!(
+            loaded.window_management.snap_mode,
+            Some(crate::window_control::SnapMode::Precision)
+        );
+
+        save_user_preferences(&loaded).expect("migrate loaded preferences into config.ts");
+
+        let config_contents =
+            fs::read_to_string(kit_dir.join("config.ts")).expect("read migrated config.ts");
+        assert!(config_contents.contains("layout"));
+        assert!(config_contents.contains("theme"));
+        assert!(config_contents.contains("dictation"));
+        assert!(config_contents.contains("ai"));
+        assert!(config_contents.contains("windowManagement"));
+        assert!(config_contents.contains("selectedAcpAgentId"));
+        assert!(config_contents.contains("snapMode"));
+        assert!(
+            !settings_path.exists(),
+            "known legacy settings file should be removed after migration"
+        );
+
+        match previous_sk_path {
+            Some(path) => std::env::set_var(crate::setup::SK_PATH_ENV, path),
+            None => std::env::remove_var(crate::setup::SK_PATH_ENV),
+        }
     }
 
     #[test]

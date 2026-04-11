@@ -281,6 +281,8 @@ pub fn migrate_from_kenv() -> bool {
         "theme.json",
         "tsconfig.json",
         "package.json",
+        // Legacy runtime preferences file; preserve it during migration so
+        // config.ts fallback/cleanup can absorb known keys safely.
         "settings.json",
     ];
     for file in kit_files {

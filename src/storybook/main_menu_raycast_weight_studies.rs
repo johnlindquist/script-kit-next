@@ -7,22 +7,39 @@ use crate::theme::get_cached_theme;
 use crate::ui_foundation::HexColorExt;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct MainMenuWeightSpec {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub family: &'static str,
-    pub description: &'static str,
-    pub search_weight: FontWeight,
-    pub section_weight: FontWeight,
-    pub title_weight: FontWeight,
-    pub selected_title_weight: FontWeight,
-    pub source_weight: FontWeight,
-    pub chip_weight: FontWeight,
-    pub kind_weight: FontWeight,
-    pub search_opacity: f32,
-    pub metadata_opacity: f32,
-    pub kind_opacity: f32,
-    pub selected_fill_opacity: f32,
+struct MainMenuWeightSpec {
+    id: &'static str,
+    name: &'static str,
+    family: &'static str,
+    description: &'static str,
+    search_weight: FontWeight,
+    section_weight: FontWeight,
+    title_weight: FontWeight,
+    selected_title_weight: FontWeight,
+    source_weight: FontWeight,
+    chip_weight: FontWeight,
+    kind_weight: FontWeight,
+    search_size: f32,
+    ask_size: f32,
+    section_size: f32,
+    row_height: f32,
+    icon_size: f32,
+    title_size: f32,
+    meta_size: f32,
+    kind_size: f32,
+    chip_size: f32,
+    footer_size: f32,
+    title_line_height: f32,
+    metadata_line_height: f32,
+    header_height: f32,
+    footer_height: f32,
+    row_gap: f32,
+    content_gap: f32,
+    row_radius: f32,
+    search_opacity: f32,
+    metadata_opacity: f32,
+    kind_opacity: f32,
+    selected_fill_opacity: f32,
 }
 
 #[derive(Clone, Copy)]
@@ -111,22 +128,517 @@ const ROWS: &[MenuPreviewRow] = &[
     },
 ];
 
-pub const SPECS: [MainMenuWeightSpec; 15] = [
-    MainMenuWeightSpec { id: "raycast-baseline", name: "Raycast Baseline", family: "Balanced", description: "Medium search, quiet metadata, and a selected row that leans on fill before weight.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::MEDIUM, chip_weight: FontWeight::MEDIUM, kind_weight: FontWeight::MEDIUM, search_opacity: 0.56, metadata_opacity: 0.62, kind_opacity: 0.70, selected_fill_opacity: 0.12 },
-    MainMenuWeightSpec { id: "lighter-search", name: "Lighter Search", family: "Balanced", description: "Pulls the search line back so the first selected row does more of the visual work.", search_weight: FontWeight::NORMAL, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::NORMAL, chip_weight: FontWeight::MEDIUM, kind_weight: FontWeight::MEDIUM, search_opacity: 0.48, metadata_opacity: 0.60, kind_opacity: 0.66, selected_fill_opacity: 0.12 },
-    MainMenuWeightSpec { id: "softer-sections", name: "Softer Sections", family: "Balanced", description: "Drops the section headers to regular weight so they whisper even more.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::NORMAL, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::MEDIUM, chip_weight: FontWeight::NORMAL, kind_weight: FontWeight::MEDIUM, search_opacity: 0.54, metadata_opacity: 0.60, kind_opacity: 0.66, selected_fill_opacity: 0.12 },
-    MainMenuWeightSpec { id: "selected-contrast", name: "Selected Contrast", family: "Balanced", description: "Makes the selected label semibold while leaving the rest close to baseline.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::SEMIBOLD, source_weight: FontWeight::MEDIUM, chip_weight: FontWeight::MEDIUM, kind_weight: FontWeight::MEDIUM, search_opacity: 0.56, metadata_opacity: 0.62, kind_opacity: 0.70, selected_fill_opacity: 0.10 },
-    MainMenuWeightSpec { id: "all-normal", name: "All Normal", family: "Balanced", description: "Uses opacity and spacing almost exclusively, with only the section headers staying medium.", search_weight: FontWeight::NORMAL, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::NORMAL, source_weight: FontWeight::NORMAL, chip_weight: FontWeight::NORMAL, kind_weight: FontWeight::NORMAL, search_opacity: 0.50, metadata_opacity: 0.58, kind_opacity: 0.62, selected_fill_opacity: 0.12 },
-    MainMenuWeightSpec { id: "vendor-forward", name: "Vendor Forward", family: "Metadata", description: "Promotes vendor/source labels so the list feels more app-directory-like.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::MEDIUM, chip_weight: FontWeight::MEDIUM, kind_weight: FontWeight::NORMAL, search_opacity: 0.56, metadata_opacity: 0.72, kind_opacity: 0.58, selected_fill_opacity: 0.12 },
-    MainMenuWeightSpec { id: "kind-quiet", name: "Kind Quiet", family: "Metadata", description: "Recedes the right-edge kind labels so they stop competing with the row title.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::MEDIUM, chip_weight: FontWeight::MEDIUM, kind_weight: FontWeight::NORMAL, search_opacity: 0.56, metadata_opacity: 0.62, kind_opacity: 0.46, selected_fill_opacity: 0.12 },
-    MainMenuWeightSpec { id: "chip-forward", name: "Chip Forward", family: "Metadata", description: "Lets the alias chip carry more of the accessory emphasis than the vendor text.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::NORMAL, chip_weight: FontWeight::SEMIBOLD, kind_weight: FontWeight::MEDIUM, search_opacity: 0.56, metadata_opacity: 0.60, kind_opacity: 0.68, selected_fill_opacity: 0.12 },
-    MainMenuWeightSpec { id: "whisper-metadata", name: "Whisper Metadata", family: "Metadata", description: "Keeps all secondary labels regular and dim so only the names really read.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::NORMAL, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::NORMAL, chip_weight: FontWeight::NORMAL, kind_weight: FontWeight::NORMAL, search_opacity: 0.54, metadata_opacity: 0.50, kind_opacity: 0.50, selected_fill_opacity: 0.11 },
-    MainMenuWeightSpec { id: "directory-kind", name: "Directory Kind", family: "Metadata", description: "Uses stronger right-edge kind labels for a more catalog-like reading order.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::NORMAL, chip_weight: FontWeight::NORMAL, kind_weight: FontWeight::SEMIBOLD, search_opacity: 0.56, metadata_opacity: 0.58, kind_opacity: 0.74, selected_fill_opacity: 0.12 },
-    MainMenuWeightSpec { id: "title-forward", name: "Title Forward", family: "Primary", description: "Pushes all row titles to medium while keeping metadata light, like a firmer launcher list.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::MEDIUM, selected_title_weight: FontWeight::SEMIBOLD, source_weight: FontWeight::NORMAL, chip_weight: FontWeight::MEDIUM, kind_weight: FontWeight::NORMAL, search_opacity: 0.56, metadata_opacity: 0.58, kind_opacity: 0.58, selected_fill_opacity: 0.10 },
-    MainMenuWeightSpec { id: "selected-medium", name: "Selected Medium", family: "Primary", description: "Keeps even the selected title at medium so the highlight relies more on the filled row.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::NORMAL, chip_weight: FontWeight::MEDIUM, kind_weight: FontWeight::NORMAL, search_opacity: 0.56, metadata_opacity: 0.56, kind_opacity: 0.56, selected_fill_opacity: 0.16 },
-    MainMenuWeightSpec { id: "crisp-raycast", name: "Crisp Raycast", family: "Primary", description: "Leans closest to the reference: medium section labels, medium selected title, and restrained accessories.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::MEDIUM, chip_weight: FontWeight::MEDIUM, kind_weight: FontWeight::MEDIUM, search_opacity: 0.58, metadata_opacity: 0.60, kind_opacity: 0.68, selected_fill_opacity: 0.14 },
-    MainMenuWeightSpec { id: "semibold-hero", name: "Semibold Hero", family: "Primary", description: "Tests whether a semibold selected row feels too assertive for the otherwise quiet shell.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::SEMIBOLD, source_weight: FontWeight::NORMAL, chip_weight: FontWeight::MEDIUM, kind_weight: FontWeight::NORMAL, search_opacity: 0.56, metadata_opacity: 0.56, kind_opacity: 0.54, selected_fill_opacity: 0.14 },
-    MainMenuWeightSpec { id: "metadata-split", name: "Metadata Split", family: "Primary", description: "Splits accessory weight: vendor regular, chip medium, kind medium for a more Raycast-like hierarchy.", search_weight: FontWeight::MEDIUM, section_weight: FontWeight::MEDIUM, title_weight: FontWeight::NORMAL, selected_title_weight: FontWeight::MEDIUM, source_weight: FontWeight::NORMAL, chip_weight: FontWeight::MEDIUM, kind_weight: FontWeight::MEDIUM, search_opacity: 0.56, metadata_opacity: 0.58, kind_opacity: 0.68, selected_fill_opacity: 0.13 },
+const SPECS: [MainMenuWeightSpec; 15] = [
+    MainMenuWeightSpec {
+        id: "raycast-baseline",
+        name: "Raycast Baseline",
+        family: "Balanced",
+        description: "Close to the reference: medium search, regular titles, medium accessories, and a calm selected fill.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::MEDIUM,
+        chip_weight: FontWeight::MEDIUM,
+        kind_weight: FontWeight::MEDIUM,
+        search_size: 23.0,
+        ask_size: 16.0,
+        section_size: 14.0,
+        row_height: 62.0,
+        icon_size: 28.0,
+        title_size: 21.0,
+        meta_size: 18.0,
+        kind_size: 18.0,
+        chip_size: 14.0,
+        footer_size: 16.0,
+        title_line_height: 24.0,
+        metadata_line_height: 20.0,
+        header_height: 84.0,
+        footer_height: 62.0,
+        row_gap: 6.0,
+        content_gap: 14.0,
+        row_radius: 14.0,
+        search_opacity: 0.56,
+        metadata_opacity: 0.62,
+        kind_opacity: 0.70,
+        selected_fill_opacity: 0.12,
+    },
+    MainMenuWeightSpec {
+        id: "lighter-search",
+        name: "Lighter Search",
+        family: "Balanced",
+        description: "Lighter search prompt, slightly smaller metadata, and a tighter row cadence.",
+        search_weight: FontWeight::NORMAL,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::NORMAL,
+        chip_weight: FontWeight::MEDIUM,
+        kind_weight: FontWeight::MEDIUM,
+        search_size: 21.0,
+        ask_size: 15.0,
+        section_size: 13.0,
+        row_height: 58.0,
+        icon_size: 26.0,
+        title_size: 20.0,
+        meta_size: 16.5,
+        kind_size: 16.5,
+        chip_size: 13.0,
+        footer_size: 15.0,
+        title_line_height: 23.0,
+        metadata_line_height: 19.0,
+        header_height: 78.0,
+        footer_height: 58.0,
+        row_gap: 5.0,
+        content_gap: 12.0,
+        row_radius: 13.0,
+        search_opacity: 0.46,
+        metadata_opacity: 0.58,
+        kind_opacity: 0.64,
+        selected_fill_opacity: 0.11,
+    },
+    MainMenuWeightSpec {
+        id: "softer-sections",
+        name: "Softer Sections",
+        family: "Balanced",
+        description: "Quieter section headers, slightly airier rows, and more distance between the title and accessories.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::NORMAL,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::MEDIUM,
+        chip_weight: FontWeight::NORMAL,
+        kind_weight: FontWeight::MEDIUM,
+        search_size: 22.0,
+        ask_size: 15.0,
+        section_size: 12.5,
+        row_height: 64.0,
+        icon_size: 28.0,
+        title_size: 21.0,
+        meta_size: 17.0,
+        kind_size: 17.0,
+        chip_size: 13.0,
+        footer_size: 15.0,
+        title_line_height: 24.0,
+        metadata_line_height: 20.0,
+        header_height: 82.0,
+        footer_height: 60.0,
+        row_gap: 7.0,
+        content_gap: 16.0,
+        row_radius: 14.0,
+        search_opacity: 0.54,
+        metadata_opacity: 0.60,
+        kind_opacity: 0.64,
+        selected_fill_opacity: 0.11,
+    },
+    MainMenuWeightSpec {
+        id: "selected-contrast",
+        name: "Selected Contrast",
+        family: "Balanced",
+        description: "Larger selected title, slightly taller rows, and a clearer delta between focused and unfocused items.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::SEMIBOLD,
+        source_weight: FontWeight::MEDIUM,
+        chip_weight: FontWeight::MEDIUM,
+        kind_weight: FontWeight::MEDIUM,
+        search_size: 23.0,
+        ask_size: 16.0,
+        section_size: 14.0,
+        row_height: 66.0,
+        icon_size: 29.0,
+        title_size: 22.0,
+        meta_size: 17.5,
+        kind_size: 17.5,
+        chip_size: 14.0,
+        footer_size: 16.0,
+        title_line_height: 25.0,
+        metadata_line_height: 20.0,
+        header_height: 84.0,
+        footer_height: 62.0,
+        row_gap: 6.0,
+        content_gap: 14.0,
+        row_radius: 15.0,
+        search_opacity: 0.56,
+        metadata_opacity: 0.62,
+        kind_opacity: 0.68,
+        selected_fill_opacity: 0.10,
+    },
+    MainMenuWeightSpec {
+        id: "all-normal",
+        name: "All Normal",
+        family: "Balanced",
+        description: "Regular weight almost everywhere, smaller accessory sizes, and denser rows for a flatter look.",
+        search_weight: FontWeight::NORMAL,
+        section_weight: FontWeight::NORMAL,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::NORMAL,
+        source_weight: FontWeight::NORMAL,
+        chip_weight: FontWeight::NORMAL,
+        kind_weight: FontWeight::NORMAL,
+        search_size: 21.0,
+        ask_size: 14.0,
+        section_size: 12.5,
+        row_height: 56.0,
+        icon_size: 25.0,
+        title_size: 19.5,
+        meta_size: 15.0,
+        kind_size: 15.0,
+        chip_size: 12.0,
+        footer_size: 14.0,
+        title_line_height: 22.0,
+        metadata_line_height: 18.0,
+        header_height: 76.0,
+        footer_height: 54.0,
+        row_gap: 4.0,
+        content_gap: 11.0,
+        row_radius: 12.0,
+        search_opacity: 0.48,
+        metadata_opacity: 0.54,
+        kind_opacity: 0.56,
+        selected_fill_opacity: 0.10,
+    },
+    MainMenuWeightSpec {
+        id: "vendor-forward",
+        name: "Vendor Forward",
+        family: "Metadata",
+        description: "Larger vendor labels and roomier metadata spacing so sources become part of the scan path.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::MEDIUM,
+        chip_weight: FontWeight::MEDIUM,
+        kind_weight: FontWeight::NORMAL,
+        search_size: 22.5,
+        ask_size: 15.0,
+        section_size: 13.5,
+        row_height: 64.0,
+        icon_size: 28.0,
+        title_size: 20.5,
+        meta_size: 19.0,
+        kind_size: 16.0,
+        chip_size: 14.0,
+        footer_size: 15.0,
+        title_line_height: 23.0,
+        metadata_line_height: 20.0,
+        header_height: 82.0,
+        footer_height: 58.0,
+        row_gap: 6.0,
+        content_gap: 16.0,
+        row_radius: 14.0,
+        search_opacity: 0.56,
+        metadata_opacity: 0.72,
+        kind_opacity: 0.56,
+        selected_fill_opacity: 0.12,
+    },
+    MainMenuWeightSpec {
+        id: "kind-quiet",
+        name: "Kind Quiet",
+        family: "Metadata",
+        description: "Smaller right-edge labels, tighter kind column, and more emphasis on the left-aligned title block.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::MEDIUM,
+        chip_weight: FontWeight::MEDIUM,
+        kind_weight: FontWeight::NORMAL,
+        search_size: 22.0,
+        ask_size: 15.0,
+        section_size: 13.5,
+        row_height: 60.0,
+        icon_size: 27.0,
+        title_size: 21.0,
+        meta_size: 17.0,
+        kind_size: 14.5,
+        chip_size: 13.0,
+        footer_size: 15.0,
+        title_line_height: 24.0,
+        metadata_line_height: 19.0,
+        header_height: 80.0,
+        footer_height: 58.0,
+        row_gap: 5.0,
+        content_gap: 15.0,
+        row_radius: 13.0,
+        search_opacity: 0.56,
+        metadata_opacity: 0.60,
+        kind_opacity: 0.42,
+        selected_fill_opacity: 0.12,
+    },
+    MainMenuWeightSpec {
+        id: "chip-forward",
+        name: "Chip Forward",
+        family: "Metadata",
+        description: "Larger chip size and stronger chip weight so the alias becomes a deliberate secondary signal.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::NORMAL,
+        chip_weight: FontWeight::SEMIBOLD,
+        kind_weight: FontWeight::MEDIUM,
+        search_size: 22.0,
+        ask_size: 15.0,
+        section_size: 13.5,
+        row_height: 61.0,
+        icon_size: 27.0,
+        title_size: 20.5,
+        meta_size: 16.0,
+        kind_size: 16.5,
+        chip_size: 15.0,
+        footer_size: 15.0,
+        title_line_height: 23.0,
+        metadata_line_height: 18.5,
+        header_height: 80.0,
+        footer_height: 58.0,
+        row_gap: 5.0,
+        content_gap: 13.0,
+        row_radius: 13.0,
+        search_opacity: 0.56,
+        metadata_opacity: 0.56,
+        kind_opacity: 0.66,
+        selected_fill_opacity: 0.12,
+    },
+    MainMenuWeightSpec {
+        id: "whisper-metadata",
+        name: "Whisper Metadata",
+        family: "Metadata",
+        description: "Smaller metadata, slightly bigger titles, and extra title line-height to isolate the primary label.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::NORMAL,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::NORMAL,
+        chip_weight: FontWeight::NORMAL,
+        kind_weight: FontWeight::NORMAL,
+        search_size: 22.0,
+        ask_size: 15.0,
+        section_size: 12.0,
+        row_height: 60.0,
+        icon_size: 26.0,
+        title_size: 21.5,
+        meta_size: 14.0,
+        kind_size: 14.0,
+        chip_size: 12.5,
+        footer_size: 14.0,
+        title_line_height: 25.0,
+        metadata_line_height: 17.5,
+        header_height: 80.0,
+        footer_height: 56.0,
+        row_gap: 5.0,
+        content_gap: 15.0,
+        row_radius: 13.0,
+        search_opacity: 0.54,
+        metadata_opacity: 0.46,
+        kind_opacity: 0.46,
+        selected_fill_opacity: 0.10,
+    },
+    MainMenuWeightSpec {
+        id: "directory-kind",
+        name: "Directory Kind",
+        family: "Metadata",
+        description: "Bigger kind labels and taller rows for a more app-directory feeling scan pattern.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::NORMAL,
+        chip_weight: FontWeight::NORMAL,
+        kind_weight: FontWeight::SEMIBOLD,
+        search_size: 22.5,
+        ask_size: 15.5,
+        section_size: 13.5,
+        row_height: 66.0,
+        icon_size: 29.0,
+        title_size: 21.0,
+        meta_size: 16.0,
+        kind_size: 19.0,
+        chip_size: 13.0,
+        footer_size: 15.0,
+        title_line_height: 24.0,
+        metadata_line_height: 18.0,
+        header_height: 82.0,
+        footer_height: 60.0,
+        row_gap: 6.5,
+        content_gap: 14.0,
+        row_radius: 14.0,
+        search_opacity: 0.56,
+        metadata_opacity: 0.56,
+        kind_opacity: 0.76,
+        selected_fill_opacity: 0.12,
+    },
+    MainMenuWeightSpec {
+        id: "title-forward",
+        name: "Title Forward",
+        family: "Primary",
+        description: "Bigger row titles, stronger selected label, and slightly larger search prompt for a bolder first read.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::MEDIUM,
+        selected_title_weight: FontWeight::SEMIBOLD,
+        source_weight: FontWeight::NORMAL,
+        chip_weight: FontWeight::MEDIUM,
+        kind_weight: FontWeight::NORMAL,
+        search_size: 24.0,
+        ask_size: 16.0,
+        section_size: 14.0,
+        row_height: 65.0,
+        icon_size: 28.5,
+        title_size: 22.5,
+        meta_size: 16.0,
+        kind_size: 16.0,
+        chip_size: 13.5,
+        footer_size: 16.0,
+        title_line_height: 26.0,
+        metadata_line_height: 18.5,
+        header_height: 86.0,
+        footer_height: 62.0,
+        row_gap: 6.0,
+        content_gap: 13.0,
+        row_radius: 14.0,
+        search_opacity: 0.58,
+        metadata_opacity: 0.56,
+        kind_opacity: 0.56,
+        selected_fill_opacity: 0.11,
+    },
+    MainMenuWeightSpec {
+        id: "selected-medium",
+        name: "Selected Medium",
+        family: "Primary",
+        description: "Heavier fill, taller rows, and slightly smaller accessories so the active row dominates the surface.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::NORMAL,
+        chip_weight: FontWeight::MEDIUM,
+        kind_weight: FontWeight::NORMAL,
+        search_size: 23.0,
+        ask_size: 15.5,
+        section_size: 13.5,
+        row_height: 68.0,
+        icon_size: 29.0,
+        title_size: 22.0,
+        meta_size: 15.0,
+        kind_size: 15.0,
+        chip_size: 13.0,
+        footer_size: 15.0,
+        title_line_height: 25.0,
+        metadata_line_height: 17.5,
+        header_height: 84.0,
+        footer_height: 60.0,
+        row_gap: 6.0,
+        content_gap: 12.0,
+        row_radius: 15.0,
+        search_opacity: 0.56,
+        metadata_opacity: 0.54,
+        kind_opacity: 0.54,
+        selected_fill_opacity: 0.18,
+    },
+    MainMenuWeightSpec {
+        id: "crisp-raycast",
+        name: "Crisp Raycast",
+        family: "Primary",
+        description: "Sharper size contrast between titles and metadata, with a slightly taller search line and a disciplined selected row.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::MEDIUM,
+        chip_weight: FontWeight::MEDIUM,
+        kind_weight: FontWeight::MEDIUM,
+        search_size: 24.0,
+        ask_size: 16.0,
+        section_size: 13.5,
+        row_height: 62.0,
+        icon_size: 28.0,
+        title_size: 21.5,
+        meta_size: 16.0,
+        kind_size: 16.5,
+        chip_size: 13.5,
+        footer_size: 15.5,
+        title_line_height: 24.5,
+        metadata_line_height: 18.0,
+        header_height: 86.0,
+        footer_height: 60.0,
+        row_gap: 5.5,
+        content_gap: 14.0,
+        row_radius: 14.0,
+        search_opacity: 0.58,
+        metadata_opacity: 0.58,
+        kind_opacity: 0.66,
+        selected_fill_opacity: 0.14,
+    },
+    MainMenuWeightSpec {
+        id: "semibold-hero",
+        name: "Semibold Hero",
+        family: "Primary",
+        description: "Biggest selected title, slightly larger search text, and compressed metadata to make the first row pop hard.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::SEMIBOLD,
+        source_weight: FontWeight::NORMAL,
+        chip_weight: FontWeight::MEDIUM,
+        kind_weight: FontWeight::NORMAL,
+        search_size: 24.0,
+        ask_size: 16.0,
+        section_size: 13.5,
+        row_height: 64.0,
+        icon_size: 28.0,
+        title_size: 23.0,
+        meta_size: 15.0,
+        kind_size: 15.0,
+        chip_size: 13.0,
+        footer_size: 15.0,
+        title_line_height: 26.0,
+        metadata_line_height: 17.0,
+        header_height: 86.0,
+        footer_height: 60.0,
+        row_gap: 5.5,
+        content_gap: 12.0,
+        row_radius: 14.0,
+        search_opacity: 0.56,
+        metadata_opacity: 0.52,
+        kind_opacity: 0.50,
+        selected_fill_opacity: 0.15,
+    },
+    MainMenuWeightSpec {
+        id: "metadata-split",
+        name: "Metadata Split",
+        family: "Primary",
+        description: "Larger chip and kind sizes, smaller vendor text, and slightly denser rows so the accessory hierarchy feels deliberately split.",
+        search_weight: FontWeight::MEDIUM,
+        section_weight: FontWeight::MEDIUM,
+        title_weight: FontWeight::NORMAL,
+        selected_title_weight: FontWeight::MEDIUM,
+        source_weight: FontWeight::NORMAL,
+        chip_weight: FontWeight::MEDIUM,
+        kind_weight: FontWeight::MEDIUM,
+        search_size: 22.5,
+        ask_size: 15.0,
+        section_size: 13.0,
+        row_height: 59.0,
+        icon_size: 27.0,
+        title_size: 20.5,
+        meta_size: 15.0,
+        kind_size: 17.5,
+        chip_size: 15.0,
+        footer_size: 15.0,
+        title_line_height: 23.5,
+        metadata_line_height: 18.0,
+        header_height: 80.0,
+        footer_height: 58.0,
+        row_gap: 4.5,
+        content_gap: 12.0,
+        row_radius: 13.0,
+        search_opacity: 0.56,
+        metadata_opacity: 0.56,
+        kind_opacity: 0.68,
+        selected_fill_opacity: 0.13,
+    },
 ];
 
 pub fn main_menu_raycast_weight_story_variants() -> Vec<StoryVariant> {
@@ -153,12 +665,26 @@ pub fn render_main_menu_raycast_weight_compare_thumbnail(stable_id: &str) -> Any
 pub fn render_main_menu_raycast_weight_gallery() -> AnyElement {
     let theme = get_cached_theme();
     let mut root = story_container().gap_6().child(
-        div().flex().flex_col().gap_1()
-            .child(div().text_sm().text_color(theme.colors.text.tertiary.to_rgb()).child("Main Menu"))
-            .child(div().text_xs().text_color(theme.colors.text.muted.to_rgb()).child(
-                "Fifteen weight studies that keep the current launcher shell but move the typography hierarchy closer to Raycast.",
-            )),
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(theme.colors.text.tertiary.to_rgb())
+                    .child("Main Menu"),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.colors.text.muted.to_rgb())
+                    .child(
+                        "Fifteen Raycast-inspired hierarchy studies that now vary size, line rhythm, density, and accessory emphasis as well as weight.",
+                    ),
+            ),
     );
+
     for family in ["Balanced", "Metadata", "Primary"] {
         let mut section = story_section(family).gap(px(12.0));
         for spec in SPECS.iter().copied().filter(|spec| spec.family == family) {
@@ -166,6 +692,7 @@ pub fn render_main_menu_raycast_weight_gallery() -> AnyElement {
         }
         root = root.child(section);
     }
+
     root.into_any_element()
 }
 
@@ -173,9 +700,18 @@ fn resolve_spec(stable_id: &str) -> Option<MainMenuWeightSpec> {
     SPECS.iter().copied().find(|spec| spec.id == stable_id)
 }
 
+fn scale(value: f32, compact: bool) -> f32 {
+    if compact {
+        value * 0.68
+    } else {
+        value
+    }
+}
+
 fn render_gallery_item(spec: MainMenuWeightSpec) -> AnyElement {
     let theme = get_cached_theme();
     div()
+        .w(px(1220.0))
         .flex()
         .flex_col()
         .gap(px(8.0))
@@ -208,8 +744,9 @@ fn render_gallery_item(spec: MainMenuWeightSpec) -> AnyElement {
 
 fn render_spec_stage(spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
     let theme = get_cached_theme();
-    let width = if compact { 360.0 } else { 1188.0 };
-    let height = if compact { 232.0 } else { 744.0 };
+    let width = if compact { 320.0 } else { 1216.0 };
+    let height = if compact { 200.0 } else { 760.0 };
+
     div()
         .w(px(width))
         .h(px(height))
@@ -224,6 +761,7 @@ fn render_spec_stage(spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
 
 fn render_main_menu_shell(spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
     let theme = get_cached_theme();
+
     div()
         .size_full()
         .flex()
@@ -234,24 +772,26 @@ fn render_main_menu_shell(spec: MainMenuWeightSpec, compact: bool) -> AnyElement
         .border_color(theme.colors.ui.border.with_opacity(0.28))
         .child(render_header(spec, compact))
         .child(
-            div()
-                .mx(px(22.0))
-                .h(px(1.0))
-                .bg(theme.colors.ui.border.with_opacity(0.24)),
+            div().mx(px(scale(22.0, compact))).h(px(1.0)).bg(theme
+                .colors
+                .ui
+                .border
+                .with_opacity(0.24)),
         )
         .child(render_rows(spec, compact))
-        .child(render_footer(compact))
+        .child(render_footer(spec, compact))
         .into_any_element()
 }
 
 fn render_header(spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
     let theme = get_cached_theme();
-    let search_size = if compact { 15.0 } else { 23.0 };
-    let ask_size = if compact { 12.0 } else { 16.0 };
+    let search_size = scale(spec.search_size, compact);
+    let ask_size = scale(spec.ask_size, compact);
+
     div()
         .w_full()
-        .h(px(if compact { 54.0 } else { 84.0 }))
-        .px(px(if compact { 14.0 } else { 22.0 }))
+        .h(px(scale(spec.header_height, compact)))
+        .px(px(scale(22.0, compact)))
         .flex()
         .flex_row()
         .items_center()
@@ -260,16 +800,18 @@ fn render_header(spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
             div()
                 .flex()
                 .items_center()
-                .gap(px(10.0))
+                .gap(px(scale(10.0, compact)))
                 .child(
-                    div()
-                        .w(px(2.0))
-                        .h(px(if compact { 22.0 } else { 34.0 }))
-                        .bg(get_cached_theme().colors.text.primary.with_opacity(0.70)),
+                    div().w(px(2.0)).h(px(scale(34.0, compact))).bg(theme
+                        .colors
+                        .text
+                        .primary
+                        .with_opacity(0.70)),
                 )
                 .child(
                     div()
                         .text_size(px(search_size))
+                        .line_height(px(search_size + scale(2.0, compact)))
                         .font_weight(spec.search_weight)
                         .text_color(theme.colors.text.primary.with_opacity(spec.search_opacity))
                         .child("Search for apps and commands..."),
@@ -279,7 +821,7 @@ fn render_header(spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
             div()
                 .flex()
                 .items_center()
-                .gap(px(12.0))
+                .gap(px(scale(12.0, compact)))
                 .child(
                     div()
                         .text_size(px(ask_size))
@@ -289,12 +831,12 @@ fn render_header(spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
                 )
                 .child(
                     div()
-                        .px(px(if compact { 8.0 } else { 12.0 }))
-                        .py(px(if compact { 4.0 } else { 6.0 }))
-                        .rounded(px(9.0))
+                        .px(px(scale(12.0, compact)))
+                        .py(px(scale(6.0, compact)))
+                        .rounded(px(scale(9.0, compact)))
                         .border_1()
                         .border_color(theme.colors.ui.border.with_opacity(0.32))
-                        .text_size(px(if compact { 11.0 } else { 14.0 }))
+                        .text_size(px(scale(14.0, compact)))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme.colors.text.primary.with_opacity(0.60))
                         .child("Tab"),
@@ -311,13 +853,15 @@ fn render_rows(spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
         .flex()
         .flex_col()
         .overflow_hidden()
-        .px(px(if compact { 12.0 } else { 22.0 }))
-        .pt(px(if compact { 10.0 } else { 18.0 }))
-        .gap(px(if compact { 4.0 } else { 6.0 }));
+        .px(px(scale(22.0, compact)))
+        .pt(px(scale(18.0, compact)))
+        .gap(px(scale(spec.row_gap, compact)));
+
     column = column.child(render_section_header("Suggestions", spec, compact));
     for row in ROWS.iter().take(5).copied() {
         column = column.child(render_row(row, spec, compact));
     }
+
     column = column.child(render_section_header("Commands", spec, compact));
     for row in ROWS
         .iter()
@@ -327,6 +871,7 @@ fn render_rows(spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
     {
         column = column.child(render_row(row, spec, compact));
     }
+
     column.into_any_element()
 }
 
@@ -336,11 +881,14 @@ fn render_section_header(
     compact: bool,
 ) -> AnyElement {
     let theme = get_cached_theme();
+    let section_size = scale(spec.section_size, compact);
+
     div()
         .w_full()
-        .pt(px(if compact { 4.0 } else { 8.0 }))
-        .pb(px(if compact { 2.0 } else { 4.0 }))
-        .text_size(px(if compact { 11.0 } else { 14.0 }))
+        .pt(px(scale(6.0, compact)))
+        .pb(px(scale(3.0, compact)))
+        .text_size(px(section_size))
+        .line_height(px(section_size + scale(2.0, compact)))
         .font_weight(spec.section_weight)
         .text_color(theme.colors.text.primary.with_opacity(0.62))
         .child(label)
@@ -349,21 +897,24 @@ fn render_section_header(
 
 fn render_row(row: MenuPreviewRow, spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
     let theme = get_cached_theme();
-    let row_height = if compact { 34.0 } else { 62.0 };
-    let icon_size = if compact { 20.0 } else { 28.0 };
-    let title_size = if compact { 14.0 } else { 21.0 };
-    let meta_size = if compact { 12.0 } else { 18.0 };
-    let kind_size = if compact { 12.0 } else { 18.0 };
-    let chip_size = if compact { 10.0 } else { 14.0 };
+    let row_height = scale(spec.row_height + 8.0, compact);
+    let icon_size = scale(spec.icon_size, compact);
+    let title_size = scale(spec.title_size, compact);
+    let meta_size = scale(spec.meta_size, compact);
+    let kind_size = scale(spec.kind_size, compact);
+    let chip_size = scale(spec.chip_size, compact);
+    let title_line_height = scale(spec.title_line_height, compact);
+    let metadata_line_height = scale(spec.metadata_line_height, compact);
+
     div()
         .w_full()
         .h(px(row_height))
-        .px(px(if compact { 10.0 } else { 14.0 }))
+        .px(px(scale(14.0, compact)))
         .flex()
         .flex_row()
         .items_center()
         .justify_between()
-        .rounded(px(if compact { 10.0 } else { 14.0 }))
+        .rounded(px(scale(spec.row_radius, compact)))
         .when(row.selected, |d| {
             d.bg(theme
                 .colors
@@ -375,16 +926,16 @@ fn render_row(row: MenuPreviewRow, spec: MainMenuWeightSpec, compact: bool) -> A
             div()
                 .flex()
                 .items_center()
-                .gap(px(if compact { 10.0 } else { 18.0 }))
+                .gap(px(scale(spec.content_gap, compact)))
                 .child(
                     div()
                         .size(px(icon_size))
-                        .rounded(px(if compact { 6.0 } else { 8.0 }))
+                        .rounded(px(scale(8.0, compact)))
                         .bg(rgb(row.icon_bg))
                         .flex()
                         .items_center()
                         .justify_center()
-                        .text_size(px(if compact { 10.0 } else { 14.0 }))
+                        .text_size(px(scale(14.0, compact)))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(if row.icon_bg == 0xF2F2F2 {
                             rgb(0x3478F6)
@@ -397,10 +948,11 @@ fn render_row(row: MenuPreviewRow, spec: MainMenuWeightSpec, compact: bool) -> A
                     div()
                         .flex()
                         .items_center()
-                        .gap(px(if compact { 8.0 } else { 14.0 }))
+                        .gap(px(scale(spec.content_gap - 2.0, compact)))
                         .child(
                             div()
                                 .text_size(px(title_size))
+                                .line_height(px(title_line_height))
                                 .font_weight(if row.selected {
                                     spec.selected_title_weight
                                 } else {
@@ -419,6 +971,7 @@ fn render_row(row: MenuPreviewRow, spec: MainMenuWeightSpec, compact: bool) -> A
                             d.child(
                                 div()
                                     .text_size(px(meta_size))
+                                    .line_height(px(metadata_line_height))
                                     .font_weight(spec.source_weight)
                                     .text_color(
                                         theme
@@ -433,13 +986,14 @@ fn render_row(row: MenuPreviewRow, spec: MainMenuWeightSpec, compact: bool) -> A
                         .when_some(row.chip, |d, chip| {
                             d.child(
                                 div()
-                                    .px(px(if compact { 6.0 } else { 10.0 }))
-                                    .py(px(if compact { 3.0 } else { 5.0 }))
-                                    .rounded(px(8.0))
+                                    .px(px(scale(10.0, compact)))
+                                    .py(px(scale(5.0, compact)))
+                                    .rounded(px(scale(8.0, compact)))
                                     .border_1()
                                     .border_color(theme.colors.ui.border.with_opacity(0.34))
                                     .font_family(FONT_MONO)
                                     .text_size(px(chip_size))
+                                    .line_height(px(chip_size + scale(2.0, compact)))
                                     .font_weight(spec.chip_weight)
                                     .text_color(theme.colors.text.primary.with_opacity(0.58))
                                     .child(chip),
@@ -450,6 +1004,7 @@ fn render_row(row: MenuPreviewRow, spec: MainMenuWeightSpec, compact: bool) -> A
         .child(
             div()
                 .text_size(px(kind_size))
+                .line_height(px(kind_size + scale(2.0, compact)))
                 .font_weight(spec.kind_weight)
                 .text_color(theme.colors.text.primary.with_opacity(spec.kind_opacity))
                 .child(row.kind),
@@ -457,20 +1012,21 @@ fn render_row(row: MenuPreviewRow, spec: MainMenuWeightSpec, compact: bool) -> A
         .into_any_element()
 }
 
-fn render_footer(compact: bool) -> AnyElement {
+fn render_footer(spec: MainMenuWeightSpec, compact: bool) -> AnyElement {
     let theme = get_cached_theme();
-    let text_size = if compact { 12.0 } else { 16.0 };
+    let text_size = scale(spec.footer_size, compact);
+
     div()
         .w_full()
-        .h(px(if compact { 34.0 } else { 62.0 }))
-        .px(px(if compact { 12.0 } else { 22.0 }))
+        .h(px(scale(spec.footer_height, compact)))
+        .px(px(scale(22.0, compact)))
         .border_t_1()
         .border_color(theme.colors.ui.border.with_opacity(0.24))
         .bg(theme.colors.background.title_bar.with_opacity(0.28))
         .flex()
         .items_center()
         .justify_end()
-        .gap(px(if compact { 14.0 } else { 24.0 }))
+        .gap(px(scale(24.0, compact)))
         .child(render_footer_item("Open Command", "↩", text_size))
         .child(render_footer_item("Actions", "⌘K", text_size))
         .into_any_element()
@@ -478,30 +1034,43 @@ fn render_footer(compact: bool) -> AnyElement {
 
 fn render_footer_item(label: &'static str, shortcut: &'static str, text_size: f32) -> AnyElement {
     let theme = get_cached_theme();
+
     div()
         .flex()
         .items_center()
-        .gap(px(8.0))
+        .gap(px(scale_local(8.0, text_size)))
         .child(
             div()
                 .text_size(px(text_size))
+                .line_height(px(text_size + 2.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme.colors.text.primary.with_opacity(0.88))
                 .child(label),
         )
         .child(
             div()
-                .px(px(8.0))
-                .py(px(4.0))
-                .rounded(px(8.0))
+                .px(px(scale_local(8.0, text_size)))
+                .py(px(scale_local(4.0, text_size)))
+                .rounded(px(scale_local(8.0, text_size)))
                 .bg(theme.colors.text.primary.with_opacity(0.08))
                 .font_family(FONT_MONO)
                 .text_size(px(text_size - 1.0))
+                .line_height(px(text_size + 1.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(theme.colors.text.primary.with_opacity(0.58))
                 .child(shortcut),
         )
         .into_any_element()
+}
+
+fn scale_local(base: f32, text_size: f32) -> f32 {
+    if text_size < 13.0 {
+        base * 0.72
+    } else if text_size > 15.5 {
+        base * 1.04
+    } else {
+        base
+    }
 }
 
 #[cfg(test)]

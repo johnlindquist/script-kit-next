@@ -71,6 +71,17 @@ fn notes_automation_bounds(
 
 /// Toggle the notes window (open if closed, close if open)
 pub fn open_notes_window(cx: &mut App) -> Result<()> {
+    open_notes_window_with_close_behavior(cx, NotesCloseBehavior::RestoreLauncher)
+}
+
+pub fn open_notes_window_without_launcher_restore(cx: &mut App) -> Result<()> {
+    open_notes_window_with_close_behavior(cx, NotesCloseBehavior::LeaveLauncherHidden)
+}
+
+fn open_notes_window_with_close_behavior(
+    cx: &mut App,
+    close_behavior: NotesCloseBehavior,
+) -> Result<()> {
     use crate::logging;
 
     logging::log("PANEL", "open_notes_window called - checking toggle state");
@@ -118,7 +129,7 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
             crate::windows::remove_automation_window("notes");
             crate::windows::remove_runtime_window_handle("notes");
 
-            restore_launcher_after_notes_close(cx);
+            restore_launcher_after_notes_close_if_needed(cx);
             return Ok(());
         }
         // Window handle was invalid, fall through to create new window
@@ -210,6 +221,13 @@ pub fn open_notes_window(cx: &mut App) -> Result<()> {
         let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
         if let Ok(mut g) = slot.lock() {
             *g = Some(handle);
+        }
+    }
+    {
+        let slot = NOTES_CLOSE_BEHAVIOR
+            .get_or_init(|| std::sync::Mutex::new(NotesCloseBehavior::RestoreLauncher));
+        if let Ok(mut g) = slot.lock() {
+            *g = close_behavior;
         }
     }
 
@@ -487,7 +505,7 @@ pub fn close_notes_window(cx: &mut App) {
                     target: "script_kit::keyboard",
                     event = "notes_helper_close_restore_launcher_requested"
                 );
-                restore_launcher_after_notes_close(cx);
+                restore_launcher_after_notes_close_if_needed(cx);
             }
             Err(error) => {
                 tracing::warn!(
@@ -497,6 +515,28 @@ pub fn close_notes_window(cx: &mut App) {
                 );
             }
         }
+    }
+}
+
+pub(crate) fn restore_launcher_after_notes_close_if_needed(cx: &mut App) {
+    let should_restore = {
+        let slot = NOTES_CLOSE_BEHAVIOR
+            .get_or_init(|| std::sync::Mutex::new(NotesCloseBehavior::RestoreLauncher));
+        slot.lock()
+            .map(|g| *g == NotesCloseBehavior::RestoreLauncher)
+            .unwrap_or(true)
+    };
+
+    {
+        let slot = NOTES_CLOSE_BEHAVIOR
+            .get_or_init(|| std::sync::Mutex::new(NotesCloseBehavior::RestoreLauncher));
+        if let Ok(mut g) = slot.lock() {
+            *g = NotesCloseBehavior::RestoreLauncher;
+        }
+    }
+
+    if should_restore {
+        restore_launcher_after_notes_close(cx);
     }
 }
 

@@ -28,6 +28,7 @@ impl ScriptListApp {
                 | AppView::ThemeChooserView { .. }
                 | AppView::FileSearchView { .. }
                 | AppView::ProcessManagerView { .. }
+                | AppView::SettingsView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::AcpHistoryView { .. }
@@ -202,6 +203,7 @@ mod tests {
             "AppView::DesignGalleryView",
             "AppView::ThemeChooserView",
             "AppView::FileSearchView",
+            "AppView::SettingsView",
         ];
 
         for view in required_views {

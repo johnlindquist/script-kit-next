@@ -58,6 +58,15 @@ static NOTES_WINDOW: std::sync::OnceLock<std::sync::Mutex<Option<gpui::WindowHan
 static NOTES_APP_ENTITY: std::sync::OnceLock<std::sync::Mutex<Option<Entity<NotesApp>>>> =
     std::sync::OnceLock::new();
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NotesCloseBehavior {
+    RestoreLauncher,
+    LeaveLauncherHidden,
+}
+
+static NOTES_CLOSE_BEHAVIOR: std::sync::OnceLock<std::sync::Mutex<NotesCloseBehavior>> =
+    std::sync::OnceLock::new();
+
 // NOTE: Theme watching is now centralized in crate::theme::service
 // The per-window NOTES_THEME_WATCHER_RUNNING flag has been removed
 
@@ -407,7 +416,7 @@ pub use acp_host::close_notes_embedded_acp;
 pub use window_ops::{
     close_notes_window, get_notes_app_entity_and_handle, get_notes_editor_text,
     inject_text_into_notes, is_notes_window, is_notes_window_open, open_notes_window,
-    quick_capture, save_note_with_content,
+    open_notes_window_without_launcher_restore, quick_capture, save_note_with_content,
 };
 
 #[cfg(test)]
