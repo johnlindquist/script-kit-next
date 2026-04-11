@@ -546,11 +546,7 @@ fn row_to_cart_item(row: &rusqlite::Row) -> rusqlite::Result<super::model::NoteC
 
     let payload: super::model::NoteCartItemPayload =
         serde_json::from_str(&payload_json).map_err(|e| {
-            rusqlite::Error::FromSqlConversionFailure(
-                3,
-                rusqlite::types::Type::Text,
-                Box::new(e),
-            )
+            rusqlite::Error::FromSqlConversionFailure(3, rusqlite::types::Type::Text, Box::new(e))
         })?;
 
     let created_at = DateTime::parse_from_rfc3339(&created_at_str)

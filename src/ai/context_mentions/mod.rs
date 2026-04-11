@@ -222,6 +222,7 @@ pub(crate) fn typed_mention_prefix_for_target_kind(kind: &str) -> &'static str {
     match kind {
         "script" => "script",
         "scriptlet" => "scriptlet",
+        "note" => "note",
         "builtin" | "menu_command" => "cmd",
         "search_query" => "search",
         "input" => "input",
@@ -442,6 +443,19 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
             let name = typed_mention_display_name(path);
             Some(format_typed_mention_token(prefix, &name))
         }
+        AiContextPart::SkillFile {
+            skill_name,
+            slash_name,
+            ..
+        } => {
+            let name = if skill_name.trim().is_empty() {
+                slash_name
+            } else {
+                skill_name
+            };
+            let name = typed_mention_label_name(name);
+            Some(format_typed_mention_token("skill", &name))
+        }
         AiContextPart::FocusedTarget {
             target, label: _, ..
         } => {
@@ -472,6 +486,13 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
         AiContextPart::AmbientContext { label } => {
             let name = typed_mention_label_name(label);
             Some(format_typed_mention_token("env", &name))
+        }
+        AiContextPart::TextBlock { label, source, .. } => {
+            if source.contains("#selection=") {
+                return Some("@selected".to_string());
+            }
+            let name = typed_mention_label_name(label);
+            Some(format_typed_mention_token("text", &name))
         }
     }
 }

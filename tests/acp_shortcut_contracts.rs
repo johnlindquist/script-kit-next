@@ -26,8 +26,8 @@ fn notes_cmd_shift_a_routes_through_existing_embedded_acp_path() {
     assert!(
         source.contains("self.request_focus_surface(")
             && source.contains("focus::NotesFocusSurface::AcpChat")
-            && source.contains("self.open_selected_note_in_embedded_acp(")
+            && source.contains("open_selected_note_cart_in_embedded_acp(\"NotesWindowCmdShiftA\"")
             && source.contains("\"NotesWindowCmdShiftA\""),
-        "Notes Cmd+Shift+A should reuse the embedded ACP open/focus path instead of duplicating AI routing"
+        "Notes Cmd+Shift+A should reuse the embedded ACP cart handoff path instead of duplicating AI routing"
     );
 }

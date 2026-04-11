@@ -305,36 +305,38 @@ fn notes_send_to_acp_label_is_consistent_across_builder_and_panel() {
 }
 
 #[test]
-fn notes_acp_handoff_emits_structured_logs() {
+fn notes_embedded_acp_switch_emits_structured_logs() {
     let panels = include_str!("../src/notes/window/panels.rs");
     assert!(
-        panels.contains("notes_send_to_acp"),
-        "Notes handler must emit notes_send_to_acp structured log"
+        panels.contains("notes_cart_open_embedded_acp_requested"),
+        "Notes cart handler must emit notes_cart_open_embedded_acp_requested structured log"
     );
     assert!(
-        panels.contains("notes_acp_handoff_blocked"),
-        "Notes handler must emit notes_acp_handoff_blocked for empty notes"
+        panels.contains("notes_cart_handoff_skipped"),
+        "Notes cart handler must emit notes_cart_handoff_skipped for empty notes"
     );
     assert!(
-        panels.contains("request_explicit_acp_handoff_from_secondary_window"),
-        "Notes handoff must route through the canonical explicit-target secondary-window path"
-    );
-    let acp_mod = include_str!("../src/ai/acp/mod.rs");
-    assert!(
-        acp_mod.contains("pub(crate) fn open_or_focus_chat_with_input("),
-        "ACP staging helper must exist for non-explicit-target secondary-window handoffs"
+        panels.contains("open_or_focus_embedded_acp") || panels.contains("relaunch_embedded_acp"),
+        "Notes must route through the Notes-owned embedded ACP helpers"
     );
     assert!(
-        acp_mod.contains("chat_window::open_chat_window_with_thread"),
-        "ACP helper must open a real ACP chat window instead of the deprecated AI window"
+        !panels.contains("request_explicit_acp_handoff_from_secondary_window"),
+        "Notes must not use the detached secondary-window ACP handoff path"
     );
     assert!(
         !panels.contains("crate::ai::open_ai_window(cx)"),
-        "Notes handoff must not open the deprecated AI window"
+        "Notes must not open the deprecated AI window"
     );
     assert!(
         !panels.contains("crate::ai::set_ai_input(cx, &content, false)"),
-        "Notes handoff must not target the deprecated AI window input API"
+        "Notes must not target the deprecated AI window input API"
+    );
+
+    // Detached ACP and shared helpers must still exist for non-Notes paths.
+    let acp_mod = include_str!("../src/ai/acp/mod.rs");
+    assert!(
+        acp_mod.contains("pub(crate) fn open_or_focus_chat_with_input("),
+        "ACP staging helper must exist for non-Notes secondary-window handoffs"
     );
 
     let handler = include_str!("../src/app_actions/handle_action/mod.rs");

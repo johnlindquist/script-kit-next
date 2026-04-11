@@ -80,22 +80,33 @@ impl NotesApp {
                     }),
             );
 
-        let acp_body = if let Some(ref acp_entity) = self.embedded_acp_chat {
-            div()
-                .flex_1()
-                .min_h(px(0.))
-                .child(acp_entity.clone())
-                .into_any_element()
+        let (acp_body, acp_footer) = if let Some(ref acp_entity) = self.embedded_acp_chat {
+            let acp_footer = {
+                let view = acp_entity.read(cx);
+                view.build_external_host_footer(acp_entity.downgrade(), cx)
+            };
+
+            (
+                div()
+                    .flex_1()
+                    .min_h(px(0.))
+                    .child(acp_entity.clone())
+                    .into_any_element(),
+                acp_footer,
+            )
         } else {
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_sm()
-                .text_color(muted_color.opacity(OPACITY_MUTED))
-                .child("ACP is loading…")
-                .into_any_element()
+            (
+                div()
+                    .flex_1()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_sm()
+                    .text_color(muted_color.opacity(OPACITY_MUTED))
+                    .child("ACP is loading…")
+                    .into_any_element(),
+                None,
+            )
         };
 
         div()
@@ -105,6 +116,7 @@ impl NotesApp {
             .h_full()
             .child(titlebar)
             .child(acp_body)
+            .when_some(acp_footer, |d, footer| d.child(footer))
             .into_any_element()
     }
 
