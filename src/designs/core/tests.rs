@@ -1272,52 +1272,6 @@ fn make_content_script_match(
 }
 
 #[test]
-fn test_content_match_snippet_format() {
-    let sm = make_content_script_match("my-script", 42, "import { fetchData } from 'api';", vec![]);
-    let cm = sm.content_match.as_ref().unwrap();
-    let snippet = format!("{}: {}", cm.line_number, cm.line_text);
-    assert_eq!(snippet, "42: import { fetchData } from 'api';");
-}
-
-#[test]
-fn test_content_match_highlight_indices_offset_by_prefix() {
-    // "findMe" starts at index 10 in the line text "const x = findMe();"
-    let sm = make_content_script_match(
-        "test",
-        7,
-        "const x = findMe();",
-        vec![10, 11, 12, 13, 14, 15],
-    );
-    let cm = sm.content_match.as_ref().unwrap();
-    let prefix_len = format!("{}: ", cm.line_number).len(); // "7: " = 3
-    assert_eq!(prefix_len, 3);
-
-    let offset_indices: Vec<usize> = cm
-        .line_match_indices
-        .iter()
-        .map(|&i| i + prefix_len)
-        .collect();
-    // Original indices [10..15] should become [13..18] after adding prefix "7: "
-    assert_eq!(offset_indices, vec![13, 14, 15, 16, 17, 18]);
-}
-
-#[test]
-fn test_content_match_highlight_indices_offset_multidigit_line() {
-    // Line 142 has prefix "142: " (5 chars)
-    let sm = make_content_script_match("test", 142, "abc match xyz", vec![4, 5, 6, 7, 8]);
-    let cm = sm.content_match.as_ref().unwrap();
-    let prefix_len = format!("{}: ", cm.line_number).len(); // "142: " = 5
-    assert_eq!(prefix_len, 5);
-
-    let offset_indices: Vec<usize> = cm
-        .line_match_indices
-        .iter()
-        .map(|&i| i + prefix_len)
-        .collect();
-    assert_eq!(offset_indices, vec![9, 10, 11, 12, 13]);
-}
-
-#[test]
 fn test_non_content_match_keeps_original_description() {
     let script = Arc::new(Script {
         name: "my-script".to_string(),
@@ -1341,8 +1295,7 @@ fn test_non_content_match_keeps_original_description() {
 }
 
 #[test]
-fn test_content_snippet_overrides_description_in_render_logic() {
-    // Simulate what render_design_item does for content matches
+fn test_content_match_keeps_explicit_description_in_render_logic() {
     let sm = make_content_script_match(
         "my-script",
         15,
@@ -1350,33 +1303,32 @@ fn test_content_snippet_overrides_description_in_render_logic() {
         vec![15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29],
     );
 
-    // Content match: description is the snippet
-    let description = if sm.match_kind == ScriptMatchKind::Content {
-        sm.content_match
-            .as_ref()
-            .map(|cm| format!("{}: {}", cm.line_number, cm.line_text))
-    } else {
-        sm.script.description.clone()
-    };
-    assert_eq!(
-        description.as_deref(),
-        Some("15: const result = searchForToken();")
-    );
+    let description = auto_description_for_script(&sm.script);
+    assert_eq!(description.as_deref(), Some("original description"));
+}
 
-    // Content match: highlight indices are offset
-    let desc_hi = if sm.match_kind == ScriptMatchKind::Content {
-        sm.content_match.as_ref().map(|cm| {
-            let prefix_len = format!("{}: ", cm.line_number).len();
-            cm.line_match_indices
-                .iter()
-                .map(|&i| i + prefix_len)
-                .collect::<Vec<_>>()
-        })
-    } else {
-        None
+#[test]
+fn test_content_match_uses_normal_fallback_description_in_render_logic() {
+    let script = Arc::new(Script {
+        name: "fallback-demo".to_string(),
+        path: PathBuf::from("/test/fallback-demo.ts"),
+        extension: "ts".to_string(),
+        ..Default::default()
+    });
+    let sm = ScriptMatch {
+        filename: "fallback-demo.ts".to_string(),
+        script,
+        score: 5,
+        match_indices: MatchIndices::default(),
+        match_kind: ScriptMatchKind::Content,
+        content_match: Some(ScriptContentMatch {
+            line_number: 12,
+            line_text: "const result = searchForToken();".to_string(),
+            line_match_indices: vec![15, 16, 17],
+            byte_range: 0..31,
+        }),
     };
-    let hi = desc_hi.unwrap();
-    // "15: " is 4 chars, so indices 15..29 → 19..33
-    assert_eq!(hi[0], 19);
-    assert_eq!(hi.len(), 15);
+
+    let description = auto_description_for_script(&sm.script);
+    assert_eq!(description.as_deref(), Some("fallback-demo.ts"));
 }

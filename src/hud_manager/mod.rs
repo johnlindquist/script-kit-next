@@ -495,7 +495,7 @@ pub fn show_hud(text: String, duration_ms: Option<u64>, cx: &mut App) {
     let (hud_width, hud_height) = hud_dimensions_for_text(&text);
 
     // Calculate position - bottom center of screen with mouse
-    let (hud_x, hud_y) = calculate_hud_position(cx, hud_width);
+    let (hud_x, hud_y) = calculate_hud_position(hud_width);
 
     // Calculate vertical offset using SLOT index (not len) - this prevents overlap
     let stack_offset = slot as f32 * HUD_STACK_GAP;
@@ -627,7 +627,7 @@ pub fn show_hud_with_action(
     let (message_width, _) = hud_dimensions_for_text(&text);
 
     // Calculate position - bottom center of screen with mouse
-    let (hud_x, hud_y) = calculate_hud_position(cx, HUD_ACTION_WIDTH.max(message_width));
+    let (hud_x, hud_y) = calculate_hud_position(HUD_ACTION_WIDTH.max(message_width));
 
     // Calculate vertical offset using SLOT index (not len) - this prevents overlap
     let stack_offset = slot as f32 * HUD_STACK_GAP;
@@ -709,39 +709,50 @@ pub fn show_hud_with_action(
         }
     }
 }
-/// Calculate HUD position - bottom center of screen containing mouse
-fn calculate_hud_position(cx: &App, hud_width: f32) -> (f32, f32) {
-    let displays = cx.displays();
+fn display_for_window_center(
+    bounds: (f64, f64, f64, f64),
+    displays: &[crate::platform::VisibleDisplayBounds],
+) -> Option<crate::platform::VisibleDisplayBounds> {
+    let (x, y, width, height) = bounds;
+    let center = (x + width / 2.0, y + height / 2.0);
+    crate::platform::display_for_point(center, displays)
+}
 
-    // Try to get mouse position
+fn select_hud_display(
+    main_window_bounds: Option<(f64, f64, f64, f64)>,
+    mouse_pos: Option<(f64, f64)>,
+    displays: &[crate::platform::VisibleDisplayBounds],
+) -> Option<crate::platform::VisibleDisplayBounds> {
+    if let Some(bounds) = main_window_bounds {
+        if let Some(display) = display_for_window_center(bounds, displays) {
+            return Some(display);
+        }
+    }
+
+    if let Some(mouse_pt) = mouse_pos {
+        if let Some(display) = crate::platform::display_for_point(mouse_pt, displays) {
+            return Some(display);
+        }
+    }
+
+    displays.first().cloned()
+}
+
+/// Calculate HUD position - bottom center of the display containing the main menu
+fn calculate_hud_position(hud_width: f32) -> (f32, f32) {
+    let displays = crate::platform::get_macos_visible_displays();
+    let main_window_bounds = crate::platform::get_main_window_bounds();
     let mouse_pos = crate::platform::get_global_mouse_position();
-
-    // Find display containing mouse
-    let target_display = if let Some((mouse_x, mouse_y)) = mouse_pos {
-        displays.iter().find(|display| {
-            let bounds = display.bounds();
-            let x: f64 = bounds.origin.x.into();
-            let y: f64 = bounds.origin.y.into();
-            let w: f64 = bounds.size.width.into();
-            let h: f64 = bounds.size.height.into();
-
-            mouse_x >= x && mouse_x < x + w && mouse_y >= y && mouse_y < y + h
-        })
-    } else {
-        None
-    };
-
-    // Use found display or primary
-    let display = target_display.or_else(|| displays.first());
+    let display = select_hud_display(main_window_bounds, mouse_pos, &displays);
 
     if let Some(display) = display {
-        let bounds = display.bounds();
-        let screen_x: f32 = bounds.origin.x.into();
-        let screen_y: f32 = bounds.origin.y.into();
-        let screen_width: f32 = bounds.size.width.into();
-        let screen_height: f32 = bounds.size.height.into();
+        let visible = &display.visible_area;
+        let screen_x = visible.origin_x as f32;
+        let screen_y = visible.origin_y as f32;
+        let screen_width = visible.width as f32;
+        let screen_height = visible.height as f32;
 
-        // Center horizontally, position at 85% down the screen
+        // Center horizontally, position at 85% down the display's visible area.
         let hud_x = screen_x + (screen_width - hud_width) / 2.0;
         let hud_y = screen_y + screen_height * 0.85;
 
@@ -1103,6 +1114,92 @@ mod tests {
             source.contains("setCanHide: false") && source.contains("orderFrontRegardless"),
             "HUD window config should disable app-hide participation and order the overlay front"
         );
+    }
+    #[test]
+    fn test_select_hud_display_prefers_main_window_display_over_mouse_display() {
+        let displays = vec![
+            crate::platform::VisibleDisplayBounds {
+                frame: crate::windows::DisplayBounds {
+                    origin_x: 0.0,
+                    origin_y: 0.0,
+                    width: 1440.0,
+                    height: 900.0,
+                },
+                visible_area: crate::windows::DisplayBounds {
+                    origin_x: 0.0,
+                    origin_y: 24.0,
+                    width: 1440.0,
+                    height: 840.0,
+                },
+            },
+            crate::platform::VisibleDisplayBounds {
+                frame: crate::windows::DisplayBounds {
+                    origin_x: 1440.0,
+                    origin_y: 0.0,
+                    width: 1920.0,
+                    height: 1080.0,
+                },
+                visible_area: crate::windows::DisplayBounds {
+                    origin_x: 1440.0,
+                    origin_y: 32.0,
+                    width: 1920.0,
+                    height: 1008.0,
+                },
+            },
+        ];
+
+        let selected = select_hud_display(
+            Some((1800.0, 160.0, 750.0, 475.0)),
+            Some((200.0, 200.0)),
+            &displays,
+        )
+        .expect("expected a selected display");
+
+        assert_eq!(selected.frame.origin_x, 1440.0);
+        assert_eq!(selected.visible_area.origin_x, 1440.0);
+    }
+    #[test]
+    fn test_select_hud_display_falls_back_to_mouse_display_when_main_window_is_unresolved() {
+        let displays = vec![
+            crate::platform::VisibleDisplayBounds {
+                frame: crate::windows::DisplayBounds {
+                    origin_x: 0.0,
+                    origin_y: 0.0,
+                    width: 1440.0,
+                    height: 900.0,
+                },
+                visible_area: crate::windows::DisplayBounds {
+                    origin_x: 0.0,
+                    origin_y: 24.0,
+                    width: 1440.0,
+                    height: 840.0,
+                },
+            },
+            crate::platform::VisibleDisplayBounds {
+                frame: crate::windows::DisplayBounds {
+                    origin_x: 1440.0,
+                    origin_y: 0.0,
+                    width: 1920.0,
+                    height: 1080.0,
+                },
+                visible_area: crate::windows::DisplayBounds {
+                    origin_x: 1440.0,
+                    origin_y: 32.0,
+                    width: 1920.0,
+                    height: 1008.0,
+                },
+            },
+        ];
+
+        let selected = select_hud_display(
+            Some((5000.0, 5000.0, 750.0, 475.0)),
+            Some((1700.0, 200.0)),
+            &displays,
+        )
+        .expect("expected a selected display");
+
+        assert_eq!(selected.frame.origin_x, 1440.0);
+        assert_eq!(selected.visible_area.origin_x, 1440.0);
     }
     #[test]
     fn test_hud_action_execute_open_url() {

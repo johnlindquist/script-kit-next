@@ -819,6 +819,10 @@ fn normalize_light_interactive_tokens(
 ) -> ColorScheme {
     let bg = colors.background.main;
 
+    // Keep primary body text as a hard black/white decision from the main
+    // surface, rather than preserving tinted preset-specific text colors.
+    colors.text.primary = super::helpers::hard_readable_text_hex(bg);
+
     // --- selected_subtle: ensure selection highlight is visible ---------------
     let composited = composite_over(colors.accent.selected_subtle, opacity.selected, bg);
     let vis_ratio = selection_visibility_ratio(composited, bg);
@@ -847,6 +851,7 @@ fn normalize_dark_interactive_tokens(
     opacity: &BackgroundOpacity,
 ) -> ColorScheme {
     let bg = colors.background.main;
+    colors.text.primary = super::helpers::hard_readable_text_hex(bg);
     let composited = composite_over(colors.accent.selected_subtle, opacity.selected, bg);
     let vis_ratio = selection_visibility_ratio(composited, bg);
 
@@ -4636,6 +4641,26 @@ mod tests {
             assert!(
                 json.is_ok(),
                 "Theme '{}' should serialize to JSON",
+                preset.name
+            );
+        }
+    }
+
+    #[test]
+    fn test_presets_force_primary_text_to_hard_black_or_white() {
+        for preset in all_presets() {
+            let theme = preset.create_theme();
+            let expected =
+                super::super::helpers::hard_readable_text_hex(theme.colors.background.main);
+
+            assert_eq!(
+                theme.colors.text.primary, expected,
+                "Theme '{}' should normalize primary text from its main background",
+                preset.name
+            );
+            assert!(
+                matches!(theme.colors.text.primary, 0x000000 | 0xFFFFFF),
+                "Theme '{}' should use pure black or white for primary text",
                 preset.name
             );
         }

@@ -37,6 +37,24 @@ fn test_prompt_header_colors_from_theme_uses_on_accent_text_token_for_logo() {
 }
 
 #[test]
+fn test_prompt_header_colors_from_dark_theme_uses_stronger_hover_overlay() {
+    let mut theme = Theme::dark_default();
+    theme.colors.accent.selected_subtle = 0x112233;
+
+    let colors = PromptHeaderColors::from_theme(&theme);
+    assert_eq!(colors.hover_overlay, 0x1122332e);
+}
+
+#[test]
+fn test_prompt_header_colors_from_light_theme_keeps_existing_hover_overlay() {
+    let mut theme = Theme::light_default();
+    theme.colors.accent.selected_subtle = 0x112233;
+
+    let colors = PromptHeaderColors::from_theme(&theme);
+    assert_eq!(colors.hover_overlay, 0x11223326);
+}
+
+#[test]
 fn test_render_ask_ai_hint_uses_transparent_backgrounds() {
     let section = render_ask_ai_hint_section();
 

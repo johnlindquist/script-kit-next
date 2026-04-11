@@ -62,6 +62,17 @@ pub fn best_readable_text_hex(background: u32) -> u32 {
     }
 }
 
+/// Choose a pure black or pure white text color for a given background.
+pub fn hard_readable_text_hex(background: u32) -> u32 {
+    let ink = 0x000000;
+    let paper = 0xFFFFFF;
+    if contrast_ratio(paper, background) >= contrast_ratio(ink, background) {
+        paper
+    } else {
+        ink
+    }
+}
+
 impl ColorScheme {
     /// Extract only the colors needed for list item rendering
     ///
@@ -254,5 +265,15 @@ mod tests {
     fn test_accent_color_name_maps_known_aliases() {
         assert_eq!(accent_color_name(0xA855F7), "Purple");
         assert_eq!(accent_color_name(0x0078D4), "Blue");
+    }
+
+    #[test]
+    fn test_hard_readable_text_hex_returns_pure_white_for_dark_backgrounds() {
+        assert_eq!(super::hard_readable_text_hex(0x101820), 0xFFFFFF);
+    }
+
+    #[test]
+    fn test_hard_readable_text_hex_returns_pure_black_for_light_backgrounds() {
+        assert_eq!(super::hard_readable_text_hex(0xF8FAFC), 0x000000);
     }
 }

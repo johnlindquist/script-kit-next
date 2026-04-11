@@ -43,8 +43,10 @@ pub const PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX: f32 = 220.0;
 const PROMPT_FOOTER_SECTION_GAP_PX: f32 = 8.0;
 /// Shared horizontal spacing between footer buttons/divider.
 const PROMPT_FOOTER_BUTTON_GAP_PX: f32 = 4.0;
-/// Hover opacity for footer action buttons.
-pub(crate) const PROMPT_FOOTER_BUTTON_HOVER_OPACITY: u8 = 0x26;
+/// Light-mode hover opacity for footer action buttons.
+pub(crate) const PROMPT_FOOTER_BUTTON_HOVER_OPACITY_LIGHT: u8 = 0x26;
+/// Dark-mode hover opacity for footer action buttons.
+pub(crate) const PROMPT_FOOTER_BUTTON_HOVER_OPACITY_DARK: u8 = 0x2e;
 /// Active/pressed opacity for footer action buttons.
 pub(crate) const PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY: u8 = 0x3a;
 /// Footer button font size delta from base UI font size.
@@ -158,7 +160,12 @@ fn is_footer_button_activation_key(key: &str) -> bool {
 }
 
 fn footer_button_hover_rgba(colors: PromptFooterColors) -> u32 {
-    (colors.background << 8) | (PROMPT_FOOTER_BUTTON_HOVER_OPACITY as u32)
+    let opacity = if colors.is_light_mode {
+        PROMPT_FOOTER_BUTTON_HOVER_OPACITY_LIGHT
+    } else {
+        PROMPT_FOOTER_BUTTON_HOVER_OPACITY_DARK
+    };
+    (colors.background << 8) | (opacity as u32)
 }
 
 fn footer_button_active_rgba(colors: PromptFooterColors) -> u32 {
@@ -634,12 +641,13 @@ mod tests {
         footer_surface_rgba, PromptFooterColors, PromptFooterConfig, PROMPT_FOOTER_BORDER_OPACITY,
         PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY, PROMPT_FOOTER_BUTTON_FONT_DELTA_PX,
         PROMPT_FOOTER_BUTTON_FONT_MIN_PX, PROMPT_FOOTER_BUTTON_GAP_PX,
-        PROMPT_FOOTER_BUTTON_HOVER_OPACITY, PROMPT_FOOTER_DIVIDER_HEIGHT_PX,
-        PROMPT_FOOTER_DIVIDER_WIDTH_PX, PROMPT_FOOTER_HELPER_FONT_DELTA_PX,
-        PROMPT_FOOTER_HELPER_FONT_MIN_PX, PROMPT_FOOTER_INFO_FONT_DELTA_PX,
-        PROMPT_FOOTER_INFO_FONT_MIN_PX, PROMPT_FOOTER_LOGO_NUDGE_X_PX, PROMPT_FOOTER_LOGO_SIZE_PX,
-        PROMPT_FOOTER_PADDING_BOTTOM_PX, PROMPT_FOOTER_PADDING_X_PX, PROMPT_FOOTER_SECTION_GAP_PX,
-        PROMPT_FOOTER_SHADOW_BLUR_PX, PROMPT_FOOTER_SHADOW_OFFSET_Y_PX,
+        PROMPT_FOOTER_BUTTON_HOVER_OPACITY_DARK, PROMPT_FOOTER_BUTTON_HOVER_OPACITY_LIGHT,
+        PROMPT_FOOTER_DIVIDER_HEIGHT_PX, PROMPT_FOOTER_DIVIDER_WIDTH_PX,
+        PROMPT_FOOTER_HELPER_FONT_DELTA_PX, PROMPT_FOOTER_HELPER_FONT_MIN_PX,
+        PROMPT_FOOTER_INFO_FONT_DELTA_PX, PROMPT_FOOTER_INFO_FONT_MIN_PX,
+        PROMPT_FOOTER_LOGO_NUDGE_X_PX, PROMPT_FOOTER_LOGO_SIZE_PX, PROMPT_FOOTER_PADDING_BOTTOM_PX,
+        PROMPT_FOOTER_PADDING_X_PX, PROMPT_FOOTER_SECTION_GAP_PX, PROMPT_FOOTER_SHADOW_BLUR_PX,
+        PROMPT_FOOTER_SHADOW_OFFSET_Y_PX,
     };
 
     #[test]
@@ -737,7 +745,7 @@ mod tests {
     }
 
     #[test]
-    fn test_footer_button_hover_rgba_uses_background_token_with_standard_opacity() {
+    fn test_footer_button_hover_rgba_uses_stronger_dark_opacity() {
         let colors = PromptFooterColors {
             accent: 0,
             text_muted: 0,
@@ -745,6 +753,20 @@ mod tests {
             surface: 0,
             background: 0x2255aa,
             is_light_mode: false,
+        };
+
+        assert_eq!(super::footer_button_hover_rgba(colors), 0x2255aa2e);
+    }
+
+    #[test]
+    fn test_footer_button_hover_rgba_keeps_existing_light_opacity() {
+        let colors = PromptFooterColors {
+            accent: 0,
+            text_muted: 0,
+            border: 0,
+            surface: 0,
+            background: 0x2255aa,
+            is_light_mode: true,
         };
 
         assert_eq!(super::footer_button_hover_rgba(colors), 0x2255aa26);
@@ -803,7 +825,8 @@ mod tests {
     fn test_prompt_footer_layout_tokens_stay_consistent_when_spacing_is_adjusted() {
         assert_eq!(PROMPT_FOOTER_SECTION_GAP_PX, 8.0);
         assert_eq!(PROMPT_FOOTER_BUTTON_GAP_PX, 4.0);
-        assert_eq!(PROMPT_FOOTER_BUTTON_HOVER_OPACITY, 0x26);
+        assert_eq!(PROMPT_FOOTER_BUTTON_HOVER_OPACITY_LIGHT, 0x26);
+        assert_eq!(PROMPT_FOOTER_BUTTON_HOVER_OPACITY_DARK, 0x2e);
         assert_eq!(PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY, 0x3a);
         assert_eq!(PROMPT_FOOTER_BUTTON_FONT_DELTA_PX, 2.0);
         assert_eq!(PROMPT_FOOTER_BUTTON_FONT_MIN_PX, 10.0);

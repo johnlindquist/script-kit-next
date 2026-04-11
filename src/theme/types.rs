@@ -91,13 +91,13 @@ pub enum AppearanceMode {
 /// Values range from 0.0 (fully transparent) to 1.0 (fully opaque)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackgroundOpacity {
-    /// Main background opacity (default: 0.30)
+    /// Main background opacity (default: 0.75)
     pub main: f32,
-    /// Title bar opacity (default: 0.30)
+    /// Title bar opacity (default: 0.75)
     pub title_bar: f32,
-    /// Search box/input opacity (default: 0.40)
+    /// Search box/input opacity (default: 0.81)
     pub search_box: f32,
-    /// Log panel opacity (default: 0.40)
+    /// Log panel opacity (default: 0.75)
     pub log_panel: f32,
     /// Selected list item background opacity (default: 0.33)
     #[serde(default = "default_selected_opacity")]
@@ -108,19 +108,19 @@ pub struct BackgroundOpacity {
     /// Preview panel background opacity (default: 0.0)
     #[serde(default = "default_preview_opacity")]
     pub preview: f32,
-    /// Dialog/popup background opacity (default: 0.60)
+    /// Dialog/popup background opacity (default: 0.75)
     #[serde(default = "default_dialog_opacity")]
     pub dialog: f32,
-    /// Input field background opacity (default: 0.30)
+    /// Input field background opacity (default: 0.79)
     #[serde(default = "default_input_opacity")]
     pub input: f32,
-    /// Panel/container background opacity (default: 0.20)
+    /// Panel/container background opacity (default: 0.75)
     #[serde(default = "default_panel_opacity")]
     pub panel: f32,
-    /// Input field inactive/empty state background opacity (default: 0.25)
+    /// Input field inactive/empty state background opacity (default: 0.77)
     #[serde(default = "default_input_inactive_opacity")]
     pub input_inactive: f32,
-    /// Input field active/filled state background opacity (default: 0.50)
+    /// Input field active/filled state background opacity (default: 0.83)
     #[serde(default = "default_input_active_opacity")]
     pub input_active: f32,
     /// Border inactive/empty state opacity (default: 0.125)
@@ -141,7 +141,7 @@ fn default_selected_opacity() -> f32 {
 }
 
 fn default_hover_opacity() -> f32 {
-    0.12 // Hover — barely visible state affordance
+    0.18 // Hover — stronger dark-theme affordance without matching selection weight
 }
 
 fn default_preview_opacity() -> f32 {
@@ -149,23 +149,23 @@ fn default_preview_opacity() -> f32 {
 }
 
 fn default_dialog_opacity() -> f32 {
-    0.15 // Very low opacity - let vibrancy blur show through more
+    0.75
 }
 
 fn default_input_opacity() -> f32 {
-    0.30
+    0.79
 }
 
 fn default_panel_opacity() -> f32 {
-    0.20
+    0.75
 }
 
 fn default_input_inactive_opacity() -> f32 {
-    0.25 // 0x40 / 255 ≈ 0.25
+    0.77
 }
 
 fn default_input_active_opacity() -> f32 {
-    0.50 // 0x80 / 255 ≈ 0.50
+    0.83
 }
 
 fn default_border_inactive_opacity() -> f32 {
@@ -183,22 +183,25 @@ impl Default for BackgroundOpacity {
 }
 
 impl BackgroundOpacity {
-    /// Dark mode opacity defaults - lower opacity for dark vibrancy
+    /// Dark mode opacity defaults.
+    ///
+    /// Keep dark themes aligned with the theme designer's 75% surface-opacity
+    /// preset so new/default themes land on a concrete preset instead of the
+    /// old split 30% shell + 75% vibrancy background state.
     pub fn dark_default() -> Self {
         BackgroundOpacity {
-            // Lower opacity values to allow vibrancy blur to show through
-            main: 0.30,                      // Root wrapper background
-            title_bar: 0.30,                 // Title bar areas
-            search_box: 0.40,                // Search input backgrounds
-            log_panel: 0.40,                 // Log/terminal panels
+            main: 0.75,                      // 75% base
+            title_bar: 0.75,                 // Match main for consistency
+            search_box: 0.81,                // +0.06
+            log_panel: 0.75,                 // Match main
             selected: 0.18, // Selected list item — whisper-subtle highlight over vibrancy
-            hover: 0.12,    // Hovered list item — barely visible state affordance
+            hover: 0.18,    // Hovered list item — stronger dark-theme affordance
             preview: 0.0,   // Preview panel (0 = fully transparent)
-            dialog: 0.15,   // Dialogs/popups - very low opacity, let vibrancy blur show through
-            input: 0.30,    // Input fields
-            panel: 0.20,    // Panels/containers
-            input_inactive: 0.25, // Input fields when empty/inactive
-            input_active: 0.50, // Input fields when has text/active
+            dialog: 0.75,   // Dialogs match main
+            input: 0.79,    // +0.04
+            panel: 0.75,    // Panels/containers
+            input_inactive: 0.77, // +0.02
+            input_active: 0.83, // +0.08
             border_inactive: 0.125, // Borders when inactive
             border_active: 0.25, // Borders when active
             vibrancy_background: Some(0.75), // Main window vibrancy background
@@ -1240,11 +1243,33 @@ fn detect_system_appearance_uncached() -> bool {
 
 // --- merged from part_05.rs ---
 fn default_theme_from_system_appearance() -> Theme {
-    if detect_system_appearance() {
+    let theme = if detect_system_appearance() {
         Theme::dark_default()
     } else {
         Theme::light_default()
+    };
+    normalize_theme_primary_text(theme)
+}
+
+fn normalize_focus_scheme_primary_text(colors: &mut FocusColorScheme) {
+    colors.text.primary = super::helpers::hard_readable_text_hex(colors.background.main);
+}
+
+fn normalize_theme_primary_text(mut theme: Theme) -> Theme {
+    theme.colors.text.primary =
+        super::helpers::hard_readable_text_hex(theme.colors.background.main);
+
+    if let Some(focus_aware) = theme.focus_aware.as_mut() {
+        if let Some(focused) = focus_aware.focused.as_mut() {
+            normalize_focus_scheme_primary_text(focused);
+        }
+
+        if let Some(unfocused) = focus_aware.unfocused.as_mut() {
+            normalize_focus_scheme_primary_text(unfocused);
+        }
     }
+
+    theme
 }
 
 fn merge_json(base: &mut serde_json::Value, overlay: serde_json::Value) {
@@ -1464,7 +1489,7 @@ fn theme_from_user_preferences(
                 preset_name = selected.name,
                 "Using theme preset from user preferences"
             );
-            Some(selected.create_theme())
+            Some(normalize_theme_primary_text(selected.create_theme()))
         }
         None => {
             warn!(
@@ -1645,6 +1670,7 @@ pub fn load_theme() -> Theme {
                             }
                         }
 
+                        theme = normalize_theme_primary_text(theme);
                         log_theme_load_result(&correlation_id, "theme_json", &theme);
                         log_theme_config(&theme);
                         theme
@@ -1951,6 +1977,64 @@ mod tests {
         );
 
         clear_theme_cache_poison_and_restore();
+    }
+
+    #[test]
+    fn test_normalize_theme_primary_text_uses_pure_black_or_white_for_main_and_focus_aware() {
+        let mut theme = Theme::light_default();
+        theme.colors.background.main = 0xF8FAFC;
+        theme.colors.text.primary = 0x223344;
+        theme.focus_aware = Some(FocusAwareColorScheme {
+            focused: Some(FocusColorScheme {
+                background: BackgroundColors {
+                    main: 0x121212,
+                    ..theme.colors.background.clone()
+                },
+                text: TextColors {
+                    primary: 0x654321,
+                    ..theme.colors.text.clone()
+                },
+                accent: theme.colors.accent.clone(),
+                ui: theme.colors.ui.clone(),
+                cursor: None,
+                terminal: theme.colors.terminal.clone(),
+            }),
+            unfocused: Some(FocusColorScheme {
+                background: BackgroundColors {
+                    main: 0xF5F5F5,
+                    ..theme.colors.background.clone()
+                },
+                text: TextColors {
+                    primary: 0x123456,
+                    ..theme.colors.text.clone()
+                },
+                accent: theme.colors.accent.clone(),
+                ui: theme.colors.ui.clone(),
+                cursor: None,
+                terminal: theme.colors.terminal.clone(),
+            }),
+        });
+
+        let normalized = normalize_theme_primary_text(theme);
+        let focus_aware = normalized.focus_aware.expect("focus aware colors expected");
+
+        assert_eq!(normalized.colors.text.primary, 0x000000);
+        assert_eq!(
+            focus_aware
+                .focused
+                .expect("focused scheme expected")
+                .text
+                .primary,
+            0xFFFFFF
+        );
+        assert_eq!(
+            focus_aware
+                .unfocused
+                .expect("unfocused scheme expected")
+                .text
+                .primary,
+            0x000000
+        );
     }
 
     #[test]

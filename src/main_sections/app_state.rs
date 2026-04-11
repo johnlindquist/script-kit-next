@@ -103,13 +103,14 @@ struct ScriptListApp {
     current_app_commands_scroll_handle: UniformListScrollHandle,
     // Scroll handle for ACP history list
     acp_history_scroll_handle: ScrollHandle,
+    // Scroll handle for notes browse portal list
+    notes_browse_scroll_handle: ScrollHandle,
     // Scroll handle for design gallery list
     design_gallery_scroll_handle: UniformListScrollHandle,
     // Scroll handle for file search list
     file_search_scroll_handle: UniformListScrollHandle,
-    // Scroll handle for theme chooser list
-    #[allow(dead_code)]
-    theme_chooser_scroll_handle: UniformListScrollHandle,
+    // Variable-height list state for the theme chooser
+    theme_chooser_list_state: ListState,
     // File search loading state (true while mdfind is running)
     file_search_loading: bool,
     // Debounce task for file search (cancelled when new input arrives)
@@ -307,6 +308,9 @@ struct ScriptListApp {
     pub(crate) attachment_portal_return_view: Option<AppView>,
     /// Previous focus target to restore when leaving an attachment portal.
     pub(crate) attachment_portal_return_focus_target: Option<FocusTarget>,
+    /// Which attachment portal is currently active, when any.
+    pub(crate) active_attachment_portal_kind:
+        Option<crate::ai::window::context_picker::types::PortalKind>,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured
@@ -366,8 +370,7 @@ struct ScriptListApp {
     cached_provider_registry: Option<crate::ai::ProviderRegistry>,
     /// Cached preflight receipt for the main-window Execution Contract rail.
     /// Rebuilt on selection/filter changes; consumed read-only in render().
-    cached_main_window_preflight:
-        Option<crate::main_window_preflight::MainWindowPreflightReceipt>,
+    cached_main_window_preflight: Option<crate::main_window_preflight::MainWindowPreflightReceipt>,
     /// Cache key for preflight receipt (filter_text + selected_index + view).
     /// Cleared by `invalidate_main_window_preflight()`.
     main_window_preflight_cache_key: String,
