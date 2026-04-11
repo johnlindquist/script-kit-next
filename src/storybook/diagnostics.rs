@@ -226,6 +226,7 @@ fn surface_resolution_entry(
 fn runtime_fixture_surface_for_story(story_id: &str) -> Option<&'static str> {
     match story_id {
         "main-menu" => Some("main-menu"),
+        "mini-ai-chat-variations" => Some("mini-ai-chat"),
         "notes-window" => Some("notes-window"),
         _ => None,
     }
@@ -500,7 +501,7 @@ mod tests {
     // ─── Runtime Fixture Completeness Tests ─────────────────────────────
 
     #[test]
-    fn catalog_main_menu_variants_have_fixture_presence_props() {
+    fn catalog_main_menu_variants_report_live_surface_representation() {
         let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
         let main_menu = snapshot
             .stories
@@ -511,18 +512,18 @@ mod tests {
         for variant in &main_menu.variants {
             assert_eq!(
                 variant.props.get("representation").map(String::as_str),
-                Some("runtimeFixture"),
-                "main-menu variant {} should have representation=runtimeFixture",
+                Some("liveSurface"),
+                "main-menu variant {} should have representation=liveSurface",
                 variant.id
             );
             assert!(
-                variant.props.contains_key("fixtureImagePresent"),
-                "main-menu variant {} should have fixtureImagePresent prop",
+                !variant.props.contains_key("fixtureImagePresent"),
+                "main-menu variant {} should not have fixtureImagePresent prop",
                 variant.id
             );
             assert!(
-                variant.props.contains_key("fixtureManifestPresent"),
-                "main-menu variant {} should have fixtureManifestPresent prop",
+                !variant.props.contains_key("fixtureManifestPresent"),
+                "main-menu variant {} should not have fixtureManifestPresent prop",
                 variant.id
             );
         }
@@ -558,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_non_runtime_fixture_variants_have_no_fixture_props() {
+    fn catalog_mini_ai_chat_variants_have_fixture_presence_props() {
         let snapshot = build_story_catalog_snapshot(&StorySelectionStore::default());
         let mini_ai_chat = snapshot
             .stories
@@ -567,9 +568,20 @@ mod tests {
             .expect("mini-ai-chat-variations story should exist");
 
         for variant in &mini_ai_chat.variants {
+            assert_eq!(
+                variant.props.get("representation").map(String::as_str),
+                Some("runtimeFixture"),
+                "mini-ai-chat variant {} should have representation=runtimeFixture",
+                variant.id
+            );
             assert!(
-                !variant.props.contains_key("fixtureImagePresent"),
-                "mini-ai-chat variant {} should NOT have fixtureImagePresent (no runtimeFixture representation)",
+                variant.props.contains_key("fixtureImagePresent"),
+                "mini-ai-chat variant {} should have fixtureImagePresent prop",
+                variant.id
+            );
+            assert!(
+                variant.props.contains_key("fixtureManifestPresent"),
+                "mini-ai-chat variant {} should have fixtureManifestPresent prop",
                 variant.id
             );
         }

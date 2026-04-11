@@ -39,7 +39,7 @@ fn variation_lookup_round_trips() {
 }
 
 #[test]
-fn story_variants_have_surface_and_runtime_fixture_props() {
+fn story_variants_have_surface_and_live_preview_props() {
     for variant in main_menu_story_variants() {
         assert_eq!(
             variant.props.get("surface").map(String::as_str),
@@ -49,8 +49,8 @@ fn story_variants_have_surface_and_runtime_fixture_props() {
         );
         assert_eq!(
             variant.props.get("representation").map(String::as_str),
-            Some("runtimeFixture"),
-            "variant {} missing representation=runtimeFixture prop",
+            Some("liveSurface"),
+            "variant {} missing representation=liveSurface prop",
             variant.stable_id()
         );
     }
