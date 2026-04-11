@@ -2577,6 +2577,104 @@ impl ScriptListApp {
 
                         Self::builtin_success(dctx, "choose_theme")
                     }
+                    SettingsCommandType::DisableWindowSnapping
+                    | SettingsCommandType::SnapModeSimple
+                    | SettingsCommandType::SnapModeExpanded
+                    | SettingsCommandType::SnapModePrecision => {
+                        let target_mode = match cmd_type {
+                            SettingsCommandType::DisableWindowSnapping => {
+                                window_control::SnapMode::Off
+                            }
+                            SettingsCommandType::SnapModeSimple => {
+                                window_control::SnapMode::Simple
+                            }
+                            SettingsCommandType::SnapModeExpanded => {
+                                window_control::SnapMode::Expanded
+                            }
+                            SettingsCommandType::SnapModePrecision => {
+                                window_control::SnapMode::Precision
+                            }
+                            _ => unreachable!("snap mode command arm only handles snap commands"),
+                        };
+
+                        let previous = window_control::current_snap_mode();
+                        let runtime_active = window_control::is_snap_runtime_active();
+
+                        let mode = match window_control::persist_snap_mode(target_mode) {
+                            Ok(mode) => mode,
+                            Err(error) => {
+                                tracing::error!(
+                                    category = "WINDOW",
+                                    trace_id = %dctx.trace_id,
+                                    %error,
+                                    ?target_mode,
+                                    "Failed to persist snap mode from built-in command"
+                                );
+                                self.show_hud(
+                                    format!("Failed to update snap mode: {error}"),
+                                    Some(HUD_SHORT_MS),
+                                    cx,
+                                );
+                                return Self::builtin_error(
+                                    dctx,
+                                    "set_snap_mode_failed",
+                                    "Failed to save snap mode",
+                                    error.to_string(),
+                                );
+                            }
+                        };
+
+                        if runtime_active {
+                            let runtime_result = if mode == window_control::SnapMode::Off {
+                                window_control::cancel_snap_runtime(cx)
+                            } else {
+                                window_control::refresh_snap_runtime_for_mode(cx)
+                            };
+
+                            if let Err(error) = runtime_result {
+                                tracing::warn!(
+                                    category = "WINDOW",
+                                    trace_id = %dctx.trace_id,
+                                    %error,
+                                    ?mode,
+                                    "Failed to apply runtime transition after snap mode change"
+                                );
+                            }
+                        }
+
+                        tracing::info!(
+                            category = "WINDOW",
+                            trace_id = %dctx.trace_id,
+                            previous = ?previous,
+                            ?mode,
+                            runtime_active,
+                            "Updated snap mode from built-in command"
+                        );
+
+                        let hud_text = match mode {
+                            window_control::SnapMode::Off => {
+                                "Window snapping disabled".to_string()
+                            }
+                            window_control::SnapMode::Simple => {
+                                "Snap mode: Simple".to_string()
+                            }
+                            window_control::SnapMode::Expanded => {
+                                "Snap mode: Expanded".to_string()
+                            }
+                            window_control::SnapMode::Precision => {
+                                "Snap mode: Precision".to_string()
+                            }
+                        };
+                        let success_id = match mode {
+                            window_control::SnapMode::Off => "set_snap_mode::off",
+                            window_control::SnapMode::Simple => "set_snap_mode::simple",
+                            window_control::SnapMode::Expanded => "set_snap_mode::expanded",
+                            window_control::SnapMode::Precision => "set_snap_mode::precision",
+                        };
+
+                        self.show_hud(hud_text, Some(HUD_SHORT_MS), cx);
+                        Self::builtin_success(dctx, success_id)
+                    }
                     SettingsCommandType::SelectMicrophone => {
                         let prefs = crate::config::load_user_preferences();
                         let menu_items = match crate::dictation::list_input_device_menu_items(

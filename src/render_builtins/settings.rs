@@ -13,6 +13,11 @@ enum SettingsAction {
     ConfigureVercelApiKey,
     ConfigureOpenAiApiKey,
     ConfigureAnthropicApiKey,
+    SelectMicrophone,
+    DisableWindowSnapping,
+    SnapModeSimple,
+    SnapModeExpanded,
+    SnapModePrecision,
     ResetWindowPositions,
 }
 
@@ -42,7 +47,53 @@ fn get_settings_items() -> Vec<SettingsItem> {
             icon: "🔑",
             action: SettingsAction::ConfigureAnthropicApiKey,
         },
+        SettingsItem {
+            name: "Select Microphone",
+            description: "Choose which microphone to use for dictation",
+            icon: "🎙️",
+            action: SettingsAction::SelectMicrophone,
+        },
     ];
+
+    let snap_mode = crate::window_control::current_snap_mode();
+
+    if snap_mode != crate::window_control::SnapMode::Off {
+        items.push(SettingsItem {
+            name: "Disable Window Snapping",
+            description: "Turn off drag snapping and snap overlays until a snap mode is re-enabled",
+            icon: "🚫",
+            action: SettingsAction::DisableWindowSnapping,
+        });
+    }
+
+    if snap_mode != crate::window_control::SnapMode::Simple {
+        items.push(SettingsItem {
+            name: "Snap Mode: Simple",
+            description:
+                "Use halves, quadrants, center, and almost-maximize targets while dragging windows",
+            icon: "◧",
+            action: SettingsAction::SnapModeSimple,
+        });
+    }
+
+    if snap_mode != crate::window_control::SnapMode::Expanded {
+        items.push(SettingsItem {
+            name: "Snap Mode: Expanded",
+            description:
+                "Use halves, quadrants, thirds, and two-thirds targets while dragging windows",
+            icon: "▤",
+            action: SettingsAction::SnapModeExpanded,
+        });
+    }
+
+    if snap_mode != crate::window_control::SnapMode::Precision {
+        items.push(SettingsItem {
+            name: "Snap Mode: Precision",
+            description: "Use the full snap grid including sixths for finer placements",
+            icon: "▦",
+            action: SettingsAction::SnapModePrecision,
+        });
+    }
 
     // Only show reset if there are saved positions
     if crate::window_state::has_custom_positions() {
@@ -113,6 +164,79 @@ impl ScriptListApp {
                     cx,
                 );
             }
+            SettingsAction::SelectMicrophone => {
+                tracing::info!(
+                    correlation_id = "settings-hub",
+                    action = "select_microphone",
+                    "settings.action_executed"
+                );
+
+                let entry = crate::builtins::BuiltInEntry {
+                    id: crate::config::canonical_builtin_command_id("builtin/select-microphone"),
+                    name: "Select Microphone".to_string(),
+                    description: "Choose which microphone to use for dictation".to_string(),
+                    keywords: vec![
+                        "microphone".to_string(),
+                        "mic".to_string(),
+                        "audio".to_string(),
+                        "input".to_string(),
+                        "dictation".to_string(),
+                        "device".to_string(),
+                        "recording".to_string(),
+                    ],
+                    feature: crate::builtins::BuiltInFeature::SettingsCommand(
+                        crate::builtins::SettingsCommandType::SelectMicrophone,
+                    ),
+                    icon: Some("mic".to_string()),
+                    group: crate::builtins::BuiltInGroup::Core,
+                };
+
+                self.execute_builtin(&entry, cx);
+            }
+            SettingsAction::DisableWindowSnapping => {
+                let entry = crate::builtins::get_builtin_entries(&self.config.get_builtins())
+                    .into_iter()
+                    .find(|entry| entry.id == "builtin/disable-window-snapping");
+
+                if let Some(entry) = entry {
+                    self.execute_builtin(&entry, cx);
+                } else {
+                    self.show_error_toast("Disable Window Snapping is unavailable", cx);
+                }
+            }
+            SettingsAction::SnapModeSimple => {
+                let entry = crate::builtins::get_builtin_entries(&self.config.get_builtins())
+                    .into_iter()
+                    .find(|entry| entry.id == "builtin/snap-mode-simple");
+
+                if let Some(entry) = entry {
+                    self.execute_builtin(&entry, cx);
+                } else {
+                    self.show_error_toast("Snap Mode: Simple is unavailable", cx);
+                }
+            }
+            SettingsAction::SnapModeExpanded => {
+                let entry = crate::builtins::get_builtin_entries(&self.config.get_builtins())
+                    .into_iter()
+                    .find(|entry| entry.id == "builtin/snap-mode-expanded");
+
+                if let Some(entry) = entry {
+                    self.execute_builtin(&entry, cx);
+                } else {
+                    self.show_error_toast("Snap Mode: Expanded is unavailable", cx);
+                }
+            }
+            SettingsAction::SnapModePrecision => {
+                let entry = crate::builtins::get_builtin_entries(&self.config.get_builtins())
+                    .into_iter()
+                    .find(|entry| entry.id == "builtin/snap-mode-precision");
+
+                if let Some(entry) = entry {
+                    self.execute_builtin(&entry, cx);
+                } else {
+                    self.show_error_toast("Snap Mode: Precision is unavailable", cx);
+                }
+            }
             SettingsAction::ResetWindowPositions => {
                 tracing::info!(
                     correlation_id = "settings-hub",
@@ -132,11 +256,7 @@ impl ScriptListApp {
     }
 
     /// Render the settings hub view with categorized configuration options.
-    fn render_settings(
-        &mut self,
-        selected_index: usize,
-        cx: &mut Context<Self>,
-    ) -> AnyElement {
+    fn render_settings(&mut self, selected_index: usize, cx: &mut Context<Self>) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
             &crate::components::PromptChromeAudit::exception(
                 "settings",
@@ -193,9 +313,7 @@ impl ScriptListApp {
 
                 if is_key_up(key) {
                     if current_selected > 0 {
-                        if let AppView::SettingsView { selected_index } =
-                            &mut this.current_view
-                        {
+                        if let AppView::SettingsView { selected_index } = &mut this.current_view {
                             *selected_index = current_selected - 1;
                         }
                         cx.notify();
@@ -203,9 +321,7 @@ impl ScriptListApp {
                     cx.stop_propagation();
                 } else if is_key_down(key) {
                     if current_selected < settings_count.saturating_sub(1) {
-                        if let AppView::SettingsView { selected_index } =
-                            &mut this.current_view
-                        {
+                        if let AppView::SettingsView { selected_index } = &mut this.current_view {
                             *selected_index = current_selected + 1;
                         }
                         cx.notify();
@@ -303,18 +419,13 @@ impl ScriptListApp {
                     .child(
                         div()
                             .text_size(px(design_typography.font_size_xl))
-                            .child("Settings"),
+                            .child("Script Kit Settings"),
                     )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!(
-                                "{} option{}",
-                                item_count,
-                                if item_count == 1 { "" } else { "s" }
-                            )),
-                    ),
+                    .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                        "{} option{}",
+                        item_count,
+                        if item_count == 1 { "" } else { "s" }
+                    ))),
             )
             // Divider
             .child(
@@ -335,21 +446,24 @@ impl ScriptListApp {
                     .flex_col()
                     .children(list_items),
             )
-            .child(if matches!(
-                crate::footer_popup::active_main_window_footer_surface(),
-                Some("settings")
-            ) {
-                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-            } else {
-                PromptFooter::new(
-                    PromptFooterConfig::new()
-                        .primary_label("Open")
-                        .primary_shortcut("↵")
-                        .show_secondary(false),
-                    PromptFooterColors::from_theme(&self.theme),
-                )
-                .into_any_element()
-            })
+            .child(
+                if matches!(
+                    crate::footer_popup::active_main_window_footer_surface(),
+                    Some("settings")
+                ) {
+                    crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(
+                    )
+                } else {
+                    PromptFooter::new(
+                        PromptFooterConfig::new()
+                            .primary_label("Open")
+                            .primary_shortcut("↵")
+                            .show_secondary(false),
+                        PromptFooterColors::from_theme(&self.theme),
+                    )
+                    .into_any_element()
+                },
+            )
             .into_any_element()
     }
 }

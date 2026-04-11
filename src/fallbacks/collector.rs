@@ -69,6 +69,34 @@ impl FallbackItem {
         }
     }
 
+    /// Get the user-facing display name for this fallback.
+    pub fn display_name(&self) -> String {
+        match self {
+            FallbackItem::Builtin(b) => b.display_name().into_owned(),
+            FallbackItem::Script(s) => s.script.name.clone(),
+        }
+    }
+
+    /// Get the user-facing description for this fallback.
+    pub fn display_description(&self) -> String {
+        match self {
+            FallbackItem::Builtin(b) => b.display_description().into_owned(),
+            FallbackItem::Script(s) => s
+                .script
+                .description
+                .clone()
+                .unwrap_or_else(|| "User script fallback".to_string()),
+        }
+    }
+
+    /// Get the user-facing row label for this fallback.
+    pub fn display_label(&self) -> String {
+        match self {
+            FallbackItem::Builtin(b) => b.display_label().into_owned(),
+            FallbackItem::Script(s) => s.label.clone(),
+        }
+    }
+
     /// Check if this is a built-in fallback
     pub fn is_builtin(&self) -> bool {
         matches!(self, FallbackItem::Builtin(_))

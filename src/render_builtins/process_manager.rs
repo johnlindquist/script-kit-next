@@ -1,7 +1,33 @@
 impl ScriptListApp {
     /// Refresh interval for the process manager list (2 seconds).
-    const PROCESS_MANAGER_REFRESH_INTERVAL: std::time::Duration =
-        std::time::Duration::from_secs(2);
+    const PROCESS_MANAGER_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+
+    fn process_manager_stop_all_entry() -> crate::builtins::BuiltInEntry {
+        crate::builtins::BuiltInEntry {
+            id: crate::config::canonical_builtin_command_id("builtin/stop-all-processes"),
+            name: "Stop All Running Scripts".to_string(),
+            description: "Terminate every active Script Kit child process".to_string(),
+            keywords: vec![
+                "process".to_string(),
+                "running".to_string(),
+                "scripts".to_string(),
+                "stop".to_string(),
+                "kill".to_string(),
+                "terminate".to_string(),
+                "jobs".to_string(),
+            ],
+            feature: crate::builtins::BuiltInFeature::UtilityCommand(
+                crate::builtins::UtilityCommandType::StopAllProcesses,
+            ),
+            icon: Some("square-stop".to_string()),
+            group: crate::builtins::BuiltInGroup::Core,
+        }
+    }
+
+    fn trigger_process_manager_stop_all(&mut self, cx: &mut Context<Self>) {
+        let entry = Self::process_manager_stop_all_entry();
+        self.execute_builtin(&entry, cx);
+    }
 
     /// Start the periodic refresh task for the ProcessManagerView.
     ///
@@ -20,10 +46,7 @@ impl ScriptListApp {
                     .update(|cx| {
                         this.update(cx, |app, cx| {
                             // Bail if we've navigated away
-                            if !matches!(
-                                app.current_view,
-                                AppView::ProcessManagerView { .. }
-                            ) {
+                            if !matches!(app.current_view, AppView::ProcessManagerView { .. }) {
                                 tracing::info!(
                                     correlation_id = "process-manager-refresh",
                                     "process_manager.refresh_stopped.view_changed"
@@ -38,8 +61,7 @@ impl ScriptListApp {
                             // Compare by PIDs to avoid unnecessary rerenders
                             let old_pids: Vec<u32> =
                                 app.cached_processes.iter().map(|p| p.pid).collect();
-                            let new_pids: Vec<u32> =
-                                new_processes.iter().map(|p| p.pid).collect();
+                            let new_pids: Vec<u32> = new_processes.iter().map(|p| p.pid).collect();
 
                             if old_pids != new_pids {
                                 tracing::info!(
@@ -52,9 +74,8 @@ impl ScriptListApp {
                                 app.cached_processes = new_processes;
 
                                 // Clamp selection index if list shrank
-                                if let AppView::ProcessManagerView {
-                                    selected_index, ..
-                                } = &mut app.current_view
+                                if let AppView::ProcessManagerView { selected_index, .. } =
+                                    &mut app.current_view
                                 {
                                     let len = app.cached_processes.len();
                                     if *selected_index >= len && len > 0 {
@@ -161,6 +182,12 @@ impl ScriptListApp {
                 // Cmd+W always closes window
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     this.close_and_reset_window(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+
+                if has_cmd && is_key_enter(key) {
+                    this.trigger_process_manager_stop_all(cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -334,9 +361,17 @@ impl ScriptListApp {
                                 let elapsed = chrono::Utc::now()
                                     .signed_duration_since(process_info.started_at);
                                 let duration_str = if elapsed.num_hours() > 0 {
-                                    format!("{}h {}m", elapsed.num_hours(), elapsed.num_minutes() % 60)
+                                    format!(
+                                        "{}h {}m",
+                                        elapsed.num_hours(),
+                                        elapsed.num_minutes() % 60
+                                    )
                                 } else if elapsed.num_minutes() > 0 {
-                                    format!("{}m {}s", elapsed.num_minutes(), elapsed.num_seconds() % 60)
+                                    format!(
+                                        "{}m {}s",
+                                        elapsed.num_minutes(),
+                                        elapsed.num_seconds() % 60
+                                    )
                                 } else {
                                     format!("{}s", elapsed.num_seconds())
                                 };
@@ -345,22 +380,23 @@ impl ScriptListApp {
                                     format!("PID {} • running {}", process_info.pid, duration_str);
 
                                 let click_entity = click_entity_handle.clone();
-                                let click_handler = move |_event: &gpui::ClickEvent,
-                                                          _window: &mut Window,
-                                                          cx: &mut gpui::App| {
-                                    if let Some(app) = click_entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            if let AppView::ProcessManagerView {
-                                                selected_index,
-                                                ..
-                                            } = &mut this.current_view
-                                            {
-                                                *selected_index = ix;
-                                            }
-                                            cx.notify();
-                                        });
-                                    }
-                                };
+                                let click_handler =
+                                    move |_event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = click_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if let AppView::ProcessManagerView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
+                                                {
+                                                    *selected_index = ix;
+                                                }
+                                                cx.notify();
+                                            });
+                                        }
+                                    };
 
                                 let hover_entity = hover_entity_handle.clone();
                                 let hover_handler =
@@ -417,6 +453,8 @@ impl ScriptListApp {
         };
 
         let total_count = self.cached_processes.len();
+        let stop_all_button_colors = crate::components::ButtonColors::from_theme(&self.theme);
+        let stop_all_button_entity = cx.entity().downgrade();
 
         div()
             .flex()
@@ -452,16 +490,26 @@ impl ScriptListApp {
                                 .focus_bordered(false),
                         ),
                     )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!(
-                                "{} process{}",
-                                total_count,
-                                if total_count == 1 { "" } else { "es" }
-                            )),
-                    ),
+                    .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                        "{} process{}",
+                        total_count,
+                        if total_count == 1 { "" } else { "es" }
+                    )))
+                    .when(total_count > 0, |d| {
+                        let stop_all_button_entity = stop_all_button_entity.clone();
+                        d.child(
+                            crate::components::Button::new("Stop All", stop_all_button_colors)
+                                .variant(crate::components::ButtonVariant::Ghost)
+                                .shortcut("⌘↵")
+                                .on_click(Box::new(move |_event, _window, cx| {
+                                    if let Some(app) = stop_all_button_entity.upgrade() {
+                                        app.update(cx, |this, cx| {
+                                            this.trigger_process_manager_stop_all(cx);
+                                        });
+                                    }
+                                })),
+                        )
+                    }),
             )
             // Divider
             .child(crate::components::SectionDivider::new())
@@ -475,20 +523,28 @@ impl ScriptListApp {
                     .py(px(design_spacing.padding_xs))
                     .child(list_element),
             )
-            .child(if matches!(
-                crate::footer_popup::active_main_window_footer_surface(),
-                Some("process_manager")
-            ) {
-                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-            } else {
-                crate::components::render_simple_hint_strip(
-                    vec![
-                        gpui::SharedString::from("↵ Stop"),
-                        gpui::SharedString::from("Esc Back"),
-                    ],
-                    None,
-                )
-            })
+            .child(
+                if matches!(
+                    crate::footer_popup::active_main_window_footer_surface(),
+                    Some("process_manager")
+                ) {
+                    crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(
+                    )
+                } else {
+                    crate::components::render_simple_hint_strip(
+                        if total_count > 0 {
+                            vec![
+                                gpui::SharedString::from("↵ Stop"),
+                                gpui::SharedString::from("⌘↵ Stop All"),
+                                gpui::SharedString::from("Esc Back"),
+                            ]
+                        } else {
+                            vec![gpui::SharedString::from("Esc Back")]
+                        },
+                        None,
+                    )
+                },
+            )
             .into_any_element()
     }
 }

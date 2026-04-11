@@ -183,6 +183,14 @@ pub enum SettingsCommandType {
     ChooseTheme,
     /// Select microphone for dictation
     SelectMicrophone,
+    /// Disable drag snapping entirely
+    DisableWindowSnapping,
+    /// Use the simplest snap target set
+    SnapModeSimple,
+    /// Use the default expanded snap target set
+    SnapModeExpanded,
+    /// Use the densest snap target set
+    SnapModePrecision,
 }
 /// Utility command types for quick access tools
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -456,7 +464,7 @@ impl BuiltInEntry {
                 SystemActionType::QuitScriptKit => "Quit Script Kit",
                 SystemActionType::ToggleDoNotDisturb => "Toggle Do Not Disturb",
                 SystemActionType::StartScreenSaver => "Start Screen Saver",
-                SystemActionType::OpenSystemPreferences => "Open System Settings",
+                SystemActionType::OpenSystemPreferences => "Open macOS System Settings",
                 SystemActionType::OpenPrivacySettings => "Open Privacy Settings",
                 SystemActionType::OpenDisplaySettings => "Open Display Settings",
                 SystemActionType::OpenSoundSettings => "Open Sound Settings",
@@ -506,12 +514,16 @@ impl BuiltInEntry {
                 SettingsCommandType::ConfigureAnthropicApiKey => "Configure Anthropic API Key",
                 SettingsCommandType::ChooseTheme => "Open Theme Designer",
                 SettingsCommandType::SelectMicrophone => "Select Microphone",
+                SettingsCommandType::DisableWindowSnapping => "Disable Window Snapping",
+                SettingsCommandType::SnapModeSimple => "Set Snap Mode: Simple",
+                SettingsCommandType::SnapModeExpanded => "Set Snap Mode: Expanded",
+                SettingsCommandType::SnapModePrecision => "Set Snap Mode: Precision",
             },
             BuiltInFeature::UtilityCommand(action) => match action {
                 UtilityCommandType::MiniMainWindow => "Open Mini Launcher",
                 UtilityCommandType::ScratchPad => "Open Scratch Pad",
                 UtilityCommandType::QuickTerminal => "Open Quick Terminal",
-                UtilityCommandType::ClaudeCode => "Open Claude Code",
+                UtilityCommandType::ClaudeCode => "Open Claude Code Terminal",
                 UtilityCommandType::ProcessManager => "Open Process Manager",
                 UtilityCommandType::StopAllProcesses => "Stop All Running Scripts",
                 UtilityCommandType::DoInCurrentApp => "Do in Current App",
@@ -529,11 +541,11 @@ impl BuiltInEntry {
             },
             BuiltInFeature::FileSearch => "Search Files",
             BuiltInFeature::Webcam => "Open Webcam",
-            BuiltInFeature::Dictation => "Start Dictation",
+            BuiltInFeature::Dictation => "Start Dictation Here",
             BuiltInFeature::DictationToAiHarness => "Start Dictation to AI",
             BuiltInFeature::DictationToFrontmostApp => "Start Dictation to App",
             BuiltInFeature::DictationToNotes => "Start Dictation to Notes",
-            BuiltInFeature::Settings => "Open Settings",
+            BuiltInFeature::Settings => "Open Script Kit Settings",
             BuiltInFeature::AcpHistory => "Open Conversation History",
         }
     }
@@ -576,7 +588,7 @@ impl BuiltInEntry {
                 SystemActionType::QuitScriptKit => "Quit",
                 SystemActionType::ToggleDoNotDisturb => "Toggle DND",
                 SystemActionType::StartScreenSaver => "Screen Saver",
-                SystemActionType::OpenSystemPreferences => "System Settings",
+                SystemActionType::OpenSystemPreferences => "macOS Settings",
                 SystemActionType::OpenPrivacySettings => "Privacy",
                 SystemActionType::OpenDisplaySettings => "Displays",
                 SystemActionType::OpenSoundSettings => "Sound",
@@ -626,6 +638,10 @@ impl BuiltInEntry {
                 SettingsCommandType::ConfigureAnthropicApiKey => "Anthropic Key",
                 SettingsCommandType::ChooseTheme => "Theme",
                 SettingsCommandType::SelectMicrophone => "Microphone",
+                SettingsCommandType::DisableWindowSnapping => "Snap Off",
+                SettingsCommandType::SnapModeSimple => "Simple Snap",
+                SettingsCommandType::SnapModeExpanded => "Expanded Snap",
+                SettingsCommandType::SnapModePrecision => "Precision Snap",
             },
             BuiltInFeature::UtilityCommand(action) => match action {
                 UtilityCommandType::MiniMainWindow => "Mini Launcher",
@@ -649,11 +665,11 @@ impl BuiltInEntry {
             },
             BuiltInFeature::FileSearch => "Files",
             BuiltInFeature::Webcam => "Webcam",
-            BuiltInFeature::Dictation => "Dictation",
+            BuiltInFeature::Dictation => "Dictate Here",
             BuiltInFeature::DictationToAiHarness => "Dictate AI",
             BuiltInFeature::DictationToFrontmostApp => "Dictate App",
             BuiltInFeature::DictationToNotes => "Dictate Notes",
-            BuiltInFeature::Settings => "Settings",
+            BuiltInFeature::Settings => "Kit Settings",
             BuiltInFeature::AcpHistory => "History",
         }
     }
@@ -688,8 +704,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
             entries.push(BuiltInEntry::new_with_icon(
                 "builtin/paste-sequentially",
-                "Paste Sequentially",
-                "Paste multiple clipboard items one at a time in sequence",
+                "Paste Next Clipboard Item",
+                "Paste the next item from clipboard history",
                 vec!["paste", "sequential", "clipboard", "batch", "paseq"],
                 BuiltInFeature::PasteSequentially,
                 "clipboard-paste",
@@ -718,7 +734,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // ACP Chat is always available from the launcher.
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/ai-chat",
-            "Open ACP Chat",
+            "ACP Chat",
             "Open ACP Chat with fresh context",
             vec![
                 "ai",
@@ -1040,8 +1056,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // System Preferences
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/system-preferences",
-            "Open System Settings",
-            "Open System Settings (System Preferences)",
+            "macOS System Settings",
+            "Open macOS System Settings",
             vec!["system", "settings", "preferences", "prefs"],
             BuiltInFeature::SystemAction(SystemActionType::OpenSystemPreferences),
             "settings",
@@ -1408,8 +1424,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         // =========================================================================
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/settings",
-            "Settings",
-            "Open settings to configure API keys, themes, window positions, and more",
+            "Script Kit Settings",
+            "Configure Script Kit settings, API keys, themes, window positions, and more",
             vec![
                 "settings",
                 "preferences",
@@ -1424,112 +1440,80 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // Settings Commands
         // =========================================================================
+        // These actions are intentionally routed through the Script Kit Settings hub
+        // instead of competing as top-level launcher commands.
 
-        // Only show reset if there are custom positions
-        if crate::window_state::has_custom_positions() {
+        let snap_mode = crate::window_control::current_snap_mode();
+
+        if snap_mode != crate::window_control::SnapMode::Off {
             entries.push(BuiltInEntry::new_with_icon(
-                "builtin/reset-window-positions",
-                "Reset Window Positions",
-                "Restore all windows to default positions",
+                "builtin/disable-window-snapping",
+                "Disable Window Snapping",
+                "Turn off drag snapping and hide snap overlays until a snap mode is re-enabled",
                 vec![
-                    "reset", "window", "position", "default", "restore", "layout", "location",
+                    "snap", "snapping", "window", "disable", "off", "drag", "overlay",
                 ],
-                BuiltInFeature::SettingsCommand(SettingsCommandType::ResetWindowPositions),
-                "refresh-cw",
+                BuiltInFeature::SettingsCommand(SettingsCommandType::DisableWindowSnapping),
+                "ban",
             ));
         }
 
-        // API Key Configuration
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/configure-vercel-api",
-            "Configure Vercel AI Gateway",
-            "Open setup for the Vercel AI Gateway API key used by ACP Chat",
-            vec![
-                "vercel",
-                "api",
-                "key",
-                "gateway",
-                "ai",
-                "configure",
-                "setup",
-                "config",
-                "settings",
-            ],
-            BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureVercelApiKey),
-            "key-round",
-        ));
+        if snap_mode != crate::window_control::SnapMode::Simple {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/snap-mode-simple",
+                "Snap Mode: Simple",
+                "Use halves, quadrants, center, and almost-maximize targets while dragging windows",
+                vec![
+                    "snap",
+                    "snapping",
+                    "window",
+                    "simple",
+                    "basic",
+                    "halves",
+                    "quadrants",
+                ],
+                BuiltInFeature::SettingsCommand(SettingsCommandType::SnapModeSimple),
+                "square-split-horizontal",
+            ));
+        }
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/configure-openai-api",
-            "Configure OpenAI API Key",
-            "Open setup for the OpenAI API key used by ACP Chat",
-            vec![
-                "openai",
-                "api",
-                "key",
-                "gpt",
-                "ai",
-                "configure",
-                "setup",
-                "config",
-                "settings",
-            ],
-            BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureOpenAiApiKey),
-            "key-round",
-        ));
+        if snap_mode != crate::window_control::SnapMode::Expanded {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/snap-mode-expanded",
+                "Snap Mode: Expanded",
+                "Use halves, quadrants, thirds, and two-thirds targets while dragging windows",
+                vec![
+                    "snap",
+                    "snapping",
+                    "window",
+                    "expanded",
+                    "thirds",
+                    "two thirds",
+                    "default",
+                ],
+                BuiltInFeature::SettingsCommand(SettingsCommandType::SnapModeExpanded),
+                "columns-3",
+            ));
+        }
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/configure-anthropic-api",
-            "Configure Anthropic API Key",
-            "Open setup for the Anthropic API key used by ACP Chat",
-            vec![
-                "anthropic",
-                "api",
-                "key",
-                "claude",
-                "ai",
-                "configure",
-                "setup",
-                "config",
-                "settings",
-            ],
-            BuiltInFeature::SettingsCommand(SettingsCommandType::ConfigureAnthropicApiKey),
-            "key-round",
-        ));
-
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/choose-theme",
-            "Theme Designer",
-            "Design your color theme with live preview",
-            vec![
-                "theme",
-                "appearance",
-                "color",
-                "dark",
-                "light",
-                "scheme",
-                "designer",
-            ],
-            BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
-            "palette",
-        ));
-
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/select-microphone",
-            "Select Microphone",
-            "Choose which microphone to use for dictation",
-            vec![
-                "microphone",
-                "mic",
-                "audio",
-                "input",
-                "dictation",
-                "device",
-                "recording",
-            ],
-            BuiltInFeature::SettingsCommand(SettingsCommandType::SelectMicrophone),
-            "mic",
-        ));
+        if snap_mode != crate::window_control::SnapMode::Precision {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/snap-mode-precision",
+                "Snap Mode: Precision",
+                "Use the full snap grid including sixths for finer placements",
+                vec![
+                    "snap",
+                    "snapping",
+                    "window",
+                    "precision",
+                    "sixths",
+                    "grid",
+                    "advanced",
+                ],
+                BuiltInFeature::SettingsCommand(SettingsCommandType::SnapModePrecision),
+                "grid-3x2",
+            ));
+        }
 
         // =========================================================================
         // Utility Commands
@@ -1585,8 +1569,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/claude-code",
-            "Claude Code",
-            "Open Claude Code in the harness terminal surface used by Tab AI",
+            "Claude Code Terminal",
+            "Open Claude Code in the terminal surface used for CLI agent sessions",
             vec![
                 "claude",
                 "code",
@@ -1610,23 +1594,6 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::ProcessManager),
             "activity",
-        ));
-
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/stop-all-processes",
-            "Stop All Running Scripts",
-            "Terminate every active Script Kit child process",
-            vec![
-                "process",
-                "running",
-                "scripts",
-                "stop",
-                "kill",
-                "terminate",
-                "jobs",
-            ],
-            BuiltInFeature::UtilityCommand(UtilityCommandType::StopAllProcesses),
-            "square-stop",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1690,96 +1657,99 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "puzzle",
         ));
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/inspect-current-context",
-            "Inspect Current Context",
-            "Capture a deterministic JSON snapshot of what Script Kit can currently see and copy it to the clipboard",
-            vec![
-                "inspect",
-                "current",
-                "context",
-                "snapshot",
-                "json",
-                "diagnostics",
-                "debug",
-                "clipboard",
-                "mcp",
-                "agent",
-                "ai",
-            ],
-            BuiltInFeature::UtilityCommand(UtilityCommandType::InspectCurrentContext),
-            "compass",
-        ));
+        #[cfg(debug_assertions)]
+        {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/inspect-current-context",
+                "Inspect Current Context",
+                "Capture a deterministic JSON snapshot of what Script Kit can currently see and copy it to the clipboard",
+                vec![
+                    "inspect",
+                    "current",
+                    "context",
+                    "snapshot",
+                    "json",
+                    "diagnostics",
+                    "debug",
+                    "clipboard",
+                    "mcp",
+                    "agent",
+                    "ai",
+                ],
+                BuiltInFeature::UtilityCommand(UtilityCommandType::InspectCurrentContext),
+                "compass",
+            ));
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/trace-current-app-intent",
-            "Trace Current App Intent",
-            "Dry-run a current-app request and copy a machine-readable JSON trace showing normalized input, candidate commands, route selection, and script prompt preview without executing anything",
-            vec![
-                "trace",
-                "current",
-                "app",
-                "intent",
-                "dry",
-                "run",
-                "preview",
-                "debug",
-                "diagnostics",
-                "routing",
-                "json",
-                "agent",
-                "automation",
-                "menu",
-                "command",
-                "shortcut",
-            ],
-            BuiltInFeature::UtilityCommand(UtilityCommandType::TraceCurrentAppIntent),
-            "flask-conical",
-        ));
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/trace-current-app-intent",
+                "Trace Current App Intent",
+                "Dry-run a current-app request and copy a machine-readable JSON trace showing normalized input, candidate commands, route selection, and script prompt preview without executing anything",
+                vec![
+                    "trace",
+                    "current",
+                    "app",
+                    "intent",
+                    "dry",
+                    "run",
+                    "preview",
+                    "debug",
+                    "diagnostics",
+                    "routing",
+                    "json",
+                    "agent",
+                    "automation",
+                    "menu",
+                    "command",
+                    "shortcut",
+                ],
+                BuiltInFeature::UtilityCommand(UtilityCommandType::TraceCurrentAppIntent),
+                "flask-conical",
+            ));
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/verify-current-app-recipe",
-            crate::menu_bar::current_app_commands::VERIFY_CURRENT_APP_RECIPE_LABEL,
-            "Read a currentAppCommand recipe JSON from the clipboard, re-capture the frontmost app, and copy a machine-readable drift report",
-            vec![
-                "verify",
-                "current",
-                "app",
-                "recipe",
-                "command",
-                "json",
-                "validate",
-                "drift",
-                "trace",
-                "clipboard",
-                "agent",
-                "automation",
-            ],
-            BuiltInFeature::UtilityCommand(UtilityCommandType::VerifyCurrentAppRecipe),
-            "microscope",
-        ));
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/verify-current-app-recipe",
+                crate::menu_bar::current_app_commands::VERIFY_CURRENT_APP_RECIPE_LABEL,
+                "Read a currentAppCommand recipe JSON from the clipboard, re-capture the frontmost app, and copy a machine-readable drift report",
+                vec![
+                    "verify",
+                    "current",
+                    "app",
+                    "recipe",
+                    "command",
+                    "json",
+                    "validate",
+                    "drift",
+                    "trace",
+                    "clipboard",
+                    "agent",
+                    "automation",
+                ],
+                BuiltInFeature::UtilityCommand(UtilityCommandType::VerifyCurrentAppRecipe),
+                "microscope",
+            ));
 
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/replay-current-app-recipe",
-            crate::menu_bar::current_app_commands::REPLAY_CURRENT_APP_RECIPE_LABEL,
-            "Read a currentAppCommand recipe JSON from the clipboard, verify it against live context, and replay the resolved action only when it still matches",
-            vec![
-                "replay",
-                "run",
-                "current",
-                "app",
-                "recipe",
-                "command",
-                "json",
-                "clipboard",
-                "verify",
-                "execute",
-                "automation",
-                "drift",
-            ],
-            BuiltInFeature::UtilityCommand(UtilityCommandType::ReplayCurrentAppRecipe),
-            "repeat",
-        ));
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/replay-current-app-recipe",
+                crate::menu_bar::current_app_commands::REPLAY_CURRENT_APP_RECIPE_LABEL,
+                "Read a currentAppCommand recipe JSON from the clipboard, verify it against live context, and replay the resolved action only when it still matches",
+                vec![
+                    "replay",
+                    "run",
+                    "current",
+                    "app",
+                    "recipe",
+                    "command",
+                    "json",
+                    "clipboard",
+                    "verify",
+                    "execute",
+                    "automation",
+                    "drift",
+                ],
+                BuiltInFeature::UtilityCommand(UtilityCommandType::ReplayCurrentAppRecipe),
+                "repeat",
+            ));
+        }
 
         // =========================================================================
         // Kit Store Commands (debug-only stubs)
@@ -1865,8 +1835,8 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/dictation",
-            "Dictation",
-            "Voice dictation — speak and paste transcribed text",
+            "Dictate Here",
+            "Voice dictation for the current destination",
             vec![
                 "dictation",
                 "voice",
@@ -1891,36 +1861,6 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "speak to ai",
             ],
             BuiltInFeature::DictationToAiHarness,
-            "mic",
-        ));
-
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/dictation-to-app",
-            "Dictate to App",
-            "Voice dictation — force paste into the frontmost app",
-            vec![
-                "dictate app",
-                "voice app",
-                "frontmost app",
-                "external app",
-                "paste app",
-            ],
-            BuiltInFeature::DictationToFrontmostApp,
-            "mic",
-        ));
-
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/dictation-to-notes",
-            "Dictate to Notes",
-            "Voice dictation — force insert into the notes editor",
-            vec![
-                "dictate notes",
-                "voice notes",
-                "notes dictation",
-                "speak to notes",
-                "insert notes",
-            ],
-            BuiltInFeature::DictationToNotes,
             "mic",
         ));
     }
@@ -2204,7 +2144,7 @@ mod tests {
             .find(|e| e.id == "builtin/paste-sequentially");
         assert!(paste_sequentially.is_some());
         let paste_sequentially = paste_sequentially.unwrap();
-        assert_eq!(paste_sequentially.name, "Paste Sequentially");
+        assert_eq!(paste_sequentially.name, "Paste Next Clipboard Item");
         assert_eq!(
             paste_sequentially.feature,
             BuiltInFeature::PasteSequentially
@@ -2236,7 +2176,7 @@ mod tests {
         let ai_chat = entries.iter().find(|e| e.id == "builtin/ai-chat");
         assert!(ai_chat.is_some());
         let ai_chat = ai_chat.unwrap();
-        assert_eq!(ai_chat.name, "Open ACP Chat");
+        assert_eq!(ai_chat.name, "ACP Chat");
         assert_eq!(ai_chat.feature, BuiltInFeature::AiChat);
         assert!(ai_chat.keywords.contains(&"ai".to_string()));
         assert!(ai_chat.keywords.contains(&"harness".to_string()));
@@ -2761,27 +2701,58 @@ mod tests {
     }
 
     #[test]
-    fn test_get_builtin_entries_includes_stop_all_processes_command() {
+    fn test_process_manager_absorbs_stop_all_processes_command() {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        let stop_all = entries
-            .iter()
-            .find(|e| e.id == "builtin/stop-all-processes");
         assert!(
-            stop_all.is_some(),
-            "Stop all running scripts builtin should exist in the main menu"
+            entries
+                .iter()
+                .all(|entry| entry.id != "builtin/stop-all-processes"),
+            "Stop all running scripts should be exposed through Process Manager instead of the top-level registry"
         );
-
-        let stop_all = stop_all.unwrap();
-        assert_eq!(
-            stop_all.feature,
-            BuiltInFeature::UtilityCommand(UtilityCommandType::StopAllProcesses)
-        );
-        assert!(stop_all.keywords.iter().any(|k| k == "stop"));
-        assert!(stop_all.keywords.iter().any(|k| k == "kill"));
-        assert!(stop_all.keywords.iter().any(|k| k == "terminate"));
     }
+
+    #[test]
+    fn test_settings_hub_absorbs_direct_settings_commands() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        for id in [
+            "builtin/reset-window-positions",
+            "builtin/configure-vercel-api",
+            "builtin/configure-openai-api",
+            "builtin/configure-anthropic-api",
+            "builtin/choose-theme",
+            "builtin/select-microphone",
+        ] {
+            assert!(
+                entries.iter().all(|entry| entry.id != id),
+                "{id} should be routed through the Script Kit Settings hub instead of the top-level registry"
+            );
+        }
+    }
+
+    #[test]
+    fn test_dictation_hub_absorbs_forced_app_and_notes_entries() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        for id in ["builtin/dictation-to-app", "builtin/dictation-to-notes"] {
+            assert!(
+                entries.iter().all(|entry| entry.id != id),
+                "{id} should remain an internal dictation route instead of a top-level launcher entry"
+            );
+        }
+
+        assert!(
+            entries
+                .iter()
+                .any(|entry| entry.id == "builtin/dictation-to-ai"),
+            "builtin/dictation-to-ai should remain available as an explicit ACP Chat route"
+        );
+    }
+
     #[test]
     fn test_builtin_descriptions_use_clear_action_phrasing() {
         let config = BuiltInConfig::default();
@@ -2841,20 +2812,17 @@ mod tests {
             .unwrap();
         assert_eq!(file_search.default_action_text(), "Search Files");
 
-        let configure_openai = entries
+        let settings = entries.iter().find(|e| e.id == "builtin/settings").unwrap();
+        assert_eq!(settings.default_action_text(), "Open Script Kit Settings");
+
+        let process_manager = entries
             .iter()
-            .find(|e| e.id == "builtin/configure-openai-api")
+            .find(|e| e.id == "builtin/process-manager")
             .unwrap();
         assert_eq!(
-            configure_openai.default_action_text(),
-            "Configure OpenAI API Key"
+            process_manager.default_action_text(),
+            "Open Process Manager"
         );
-
-        let stop_all = entries
-            .iter()
-            .find(|e| e.id == "builtin/stop-all-processes")
-            .unwrap();
-        assert_eq!(stop_all.default_action_text(), "Stop All Running Scripts");
 
         let clipboard = entries
             .iter()
@@ -2902,17 +2870,11 @@ mod tests {
             );
         }
 
-        let openai = get_builtin_entries(&config)
+        let settings = get_builtin_entries(&config)
             .into_iter()
-            .find(|e| e.id == "builtin/configure-openai-api")
+            .find(|e| e.id == "builtin/settings")
             .unwrap();
-        assert_eq!(openai.footer_action_text(), "OpenAI Key");
-
-        let theme = get_builtin_entries(&config)
-            .into_iter()
-            .find(|e| e.id == "builtin/choose-theme")
-            .unwrap();
-        assert_eq!(theme.footer_action_text(), "Theme");
+        assert_eq!(settings.footer_action_text(), "Kit Settings");
     }
 
     #[test]
