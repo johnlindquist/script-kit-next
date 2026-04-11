@@ -25,6 +25,8 @@ impl NotesApp {
         let trash_count = self.deleted_notes.len();
         let is_trash_view = self.view_mode == NotesViewMode::Trash;
         let reading_time = self.get_reading_time(cx);
+        let mention_preview = self.focused_note_mention_preview(cx);
+        let show_mention_preview = mention_preview.is_some();
         let sort_label = match self.sort_mode {
             NotesSortMode::Updated => "updated ↓",
             NotesSortMode::Created => "created ↓",
@@ -149,47 +151,64 @@ impl NotesApp {
                     .items_center()
                     .justify_center()
                     .overflow_hidden()
-                    .when_some(cursor_line_info, |d, (line, total)| {
-                        d.child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
-                                .child(format!("Ln {}/{}", line, total)),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
-                                .child(FOOTER_SEP),
-                        )
+                    .when_some(mention_preview.clone(), |d, (token, detail)| {
+                        d.child(div().text_xs().text_color(cx.theme().accent).child(token))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
+                                    .child(FOOTER_SEP),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(detail),
+                            )
                     })
-                    .child(if let Some((sel_words, sel_chars)) = selection_stats {
-                        div().text_xs().text_color(cx.theme().accent).child(format!(
-                            "{}/{} words{}{}/{} chars",
-                            sel_words, word_count, FOOTER_SEP, sel_chars, char_count,
-                        ))
-                    } else {
-                        div()
-                            .text_xs()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(format!(
-                                "{} words{}{} chars",
-                                word_count, FOOTER_SEP, char_count,
+                    .when(!show_mention_preview, |d| {
+                        d.when_some(cursor_line_info, |d, (line, total)| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
+                                    .child(format!("Ln {}/{}", line, total)),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
+                                    .child(FOOTER_SEP),
+                            )
+                        })
+                        .child(if let Some((sel_words, sel_chars)) = selection_stats {
+                            div().text_xs().text_color(cx.theme().accent).child(format!(
+                                "{}/{} words{}{}/{} chars",
+                                sel_words, word_count, FOOTER_SEP, sel_chars, char_count,
                             ))
-                    })
-                    .when(!reading_time.is_empty(), |d| {
-                        d.child(
+                        } else {
                             div()
                                 .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
-                                .child(FOOTER_SEP),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
-                                .child(reading_time.clone()),
-                        )
+                                .text_color(cx.theme().muted_foreground)
+                                .child(format!(
+                                    "{} words{}{} chars",
+                                    word_count, FOOTER_SEP, char_count,
+                                ))
+                        })
+                        .when(!reading_time.is_empty(), |d| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
+                                    .child(FOOTER_SEP),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
+                                    .child(reading_time.clone()),
+                            )
+                        })
                     }),
             )
             .child(

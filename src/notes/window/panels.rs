@@ -292,6 +292,9 @@ impl NotesApp {
             // Find the note by ID string
             if let Some(note) = self.notes.iter().find(|n| n.id.as_str() == note_id_str) {
                 let note_id = note.id;
+                if self.replace_active_note_mention_with_note(note_id, window, cx) {
+                    return;
+                }
                 self.close_browse_panel(window, cx);
                 self.select_note(note_id, window, cx);
                 return;
@@ -386,6 +389,9 @@ impl NotesApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.replace_active_note_mention_with_note(id, window, cx) {
+            return;
+        }
         self.show_browse_panel = false;
         self.browse_panel = None;
         // select_note already focuses the editor
@@ -455,6 +461,7 @@ impl NotesApp {
 
         self.show_browse_panel = false;
         self.browse_panel = None;
+        self.mention_portal_edit = None;
 
         // Route through NotesFocusSurface for structured logging and consistent focus management.
         self.request_focus_surface(focus::NotesFocusSurface::Editor, window, cx);

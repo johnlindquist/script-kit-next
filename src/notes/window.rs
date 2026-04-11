@@ -192,6 +192,12 @@ pub enum NotesSurfaceMode {
     Acp,
 }
 
+#[derive(Debug, Clone)]
+struct NotesMentionPortalEditSession {
+    mention_range: Range<usize>,
+    original_token: String,
+}
+
 /// Sort mode for the notes list
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum NotesSortMode {
@@ -366,6 +372,9 @@ pub struct NotesApp {
     /// Cached ACP chat entity — survives mode switches so conversation state
     /// is preserved when toggling between Notes and ACP.
     embedded_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
+    /// Active inline mention replacement session for note-local `@note`
+    /// reopen/replace flows via the note switcher.
+    mention_portal_edit: Option<NotesMentionPortalEditSession>,
 }
 
 mod acp_host;

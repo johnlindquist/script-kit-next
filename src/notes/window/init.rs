@@ -188,6 +188,7 @@ impl NotesApp {
             pending_focus_surface: None,
             surface_mode: NotesSurfaceMode::default(),
             embedded_acp_chat: None,
+            mention_portal_edit: None,
         }
     }
 
