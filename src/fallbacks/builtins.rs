@@ -7,6 +7,8 @@
 //! NOTE: Some items are currently unused as this is a new module being integrated.
 #![allow(dead_code)]
 
+use std::borrow::Cow;
+
 use crate::scripts::input_detection::{is_file_path, is_math_expression, is_url, InputType};
 
 fn truncate_str_chars(s: &str, max_chars: usize) -> &str {
@@ -73,6 +75,27 @@ pub const SEND_TO_AI_FALLBACK_LABEL: &str = "Auto Submit";
 /// Description for the "Auto Submit" fallback.
 pub const SEND_TO_AI_FALLBACK_DESCRIPTION: &str =
     "Open Tab AI and immediately submit the current input";
+/// Fallback ID for the current-app action.
+pub const DO_IN_CURRENT_APP_FALLBACK_ID: &str = "builtin/do-in-current-app";
+const DO_IN_CURRENT_APP_FALLBACK_LABEL: &str = "Do This in Current App";
+const DO_IN_CURRENT_APP_FALLBACK_DESCRIPTION: &str =
+    "Use the current app's menu commands or generate a Script Kit automation from its live context";
+
+fn do_in_current_app_label_for_app(app_name: Option<&str>) -> String {
+    match app_name.map(str::trim).filter(|name| !name.is_empty()) {
+        Some(app_name) => format!("Do This in {app_name}"),
+        None => DO_IN_CURRENT_APP_FALLBACK_LABEL.to_string(),
+    }
+}
+
+fn do_in_current_app_description_for_app(app_name: Option<&str>) -> String {
+    match app_name.map(str::trim).filter(|name| !name.is_empty()) {
+        Some(app_name) => format!(
+            "Use {app_name}'s menu commands or generate a Script Kit automation from its live context"
+        ),
+        None => DO_IN_CURRENT_APP_FALLBACK_DESCRIPTION.to_string(),
+    }
+}
 
 /// Action type that determines how the fallback executes
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -146,6 +169,38 @@ impl BuiltinFallback {
     /// Check if this fallback should be shown for the given input
     pub fn is_applicable(&self, input: &str) -> bool {
         self.enabled && self.condition.matches(input)
+    }
+
+    fn current_app_name(&self) -> Option<String> {
+        if self.id != DO_IN_CURRENT_APP_FALLBACK_ID {
+            return None;
+        }
+
+        crate::frontmost_app_tracker::get_last_real_app().map(|app| app.name)
+    }
+
+    pub fn display_name(&self) -> Cow<'static, str> {
+        match self.id {
+            DO_IN_CURRENT_APP_FALLBACK_ID => {
+                let app_name = self.current_app_name();
+                Cow::Owned(do_in_current_app_label_for_app(app_name.as_deref()))
+            }
+            _ => Cow::Borrowed(self.name),
+        }
+    }
+
+    pub fn display_label(&self) -> Cow<'static, str> {
+        self.display_name()
+    }
+
+    pub fn display_description(&self) -> Cow<'static, str> {
+        match self.id {
+            DO_IN_CURRENT_APP_FALLBACK_ID => {
+                let app_name = self.current_app_name();
+                Cow::Owned(do_in_current_app_description_for_app(app_name.as_deref()))
+            }
+            _ => Cow::Borrowed(self.description),
+        }
     }
 
     /// Execute this fallback with the given input
@@ -271,7 +326,22 @@ pub enum FallbackResult {
 /// Returns a vector of all default fallbacks in priority order
 pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
     vec![
-        // Auto Submit — top fallback when no script matches; opens the instant harness
+        // Do in Current App — top fallback when no script matches; first try the
+        // current app's real commands before falling through to generation.
+        BuiltinFallback {
+            id: DO_IN_CURRENT_APP_FALLBACK_ID,
+            name: "Do in Current App",
+            description: DO_IN_CURRENT_APP_FALLBACK_DESCRIPTION,
+            icon: "target",
+            action: FallbackAction::ExecuteBuiltin {
+                builtin_id: DO_IN_CURRENT_APP_FALLBACK_ID.to_string(),
+            },
+            condition: FallbackCondition::Always,
+            enabled: true,
+            priority: 0,
+        },
+        // Auto Submit — still available as an explicit escape hatch to ACP Chat,
+        // but no longer the first default fallback since Tab already does this.
         BuiltinFallback {
             id: SEND_TO_AI_FALLBACK_ID,
             name: SEND_TO_AI_FALLBACK_LABEL,
@@ -280,20 +350,7 @@ pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
             action: FallbackAction::SendToAiHarness,
             condition: FallbackCondition::Always,
             enabled: true,
-            priority: 0,
-        },
-        // Do in Current App - match menu commands or generate scripts for the frontmost app
-        BuiltinFallback {
-            id: "builtin/do-in-current-app",
-            name: "Do in Current App",
-            description: "Run a matching menu command or generate a script for the frontmost app",
-            icon: "target",
-            action: FallbackAction::ExecuteBuiltin {
-                builtin_id: "builtin/do-in-current-app".to_string(),
-            },
-            condition: FallbackCondition::Always,
-            enabled: true,
-            priority: 1,
+            priority: 23,
         },
         // Search Files - high priority, always available
         BuiltinFallback {
@@ -598,8 +655,8 @@ mod tests {
         let first = fallbacks
             .first()
             .expect("applicable fallback list should not be empty");
-        assert_eq!(first.id, SEND_TO_AI_FALLBACK_ID);
-        assert_eq!(first.name, SEND_TO_AI_FALLBACK_LABEL);
+        assert_eq!(first.id, DO_IN_CURRENT_APP_FALLBACK_ID);
+        assert_eq!(first.name, "Do in Current App");
         assert_eq!(first.priority, 0);
     }
 
@@ -792,9 +849,12 @@ mod tests {
             .iter()
             .min_by_key(|fallback| fallback.priority)
             .expect("fallback list should not be empty");
-        assert_eq!(first.id, SEND_TO_AI_FALLBACK_ID);
-        assert_eq!(first.name, SEND_TO_AI_FALLBACK_LABEL);
-        assert!(matches!(&first.action, FallbackAction::SendToAiHarness));
+        assert_eq!(first.id, DO_IN_CURRENT_APP_FALLBACK_ID);
+        assert_eq!(first.name, "Do in Current App");
+        assert!(matches!(
+            &first.action,
+            FallbackAction::ExecuteBuiltin { builtin_id } if builtin_id == DO_IN_CURRENT_APP_FALLBACK_ID
+        ));
         assert_eq!(first.priority, 0);
     }
 
@@ -838,7 +898,7 @@ mod tests {
             .first()
             .expect("applicable fallback list should not be empty");
 
-        assert_eq!(first.id, SEND_TO_AI_FALLBACK_ID);
+        assert_eq!(first.id, DO_IN_CURRENT_APP_FALLBACK_ID);
         assert_eq!(first.priority, 0);
     }
 
@@ -847,11 +907,11 @@ mod tests {
         let fallbacks = get_builtin_fallbacks();
         let entry = fallbacks
             .iter()
-            .find(|f| f.id == "builtin/do-in-current-app")
+            .find(|f| f.id == DO_IN_CURRENT_APP_FALLBACK_ID)
             .expect("builtin/do-in-current-app fallback should exist");
 
         assert_eq!(entry.name, "Do in Current App");
-        assert_eq!(entry.priority, 1);
+        assert_eq!(entry.priority, 0);
         assert!(entry.enabled);
         assert_eq!(entry.condition, FallbackCondition::Always);
     }
@@ -861,20 +921,20 @@ mod tests {
         let fallbacks = get_builtin_fallbacks();
         let entry = fallbacks
             .iter()
-            .find(|f| f.id == "builtin/do-in-current-app")
+            .find(|f| f.id == DO_IN_CURRENT_APP_FALLBACK_ID)
             .expect("fallback should exist");
 
         let result = entry.execute("new private window").unwrap();
         match result {
             FallbackResult::ExecuteBuiltin { builtin_id } => {
-                assert_eq!(builtin_id, "builtin/do-in-current-app");
+                assert_eq!(builtin_id, DO_IN_CURRENT_APP_FALLBACK_ID);
             }
             _ => panic!("Expected ExecuteBuiltin result"),
         }
     }
 
     #[test]
-    fn test_do_in_current_app_fallback_priority_after_send_to_ai() {
+    fn test_do_in_current_app_fallback_priority_before_send_to_ai() {
         let fallbacks = get_applicable_fallbacks("close duplicate tabs");
 
         let ai_pos = fallbacks
@@ -882,13 +942,39 @@ mod tests {
             .position(|f| f.id == SEND_TO_AI_FALLBACK_ID);
         let do_pos = fallbacks
             .iter()
-            .position(|f| f.id == "builtin/do-in-current-app");
+            .position(|f| f.id == DO_IN_CURRENT_APP_FALLBACK_ID);
 
         assert!(ai_pos.is_some());
         assert!(do_pos.is_some());
         assert!(
-            ai_pos.unwrap() < do_pos.unwrap(),
-            "send-to-ai (priority 0) should come before do-in-current-app (priority 1)"
+            do_pos.unwrap() < ai_pos.unwrap(),
+            "do-in-current-app (priority 0) should come before send-to-ai (priority 23)"
+        );
+    }
+
+    #[test]
+    fn test_do_in_current_app_display_label_without_tracked_app_uses_generic_label() {
+        let fallback = get_builtin_fallbacks()
+            .into_iter()
+            .find(|f| f.id == DO_IN_CURRENT_APP_FALLBACK_ID)
+            .expect("do-in-current-app fallback should exist");
+
+        assert_eq!(fallback.display_label(), "Do This in Current App");
+        assert_eq!(
+            fallback.display_description(),
+            DO_IN_CURRENT_APP_FALLBACK_DESCRIPTION
+        );
+    }
+
+    #[test]
+    fn test_do_in_current_app_label_formatter_uses_tracked_app_name() {
+        assert_eq!(
+            do_in_current_app_label_for_app(Some("Safari")),
+            "Do This in Safari"
+        );
+        assert_eq!(
+            do_in_current_app_description_for_app(Some("Safari")),
+            "Use Safari's menu commands or generate a Script Kit automation from its live context"
         );
     }
 }

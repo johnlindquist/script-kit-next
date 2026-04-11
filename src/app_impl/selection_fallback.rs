@@ -363,7 +363,7 @@ impl ScriptListApp {
             "EXEC",
             &format!(
                 "Executing fallback item: {} with input: '{}'",
-                fallback.name(),
+                fallback.display_name(),
                 input
             ),
         );
@@ -404,7 +404,7 @@ impl ScriptListApp {
             .get(self.fallback_selected_index)
             .cloned()
         {
-            logging::log("EXEC", &format!("Executing fallback: {}", fallback.name()));
+            logging::log("EXEC", &format!("Executing fallback: {}", fallback.display_name()));
 
             let should_close = !fallback_keeps_window_open(&fallback);
 
