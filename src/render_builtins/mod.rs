@@ -17,3 +17,4 @@ include!("ai_presets.rs");
 include!("settings.rs");
 include!("favorites.rs");
 include!("acp_history.rs");
+include!("notes_browse.rs");

@@ -15,7 +15,15 @@ pub enum PortalKind {
     FileSearch,
     /// Open the visual clipboard history browser.
     ClipboardHistory,
-    /// Open the ACP conversation history popup (prefiltered by typed query).
+    /// Open the main launcher filtered to scripts only.
+    ScriptSearch,
+    /// Open the main launcher filtered to scriptlets only.
+    ScriptletSearch,
+    /// Open the main launcher filtered to skills only.
+    SkillSearch,
+    /// Open the notes browser portal.
+    NotesBrowse,
+    /// Open the ACP conversation history browser (prefiltered by typed query).
     AcpHistory,
 }
 

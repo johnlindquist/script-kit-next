@@ -220,6 +220,14 @@ impl ScriptListApp {
                 return;
             }
 
+            if self.is_in_attachment_portal() && matches!(self.current_view, AppView::ScriptList) {
+                if let Some(part) = self.build_attachment_portal_part_for_selected_script_list_result()
+                {
+                    self.close_attachment_portal_with_part(part, cx);
+                }
+                return;
+            }
+
             if let Some(result) = flat_results.get(idx).cloned() {
                 // Record frecency usage before executing (unless excluded).
                 // Skills and scriptlets use plugin-qualified keys.

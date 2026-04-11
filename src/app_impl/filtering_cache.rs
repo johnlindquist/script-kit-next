@@ -139,6 +139,57 @@ impl ScriptListApp {
         self.filter_cache_key = String::from("\0_INVALIDATED_\0");
     }
 
+    fn active_script_list_attachment_portal_kind(
+        &self,
+    ) -> Option<crate::ai::window::context_picker::types::PortalKind> {
+        use crate::ai::window::context_picker::types::PortalKind;
+
+        if !matches!(self.current_view, AppView::ScriptList) {
+            return None;
+        }
+
+        match self.active_attachment_portal_kind {
+            Some(
+                kind @ (PortalKind::ScriptSearch
+                | PortalKind::ScriptletSearch
+                | PortalKind::SkillSearch),
+            ) => Some(kind),
+            _ => None,
+        }
+    }
+
+    fn script_list_result_matches_attachment_portal(
+        kind: crate::ai::window::context_picker::types::PortalKind,
+        result: &scripts::SearchResult,
+    ) -> bool {
+        use crate::ai::window::context_picker::types::PortalKind;
+
+        matches!(
+            (kind, result),
+            (PortalKind::ScriptSearch, scripts::SearchResult::Script(_))
+                | (PortalKind::ScriptletSearch, scripts::SearchResult::Scriptlet(_))
+                | (PortalKind::SkillSearch, scripts::SearchResult::Skill(_))
+        )
+    }
+
+    fn apply_script_list_attachment_portal_filter(
+        &self,
+        kind: crate::ai::window::context_picker::types::PortalKind,
+        flat_results: Vec<scripts::SearchResult>,
+    ) -> (Vec<GroupedListItem>, Vec<scripts::SearchResult>) {
+        let filtered_results: Vec<scripts::SearchResult> = flat_results
+            .into_iter()
+            .filter(|result| Self::script_list_result_matches_attachment_portal(kind, result))
+            .collect();
+        let grouped_items: Vec<GroupedListItem> = filtered_results
+            .iter()
+            .enumerate()
+            .map(|(index, _)| GroupedListItem::Item(index))
+            .collect();
+
+        (grouped_items, filtered_results)
+    }
+
     /// P1: Get grouped results with caching - avoids recomputing 9+ times per keystroke
     ///
     /// This is the ONLY place that should call scripts::get_grouped_results().
@@ -211,6 +262,12 @@ impl ScriptListApp {
             flat_results,
             self.inline_calculator.as_ref(),
         );
+        let (grouped_items, flat_results) =
+            if let Some(kind) = self.active_script_list_attachment_portal_kind() {
+                self.apply_script_list_attachment_portal_filter(kind, flat_results)
+            } else {
+                (grouped_items, flat_results)
+            };
         let elapsed = start.elapsed();
 
         let mut first_selectable_index = None;

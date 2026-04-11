@@ -801,16 +801,15 @@ fn extend_builtin_picker_items(
         );
     }
 
-    // Portal items — "Browse Files..." / "Browse Clipboard..." for rich browsing.
+    // Portal items — rich browse surfaces that attach their selection back to ACP.
     // Only in mention mode; slash mode is command-only.
     if trigger == ContextPickerTrigger::Mention {
         inject_portal_items(query_lower, items);
     }
 }
 
-/// Inject "Browse Files..." and "Browse Clipboard..." portal items for rich
-/// browsing. These open the full built-in view as a temporary portal that
-/// returns the selection to the ACP chat.
+/// Inject portal items for rich browsing. These open a temporary browse
+/// surface and attach the selected result back to ACP.
 fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
     use types::PortalKind;
 
@@ -827,25 +826,57 @@ fn inject_portal_items(query_lower: &str, items: &mut Vec<ContextPickerItem>) {
         PortalDef {
             kind: PortalKind::FileSearch,
             id: "portal:file_search",
-            label: "Browse Files\u{2026}",
+            label: "@file",
             description: "Search files with Spotlight and browse folders",
-            meta: "@file",
+            meta: "Portal",
             match_terms: &["file", "files", "browse", "search"],
         },
         PortalDef {
             kind: PortalKind::ClipboardHistory,
             id: "portal:clipboard_history",
-            label: "Browse Clipboard\u{2026}",
+            label: "@clipboard",
             description: "Browse clipboard history with previews",
-            meta: "@clipboard",
+            meta: "Portal",
             match_terms: &["clipboard", "clip", "paste"],
+        },
+        PortalDef {
+            kind: PortalKind::ScriptSearch,
+            id: "portal:script_search",
+            label: "@script",
+            description: "Browse installed scripts and attach one to ACP",
+            meta: "Portal",
+            match_terms: &["script", "scripts", "command", "commands", "browse"],
+        },
+        PortalDef {
+            kind: PortalKind::ScriptletSearch,
+            id: "portal:scriptlet_search",
+            label: "@scriptlet",
+            description: "Browse scriptlets and attach one to ACP",
+            meta: "Portal",
+            match_terms: &["scriptlet", "scriptlets", "snippet", "snippets", "browse"],
+        },
+        PortalDef {
+            kind: PortalKind::SkillSearch,
+            id: "portal:skill_search",
+            label: "@skill",
+            description: "Browse skills and attach one to ACP",
+            meta: "Portal",
+            match_terms: &["skill", "skills", "agent", "agents", "browse"],
+        },
+        PortalDef {
+            kind: PortalKind::NotesBrowse,
+            id: "portal:notes_browse",
+            label: "@note",
+            description: "Browse notes and attach one to ACP",
+            meta: "Portal",
+            match_terms: &["note", "notes", "markdown", "browse"],
         },
         PortalDef {
             kind: PortalKind::AcpHistory,
             id: "portal:acp_history",
-            label: "Browse History\u{2026}",
-            description: "Search prior ACP conversations",
-            meta: "@history",
+            label: "@history",
+            description: "Browse prior ACP conversations",
+            meta: "Portal",
             match_terms: &["history", "conversation", "chat", "resume", "reuse"],
         },
     ];

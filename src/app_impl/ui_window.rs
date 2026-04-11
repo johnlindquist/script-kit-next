@@ -616,6 +616,16 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
+            AppView::NotesBrowseView { filter, .. } => Some((
+                ViewType::ScriptList,
+                if filter.is_empty() {
+                    crate::notes::get_all_notes().map(|notes| notes.len()).unwrap_or(0)
+                } else {
+                    crate::notes::search_notes(filter)
+                        .map(|notes| notes.len())
+                        .unwrap_or(0)
+                },
+            )),
             AppView::AcpChatView { .. } => Some((ViewType::DivPrompt, 0)),
         }
     }

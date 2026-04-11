@@ -203,6 +203,7 @@ impl Render for ScriptListApp {
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::AcpHistoryView { .. }
+                | AppView::NotesBrowseView { .. }
                 | AppView::MiniPrompt { .. }
                 | AppView::ArgPrompt { .. }
         ) {
@@ -394,6 +395,12 @@ impl Render for ScriptListApp {
                 selected_index,
             } => self
                 .render_acp_history(filter, selected_index, cx)
+                .into_any_element(),
+            AppView::NotesBrowseView {
+                filter,
+                selected_index,
+            } => self
+                .render_notes_browse_portal(filter, selected_index, cx)
                 .into_any_element(),
             AppView::AcpChatView { entity } => entity.into_any_element(),
         };

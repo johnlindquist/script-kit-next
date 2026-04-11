@@ -30,6 +30,8 @@ impl ScriptListApp {
                 | AppView::ProcessManagerView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
+                | AppView::AcpHistoryView { .. }
+                | AppView::NotesBrowseView { .. }
         )
     }
 

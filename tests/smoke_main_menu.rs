@@ -8,7 +8,7 @@
 //! - `plugin_skill_cataloged` — skill discovered in plugin inventory
 //! - `main_menu_skill_ranked` — skill surfaced in search results
 //! - `acp_skill_launch_requested` — skill selected from main menu
-//! - `acp_skill_context_staged` — skill content staged for ACP session
+//! - `acp_skill_context_staged` — skill slash prefill + attachment staged for ACP session
 
 use std::fs;
 use std::sync::Arc;
@@ -102,37 +102,36 @@ fn smoke_skill_discovery_through_search_pipeline() {
 
         // Phase 5: Validate ACP staging contract for the top skill result
         let top_skill = &skill_results[0].skill;
-        let skill_content = fs::read_to_string(&top_skill.path).unwrap_or_default();
-        assert!(
-            !skill_content.is_empty(),
-            "Skill SKILL.md should have content"
-        );
+        let initial_input = format!("/{} ", top_skill.skill_id);
+        let part = script_kit_gpui::ai::AiContextPart::SkillFile {
+            path: top_skill.path.to_string_lossy().to_string(),
+            label: format!("/{}", top_skill.skill_id),
+            skill_name: top_skill.title.clone(),
+            owner_label: top_skill.plugin_title.clone(),
+            slash_name: top_skill.skill_id.clone(),
+        };
 
-        // Simulate the ACP initial input construction (mirrors open_acp_with_selected_skill)
-        let initial_input = format!(
-            "Use the attached skill \"{}\" from plugin \"{}\" for this session.\n\n<skill path=\"{}\">\n{}\n</skill>",
-            top_skill.title,
-            top_skill.plugin_title,
-            top_skill.path.display(),
-            skill_content
+        assert_eq!(
+            initial_input,
+            format!("/{} ", top_skill.skill_id),
+            "ACP initial input must prefill the slash command"
         );
-
-        assert!(
-            initial_input.contains(&top_skill.title),
-            "ACP initial input must contain skill title"
-        );
-        assert!(
-            initial_input.contains(&top_skill.plugin_title),
-            "ACP initial input must contain plugin title"
-        );
-        assert!(
-            initial_input.contains("<skill path="),
-            "ACP initial input must wrap skill content in <skill> tags"
-        );
-        assert!(
-            initial_input.contains("</skill>"),
-            "ACP initial input must close <skill> tags"
-        );
+        match part {
+            script_kit_gpui::ai::AiContextPart::SkillFile {
+                path,
+                label,
+                skill_name,
+                owner_label,
+                slash_name,
+            } => {
+                assert_eq!(path, top_skill.path.to_string_lossy().to_string());
+                assert_eq!(label, format!("/{}", top_skill.skill_id));
+                assert_eq!(skill_name, top_skill.title);
+                assert_eq!(owner_label, top_skill.plugin_title);
+                assert_eq!(slash_name, top_skill.skill_id);
+            }
+            other => panic!("expected SkillFile part, got {other:?}"),
+        }
     });
 }
 
@@ -314,40 +313,31 @@ fn smoke_acp_staging_contract_structure() {
             .find(|s| s.plugin_id == "authoring" && s.skill_id == "scriptlets")
             .expect("authoring/scriptlets skill must exist");
 
-        let content = fs::read_to_string(&scriptlets_skill.path).expect("read SKILL.md");
+        let initial_input = format!("/{} ", scriptlets_skill.skill_id);
+        let part = script_kit_gpui::ai::AiContextPart::SkillFile {
+            path: scriptlets_skill.path.to_string_lossy().to_string(),
+            label: format!("/{}", scriptlets_skill.skill_id),
+            skill_name: scriptlets_skill.title.clone(),
+            owner_label: scriptlets_skill.plugin_title.clone(),
+            slash_name: scriptlets_skill.skill_id.clone(),
+        };
 
-        // Mirror the ACP staging logic from open_acp_with_selected_skill
-        let initial_input = format!(
-            "Use the attached skill \"{}\" from plugin \"{}\" for this session.\n\n<skill path=\"{}\">\n{}\n</skill>",
-            scriptlets_skill.title,
-            scriptlets_skill.plugin_title,
-            scriptlets_skill.path.display(),
-            content
-        );
-
-        // Structural assertions on the ACP payload
-        assert!(
-            initial_input.starts_with("Use the attached skill"),
-            "Initial input must start with skill instruction"
-        );
-        assert!(
-            initial_input.contains("from plugin"),
-            "Initial input must reference the owning plugin"
-        );
-        assert!(
-            initial_input.contains(&format!(
-                "<skill path=\"{}\">",
-                scriptlets_skill.path.display()
-            )),
-            "Skill content must be wrapped in <skill path=...> tags"
-        );
-        assert!(
-            initial_input.ends_with("</skill>"),
-            "Initial input must end with closing </skill> tag"
-        );
-        assert!(
-            initial_input.contains("---"),
-            "Skill content should contain frontmatter"
-        );
+        assert_eq!(initial_input, "/scriptlets ");
+        match part {
+            script_kit_gpui::ai::AiContextPart::SkillFile {
+                path,
+                label,
+                skill_name,
+                owner_label,
+                slash_name,
+            } => {
+                assert_eq!(path, scriptlets_skill.path.to_string_lossy().to_string());
+                assert_eq!(label, "/scriptlets");
+                assert_eq!(skill_name, scriptlets_skill.title);
+                assert_eq!(owner_label, scriptlets_skill.plugin_title);
+                assert_eq!(slash_name, scriptlets_skill.skill_id);
+            }
+            other => panic!("expected SkillFile part, got {other:?}"),
+        }
     });
 }

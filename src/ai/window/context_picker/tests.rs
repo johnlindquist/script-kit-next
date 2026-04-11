@@ -181,6 +181,52 @@ fn context_picker_builtins_grouped_before_files() {
 }
 
 #[test]
+fn context_picker_empty_query_includes_all_portals() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "");
+    let portal_labels: Vec<String> = items
+        .iter()
+        .filter_map(|item| match item.kind {
+            ContextPickerItemKind::Portal(_) => Some(item.label.to_string()),
+            _ => None,
+        })
+        .collect();
+
+    for expected in [
+        "@file",
+        "@clipboard",
+        "@script",
+        "@scriptlet",
+        "@skill",
+        "@note",
+        "@history",
+    ] {
+        assert!(
+            portal_labels.iter().any(|label| label == expected),
+            "expected portal label {expected:?} in empty-query picker results"
+        );
+    }
+}
+
+#[test]
+fn context_picker_clipboard_query_keeps_builtin_ahead_of_portal() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "clipboard");
+
+    let built_in_index = items
+        .iter()
+        .position(|item| item.label.as_ref() == "Clipboard")
+        .expect("clipboard built-in should be present");
+    let portal_index = items
+        .iter()
+        .position(|item| item.label.as_ref() == "@clipboard")
+        .expect("clipboard portal should be present");
+
+    assert!(
+        built_in_index < portal_index,
+        "exact built-in mention should outrank the clipboard portal"
+    );
+}
+
+#[test]
 fn score_builtin_exact_mention_scores_highest() {
     let selection_spec = ContextAttachmentKind::Selection.spec();
     let exact_score = score_builtin(selection_spec, "selection");

@@ -2121,6 +2121,33 @@ impl ScriptListApp {
                             selected_value,
                         )
                     }
+                    AppView::NotesBrowseView {
+                        filter,
+                        selected_index,
+                    } => {
+                        let entries = if filter.is_empty() {
+                            crate::notes::get_all_notes().unwrap_or_default()
+                        } else {
+                            crate::notes::search_notes(filter).unwrap_or_default()
+                        };
+                        let selected_value = entries.get(*selected_index).map(|entry| {
+                            if entry.title.trim().is_empty() {
+                                "Untitled Note".to_string()
+                            } else {
+                                entry.title.clone()
+                            }
+                        });
+                        (
+                            "notesBrowse".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            entries.len(),
+                            entries.len(),
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     // P0 FIX: View state only - data comes from self.apps
                     AppView::AppLauncherView {
                         filter,

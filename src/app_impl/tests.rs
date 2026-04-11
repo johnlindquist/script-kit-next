@@ -37,6 +37,21 @@ fn test_clear_builtin_query_state_clears_text_and_resets_selection() {
 }
 
 #[test]
+fn test_theme_chooser_filter_changes_repreview_first_match() {
+    let source = fs::read_to_string("src/app_impl/filter_input_change.rs")
+        .expect("Failed to read src/app_impl/filter_input_change.rs");
+
+    assert!(
+        source.contains("theme_chooser_filter_preview"),
+        "Theme chooser filter changes should trigger a live preview refresh"
+    );
+    assert!(
+        source.contains("self.preview_theme_chooser_preset("),
+        "Theme chooser filter branch should reuse the preset preview pipeline"
+    );
+}
+
+#[test]
 fn test_calculate_fallback_error_message_includes_expression_and_recovery() {
     let message = calculate_fallback_error_message("2 + )");
     assert!(message.contains("2 + )"));

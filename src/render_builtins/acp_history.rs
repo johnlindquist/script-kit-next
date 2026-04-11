@@ -35,6 +35,7 @@ impl ScriptListApp {
         let preview_conversation = selected_session_id
             .as_deref()
             .and_then(crate::ai::acp::history::load_conversation);
+        let in_portal = self.is_in_attachment_portal();
 
         // Key handler
         let handle_key = cx.listener(
@@ -72,7 +73,11 @@ impl ScriptListApp {
                 // ESC: Clear filter first if present, otherwise go back/close
                 if is_key_escape(key) && !this.show_actions_popup {
                     if !this.clear_builtin_view_filter(cx) {
-                        this.go_back_or_close(window, cx);
+                        if this.is_in_attachment_portal() {
+                            this.close_attachment_portal_cancel(cx);
+                        } else {
+                            this.go_back_or_close(window, cx);
+                        }
                     }
                     cx.stop_propagation();
                     return;
@@ -131,9 +136,30 @@ impl ScriptListApp {
                     }
                     cx.stop_propagation();
                 } else if has_cmd && is_key_enter(key) {
-                    // Cmd+Enter: attach summary as context chip to ACP
                     if let Some(entry) = filtered.get(current_selected) {
-                        if let Err(error) = this.attach_acp_history_to_chat_from_browser(
+                        if this.is_in_attachment_portal() {
+                            match crate::ai::acp::history_attachment::write_history_attachment(
+                                &entry.session_id,
+                                crate::ai::acp::history_attachment::AcpHistoryAttachMode::Summary,
+                            ) {
+                                Ok((path, label)) => {
+                                    this.close_attachment_portal_with_part(
+                                        crate::ai::message_parts::AiContextPart::FilePath {
+                                            path: path.to_string_lossy().to_string(),
+                                            label,
+                                        },
+                                        cx,
+                                    );
+                                }
+                                Err(error) => {
+                                    tracing::warn!(
+                                        event = "acp_history_portal_summary_attach_failed",
+                                        session_id = %entry.session_id,
+                                        error = %error,
+                                    );
+                                }
+                            }
+                        } else if let Err(error) = this.attach_acp_history_to_chat_from_browser(
                             &entry.session_id,
                             window,
                             cx,
@@ -147,20 +173,43 @@ impl ScriptListApp {
                     }
                     cx.stop_propagation();
                 } else if is_key_enter(key) {
-                    // Enter: load full transcript into ACP chat
                     if let Some(entry) = filtered.get(current_selected) {
-                        let session_id = entry.session_id.clone();
-                        let title = entry.title_display().to_string();
-                        tracing::info!(
-                            event = "acp_history_browser_transcript_loaded",
-                            session_id = %session_id,
-                        );
-                        this.resume_acp_conversation_from_history(
-                            &session_id,
-                            &title,
-                            window,
-                            cx,
-                        );
+                        if this.is_in_attachment_portal() {
+                            match crate::ai::acp::history_attachment::write_history_attachment(
+                                &entry.session_id,
+                                crate::ai::acp::history_attachment::AcpHistoryAttachMode::Transcript,
+                            ) {
+                                Ok((path, label)) => {
+                                    this.close_attachment_portal_with_part(
+                                        crate::ai::message_parts::AiContextPart::FilePath {
+                                            path: path.to_string_lossy().to_string(),
+                                            label,
+                                        },
+                                        cx,
+                                    );
+                                }
+                                Err(error) => {
+                                    tracing::warn!(
+                                        event = "acp_history_portal_transcript_attach_failed",
+                                        session_id = %entry.session_id,
+                                        error = %error,
+                                    );
+                                }
+                            }
+                        } else {
+                            let session_id = entry.session_id.clone();
+                            let title = entry.title_display().to_string();
+                            tracing::info!(
+                                event = "acp_history_browser_transcript_loaded",
+                                session_id = %session_id,
+                            );
+                            this.resume_acp_conversation_from_history(
+                                &session_id,
+                                &title,
+                                window,
+                                cx,
+                            );
+                        }
                     }
                     cx.stop_propagation();
                 } else if key.eq_ignore_ascii_case("backspace") && has_cmd {
@@ -344,12 +393,21 @@ impl ScriptListApp {
             .py(px(design_spacing.padding_xs))
             .child(list_element);
 
-        let hints: Vec<SharedString> = vec![
-            "↵ Load Transcript".into(),
-            "⌘↵ Attach Summary".into(),
-            "⌘⌫ Delete".into(),
-            "Esc Back".into(),
-        ];
+        let hints: Vec<SharedString> = if in_portal {
+            vec![
+                "↵ Attach Transcript".into(),
+                "⌘↵ Attach Summary".into(),
+                "⌘⌫ Delete".into(),
+                "Esc Cancel".into(),
+            ]
+        } else {
+            vec![
+                "↵ Load Transcript".into(),
+                "⌘↵ Attach Summary".into(),
+                "⌘⌫ Delete".into(),
+                "Esc Back".into(),
+            ]
+        };
         crate::components::emit_prompt_hint_audit("acp_history", &hints);
 
         let gpui_footer = crate::components::render_simple_hint_strip(hints, None);
