@@ -2433,11 +2433,14 @@ impl ScriptListApp {
                         0,
                         None,
                     ),
-                    AppView::SettingsView { selected_index } => (
+                    AppView::SettingsView {
+                        filter,
+                        selected_index,
+                    } => (
                         "settings".to_string(),
                         None,
                         None,
-                        String::new(),
+                        filter.clone(),
                         0,
                         0,
                         *selected_index as i32,

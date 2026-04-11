@@ -290,7 +290,7 @@ impl NotesApp {
                         wb,
                     );
                     window.remove_window();
-                    super::window_ops::restore_launcher_after_notes_close(cx);
+                    super::window_ops::restore_launcher_after_notes_close_if_needed(cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -331,7 +331,7 @@ impl NotesApp {
             crate::window_state::save_window_from_gpui(crate::window_state::WindowRole::Notes, wb);
             window.close_all_dialogs(cx);
             window.remove_window();
-            super::window_ops::restore_launcher_after_notes_close(cx);
+            super::window_ops::restore_launcher_after_notes_close_if_needed(cx);
             return;
         }
 
@@ -484,7 +484,7 @@ impl NotesApp {
                     );
                     window.close_all_dialogs(cx);
                     window.remove_window();
-                    super::window_ops::restore_launcher_after_notes_close(cx);
+                    super::window_ops::restore_launcher_after_notes_close_if_needed(cx);
                     cx.stop_propagation();
                 }
                 "." => {

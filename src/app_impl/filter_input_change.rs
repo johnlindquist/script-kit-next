@@ -175,6 +175,16 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
+            AppView::SettingsView {
+                filter,
+                selected_index,
+            } => {
+                self.filter_text = new_text.clone();
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    cx.notify();
+                }
+                return; // Don't run main menu filter logic
+            }
             AppView::CurrentAppCommandsView {
                 filter,
                 selected_index,

@@ -1,4 +1,4 @@
-//! Configuration module - Application settings and user preferences
+//! Configuration module - application settings and config-backed runtime preferences
 //!
 //! This module provides functionality for:
 //! - Loading configuration from ~/.scriptkit/kit/config.ts

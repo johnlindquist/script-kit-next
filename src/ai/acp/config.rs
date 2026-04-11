@@ -569,7 +569,7 @@ fn classify_agent_source(agent_id: &str) -> super::catalog::AcpAgentSource {
     }
 }
 
-/// Load the persisted preferred ACP agent ID from user preferences.
+/// Load the persisted preferred ACP agent ID from config-backed preferences.
 pub(crate) fn load_preferred_acp_agent_id() -> Option<String> {
     crate::config::load_user_preferences()
         .ai

@@ -4023,6 +4023,7 @@ impl ScriptListApp {
             | AppView::ThemeChooserView { filter, .. }
             | AppView::EmojiPickerView { filter, .. }
             | AppView::ProcessManagerView { filter, .. }
+            | AppView::SettingsView { filter, .. }
             | AppView::SearchAiPresetsView { filter, .. }
             | AppView::FavoritesBrowseView { filter, .. }
             | AppView::CurrentAppCommandsView { filter, .. }
@@ -4100,7 +4101,7 @@ impl ScriptListApp {
             // WebcamView: camera feed, no text
             // CreationFeedback: read-only confirmation
             // ActionsDialog: transient overlay, not a primary surface
-            // SettingsView/InstalledKitsView: navigation-only, no free text
+            // InstalledKitsView: navigation-only, no free text
             AppView::DivPrompt { .. }
             | AppView::FormPrompt { .. }
             | AppView::TermPrompt { .. }
@@ -4110,7 +4111,6 @@ impl ScriptListApp {
             | AppView::WebcamView { .. }
             | AppView::CreationFeedback { .. }
             | AppView::ActionsDialog
-            | AppView::SettingsView { .. }
             | AppView::InstalledKitsView { .. } => None,
 
             #[cfg(feature = "storybook")]

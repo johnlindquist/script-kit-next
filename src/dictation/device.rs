@@ -171,7 +171,7 @@ pub fn list_input_device_menu_items(
     Ok(build_device_menu_items(&devices, selected_device_id))
 }
 
-/// Persist a picker selection to user preferences.
+/// Persist a picker selection to config-backed preferences.
 pub fn apply_device_selection(action: &DictationDeviceSelectionAction) -> Result<()> {
     match action {
         DictationDeviceSelectionAction::UseSystemDefault => save_dictation_device_id(None),
@@ -181,7 +181,7 @@ pub fn apply_device_selection(action: &DictationDeviceSelectionAction) -> Result
     }
 }
 
-/// Persist the selected microphone device ID to user preferences.
+/// Persist the selected microphone device ID to config-backed preferences.
 ///
 /// Pass `None` to clear the preference and revert to the system default.
 pub fn save_dictation_device_id(device_id: Option<&str>) -> Result<()> {

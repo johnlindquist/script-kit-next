@@ -203,6 +203,7 @@ enum AppView {
     /// Showing settings hub with configuration panels
     /// Lists categories: API Keys, Theme, Window Positions, Feature Toggles, Hotkeys
     SettingsView {
+        filter: String,
         selected_index: usize,
     },
     /// Browsing favorites with search/filter

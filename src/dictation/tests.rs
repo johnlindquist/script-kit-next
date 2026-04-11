@@ -701,7 +701,7 @@ fn runtime_resolves_mic_preference_from_settings() {
 
     assert!(
         runtime_src.contains("load_user_preferences"),
-        "runtime must read user preferences for mic selection"
+        "runtime must read config-backed preferences for mic selection"
     );
     assert!(
         runtime_src.contains("selected_device_id"),
@@ -972,7 +972,7 @@ fn builtin_microphone_submit_handler_persists_or_clears_preference() {
     );
     assert!(
         config_src.contains("pub selected_device_id: Option<String>"),
-        "user preferences must persist dictation.selected_device_id"
+        "config-backed preferences must persist dictation.selected_device_id"
     );
 }
 
@@ -2312,7 +2312,7 @@ fn dictation_preferences_serialize_selected_device_id_as_camel_case() {
         ..Default::default()
     };
 
-    let value = serde_json::to_value(&preferences).expect("serialize user preferences");
+    let value = serde_json::to_value(&preferences).expect("serialize config-backed preferences");
     assert_eq!(value["dictation"]["selectedDeviceId"], "usb-mic");
     assert!(value["dictation"].get("selected_device_id").is_none());
 }
@@ -2344,7 +2344,8 @@ fn save_user_preferences_writes_config_and_cleans_known_legacy_settings() {
         },
         ..Default::default()
     };
-    crate::config::save_user_preferences(&preferences).expect("save merged user preferences");
+    crate::config::save_user_preferences(&preferences)
+        .expect("save merged config-backed preferences");
 
     assert!(
         !settings_path.exists(),

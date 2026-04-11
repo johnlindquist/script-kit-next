@@ -212,6 +212,7 @@ impl ScriptListApp {
             AppView::ProcessManagerView { filter, .. } if !filter.is_empty() => {
                 Some("ProcessManager filter")
             }
+            AppView::SettingsView { filter, .. } if !filter.is_empty() => Some("Settings filter"),
             AppView::CurrentAppCommandsView { filter, .. } if !filter.is_empty() => {
                 Some("CurrentAppCommands filter")
             }

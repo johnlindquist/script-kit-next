@@ -322,7 +322,7 @@ app.run(move |cx: &mut App| {
             tracing::warn!(
                 target: "script_kit::snap_mode",
                 %error,
-                "failed to hydrate snap mode from user preferences"
+                "failed to hydrate snap mode from config-backed preferences"
             );
         }
 

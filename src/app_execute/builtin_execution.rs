@@ -1934,7 +1934,7 @@ impl ScriptListApp {
                 self.pending_focus = None;
                 script_kit_gpui::set_main_window_visible(false);
                 platform::defer_hide_main_window(cx);
-                if let Err(e) = notes::open_notes_window(cx) {
+                if let Err(e) = notes::open_notes_window_without_launcher_restore(cx) {
                     script_kit_gpui::set_main_window_visible(true);
                     platform::show_main_window_without_activation();
                     let message = format!("Failed to open Notes: {}", e);
@@ -2063,7 +2063,9 @@ impl ScriptListApp {
                 let result = match cmd_type {
                     NotesCommandType::OpenNotes
                     | NotesCommandType::NewNote
-                    | NotesCommandType::SearchNotes => notes::open_notes_window(cx),
+                    | NotesCommandType::SearchNotes => {
+                        notes::open_notes_window_without_launcher_restore(cx)
+                    }
                     NotesCommandType::QuickCapture => notes::quick_capture(cx),
                 };
 
@@ -4353,12 +4355,14 @@ impl ScriptListApp {
                     trace_id = %dctx.trace_id,
                     "Opening Settings"
                 );
-                self.opened_from_main_menu = true;
-                self.current_view = AppView::SettingsView { selected_index: 0 };
-                self.hovered_index = None;
-                resize_to_view_sync(ViewType::ScriptList, 0);
-                self.pending_focus = Some(FocusTarget::AppRoot);
-                cx.notify();
+                self.open_builtin_filterable_view(
+                    AppView::SettingsView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search settings...",
+                    cx,
+                );
                 Self::builtin_success(dctx, "open_settings")
             }
             // =========================================================================
