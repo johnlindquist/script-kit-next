@@ -318,6 +318,14 @@ app.run(move |cx: &mut App| {
         #[cfg(target_os = "macos")]
         frontmost_app_tracker::start_tracking();
 
+        if let Err(error) = window_control::load_snap_mode_from_preferences() {
+            tracing::warn!(
+                target: "script_kit::snap_mode",
+                %error,
+                "failed to hydrate snap mode from user preferences"
+            );
+        }
+
         // Install the snap drag monitor — detects external window drags and
         // drives the desktop snap overlay lifecycle (start on drag, finish on release).
         if let Err(e) = window_control::install_snap_drag_monitor(cx) {
@@ -667,19 +675,21 @@ app.run(move |cx: &mut App| {
                             show_main_window_helper(window_inner, app_entity_inner, cx);
                         });
                     }
-                    Some(TrayMenuAction::OpenNotes) => {
-                        logging::log("TRAY", "Notes menu item clicked");
+                    Some(TrayMenuAction::OpenCurrentAppCommands) => {
+                        logging::log("TRAY", "Current App Commands menu item clicked");
+                        let window_inner = window_for_tray;
+                        let app_entity_inner = app_entity_for_tray.clone();
                         cx.update(|cx| {
-                            if let Err(e) = notes::open_notes_window(cx) {
-                                logging::log("TRAY", &format!("Failed to open notes window: {}", e));
-                            }
-                        });
-                    }
-                    Some(TrayMenuAction::OpenAiChat) => {
-                        logging::log("TRAY", "ACP Chat menu item clicked");
-                        cx.update(|cx| {
-                            app_entity_for_tray.update(cx, |view, cx| {
-                                view.open_tab_ai_acp_with_entry_intent(None, cx);
+                            show_main_window_helper(window_inner, app_entity_inner.clone(), cx);
+                            app_entity_inner.update(cx, |view, cx| {
+                                if let Err(e) = view.open_current_app_commands_from_tray(cx) {
+                                    let message = e.to_string();
+                                    tracing::warn!(
+                                        error = %message,
+                                        "tray.open_current_app_commands_failed"
+                                    );
+                                    view.show_error_toast(message, cx);
+                                }
                             });
                         });
                     }
@@ -707,34 +717,6 @@ app.run(move |cx: &mut App| {
                                 "TRAY",
                                 &format!("Failed to spawn editor '{}': {}", editor, e),
                             ),
-                        }
-                    }
-                    Some(TrayMenuAction::OpenOnGitHub) => {
-                        logging::log("TRAY", "Open on GitHub menu item clicked");
-                        let url = "https://github.com/script-kit/app";
-                        if let Err(e) = open::that(url) {
-                            logging::log("TRAY", &format!("Failed to open GitHub URL: {}", e));
-                        }
-                    }
-                    Some(TrayMenuAction::OpenManual) => {
-                        logging::log("TRAY", "Manual menu item clicked");
-                        let url = "https://scriptkit.com";
-                        if let Err(e) = open::that(url) {
-                            logging::log("TRAY", &format!("Failed to open manual URL: {}", e));
-                        }
-                    }
-                    Some(TrayMenuAction::JoinCommunity) => {
-                        logging::log("TRAY", "Join Community menu item clicked");
-                        let url = "https://discord.gg/qnUX4XqJQd";
-                        if let Err(e) = open::that(url) {
-                            logging::log("TRAY", &format!("Failed to open Discord URL: {}", e));
-                        }
-                    }
-                    Some(TrayMenuAction::FollowUs) => {
-                        logging::log("TRAY", "Follow Us menu item clicked");
-                        let url = "https://twitter.com/scriptkitapp";
-                        if let Err(e) = open::that(url) {
-                            logging::log("TRAY", &format!("Failed to open Twitter URL: {}", e));
                         }
                     }
                     Some(TrayMenuAction::Quit) => {

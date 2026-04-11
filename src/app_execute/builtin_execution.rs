@@ -226,6 +226,42 @@ fn ai_command_uses_hide_then_capture_flow(_cmd_type: &builtins::AiCommandType) -
     false
 }
 
+impl ScriptListApp {
+    pub(crate) fn open_current_app_commands_from_tray(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let snapshot = crate::menu_bar::load_frontmost_menu_snapshot()
+            .map_err(|e| anyhow::anyhow!("Failed to load frontmost app menu bar: {e}"))?;
+        let (entries, receipt) = snapshot.into_entries_with_receipt();
+
+        if entries.is_empty() {
+            anyhow::bail!("No enabled menu bar commands found for {}", receipt.app_name);
+        }
+
+        tracing::info!(
+            app_name = %receipt.app_name,
+            bundle_id = %receipt.bundle_id,
+            top_level_menu_count = receipt.top_level_menu_count,
+            leaf_entry_count = receipt.leaf_entry_count,
+            placeholder = %receipt.placeholder,
+            "tray.open_current_app_commands"
+        );
+
+        self.cached_current_app_entries = entries;
+        self.open_builtin_filterable_view_with_filter(
+            AppView::CurrentAppCommandsView {
+                filter: String::new(),
+                selected_index: 0,
+            },
+            "",
+            &receipt.placeholder,
+            cx,
+        );
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 fn favorites_loaded_message(count: usize) -> String {
     if count == 1 {

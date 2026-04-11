@@ -2045,8 +2045,10 @@ fn generate_script_and_send_builtins_still_registered() {
 fn dispatch_ai_script_generation_routes_to_harness() {
     // The legacy dispatch function must now route to the harness, not show_script_generation_chat.
     assert!(
-        PROMPT_AI_SOURCE.contains("open_tab_ai_chat_with_entry_intent(Some(query), cx)"),
-        "dispatch_ai_script_generation_from_query must route to harness entry intent"
+        PROMPT_AI_SOURCE.contains(
+            "open_tab_ai_chat_with_entry_intent_suppressing_focused_part(Some(query), cx)",
+        ),
+        "dispatch_ai_script_generation_from_query must route to harness entry intent while suppressing launcher focus chips"
     );
     // Must NOT call the legacy ChatPrompt path
     let dispatch_fn_start = PROMPT_AI_SOURCE

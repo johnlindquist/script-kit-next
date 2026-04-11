@@ -677,6 +677,9 @@ fn render_focused_info_for_result(
 
         scripts::SearchResult::Fallback(fallback_match) => {
             let fallback = &fallback_match.fallback;
+            let fallback_name = fallback.display_name();
+            let fallback_label = fallback.display_label();
+            let fallback_description = fallback.display_description();
 
             // Source indicator
             let mut path_div = div()
@@ -695,7 +698,7 @@ fn render_focused_info_for_result(
             path_div = path_div.child(
                 div()
                     .text_color(rgba((style.text_muted << 8) | 0x99))
-                    .child(fallback.name().to_string()),
+                    .child(fallback_name),
             );
 
             content = content.child(path_div);
@@ -707,7 +710,7 @@ fn render_focused_info_for_result(
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(rgb(style.text_primary))
                     .pb(px(s.padding_sm))
-                    .child(fallback.label().to_string()),
+                    .child(fallback_label),
             );
 
             // Description
@@ -716,7 +719,7 @@ fn render_focused_info_for_result(
                     .text_sm()
                     .text_color(rgb(style.text_secondary))
                     .pb(px(s.padding_md))
-                    .child(fallback.description().to_string()),
+                    .child(fallback_description),
             );
 
             // Divider + Type indicator
@@ -1074,11 +1077,12 @@ impl ScriptListApp {
                         )
                     }
                     scripts::SearchResult::Fallback(m) => {
+                        let fallback_name = m.fallback.display_name();
                         // Fallbacks use their name as identifier
                         // is_script depends on whether it's a built-in fallback or script-based
                         // Fallbacks don't track frecency, so is_suggested is always false
                         Some(ScriptInfo::with_action_verb(
-                            m.fallback.name(),
+                            fallback_name,
                             format!("fallback:{}", m.fallback.name()),
                             !m.fallback.is_builtin(),
                             "Run",

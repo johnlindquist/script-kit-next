@@ -49,7 +49,7 @@ mod preview_panel_metadata_tests {
         );
         assert_eq!(
             builtin_feature_annotation(&BuiltInFeature::PasteSequentially),
-            "Paste Sequentially"
+            "Paste Next Clipboard Item"
         );
     }
 

@@ -73,12 +73,7 @@ const LOGO_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="32" hei
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TrayMenuAction {
     OpenScriptKit,
-    OpenNotes,
-    OpenAiChat,
-    OpenOnGitHub,
-    OpenManual,
-    JoinCommunity,
-    FollowUs,
+    OpenCurrentAppCommands,
     Settings,
     LaunchAtLogin,
     Quit,
@@ -89,12 +84,7 @@ impl TrayMenuAction {
     pub const fn id(self) -> &'static str {
         match self {
             Self::OpenScriptKit => "tray.open_script_kit",
-            Self::OpenNotes => "tray.open_notes",
-            Self::OpenAiChat => "tray.open_ai_chat",
-            Self::OpenOnGitHub => "tray.open_github",
-            Self::OpenManual => "tray.open_manual",
-            Self::JoinCommunity => "tray.join_community",
-            Self::FollowUs => "tray.follow_us",
+            Self::OpenCurrentAppCommands => "tray.open_current_app_commands",
             Self::Settings => "tray.settings",
             Self::LaunchAtLogin => "tray.launch_at_login",
             Self::Quit => "tray.quit",
@@ -106,12 +96,7 @@ impl TrayMenuAction {
     pub fn from_id(id: &str) -> Option<Self> {
         match id {
             "tray.open_script_kit" => Some(Self::OpenScriptKit),
-            "tray.open_notes" => Some(Self::OpenNotes),
-            "tray.open_ai_chat" => Some(Self::OpenAiChat),
-            "tray.open_github" => Some(Self::OpenOnGitHub),
-            "tray.open_manual" => Some(Self::OpenManual),
-            "tray.join_community" => Some(Self::JoinCommunity),
-            "tray.follow_us" => Some(Self::FollowUs),
+            "tray.open_current_app_commands" => Some(Self::OpenCurrentAppCommands),
             "tray.settings" => Some(Self::Settings),
             "tray.launch_at_login" => Some(Self::LaunchAtLogin),
             "tray.quit" => Some(Self::Quit),
@@ -124,12 +109,7 @@ impl TrayMenuAction {
     pub const fn all() -> &'static [Self] {
         &[
             Self::OpenScriptKit,
-            Self::OpenNotes,
-            Self::OpenAiChat,
-            Self::OpenOnGitHub,
-            Self::OpenManual,
-            Self::JoinCommunity,
-            Self::FollowUs,
+            Self::OpenCurrentAppCommands,
             Self::Settings,
             Self::LaunchAtLogin,
             Self::Quit,
@@ -199,23 +179,15 @@ impl TrayManager {
     /// On macOS, `Menu::append` only allows `Submenu`, but `Submenu::append`
     /// allows any menu item type.
     ///
-    /// Menu structure (Raycast-style):
+    /// Menu structure:
     /// 1. Open Script Kit
-    /// 2. ---
-    /// 3. Open Notes
-    /// 4. Open ACP Chat
-    /// 5. ---
-    /// 6. Open on GitHub
-    /// 7. Manual
-    /// 8. Join Community
-    /// 9. Follow Us
-    /// 10. ---
-    /// 11. Settings
-    /// 12. ---
-    /// 13. Launch at Login (checkmark)
-    /// 14. Version X.Y.Z (disabled)
-    /// 15. ---
-    /// 16. Quit Script Kit
+    /// 2. Current App Commands…
+    /// 3. ---
+    /// 4. Settings
+    /// 5. Launch at Login (checkmark)
+    /// 6. Version X.Y.Z (disabled)
+    /// 7. ---
+    /// 8. Quit Script Kit
     fn create_menu() -> Result<(Box<dyn ContextMenu>, CheckMenuItem)> {
         // Use Submenu as context menu root - works cross-platform
         // (Menu::append only allows Submenu on macOS, but Submenu::append allows any item)
@@ -230,48 +202,11 @@ impl TrayManager {
             Some(NativeIcon::Home),
             None,
         );
-        let open_notes_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::OpenNotes.id(),
-            "Open Notes",
-            true,
-            Some(NativeIcon::FontPanel),
-            None,
-        );
-        let open_ai_chat_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::OpenAiChat.id(),
-            "Open ACP Chat",
-            true,
-            Some(NativeIcon::IChatTheater),
-            None,
-        );
-
-        // External links
-        let open_on_github_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::OpenOnGitHub.id(),
-            "Open on GitHub",
-            true,
-            Some(NativeIcon::FollowLinkFreestanding),
-            None,
-        );
-        let open_manual_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::OpenManual.id(),
-            "Manual",
+        let open_current_app_commands_item = IconMenuItem::with_id_and_native_icon(
+            TrayMenuAction::OpenCurrentAppCommands.id(),
+            "Current App Commands…",
             true,
             Some(NativeIcon::Bookmarks),
-            None,
-        );
-        let join_community_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::JoinCommunity.id(),
-            "Join Community",
-            true,
-            Some(NativeIcon::UserGroup),
-            None,
-        );
-        let follow_us_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::FollowUs.id(),
-            "Follow Us",
-            true,
-            Some(NativeIcon::User),
             None,
         );
 
@@ -308,48 +243,22 @@ impl TrayManager {
             None,
         );
 
-        // Add items to menu in Raycast-style order
-        // Section 1: Main action
+        // Add items to menu in compact current-app-first order.
         menu.append(&open_item).context("Failed to add Open item")?;
+        menu.append(&open_current_app_commands_item)
+            .context("Failed to add Current App Commands item")?;
         menu.append(&PredefinedMenuItem::separator())
             .context("Failed to add separator")?;
-
-        // Section 2: App features
-        menu.append(&open_notes_item)
-            .context("Failed to add Open Notes item")?;
-        menu.append(&open_ai_chat_item)
-            .context("Failed to add Open ACP Chat item")?;
-        menu.append(&PredefinedMenuItem::separator())
-            .context("Failed to add separator")?;
-
-        // Section 3: External links
-        menu.append(&open_on_github_item)
-            .context("Failed to add Open on GitHub item")?;
-        menu.append(&open_manual_item)
-            .context("Failed to add Manual item")?;
-        menu.append(&join_community_item)
-            .context("Failed to add Join Community item")?;
-        menu.append(&follow_us_item)
-            .context("Failed to add Follow Us item")?;
-        menu.append(&PredefinedMenuItem::separator())
-            .context("Failed to add separator")?;
-
-        // Section 4: Settings
         menu.append(&settings_item)
             .context("Failed to add Settings item")?;
-        menu.append(&PredefinedMenuItem::separator())
-            .context("Failed to add separator")?;
-
-        // Section 5: App state
         menu.append(&launch_at_login_item)
             .context("Failed to add Launch at Login item")?;
         menu.append(&version_item)
             .context("Failed to add Version item")?;
         menu.append(&PredefinedMenuItem::separator())
             .context("Failed to add separator")?;
-
-        // Section 6: Quit
         menu.append(&quit_item).context("Failed to add Quit item")?;
+        tracing::info!(layout = "compact_current_app_first", "tray.menu_built");
 
         Ok((Box::new(menu), launch_at_login_item))
     }
@@ -465,7 +374,7 @@ mod tests {
     #[test]
     fn test_tray_menu_action_all_count() {
         // Verify all() returns all variants
-        assert_eq!(TrayMenuAction::all().len(), 10);
+        assert_eq!(TrayMenuAction::all().len(), 5);
     }
 
     // ========================================================================

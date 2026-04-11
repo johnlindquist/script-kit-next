@@ -3,6 +3,9 @@
 
                         // Fallback command preview
                         let fallback = &fallback_match.fallback;
+                        let fallback_name = fallback.display_name();
+                        let fallback_label = fallback.display_label();
+                        let fallback_description = fallback.display_description();
 
                         // Header showing "Fallback"
                         let mut path_div = div()
@@ -21,7 +24,7 @@
                         path_div = path_div.child(
                             div()
                                 .text_color(rgba((text_muted << 8) | ALPHA_MUTED_LABEL))
-                                .child(fallback.name().to_string()),
+                                .child(fallback_name),
                         );
 
                         panel = panel.child(path_div);
@@ -33,7 +36,7 @@
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(rgb(text_primary))
                                 .pb(px(spacing.padding_sm))
-                                .child(fallback.label().to_string()),
+                                .child(fallback_label),
                         );
 
                         // Description
@@ -42,7 +45,7 @@
                                 .text_sm()
                                 .text_color(rgb(text_secondary))
                                 .pb(px(spacing.padding_md))
-                                .child(fallback.description().to_string()),
+                                .child(fallback_description),
                         );
 
                         // Divider

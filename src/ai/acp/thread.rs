@@ -1560,6 +1560,17 @@ impl AcpThread {
         cx.notify();
     }
 
+    /// Clear composer-attached context state before a fresh external entry
+    /// intent reuses this thread.
+    ///
+    /// Preserves transcript history, but removes stale chips, hidden context
+    /// blocks, and queued bootstrap state so a launcher-initiated submit
+    /// starts from the new intent alone.
+    pub(crate) fn clear_pending_context_for_new_entry_intent(&mut self, cx: &mut Context<Self>) {
+        self.reset_pending_context_for_new_entry_intent();
+        cx.notify();
+    }
+
     pub(crate) fn cancel_streaming(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.status, AcpThreadStatus::Streaming) {
             return;
@@ -1598,6 +1609,13 @@ impl AcpThread {
         self.context_bootstrap_state = AcpContextBootstrapState::Ready;
         self.context_bootstrap_note = None;
         cx.notify();
+    }
+
+    fn reset_pending_context_for_new_entry_intent(&mut self) {
+        self.clear_all_pending_context("new_entry_intent");
+        self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+        self.context_bootstrap_note = None;
+        self.queued_submit_while_bootstrapping = false;
     }
 
     /// Tracked tool calls, ordered by creation.
@@ -2779,5 +2797,44 @@ mod tests {
         let reqs = thread.current_setup_requirements();
         assert!(reqs.needs_embedded_context, "still true from launch");
         assert!(reqs.needs_image, "screenshot part added after open → true");
+    }
+
+    #[test]
+    fn reset_pending_context_for_new_entry_intent_preserves_messages_but_clears_context_state() {
+        let mut thread = test_thread(vec![ContentBlock::Text(TextContent::new("context"))], false);
+        thread.messages.push(AcpThreadMessage::new(
+            1,
+            AcpThreadMessageRole::Assistant,
+            "existing response",
+        ));
+        thread.add_context_part_test(focused_target_part("existing-chip"));
+        thread.context_bootstrap_state = AcpContextBootstrapState::Preparing;
+        thread.context_bootstrap_note = Some("Capturing Current Context…".into());
+        thread.queued_submit_while_bootstrapping = true;
+
+        thread.reset_pending_context_for_new_entry_intent();
+
+        assert_eq!(thread.messages.len(), 1, "transcript history should remain");
+        assert!(
+            thread.pending_context_parts.is_empty(),
+            "stale composer chips must be cleared before reusing the thread"
+        );
+        assert!(
+            thread.pending_context_blocks.is_empty(),
+            "hidden staged context must be cleared before reusing the thread"
+        );
+        assert_eq!(
+            thread.context_bootstrap_state,
+            AcpContextBootstrapState::Ready,
+            "reused entry intents must not stay stuck behind old bootstrap work"
+        );
+        assert_eq!(
+            thread.context_bootstrap_note, None,
+            "stale bootstrap messaging should be cleared"
+        );
+        assert!(
+            !thread.queued_submit_while_bootstrapping,
+            "reused entry intents should not inherit an old queued submit"
+        );
     }
 }
