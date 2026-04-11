@@ -118,17 +118,39 @@ impl ScriptListApp {
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
+            let empty_title = if filter.trim().is_empty() {
+                "No commands ready yet"
+            } else {
+                "No matching commands"
+            };
+            let empty_detail = if filter.trim().is_empty() {
+                "Switch back to the app you want to control, then open Current App Commands again."
+                    .to_string()
+            } else {
+                format!(
+                    "Nothing matched \"{}\". Press Esc to clear the filter.",
+                    filter.trim()
+                )
+            };
+
+            tracing::info!(
+                filter = %filter,
+                total_entries = self.cached_current_app_entries.len(),
+                "current_app_commands.render_empty_state"
+            );
+
             div()
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
-                .text_color(rgb(self.theme.colors.text.muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() {
-                    "No menu bar commands available"
-                } else {
-                    "No commands match your filter"
-                })
+                .child(div().text_sm().text_color(rgb(text_primary)).child(empty_title))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(text_dimmed))
+                        .child(empty_detail),
+                )
                 .into_any_element()
         } else {
             let entries_for_closure: Vec<(usize, builtins::BuiltInEntry)> = filtered_entries
@@ -153,10 +175,12 @@ impl ScriptListApp {
                                 let description = entry.description.clone();
 
                                 let click_entity = click_entity_handle.clone();
+                                let clicked_entry = entry.clone();
                                 let click_handler = move |_event: &gpui::ClickEvent,
                                                           _window: &mut Window,
                                                           cx: &mut gpui::App| {
                                     if let Some(app) = click_entity.upgrade() {
+                                        let entry = clicked_entry.clone();
                                         app.update(cx, |this, cx| {
                                             if let AppView::CurrentAppCommandsView {
                                                 selected_index,
@@ -165,6 +189,12 @@ impl ScriptListApp {
                                             {
                                                 *selected_index = ix;
                                             }
+                                            tracing::info!(
+                                                entry_id = %entry.id,
+                                                entry_name = %entry.name,
+                                                "current_app_commands.execute_clicked"
+                                            );
+                                            this.execute_builtin(&entry, cx);
                                             cx.notify();
                                         });
                                     }

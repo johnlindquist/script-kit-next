@@ -1135,7 +1135,25 @@ pub fn load_frontmost_menu_snapshot() -> anyhow::Result<FrontmostMenuSnapshot> {
     let tracked_app = crate::frontmost_app_tracker::get_last_real_app()
         .context("No frontmost application tracked — is the app tracker running?")?;
 
-    let items = crate::frontmost_app_tracker::get_cached_menu_items();
+    let mut items = crate::frontmost_app_tracker::get_cached_menu_items();
+
+    if items.is_empty() {
+        tracing::info!(
+            app_name = %tracked_app.name,
+            bundle_id = %tracked_app.bundle_id,
+            pid = tracked_app.pid,
+            "frontmost_menu_snapshot.cache_empty_refresh_live"
+        );
+
+        items = crate::menu_bar::get_menu_bar_for_pid(tracked_app.pid)
+            .with_context(|| format!("Failed to refresh menu bar for {}", tracked_app.name))?;
+
+        crate::frontmost_app_tracker::replace_cached_menu_items(
+            tracked_app.pid,
+            &tracked_app.bundle_id,
+            items.clone(),
+        );
+    }
 
     tracing::info!(
         app_name = %tracked_app.name,
@@ -1281,6 +1299,18 @@ mod tests {
             "Expected macOS-specific error, got: {}",
             err
         );
+    }
+
+    #[test]
+    fn placeholder_copy_mentions_app_commands() {
+        let snap = FrontmostMenuSnapshot {
+            app_name: "Finder".into(),
+            bundle_id: "com.apple.finder".into(),
+            items: vec![],
+        };
+
+        let (_entries, receipt) = snap.into_entries_with_receipt();
+        assert_eq!(receipt.placeholder, "Search Finder commands…");
     }
 
     // -----------------------------------------------------------------------
