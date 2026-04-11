@@ -242,6 +242,14 @@
  * } satisfies Config;
  * ```
  *
+ * Runtime preference groups also live in `config.ts`:
+ * ```typescript
+ * theme: { presetId: "nord" },
+ * dictation: { selectedDeviceId: "usb-mic" },
+ * ai: { selectedAcpAgentId: "codex-acp", selectedModelId: "gpt-5.4" },
+ * windowManagement: { snapMode: "expanded" },
+ * ```
+ *
  * ┌───────────────────────────────────────────────────────────────────────────┐
  * │                           CONFIGURATION OPTIONS                            │
  * └───────────────────────────────────────────────────────────────────────────┘
@@ -640,6 +648,11 @@
  * | processLimits.maxMemoryMb        | number | unlimited            | no       |
  * | processLimits.maxRuntimeSeconds  | number | unlimited            | no       |
  * | processLimits.healthCheckIntervalMs | number | 5000              | no       |
+ * | theme.presetId     | string         | unset                       | no       |
+ * | dictation.selectedDeviceId | string | unset                      | no       |
+ * | ai.selectedModelId | string         | unset                       | no       |
+ * | ai.selectedAcpAgentId | string      | unset                       | no       |
+ * | windowManagement.snapMode | SnapMode | unset                     | no       |
  * | bun_path          | string         | auto-detected               | no       |
  * | editor            | string         | $EDITOR or "code"           | no       |
  *
@@ -665,6 +678,7 @@
  *
  * RELATED FILES:
  * - ~/.scriptkit/kit/theme.json - Color themes and visual appearance
+ * - ~/.scriptkit/kit/config.ts - Hotkeys, runtime preferences, Claude Code, command overrides
  * - ~/.scriptkit/kit/main/scripts/ - User scripts
  * - ~/.scriptkit/sdk/       - SDK runtime files
  */

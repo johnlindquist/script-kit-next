@@ -41,6 +41,23 @@ impl ConfigProperty {
     }
 }
 
+fn find_top_level_pair<'a>(
+    object: tree_sitter::Node<'a>,
+    content: &str,
+    property_name: &str,
+) -> Option<tree_sitter::Node<'a>> {
+    (0..object.named_child_count())
+        .filter_map(|i| object.named_child(i))
+        .find(|pair| {
+            if pair.kind() != "pair" {
+                return false;
+            }
+            pair.child_by_field_name("key")
+                .map(|key| &content[key.start_byte()..key.end_byte()] == property_name)
+                .unwrap_or(false)
+        })
+}
+
 /// Error type for config write operations
 #[derive(Debug)]
 pub enum ConfigWriteError {
@@ -84,13 +101,44 @@ pub enum WriteOutcome {
 /// * `EditResult::AlreadySet` - Property already exists with desired value
 /// * `EditResult::Failed(reason)` - Could not modify
 pub fn add_property(content: &str, property: &ConfigProperty) -> EditResult {
-    // Check if property already exists
-    if contains_property(content, &property.name) {
-        // TODO: Could update the value if different
-        return EditResult::AlreadySet;
+    let tree = match parse_typescript(content) {
+        Ok(tree) => tree,
+        Err(error) => return EditResult::Failed(error),
+    };
+    let root = tree.root_node();
+    let export = match find_export_statement(root) {
+        Some(export) => export,
+        None => return EditResult::Failed("No export statement found".to_string()),
+    };
+    let object = match find_object_in_export(export, content) {
+        Some(object) => object,
+        None => {
+            return EditResult::Failed("Could not find config object in export statement".into());
+        }
+    };
+
+    if let Some(pair) = find_top_level_pair(object, content, &property.name) {
+        let Some(value_node) = pair.child_by_field_name("value") else {
+            return EditResult::Failed(format!(
+                "Could not find existing value node for {}",
+                property.name
+            ));
+        };
+        let existing_value = content[value_node.start_byte()..value_node.end_byte()].trim();
+        if existing_value == property.value.trim() {
+            return EditResult::AlreadySet;
+        }
+
+        let mut new_content = String::with_capacity(
+            content.len() - (value_node.end_byte() - value_node.start_byte())
+                + property.value.len(),
+        );
+        new_content.push_str(&content[..value_node.start_byte()]);
+        new_content.push_str(&property.value);
+        new_content.push_str(&content[value_node.end_byte()..]);
+        return EditResult::Modified(new_content);
     }
 
-    // Find the closing brace of the default export object
     match find_object_end(content) {
         Some(insert_info) => {
             let new_content = insert_property(content, &insert_info, property);
@@ -545,6 +593,24 @@ pub fn enable_claude_code_safely(
     bun_path: Option<&str>,
 ) -> Result<WriteOutcome, ConfigWriteError> {
     let property = ConfigProperty::new("claudeCode", "{ enabled: true }");
+    write_config_safely(config_path, &property, bun_path)
+}
+
+pub fn write_json_property_safely<T: serde::Serialize>(
+    config_path: &Path,
+    property_name: &str,
+    value: &T,
+    bun_path: Option<&str>,
+) -> Result<WriteOutcome, ConfigWriteError> {
+    let property = ConfigProperty::new(
+        property_name,
+        serde_json::to_string(value).map_err(|error| {
+            ConfigWriteError::EditFailed(format!(
+                "Failed to serialize property {}: {}",
+                property_name, error
+            ))
+        })?,
+    );
     write_config_safely(config_path, &property, bun_path)
 }
 

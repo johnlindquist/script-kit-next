@@ -237,7 +237,7 @@ impl Default for WatcherConfig {
 }
 
 /// Core launcher sizing configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LayoutConfig {
     /// Standard list/panel height in pixels.
@@ -264,8 +264,8 @@ impl Default for LayoutConfig {
     }
 }
 
-/// Theme selection preferences loaded from user settings.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Theme preset selection loaded from `config.ts`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ThemeSelectionPreferences {
     /// Optional preset identifier (for example: "catppuccin-mocha").
@@ -273,8 +273,8 @@ pub struct ThemeSelectionPreferences {
     pub preset_id: Option<String>,
 }
 
-/// Dictation preferences loaded from user settings.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Dictation preferences loaded from `config.ts`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct DictationPreferences {
     /// Persisted microphone device ID. `None` means use system default.
@@ -282,8 +282,8 @@ pub struct DictationPreferences {
     pub selected_device_id: Option<String>,
 }
 
-/// User preferences loaded from `<SK_PATH>/kit/settings.json`.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// Projection of config-backed runtime preferences.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ScriptKitUserPreferences {
     /// Launcher/window layout settings.
@@ -298,10 +298,13 @@ pub struct ScriptKitUserPreferences {
     /// AI chat settings.
     #[serde(default)]
     pub ai: AiPreferences,
+    /// Window snapping and related desktop window-management settings.
+    #[serde(default)]
+    pub window_management: WindowManagementPreferences,
 }
 
-/// AI chat preferences persisted in `settings.json`.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+/// AI chat preferences loaded from `config.ts`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AiPreferences {
     /// Last-selected model ID (e.g. "claude-sonnet-4-6").
@@ -311,6 +314,15 @@ pub struct AiPreferences {
     /// Last-selected ACP agent ID (e.g. "opencode", "claude-code").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_acp_agent_id: Option<String>,
+}
+
+/// Window-management preferences loaded from `config.ts`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowManagementPreferences {
+    /// Persisted drag-snap density/mode. `None` falls back to the app default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snap_mode: Option<crate::window_control::SnapMode>,
 }
 
 // ============================================
@@ -670,6 +682,22 @@ pub struct Config {
     /// Window/layout sizing settings
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub layout: Option<LayoutConfig>,
+    /// Theme preset selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme: Option<ThemeSelectionPreferences>,
+    /// Dictation runtime preferences, including microphone selection.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dictation: Option<DictationPreferences>,
+    /// ACP Chat runtime preferences, including the preferred agent and model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai: Option<AiPreferences>,
+    /// Window-management preferences such as snap mode.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "windowManagement"
+    )]
+    pub window_management: Option<WindowManagementPreferences>,
     /// Per-command configuration overrides (shortcuts, visibility)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commands: Option<HashMap<String, CommandConfig>>,
@@ -707,6 +735,10 @@ impl Default for Config {
             dictation_hotkey_enabled: None, // Defaults to true via getter
             watcher: None,            // Will use WatcherConfig::default() via getter
             layout: None,             // Will use LayoutConfig::default() via getter
+            theme: None,              // Will use ThemeSelectionPreferences::default() via getter
+            dictation: None,          // Will use DictationPreferences::default() via getter
+            ai: None,                 // Will use AiPreferences::default() via getter
+            window_management: None,  // Will use WindowManagementPreferences::default() via getter
             commands: None,           // No per-command overrides by default
             claude_code: None,        // Will use ClaudeCodeConfig::default() via getter
         }
@@ -857,6 +889,26 @@ impl Config {
     #[cfg(test)]
     fn get_layout(&self) -> LayoutConfig {
         self.layout.clone().unwrap_or_default()
+    }
+
+    /// Returns theme preset selection config, or defaults.
+    pub fn get_theme_selection(&self) -> ThemeSelectionPreferences {
+        self.theme.clone().unwrap_or_default()
+    }
+
+    /// Returns dictation preferences, or defaults.
+    pub fn get_dictation_preferences(&self) -> DictationPreferences {
+        self.dictation.clone().unwrap_or_default()
+    }
+
+    /// Returns ACP Chat preferences, or defaults.
+    pub fn get_ai_preferences(&self) -> AiPreferences {
+        self.ai.clone().unwrap_or_default()
+    }
+
+    /// Returns window-management preferences, or defaults.
+    pub fn get_window_management_preferences(&self) -> WindowManagementPreferences {
+        self.window_management.clone().unwrap_or_default()
     }
 
     /// Returns command configuration for a specific command ID, or None if not configured.

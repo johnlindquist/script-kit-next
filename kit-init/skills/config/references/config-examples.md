@@ -29,6 +29,23 @@ export default {
   },
   dictationHotkeyEnabled: true,
 
+  theme: {
+    presetId: "nord",
+  },
+
+  dictation: {
+    selectedDeviceId: "usb-mic",
+  },
+
+  ai: {
+    selectedAcpAgentId: "codex-acp",
+    selectedModelId: "gpt-5.4",
+  },
+
+  windowManagement: {
+    snapMode: "expanded",
+  },
+
   commands: {
     "builtin/clipboard-history": {
       shortcut: { modifiers: ["meta", "shift"], key: "KeyV" },
@@ -106,8 +123,8 @@ claudeCode: {
 
 ## Dictation
 
-Two files involved:
+Two config groups involved:
 - Shortcut: `~/.scriptkit/kit/config.ts` — `dictationHotkey` + `dictationHotkeyEnabled`
-- Microphone: `~/.scriptkit/kit/settings.json` — `dictation.selectedDeviceId`
+- Microphone: `~/.scriptkit/kit/config.ts` — `dictation.selectedDeviceId`
 
 Use the built-in **Select Microphone** action to persist a device.

@@ -9,6 +9,7 @@ use serde_json::{Map, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{LazyLock, Mutex};
 use std::time::UNIX_EPOCH;
 use tempfile::Builder;
 use tracing::{info, instrument, warn};
@@ -229,6 +230,8 @@ fn settings_json_path() -> PathBuf {
         .join("settings.json")
 }
 
+static CONFIG_PREFERENCE_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
+
 /// Build a Bun command that imports a module by URL and writes its default export as JSON to stdout.
 ///
 /// Uses `pathToFileURL` so paths with special characters are handled safely.
@@ -335,6 +338,10 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
         ),
         watcher: parse_optional_field(object, "watcher", correlation_id),
         layout: parse_optional_field(object, "layout", correlation_id),
+        theme: parse_optional_field(object, "theme", correlation_id),
+        dictation: parse_optional_field(object, "dictation", correlation_id),
+        ai: parse_optional_field(object, "ai", correlation_id),
+        window_management: parse_optional_field(object, "windowManagement", correlation_id),
         commands: parse_optional_field(object, "commands", correlation_id),
         claude_code: parse_optional_field(object, "claudeCode", correlation_id),
     }
@@ -381,6 +388,12 @@ fn recover_user_preferences_fields(value: Value, correlation_id: &str) -> Script
         theme: parse_required_field(object, "theme", defaults.theme, correlation_id),
         dictation: parse_required_field(object, "dictation", defaults.dictation, correlation_id),
         ai: parse_required_field(object, "ai", defaults.ai, correlation_id),
+        window_management: parse_required_field(
+            object,
+            "windowManagement",
+            defaults.window_management,
+            correlation_id,
+        ),
     }
 }
 
@@ -410,86 +423,198 @@ fn parse_user_preferences_json(json_str: &str, correlation_id: &str) -> ScriptKi
     }
 }
 
-/// Load user preferences from `<SK_PATH>/kit/settings.json` (or `~/.scriptkit/kit/settings.json`)
-///
-/// This file is intentionally JSON (not TypeScript) so runtime readers can parse
-/// lightweight preferences (layout/theme) without invoking Bun.
-pub fn load_user_preferences() -> ScriptKitUserPreferences {
-    let correlation_id = format!("settings_load:{}", uuid::Uuid::new_v4());
-    let settings_path = settings_json_path();
+fn preferences_from_config(config: &Config) -> ScriptKitUserPreferences {
+    ScriptKitUserPreferences {
+        layout: config.layout.clone().unwrap_or_default(),
+        theme: config.get_theme_selection(),
+        dictation: config.get_dictation_preferences(),
+        ai: config.get_ai_preferences(),
+        window_management: config.get_window_management_preferences(),
+    }
+}
 
+fn overlay_legacy_preferences_if_missing(
+    mut prefs: ScriptKitUserPreferences,
+    legacy: ScriptKitUserPreferences,
+    config: &Config,
+) -> ScriptKitUserPreferences {
+    if config.layout.is_none() {
+        prefs.layout = legacy.layout;
+    }
+    if config.theme.is_none() {
+        prefs.theme = legacy.theme;
+    }
+    if config.dictation.is_none() {
+        prefs.dictation = legacy.dictation;
+    }
+    if config.ai.is_none() {
+        prefs.ai = legacy.ai;
+    }
+    if config.window_management.is_none() {
+        prefs.window_management = legacy.window_management;
+    }
+    prefs
+}
+
+fn maybe_load_legacy_user_preferences(correlation_id: &str) -> Option<ScriptKitUserPreferences> {
+    let settings_path = settings_json_path();
     if !settings_path.exists() {
-        info!(
-            correlation_id = %correlation_id,
-            path = %settings_path.display(),
-            "Settings file not found, using defaults"
-        );
-        return ScriptKitUserPreferences::default();
+        return None;
     }
 
     match std::fs::read_to_string(&settings_path) {
-        Ok(contents) => {
-            let preferences = parse_user_preferences_json(&contents, &correlation_id);
-            info!(
-                correlation_id = %correlation_id,
-                path = %settings_path.display(),
-                "Successfully loaded user preferences"
-            );
-            preferences
-        }
+        Ok(contents) => Some(parse_user_preferences_json(&contents, correlation_id)),
         Err(error) => {
             warn!(
                 correlation_id = %correlation_id,
                 path = %settings_path.display(),
                 error = %error,
-                "Failed to read settings file, using defaults"
+                "Failed to read legacy settings.json"
             );
-            ScriptKitUserPreferences::default()
+            None
         }
     }
 }
 
-/// Persist user preferences to `<SK_PATH>/kit/settings.json`.
-///
-/// Reads the existing file first, merges the new preferences on top (to avoid
-/// clobbering unknown keys), and writes back pretty-printed JSON.
-pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result<()> {
+/// Load runtime preference groups from `config.ts`, with a legacy `settings.json`
+/// fallback for users who have not migrated yet.
+pub fn load_user_preferences() -> ScriptKitUserPreferences {
+    let correlation_id = format!("config_prefs_load:{}", uuid::Uuid::new_v4());
+    let config = load_config();
+    let preferences = preferences_from_config(&config);
+    if let Some(legacy) = maybe_load_legacy_user_preferences(&correlation_id) {
+        return overlay_legacy_preferences_if_missing(preferences, legacy, &config);
+    }
+    preferences
+}
+
+fn cleanup_legacy_settings_file_if_safe(correlation_id: &str) {
     let path = settings_json_path();
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create settings directory {}", parent.display()))?;
+    if !path.exists() {
+        return;
     }
 
-    // Read existing JSON to preserve unknown keys from other tools.
-    let mut root: serde_json::Map<String, Value> = if path.exists() {
-        let text = std::fs::read_to_string(&path)
-            .with_context(|| format!("failed to read settings file {}", path.display()))?;
-        match serde_json::from_str::<serde_json::Map<String, Value>>(&text) {
-            Ok(map) => map,
-            Err(error) => {
-                warn!(
-                    path = %path.display(),
-                    error = %error,
-                    "Settings file was not a JSON object; overwriting known preference fields"
-                );
-                serde_json::Map::new()
-            }
+    let contents = match fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                path = %path.display(),
+                error = %error,
+                "Failed to inspect legacy settings.json for cleanup"
+            );
+            return;
         }
-    } else {
-        serde_json::Map::new()
     };
 
-    // Overlay our strongly-typed preferences.
-    let overlay = serde_json::to_value(prefs)?;
-    if let Value::Object(map) = overlay {
-        for (k, v) in map {
-            root.insert(k, v);
+    let parsed = match serde_json::from_str::<Value>(&contents) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            warn!(
+                correlation_id = %correlation_id,
+                path = %path.display(),
+                error = %error,
+                "Legacy settings.json is invalid JSON; leaving it in place"
+            );
+            return;
+        }
+    };
+
+    let Some(object) = parsed.as_object() else {
+        return;
+    };
+
+    let known_keys = ["layout", "theme", "dictation", "ai", "windowManagement"];
+    if object.keys().all(|key| known_keys.contains(&key.as_str())) {
+        if let Err(error) = fs::remove_file(&path) {
+            warn!(
+                correlation_id = %correlation_id,
+                path = %path.display(),
+                error = %error,
+                "Failed to remove legacy settings.json after config migration"
+            );
+        } else {
+            info!(
+                correlation_id = %correlation_id,
+                path = %path.display(),
+                "Removed legacy settings.json after migrating preferences to config.ts"
+            );
         }
     }
+}
 
-    let json = serde_json::to_string_pretty(&root)?;
-    std::fs::write(&path, json)
-        .with_context(|| format!("failed to write settings file {}", path.display()))?;
+fn write_preference_group<T: Serialize + PartialEq>(
+    config_path: &Path,
+    property_name: &str,
+    current_exists: bool,
+    value: &T,
+    default_value: &T,
+) -> anyhow::Result<()> {
+    if value == default_value && !current_exists {
+        return Ok(());
+    }
+
+    let property = if value == default_value {
+        super::editor::ConfigProperty::new(property_name, "undefined")
+    } else {
+        super::editor::ConfigProperty::new(
+            property_name,
+            serde_json::to_string(value)
+                .with_context(|| format!("failed to serialize {}", property_name))?,
+        )
+    };
+
+    super::editor::write_config_safely(config_path, &property, None)
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    Ok(())
+}
+
+/// Persist runtime preference groups back into `config.ts`.
+pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result<()> {
+    let _write_guard = CONFIG_PREFERENCE_WRITE_LOCK
+        .lock()
+        .expect("config preference write lock poisoned");
+    let config_path = config_ts_path();
+    let current = load_config();
+
+    write_preference_group(
+        &config_path,
+        "layout",
+        current.layout.is_some(),
+        &prefs.layout,
+        &super::types::LayoutConfig::default(),
+    )?;
+    write_preference_group(
+        &config_path,
+        "theme",
+        current.theme.is_some(),
+        &prefs.theme,
+        &super::types::ThemeSelectionPreferences::default(),
+    )?;
+    write_preference_group(
+        &config_path,
+        "dictation",
+        current.dictation.is_some(),
+        &prefs.dictation,
+        &super::types::DictationPreferences::default(),
+    )?;
+    write_preference_group(
+        &config_path,
+        "ai",
+        current.ai.is_some(),
+        &prefs.ai,
+        &super::types::AiPreferences::default(),
+    )?;
+    write_preference_group(
+        &config_path,
+        "windowManagement",
+        current.window_management.is_some(),
+        &prefs.window_management,
+        &super::types::WindowManagementPreferences::default(),
+    )?;
+
+    let correlation_id = format!("config_prefs_save:{}", uuid::Uuid::new_v4());
+    cleanup_legacy_settings_file_if_safe(&correlation_id);
     Ok(())
 }
 
@@ -801,7 +926,48 @@ mod tests {
     }
 
     #[test]
-    fn test_user_preferences_loader_parses_layout_and_theme_preset() {
+    fn test_config_loader_parses_runtime_preference_groups() {
+        let json = r#"{
+            "layout": { "standardHeight": 640, "maxHeight": 920 },
+            "theme": { "presetId": "catppuccin-mocha" },
+            "dictation": { "selectedDeviceId": "usb-mic" },
+            "ai": { "selectedModelId": "gpt-5.4", "selectedAcpAgentId": "codex-acp" },
+            "windowManagement": { "snapMode": "precision" }
+        }"#;
+
+        let config = parse_config_json(json, "test-correlation-id");
+
+        assert_eq!(config.layout.as_ref().unwrap().standard_height, 640.0);
+        assert_eq!(config.layout.as_ref().unwrap().max_height, 920.0);
+        assert_eq!(
+            config.theme.as_ref().unwrap().preset_id.as_deref(),
+            Some("catppuccin-mocha")
+        );
+        assert_eq!(
+            config
+                .dictation
+                .as_ref()
+                .unwrap()
+                .selected_device_id
+                .as_deref(),
+            Some("usb-mic")
+        );
+        assert_eq!(
+            config.ai.as_ref().unwrap().selected_model_id.as_deref(),
+            Some("gpt-5.4")
+        );
+        assert_eq!(
+            config.ai.as_ref().unwrap().selected_acp_agent_id.as_deref(),
+            Some("codex-acp")
+        );
+        assert_eq!(
+            config.window_management.as_ref().unwrap().snap_mode,
+            Some(crate::window_control::SnapMode::Precision)
+        );
+    }
+
+    #[test]
+    fn test_legacy_settings_loader_parses_layout_and_theme_preset() {
         let json = r#"{
             "layout": { "standardHeight": 640, "maxHeight": 920 },
             "theme": { "presetId": "catppuccin-mocha" }
@@ -818,7 +984,7 @@ mod tests {
     }
 
     #[test]
-    fn test_user_preferences_loader_recovers_from_invalid_layout_field() {
+    fn test_legacy_settings_loader_recovers_from_invalid_layout_field() {
         let json = r#"{
             "layout": { "standardHeight": "bad", "maxHeight": 920 },
             "theme": { "presetId": "nord" }

@@ -220,7 +220,16 @@ export default {
   
   // Custom paths
   bun_path: "/opt/homebrew/bin/bun",
-  editor: "code"
+  editor: "code",
+
+  // Runtime preferences also live here
+  theme: { presetId: "nord" },
+  dictation: { selectedDeviceId: "usb-mic" },
+  ai: {
+    selectedAcpAgentId: "codex-acp",
+    selectedModelId: "gpt-5.4"
+  },
+  windowManagement: { snapMode: "expanded" }
 };
 ```
 
