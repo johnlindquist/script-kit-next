@@ -3,7 +3,7 @@
 /// round-trip correctly between config keys, deeplinks, and runtime resolution.
 
 #[test]
-fn config_skill_mentions_authoring_skills_and_dictation_split() {
+fn config_skill_mentions_authoring_skills_and_runtime_preference_groups() {
     let content = include_str!("../kit-init/skills/config/SKILL.md");
     assert!(
         content.contains("~/.scriptkit/kit/authoring/skills/"),
@@ -14,16 +14,20 @@ fn config_skill_mentions_authoring_skills_and_dictation_split() {
         "SKILL.md must reference kit/config.ts"
     );
     assert!(
-        content.contains("~/.scriptkit/kit/settings.json"),
-        "SKILL.md must reference kit/settings.json"
-    );
-    assert!(
         content.contains("dictationHotkey"),
         "SKILL.md must mention dictationHotkey"
     );
     assert!(
         content.contains("selectedDeviceId"),
         "SKILL.md must mention selectedDeviceId"
+    );
+    assert!(
+        content.contains("selectedAcpAgentId"),
+        "SKILL.md must mention selectedAcpAgentId"
+    );
+    assert!(
+        content.contains("windowManagement"),
+        "SKILL.md must mention windowManagement"
     );
 }
 
@@ -49,6 +53,12 @@ fn kit_sdk_mentions_current_public_config_fields() {
         "logsHotkeyEnabled",
         "dictationHotkey",
         "dictationHotkeyEnabled",
+        "theme",
+        "dictation",
+        "selectedDeviceId",
+        "selectedModelId",
+        "selectedAcpAgentId",
+        "windowManagement",
         "commands",
         "claudeCode",
     ] {
@@ -100,6 +110,10 @@ fn config_cli_known_top_level_is_current() {
         "dictationHotkey",
         "watcher",
         "layout",
+        "theme",
+        "dictation",
+        "ai",
+        "windowManagement",
         "commands",
         "claudeCode",
     ] {
@@ -114,6 +128,10 @@ fn kit_sdk_exports_canonical_config_types() {
         "export interface SuggestedConfig",
         "export interface WatcherConfig",
         "export interface LayoutConfig",
+        "export interface ThemeSelectionPreferences",
+        "export interface DictationPreferences",
+        "export interface AiPreferences",
+        "export interface WindowManagementPreferences",
         "export interface HotkeyConfig",
         "export interface CommandConfig",
         "export interface ClaudeCodeConfig",

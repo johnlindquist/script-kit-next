@@ -123,9 +123,11 @@ export default {
   // dictationHotkey: { modifiers: ["meta", "shift"], key: "KeyD" },
   // dictationHotkeyEnabled: true, // only registers when dictationHotkey is set
   //
-  // The selected dictation microphone is persisted separately in:
-  //   ~/.scriptkit/kit/settings.json
-  //   { "dictation": { "selectedDeviceId": "usb-mic" } }
+  // Runtime preferences also live here:
+  // theme: { presetId: "nord" },
+  // dictation: { selectedDeviceId: "usb-mic" },
+  // ai: { selectedAcpAgentId: "codex-acp", selectedModelId: "gpt-5.4" },
+  // windowManagement: { snapMode: "expanded" },
   //
   // Behavior:
   // - No selectedDeviceId means use the macOS default microphone

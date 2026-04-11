@@ -694,6 +694,33 @@ export default {
 }
 
 #[test]
+fn test_write_config_safely_replaces_existing_top_level_property() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let config_path = dir.path().join("config.ts");
+
+    let content = r#"import type { Config } from "@scriptkit/sdk";
+
+export default {
+  hotkey: { modifiers: ["meta"], key: "Semicolon" },
+  ai: { selectedModelId: "claude-sonnet-4-6" },
+} satisfies Config;
+"#;
+    std::fs::write(&config_path, content).unwrap();
+
+    let property = ConfigProperty::new("ai", r#"{"selectedModelId":"gpt-5.4"}"#);
+    let result = write_config_safely(&config_path, &property, None);
+
+    match result {
+        Ok(WriteOutcome::Written) => {
+            let updated = std::fs::read_to_string(&config_path).unwrap();
+            assert!(updated.contains(r#"ai: {"selectedModelId":"gpt-5.4"}"#));
+            assert!(!updated.contains("claude-sonnet-4-6"));
+        }
+        other => panic!("Expected Written, got {:?}", other),
+    }
+}
+
+#[test]
 fn test_write_config_safely_does_not_touch_predictable_tmp_path() {
     let dir = tempfile::TempDir::new().unwrap();
     let config_path = dir.path().join("config.ts");

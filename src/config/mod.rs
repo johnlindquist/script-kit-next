@@ -31,8 +31,9 @@ pub use defaults::DEFAULT_SUGGESTED_HALF_LIFE_DAYS;
 // Re-export types that are used externally
 #[allow(unused_imports)]
 pub use types::{
-    BuiltInConfig, ClaudeCodeConfig, Config, DictationPreferences, HotkeyConfig, LayoutConfig,
-    ScriptKitUserPreferences, SuggestedConfig, ThemeSelectionPreferences, WatcherConfig,
+    AiPreferences, BuiltInConfig, ClaudeCodeConfig, Config, DictationPreferences, HotkeyConfig,
+    LayoutConfig, ScriptKitUserPreferences, SuggestedConfig, ThemeSelectionPreferences,
+    WatcherConfig, WindowManagementPreferences,
 };
 
 // Re-export loader

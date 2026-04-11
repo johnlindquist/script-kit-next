@@ -1115,7 +1115,7 @@ export interface LayoutConfig {
 export type ClaudeCodePermissionMode = "plan" | "dontAsk";
 
 /**
- * Theme preset selection persisted in `~/.scriptkit/kit/settings.json`.
+ * Theme preset selection stored in `~/.scriptkit/kit/config.ts`.
  */
 export interface ThemeSelectionPreferences {
   /**
@@ -1125,7 +1125,7 @@ export interface ThemeSelectionPreferences {
 }
 
 /**
- * Dictation runtime preferences persisted in `~/.scriptkit/kit/settings.json`.
+ * Dictation runtime preferences stored in `~/.scriptkit/kit/config.ts`.
  */
 export interface DictationPreferences {
   /**
@@ -1138,33 +1138,34 @@ export interface DictationPreferences {
 }
 
 /**
- * Runtime-persisted preferences stored in `~/.scriptkit/kit/settings.json`.
- * These are separate from `Config` and are usually written by the app.
- *
- * @example
- * ```typescript
- * const prefs: ScriptKitUserPreferences = {
- *   theme: { presetId: "catppuccin-mocha" },
- *   dictation: { selectedDeviceId: "usb-mic" },
- * };
- * ```
+ * ACP Chat runtime preferences stored in `~/.scriptkit/kit/config.ts`.
  */
-export interface ScriptKitUserPreferences {
+export interface AiPreferences {
   /**
-   * Runtime-persisted launcher sizing.
-   * Uses the same shape as `Config.layout`.
+   * Last-selected model ID.
+   *
+   * @example "gpt-5.4"
    */
-  layout?: LayoutConfig;
+  selectedModelId?: string;
 
   /**
-   * Selected theme preset.
+   * Last-selected ACP agent ID.
+   *
+   * @example "codex-acp"
    */
-  theme?: ThemeSelectionPreferences;
+  selectedAcpAgentId?: string;
+}
 
+export type SnapMode = "off" | "simple" | "expanded" | "precision";
+
+/**
+ * Window-management preferences stored in `~/.scriptkit/kit/config.ts`.
+ */
+export interface WindowManagementPreferences {
   /**
-   * Dictation microphone preference.
+   * Drag-snap density/mode for desktop tiling.
    */
-  dictation?: DictationPreferences;
+  snapMode?: SnapMode;
 }
 
 /**
@@ -1361,8 +1362,6 @@ export interface Config {
   /**
    * Hotkey for toggling dictation.
    * No default shortcut is registered; set this explicitly if you want one.
-   * The selected microphone is stored separately in
-   * `~/.scriptkit/kit/settings.json` as `dictation.selectedDeviceId`.
    *
    * @default undefined
    */
@@ -1396,6 +1395,36 @@ export interface Config {
    * @default { standardHeight: 500, maxHeight: 700 }
    */
   layout?: LayoutConfig;
+
+  /**
+   * Theme preset selection.
+   *
+   * Theme colors still live in `~/.scriptkit/kit/theme.json`.
+   *
+   * @default undefined
+   */
+  theme?: ThemeSelectionPreferences;
+
+  /**
+   * Dictation runtime preferences, including the selected microphone device.
+   *
+   * @default undefined
+   */
+  dictation?: DictationPreferences;
+
+  /**
+   * ACP Chat runtime preferences, including the selected agent and model.
+   *
+   * @default undefined
+   */
+  ai?: AiPreferences;
+
+  /**
+   * Window-management preferences such as drag-snap mode.
+   *
+   * @default undefined
+   */
+  windowManagement?: WindowManagementPreferences;
 
   /**
    * Per-command configuration for shortcuts and visibility.

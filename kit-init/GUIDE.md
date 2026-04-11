@@ -849,6 +849,23 @@ export default {
     maxHeight: 700,
   },
 
+  theme: {
+    presetId: "nord",
+  },
+
+  dictation: {
+    selectedDeviceId: "usb-mic",
+  },
+
+  ai: {
+    selectedAcpAgentId: "codex-acp",
+    selectedModelId: "gpt-5.4",
+  },
+
+  windowManagement: {
+    snapMode: "expanded",
+  },
+
   bun_path: "/opt/homebrew/bin/bun",
   editor: "code",
 
@@ -864,16 +881,6 @@ export default {
     },
   },
 } satisfies Config;
-```
-
-Dictation microphone selection is stored separately in `~/.scriptkit/kit/settings.json`:
-
-```json
-{
-  "dictation": {
-    "selectedDeviceId": "usb-mic"
-  }
-}
 ```
 
 Behavior:
@@ -901,7 +908,7 @@ Common key codes:
 - Putting skills at the workspace root instead of in `~/.scriptkit/kit/authoring/skills/`
 - Editing `~/.scriptkit/config.ts` instead of `~/.scriptkit/kit/config.ts` (legacy path)
 - Using `command` / `control` instead of `meta` / `ctrl`
-- Putting dictation microphone selection in `config.ts` instead of `kit/settings.json`
+- Editing `theme.json` when you meant to change `theme.presetId` in `config.ts`
 
 ---
 

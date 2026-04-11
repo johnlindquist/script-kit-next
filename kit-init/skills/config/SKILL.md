@@ -12,8 +12,7 @@ Manage files under `~/.scriptkit` that control launcher behavior, hotkeys, dicta
 | File | Purpose | Reload |
 |------|---------|--------|
 | `~/.scriptkit/kit/authoring/skills/` | Agent-readable skills | Read from authoring plugin |
-| `~/.scriptkit/kit/config.ts` | Static config: hotkeys, built-ins, Claude Code | Auto-reloads |
-| `~/.scriptkit/kit/settings.json` | Runtime preferences: layout, theme, microphone | Read by runtime |
+| `~/.scriptkit/kit/config.ts` | Full config: hotkeys, built-ins, runtime preferences, Claude Code | Auto-reloads |
 | `~/.scriptkit/kit/theme.json` | Theme colors | Auto-reloads |
 
 ## What Goes Where
@@ -22,8 +21,10 @@ Manage files under `~/.scriptkit` that control launcher behavior, hotkeys, dicta
 |---------|------|-----|
 | Launcher hotkey | `config.ts` | `hotkey` |
 | AI/Logs/Dictation shortcuts | `config.ts` | `aiHotkey`, `logsHotkey`, `dictationHotkey` |
-| Dictation microphone | `settings.json` | `dictation.selectedDeviceId` |
-| Theme preset | `settings.json` | `theme.presetId` |
+| Dictation microphone | `config.ts` | `dictation.selectedDeviceId` |
+| Theme preset | `config.ts` | `theme.presetId` |
+| ACP defaults | `config.ts` | `ai.selectedAcpAgentId`, `ai.selectedModelId` |
+| Snap mode | `config.ts` | `windowManagement.snapMode` |
 | Theme colors | `theme.json` | `colors.*` |
 | Claude Code | `config.ts` | `claudeCode` |
 
@@ -72,12 +73,24 @@ Command deeplinks: `scriptkit://commands/{id}`
 - `dictationHotkey` — no default; set explicitly
 - All have `*Enabled` boolean (default `true`)
 
+## Runtime Preference Groups
+
+```typescript
+theme: { presetId: "nord" },
+dictation: { selectedDeviceId: "usb-mic" },
+ai: {
+  selectedAcpAgentId: "codex-acp",
+  selectedModelId: "gpt-5.4",
+},
+windowManagement: { snapMode: "expanded" },
+```
+
 ## Common Mistakes
 
 - Putting skills at the workspace root instead of in `~/.scriptkit/kit/authoring/skills/`
 - Editing `~/.scriptkit/config.ts` instead of `~/.scriptkit/kit/config.ts`
 - Using `command`/`control` instead of `meta`/`ctrl`
-- Putting microphone selection in `config.ts` instead of `settings.json`
+- Editing `theme.json` when you meant to change `theme.presetId` in `config.ts`
 
 ## References
 

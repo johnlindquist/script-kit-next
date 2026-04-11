@@ -33,9 +33,9 @@ import type {
   ValidateConfigChangeResult,
 } from './config-schema';
 
-// NOTE: This CLI only manages ~/.scriptkit/kit/config.ts.
-// Runtime preferences such as dictation.selectedDeviceId live in
-// ~/.scriptkit/kit/settings.json.
+// NOTE: This CLI manages the full ~/.scriptkit/kit/config.ts surface,
+// including runtime preference groups such as theme, dictation, AI, and
+// windowManagement.
 
 // =============================================================================
 // Types (matching kit-sdk.ts and src/config.rs)
@@ -98,6 +98,25 @@ interface LayoutConfig {
   maxHeight?: number;
 }
 
+interface ThemeSelectionPreferences {
+  presetId?: string;
+}
+
+interface DictationPreferences {
+  selectedDeviceId?: string;
+}
+
+interface AiPreferences {
+  selectedModelId?: string;
+  selectedAcpAgentId?: string;
+}
+
+type SnapMode = "off" | "simple" | "expanded" | "precision";
+
+interface WindowManagementPreferences {
+  snapMode?: SnapMode;
+}
+
 interface CommandConfig {
   shortcut?: HotkeyConfig;
   hidden?: boolean;
@@ -135,6 +154,10 @@ interface Config {
   dictationHotkeyEnabled?: boolean;
   watcher?: WatcherConfig;
   layout?: LayoutConfig;
+  theme?: ThemeSelectionPreferences;
+  dictation?: DictationPreferences;
+  ai?: AiPreferences;
+  windowManagement?: WindowManagementPreferences;
   commands?: Record<string, CommandConfig>;
   claudeCode?: ClaudeCodeConfig;
 }
@@ -191,6 +214,10 @@ const DEFAULTS: Config & Record<string, unknown> = {
     standardHeight: 500,
     maxHeight: 700
   },
+  theme: undefined,
+  dictation: undefined,
+  ai: undefined,
+  windowManagement: undefined,
   claudeCode: {
     enabled: false,
     path: undefined,
@@ -443,6 +470,36 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     default: 700,
     description: "Maximum window height in pixels"
   },
+  {
+    key: "theme.presetId",
+    type: "string | undefined",
+    default: undefined,
+    description: "Theme preset ID to apply before theme.json overrides"
+  },
+  {
+    key: "dictation.selectedDeviceId",
+    type: "string | undefined",
+    default: undefined,
+    description: "Preferred microphone device ID for dictation"
+  },
+  {
+    key: "ai.selectedModelId",
+    type: "string | undefined",
+    default: undefined,
+    description: "Last-selected ACP model ID"
+  },
+  {
+    key: "ai.selectedAcpAgentId",
+    type: "string | undefined",
+    default: undefined,
+    description: "Last-selected ACP agent ID"
+  },
+  {
+    key: "windowManagement.snapMode",
+    type: '"off" | "simple" | "expanded" | "precision" | undefined',
+    default: undefined,
+    description: "Drag-snap density for desktop tiling"
+  },
   // --- Commands & Claude Code ---
   {
     key: "commands",
@@ -664,6 +721,10 @@ function parseValue(value: string, key: string): unknown {
   }
   
   const type = schema.type;
+
+  if (type.includes('undefined') && (value === 'undefined' || value === 'null')) {
+    return undefined;
+  }
   
   if (type.includes('boolean')) {
     if (value === 'true') return true;
@@ -727,6 +788,16 @@ function validateValue(key: string, value: unknown): { valid: boolean; error?: s
       if (!validMods.includes(mod as KeyModifier)) {
         return { valid: false, error: `Invalid modifier: ${mod}. Valid modifiers: ${validMods.join(', ')}` };
       }
+    }
+  }
+
+  if (key === 'windowManagement.snapMode' && value !== undefined) {
+    const validModes: SnapMode[] = ['off', 'simple', 'expanded', 'precision'];
+    if (!validModes.includes(value as SnapMode)) {
+      return {
+        valid: false,
+        error: `windowManagement.snapMode must be one of: ${validModes.join(', ')}`,
+      };
     }
   }
   
@@ -1059,6 +1130,7 @@ async function cmdValidate(): Promise<void> {
       'clipboardHistoryMaxTextLength', 'suggested', 'notesHotkey',
       'aiHotkey', 'aiHotkeyEnabled', 'logsHotkey', 'logsHotkeyEnabled',
       'dictationHotkey', 'dictationHotkeyEnabled', 'watcher', 'layout',
+      'theme', 'dictation', 'ai', 'windowManagement',
       'commands', 'claudeCode',
     ];
     for (const key of Object.keys(config)) {
