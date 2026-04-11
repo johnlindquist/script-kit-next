@@ -21,7 +21,7 @@ impl AiApp {
         };
 
         let theme = crate::theme::get_cached_theme();
-        let colors = InlineDropdownColors::from_theme(&theme);
+        let colors = InlineDropdownColors::popup_from_theme(&theme);
         let fg = cx.theme().foreground;
         let muted_fg = cx.theme().muted_foreground;
 

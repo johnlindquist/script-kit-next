@@ -2254,7 +2254,7 @@ fn builtin_ai_chat_does_not_open_legacy_ai_window() {
 #[test]
 fn builtin_ai_chat_entry_reflects_acp_label() {
     assert!(
-        BUILTINS_SOURCE.contains("\"Open ACP Chat\""),
+        BUILTINS_SOURCE.contains("\"ACP Chat\""),
         "builtin/ai-chat entry must use the ACP Chat label, not the legacy AI Chat label"
     );
 }

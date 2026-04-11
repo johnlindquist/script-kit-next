@@ -576,7 +576,7 @@ pub(crate) fn load_preferred_acp_agent_id() -> Option<String> {
         .selected_acp_agent_id
 }
 
-/// Persist the preferred ACP agent ID to `settings.json` synchronously.
+/// Persist the preferred ACP agent ID to `config.ts` synchronously.
 ///
 /// Returns `Ok(())` when the write succeeds, so callers can gate retry
 /// logic on a truthful persistence outcome instead of racing an async write.
@@ -592,7 +592,7 @@ pub(crate) fn persist_preferred_acp_agent_id_sync(agent_id: Option<String>) -> a
     Ok(())
 }
 
-/// Persist the preferred ACP agent ID to `settings.json` on a background thread.
+/// Persist the preferred ACP agent ID to `config.ts` on a background thread.
 ///
 /// Delegates to the synchronous helper internally. Use this when the caller
 /// does not need to gate on persistence success (e.g. initial launch).

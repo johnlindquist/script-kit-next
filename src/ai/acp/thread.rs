@@ -1496,7 +1496,7 @@ impl AcpThread {
         self.selected_model_id.as_deref()
     }
 
-    /// Select a model by ID. Updates the display name, persists to settings, and notifies.
+    /// Select a model by ID. Updates the display name, persists to config, and notifies.
     pub(crate) fn select_model(&mut self, model_id: &str, cx: &mut Context<Self>) {
         if let Some(entry) = self.available_models.iter().find(|m| m.id == model_id) {
             self.selected_model_id = Some(entry.id.clone());
@@ -1507,7 +1507,7 @@ impl AcpThread {
                     .unwrap_or_else(|| entry.id.clone()),
             ));
 
-            // Persist selection to settings.json (non-fatal).
+            // Persist selection to config.ts (non-fatal).
             let id = entry.id.clone();
             std::thread::Builder::new()
                 .name("acp-save-model".into())

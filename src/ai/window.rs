@@ -53,7 +53,7 @@ pub(crate) mod context_picker;
 pub(crate) mod context_preflight;
 #[cfg(test)]
 mod context_preflight_tests;
-mod context_preview;
+pub(crate) mod context_preview;
 pub(crate) mod context_recommendations;
 mod dropdowns;
 mod images;

@@ -53,6 +53,19 @@ pub(crate) struct AcpMentionSession {
     pub(crate) items: Vec<ContextPickerItem>,
 }
 
+#[derive(Debug, Clone)]
+struct AcpPortalEditSession {
+    portal_kind: crate::ai::window::context_picker::types::PortalKind,
+    mention_range: std::ops::Range<usize>,
+    original_token: String,
+}
+
+#[derive(Debug, Clone)]
+struct AcpFocusedMentionPreview {
+    token: String,
+    detail: String,
+}
+
 #[derive(Debug, Clone, Copy)]
 struct AcpMentionPopupParentWindow {
     handle: gpui::AnyWindowHandle,
@@ -403,9 +416,12 @@ pub(crate) struct AcpChatView {
     on_open_history_command: Option<AcpFooterActionHandler>,
     /// Host-owned callback for opening a full built-in view as an attachment portal.
     on_open_portal: Option<AcpPortalHandler>,
-    /// Stashed query text from the `@history` trigger, consumed once by the
-    /// portal opener to prefilter the history popup.
-    pending_history_portal_query: Option<String>,
+    /// Stashed query text for the next portal open, consumed once by the
+    /// portal host to prefilter the selected browser.
+    pending_portal_query: Option<(crate::ai::window::context_picker::types::PortalKind, String)>,
+    /// Replacement session for reopening an existing inline mention through
+    /// its backing portal and swapping the token in place on return.
+    pending_portal_edit: Option<AcpPortalEditSession>,
     footer_host: AcpFooterHost,
     /// Portal kinds the host allows this ACP surface to open.
     ///
@@ -1049,7 +1065,8 @@ impl AcpChatView {
         self.mention_session = None;
         self.history_menu = None;
         self.setup_agent_picker = None;
-        self.pending_history_portal_query = None;
+        self.pending_portal_query = None;
+        self.pending_portal_edit = None;
         self.sync_acp_popup_windows_from_cached_parent(cx);
         cx.notify();
     }
@@ -1492,9 +1509,25 @@ impl AcpChatView {
         Ok(())
     }
 
-    /// Take the pending history portal query (consumed once by the portal opener).
+    /// Take the pending portal query for `kind` (consumed once by the host).
+    pub(crate) fn take_pending_portal_query(
+        &mut self,
+        kind: crate::ai::window::context_picker::types::PortalKind,
+    ) -> Option<String> {
+        let pending = self.pending_portal_query.take()?;
+        if pending.0 == kind {
+            Some(pending.1)
+        } else {
+            self.pending_portal_query = Some(pending);
+            None
+        }
+    }
+
+    /// Backward-compatible helper for the ACP history host flow.
     pub(crate) fn take_pending_history_portal_query(&mut self) -> Option<String> {
-        self.pending_history_portal_query.take()
+        self.take_pending_portal_query(
+            crate::ai::window::context_picker::types::PortalKind::AcpHistory,
+        )
     }
 
     /// Open the history popup pre-seeded with search hits from the portal.
@@ -1928,7 +1961,8 @@ impl AcpChatView {
             on_close_requested: None,
             on_open_history_command: None,
             on_open_portal: None,
-            pending_history_portal_query: None,
+            pending_portal_query: None,
+            pending_portal_edit: None,
             footer_host: AcpFooterHost::Inline,
             allowed_portal_kinds: Self::all_portal_kinds(),
         }
@@ -1979,7 +2013,8 @@ impl AcpChatView {
             on_close_requested: None,
             on_open_history_command: None,
             on_open_portal: None,
-            pending_history_portal_query: None,
+            pending_portal_query: None,
+            pending_portal_edit: None,
             footer_host: AcpFooterHost::Inline,
             allowed_portal_kinds: Self::all_portal_kinds(),
         }
@@ -2236,6 +2271,305 @@ impl AcpChatView {
 
         cx.notify();
         true
+    }
+
+    fn portal_kind_detail_label(
+        kind: crate::ai::window::context_picker::types::PortalKind,
+    ) -> &'static str {
+        match kind {
+            crate::ai::window::context_picker::types::PortalKind::FileSearch => "file portal",
+            crate::ai::window::context_picker::types::PortalKind::ClipboardHistory => {
+                "clipboard portal"
+            }
+            crate::ai::window::context_picker::types::PortalKind::ScriptSearch => "script portal",
+            crate::ai::window::context_picker::types::PortalKind::ScriptletSearch => {
+                "scriptlet portal"
+            }
+            crate::ai::window::context_picker::types::PortalKind::SkillSearch => "skill portal",
+            crate::ai::window::context_picker::types::PortalKind::NotesBrowse => "notes portal",
+            crate::ai::window::context_picker::types::PortalKind::AcpHistory => "history portal",
+        }
+    }
+
+    fn is_fileish_typed_prefix(prefix: &str) -> bool {
+        matches!(
+            prefix,
+            "file"
+                | "dir"
+                | "rs"
+                | "ts"
+                | "js"
+                | "py"
+                | "rb"
+                | "go"
+                | "java"
+                | "swift"
+                | "c"
+                | "cpp"
+                | "md"
+                | "json"
+                | "toml"
+                | "yaml"
+                | "xml"
+                | "html"
+                | "css"
+                | "sh"
+                | "img"
+                | "vid"
+                | "audio"
+                | "sql"
+                | "txt"
+        )
+    }
+
+    fn portal_target_from_part(
+        part: &crate::ai::message_parts::AiContextPart,
+    ) -> Option<(crate::ai::window::context_picker::types::PortalKind, String)> {
+        use crate::ai::window::context_picker::types::PortalKind;
+
+        match part {
+            crate::ai::message_parts::AiContextPart::ResourceUri { uri, label } => match uri
+                .as_str()
+            {
+                "kit://clipboard-history" => Some((PortalKind::ClipboardHistory, label.clone())),
+                "kit://scripts" => Some((PortalKind::ScriptSearch, label.clone())),
+                _ => None,
+            },
+            crate::ai::message_parts::AiContextPart::FilePath { label, .. } => {
+                Some((PortalKind::FileSearch, label.clone()))
+            }
+            crate::ai::message_parts::AiContextPart::SkillFile {
+                label, skill_name, ..
+            } => Some((
+                PortalKind::SkillSearch,
+                if skill_name.trim().is_empty() {
+                    label.clone()
+                } else {
+                    skill_name.clone()
+                },
+            )),
+            crate::ai::message_parts::AiContextPart::FocusedTarget { target, .. } => {
+                match target.kind.as_str() {
+                    "script" => Some((PortalKind::ScriptSearch, target.label.clone())),
+                    "scriptlet" => Some((PortalKind::ScriptletSearch, target.label.clone())),
+                    "note" => Some((PortalKind::NotesBrowse, target.label.clone())),
+                    "clipboard_entry" => Some((PortalKind::ClipboardHistory, target.label.clone())),
+                    "skill" => Some((PortalKind::SkillSearch, target.label.clone())),
+                    "file" | "directory" => Some((
+                        PortalKind::FileSearch,
+                        target
+                            .metadata
+                            .as_ref()
+                            .and_then(|metadata| metadata.get("path"))
+                            .and_then(|path| path.as_str())
+                            .and_then(|path| {
+                                std::path::Path::new(path)
+                                    .file_name()
+                                    .and_then(|name| name.to_str())
+                                    .map(ToString::to_string)
+                            })
+                            .unwrap_or_else(|| target.label.clone()),
+                    )),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    fn portal_target_from_inline_token(
+        token: &str,
+    ) -> Option<(crate::ai::window::context_picker::types::PortalKind, String)> {
+        use crate::ai::window::context_picker::types::PortalKind;
+
+        match token {
+            "@clipboard" => return Some((PortalKind::ClipboardHistory, String::new())),
+            "@recent-scripts" => return Some((PortalKind::ScriptSearch, String::new())),
+            _ => {}
+        }
+
+        let (prefix, value) = crate::ai::context_mentions::typed_mention_token_parts(token)?;
+        let value = value.trim().to_string();
+        let kind = match prefix.as_str() {
+            "note" => PortalKind::NotesBrowse,
+            "script" => PortalKind::ScriptSearch,
+            "scriptlet" => PortalKind::ScriptletSearch,
+            "skill" => PortalKind::SkillSearch,
+            "clipboard" => PortalKind::ClipboardHistory,
+            "history" => PortalKind::AcpHistory,
+            file_prefix if Self::is_fileish_typed_prefix(file_prefix) => PortalKind::FileSearch,
+            _ => return None,
+        };
+        Some((kind, value))
+    }
+
+    fn focused_inline_token_span(
+        &self,
+        cx: &App,
+    ) -> Option<crate::ai::context_mentions::InlineTokenSpan> {
+        let thread = self.live_thread().read(cx);
+        crate::ai::context_mentions::inline_token_at_cursor(
+            thread.input.text(),
+            thread.input.cursor(),
+        )
+    }
+
+    fn focused_inline_mention(
+        &self,
+        cx: &App,
+    ) -> Option<crate::ai::context_mentions::InlineContextMention> {
+        let thread = self.live_thread().read(cx);
+        let cursor = thread.input.cursor();
+        crate::ai::context_mentions::parse_inline_context_mentions_with_aliases(
+            thread.input.text(),
+            &self.typed_mention_aliases,
+        )
+        .into_iter()
+        .find(|mention| cursor > mention.range.start && cursor <= mention.range.end)
+    }
+
+    fn focused_inline_portal_target(
+        &self,
+        cx: &App,
+    ) -> Option<(
+        crate::ai::window::context_picker::types::PortalKind,
+        String,
+        crate::ai::context_mentions::InlineTokenSpan,
+    )> {
+        let span = self.focused_inline_token_span(cx)?;
+        if let Some(mention) = self.focused_inline_mention(cx) {
+            if let Some((kind, query)) = Self::portal_target_from_part(&mention.part) {
+                return Some((kind, query, span));
+            }
+        }
+
+        Self::portal_target_from_inline_token(&span.token).map(|(kind, query)| (kind, query, span))
+    }
+
+    fn focused_inline_mention_preview(&self, cx: &App) -> Option<AcpFocusedMentionPreview> {
+        let span = self.focused_inline_token_span(cx)?;
+        if let Some(mention) = self.focused_inline_mention(cx) {
+            if let Some((portal_kind, query)) = Self::portal_target_from_part(&mention.part) {
+                let info =
+                    crate::ai::window::context_preview::derive_context_preview_info(&mention.part);
+                let query_hint = if query.trim().is_empty() {
+                    String::new()
+                } else {
+                    format!(" for \"{}\"", query.trim())
+                };
+                return Some(AcpFocusedMentionPreview {
+                    token: span.token,
+                    detail: format!(
+                        "{}{} • {} • Cmd+Shift+O",
+                        Self::portal_kind_detail_label(portal_kind),
+                        query_hint,
+                        info.description
+                    ),
+                });
+            }
+        }
+
+        let (portal_kind, query) = Self::portal_target_from_inline_token(&span.token)?;
+        let query_hint = if query.trim().is_empty() {
+            String::new()
+        } else {
+            format!(" for \"{}\"", query.trim())
+        };
+        Some(AcpFocusedMentionPreview {
+            token: span.token,
+            detail: format!(
+                "{}{} • preview only • Cmd+Shift+O",
+                Self::portal_kind_detail_label(portal_kind),
+                query_hint
+            ),
+        })
+    }
+
+    fn open_focused_mention_portal(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some((kind, query, span)) = self.focused_inline_portal_target(cx) else {
+            return false;
+        };
+        if !self.is_portal_kind_allowed(kind) {
+            return false;
+        }
+        let Some(callback) = self.on_open_portal.clone() else {
+            return false;
+        };
+
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "acp_focused_mention_portal_open",
+            kind = ?kind,
+            token = %span.token,
+            query = %query,
+        );
+
+        self.pending_portal_query = Some((kind, query));
+        self.pending_portal_edit = Some(AcpPortalEditSession {
+            portal_kind: kind,
+            mention_range: span.range,
+            original_token: span.token,
+        });
+        cx.defer(move |cx| {
+            callback(kind, cx);
+        });
+        cx.notify();
+        true
+    }
+
+    pub(crate) fn attach_portal_part(
+        &mut self,
+        part: crate::ai::message_parts::AiContextPart,
+        cx: &mut Context<Self>,
+    ) {
+        use crate::ai::context_mentions::part_to_inline_token;
+
+        let inline_token =
+            part_to_inline_token(&part).unwrap_or_else(|| format!("@{}", part.label()));
+        let should_claim_inline_ownership = self.should_claim_inline_mention_ownership(&part, cx);
+        let current_text = self.live_thread().read(cx).input.text().to_string();
+        let replacement = format!("{inline_token} ");
+
+        let (next_text, next_cursor) = if let Some(edit) = self.pending_portal_edit.take() {
+            tracing::info!(
+                target: "script_kit::acp",
+                event = "acp_portal_attachment_replaced_inline_mention",
+                portal_kind = ?edit.portal_kind,
+                old_token = %edit.original_token,
+                new_token = %inline_token,
+            );
+            (
+                Self::replace_text_in_char_range(
+                    &current_text,
+                    edit.mention_range.clone(),
+                    &replacement,
+                ),
+                Self::caret_after_replacement(&edit.mention_range, &replacement),
+            )
+        } else {
+            let separator = if current_text.is_empty() || current_text.ends_with(' ') {
+                ""
+            } else {
+                " "
+            };
+            let next_text = format!("{current_text}{separator}{inline_token} ");
+            let next_cursor = next_text.chars().count();
+            (next_text, next_cursor)
+        };
+
+        self.live_thread().update(cx, |thread, cx| {
+            thread.input.set_text(next_text);
+            thread.input.set_cursor(next_cursor);
+            thread.add_context_part(part.clone(), cx);
+            cx.notify();
+        });
+
+        self.register_typed_alias(inline_token.clone(), part);
+        if should_claim_inline_ownership {
+            self.register_inline_owned_token(inline_token);
+        }
+        self.sync_inline_mentions(cx);
+        cx.notify();
     }
 
     fn approve_permission(&mut self, option_id: Option<String>, cx: &mut Context<Self>) {
@@ -3974,28 +4308,26 @@ impl AcpChatView {
                     return;
                 }
 
-                // For AcpHistory portals, stash the remaining input text as the
-                // prefilter query before clearing the trigger text.
+                let current_text = self.live_thread().read(cx).input.text().to_string();
+                let remaining = Self::replace_text_in_char_range(
+                    &current_text,
+                    session.trigger_range.clone(),
+                    "",
+                );
+                let query = remaining.trim().to_string();
+                self.pending_portal_query = Some((*portal_kind, query.clone()));
+
                 if *portal_kind == crate::ai::window::context_picker::types::PortalKind::AcpHistory
                 {
-                    let current_text = self.live_thread().read(cx).input.text().to_string();
-                    let remaining = Self::replace_text_in_char_range(
-                        &current_text,
-                        session.trigger_range.clone(),
-                        "",
-                    );
-                    let query = remaining.trim().to_string();
                     tracing::info!(
                         target: "script_kit::tab_ai",
                         event = "acp_history_portal_query_staged",
                         query = %query,
                     );
-                    self.pending_history_portal_query = Some(query);
                 }
 
                 // Remove the trigger text (@file, @clip, etc.) from the input
                 // before opening the portal so it doesn't linger on return.
-                let current_text = self.live_thread().read(cx).input.text().to_string();
                 let cleaned = Self::replace_text_in_char_range(
                     &current_text,
                     session.trigger_range.clone(),
@@ -5621,6 +5953,14 @@ impl AcpChatView {
             return;
         }
 
+        // ── Cmd+Shift+O → reopen focused mention in its portal ──────────
+        if modifiers.platform && modifiers.shift && key.eq_ignore_ascii_case("o") {
+            if self.open_focused_mention_portal(cx) {
+                cx.stop_propagation();
+                return;
+            }
+        }
+
         // ── Cmd+P → open dedicated history command surface ──────────
         if modifiers.platform && key.eq_ignore_ascii_case("p") {
             tracing::info!(event = "acp_history_shortcut_routed_to_command");
@@ -6002,6 +6342,22 @@ impl Render for AcpChatView {
                             }),
                     ),
             )
+            .when_some(self.focused_inline_mention_preview(cx), |d, preview| {
+                d.child(
+                    div()
+                        .w_full()
+                        .px(px(12.0))
+                        .pb(px(4.0))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(rgb(theme.colors.text.muted))
+                                .child(preview.token)
+                                .child(" ")
+                                .child(preview.detail),
+                        ),
+                )
+            })
             // Context chips removed — all attachments are now inline @type:name tokens.
             // .child(self.render_pending_context_chips(cx))
             .child(self.render_context_bootstrap_note(cx))

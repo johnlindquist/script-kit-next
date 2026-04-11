@@ -172,6 +172,39 @@ fn parse_inline_context_mentions_requires_word_boundary() {
     assert!(mentions.is_empty());
 }
 
+#[test]
+fn inline_token_at_cursor_finds_unresolved_typed_note_token() {
+    let token = inline_token_at_cursor("See @note:\"Daily Standup\" soon", 13)
+        .expect("Expected token at cursor");
+
+    assert_eq!(token.token, "@note:\"Daily Standup\"");
+}
+
+#[test]
+fn next_inline_token_range_wraps_when_cursor_is_after_last_token() {
+    let range = next_inline_token_range("a @note:\"One\" b @skill:\"Two\"", 30)
+        .expect("Expected next token");
+
+    assert_eq!(range, 2..13);
+}
+
+#[test]
+fn previous_inline_token_range_wraps_when_cursor_is_before_first_token() {
+    let range = previous_inline_token_range("a @note:\"One\" b @skill:\"Two\"", 1)
+        .expect("Expected previous token");
+
+    assert_eq!(range, 17..29);
+}
+
+#[test]
+fn typed_mention_token_parts_unescapes_quoted_values() {
+    let (prefix, value) = typed_mention_token_parts("@note:\"Daily \\\"Standup\\\"\"")
+        .expect("Expected typed token parts");
+
+    assert_eq!(prefix, "note");
+    assert_eq!(value, "Daily \"Standup\"");
+}
+
 // ── part_to_inline_token round-trip ────────────────────────────
 
 #[test]

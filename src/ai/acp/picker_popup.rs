@@ -267,7 +267,7 @@ impl AcpMentionPopupWindow {
 
     fn render_picker(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let theme = crate::theme::get_cached_theme();
-        let colors = InlineDropdownColors::from_theme(&theme);
+        let colors = InlineDropdownColors::popup_from_theme(&theme);
         let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
         let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
         let visible = self.visible_range();
@@ -342,7 +342,7 @@ impl AcpMentionPopupWindow {
         use crate::list_item::FONT_MONO;
 
         let theme = crate::theme::get_cached_theme();
-        let colors = InlineDropdownColors::from_theme(&theme);
+        let colors = InlineDropdownColors::popup_from_theme(&theme);
         let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
         let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
 

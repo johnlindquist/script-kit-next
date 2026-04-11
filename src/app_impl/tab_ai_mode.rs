@@ -1637,7 +1637,7 @@ impl ScriptListApp {
         let agent_display_name = agent.display_name().to_string();
         // Extract model info before `agent` is moved into spawn_with_approval.
         let agent_models = agent.models.clone();
-        // Use persisted model from settings.json, falling back to first model.
+        // Use the config-backed preferred model, falling back to the first model.
         let persisted_model = crate::config::load_user_preferences().ai.selected_model_id;
         let default_model_id = persisted_model
             .filter(|id| agent_models.iter().any(|m| m.id == *id))
@@ -3055,8 +3055,8 @@ impl ScriptListApp {
                 "path": m.skill.path.to_string_lossy(),
             }),
             scripts::SearchResult::Fallback(m) => serde_json::json!({
-                "name": m.fallback.name(),
-                "description": m.fallback.description(),
+                "name": m.fallback.display_label(),
+                "description": m.fallback.display_description(),
             }),
         };
         crate::ai::TabAiTargetContext {
