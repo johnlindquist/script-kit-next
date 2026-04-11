@@ -4,12 +4,13 @@ impl ScriptListApp {
     fn open_script_list_attachment_portal(
         &mut self,
         kind: crate::ai::window::context_picker::types::PortalKind,
+        query: &str,
         placeholder: &str,
         _cx: &mut Context<Self>,
     ) {
         self.active_attachment_portal_kind = Some(kind);
-        self.filter_text.clear();
-        self.computed_filter_text.clear();
+        self.filter_text = query.to_string();
+        self.computed_filter_text = query.to_string();
         self.pending_filter_sync = true;
         self.pending_placeholder = Some(placeholder.to_string());
         self.current_view = AppView::ScriptList;
@@ -66,8 +67,7 @@ impl ScriptListApp {
                 label: script_match.script.name.clone(),
             }),
             scripts::SearchResult::Scriptlet(scriptlet_match) => {
-                let target =
-                    Self::tab_ai_target_from_search_result(self.selected_index, &result);
+                let target = Self::tab_ai_target_from_search_result(self.selected_index, &result);
                 let target = crate::ai::TabAiTargetContext {
                     metadata: Some(serde_json::json!({
                         "name": scriptlet_match.scriptlet.name,
@@ -81,10 +81,7 @@ impl ScriptListApp {
                     ..target
                 };
                 let label = crate::ai::format_explicit_target_chip_label(&target);
-                Some(AiContextPart::FocusedTarget {
-                    target,
-                    label,
-                })
+                Some(AiContextPart::FocusedTarget { target, label })
             }
             scripts::SearchResult::Skill(skill_match) => {
                 let owner = if skill_match.skill.plugin_title.is_empty() {
@@ -135,56 +132,74 @@ impl ScriptListApp {
             kind = ?kind,
         );
 
+        let portal_query = if let Some(AppView::AcpChatView { entity }) =
+            self.attachment_portal_return_view.as_ref()
+        {
+            entity.update(cx, |view, _cx| {
+                view.take_pending_portal_query(kind).unwrap_or_default()
+            })
+        } else {
+            String::new()
+        };
+
         match kind {
             PortalKind::FileSearch => {
-                self.open_file_search(String::new(), cx);
+                self.open_file_search(portal_query, cx);
             }
             PortalKind::ClipboardHistory => {
                 self.cached_clipboard_entries = crate::clipboard_history::get_cached_entries(100);
-                self.open_builtin_filterable_view(
+                self.open_builtin_filterable_view_with_filter(
                     AppView::ClipboardHistoryView {
-                        filter: String::new(),
+                        filter: portal_query.clone(),
                         selected_index: 0,
                     },
+                    &portal_query,
                     "Search clipboard history...",
                     cx,
                 );
             }
             PortalKind::ScriptSearch => {
-                self.open_script_list_attachment_portal(kind, "Search scripts...", cx);
+                self.open_script_list_attachment_portal(
+                    kind,
+                    &portal_query,
+                    "Search scripts...",
+                    cx,
+                );
             }
             PortalKind::ScriptletSearch => {
-                self.open_script_list_attachment_portal(kind, "Search scriptlets...", cx);
+                self.open_script_list_attachment_portal(
+                    kind,
+                    &portal_query,
+                    "Search scriptlets...",
+                    cx,
+                );
             }
             PortalKind::SkillSearch => {
-                self.open_script_list_attachment_portal(kind, "Search skills...", cx);
+                self.open_script_list_attachment_portal(
+                    kind,
+                    &portal_query,
+                    "Search skills...",
+                    cx,
+                );
             }
             PortalKind::NotesBrowse => {
-                self.open_builtin_filterable_view(
+                self.open_builtin_filterable_view_with_filter(
                     AppView::NotesBrowseView {
-                        filter: String::new(),
+                        filter: portal_query.clone(),
                         selected_index: 0,
                     },
+                    &portal_query,
                     "Search notes...",
                     cx,
                 );
             }
             PortalKind::AcpHistory => {
-                let query = if let AppView::AcpChatView { entity } = &self.current_view {
-                    entity.update(cx, |view, _cx| {
-                        view.take_pending_history_portal_query()
-                            .unwrap_or_default()
-                    })
-                } else {
-                    String::new()
-                };
-
                 self.open_builtin_filterable_view_with_filter(
                     AppView::AcpHistoryView {
-                        filter: query.clone(),
+                        filter: portal_query.clone(),
                         selected_index: 0,
                     },
-                    &query,
+                    &portal_query,
                     "Search conversation history...",
                     cx,
                 );
@@ -223,30 +238,7 @@ impl ScriptListApp {
         if let AppView::AcpChatView { entity } = &return_view {
             let entity = entity.clone();
             entity.update(cx, |view, cx| {
-                let inline_token = crate::ai::context_mentions::part_to_inline_token(&part)
-                    .unwrap_or_else(|| format!("@{}", part.label()));
-
-                // Append the inline token to the current input text.
-                let current_text = view.live_thread().read(cx).input.text().to_string();
-                let separator = if current_text.is_empty() || current_text.ends_with(' ') {
-                    ""
-                } else {
-                    " "
-                };
-                let new_text = format!("{current_text}{separator}{inline_token} ");
-                let new_cursor = new_text.len();
-
-                view.live_thread().update(cx, |thread, cx| {
-                    thread.input.set_text(new_text);
-                    thread.input.set_cursor(new_cursor);
-                    thread.add_context_part(part.clone(), cx);
-                    cx.notify();
-                });
-
-                // Register alias so the parser can resolve this typed token.
-                view.register_typed_alias(inline_token.clone(), part);
-                // Register inline ownership so deleting the mention removes the part.
-                view.register_inline_owned_token(inline_token);
+                view.attach_portal_part(part.clone(), cx);
                 cx.notify();
             });
         }

@@ -1,4 +1,5 @@
 use crate::ai::message_parts::AiContextPart;
+use std::ops::Range;
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -26,6 +27,17 @@ pub struct InlineContextMention {
     pub canonical_token: String,
     /// The resolved context part for this mention.
     pub part: AiContextPart,
+}
+
+/// A raw inline `@token` span found syntactically in text.
+///
+/// Unlike [`InlineContextMention`], this does not require successful
+/// resolution to an `AiContextPart`. It exists so editor hosts can preview
+/// and reopen typed portal tokens from persisted text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct InlineTokenSpan {
+    pub range: Range<usize>,
+    pub token: String,
 }
 
 pub(crate) fn parse_context_mentions(raw_content: &str) -> ParsedContextMentions {
@@ -308,6 +320,95 @@ fn typed_mention_label_name(label: &str) -> String {
     name
 }
 
+/// Format a typed mention token using the label-truncation rules used by
+/// inline context attachments.
+pub(crate) fn format_typed_label_mention_token(prefix: &str, label: &str) -> String {
+    let name = typed_mention_label_name(label);
+    format_typed_mention_token(prefix, &name)
+}
+
+/// Parse a typed mention token like `@note:"Daily Standup"` or
+/// `@file:/tmp/demo.rs` into `(prefix, value)`.
+pub(crate) fn typed_mention_token_parts(token: &str) -> Option<(String, String)> {
+    let trimmed = trim_inline_token_trailing_punctuation(token).trim();
+    let body = trimmed.strip_prefix('@')?;
+    let (prefix, raw_value) = body.split_once(':')?;
+    let prefix = prefix.trim().to_ascii_lowercase();
+    if prefix.is_empty() || raw_value.trim().is_empty() {
+        return None;
+    }
+
+    Some((prefix, unescape_quoted_path(raw_value.trim())))
+}
+
+/// Collect all syntactic inline `@token` spans from `text`.
+pub(crate) fn inline_token_spans(text: &str) -> Vec<InlineTokenSpan> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] != '@' {
+            i += 1;
+            continue;
+        }
+        if i > 0 && (chars[i - 1].is_alphanumeric() || chars[i - 1] == '_') {
+            i += 1;
+            continue;
+        }
+
+        let start = i;
+        let (raw_token, next_i) = scan_inline_token(&chars, start);
+        i = next_i;
+
+        let trimmed = trim_inline_token_trailing_punctuation(&raw_token);
+        if trimmed.len() <= 1 {
+            continue;
+        }
+
+        out.push(InlineTokenSpan {
+            range: start..(start + trimmed.chars().count()),
+            token: trimmed.to_string(),
+        });
+    }
+    out
+}
+
+/// Return the raw inline token whose range covers `cursor`.
+pub(crate) fn inline_token_at_cursor(text: &str, cursor: usize) -> Option<InlineTokenSpan> {
+    inline_token_spans(text)
+        .into_iter()
+        .find(|span| cursor > span.range.start && cursor <= span.range.end)
+}
+
+/// Return the next raw inline token range after `cursor`, wrapping to the first.
+pub(crate) fn next_inline_token_range(text: &str, cursor: usize) -> Option<Range<usize>> {
+    let spans = inline_token_spans(text);
+    if spans.is_empty() {
+        return None;
+    }
+
+    spans
+        .iter()
+        .find(|span| span.range.start > cursor)
+        .map(|span| span.range.clone())
+        .or_else(|| spans.first().map(|span| span.range.clone()))
+}
+
+/// Return the previous raw inline token range before `cursor`, wrapping to the last.
+pub(crate) fn previous_inline_token_range(text: &str, cursor: usize) -> Option<Range<usize>> {
+    let spans = inline_token_spans(text);
+    if spans.is_empty() {
+        return None;
+    }
+
+    spans
+        .iter()
+        .rev()
+        .find(|span| span.range.end < cursor)
+        .map(|span| span.range.clone())
+        .or_else(|| spans.last().map(|span| span.range.clone()))
+}
+
 /// Scan `text` for inline `@mention` tokens and resolve each to an
 /// `AiContextPart`. Supports built-in mentions (`@browser`, `@git-status`,
 /// etc.), file mentions (`@file:/path`), and typed mentions (`@type:name`)
@@ -322,47 +423,27 @@ pub fn parse_inline_context_mentions_with_aliases(
     text: &str,
     aliases: &std::collections::HashMap<String, AiContextPart>,
 ) -> Vec<InlineContextMention> {
-    let chars: Vec<char> = text.chars().collect();
     let mut out = Vec::new();
-    let mut i = 0;
-    while i < chars.len() {
-        if chars[i] != '@' {
-            i += 1;
-            continue;
-        }
-        // `@` must be at start or preceded by whitespace/punctuation
-        if i > 0 && (chars[i - 1].is_alphanumeric() || chars[i - 1] == '_') {
-            i += 1;
-            continue;
-        }
-
-        let start = i;
-        let (raw_token, next_i) = scan_inline_token(&chars, start);
-        i = next_i;
-
-        let trimmed = trim_inline_token_trailing_punctuation(&raw_token);
-        let trimmed_char_len = trimmed.chars().count();
-        let end = start + trimmed_char_len;
-
+    for span in inline_token_spans(text) {
         // Resolution order: built-in → @file:/path → alias registry
-        let part = resolve_builtin_mention_token(trimmed)
-            .or_else(|| parse_file_mention(trimmed))
-            .or_else(|| aliases.get(trimmed).cloned());
+        let part = resolve_builtin_mention_token(&span.token)
+            .or_else(|| parse_file_mention(&span.token))
+            .or_else(|| aliases.get(&span.token).cloned());
 
         if let Some(part) = part {
             let canonical_token =
-                part_to_inline_token(&part).unwrap_or_else(|| trimmed.to_string());
+                part_to_inline_token(&part).unwrap_or_else(|| span.token.to_string());
             tracing::info!(
                 target: "ai",
                 event = "inline_context_token_resolved",
-                token = %trimmed,
+                token = %span.token,
                 canonical_token = %canonical_token,
                 source = %part.source(),
                 label = %part.label(),
             );
             out.push(InlineContextMention {
-                range: start..end,
-                token: trimmed.to_string(),
+                range: span.range,
+                token: span.token,
                 canonical_token,
                 part,
             });
@@ -453,8 +534,7 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
             } else {
                 skill_name
             };
-            let name = typed_mention_label_name(name);
-            Some(format_typed_mention_token("skill", &name))
+            Some(format_typed_label_mention_token("skill", name))
         }
         AiContextPart::FocusedTarget {
             target, label: _, ..
@@ -477,22 +557,19 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
 
             // Non-file targets use kind-specific prefixes so script, scriptlet,
             // app, and other ACP attachments stay distinguishable inline.
-            let name = typed_mention_label_name(&target.label);
-            Some(format_typed_mention_token(
+            Some(format_typed_label_mention_token(
                 typed_mention_prefix_for_target_kind(&target.kind),
-                &name,
+                &target.label,
             ))
         }
         AiContextPart::AmbientContext { label } => {
-            let name = typed_mention_label_name(label);
-            Some(format_typed_mention_token("env", &name))
+            Some(format_typed_label_mention_token("env", label))
         }
         AiContextPart::TextBlock { label, source, .. } => {
             if source.contains("#selection=") {
                 return Some("@selected".to_string());
             }
-            let name = typed_mention_label_name(label);
-            Some(format_typed_mention_token("text", &name))
+            Some(format_typed_label_mention_token("text", label))
         }
     }
 }

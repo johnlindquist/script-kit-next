@@ -6,7 +6,7 @@ use super::*;
 /// calls or file reads. This is the data model behind the pre-submit
 /// preview affordance on each context chip.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct ContextPreviewInfo {
+pub(crate) struct ContextPreviewInfo {
     pub label: String,
     pub source_uri: String,
     pub profile: ContextPreviewProfile,
@@ -16,7 +16,7 @@ pub(super) struct ContextPreviewInfo {
 
 /// Identifies the breadth of a context resource for visual differentiation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ContextPreviewProfile {
+pub(crate) enum ContextPreviewProfile {
     /// `kit://context?profile=minimal` — excludes selected text and menu bar.
     Minimal,
     /// `kit://context` (default) or `?profile=full` — all fields captured.
@@ -39,7 +39,7 @@ impl std::fmt::Display for ContextPreviewProfile {
 }
 
 /// Derive a preview summary from an `AiContextPart` without any I/O.
-pub(super) fn derive_context_preview_info(
+pub(crate) fn derive_context_preview_info(
     part: &crate::ai::message_parts::AiContextPart,
 ) -> ContextPreviewInfo {
     match part {
