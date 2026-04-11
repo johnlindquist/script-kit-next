@@ -106,8 +106,10 @@ impl NotesApp {
     /// `&mut App`.
     ///
     /// `AcpHistory` is supported in Notes because ACP already stages the query.
-    /// The other portal kinds still require main-panel view switching and
-    /// should stop here without detaching or re-routing ownership.
+    /// `FileSearch` and `ClipboardHistory` are filtered from the picker and
+    /// guarded at the accept path by `allowed_portal_kinds`, so they should
+    /// not reach here in normal operation. The branches remain as
+    /// defense-in-depth logging.
     fn handle_acp_portal_static(
         chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
         kind: crate::ai::window::context_picker::types::PortalKind,
@@ -145,10 +147,14 @@ impl NotesApp {
                     view.open_history_portal_with_entries(query, hits, cx);
                 });
             }
-            PortalKind::FileSearch => {
+            PortalKind::FileSearch
+            | PortalKind::ScriptSearch
+            | PortalKind::ScriptletSearch
+            | PortalKind::SkillSearch
+            | PortalKind::NotesBrowse => {
                 tracing::info!(
                     event = "notes_acp_portal_requested",
-                    kind = "FileSearch",
+                    kind = ?kind,
                     opened = false,
                     reason = "unsupported_in_notes_host",
                 );
@@ -172,6 +178,16 @@ impl NotesApp {
         cx: &mut Context<Self>,
     ) {
         let notes_entity = cx.entity().downgrade();
+
+        // Restrict portal kinds to those Notes can actually host.
+        // Notes owns @history locally; @file and @clipboard require
+        // main-panel view switching that Notes cannot provide.
+        view.update(cx, |chat, _cx| {
+            chat.set_footer_host(crate::ai::acp::view::AcpFooterHost::External);
+            chat.set_allowed_portal_kinds(vec![
+                crate::ai::window::context_picker::types::PortalKind::AcpHistory,
+            ]);
+        });
 
         // Toggle actions: open the Notes-hosted ACP actions dialog.
         let toggle_entity = notes_entity.clone();
@@ -209,9 +225,9 @@ impl NotesApp {
             });
         });
 
-        // Portal requests (@history, @file, @clipboard): route through
-        // Notes-owned handler which supports AcpHistory and logs-and-stops
-        // for unsupported kinds.
+        // Portal requests: only @history reaches here because the view's
+        // allowed_portal_kinds filters @file and @clipboard from the picker.
+        // The handler still logs rejected kinds as defense-in-depth.
         let portal_entity = notes_entity;
         view.update(cx, |chat, _cx| {
             chat.set_on_open_portal(move |kind, cx| {
@@ -298,8 +314,26 @@ impl NotesApp {
             dialog
         });
 
+        let activation_dialog = dialog.clone();
         let notes_entity = cx.entity().downgrade();
         dialog.update(cx, |dialog, _cx| {
+            dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| {
+                match activation {
+                    crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
+                        crate::actions::resize_actions_window(cx, &activation_dialog);
+                    }
+                    crate::actions::ActionsDialogActivation::Executed { should_close, .. } => {
+                        if should_close {
+                            let on_close = activation_dialog.read(cx).on_close.clone();
+                            if let Some(on_close) = on_close {
+                                on_close(cx);
+                            }
+                            crate::actions::close_actions_window(cx);
+                        }
+                    }
+                    crate::actions::ActionsDialogActivation::NoSelection => {}
+                }
+            }));
             dialog.set_on_close(std::sync::Arc::new(move |cx| {
                 if let Some(entity) = notes_entity.upgrade() {
                     entity.update(cx, |app, cx| {
@@ -558,6 +592,7 @@ fn dispatch_notes_acp_action(
         });
         return;
     }
+
     // Handle model switch.
     if let Some(model_id) = crate::actions::acp_switch_model_id_from_action(action_id) {
         acp_entity.update(cx, |chat, cx| {

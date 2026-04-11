@@ -221,10 +221,10 @@ impl NotesApp {
             }
             NotesAction::SendToAi => {
                 let opened =
-                    self.open_selected_note_in_embedded_acp("NotesAction::SendToAi", window, cx);
+                    self.open_selected_note_cart_in_embedded_acp("NotesAction::SendToAi", cx);
                 self.close_actions_panel(window, cx);
                 if opened {
-                    self.show_action_feedback("Sent to ACP Chat", false);
+                    self.show_action_feedback("Staged in ACP Chat", false);
                 }
                 return;
             }
@@ -608,19 +608,53 @@ impl NotesApp {
         Ok(())
     }
 
-    /// Build a full cart payload for the selected note: the note body as the
-    /// first `TextBlock`, then persisted `NoteCartItem`s in sort_order.
+    pub(crate) fn build_note_text_part_for_ai(
+        title: &str,
+        semantic_note_id: &str,
+        content: &str,
+        selection: std::ops::Range<usize>,
+    ) -> Option<crate::ai::message_parts::AiContextPart> {
+        if selection.start < selection.end && selection.end <= content.len() {
+            return Some(crate::ai::message_parts::AiContextPart::TextBlock {
+                label: "Selected Text".to_string(),
+                source: format!(
+                    "notes://{}#selection={}-{}",
+                    semantic_note_id, selection.start, selection.end
+                ),
+                text: content[selection.clone()].to_string(),
+                mime_type: Some("text/markdown".to_string()),
+            });
+        }
+
+        if content.trim().is_empty() {
+            return None;
+        }
+
+        Some(crate::ai::message_parts::AiContextPart::TextBlock {
+            label: title.to_string(),
+            source: format!("notes://{}", semantic_note_id),
+            text: content.to_string(),
+            mime_type: Some("text/markdown".to_string()),
+        })
+    }
+
+    /// Build a full cart payload for the selected note: the selected note text
+    /// as the first `TextBlock` (selection first, otherwise full note body),
+    /// then persisted `NoteCartItem`s in sort_order.
     ///
-    /// Returns an ordered `Vec<AiContextPart>` ready for batch handoff to
-    /// primary ACP Chat.
+    /// Returns an ordered `Vec<AiContextPart>` ready to stage onto the
+    /// Notes-hosted ACP surface as inline `@mentions`.
     pub(super) fn build_selected_note_cart_parts_for_ai(
         &self,
         cx: &Context<Self>,
     ) -> Result<Vec<crate::ai::message_parts::AiContextPart>, String> {
-        let content = self.editor_state.read(cx).value().to_string();
+        let editor_state = self.editor_state.read(cx);
+        let content = editor_state.value().to_string();
+        let selection = editor_state.selection();
         let selected_note = self
             .selected_note_id
             .and_then(|id| self.notes.iter().find(|n| n.id == id));
+        let has_selection = selection.start < selection.end;
 
         // Require either a saved note or non-empty draft content.
         if selected_note.is_none() && content.trim().is_empty() {
@@ -638,14 +672,14 @@ impl NotesApp {
 
         let mut parts = Vec::new();
 
-        // 1. Note body as the first TextBlock part.
-        if !content.trim().is_empty() {
-            parts.push(crate::ai::message_parts::AiContextPart::TextBlock {
-                label: title.clone(),
-                source: format!("notes://{}", semantic_note_id),
-                text: content,
-                mime_type: Some("text/markdown".to_string()),
-            });
+        // 1. Selected text as the first TextBlock part, otherwise the full note body.
+        if let Some(part) = Self::build_note_text_part_for_ai(
+            &title,
+            &semantic_note_id,
+            &content,
+            selection.clone(),
+        ) {
+            parts.push(part);
         }
 
         // 2. Persisted cart items in sort_order.
@@ -672,16 +706,19 @@ impl NotesApp {
             event = "notes_cart_parts_built",
             note_id = %semantic_note_id,
             part_count = parts.len(),
+            selected = has_selection,
         );
 
         Ok(parts)
     }
 
-    /// Open primary ACP Chat with the full cart payload from the selected note.
+    /// Open the Notes-hosted ACP surface with the full cart payload from the
+    /// selected note.
     ///
     /// Returns `true` if the handoff was initiated, `false` on failure.
-    pub(super) fn open_selected_note_cart_in_primary_acp(
+    pub(super) fn open_selected_note_cart_in_embedded_acp(
         &mut self,
+        source: &'static str,
         cx: &mut Context<Self>,
     ) -> bool {
         let parts = match self.build_selected_note_cart_parts_for_ai(cx) {
@@ -705,7 +742,8 @@ impl NotesApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "notes_cart_open_primary_acp_requested",
+            event = "notes_cart_open_embedded_acp_requested",
+            source,
             item_count = part_count,
         );
 
@@ -822,7 +860,8 @@ impl NotesApp {
 
         tracing::info!(
             target: "script_kit::tab_ai",
-            event = "notes_cart_open_primary_acp_completed",
+            event = "notes_cart_open_embedded_acp_completed",
+            source,
             item_count = part_count,
         );
 

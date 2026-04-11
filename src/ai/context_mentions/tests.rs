@@ -201,6 +201,18 @@ fn part_to_inline_token_returns_typed_token_for_ambient() {
 }
 
 #[test]
+fn part_to_inline_token_uses_selected_alias_for_note_selection_text_blocks() {
+    let part = AiContextPart::TextBlock {
+        label: "Selected Text".to_string(),
+        source: "notes://demo-id#selection=6-11".to_string(),
+        text: "world".to_string(),
+        mime_type: Some("text/markdown".to_string()),
+    };
+
+    assert_eq!(part_to_inline_token(&part), Some("@selected".to_string()));
+}
+
+#[test]
 fn part_to_inline_token_uses_focused_target_name_instead_of_prefixed_chip_label() {
     let part = AiContextPart::FocusedTarget {
         target: crate::ai::tab_context::TabAiTargetContext {
@@ -250,6 +262,41 @@ fn part_to_inline_token_distinguishes_script_and_scriptlet_targets() {
     assert_eq!(
         part_to_inline_token(&scriptlet),
         Some("@scriptlet:\"Quick Copy\"".to_string())
+    );
+}
+
+#[test]
+fn part_to_inline_token_uses_note_prefix_for_note_targets() {
+    let part = AiContextPart::FocusedTarget {
+        target: crate::ai::tab_context::TabAiTargetContext {
+            source: "NotesBrowse".to_string(),
+            kind: "note".to_string(),
+            semantic_id: "choice:0:acp-chat-conversation".to_string(),
+            label: "ACP Chat Conversation".to_string(),
+            metadata: None,
+        },
+        label: "Note: ACP Chat Conversation".to_string(),
+    };
+
+    assert_eq!(
+        part_to_inline_token(&part),
+        Some("@note:\"ACP Chat Conve…\"".to_string())
+    );
+}
+
+#[test]
+fn part_to_inline_token_uses_skill_prefix_for_skill_files() {
+    let part = AiContextPart::SkillFile {
+        path: "/tmp/SKILL.md".to_string(),
+        label: "/review".to_string(),
+        skill_name: "Review Diff".to_string(),
+        owner_label: "Authoring".to_string(),
+        slash_name: "review".to_string(),
+    };
+
+    assert_eq!(
+        part_to_inline_token(&part),
+        Some("@skill:\"Review Diff\"".to_string())
     );
 }
 

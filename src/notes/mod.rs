@@ -50,6 +50,13 @@ pub use actions_panel::{NotesAction, NotesActionCallback, NotesActionItem, Notes
 #[allow(unused_imports)]
 pub use browse_panel::{BrowsePanel, NoteAction, NoteListItem};
 
+#[allow(unused_imports)]
+pub(crate) use model::{Note, NoteCartItem, NoteCartItemPayload, NoteId};
+#[allow(unused_imports)]
+pub(crate) use storage::{
+    delete_note_cart_item, get_all_notes, list_note_cart_items, save_note_cart_item, search_notes,
+};
+
 // Re-export key types - suppress unused warnings since these are public API
 #[allow(unused_imports)]
 pub use window::{

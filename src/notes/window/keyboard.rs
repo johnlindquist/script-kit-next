@@ -377,14 +377,15 @@ impl NotesApp {
 
         if modifiers.platform {
             match key {
-                // Cmd+Enter: open embedded ACP with selected note as canonical target.
-                // Must precede plain Enter and other platform shortcuts.
+                // Cmd+Enter: open embedded ACP with the staged note cart as
+                // inline @mentions. Must precede plain Enter and other
+                // platform shortcuts.
                 key if is_key_enter(key)
                     && !modifiers.shift
                     && !modifiers.control
                     && !modifiers.alt =>
                 {
-                    if self.open_selected_note_in_embedded_acp("NotesWindowCmdEnter", window, cx) {
+                    if self.open_selected_note_cart_in_embedded_acp("NotesWindowCmdEnter", cx) {
                         cx.stop_propagation();
                     }
                 }
@@ -436,11 +437,8 @@ impl NotesApp {
                             return;
                         }
 
-                        if self.open_selected_note_in_embedded_acp(
-                            "NotesWindowCmdShiftA",
-                            window,
-                            cx,
-                        ) {
+                        if self.open_selected_note_cart_in_embedded_acp("NotesWindowCmdShiftA", cx)
+                        {
                             cx.stop_propagation();
                             return;
                         }

@@ -1,4 +1,5 @@
 use super::{Note, NoteId, NotesApp};
+use crate::ai::message_parts::AiContextPart;
 
 #[test]
 fn formatting_replacement_wraps_selected_text() {
@@ -36,6 +37,38 @@ fn formatting_replacement_inserts_and_positions_cursor() {
 
     assert_eq!(new_value, "he****llo");
     assert_eq!(new_selection, 4..4);
+}
+
+#[test]
+fn build_note_text_part_for_ai_prefers_selection_when_present() {
+    let part = NotesApp::build_note_text_part_for_ai("Demo Note", "demo-id", "hello world", 6..11)
+        .expect("Expected selected note part");
+
+    assert_eq!(
+        part,
+        AiContextPart::TextBlock {
+            label: "Selected Text".to_string(),
+            source: "notes://demo-id#selection=6-11".to_string(),
+            text: "world".to_string(),
+            mime_type: Some("text/markdown".to_string()),
+        }
+    );
+}
+
+#[test]
+fn build_note_text_part_for_ai_falls_back_to_full_note_when_selection_is_empty() {
+    let part = NotesApp::build_note_text_part_for_ai("Demo Note", "demo-id", "hello world", 5..5)
+        .expect("Expected full note part");
+
+    assert_eq!(
+        part,
+        AiContextPart::TextBlock {
+            label: "Demo Note".to_string(),
+            source: "notes://demo-id".to_string(),
+            text: "hello world".to_string(),
+            mime_type: Some("text/markdown".to_string()),
+        }
+    );
 }
 
 #[test]
@@ -523,6 +556,29 @@ fn test_notes_acp_actions_close_requests_embedded_chat_refocus() {
         ACP_HOST_SOURCE
             .contains("app.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);"),
         "Closing the Notes-hosted ACP actions popup should restore ACP focus"
+    );
+}
+
+#[test]
+fn test_notes_acp_uses_shared_external_footer_renderer() {
+    const ACP_HOST_SOURCE: &str = include_str!("acp_host.rs");
+    const RENDER_SOURCE: &str = include_str!("render.rs");
+    const ACP_VIEW_SOURCE: &str = include_str!("../../ai/acp/view.rs");
+    assert!(
+        ACP_HOST_SOURCE
+            .contains("chat.set_footer_host(crate::ai::acp::view::AcpFooterHost::External);"),
+        "Notes-hosted ACP should opt into the shared externally rendered footer"
+    );
+    assert!(
+        RENDER_SOURCE.contains("view.build_external_host_footer(acp_entity.downgrade(), cx)")
+            && RENDER_SOURCE.contains(".when_some(acp_footer, |d, footer| d.child(footer))"),
+        "Notes ACP surface should render the shared ACP footer below the embedded chat view"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("SelectableHint::new(\"↵ Run\"")
+            && ACP_VIEW_SOURCE.contains("SelectableHint::new(\"⌘↵ AI\"")
+            && ACP_VIEW_SOURCE.contains("SelectableHint::new(\"⌘K Actions\""),
+        "Notes-hosted ACP should mirror the main-window ACP footer labels and order"
     );
 }
 
