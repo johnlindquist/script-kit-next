@@ -226,42 +226,6 @@ fn ai_command_uses_hide_then_capture_flow(_cmd_type: &builtins::AiCommandType) -
     false
 }
 
-impl ScriptListApp {
-    pub(crate) fn open_current_app_commands_from_tray(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> anyhow::Result<()> {
-        let snapshot = crate::menu_bar::load_frontmost_menu_snapshot()
-            .map_err(|e| anyhow::anyhow!("Failed to load frontmost app menu bar: {e}"))?;
-        let (entries, receipt) = snapshot.into_entries_with_receipt();
-
-        if entries.is_empty() {
-            anyhow::bail!("No enabled menu bar commands found for {}", receipt.app_name);
-        }
-
-        tracing::info!(
-            app_name = %receipt.app_name,
-            bundle_id = %receipt.bundle_id,
-            top_level_menu_count = receipt.top_level_menu_count,
-            leaf_entry_count = receipt.leaf_entry_count,
-            placeholder = %receipt.placeholder,
-            "tray.open_current_app_commands"
-        );
-
-        self.cached_current_app_entries = entries;
-        self.open_builtin_filterable_view_with_filter(
-            AppView::CurrentAppCommandsView {
-                filter: String::new(),
-                selected_index: 0,
-            },
-            "",
-            &receipt.placeholder,
-            cx,
-        );
-        Ok(())
-    }
-}
-
 #[cfg(test)]
 fn favorites_loaded_message(count: usize) -> String {
     if count == 1 {
@@ -1600,6 +1564,55 @@ impl ScriptListApp {
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
         cx.notify();
+    }
+
+    pub(crate) fn present_current_app_commands_entries(
+        &mut self,
+        entries: Vec<crate::builtins::BuiltInEntry>,
+        receipt: &crate::menu_bar::FrontmostMenuSnapshotReceipt,
+        filter: &str,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            app_name = %receipt.app_name,
+            bundle_id = %receipt.bundle_id,
+            top_level_menu_count = receipt.top_level_menu_count,
+            leaf_entry_count = receipt.leaf_entry_count,
+            placeholder = %receipt.placeholder,
+            source = receipt.source,
+            filter = %filter,
+            "current_app_commands.present"
+        );
+
+        self.cached_current_app_entries = entries;
+        self.open_builtin_filterable_view_with_filter(
+            AppView::CurrentAppCommandsView {
+                filter: filter.to_string(),
+                selected_index: 0,
+            },
+            filter,
+            &receipt.placeholder,
+            cx,
+        );
+
+        if self.cached_current_app_entries.is_empty() {
+            tracing::info!(
+                app_name = %receipt.app_name,
+                bundle_id = %receipt.bundle_id,
+                "current_app_commands.present_empty_state"
+            );
+        }
+    }
+
+    pub(crate) fn open_current_app_commands_from_tray(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        let snapshot = crate::menu_bar::load_frontmost_menu_snapshot()
+            .map_err(|e| anyhow::anyhow!("Failed to load frontmost app menu bar: {e}"))?;
+        let (entries, receipt) = snapshot.into_entries_with_receipt();
+        self.present_current_app_commands_entries(entries, &receipt, "", cx);
+        Ok(())
     }
 
     /// Inner builtin executor — runs the actual action logic.
@@ -3290,15 +3303,10 @@ impl ScriptListApp {
                                             .live_recipe
                                             .effective_query
                                             .clone();
-
-                                        self.cached_current_app_entries = entries;
-                                        self.open_builtin_filterable_view_with_filter(
-                                            AppView::CurrentAppCommandsView {
-                                                filter: filter.clone(),
-                                                selected_index: 0,
-                                            },
+                                        self.present_current_app_commands_entries(
+                                            entries,
+                                            &snapshot_receipt,
                                             &filter,
-                                            &snapshot_receipt.placeholder,
                                             cx,
                                         );
 
@@ -3544,14 +3552,10 @@ impl ScriptListApp {
                                                 placeholder = %snapshot_receipt.placeholder,
                                                 "do_in_current_app.action → OpenCommandPalette — switching to CurrentAppCommandsView"
                                             );
-                                            self.cached_current_app_entries = entries;
-                                            self.open_builtin_filterable_view_with_filter(
-                                                AppView::CurrentAppCommandsView {
-                                                    filter: trimmed_query.clone(),
-                                                    selected_index: 0,
-                                                },
+                                            self.present_current_app_commands_entries(
+                                                entries,
+                                                &snapshot_receipt,
                                                 &trimmed_query,
-                                                &snapshot_receipt.placeholder,
                                                 cx,
                                             );
                                             Self::builtin_success(dctx, "do_in_current_app_open_palette")
@@ -3624,14 +3628,10 @@ impl ScriptListApp {
                                                                 }
                                                                 "open_command_palette" => {
                                                                     let filter = replay.verification.live_recipe.effective_query.clone();
-                                                                    self.cached_current_app_entries = entries.clone();
-                                                                    self.open_builtin_filterable_view_with_filter(
-                                                                        AppView::CurrentAppCommandsView {
-                                                                            filter: filter.clone(),
-                                                                            selected_index: 0,
-                                                                        },
+                                                                    self.present_current_app_commands_entries(
+                                                                        entries.clone(),
+                                                                        &snapshot_receipt,
                                                                         &filter,
-                                                                        &snapshot_receipt.placeholder,
                                                                         cx,
                                                                     );
                                                                     return Self::builtin_success(
@@ -3734,8 +3734,6 @@ impl ScriptListApp {
                         match crate::menu_bar::load_frontmost_menu_snapshot() {
                             Ok(snapshot) => {
                                 let (entries, receipt) = snapshot.into_entries_with_receipt();
-                                let placeholder = receipt.placeholder.clone();
-                                let app_name = receipt.app_name.clone();
 
                                 tracing::info!(
                                     trace_id = %dctx.trace_id,
@@ -3748,41 +3746,8 @@ impl ScriptListApp {
                                     "current_app_commands.snapshot_ready"
                                 );
 
-                                if entries.is_empty() {
-                                    let message = format!(
-                                        "No enabled menu bar commands found for {}",
-                                        app_name
-                                    );
-                                    tracing::warn!(
-                                        trace_id = %dctx.trace_id,
-                                        app_name = %app_name,
-                                        "current_app_commands.no_entries"
-                                    );
-                                    self.show_error_toast(message.clone(), cx);
-                                    Self::builtin_error(
-                                        dctx,
-                                        crate::action_helpers::ERROR_ACTION_FAILED,
-                                        message,
-                                        "current_app_commands_empty",
-                                    )
-                                } else {
-                                    tracing::info!(
-                                        trace_id = %dctx.trace_id,
-                                        app_name = %app_name,
-                                        entry_count = entries.len(),
-                                        "current_app_commands.loaded"
-                                    );
-                                    self.cached_current_app_entries = entries;
-                                    self.open_builtin_filterable_view(
-                                        AppView::CurrentAppCommandsView {
-                                            filter: String::new(),
-                                            selected_index: 0,
-                                        },
-                                        &placeholder,
-                                        cx,
-                                    );
-                                    Self::builtin_success(dctx, "open_current_app_commands")
-                                }
+                                self.present_current_app_commands_entries(entries, &receipt, "", cx);
+                                Self::builtin_success(dctx, "open_current_app_commands")
                             }
                             Err(e) => {
                                 let message =

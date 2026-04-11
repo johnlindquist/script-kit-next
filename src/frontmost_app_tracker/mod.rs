@@ -372,6 +372,41 @@ pub fn get_last_real_app_bundle_id() -> Option<String> {
 pub fn get_cached_menu_items() -> Vec<MenuBarItem> {
     TRACKER_STATE.read().cached_menu_items.clone()
 }
+
+#[cfg(target_os = "macos")]
+pub fn replace_cached_menu_items(pid: i32, bundle_id: &str, items: Vec<MenuBarItem>) {
+    let mut state = TRACKER_STATE.write();
+    let same_app = state
+        .last_real_app
+        .as_ref()
+        .map(|app| app.pid == pid && app.bundle_id == bundle_id)
+        .unwrap_or(false);
+
+    if !same_app {
+        logging::log(
+            "APP",
+            &format!(
+                "Skipped cache replace for {} PID {} because the tracked app changed",
+                bundle_id, pid
+            ),
+        );
+        return;
+    }
+
+    let item_count = items.len();
+    state.cached_menu_items = items;
+    if state.fetching_bundle_id.as_deref() == Some(bundle_id) {
+        state.fetching_bundle_id = None;
+    }
+
+    logging::log(
+        "APP",
+        &format!(
+            "Replaced cached menu items for {} PID {} with {} top-level items",
+            bundle_id, pid, item_count
+        ),
+    );
+}
 /// Check if menu items are currently being fetched in the background.
 #[allow(dead_code)] // Public API for future use
 pub fn is_fetching_menu() -> bool {
@@ -851,6 +886,101 @@ mod tests {
         );
 
         TRACKER_STATE.write().last_real_app = previous;
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_replace_cached_menu_items_updates_matching_tracked_app() {
+        let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
+        let previous = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_bundle_id.clone();
+
+        {
+            let mut state = TRACKER_STATE.write();
+            state.last_real_app = Some(TrackedApp {
+                pid: 42,
+                bundle_id: "com.example.bundle".to_string(),
+                name: "Example".to_string(),
+                window_title: None,
+            });
+            state.cached_menu_items = Vec::new();
+            state.fetching_bundle_id = Some("com.example.bundle".to_string());
+        }
+
+        let replacement = vec![MenuBarItem {
+            title: "File".to_string(),
+            enabled: true,
+            shortcut: None,
+            children: vec![],
+            ax_element_path: vec![0],
+        }];
+
+        replace_cached_menu_items(42, "com.example.bundle", replacement.clone());
+
+        let state = TRACKER_STATE.read();
+        assert_eq!(state.cached_menu_items, replacement);
+        assert!(state.fetching_bundle_id.is_none());
+        drop(state);
+
+        let mut state = TRACKER_STATE.write();
+        state.last_real_app = previous;
+        state.cached_menu_items = previous_cached;
+        state.fetching_bundle_id = previous_fetching;
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn test_replace_cached_menu_items_ignores_stale_app() {
+        let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
+        let previous = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_bundle_id.clone();
+
+        let existing = vec![MenuBarItem {
+            title: "Edit".to_string(),
+            enabled: true,
+            shortcut: None,
+            children: vec![],
+            ax_element_path: vec![1],
+        }];
+
+        {
+            let mut state = TRACKER_STATE.write();
+            state.last_real_app = Some(TrackedApp {
+                pid: 7,
+                bundle_id: "com.example.current".to_string(),
+                name: "Current".to_string(),
+                window_title: None,
+            });
+            state.cached_menu_items = existing.clone();
+            state.fetching_bundle_id = Some("com.example.current".to_string());
+        }
+
+        replace_cached_menu_items(
+            8,
+            "com.example.other",
+            vec![MenuBarItem {
+                title: "File".to_string(),
+                enabled: true,
+                shortcut: None,
+                children: vec![],
+                ax_element_path: vec![0],
+            }],
+        );
+
+        let state = TRACKER_STATE.read();
+        assert_eq!(state.cached_menu_items, existing);
+        assert_eq!(
+            state.fetching_bundle_id.as_deref(),
+            Some("com.example.current")
+        );
+        drop(state);
+
+        let mut state = TRACKER_STATE.write();
+        state.last_real_app = previous;
+        state.cached_menu_items = previous_cached;
+        state.fetching_bundle_id = previous_fetching;
     }
 
     #[test]
