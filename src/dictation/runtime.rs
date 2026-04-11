@@ -427,7 +427,7 @@ fn stop_capture_and_collect(session: &mut DictationSession) -> Result<()> {
 
 /// Resolve the user's preferred microphone device.
 ///
-/// Reads `ScriptKitUserPreferences.dictation.selected_device_id` and, if the
+/// Reads the config-backed `dictation.selected_device_id` preference and, if the
 /// device is still present, returns its ID.  Falls back using ranked heuristics
 /// (system default → built-in → USB → first non-virtual → any) when the
 /// preference is unset or the device has disappeared.
