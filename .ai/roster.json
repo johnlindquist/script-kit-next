@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-04-03T09:04:12.495Z",
+  "updatedAt": "2026-04-11T01:24:10.842Z",
   "agents": {
     "tab-ai-instant-context-a1": {
       "id": "tab-ai-instant-context-a1",
@@ -446,6 +446,72 @@
         ]
       },
       "claimed_at": {}
+    },
+    "builtin-taxonomy-a1": {
+      "id": "builtin-taxonomy-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Design a user-facing command architecture for built-ins. Success means a concrete keep/merge/demote/rename plan that reduces search noise while preserving discoverability. Use already surfaced anchors: src/builtins/mod.rs, src/app_execute/builtin_execution.rs, src/app_execute/utility_views.rs, the existing audit findings around Settings duplication, ACP Chat vs Generate Script, Quick Terminal vs Claude Code, and current-app diagnostics.",
+      "scope": "src/builtins/mod.rs src/app_execute/builtin_execution.rs src/app_execute/utility_views.rs",
+      "readonly": false,
+      "status": "abandoned",
+      "claims": [],
+      "createdAt": "2026-04-11T01:21:40.546Z",
+      "lastSeenAt": "2026-04-11T01:24:10.561Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "49ebc9f4fcabc9aad090fd543206bf4dacd650ff",
+      "notes": "dispatcher aborted round due file-claim contention on read-only planning task",
+      "pid": 28631,
+      "claimed_at": {}
+    },
+    "builtin-settings-a1": {
+      "id": "builtin-settings-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Design a consolidation plan for Script Kit settings, macOS settings, permissions, and system controls. Success means a concrete organization proposal with migration ordering for Settings hub vs direct SettingsCommand entries, Script Kit Settings vs macOS System Settings naming, permission flow simplification, and whether pane-specific or volume-specific commands should stay top-level. Use already surfaced anchors: src/builtins/mod.rs, src/app_execute/builtin_execution.rs, src/render_builtins/settings.rs, src/permissions_wizard.rs.",
+      "scope": "src/builtins/mod.rs src/app_execute/builtin_execution.rs src/render_builtins/settings.rs src/permissions_wizard.rs",
+      "readonly": false,
+      "status": "abandoned",
+      "claims": [
+        "src/builtins/mod.rs",
+        "src/app_execute/builtin_execution.rs"
+      ],
+      "createdAt": "2026-04-11T01:21:40.572Z",
+      "lastSeenAt": "2026-04-11T01:24:10.583Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "49ebc9f4fcabc9aad090fd543206bf4dacd650ff",
+      "notes": "dispatcher aborted round due file-claim contention on read-only planning task",
+      "pid": 28643,
+      "claimed_at": {
+        "src/builtins/mod.rs": "2026-04-11T01:23:46.009Z",
+        "src/app_execute/builtin_execution.rs": "2026-04-11T01:23:46.116Z"
+      }
+    },
+    "builtin-automation-a1": {
+      "id": "builtin-automation-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Design a consolidation plan for AI/chat, terminal, dictation, current-app automation, and diagnostics built-ins. Success means a proposed top-level lineup, naming cleanup, what becomes presets or sub-actions, and which advanced/dev surfaces should be hidden or debug-gated. Use already surfaced anchors: src/builtins/mod.rs, src/app_execute/builtin_execution.rs, src/app_execute/utility_views.rs, src/menu_bar/current_app_commands.rs, src/app_impl/tab_ai_mode.rs, plus prior findings about ACP Chat overlap, current-app diagnostics, and forced-route dictation.",
+      "scope": "src/builtins/mod.rs src/app_execute/builtin_execution.rs src/app_execute/utility_views.rs src/menu_bar/current_app_commands.rs src/app_impl/tab_ai_mode.rs",
+      "readonly": false,
+      "status": "abandoned",
+      "claims": [
+        "src/app_execute/builtin_execution.rs",
+        "src/app_execute/utility_views.rs"
+      ],
+      "createdAt": "2026-04-11T01:21:40.783Z",
+      "lastSeenAt": "2026-04-11T01:24:10.842Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "49ebc9f4fcabc9aad090fd543206bf4dacd650ff",
+      "notes": "dispatcher aborted round due file-claim contention on read-only planning task",
+      "pid": 29106,
+      "claimed_at": {
+        "src/app_execute/builtin_execution.rs": "2026-04-11T01:23:45.981Z",
+        "src/app_execute/utility_views.rs": "2026-04-11T01:23:46.053Z"
+      }
     }
   }
 }
