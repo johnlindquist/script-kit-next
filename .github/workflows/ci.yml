@@ -204,8 +204,8 @@ jobs:
         if: steps.cache-cargo-bundle.outputs.cache-hit != 'true'
         run: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy
 
-      - name: Show cargo-bundle version
-        run: cargo bundle --version
+      - name: Verify cargo-bundle is available
+        run: cargo bundle --help >/dev/null
 
       - name: Build release
         run: cargo build --release --bin script-kit-gpui
