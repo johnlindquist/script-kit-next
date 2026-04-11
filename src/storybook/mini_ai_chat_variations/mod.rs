@@ -9,6 +9,7 @@ use super::adoption::{
     adopted_surface_live, resolve_surface_live, AdoptableSurface, SurfaceSelectionResolution,
     VariationId,
 };
+use super::runtime_fixture;
 use super::StoryVariant;
 
 // ─── Production constants (synced from src/ai/window/types.rs) ──────────
@@ -367,6 +368,8 @@ pub fn mini_ai_chat_story_variants() -> Vec<StoryVariant> {
             StoryVariant::default_named(spec.id.as_str(), spec.id.name())
                 .description(spec.id.description())
                 .with_prop("surface", "miniAiChat")
+                .with_prop("representation", "runtimeFixture")
+                .with_prop("fixtureSurface", "mini-ai-chat")
                 .with_prop("variantId", spec.id.as_str())
                 .with_prop(
                     "showTitlebarBorder",
@@ -400,6 +403,16 @@ pub fn resolve_mini_ai_chat_style(
 
 pub fn adopted_mini_ai_chat_style() -> MiniAiChatStyle {
     adopted_surface_live::<MiniAiChatSurface>()
+}
+
+/// Render a Mini ACP Chat storybook preview using the runtime-fixture host.
+pub fn render_mini_ai_chat_story_preview(stable_id: &str) -> gpui::AnyElement {
+    runtime_fixture::render_runtime_fixture("mini-ai-chat", stable_id, false)
+}
+
+/// Render a Mini ACP Chat compare-mode thumbnail via the runtime-fixture host.
+pub fn render_mini_ai_chat_compare_thumbnail(stable_id: &str) -> gpui::AnyElement {
+    runtime_fixture::render_runtime_fixture("mini-ai-chat", stable_id, true)
 }
 
 #[cfg(test)]

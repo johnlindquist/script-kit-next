@@ -87,8 +87,9 @@ pub use mini_ai_chat_presenter::{
     MiniAiChatRole, MiniAiChatSuggestion,
 };
 pub use mini_ai_chat_variations::{
-    adopted_mini_ai_chat_style, mini_ai_chat_story_variants, resolve_mini_ai_chat_style,
-    MiniAiChatStyle, MiniAiChatSurface, MiniAiChatVariationId, MiniAiChatVariationSpec,
+    adopted_mini_ai_chat_style, mini_ai_chat_story_variants, render_mini_ai_chat_compare_thumbnail,
+    render_mini_ai_chat_story_preview, resolve_mini_ai_chat_style, MiniAiChatStyle,
+    MiniAiChatSurface, MiniAiChatVariationId, MiniAiChatVariationSpec,
     SPECS as MINI_AI_CHAT_VARIATION_SPECS,
 };
 pub use notes_window_variations::{

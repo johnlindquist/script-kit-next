@@ -111,6 +111,24 @@ Input adoption: `adopted_input_variation()` reads persisted selection, falls bac
 
 Both are called at render time in live prompt surfaces.
 
+## Surface Wiring Map
+
+Use this map before claiming that a Storybook edit changes the real app.
+
+| Surface | Wiring | What changes affect live UI |
+|---------|--------|-----------------------------|
+| Main Menu | Storybook-specific preview in `src/storybook/main_menu_variations/mod.rs` plus feature-gated live-spec overrides in `src/render_script_list/mod.rs` | Shared components/tokens affect both. Preview-only layout/data changes do not update the real app by themselves. |
+| Footer Variations | Adopted live surface | Changing variation specs/config mapping affects live prompt footers when that selection is adopted. |
+| Input Variations | Adopted live surface | Changing variation specs/config mapping affects live prompt inputs when that selection is adopted. |
+| Actions Dialog | Shared presenter in `src/storybook/actions_dialog_presenter.rs` | Presenter changes affect both Storybook and the live dialog. |
+| Mini AI Chat | Shared presenter in `src/storybook/mini_ai_chat_presenter.rs` | Presenter changes affect both Storybook and the live mini AI chat. |
+| Notes Window | Runtime fixture preview | Fixture or preview-host changes affect Storybook only unless shared notes-window code also changes. |
+
+Rule of thumb:
+- `src/storybook/...` only: usually Storybook-only
+- Shared presenter/component/theme code: affects both
+- Adopted variation/spec code: can affect live surfaces that read that selection
+
 ## Chrome Audit System
 
 `PromptChromeAudit` in `prompt_layout_shell.rs` validates minimal chrome compliance:
