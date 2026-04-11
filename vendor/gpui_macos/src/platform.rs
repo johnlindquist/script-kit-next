@@ -1007,7 +1007,9 @@ impl Platform for MacPlatform {
                 CursorStyle::Crosshair => msg_send![class!(NSCursor), crosshairCursor],
                 CursorStyle::ClosedHand => msg_send![class!(NSCursor), closedHandCursor],
                 CursorStyle::OpenHand => msg_send![class!(NSCursor), openHandCursor],
-                CursorStyle::PointingHand => msg_send![class!(NSCursor), pointingHandCursor],
+                // Script Kit disables the pointing-hand cursor globally because
+                // non-activating panel windows make hover ownership unreliable.
+                CursorStyle::PointingHand => msg_send![class!(NSCursor), arrowCursor],
                 CursorStyle::ResizeLeftRight => msg_send![class!(NSCursor), resizeLeftRightCursor],
                 CursorStyle::ResizeUpDown => msg_send![class!(NSCursor), resizeUpDownCursor],
                 CursorStyle::ResizeLeft => msg_send![class!(NSCursor), resizeLeftCursor],

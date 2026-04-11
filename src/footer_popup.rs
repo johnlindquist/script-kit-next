@@ -104,13 +104,13 @@ pub(crate) enum FooterDotStatus {
     /// No dot shown.
     #[default]
     Hidden,
-    /// Streaming — pulsing gold/accent dot.
+    /// Streaming — pulsing, high-contrast theme-aligned dot.
     Streaming,
-    /// Waiting for user permission — pulsing gold dot (same as streaming).
+    /// Waiting for user permission — same pulsing active dot treatment.
     WaitingForPermission,
-    /// Idle / done — solid green dot.
+    /// Idle / done — subtle theme-matched dot.
     Idle,
-    /// Error — solid red dot.
+    /// Error — solid theme error dot.
     Error,
 }
 
@@ -137,6 +137,33 @@ impl MainWindowFooterConfig {
             buttons,
             left_info: None,
         }
+    }
+}
+
+fn footer_active_dot_hex(theme: &crate::theme::Theme) -> u32 {
+    let colors = &theme.colors;
+    let background = colors.background.main;
+    let accent = colors.accent.selected;
+    let primary_text = colors.text.primary;
+
+    if crate::theme::contrast_ratio(accent, background)
+        >= crate::theme::contrast_ratio(primary_text, background)
+    {
+        accent
+    } else {
+        primary_text
+    }
+}
+
+fn footer_dot_hex(status: FooterDotStatus, theme: &crate::theme::Theme) -> u32 {
+    let colors = &theme.colors;
+    match status {
+        FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission => {
+            footer_active_dot_hex(theme)
+        }
+        FooterDotStatus::Idle => colors.text.secondary,
+        FooterDotStatus::Error => colors.ui.error,
+        FooterDotStatus::Hidden => unreachable!(),
     }
 }
 
@@ -602,15 +629,8 @@ unsafe fn layout_footer_left_info(
     // ── Status dot (color + animation depends on thread status) ──
     let show_dot = !matches!(info.dot_status, FooterDotStatus::Hidden);
     if show_dot {
-        // Pick color: gold/accent for streaming/permission, green for idle, red for error.
-        let dot_hex: u32 = match info.dot_status {
-            FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission => {
-                crate::theme::get_cached_theme().colors.accent.selected
-            }
-            FooterDotStatus::Idle => 0x22c55e,  // green-500
-            FooterDotStatus::Error => 0xef4444, // red-500
-            FooterDotStatus::Hidden => unreachable!(),
-        };
+        let theme = crate::theme::get_cached_theme();
+        let dot_hex = footer_dot_hex(info.dot_status, &theme);
         let should_pulse = matches!(
             info.dot_status,
             FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission
@@ -1008,7 +1028,10 @@ unsafe fn make_footer_hint_text_field(
 
 #[cfg(test)]
 mod footer_layout_tests {
-    use super::{footer_hint_content_layout, footer_hint_slot_width, FooterAction};
+    use super::{
+        footer_active_dot_hex, footer_dot_hex, footer_hint_content_layout, footer_hint_slot_width,
+        FooterAction, FooterDotStatus,
+    };
 
     #[test]
     fn footer_hint_slot_widths_are_stable_per_action() {
@@ -1052,6 +1075,35 @@ mod footer_layout_tests {
         assert_eq!(long.1, 118.0);
         assert_eq!(96.0 - (short.1 + 18.0), 4.0);
         assert_eq!(140.0 - (long.1 + 18.0), 4.0);
+    }
+
+    #[test]
+    fn active_dot_prefers_the_most_contrasting_theme_color() {
+        let mut theme = crate::theme::Theme::dark_default();
+        theme.colors.background.main = 0x101114;
+        theme.colors.accent.selected = 0x3a4250;
+        theme.colors.text.primary = 0xf5f7fa;
+
+        assert_eq!(footer_active_dot_hex(&theme), theme.colors.text.primary);
+
+        theme.colors.accent.selected = 0xffc600;
+        assert_eq!(footer_active_dot_hex(&theme), theme.colors.accent.selected);
+    }
+
+    #[test]
+    fn footer_dot_colors_follow_theme_tokens() {
+        let mut theme = crate::theme::Theme::dark_default();
+        theme.colors.text.secondary = 0x778899;
+        theme.colors.ui.error = 0xaa3344;
+
+        assert_eq!(
+            footer_dot_hex(FooterDotStatus::Idle, &theme),
+            theme.colors.text.secondary
+        );
+        assert_eq!(
+            footer_dot_hex(FooterDotStatus::Error, &theme),
+            theme.colors.ui.error
+        );
     }
 }
 
@@ -1226,14 +1278,14 @@ extern "C" fn footer_button_reset_cursor_rects(
     use objc::{class, msg_send, sel, sel_impl};
 
     // SAFETY: `this` is a live NSButton subclass. We add a cursor rect covering
-    // the full button bounds so the pointing-hand cursor appears on hover.
+    // the full button bounds so the footer keeps the default arrow cursor.
     unsafe {
         let enabled: cocoa::base::BOOL = *this.get_ivar::<cocoa::base::BOOL>("_enabled");
         if enabled != YES {
             return;
         }
         let bounds: cocoa::foundation::NSRect = msg_send![this, bounds];
-        let cursor: id = msg_send![class!(NSCursor), pointingHandCursor];
+        let cursor: id = msg_send![class!(NSCursor), arrowCursor];
         let _: () = msg_send![this, addCursorRect:bounds cursor:cursor];
     }
 }

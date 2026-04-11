@@ -9,6 +9,10 @@ pub const HEADER_ACTIONS_MIN_WIDTH_COMPACT_PX: f32 = 168.0;
 pub const HEADER_ACTIONS_MIN_WIDTH_NORMAL_PX: f32 = 200.0;
 /// Reserved action slot width for expanded action labels/shortcuts.
 pub const HEADER_ACTIONS_MIN_WIDTH_EXPANDED_PX: f32 = 236.0;
+/// Light-mode hover overlay alpha for inline header actions.
+const HEADER_HOVER_OVERLAY_ALPHA_LIGHT: u8 = 0x26;
+/// Dark-mode hover overlay alpha for inline header actions.
+const HEADER_HOVER_OVERLAY_ALPHA_DARK: u8 = 0x2e;
 
 /// Horizontal density policy for the right-side actions slot.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -79,6 +83,14 @@ impl PromptHeaderColors {
         ((base_color & 0x00ff_ffff) << 8) | (alpha as u32)
     }
 
+    fn hover_overlay_alpha(is_dark_mode: bool) -> u8 {
+        if is_dark_mode {
+            HEADER_HOVER_OVERLAY_ALPHA_DARK
+        } else {
+            HEADER_HOVER_OVERLAY_ALPHA_LIGHT
+        }
+    }
+
     /// Create PromptHeaderColors from theme reference
     pub fn from_theme(theme: &Theme) -> Self {
         let ui_font_size = theme.get_fonts().ui_size;
@@ -91,7 +103,10 @@ impl PromptHeaderColors {
             search_box_bg: theme.colors.background.search_box,
             border: theme.colors.ui.border,
             logo_icon: theme.colors.text.on_accent,
-            hover_overlay: Self::overlay_with_alpha(theme.colors.accent.selected_subtle, 0x26),
+            hover_overlay: Self::overlay_with_alpha(
+                theme.colors.accent.selected_subtle,
+                Self::hover_overlay_alpha(theme.is_dark_mode()),
+            ),
             input_font_size: (ui_font_size + 2.0).max(12.0),
             supporting_font_size: (ui_font_size - 2.0).max(10.0),
             caption_font_size: (ui_font_size - 4.0).max(9.0),

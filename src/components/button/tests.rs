@@ -40,11 +40,11 @@ fn test_resolve_element_id_prefers_explicit_id_when_present() {
 
 #[test]
 fn test_button_colors_from_theme_uses_selected_subtle_for_hover_overlay() {
-    let mut theme = Theme::default();
+    let mut theme = Theme::dark_default();
     theme.colors.accent.selected_subtle = 0x112233;
 
     let colors = ButtonColors::from_theme(&theme);
-    assert_eq!(colors.hover_overlay, 0x11223326);
+    assert_eq!(colors.hover_overlay, 0x1122332e);
 }
 
 #[test]
@@ -55,7 +55,16 @@ fn test_button_colors_from_design_uses_design_background_for_hover_overlay() {
     };
 
     let colors = ButtonColors::from_design_with_dark_mode(&design, true);
-    assert_eq!(colors.hover_overlay, 0x44556626);
+    assert_eq!(colors.hover_overlay, 0x4455662e);
+}
+
+#[test]
+fn test_button_colors_from_theme_keeps_light_hover_overlay_alpha() {
+    let mut theme = Theme::light_default();
+    theme.colors.accent.selected_subtle = 0x112233;
+
+    let colors = ButtonColors::from_theme(&theme);
+    assert_eq!(colors.hover_overlay, 0x11223326);
 }
 
 #[test]

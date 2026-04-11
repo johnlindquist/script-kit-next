@@ -211,9 +211,7 @@ impl ScriptListApp {
                     return cached_indices.clone();
                 }
             }
-            let built = std::sync::Arc::new(
-                theme::presets::filtered_preset_indices_cached(filter),
-            );
+            let built = std::sync::Arc::new(theme::presets::filtered_preset_indices_cached(filter));
             *slot.borrow_mut() = Some((filter.to_string(), built.clone()));
             built
         })
@@ -325,8 +323,8 @@ impl ScriptListApp {
             return;
         };
         let next_theme = (*theme::presets::preset_theme_cached(preset_idx)).clone();
-        self.theme_chooser_scroll_handle
-            .scroll_to_item(filtered_selected_index, ScrollStrategy::Nearest);
+        self.theme_chooser_list_state
+            .scroll_to_reveal_item(filtered_selected_index);
         self.apply_theme_chooser_theme(next_theme, reason, cx);
     }
 
@@ -342,9 +340,17 @@ impl ScriptListApp {
             return;
         };
         let next_theme = (*theme::presets::preset_theme_cached(preset_idx)).clone();
-        self.theme_chooser_scroll_handle
-            .scroll_to_item(filtered_selected_index, ScrollStrategy::Nearest);
+        self.theme_chooser_list_state
+            .scroll_to_reveal_item(filtered_selected_index);
         self.apply_and_persist_theme(next_theme, reason, cx);
+    }
+
+    fn sync_theme_chooser_list_state(&mut self, item_count: usize) {
+        let old_count = self.theme_chooser_list_state.item_count();
+        if old_count != item_count {
+            self.theme_chooser_list_state
+                .splice(0..old_count, item_count);
+        }
     }
 
     /// Accent color palette for theme customization
@@ -378,7 +384,6 @@ impl ScriptListApp {
             .map(|(i, _)| i)
             .unwrap_or(0)
     }
-
 
     /// Three-item footer hint strip for the theme chooser
     fn theme_chooser_hint_items() -> Vec<gpui::SharedString> {
@@ -469,10 +474,7 @@ impl ScriptListApp {
                     .with_accent_bar(true),
             )
             .child(crate::list_item::ListItem::new("Regular Item", list_colors))
-            .child(
-                crate::list_item::ListItem::new("Another Item", list_colors)
-                    .tool_badge("ts"),
-            )
+            .child(crate::list_item::ListItem::new("Another Item", list_colors).tool_badge("ts"))
             .into_any_element()
     }
 
@@ -482,33 +484,26 @@ impl ScriptListApp {
         accent_name: &str,
         chrome: &theme::AppChromeColors,
     ) -> gpui::AnyElement {
-        let header = div()
-            .w_full()
-            .flex()
-            .flex_row()
-            .items_center()
-            .child(
-                div()
-                    .flex_1()
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.0))
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(chrome.text_primary_hex))
-                            .child(preset_name.to_string()),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(chrome.text_muted_hex))
-                            .child(format!(
-                                "{accent_name} accent · live launcher preview"
-                            )),
-                    ),
-            );
+        let header = div().w_full().flex().flex_row().items_center().child(
+            div()
+                .flex_1()
+                .flex()
+                .flex_col()
+                .gap(px(2.0))
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(rgb(chrome.text_primary_hex))
+                        .child(preset_name.to_string()),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(chrome.text_muted_hex))
+                        .child(format!("{accent_name} accent · live launcher preview")),
+                ),
+        );
 
         let content = div()
             .flex()
@@ -564,10 +559,7 @@ impl ScriptListApp {
         let first_light = theme::presets::first_light_theme_index();
         let original_match =
             Self::cached_theme_chooser_original_match(self.theme_before_chooser.as_ref());
-        let original_index = original_match
-            .as_ref()
-            .map(|m| m.preset_index)
-            .unwrap_or(0);
+        let original_index = original_match.as_ref().map(|m| m.preset_index).unwrap_or(0);
         let original_is_exact = original_match
             .as_ref()
             .map(|m| m.is_exact())
@@ -576,6 +568,7 @@ impl ScriptListApp {
         // Filter presets by name or description (cached by filter string)
         let filtered_indices = Self::cached_theme_chooser_filtered_indices(filter);
         let filtered_count = filtered_indices.len();
+        self.sync_theme_chooser_list_state(filtered_count);
         let filter_is_empty = filter.is_empty();
 
         let summary = Self::theme_chooser_match_summary(&filtered_indices, presets);
@@ -597,7 +590,11 @@ impl ScriptListApp {
                     if !this.clear_builtin_view_filter(cx) {
                         // No filter to clear — restore original theme, persist the undo, and go back
                         if let Some(original) = this.theme_before_chooser.take() {
-                            this.restore_theme_chooser_theme(original, "theme_chooser_escape_undo", cx);
+                            this.restore_theme_chooser_theme(
+                                original,
+                                "theme_chooser_escape_undo",
+                                cx,
+                            );
                             let _ = crate::theme::service::persist_theme_and_sync_all_windows(
                                 cx,
                                 this.theme.as_ref(),
@@ -656,8 +653,13 @@ impl ScriptListApp {
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx > 0 {
                         let target = Self::OPACITY_PRESETS[idx - 1].0;
-                        let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), target);
-                        this.apply_theme_chooser_theme(modified, "theme_chooser_opacity_decrease", cx);
+                        let modified =
+                            Self::apply_surface_opacity_preset(this.theme.as_ref(), target);
+                        this.apply_theme_chooser_theme(
+                            modified,
+                            "theme_chooser_opacity_decrease",
+                            cx,
+                        );
                     }
                     return;
                 }
@@ -666,8 +668,13 @@ impl ScriptListApp {
                     let idx = Self::find_opacity_preset_index(current_main);
                     if idx < Self::OPACITY_PRESETS.len() - 1 {
                         let target = Self::OPACITY_PRESETS[idx + 1].0;
-                        let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), target);
-                        this.apply_theme_chooser_theme(modified, "theme_chooser_opacity_increase", cx);
+                        let modified =
+                            Self::apply_surface_opacity_preset(this.theme.as_ref(), target);
+                        this.apply_theme_chooser_theme(
+                            modified,
+                            "theme_chooser_opacity_increase",
+                            cx,
+                        );
                     }
                     return;
                 }
@@ -695,7 +702,11 @@ impl ScriptListApp {
                     if let Some(ref mut vibrancy) = modified.vibrancy {
                         vibrancy.material = new_material;
                     }
-                    this.apply_theme_chooser_theme(modified, "theme_chooser_vibrancy_material_cycle", cx);
+                    this.apply_theme_chooser_theme(
+                        modified,
+                        "theme_chooser_vibrancy_material_cycle",
+                        cx,
+                    );
                     return;
                 }
                 // Cmd+J: surprise me / remix
@@ -815,131 +826,122 @@ impl ScriptListApp {
         let list_colors = crate::list_item::ListItemColors::from_theme(self.theme.as_ref());
 
         // ── Theme list (shared ListItem rows) ─────────────────────
-        let list = uniform_list(
-            "theme-chooser",
-            filtered_count,
-            move |visible_range, _window, _cx| {
-                visible_range
-                    .map(|ix| {
-                        let preset_idx = filtered_indices_for_list[ix];
-                        let is_selected = ix == selected;
-                        let is_original = preset_idx == orig_idx;
-                        let preset = &presets_for_list[preset_idx];
-                        let name = preset.name;
-                        let desc = preset.description;
-                        let colors = &preview_colors[preset_idx];
-                        let is_first_light =
-                            filter_is_empty && preset_idx == first_light_idx && first_light_idx > 0;
+        let list = list(
+            self.theme_chooser_list_state.clone(),
+            move |ix, _window, _cx| {
+                let preset_idx = filtered_indices_for_list[ix];
+                let is_selected = ix == selected;
+                let is_original = preset_idx == orig_idx;
+                let preset = &presets_for_list[preset_idx];
+                let name = preset.name;
+                let desc = preset.description;
+                let colors = &preview_colors[preset_idx];
+                let is_first_light =
+                    filter_is_empty && preset_idx == first_light_idx && first_light_idx > 0;
 
-                        // Compact color bar — thin horizontal strip showing theme palette
-                        let color_bar = div()
-                            .flex()
-                            .flex_row()
-                            .w(px(40.0))
-                            .h(px(8.0))
-                            .rounded(px(4.0))
-                            .overflow_hidden()
-                            .child(div().flex_1().bg(rgb(colors.bg)))
-                            .child(div().flex_1().bg(rgb(colors.accent)))
-                            .child(div().flex_1().bg(rgb(colors.text)))
-                            .child(div().flex_1().bg(rgb(colors.secondary)))
-                            .child(div().flex_1().bg(rgb(colors.border)));
+                // Compact color bar — thin horizontal strip showing theme palette
+                let color_bar = div()
+                    .flex()
+                    .flex_row()
+                    .w(px(40.0))
+                    .h(px(8.0))
+                    .rounded(px(4.0))
+                    .overflow_hidden()
+                    .child(div().flex_1().bg(rgb(colors.bg)))
+                    .child(div().flex_1().bg(rgb(colors.accent)))
+                    .child(div().flex_1().bg(rgb(colors.text)))
+                    .child(div().flex_1().bg(rgb(colors.secondary)))
+                    .child(div().flex_1().bg(rgb(colors.border)));
 
-                        // Badge for original theme — "Saved" if exact match, "Modified" if remixed
-                        let saved_badge = if is_original {
-                            let label = if orig_exact { "Saved" } else { "Modified" };
-                            Some(
-                                div()
-                                    .px(px(6.0))
-                                    .py(px(2.0))
-                                    .rounded(px(5.0))
-                                    .border_1()
-                                    .border_color(accent_badge_border)
-                                    .bg(accent_badge_bg)
-                                    .text_xs()
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(accent_badge_text)
-                                    .child(label)
-                                    .into_any_element(),
-                            )
-                        } else {
-                            None
-                        };
+                // Badge for original theme — "Saved" if exact match, "Modified" if remixed
+                let saved_badge = if is_original {
+                    let label = if orig_exact { "Saved" } else { "Modified" };
+                    Some(
+                        div()
+                            .px(px(6.0))
+                            .py(px(2.0))
+                            .rounded(px(5.0))
+                            .border_1()
+                            .border_color(accent_badge_border)
+                            .bg(accent_badge_bg)
+                            .text_xs()
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(accent_badge_text)
+                            .child(label)
+                            .into_any_element(),
+                    )
+                } else {
+                    None
+                };
 
-                        // Section label for light themes (only when unfiltered)
-                        let section_label = if is_first_light {
-                            Some(crate::list_item::render_section_header(
-                                "LIGHT", None, list_colors, false,
-                            ))
-                        } else {
-                            None
-                        };
+                // Section label for light themes (only when unfiltered)
+                let section_label = if is_first_light {
+                    Some(crate::list_item::render_section_header(
+                        "LIGHT",
+                        None,
+                        list_colors,
+                        false,
+                    ))
+                } else {
+                    None
+                };
 
-                        // Click handler: select + preview via captured Arc indices
-                        let click_entity = entity_handle.clone();
-                        let click_indices = std::sync::Arc::clone(&filtered_indices_for_list);
-                        let click_handler =
-                            move |_event: &gpui::ClickEvent,
-                                  _window: &mut Window,
-                                  cx: &mut gpui::App| {
-                                if let Some(app) = click_entity.upgrade() {
-                                    let indices = std::sync::Arc::clone(&click_indices);
-                                    app.update(cx, |this, cx| {
-                                        if let AppView::ThemeChooserView {
-                                            ref mut selected_index,
-                                            ..
-                                        } = this.current_view
-                                        {
-                                            *selected_index = ix;
-                                        }
-                                        this.preview_and_persist_theme_chooser_preset(
-                                            &indices,
-                                            ix,
-                                            "theme_chooser_mouse_click",
-                                            cx,
-                                        );
-                                    });
+                // Click handler: select + preview via captured Arc indices
+                let click_entity = entity_handle.clone();
+                let click_indices = std::sync::Arc::clone(&filtered_indices_for_list);
+                let click_handler =
+                    move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
+                        if let Some(app) = click_entity.upgrade() {
+                            let indices = std::sync::Arc::clone(&click_indices);
+                            app.update(cx, |this, cx| {
+                                if let AppView::ThemeChooserView {
+                                    ref mut selected_index,
+                                    ..
+                                } = this.current_view
+                                {
+                                    *selected_index = ix;
                                 }
-                            };
-
-                        // Build shared ListItem row — matches main menu rendering
-                        let item = crate::list_item::ListItem::new(name, list_colors)
-                            .description(desc)
-                            .selected(is_selected)
-                            .with_accent_bar(true)
-                            .index(ix)
-                            .leading_accessory(color_bar)
-                            .trailing_accessory_opt(saved_badge);
-
-                        let row = div()
-                            .id(ix)
-                            .cursor_pointer()
-                            .on_click(click_handler)
-                            .child(item);
-
-                        if let Some(label) = section_label {
-                            div()
-                                .w_full()
-                                .flex()
-                                .flex_col()
-                                .child(label)
-                                .child(row)
-                                .into_any_element()
-                        } else {
-                            row.into_any_element()
+                                this.preview_and_persist_theme_chooser_preset(
+                                    &indices,
+                                    ix,
+                                    "theme_chooser_mouse_click",
+                                    cx,
+                                );
+                            });
                         }
-                    })
-                    .collect()
+                    };
+
+                // Build shared ListItem row — matches main menu rendering
+                let item = crate::list_item::ListItem::new(name, list_colors)
+                    .description(desc)
+                    .selected(is_selected)
+                    .with_accent_bar(true)
+                    .index(ix)
+                    .leading_accessory(color_bar)
+                    .trailing_accessory_opt(saved_badge);
+
+                let row = div()
+                    .id(ix)
+                    .cursor_pointer()
+                    .on_click(click_handler)
+                    .child(item);
+
+                if let Some(label) = section_label {
+                    div()
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .child(label)
+                        .child(row)
+                        .into_any_element()
+                } else {
+                    row.into_any_element()
+                }
             },
         )
         .h_full()
-        .track_scroll(&self.theme_chooser_scroll_handle)
+        .with_sizing_behavior(gpui::ListSizingBehavior::Auto)
         .into_any_element();
-        let list_scrollbar = self.builtin_uniform_list_scrollbar(
-            &self.theme_chooser_scroll_handle,
-            filtered_count,
-            8,
-        );
 
         // ── Header with search input + summary strip ─────────────────
         let header_divider = div()
@@ -1019,10 +1021,7 @@ impl ScriptListApp {
                             .rounded(px(9.0))
                             .bg(rgb(color))
                             .when(is_current, |d| d.border_2().border_color(rgb(text_primary)))
-                            .when(!is_current, |d| {
-                                d.border_1()
-                                    .border_color(badge_border_bg)
-                            }),
+                            .when(!is_current, |d| d.border_1().border_color(badge_border_bg)),
                     )
                     .on_click(
                         move |_event: &gpui::ClickEvent,
@@ -1034,7 +1033,11 @@ impl ScriptListApp {
                                     modified.colors.accent.selected = color;
                                     modified.colors.text.on_accent =
                                         best_contrast_of_two(color, 0xFFFFFF, swatch_bg_main);
-                                    this.apply_and_persist_theme(modified, "theme_chooser_accent_click", cx);
+                                    this.apply_and_persist_theme(
+                                        modified,
+                                        "theme_chooser_accent_click",
+                                        cx,
+                                    );
                                 });
                             }
                         },
@@ -1079,8 +1082,15 @@ impl ScriptListApp {
                               cx: &mut gpui::App| {
                             if let Some(app) = click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
-                                    let modified = Self::apply_surface_opacity_preset(this.theme.as_ref(), value);
-                                    this.apply_and_persist_theme(modified, "theme_chooser_opacity_click", cx);
+                                    let modified = Self::apply_surface_opacity_preset(
+                                        this.theme.as_ref(),
+                                        value,
+                                    );
+                                    this.apply_and_persist_theme(
+                                        modified,
+                                        "theme_chooser_opacity_click",
+                                        cx,
+                                    );
                                 });
                             }
                         },
@@ -1114,7 +1124,11 @@ impl ScriptListApp {
                             if let Some(ref mut vibrancy) = modified.vibrancy {
                                 vibrancy.enabled = !vibrancy.enabled;
                             }
-                            this.apply_and_persist_theme(modified, "theme_chooser_vibrancy_click", cx);
+                            this.apply_and_persist_theme(
+                                modified,
+                                "theme_chooser_vibrancy_click",
+                                cx,
+                            );
                         });
                     }
                 },
@@ -1125,9 +1139,7 @@ impl ScriptListApp {
                     .h(px(14.0))
                     .rounded(px(7.0))
                     .when(vibrancy_enabled, |d| d.bg(rgb(accent_color)))
-                    .when(!vibrancy_enabled, |d| {
-                        d.bg(badge_border_bg)
-                    })
+                    .when(!vibrancy_enabled, |d| d.bg(badge_border_bg))
                     .flex()
                     .items_center()
                     .child(
@@ -1194,7 +1206,11 @@ impl ScriptListApp {
                                     if let Some(ref mut vibrancy) = modified.vibrancy {
                                         vibrancy.material = material;
                                     }
-                                    this.apply_and_persist_theme(modified, "theme_chooser_material_click", cx);
+                                    this.apply_and_persist_theme(
+                                        modified,
+                                        "theme_chooser_material_click",
+                                        cx,
+                                    );
                                 });
                             }
                         },
@@ -1250,7 +1266,11 @@ impl ScriptListApp {
                                             ..Default::default()
                                         });
                                     }
-                                    this.apply_and_persist_theme(modified, "theme_chooser_font_size_click", cx);
+                                    this.apply_and_persist_theme(
+                                        modified,
+                                        "theme_chooser_font_size_click",
+                                        cx,
+                                    );
                                 });
                             }
                         },
@@ -1334,11 +1354,7 @@ impl ScriptListApp {
                                 this.theme.as_ref(),
                                 theme_chooser_remix_seed(),
                             );
-                            this.apply_and_persist_theme(
-                                remixed,
-                                "theme_chooser_surprise_me",
-                                cx,
-                            );
+                            this.apply_and_persist_theme(remixed, "theme_chooser_surprise_me", cx);
                         });
                     }
                 },
@@ -1438,15 +1454,10 @@ impl ScriptListApp {
                     .flex()
                     .flex_col()
                     .gap(px(preview_section_gap))
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgb(text_muted))
-                            .child(format!(
-                                "Surface Opacity  {:.0}%",
-                                current_opacity_main * 100.0
-                            )),
-                    )
+                    .child(div().text_xs().text_color(rgb(text_muted)).child(format!(
+                        "Surface Opacity  {:.0}%",
+                        current_opacity_main * 100.0
+                    )))
                     .child(
                         div()
                             .flex()
@@ -1521,22 +1532,22 @@ impl ScriptListApp {
                     .gap(px(8.0))
                     .child(Self::render_theme_chooser_semantic_chip("OK", success_chip))
                     .child(Self::render_theme_chooser_semantic_chip("Err", error_chip))
-                    .child(Self::render_theme_chooser_semantic_chip("Warn", warning_chip))
+                    .child(Self::render_theme_chooser_semantic_chip(
+                        "Warn",
+                        warning_chip,
+                    ))
                     .child(Self::render_theme_chooser_semantic_chip("Info", info_chip)),
             )
             // ── Contrast audit (summary only) ────────────────────────
             .child({
                 let contrast_snapshot = cached_theme_chooser_contrast_snapshot(&self.theme);
-                div()
-                    .text_xs()
-                    .text_color(rgb(text_muted))
-                    .child(format!(
-                        "Contrast {}/{} pass · worst {} {:.2}:1",
-                        contrast_snapshot.passing,
-                        contrast_snapshot.total,
-                        contrast_snapshot.worst_label,
-                        contrast_snapshot.worst_ratio,
-                    ))
+                div().text_xs().text_color(rgb(text_muted)).child(format!(
+                    "Contrast {}/{} pass · worst {} {:.2}:1",
+                    contrast_snapshot.passing,
+                    contrast_snapshot.total,
+                    contrast_snapshot.worst_label,
+                    contrast_snapshot.worst_ratio,
+                ))
             })
             // ── Launcher-style live preview (spacing-only separation per spec) ──
             .child(div().h(px(1.0)).bg(divider_bg))
@@ -1574,9 +1585,7 @@ impl ScriptListApp {
                 .on_key_down(handle_key)
                 .child(header)
                 .child(header_divider)
-                .child(self.render_theme_chooser_empty_state_body(
-                    filter, summary, &chrome,
-                ))
+                .child(self.render_theme_chooser_empty_state_body(filter, summary, &chrome))
                 .child(footer)
                 .into_any_element();
         }
@@ -1602,18 +1611,14 @@ impl ScriptListApp {
                     .flex()
                     .flex_row()
                     .child(
-                        div()
-                            .w_1_2()
-                            .h_full()
-                            .py(px(4.0))
-                            .child(
-                                div()
-                                    .relative()
-                                    .w_full()
-                                    .h_full()
-                                    .child(list)
-                                    .child(list_scrollbar),
-                            ),
+                        div().w_1_2().h_full().py(px(4.0)).child(
+                            div()
+                                .relative()
+                                .w_full()
+                                .h_full()
+                                .child(list)
+                                .vertical_scrollbar(&self.theme_chooser_list_state),
+                        ),
                     )
                     .child(preview_panel),
             )
@@ -1739,6 +1744,14 @@ mod theme_chooser_filter_tests {
         // The theme chooser now uses the shared ListItem component for preset rows,
         // matching the main menu's accent bar, description reveal, and spacing.
         let source = include_str!("theme_chooser.rs");
+        assert!(
+            source.contains("list(self.theme_chooser_list_state.clone()"),
+            "theme chooser should use variable-height list() for mixed header/row heights"
+        );
+        assert!(
+            !source.contains("uniform_list("),
+            "theme chooser should not use uniform_list because rows can grow"
+        );
         assert!(
             source.contains("ListItem::new(name, list_colors)"),
             "theme chooser preset rows should use the shared ListItem primitive"

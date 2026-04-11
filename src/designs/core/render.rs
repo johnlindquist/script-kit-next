@@ -149,14 +149,7 @@ pub fn render_design_item(
                         .shortcut
                         .clone()
                         .or_else(|| sm.script.alias.clone());
-                    // Content matches: show line snippet instead of auto-description
-                    let description = if sm.match_kind == crate::scripts::ScriptMatchKind::Content {
-                        sm.content_match
-                            .as_ref()
-                            .map(|cm| format!("{}: {}", cm.line_number, cm.line_text))
-                    } else {
-                        auto_description_for_script(&sm.script)
-                    };
+                    let description = auto_description_for_script(&sm.script);
                     (sm.script.name.clone(), description, badge, Some(icon))
                 }
                 SearchResult::Scriptlet(sm) => {
@@ -287,24 +280,6 @@ pub fn render_design_item(
             // For scripts: show property indicator if the script has special runtime behavior
             // (cron/schedule, file watch, background, system)
             let tool_badge = resolve_tool_badge(result, !filter_text.is_empty());
-
-            // For content matches, use the pre-computed line_match_indices
-            // instead of fuzzy-matching the description text
-            let description_highlight_indices = match result {
-                SearchResult::Script(sm)
-                    if sm.match_kind == crate::scripts::ScriptMatchKind::Content =>
-                {
-                    sm.content_match.as_ref().map(|cm| {
-                        // Offset indices by the "{line_number}: " prefix length
-                        let prefix_len = format!("{}: ", cm.line_number).len();
-                        cm.line_match_indices
-                            .iter()
-                            .map(|&i| i + prefix_len)
-                            .collect::<Vec<_>>()
-                    })
-                }
-                _ => description_highlight_indices,
-            };
 
             ListItem::new(name, list_colors)
                 .index(index)

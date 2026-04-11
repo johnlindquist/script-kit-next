@@ -21,6 +21,10 @@ pub const BUTTON_CONTENT_GAP_PX: f32 = 2.0;
 pub const BUTTON_SHORTCUT_MARGIN_LEFT_PX: f32 = 4.0;
 /// Canonical button corner radius.
 pub const BUTTON_RADIUS_PX: f32 = 6.0;
+/// Light-mode hover overlay alpha for ghost/icon buttons.
+const BUTTON_HOVER_OVERLAY_ALPHA_LIGHT: u8 = 0x26;
+/// Dark-mode hover overlay alpha for ghost/icon buttons.
+const BUTTON_HOVER_OVERLAY_ALPHA_DARK: u8 = 0x2e;
 
 /// Button variant determines the visual style
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -67,10 +71,21 @@ impl ButtonColors {
         ((base_color & 0x00ff_ffff) << 8) | (alpha as u32)
     }
 
+    fn hover_overlay_alpha(is_dark_mode: bool) -> u8 {
+        if is_dark_mode {
+            BUTTON_HOVER_OVERLAY_ALPHA_DARK
+        } else {
+            BUTTON_HOVER_OVERLAY_ALPHA_LIGHT
+        }
+    }
+
     /// Create ButtonColors from theme reference
     /// Uses accent.selected (yellow/gold) to match logo and selected item highlights
     pub fn from_theme(theme: &Theme) -> Self {
-        let hover_overlay = Self::overlay_with_alpha(theme.colors.accent.selected_subtle, 0x26);
+        let hover_overlay = Self::overlay_with_alpha(
+            theme.colors.accent.selected_subtle,
+            Self::hover_overlay_alpha(theme.is_dark_mode()),
+        );
 
         Self {
             text_color: theme.colors.accent.selected, // Yellow/gold - matches logo & highlights
@@ -100,8 +115,11 @@ impl ButtonColors {
     /// # Arguments
     /// * `colors` - Design color tokens
     /// * `is_dark` - True for dark mode (white hover), false for light mode (black hover)
-    pub fn from_design_with_dark_mode(colors: &DesignColors, _is_dark: bool) -> Self {
-        let hover_overlay = Self::overlay_with_alpha(colors.background_selected, 0x26);
+    pub fn from_design_with_dark_mode(colors: &DesignColors, is_dark: bool) -> Self {
+        let hover_overlay = Self::overlay_with_alpha(
+            colors.background_selected,
+            Self::hover_overlay_alpha(is_dark),
+        );
 
         Self {
             text_color: colors.accent, // Primary accent (yellow/gold for default)
