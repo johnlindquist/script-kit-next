@@ -294,6 +294,42 @@ fn test_notes_keyboard_stops_propagation_for_cmd_p_browse_toggle() {
 }
 
 #[test]
+fn test_notes_keyboard_uses_cmd_shift_o_for_focused_note_mentions() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    assert!(
+        KEYBOARD_SOURCE.contains("key if modifiers.shift && key.eq_ignore_ascii_case(\"o\") => {"),
+        "Notes keyboard should reserve Cmd+Shift+O for focused note mention portal opens"
+    );
+    assert!(
+        KEYBOARD_SOURCE.contains("self.open_focused_note_mention_portal(window, cx)"),
+        "Cmd+Shift+O branch should route through the focused note mention portal helper"
+    );
+}
+
+#[test]
+fn test_note_switcher_selection_can_replace_active_note_mention() {
+    const PANELS_SOURCE: &str = include_str!("panels.rs");
+    assert!(
+        PANELS_SOURCE.contains("self.replace_active_note_mention_with_note(note_id, window, cx)"),
+        "Note switcher note selections should first try replacing an active note mention"
+    );
+}
+
+#[test]
+fn test_note_footer_preview_advertises_replace_shortcut() {
+    const FOOTER_SOURCE: &str = include_str!("render_editor_footer.rs");
+    const NAVIGATION_SOURCE: &str = include_str!("navigation.rs");
+    assert!(
+        FOOTER_SOURCE.contains("self.focused_note_mention_preview(cx)"),
+        "Notes footer should derive focused note mention preview state"
+    );
+    assert!(
+        NAVIGATION_SOURCE.contains("Cmd+Shift+O replace"),
+        "Focused note mention preview should advertise the replace shortcut"
+    );
+}
+
+#[test]
 fn test_save_note_with_content_activates_existing_notes_window() {
     const WINDOW_OPS_SOURCE: &str = include_str!("window_ops.rs");
     let helper_start = WINDOW_OPS_SOURCE

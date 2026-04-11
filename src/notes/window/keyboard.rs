@@ -397,6 +397,12 @@ impl NotesApp {
                     }
                     cx.stop_propagation();
                 }
+                key if modifiers.shift && key.eq_ignore_ascii_case("o") => {
+                    if self.open_focused_note_mention_portal(window, cx) {
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
                 key if key.eq_ignore_ascii_case("p") => {
                     if modifiers.shift {
                         self.toggle_preview(window, cx);

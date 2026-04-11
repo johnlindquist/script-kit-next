@@ -3,6 +3,155 @@ use itertools::Itertools;
 use super::*;
 
 impl NotesApp {
+    fn byte_offset_to_char_index(text: &str, byte_offset: usize) -> usize {
+        text[..byte_offset.min(text.len())].chars().count()
+    }
+
+    fn char_index_to_byte_offset(text: &str, char_index: usize) -> usize {
+        text.char_indices()
+            .nth(char_index)
+            .map(|(byte, _)| byte)
+            .unwrap_or(text.len())
+    }
+
+    fn char_range_to_byte_range(
+        text: &str,
+        range: std::ops::Range<usize>,
+    ) -> std::ops::Range<usize> {
+        Self::char_index_to_byte_offset(text, range.start)
+            ..Self::char_index_to_byte_offset(text, range.end)
+    }
+
+    fn note_portal_query_from_token(token: &str) -> Option<String> {
+        let (prefix, value) = crate::ai::context_mentions::typed_mention_token_parts(token)?;
+        (prefix == "note").then_some(value)
+    }
+
+    pub(super) fn focused_note_inline_token_span(
+        &self,
+        cx: &Context<Self>,
+    ) -> Option<crate::ai::context_mentions::InlineTokenSpan> {
+        let editor = self.editor_state.read(cx);
+        let value = editor.value().to_string();
+        let cursor_char = Self::byte_offset_to_char_index(&value, editor.cursor());
+        crate::ai::context_mentions::inline_token_at_cursor(&value, cursor_char)
+    }
+
+    pub(super) fn focused_note_mention_preview(
+        &self,
+        cx: &Context<Self>,
+    ) -> Option<(String, String)> {
+        let span = self.focused_note_inline_token_span(cx)?;
+        let detail = if let Some(query) = Self::note_portal_query_from_token(&span.token) {
+            if query.trim().is_empty() {
+                "notes portal • Cmd+Shift+O replace".to_string()
+            } else {
+                format!(
+                    "notes portal for \"{}\" • Cmd+Shift+O replace",
+                    query.trim()
+                )
+            }
+        } else if let Some((prefix, value)) =
+            crate::ai::context_mentions::typed_mention_token_parts(&span.token)
+        {
+            if value.trim().is_empty() {
+                format!("@{prefix} token • open in ACP to replace")
+            } else {
+                format!("@{prefix} \"{}\" • open in ACP to replace", value.trim())
+            }
+        } else {
+            "ACP token • open in ACP to replace".to_string()
+        };
+
+        Some((span.token, detail))
+    }
+
+    pub(super) fn open_focused_note_mention_portal(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(span) = self.focused_note_inline_token_span(cx) else {
+            return false;
+        };
+        let Some(query) = Self::note_portal_query_from_token(&span.token) else {
+            return false;
+        };
+
+        let value = self.editor_state.read(cx).value().to_string();
+        self.mention_portal_edit = Some(NotesMentionPortalEditSession {
+            mention_range: Self::char_range_to_byte_range(&value, span.range),
+            original_token: span.token,
+        });
+        self.open_browse_panel(window, cx);
+        if let Some(dialog) = self.note_switcher.dialog() {
+            dialog.update(cx, |d, cx| {
+                d.set_context_title(Some("Replace @note".to_string()));
+                d.set_search_text(query, cx);
+            });
+        }
+        cx.notify();
+        true
+    }
+
+    pub(super) fn replace_active_note_mention_with_note(
+        &mut self,
+        id: NoteId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(edit) = self.mention_portal_edit.take() else {
+            return false;
+        };
+        let Some(note) = self.notes.iter().find(|note| note.id == id) else {
+            self.show_selected_note_missing_feedback("replace_active_note_mention_with_note", cx);
+            self.close_browse_panel(window, cx);
+            return true;
+        };
+
+        let title = if note.title.trim().is_empty() {
+            "Untitled Note"
+        } else {
+            note.title.trim()
+        };
+        let token = crate::ai::context_mentions::format_typed_label_mention_token("note", title);
+        let current_value = self.editor_state.read(cx).value().to_string();
+        let suffix = &current_value[edit.mention_range.end.min(current_value.len())..];
+        let needs_space = suffix
+            .chars()
+            .next()
+            .map(|ch| !ch.is_whitespace() && !matches!(ch, ',' | '.' | ';' | ':' | ')' | ']' | '}'))
+            .unwrap_or(false);
+        let replacement = if needs_space {
+            format!("{token} ")
+        } else {
+            token.clone()
+        };
+        let next_value = format!(
+            "{}{}{}",
+            &current_value[..edit.mention_range.start.min(current_value.len())],
+            replacement,
+            suffix,
+        );
+        let next_cursor = edit.mention_range.start + replacement.len();
+
+        tracing::info!(
+            target: "script_kit::notes",
+            event = "notes_mention_portal_replaced",
+            old_token = %edit.original_token,
+            new_token = %token,
+            note_id = %id.as_str(),
+        );
+
+        self.editor_state.update(cx, |state, cx| {
+            state.set_value(next_value, window, cx);
+            state.set_selection(next_cursor, next_cursor, window, cx);
+        });
+        self.close_browse_panel(window, cx);
+        cx.notify();
+        true
+    }
+
     /// Get filtered notes based on search query
     pub(super) fn get_visible_notes(&self) -> &[Note] {
         match self.view_mode {
