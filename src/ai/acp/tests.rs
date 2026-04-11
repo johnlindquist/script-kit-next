@@ -1885,14 +1885,13 @@ fn acp_default_slash_accept_inserts_command_text() {
     }
 }
 
-/// Plugin skills accepted from the ACP slash picker must stage the same
-/// deterministic `<skill path="...">...</skill>` payload as the main-menu
-/// skill launch path.  Both use `build_staged_skill_prompt`.
+/// Plugin skills accepted from the ACP slash picker must use the same
+/// slash-prefill text and attached skill-part payload as the main-menu
+/// skill launch path.
 #[test]
 fn acp_plugin_slash_accept_stages_selected_skill_prompt() {
-    use super::view::{build_staged_skill_prompt, SlashCommandEntry, SlashCommandSource};
+    use super::view::{build_skill_context_part, build_skill_slash_command_text};
     use std::io::Write;
-    use std::path::PathBuf;
 
     // Create a temp skill file with known content.
     let dir = tempfile::tempdir().expect("tempdir");
@@ -1912,41 +1911,38 @@ fn acp_plugin_slash_accept_stages_selected_skill_prompt() {
         description: "Alpha review".to_string(),
     };
 
-    // Build via the shared helper — same function used by both main-menu and
-    // slash acceptance paths.
-    let staged = build_staged_skill_prompt("Review", "Alpha", &skill_path);
+    let slash_prefill = build_skill_slash_command_text(&skill.skill_id);
+    assert_eq!(slash_prefill, "/review ");
 
-    assert!(
-        staged.contains("<skill path=\""),
-        "Staged payload must contain <skill path=...> wrapper: {staged}"
-    );
-    assert!(
-        staged.contains("</skill>"),
-        "Staged payload must close the <skill> tag: {staged}"
-    );
-    assert!(
-        staged.contains("Review code changes against project guidelines."),
-        "Staged payload must include the skill file content: {staged}"
-    );
-    assert!(
-        staged.contains("from plugin \"Alpha\""),
-        "Staged payload must reference the owner: {staged}"
-    );
-
-    // Verify main-menu path produces the identical output.
     let owner = if skill.plugin_title.is_empty() {
         &skill.plugin_id
     } else {
         &skill.plugin_title
     };
-    let main_menu_staged = build_staged_skill_prompt(&skill.title, owner, &skill.path);
-    assert_eq!(
-        staged, main_menu_staged,
-        "Slash and main-menu paths must produce identical staged payloads"
-    );
+    let slash_part = build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path);
+    let main_menu_part =
+        build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path);
+    assert_eq!(slash_part, main_menu_part);
 
-    // When two plugins share the same slash slug, their staged payloads diverge
-    // because the skill_path differs.
+    match &slash_part {
+        crate::ai::message_parts::AiContextPart::SkillFile {
+            path,
+            label,
+            skill_name,
+            owner_label,
+            slash_name,
+        } => {
+            assert_eq!(path, &skill_path.to_string_lossy().to_string());
+            assert_eq!(label, "/review");
+            assert_eq!(skill_name, "Review");
+            assert_eq!(owner_label, "Alpha");
+            assert_eq!(slash_name, "review");
+        }
+        other => panic!("expected SkillFile part, got {other:?}"),
+    }
+
+    // When two plugins share the same slash slug, their attached parts diverge
+    // because the owner and path differ.
     let beta_path = dir.path().join("BETA_SKILL.md");
     {
         let mut f = std::fs::File::create(&beta_path).expect("create beta skill");
@@ -1954,14 +1950,10 @@ fn acp_plugin_slash_accept_stages_selected_skill_prompt() {
             .expect("write");
     }
 
-    let beta_staged = build_staged_skill_prompt("Review", "Beta", &beta_path);
+    let beta_part = build_skill_context_part("Review", "Beta", "review", &beta_path);
     assert_ne!(
-        staged, beta_staged,
-        "Same slug from different plugins must produce different payloads"
-    );
-    assert!(
-        beta_staged.contains("from plugin \"Beta\""),
-        "Beta payload must reference its own owner"
+        slash_part, beta_part,
+        "Same slug from different plugins must produce different attached parts"
     );
 }
 
@@ -2120,11 +2112,11 @@ fn acp_slash_dedup_preserves_source_distinct_rows() {
     );
 }
 
-/// Plugin and Claude skill slash acceptance both produce the same staged
-/// prompt payload as main-menu skill launch (through `build_staged_skill_prompt`).
+/// Plugin and Claude skill slash acceptance both share the same slash-prefill
+/// and attached-skill-part contract as main-menu skill launch.
 #[test]
 fn acp_slash_and_main_menu_skill_launch_share_prompt_contract() {
-    use super::view::build_staged_skill_prompt;
+    use super::view::{build_skill_context_part, build_skill_slash_command_text};
     use std::io::Write;
 
     let dir = tempfile::tempdir().expect("tempdir");
@@ -2150,29 +2142,32 @@ fn acp_slash_and_main_menu_skill_launch_share_prompt_contract() {
     } else {
         &skill.plugin_title
     };
-    let main_menu = build_staged_skill_prompt(&skill.title, owner, &skill.path);
-
-    // Slash acceptance path (from accept_mention_selection_impl).
-    let slash_accept = build_staged_skill_prompt(&skill.title, owner, &skill.path);
+    let main_menu_prefill = build_skill_slash_command_text(&skill.skill_id);
+    let slash_accept_prefill = build_skill_slash_command_text(&skill.skill_id);
+    let main_menu_part =
+        build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path);
+    let slash_accept_part =
+        build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path);
 
     assert_eq!(
-        main_menu, slash_accept,
-        "Main-menu and slash acceptance must produce identical staged payloads"
+        main_menu_prefill, slash_accept_prefill,
+        "Main-menu and slash acceptance must produce identical slash prefill"
+    );
+    assert_eq!(
+        main_menu_part, slash_accept_part,
+        "Main-menu and slash acceptance must attach the same skill part"
     );
 
-    // Claude Code skill uses "Claude Code" as owner.
     let claude_skill_path = dir.path().join("CLAUDE_SKILL.md");
     {
         let mut f = std::fs::File::create(&claude_skill_path).expect("create");
         f.write_all(b"# Plan\nCreate a plan.").expect("write");
     }
-    let claude_staged = build_staged_skill_prompt("Plan", "Claude Code", &claude_skill_path);
-    assert!(
-        claude_staged.contains("from Claude Code"),
-        "Claude skill must use 'from Claude Code': {claude_staged}"
-    );
-    assert!(
-        !claude_staged.contains("from plugin"),
-        "Claude skill must not use plugin phrasing: {claude_staged}"
-    );
+    let claude_part = build_skill_context_part("Plan", "Claude Code", "plan", &claude_skill_path);
+    match claude_part {
+        crate::ai::message_parts::AiContextPart::SkillFile { owner_label, .. } => {
+            assert_eq!(owner_label, "Claude Code");
+        }
+        other => panic!("expected SkillFile part, got {other:?}"),
+    }
 }

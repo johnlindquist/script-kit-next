@@ -224,6 +224,9 @@ impl ScriptListApp {
             AppView::AcpHistoryView { filter, .. } if !filter.is_empty() => {
                 Some("AcpHistory filter")
             }
+            AppView::NotesBrowseView { filter, .. } if !filter.is_empty() => {
+                Some("NotesBrowse filter")
+            }
             AppView::DesignGalleryView { filter, .. } if !filter.is_empty() => {
                 Some("DesignGallery filter")
             }
@@ -269,7 +272,8 @@ impl ScriptListApp {
                 ..
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
-                self.emoji_scroll_handle.scroll_to_item(0, ScrollStrategy::Top);
+                self.emoji_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
             }
             AppView::WindowSwitcherView {
                 filter,
@@ -314,6 +318,13 @@ impl ScriptListApp {
                 Self::clear_builtin_query_state(filter, selected_index);
                 self.acp_history_scroll_handle.scroll_to_top_of_item(0);
             }
+            AppView::NotesBrowseView {
+                filter,
+                selected_index,
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.notes_browse_scroll_handle.scroll_to_top_of_item(0);
+            }
             AppView::DesignGalleryView {
                 filter,
                 selected_index,
@@ -327,8 +338,10 @@ impl ScriptListApp {
                 selected_index,
             } => {
                 Self::clear_builtin_query_state(filter, selected_index);
-                self.theme_chooser_scroll_handle
-                    .scroll_to_item(0, ScrollStrategy::Top);
+                self.theme_chooser_list_state.scroll_to(ListOffset {
+                    item_ix: 0,
+                    offset_in_item: px(0.),
+                });
             }
             AppView::FileSearchView {
                 query,

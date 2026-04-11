@@ -27,6 +27,14 @@ pub enum AiContextPart {
     ResourceUri { uri: String, label: String },
     /// A local file path attachment
     FilePath { path: String, label: String },
+    /// A local skill attachment selected from slash-mode or the main menu.
+    SkillFile {
+        path: String,
+        label: String,
+        skill_name: String,
+        owner_label: String,
+        slash_name: String,
+    },
     /// A focused UI target resolved from the active surface (e.g. a selected
     /// script, clipboard entry, or file). Carries the full target context so
     /// it can be rendered as a chip and resolved into a deterministic prompt
@@ -40,6 +48,16 @@ pub enum AiContextPart {
     /// Resolves to an empty prompt block (the real content lives in the
     /// staged blocks).
     AmbientContext { label: String },
+    /// A raw text block — terminal logs, pasted snippets, URLs, or note
+    /// content stashed into a Context Cart session. Resolves into a
+    /// `<context>` block at submit time.
+    TextBlock {
+        label: String,
+        source: String,
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        mime_type: Option<String>,
+    },
 }
 
 impl AiContextPart {
@@ -47,8 +65,10 @@ impl AiContextPart {
         match self {
             Self::ResourceUri { label, .. }
             | Self::FilePath { label, .. }
+            | Self::SkillFile { label, .. }
             | Self::FocusedTarget { label, .. }
-            | Self::AmbientContext { label } => label,
+            | Self::AmbientContext { label }
+            | Self::TextBlock { label, .. } => label,
         }
     }
 
@@ -57,8 +77,10 @@ impl AiContextPart {
         match self {
             Self::ResourceUri { uri, .. } => uri,
             Self::FilePath { path, .. } => path,
+            Self::SkillFile { path, .. } => path,
             Self::FocusedTarget { target, .. } => &target.semantic_id,
             Self::AmbientContext { .. } => "ambient://ask-anything",
+            Self::TextBlock { source, .. } => source,
         }
     }
 
@@ -208,6 +230,27 @@ pub fn resolve_context_part_to_prompt_block(
                 ))
             }
         },
+        AiContextPart::SkillFile {
+            path,
+            skill_name,
+            owner_label,
+            ..
+        } => {
+            let prompt = crate::ai::acp::build_staged_skill_prompt(
+                skill_name,
+                owner_label,
+                std::path::Path::new(path),
+            );
+            tracing::info!(
+                kind = "skill_file",
+                path = %path,
+                skill_name = %skill_name,
+                owner_label = %owner_label,
+                bytes = prompt.len(),
+                "Resolved skill file context part"
+            );
+            Ok(prompt)
+        }
         AiContextPart::FocusedTarget { target, label } => {
             resolve_focused_target_part(target, label)
         }
@@ -218,6 +261,25 @@ pub fn resolve_context_part_to_prompt_block(
                 "Skipped display-only ambient context chip during prompt resolution"
             );
             Ok(String::new())
+        }
+        AiContextPart::TextBlock {
+            label,
+            source,
+            text,
+            mime_type,
+        } => {
+            let mime = mime_type.as_deref().unwrap_or("text/plain");
+            tracing::info!(
+                event = "context_part_resolved_text_block",
+                source = %source,
+                bytes = text.len(),
+                mime_type = %mime,
+                "Resolved text block context part"
+            );
+            Ok(format!(
+                "<context source=\"{}\" mimeType=\"{}\" label=\"{}\">\n{}\n</context>",
+                source, mime, label, text
+            ))
         }
     }
 }
@@ -604,6 +666,28 @@ fn resolve_context_part_for_preparation(
                 ),
             },
         },
+        AiContextPart::SkillFile {
+            path,
+            label,
+            skill_name,
+            owner_label,
+            ..
+        } => {
+            let prompt_block = crate::ai::acp::build_staged_skill_prompt(
+                skill_name,
+                owner_label,
+                std::path::Path::new(path),
+            );
+            (
+                ContextPartPreparationOutcome {
+                    label: label.clone(),
+                    source: path.clone(),
+                    kind: ContextPartPreparationOutcomeKind::FullContent,
+                    detail: Some(format!("skillName={skill_name}, owner={owner_label}")),
+                },
+                Some(prompt_block),
+            )
+        }
         AiContextPart::FocusedTarget { target, label } => {
             match resolve_focused_target_part(target, label) {
                 Ok(prompt_block) => (
@@ -638,6 +722,27 @@ fn resolve_context_part_for_preparation(
             },
             None,
         ),
+        AiContextPart::TextBlock {
+            label,
+            source,
+            text,
+            mime_type,
+        } => {
+            let mime = mime_type.as_deref().unwrap_or("text/plain");
+            let prompt_block = format!(
+                "<context source=\"{}\" mimeType=\"{}\" label=\"{}\">\n{}\n</context>",
+                source, mime, label, text
+            );
+            (
+                ContextPartPreparationOutcome {
+                    label: label.clone(),
+                    source: source.clone(),
+                    kind: ContextPartPreparationOutcomeKind::FullContent,
+                    detail: Some(format!("mimeType={mime}, bytes={}", text.len())),
+                },
+                Some(prompt_block),
+            )
+        }
     }
 }
 
@@ -820,6 +925,30 @@ mod tests {
         assert!(block.contains("Hello, world!"));
         assert!(block.contains("</attachment>"));
         assert!(!block.contains("unreadable"));
+    }
+
+    #[test]
+    fn test_resolve_skill_file_path_builds_staged_skill_prompt() {
+        let dir = tempfile::tempdir().expect("create temp dir");
+        let file_path = dir.path().join("SKILL.md");
+        std::fs::write(&file_path, "# Review\nReview the current diff.").expect("write temp file");
+
+        let part = AiContextPart::SkillFile {
+            path: file_path.to_string_lossy().to_string(),
+            label: "/review".to_string(),
+            skill_name: "Review".to_string(),
+            owner_label: "Authoring".to_string(),
+            slash_name: "review".to_string(),
+        };
+
+        let block =
+            resolve_context_part_to_prompt_block(&part, &[], &[]).expect("resolve should succeed");
+
+        assert!(block.contains("Use the attached skill \"Review\""));
+        assert!(block.contains("from plugin \"Authoring\""));
+        assert!(block.contains("<skill path=\""));
+        assert!(block.contains("Review the current diff."));
+        assert!(block.contains("</skill>"));
     }
 
     #[test]

@@ -193,7 +193,9 @@ impl ScriptListApp {
         // Start cursor blink timer - updates all inputs that track cursor visibility
         cx.spawn(async move |this, cx| {
             loop {
-                cx.background_executor().timer(std::time::Duration::from_millis(530)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(530))
+                    .await;
 
                 // CRITICAL: Check window visibility BEFORE cx.update() to avoid
                 // unnecessary GPUI context access when window is hidden.
@@ -439,9 +441,10 @@ impl ScriptListApp {
             process_list_scroll_handle: UniformListScrollHandle::new(),
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             acp_history_scroll_handle: ScrollHandle::new(),
+            notes_browse_scroll_handle: ScrollHandle::new(),
             design_gallery_scroll_handle: UniformListScrollHandle::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
-            theme_chooser_scroll_handle: UniformListScrollHandle::new(),
+            theme_chooser_list_state: ListState::new(0, ListAlignment::Top, px(100.)).measure_all(),
             file_search_loading: false,
             file_search_debounce_task: None,
             file_search_current_dir: None,
@@ -572,6 +575,7 @@ impl ScriptListApp {
             embedded_acp_chat: None,
             attachment_portal_return_view: None,
             attachment_portal_return_focus_target: None,
+            active_attachment_portal_kind: None,
             // Input history for shell-like up/down navigation
             input_history: {
                 let mut history = input_history::InputHistory::new();
@@ -834,9 +838,8 @@ impl ScriptListApp {
                             // Consume Tab/Shift+Tab while the ACP chat is
                             // open so the surface keeps local tab ownership.
                             if let AppView::AcpChatView { entity, .. } = &this.current_view {
-                                let handled = entity.update(cx, |chat, cx| {
-                                    chat.handle_tab_key(has_shift, cx)
-                                });
+                                let handled = entity
+                                    .update(cx, |chat, cx| chat.handle_tab_key(has_shift, cx));
                                 if handled {
                                     cx.stop_propagation();
                                     return;
@@ -996,7 +999,8 @@ impl ScriptListApp {
 
                                 let row =
                                     crate::emoji::compute_scroll_row(*selected_index, &ordered);
-                                this.emoji_scroll_handle.scroll_to_item(row, ScrollStrategy::Nearest);
+                                this.emoji_scroll_handle
+                                    .scroll_to_item(row, ScrollStrategy::Nearest);
 
                                 this.input_mode = InputMode::Keyboard;
                                 this.hovered_index = None;
@@ -1265,7 +1269,8 @@ impl ScriptListApp {
                                         crate::ai::acp::history::load_history()
                                             .into_iter()
                                             .filter(|entry| {
-                                                entry.first_message
+                                                entry
+                                                    .first_message
                                                     .to_lowercase()
                                                     .contains(&filter_lower)
                                                     || entry
@@ -1398,8 +1403,7 @@ impl ScriptListApp {
                                                             window,
                                                             input_cx,
                                                         );
-                                                        state
-                                                            .set_selection(0, 0, window, input_cx);
+                                                        state.set_selection(0, 0, window, input_cx);
                                                     },
                                                 );
                                                 this.queue_filter_compute(String::new(), cx);

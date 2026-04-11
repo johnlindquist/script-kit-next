@@ -2857,6 +2857,7 @@ impl ScriptListApp {
             | AppView::SettingsView { .. }
             | AppView::FavoritesBrowseView { .. }
             | AppView::AcpHistoryView { .. }
+            | AppView::NotesBrowseView { .. }
             | AppView::CurrentAppCommandsView { .. }
             | AppView::DesignGalleryView { .. }
             | AppView::CreationFeedback { .. }
@@ -2999,7 +3000,7 @@ impl ScriptListApp {
 
     /// Convert a `SearchResult` from the Script List into a `TabAiTargetContext`
     /// with script-native metadata (name, path, description, type).
-    fn tab_ai_target_from_search_result(
+    pub(crate) fn tab_ai_target_from_search_result(
         index: usize,
         result: &scripts::SearchResult,
     ) -> crate::ai::TabAiTargetContext {
@@ -3968,6 +3969,7 @@ impl ScriptListApp {
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowse".to_string(),
             AppView::CurrentAppCommandsView { .. } => "CurrentAppCommands".to_string(),
             AppView::AcpHistoryView { .. } => "AcpHistoryView".to_string(),
+            AppView::NotesBrowseView { .. } => "NotesBrowse".to_string(),
             AppView::AcpChatView { .. } => "AcpChatView".to_string(),
         }
     }
@@ -3998,7 +4000,8 @@ impl ScriptListApp {
             | AppView::FavoritesBrowseView { filter, .. }
             | AppView::CurrentAppCommandsView { filter, .. }
             | AppView::DesignGalleryView { filter, .. }
-            | AppView::AcpHistoryView { filter, .. } => non_empty(filter.clone()),
+            | AppView::AcpHistoryView { filter, .. }
+            | AppView::NotesBrowseView { filter, .. } => non_empty(filter.clone()),
 
             AppView::FileSearchView { query, .. } => non_empty(query.clone()),
 

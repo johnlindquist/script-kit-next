@@ -171,6 +171,62 @@ fn dialog_has_structured_route_tracing() {
     );
 }
 
+// ── Notes-hosted ACP agent switching contract tests ─────────────────────────
+
+const NOTES_ACP_HOST_SOURCE: &str = include_str!("../src/notes/window/acp_host.rs");
+
+#[test]
+fn notes_acp_dispatch_handles_switch_agent_actions() {
+    assert!(
+        NOTES_ACP_HOST_SOURCE.contains("acp_switch_agent_id_from_action"),
+        "Notes-hosted ACP must detect switch-agent action IDs"
+    );
+    assert!(
+        NOTES_ACP_HOST_SOURCE.contains("persist_preferred_acp_agent_id_sync"),
+        "Notes-hosted ACP switch-agent flow must persist the selected agent synchronously"
+    );
+    assert!(
+        NOTES_ACP_HOST_SOURCE.contains("notes_acp_switch_agent_relaunched"),
+        "Notes-hosted ACP switch-agent flow must emit relaunch tracing"
+    );
+}
+
+#[test]
+fn notes_acp_switch_agent_preserves_draft_input() {
+    assert!(
+        NOTES_ACP_HOST_SOURCE.contains("current_notes_acp_draft_input"),
+        "Notes-hosted ACP switch-agent flow must extract draft input before relaunch"
+    );
+    assert!(
+        NOTES_ACP_HOST_SOURCE.contains("has_draft_input"),
+        "Notes-hosted ACP switch-agent tracing must include draft input status"
+    );
+}
+
+#[test]
+fn notes_acp_switch_agent_tears_down_before_relaunch() {
+    let hide_pos = NOTES_ACP_HOST_SOURCE
+        .find("notes_acp_switch_agent_requested")
+        .and_then(|start| {
+            NOTES_ACP_HOST_SOURCE[start..]
+                .find("prepare_for_host_hide")
+                .map(|offset| start + offset)
+        })
+        .expect("prepare_for_host_hide must appear after switch-agent-requested");
+    let drop_pos = NOTES_ACP_HOST_SOURCE[hide_pos..]
+        .find("embedded_acp_chat = None")
+        .map(|offset| hide_pos + offset)
+        .expect("embedded_acp_chat = None must appear after prepare_for_host_hide");
+    let relaunch_pos = NOTES_ACP_HOST_SOURCE[drop_pos..]
+        .find("open_or_focus_embedded_acp")
+        .map(|offset| drop_pos + offset)
+        .expect("open_or_focus_embedded_acp must appear after dropping cached view");
+    assert!(
+        hide_pos < drop_pos && drop_pos < relaunch_pos,
+        "Agent switch must: hide popups -> drop cached view -> relaunch"
+    );
+}
+
 // ── Host-aware ACP unification contract tests ───────────────────────────────
 
 #[test]
@@ -194,6 +250,30 @@ fn acp_builder_exposes_host_aware_route_api() {
     assert!(
         ACTION_BUILDER_SOURCE.contains("get_acp_agent_picker_route_for_host"),
         "Host-aware ACP agent picker route builder must exist"
+    );
+}
+
+#[test]
+fn actions_window_routes_focused_popup_shortcuts_through_shared_matcher() {
+    assert!(
+        ACTIONS_WINDOW_SOURCE.contains("matching_action_id_for_keystroke"),
+        "ActionsWindow must reuse the shared dialog shortcut matcher for focused popup fallback"
+    );
+    assert!(
+        ACTIONS_DIALOG_SOURCE.contains("activate_action_id"),
+        "Shared actions dialog routing must expose activation by explicit action id"
+    );
+}
+
+#[test]
+fn actions_window_defers_activation_to_host_callback_when_present() {
+    assert!(
+        ACTIONS_WINDOW_SOURCE.contains("on_activation_callback"),
+        "ActionsWindow must read the dialog's activation callback"
+    );
+    assert!(
+        ACTIONS_WINDOW_SOURCE.contains("callback(activation, window, cx);"),
+        "ActionsWindow must defer focused-popup activation back to the host callback"
     );
 }
 

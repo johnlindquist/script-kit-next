@@ -86,6 +86,33 @@ pub(super) fn derive_context_preview_info(
                 description: format!("File attachment ({file_size})"),
             }
         }
+        crate::ai::message_parts::AiContextPart::SkillFile {
+            path,
+            label,
+            owner_label,
+            ..
+        } => {
+            let file_size = std::fs::metadata(path)
+                .map(|m| format_byte_size(m.len()))
+                .unwrap_or_else(|_| "unknown size".to_string());
+
+            tracing::info!(
+                checkpoint = "context_preview_derived",
+                label = %label,
+                path = %path,
+                owner_label = %owner_label,
+                profile = "skill",
+                "derived skill context preview info"
+            );
+
+            ContextPreviewInfo {
+                label: label.clone(),
+                source_uri: path.clone(),
+                profile: ContextPreviewProfile::FilePath,
+                has_diagnostics: false,
+                description: format!("Skill attachment from {owner_label} ({file_size})"),
+            }
+        }
         crate::ai::message_parts::AiContextPart::FocusedTarget { target, label } => {
             tracing::info!(
                 checkpoint = "context_preview_derived",
@@ -119,6 +146,32 @@ pub(super) fn derive_context_preview_info(
                 profile: ContextPreviewProfile::Custom,
                 has_diagnostics: false,
                 description: "Ambient desktop context (staged separately)".to_string(),
+            }
+        }
+        crate::ai::message_parts::AiContextPart::TextBlock {
+            label,
+            source,
+            text,
+            mime_type,
+        } => {
+            let mime = mime_type.as_deref().unwrap_or("text/plain");
+            let size = format_byte_size(text.len() as u64);
+
+            tracing::info!(
+                checkpoint = "context_preview_derived",
+                label = %label,
+                source = %source,
+                mime_type = %mime,
+                profile = "text_block",
+                "derived text block context preview info"
+            );
+
+            ContextPreviewInfo {
+                label: label.clone(),
+                source_uri: source.clone(),
+                profile: ContextPreviewProfile::Custom,
+                has_diagnostics: false,
+                description: format!("Text block ({mime}, {size})"),
             }
         }
     }

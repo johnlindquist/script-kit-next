@@ -222,6 +222,11 @@ enum AppView {
         filter: String,
         selected_index: usize,
     },
+    /// Browsing notes from ACP as an attachment portal
+    NotesBrowseView {
+        filter: String,
+        selected_index: usize,
+    },
     /// Showing the ACP-backed Tab AI chat surface for the default Tab path.
     ///
     /// Verification-bearing script-authoring requests deliberately route to

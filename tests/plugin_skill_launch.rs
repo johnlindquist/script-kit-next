@@ -99,7 +99,7 @@ fn skill_search_result_type_tag_uses_gold_color() {
 }
 
 #[test]
-fn skill_initial_input_contains_skill_title_and_plugin() {
+fn skill_initial_input_prefills_slash_and_attaches_skill_part() {
     let skill = make_skill(
         "authoring",
         "Authoring",
@@ -107,11 +107,29 @@ fn skill_initial_input_contains_skill_title_and_plugin() {
         "Scriptlet Authoring",
     );
 
-    // Simulate the initial input that would be built by open_acp_with_selected_skill
-    let initial_input = format!(
-        "Use the attached skill \"{}\" from plugin \"{}\" for this session.",
-        skill.title, skill.plugin_title
-    );
-    assert!(initial_input.contains("Scriptlet Authoring"));
-    assert!(initial_input.contains("Authoring"));
+    let initial_input = format!("/{} ", skill.skill_id);
+    let part = script_kit_gpui::ai::AiContextPart::SkillFile {
+        path: skill.path.to_string_lossy().to_string(),
+        label: format!("/{}", skill.skill_id),
+        skill_name: skill.title.clone(),
+        owner_label: skill.plugin_title.clone(),
+        slash_name: skill.skill_id.clone(),
+    };
+
+    assert_eq!(initial_input, "/scriptlets ");
+    match part {
+        script_kit_gpui::ai::AiContextPart::SkillFile {
+            label,
+            skill_name,
+            owner_label,
+            slash_name,
+            ..
+        } => {
+            assert_eq!(label, "/scriptlets");
+            assert_eq!(skill_name, "Scriptlet Authoring");
+            assert_eq!(owner_label, "Authoring");
+            assert_eq!(slash_name, "scriptlets");
+        }
+        other => panic!("expected SkillFile part, got {other:?}"),
+    }
 }

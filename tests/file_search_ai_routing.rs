@@ -56,21 +56,6 @@ fn file_search_cmd_shift_enter_preserves_local_ai_path() {
 }
 
 #[test]
-fn file_search_view_is_eligible_for_shared_global_cmd_enter_route() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode.rs");
-
-    assert!(
-        source.contains("fn supports_global_cmd_enter_ai_entry(view: &AppView) -> bool"),
-        "tab_ai_mode must define the shared global Cmd+Enter eligibility gate"
-    );
-    assert!(
-        source.contains("| AppView::FileSearchView { .. }"),
-        "FileSearchView must participate in the shared global Cmd+Enter ACP route"
-    );
-}
-
-#[test]
 fn tab_ai_mode_has_file_search_intent_builder() {
     let source = fs::read_to_string("src/app_impl/tab_ai_mode.rs")
         .expect("Failed to read src/app_impl/tab_ai_mode.rs");

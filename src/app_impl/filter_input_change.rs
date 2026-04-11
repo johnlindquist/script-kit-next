@@ -187,8 +187,10 @@ impl ScriptListApp {
                         "mouse"
                     };
 
-                    let (_filtered, receipt) =
-                        crate::builtins::filter_menu_bar_entries(&self.cached_current_app_entries, &new_text);
+                    let (_filtered, receipt) = crate::builtins::filter_menu_bar_entries(
+                        &self.cached_current_app_entries,
+                        &new_text,
+                    );
 
                     tracing::debug!(
                         query = %receipt.query,
@@ -241,6 +243,17 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
+            AppView::NotesBrowseView {
+                filter,
+                selected_index,
+            } => {
+                self.filter_text = new_text.clone();
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    self.notes_browse_scroll_handle.scroll_to_top_of_item(0);
+                    cx.notify();
+                }
+                return; // Don't run main menu filter logic
+            }
             AppView::DesignGalleryView {
                 filter,
                 selected_index,
@@ -258,10 +271,31 @@ impl ScriptListApp {
                 selected_index,
             } => {
                 self.filter_text = new_text.clone();
-                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    self.theme_chooser_scroll_handle
-                        .scroll_to_item(0, ScrollStrategy::Top);
-                    cx.notify();
+                let changed = Self::sync_builtin_query_state(filter, selected_index, &new_text);
+                let current_filter = filter.clone();
+                let current_selected_index = *selected_index;
+
+                if changed {
+                    let filtered = Self::theme_chooser_filtered_indices(&current_filter);
+                    let old_count = self.theme_chooser_list_state.item_count();
+                    if old_count != filtered.len() {
+                        self.theme_chooser_list_state
+                            .splice(0..old_count, filtered.len());
+                    }
+                    self.theme_chooser_list_state.scroll_to(ListOffset {
+                        item_ix: 0,
+                        offset_in_item: px(0.),
+                    });
+                    if filtered.is_empty() {
+                        cx.notify();
+                    } else {
+                        self.preview_theme_chooser_preset(
+                            &filtered,
+                            current_selected_index,
+                            "theme_chooser_filter_preview",
+                            cx,
+                        );
+                    }
                 }
                 return; // Don't run main menu filter logic
             }
@@ -518,7 +552,8 @@ impl ScriptListApp {
         preferred_path: Option<&str>,
     ) {
         let len = self.file_search_display_indices.len();
-        let pin_to_first_row = self.file_search_selection_mode == FileSearchSelectionMode::AutoFirst;
+        let pin_to_first_row =
+            self.file_search_selection_mode == FileSearchSelectionMode::AutoFirst;
         let fallback_index = match &self.current_view {
             AppView::FileSearchView { selected_index, .. } if len > 0 => {
                 (*selected_index).min(len.saturating_sub(1))
@@ -535,7 +570,11 @@ impl ScriptListApp {
         };
 
         if let AppView::FileSearchView { selected_index, .. } = &mut self.current_view {
-            *selected_index = if len == 0 { 0 } else { next_index.min(len.saturating_sub(1)) };
+            *selected_index = if len == 0 {
+                0
+            } else {
+                next_index.min(len.saturating_sub(1))
+            };
         }
     }
 
@@ -788,12 +827,7 @@ impl ScriptListApp {
             if !preserve_old_results_until_first_batch {
                 self.cached_file_results.clear();
                 self.file_search_display_indices.clear();
-                Self::resize_file_search_window_after_results_change(
-                    presentation,
-                    0,
-                    true,
-                    false,
-                );
+                Self::resize_file_search_window_after_results_change(presentation, 0, true, false);
             }
 
             self.spawn_file_search_stream_task(
@@ -818,12 +852,7 @@ impl ScriptListApp {
         self.file_search_frozen_filter = None;
         self.cached_file_results.clear();
         self.file_search_display_indices.clear();
-        Self::resize_file_search_window_after_results_change(
-            presentation,
-            0,
-            true,
-            false,
-        );
+        Self::resize_file_search_window_after_results_change(presentation, 0, true, false);
 
         self.spawn_file_search_stream_task(
             gen,

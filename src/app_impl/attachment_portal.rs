@@ -1,11 +1,34 @@
 use super::*;
 
 impl ScriptListApp {
+    fn open_script_list_attachment_portal(
+        &mut self,
+        kind: crate::ai::window::context_picker::types::PortalKind,
+        placeholder: &str,
+        _cx: &mut Context<Self>,
+    ) {
+        self.active_attachment_portal_kind = Some(kind);
+        self.filter_text.clear();
+        self.computed_filter_text.clear();
+        self.pending_filter_sync = true;
+        self.pending_placeholder = Some(placeholder.to_string());
+        self.current_view = AppView::ScriptList;
+        self.hovered_index = None;
+        self.selected_index = 0;
+        self.opened_from_main_menu = true;
+        self.invalidate_grouped_cache();
+        self.sync_list_state();
+        self.update_window_size();
+        self.pending_focus = Some(FocusTarget::MainFilter);
+        self.focused_input = FocusedInput::MainFilter;
+    }
+
     fn restore_attachment_portal_return_view(
         &mut self,
         return_view: AppView,
         return_focus_target: FocusTarget,
     ) {
+        self.active_attachment_portal_kind = None;
         self.current_view = return_view;
         self.pending_focus = Some(return_focus_target);
         self.focused_input = match return_focus_target {
@@ -23,6 +46,62 @@ impl ScriptListApp {
     /// clipboard history opened from the ACP chat context picker).
     pub(crate) fn is_in_attachment_portal(&self) -> bool {
         self.attachment_portal_return_view.is_some()
+    }
+
+    pub(crate) fn active_attachment_portal_kind(
+        &self,
+    ) -> Option<crate::ai::window::context_picker::types::PortalKind> {
+        self.active_attachment_portal_kind
+    }
+
+    pub(crate) fn build_attachment_portal_part_for_selected_script_list_result(
+        &mut self,
+    ) -> Option<crate::ai::message_parts::AiContextPart> {
+        use crate::ai::message_parts::AiContextPart;
+
+        let result = self.get_selected_result()?;
+        match &result {
+            scripts::SearchResult::Script(script_match) => Some(AiContextPart::FilePath {
+                path: script_match.script.path.to_string_lossy().to_string(),
+                label: script_match.script.name.clone(),
+            }),
+            scripts::SearchResult::Scriptlet(scriptlet_match) => {
+                let target =
+                    Self::tab_ai_target_from_search_result(self.selected_index, &result);
+                let target = crate::ai::TabAiTargetContext {
+                    metadata: Some(serde_json::json!({
+                        "name": scriptlet_match.scriptlet.name,
+                        "description": scriptlet_match.scriptlet.description,
+                        "tool": scriptlet_match.scriptlet.tool,
+                        "code": scriptlet_match.scriptlet.code,
+                        "filePath": scriptlet_match.scriptlet.file_path,
+                        "pluginId": scriptlet_match.scriptlet.plugin_id,
+                        "pluginTitle": scriptlet_match.scriptlet.plugin_title,
+                    })),
+                    ..target
+                };
+                let label = crate::ai::format_explicit_target_chip_label(&target);
+                Some(AiContextPart::FocusedTarget {
+                    target,
+                    label,
+                })
+            }
+            scripts::SearchResult::Skill(skill_match) => {
+                let owner = if skill_match.skill.plugin_title.is_empty() {
+                    skill_match.skill.plugin_id.clone()
+                } else {
+                    skill_match.skill.plugin_title.clone()
+                };
+                Some(AiContextPart::SkillFile {
+                    path: skill_match.skill.path.to_string_lossy().to_string(),
+                    label: skill_match.skill.title.clone(),
+                    skill_name: skill_match.skill.title.clone(),
+                    owner_label: owner,
+                    slash_name: skill_match.skill.skill_id.clone(),
+                })
+            }
+            _ => None,
+        }
     }
 
     /// Open a full built-in view as an attachment portal. The user browses
@@ -48,6 +127,7 @@ impl ScriptListApp {
         // The portal is always opened from AcpChatView, so ChatPrompt is correct.
         self.attachment_portal_return_view = Some(self.current_view.clone());
         self.attachment_portal_return_focus_target = Some(FocusTarget::ChatPrompt);
+        self.active_attachment_portal_kind = Some(kind);
 
         tracing::info!(
             target: "script_kit::acp",
@@ -70,36 +150,44 @@ impl ScriptListApp {
                     cx,
                 );
             }
+            PortalKind::ScriptSearch => {
+                self.open_script_list_attachment_portal(kind, "Search scripts...", cx);
+            }
+            PortalKind::ScriptletSearch => {
+                self.open_script_list_attachment_portal(kind, "Search scriptlets...", cx);
+            }
+            PortalKind::SkillSearch => {
+                self.open_script_list_attachment_portal(kind, "Search skills...", cx);
+            }
+            PortalKind::NotesBrowse => {
+                self.open_builtin_filterable_view(
+                    AppView::NotesBrowseView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search notes...",
+                    cx,
+                );
+            }
             PortalKind::AcpHistory => {
-                // AcpHistory opens the floating history popup instead of
-                // switching the full view. Undo the portal state we just set
-                // since this path does not use the view-switch flow.
-                self.attachment_portal_return_view = None;
-                self.attachment_portal_return_focus_target = None;
-
-                if let AppView::AcpChatView { entity } = &self.current_view {
-                    let chat = entity.clone();
-                    let query = chat.update(cx, |view, _cx| {
+                let query = if let AppView::AcpChatView { entity } = &self.current_view {
+                    entity.update(cx, |view, _cx| {
                         view.take_pending_history_portal_query()
                             .unwrap_or_default()
-                    });
+                    })
+                } else {
+                    String::new()
+                };
 
-                    let hits =
-                        crate::ai::acp::history::search_history(&query, 12);
-
-                    tracing::info!(
-                        target: "script_kit::tab_ai",
-                        event = "acp_history_portal_opened",
-                        query = %query,
-                        hit_count = hits.len(),
-                    );
-
-                    // Open the history popup on the ACP chat view, pre-seeded
-                    // with search results for the stashed query.
-                    chat.update(cx, |view, cx| {
-                        view.open_history_portal_with_entries(query, hits, cx);
-                    });
-                }
+                self.open_builtin_filterable_view_with_filter(
+                    AppView::AcpHistoryView {
+                        filter: query.clone(),
+                        selected_index: 0,
+                    },
+                    &query,
+                    "Search conversation history...",
+                    cx,
+                );
             }
         }
 

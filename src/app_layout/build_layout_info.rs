@@ -48,6 +48,7 @@ impl ScriptListApp {
             AppView::SettingsView { .. } => "settings",
             AppView::FavoritesBrowseView { .. } => "favoritesBrowse",
             AppView::AcpHistoryView { .. } => "acpHistory",
+            AppView::NotesBrowseView { .. } => "notesBrowse",
             AppView::AcpChatView { .. } => "acpChat",
         };
 

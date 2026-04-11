@@ -121,7 +121,7 @@ pub(crate) struct AcpThreadInit {
     pub cwd: PathBuf,
     /// Optional initial input text (populated by Shift+Tab quick-submit).
     pub initial_input: Option<String>,
-    /// Typed context parts staged before the first submit.
+    /// Optional typed context parts staged before the first submit.
     pub initial_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
     /// Display name for the agent (shown in toolbar, e.g. "Claude Code").
     pub display_name: SharedString,

@@ -75,6 +75,18 @@ type AcpPortalHandler = std::sync::Arc<
     dyn Fn(crate::ai::window::context_picker::types::PortalKind, &mut App) + 'static,
 >;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AcpFooterHost {
+    Inline,
+    External,
+}
+
+#[derive(Clone, Debug)]
+struct AcpFooterSnapshot {
+    dot_status: crate::footer_popup::FooterDotStatus,
+    model_display: String,
+}
+
 /// Parse the `description` field from YAML frontmatter in a SKILL.md file.
 fn parse_skill_description(content: &str) -> Option<String> {
     if !content.starts_with("---") {
@@ -250,6 +262,27 @@ pub(crate) fn build_staged_skill_prompt(
     }
 }
 
+/// Build the deterministic slash-prefill text for a selected skill.
+pub(crate) fn build_skill_slash_command_text(slash_name: &str) -> String {
+    format!("/{slash_name} ")
+}
+
+/// Build the attached skill context part shared by ACP skill entry paths.
+pub(crate) fn build_skill_context_part(
+    skill_title: &str,
+    owner_label: &str,
+    slash_name: &str,
+    skill_path: &std::path::Path,
+) -> crate::ai::message_parts::AiContextPart {
+    crate::ai::message_parts::AiContextPart::SkillFile {
+        path: skill_path.to_string_lossy().to_string(),
+        label: format!("/{slash_name}"),
+        skill_name: skill_title.to_string(),
+        owner_label: owner_label.to_string(),
+        slash_name: slash_name.to_string(),
+    }
+}
+
 /// Session mode for the ACP chat view.
 #[derive(Clone)]
 pub(crate) enum AcpChatSession {
@@ -373,6 +406,14 @@ pub(crate) struct AcpChatView {
     /// Stashed query text from the `@history` trigger, consumed once by the
     /// portal opener to prefilter the history popup.
     pending_history_portal_query: Option<String>,
+    footer_host: AcpFooterHost,
+    /// Portal kinds the host allows this ACP surface to open.
+    ///
+    /// Defaults to all kinds. Notes-hosted ACP narrows this to only
+    /// `AcpHistory` because it cannot own file-search or clipboard views.
+    /// Items for disallowed kinds are filtered from the mention picker and
+    /// rejected at the portal-open dispatch as defense-in-depth.
+    allowed_portal_kinds: Vec<crate::ai::window::context_picker::types::PortalKind>,
 }
 
 /// Bounded ring buffer for ACP test probe events.
@@ -414,6 +455,20 @@ struct AcpSetupAgentPickerState {
 }
 
 impl AcpChatView {
+    /// All portal kinds — the default for launcher/detached ACP surfaces.
+    fn all_portal_kinds() -> Vec<crate::ai::window::context_picker::types::PortalKind> {
+        use crate::ai::window::context_picker::types::PortalKind;
+        vec![
+            PortalKind::AcpHistory,
+            PortalKind::FileSearch,
+            PortalKind::ClipboardHistory,
+            PortalKind::ScriptSearch,
+            PortalKind::ScriptletSearch,
+            PortalKind::SkillSearch,
+            PortalKind::NotesBrowse,
+        ]
+    }
+
     fn composer_is_active(
         window_active: bool,
         view_focused: bool,
@@ -564,6 +619,278 @@ impl AcpChatView {
         callback: impl Fn(crate::ai::window::context_picker::types::PortalKind, &mut App) + 'static,
     ) {
         self.on_open_portal = Some(std::sync::Arc::new(callback));
+    }
+
+    pub(crate) fn set_footer_host(&mut self, footer_host: AcpFooterHost) {
+        self.footer_host = footer_host;
+    }
+
+    pub(crate) fn uses_external_footer_host(&self) -> bool {
+        matches!(self.footer_host, AcpFooterHost::External)
+    }
+
+    fn inline_footer_height(&self) -> f32 {
+        if self.uses_external_footer_host() {
+            0.0
+        } else {
+            crate::window_resize::mini_layout::HINT_STRIP_HEIGHT
+        }
+    }
+
+    fn footer_snapshot(&self, cx: &App) -> AcpFooterSnapshot {
+        use crate::ai::acp::thread::AcpThreadStatus;
+
+        let thread = self.live_thread().read(cx);
+        let dot_status = match thread.status {
+            AcpThreadStatus::Streaming => crate::footer_popup::FooterDotStatus::Streaming,
+            AcpThreadStatus::WaitingForPermission => {
+                crate::footer_popup::FooterDotStatus::WaitingForPermission
+            }
+            AcpThreadStatus::Error => crate::footer_popup::FooterDotStatus::Error,
+            AcpThreadStatus::Idle => crate::footer_popup::FooterDotStatus::Idle,
+        };
+        AcpFooterSnapshot {
+            dot_status,
+            model_display: thread.selected_model_display().to_string(),
+        }
+    }
+
+    fn footer_dot_element(
+        dot_status: crate::footer_popup::FooterDotStatus,
+    ) -> Option<gpui::AnyElement> {
+        use crate::footer_popup::FooterDotStatus;
+
+        let theme = theme::get_cached_theme();
+        let dot_hex = match dot_status {
+            FooterDotStatus::Hidden => return None,
+            FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission => {
+                theme.colors.accent.selected
+            }
+            FooterDotStatus::Idle => theme.colors.text.secondary,
+            FooterDotStatus::Error => theme.colors.ui.error,
+        };
+        let accent = rgb(dot_hex);
+
+        let dot = div().size(px(6.0)).rounded_full().bg(accent);
+
+        if matches!(
+            dot_status,
+            FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission
+        ) {
+            let pulse_duration = Duration::from_millis(1200);
+            Some(
+                dot.with_animation(
+                    "acp-footer-dot-pulse",
+                    Animation::new(pulse_duration).repeat(),
+                    move |el, delta| {
+                        let sine = (delta * std::f32::consts::PI * 2.0).sin();
+                        let a = 0.5 + 0.5 * sine;
+                        el.bg(gpui::Rgba {
+                            r: accent.r,
+                            g: accent.g,
+                            b: accent.b,
+                            a,
+                        })
+                    },
+                )
+                .into_any_element(),
+            )
+        } else {
+            Some(dot.into_any_element())
+        }
+    }
+
+    fn render_toolbar_from_snapshot(
+        snapshot: AcpFooterSnapshot,
+        weak_view: WeakEntity<AcpChatView>,
+    ) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+
+        // Hint strip opacity: match main menu's OPACITY_TEXT_MUTED (0.65)
+        let hint_text_hex = theme.colors.text.primary;
+        let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0).round() as u32;
+        let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
+
+        let history_view = weak_view.clone();
+        let actions_view = weak_view.clone();
+        let close_view = weak_view.clone();
+
+        div()
+            .w_full()
+            .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+            .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
+            .py(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_Y))
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .border_t(px(1.0))
+            .border_color(rgba((theme.colors.text.primary << 8) | 0x10))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .when_some(Self::footer_dot_element(snapshot.dot_status), |d, dot| {
+                        d.child(dot)
+                    })
+                    .child(
+                        div()
+                            .id("acp-model-display")
+                            .flex()
+                            .items_center()
+                            .text_xs()
+                            .text_color(rgba(hint_text_rgba))
+                            .child(snapshot.model_display),
+                    ),
+            )
+            .child(crate::components::render_hint_icons_clickable(
+                vec![
+                    crate::components::ClickableHint::new("↩ Send", move |_, _window, cx| {
+                        if let Some(entity) = weak_view.upgrade() {
+                            entity.update(cx, |chat, cx| {
+                                chat.submit_with_expanded_tokens(cx);
+                            });
+                        }
+                    }),
+                    crate::components::ClickableHint::new("⌘P History", move |_, window, cx| {
+                        if let Some(entity) = history_view.upgrade() {
+                            entity.update(cx, |chat, cx| {
+                                tracing::info!(
+                                    target: "script_kit::tab_ai",
+                                    event = "acp_toolbar_history_clicked",
+                                );
+                                chat.trigger_open_history_command(window, cx);
+                            });
+                        }
+                    }),
+                    crate::components::ClickableHint::new("⌘K Actions", move |_, window, cx| {
+                        if let Some(entity) = actions_view.upgrade() {
+                            entity.update(cx, |chat, cx| {
+                                chat.trigger_toggle_actions(window, cx);
+                            });
+                        }
+                    }),
+                    crate::components::ClickableHint::new("⌘W Close", move |_, window, cx| {
+                        if let Some(entity) = close_view.upgrade() {
+                            entity.update(cx, |chat, cx| {
+                                chat.trigger_close_requested(window, cx);
+                            });
+                        }
+                    }),
+                ],
+                hint_text_rgba,
+            ))
+            .into_any_element()
+    }
+
+    fn render_external_host_footer_from_snapshot(
+        snapshot: AcpFooterSnapshot,
+        weak_view: WeakEntity<AcpChatView>,
+    ) -> gpui::AnyElement {
+        let theme = theme::get_cached_theme();
+        let hint_text_hex = theme.colors.text.primary;
+        let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0).round() as u32;
+        let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
+        let actions_selected = crate::actions::is_actions_window_open();
+
+        let run_view = weak_view.clone();
+        let ai_view = weak_view.clone();
+        let actions_view = weak_view.clone();
+
+        div()
+            .w_full()
+            .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+            .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
+            .py(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_Y))
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .border_t(px(1.0))
+            .border_color(rgba((theme.colors.text.primary << 8) | 0x10))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .when_some(Self::footer_dot_element(snapshot.dot_status), |d, dot| {
+                        d.child(dot)
+                    })
+                    .child(
+                        div()
+                            .id("acp-model-display")
+                            .flex()
+                            .items_center()
+                            .text_xs()
+                            .text_color(rgba(hint_text_rgba))
+                            .child(snapshot.model_display),
+                    ),
+            )
+            .child(crate::components::render_selectable_hint_icons(
+                vec![
+                    crate::components::SelectableHint::new("↵ Run", move |_, _window, cx| {
+                        if let Some(entity) = run_view.upgrade() {
+                            entity.update(cx, |chat, cx| {
+                                chat.submit_with_expanded_tokens(cx);
+                            });
+                        }
+                    }),
+                    crate::components::SelectableHint::new(
+                        "⌘↵ AI",
+                        move |_event, window, cx| {
+                            if let Some(entity) = ai_view.upgrade() {
+                                let focus_handle = entity.read(cx).focus_handle(cx);
+                                window.focus(&focus_handle, cx);
+                            }
+                        },
+                    ),
+                    crate::components::SelectableHint::new("⌘K Actions", move |_, window, cx| {
+                        if let Some(entity) = actions_view.upgrade() {
+                            entity.update(cx, |chat, cx| {
+                                chat.trigger_toggle_actions(window, cx);
+                            });
+                        }
+                    })
+                    .selected(actions_selected),
+                ],
+                hint_text_rgba,
+            ))
+            .into_any_element()
+    }
+
+    pub(crate) fn build_external_host_footer(
+        &self,
+        weak_view: WeakEntity<AcpChatView>,
+        cx: &App,
+    ) -> Option<gpui::AnyElement> {
+        if !self.uses_external_footer_host() || self.is_setup_mode() {
+            return None;
+        }
+
+        Some(Self::render_external_host_footer_from_snapshot(
+            self.footer_snapshot(cx),
+            weak_view,
+        ))
+    }
+
+    /// Restrict portal kinds this ACP surface can open.
+    ///
+    /// Items for disallowed kinds are filtered from the mention picker and
+    /// rejected at the portal-open dispatch. Call before wiring host callbacks.
+    pub(crate) fn set_allowed_portal_kinds(
+        &mut self,
+        kinds: Vec<crate::ai::window::context_picker::types::PortalKind>,
+    ) {
+        self.allowed_portal_kinds = kinds;
+    }
+
+    /// Whether the given portal kind is allowed by the host.
+    fn is_portal_kind_allowed(
+        &self,
+        kind: crate::ai::window::context_picker::types::PortalKind,
+    ) -> bool {
+        self.allowed_portal_kinds.contains(&kind)
     }
 
     /// Register an inline mention token as owned so the mention sync system
@@ -1602,6 +1929,8 @@ impl AcpChatView {
             on_open_history_command: None,
             on_open_portal: None,
             pending_history_portal_query: None,
+            footer_host: AcpFooterHost::Inline,
+            allowed_portal_kinds: Self::all_portal_kinds(),
         }
     }
 
@@ -1651,6 +1980,8 @@ impl AcpChatView {
             on_open_history_command: None,
             on_open_portal: None,
             pending_history_portal_query: None,
+            footer_host: AcpFooterHost::Inline,
+            allowed_portal_kinds: Self::all_portal_kinds(),
         }
     }
 
@@ -3136,111 +3467,12 @@ impl AcpChatView {
             .into_any_element()
     }
 
-    fn render_toolbar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = theme::get_cached_theme();
-        let is_streaming = matches!(
-            self.live_thread().read(cx).status,
-            AcpThreadStatus::Streaming
-        );
-
-        // Hint strip opacity: match main menu's OPACITY_TEXT_MUTED (0.65)
-        let hint_text_hex = theme.colors.text.primary;
-        let hint_opacity_byte = (crate::theme::opacity::OPACITY_TEXT_MUTED * 255.0).round() as u32;
-        let hint_text_rgba = (hint_text_hex << 8) | hint_opacity_byte;
-
-        div()
-            .w_full()
-            .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
-            .px(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_X))
-            .py(px(crate::window_resize::mini_layout::HINT_STRIP_PADDING_Y))
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_between()
-            // Subtle top border to separate hint strip from content
-            .border_t(px(1.0))
-            .border_color(rgba((theme.colors.text.primary << 8) | 0x10))
-            // ── Left: streaming dot + model selector ─────
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.0))
-                    .when(is_streaming, |d| {
-                        let accent = rgb(theme.colors.accent.selected);
-                        let pulse_duration = Duration::from_millis(1200);
-                        d.child(
-                            div()
-                                .id("acp-streaming-dot")
-                                .size(px(6.0))
-                                .rounded_full()
-                                .bg(accent)
-                                .with_animation(
-                                    "acp-streaming-dot-pulse",
-                                    Animation::new(pulse_duration).repeat(),
-                                    move |el, delta| {
-                                        let sine = (delta * std::f32::consts::PI * 2.0).sin();
-                                        let a = 0.5 + 0.5 * sine;
-                                        el.bg(gpui::Rgba {
-                                            r: accent.r,
-                                            g: accent.g,
-                                            b: accent.b,
-                                            a,
-                                        })
-                                    },
-                                ),
-                        )
-                    })
-                    // Active model label
-                    .child({
-                        let model_display = self
-                            .live_thread()
-                            .read(cx)
-                            .selected_model_display()
-                            .to_string();
-                        div()
-                            .id("acp-model-display")
-                            .flex()
-                            .items_center()
-                            .text_xs()
-                            .text_color(rgba(hint_text_rgba))
-                            .child(model_display)
-                    }),
-            )
-            // ── Right: clickable hint strip (matches main menu behavior) ──
-            .child(crate::components::render_hint_icons_clickable(
-                vec![
-                    crate::components::ClickableHint::new(
-                        "↩ Send",
-                        cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-                            this.submit_with_expanded_tokens(cx);
-                        }),
-                    ),
-                    crate::components::ClickableHint::new(
-                        "⌘P History",
-                        cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-                            tracing::info!(
-                                target: "script_kit::tab_ai",
-                                event = "acp_toolbar_history_clicked",
-                            );
-                            this.trigger_open_history_command(window, cx);
-                        }),
-                    ),
-                    crate::components::ClickableHint::new(
-                        "⌘K Actions",
-                        cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
-                            this.trigger_toggle_actions(window, cx);
-                        }),
-                    ),
-                    crate::components::ClickableHint::new(
-                        "⌘W Close",
-                        cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-                            this.trigger_close_requested(_window, cx);
-                        }),
-                    ),
-                ],
-                hint_text_rgba,
-            ))
+    fn render_toolbar(
+        &self,
+        weak_view: WeakEntity<AcpChatView>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        Self::render_toolbar_from_snapshot(self.footer_snapshot(cx), weak_view)
     }
 
     fn render_send_button(
@@ -3335,7 +3567,7 @@ impl AcpChatView {
 
         let next_session = match Self::find_active_trigger(&text, cursor) {
             Some((trigger, trigger_range, query)) => {
-                let items = match trigger {
+                let mut items = match trigger {
                     ContextPickerTrigger::Mention => build_picker_items(trigger, &query),
                     ContextPickerTrigger::Slash => {
                         if self.cached_slash_commands.is_empty() {
@@ -3371,6 +3603,15 @@ impl AcpChatView {
                         }
                     }
                 };
+
+                // Filter out portal items the host does not support.
+                items.retain(|item| {
+                    if let ContextPickerItemKind::Portal(kind) = item.kind {
+                        self.is_portal_kind_allowed(kind)
+                    } else {
+                        true
+                    }
+                });
 
                 let selected_index =
                     crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
@@ -3723,6 +3964,16 @@ impl AcpChatView {
             }
             ContextPickerItemKind::SlashCommand(_) | ContextPickerItemKind::Inert => return,
             ContextPickerItemKind::Portal(portal_kind) => {
+                // Defense-in-depth: reject portal kinds the host disallows.
+                if !self.is_portal_kind_allowed(*portal_kind) {
+                    tracing::info!(
+                        target: "script_kit::acp",
+                        event = "acp_portal_blocked_by_host_capability",
+                        kind = ?portal_kind,
+                    );
+                    return;
+                }
+
                 // For AcpHistory portals, stash the remaining input text as the
                 // prefilter query before clearing the trigger text.
                 if *portal_kind == crate::ai::window::context_picker::types::PortalKind::AcpHistory
@@ -6008,7 +6259,7 @@ impl Render for AcpChatView {
                         .top_0()
                         .left_0()
                         .right_0()
-                        .bottom(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+                        .bottom(px(self.inline_footer_height()))
                         .on_mouse_down(gpui::MouseButton::Left, cx.listener(|this, _, _, cx| {
                             this.dismiss_history_popup(cx);
                             cx.stop_propagation();
@@ -6016,7 +6267,9 @@ impl Render for AcpChatView {
                 )
             })
             // ── BOTTOM: Hint strip ─────────────────────
-            .child(self.render_toolbar(cx))
+            .when(!self.uses_external_footer_host(), |d| {
+                d.child(self.render_toolbar(view_entity.clone(), cx))
+            })
             .into_any_element()
     }
 }
