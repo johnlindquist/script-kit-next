@@ -17,6 +17,7 @@ fn fallback_keeps_window_open(fallback: &crate::fallbacks::FallbackItem) -> bool
             builtin.id,
             "run-in-terminal"
                 | "search-files"
+                | crate::fallbacks::builtins::DO_IN_CURRENT_APP_FALLBACK_ID
                 | crate::fallbacks::builtins::SEND_TO_AI_FALLBACK_ID
         ),
         crate::fallbacks::FallbackItem::Script(_) => true,
@@ -610,6 +611,20 @@ mod tests {
                     fallback.id == crate::fallbacks::builtins::SEND_TO_AI_FALLBACK_ID
                 })
                 .expect("send-to-ai fallback should exist"),
+        );
+
+        assert!(fallback_keeps_window_open(&fallback));
+    }
+
+    #[test]
+    fn test_fallback_keeps_window_open_for_do_in_current_app() {
+        let fallback = crate::fallbacks::FallbackItem::Builtin(
+            crate::fallbacks::builtins::get_builtin_fallbacks()
+                .into_iter()
+                .find(|fallback| {
+                    fallback.id == crate::fallbacks::builtins::DO_IN_CURRENT_APP_FALLBACK_ID
+                })
+                .expect("do-in-current-app fallback should exist"),
         );
 
         assert!(fallback_keeps_window_open(&fallback));

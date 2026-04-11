@@ -118,9 +118,23 @@ impl ScriptListApp {
         entry_intent: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.open_tab_ai_chat_with_capture_kind(
+        self.open_tab_ai_chat_with_capture_kind_and_options(
             entry_intent,
             crate::ai::TabAiCaptureKind::DefaultContext,
+            false,
+            cx,
+        );
+    }
+
+    pub(crate) fn open_tab_ai_chat_with_entry_intent_suppressing_focused_part(
+        &mut self,
+        entry_intent: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_tab_ai_chat_with_capture_kind_and_options(
+            entry_intent,
+            crate::ai::TabAiCaptureKind::DefaultContext,
+            true,
             cx,
         );
     }
@@ -400,16 +414,7 @@ impl ScriptListApp {
 
         if let Some(intent) = normalized_intent.clone().filter(|_| !is_setup_mode) {
             entity.update(cx, |chat, cx| {
-                chat.live_thread().update(cx, |thread, cx| {
-                    thread.set_input(intent.clone(), cx);
-                    if let Err(error) = thread.submit_input(cx) {
-                        tracing::warn!(
-                            target: "script_kit::tab_ai",
-                            event = "tab_ai_embedded_acp_reuse_submit_failed",
-                            error = %error,
-                        );
-                    }
-                });
+                chat.submit_reused_entry_intent(intent.clone(), cx);
             });
         }
 
@@ -442,6 +447,21 @@ impl ScriptListApp {
         capture_kind: crate::ai::TabAiCaptureKind,
         cx: &mut Context<Self>,
     ) {
+        self.open_tab_ai_chat_with_capture_kind_and_options(
+            entry_intent,
+            capture_kind,
+            false,
+            cx,
+        );
+    }
+
+    fn open_tab_ai_chat_with_capture_kind_and_options(
+        &mut self,
+        entry_intent: Option<String>,
+        capture_kind: crate::ai::TabAiCaptureKind,
+        suppress_focused_part: bool,
+        cx: &mut Context<Self>,
+    ) {
         if self.tab_ai_save_offer_state.is_some() {
             return;
         }
@@ -457,7 +477,14 @@ impl ScriptListApp {
             }
         }
 
-        self.begin_tab_ai_harness_entry(entry_intent, false, None, capture_kind, false, cx);
+        self.begin_tab_ai_harness_entry(
+            entry_intent,
+            suppress_focused_part,
+            None,
+            capture_kind,
+            false,
+            cx,
+        );
     }
 
     /// Open the harness with a pre-computed quick-submit plan.
@@ -5286,6 +5313,20 @@ mod tests {
         assert!(!ScriptListApp::should_reuse_embedded_acp_view_for_open(
             Some("switch agent"), true,
         ));
+    }
+
+    #[test]
+    fn embedded_acp_reuse_submits_entry_intent_via_reuse_reset_helper() {
+        let body = tab_ai_contract_compact(&tab_ai_extract_fn_body(
+            include_str!("tab_ai_mode.rs"),
+            "fn try_reuse_embedded_acp_view(",
+        ));
+        assert!(
+            body.contains(&tab_ai_contract_compact(
+                "chat.submit_reused_entry_intent(intent.clone(), cx);",
+            )),
+            "reused ACP entry intents must clear stale composer state before submit"
+        );
     }
 
     #[test]

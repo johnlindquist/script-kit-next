@@ -2834,6 +2834,36 @@ impl AcpChatView {
             .update(cx, |thread, cx| thread.set_input(value, cx));
     }
 
+    /// Reuse the current live thread for a fresh external entry intent.
+    ///
+    /// Clears composer-local transient state and thread-scoped pending
+    /// context so launcher-driven submits do not inherit stale chips or
+    /// queued bootstrap work from the previous draft.
+    pub(crate) fn submit_reused_entry_intent(&mut self, intent: String, cx: &mut Context<Self>) {
+        self.mention_session = None;
+        self.history_menu = None;
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+        self.last_accepted_item = None;
+        self.pending_history_resume = None;
+        self.pending_portal_query = None;
+        self.pending_portal_edit = None;
+        self.inline_owned_context_tokens.clear();
+        self.typed_mention_aliases.clear();
+
+        self.live_thread().update(cx, |thread, cx| {
+            thread.clear_pending_context_for_new_entry_intent(cx);
+            thread.set_input(intent, cx);
+            if let Err(error) = thread.submit_input(cx) {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "tab_ai_embedded_acp_reuse_submit_failed",
+                    error = %error,
+                );
+            }
+        });
+    }
+
     fn open_picker_trigger(&mut self, trigger: &str, cx: &mut Context<Self>) {
         self.attach_menu_open = false;
         self.model_selector_open = false;

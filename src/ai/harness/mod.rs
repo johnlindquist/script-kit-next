@@ -2727,7 +2727,7 @@ mod cleanup_contract_audits {
         );
         assert!(
             source.contains(&compact(
-                "self.open_tab_ai_chat_with_entry_intent(Some(query), cx);"
+                "self.open_tab_ai_chat_with_entry_intent_suppressing_focused_part(Some(query), cx);"
             )),
             "dispatch_ai_script_generation_from_query must route to the harness"
         );

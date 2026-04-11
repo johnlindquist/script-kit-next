@@ -740,6 +740,10 @@ mod tests {
             dictation_hotkey_enabled: None,
             watcher: None,
             layout: None,
+            theme: None,
+            dictation: None,
+            ai: None,
+            window_management: None,
             commands: None,
             claude_code: None,
         };
@@ -767,6 +771,10 @@ mod tests {
             dictation_hotkey_enabled: None,
             watcher: None,
             layout: None,
+            theme: None,
+            dictation: None,
+            ai: None,
+            window_management: None,
             commands: None,
             claude_code: None,
         };

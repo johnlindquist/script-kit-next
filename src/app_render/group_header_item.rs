@@ -21,7 +21,7 @@ fn preview_keyword_tags(keywords: &[String]) -> Vec<String> {
 fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
     match feature {
         builtins::BuiltInFeature::ClipboardHistory => "Clipboard History Manager".to_string(),
-        builtins::BuiltInFeature::PasteSequentially => "Paste Sequentially".to_string(),
+        builtins::BuiltInFeature::PasteSequentially => "Paste Next Clipboard Item".to_string(),
         builtins::BuiltInFeature::Favorites => "Favorites".to_string(),
         builtins::BuiltInFeature::AppLauncher => "Application Launcher".to_string(),
         builtins::BuiltInFeature::App(name) => name.clone(),
@@ -44,12 +44,12 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::KitStoreCommand(_) => "Kit Store".to_string(),
         builtins::BuiltInFeature::FileSearch => "File Browser".to_string(),
         builtins::BuiltInFeature::Webcam => "Webcam Capture".to_string(),
-        builtins::BuiltInFeature::Dictation => "Voice Dictation".to_string(),
+        builtins::BuiltInFeature::Dictation => "Dictate Here".to_string(),
         builtins::BuiltInFeature::DictationToAiHarness => "Voice Dictation to AI".to_string(),
         builtins::BuiltInFeature::DictationToFrontmostApp => "Voice Dictation to App".to_string(),
         builtins::BuiltInFeature::DictationToNotes => "Voice Dictation to Notes".to_string(),
         builtins::BuiltInFeature::AcpHistory => "AI Conversation History".to_string(),
-        builtins::BuiltInFeature::Settings => "Settings".to_string(),
+        builtins::BuiltInFeature::Settings => "Script Kit Settings".to_string(),
     }
 }
 

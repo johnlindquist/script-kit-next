@@ -9,6 +9,7 @@
 //! - [`story_container`], [`story_section`], etc. - Layout helpers
 //!
 
+pub mod acp_chat_raycast_weight_studies;
 pub mod actions_dialog_presenter;
 pub mod actions_dialog_variations;
 pub mod adoption;
@@ -22,6 +23,7 @@ pub mod footer_variations;
 pub mod input_variations;
 pub mod integrated_surface_shell;
 mod layout;
+pub mod main_menu_raycast_weight_studies;
 pub mod main_menu_variations;
 pub mod mini_ai_chat_presenter;
 pub mod mini_ai_chat_variations;
@@ -32,6 +34,10 @@ pub mod runtime_fixture;
 mod selection;
 mod story;
 
+pub use acp_chat_raycast_weight_studies::{
+    acp_chat_raycast_weight_story_variants, render_acp_chat_raycast_weight_compare_thumbnail,
+    render_acp_chat_raycast_weight_gallery, render_acp_chat_raycast_weight_story_preview,
+};
 pub use actions_dialog_presenter::{
     render_actions_dialog_presentation, ActionsDialogPresentationAction,
     ActionsDialogPresentationItem, ActionsDialogPresentationModel,
@@ -81,6 +87,10 @@ pub use integrated_surface_shell::{
     IntegratedSurfaceShellConfig,
 };
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
+pub use main_menu_raycast_weight_studies::{
+    main_menu_raycast_weight_story_variants, render_main_menu_raycast_weight_compare_thumbnail,
+    render_main_menu_raycast_weight_gallery, render_main_menu_raycast_weight_story_preview,
+};
 pub use main_menu_variations::{
     adopted_main_menu_live_spec, adopted_main_menu_variant, main_menu_story_variants,
     render_main_menu_compare_thumbnail, render_main_menu_story_preview, resolve_main_menu_variant,

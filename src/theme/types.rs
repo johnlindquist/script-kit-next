@@ -1472,7 +1472,7 @@ fn theme_from_user_preferences(
     if preset_id.is_empty() {
         warn!(
             correlation_id = %correlation_id,
-            "Theme preset id in settings is empty; ignoring"
+            "Theme preset id in config is empty; ignoring"
         );
         return None;
     }
@@ -1487,7 +1487,7 @@ fn theme_from_user_preferences(
                 correlation_id = %correlation_id,
                 preset_id = selected.id,
                 preset_name = selected.name,
-                "Using theme preset from user preferences"
+                "Using theme preset from config"
             );
             Some(normalize_theme_primary_text(selected.create_theme()))
         }
@@ -1495,7 +1495,7 @@ fn theme_from_user_preferences(
             warn!(
                 correlation_id = %correlation_id,
                 preset_id,
-                "Unknown theme preset id in settings; falling back to theme file/default"
+                "Unknown theme preset id in config; falling back to theme file/default"
             );
             None
         }
@@ -1882,6 +1882,7 @@ mod tests {
             },
             dictation: Default::default(),
             ai: Default::default(),
+            window_management: Default::default(),
         }
     }
 

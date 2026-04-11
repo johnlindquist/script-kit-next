@@ -524,8 +524,10 @@ impl ScriptListApp {
             return;
         }
 
-        // Route through the instant harness terminal instead of the legacy ChatPrompt.
-        self.open_tab_ai_chat_with_entry_intent(Some(query), cx);
+        // Route through the current harness/ACP entry path, but suppress the
+        // launcher's focused fallback chip so recipe-driven generation uses
+        // only the generated prompt as context.
+        self.open_tab_ai_chat_with_entry_intent_suppressing_focused_part(Some(query), cx);
     }
 
     /// Generate a Script Kit script from a natural-language prompt using the built-in AI backend.
