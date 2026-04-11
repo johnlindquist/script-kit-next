@@ -2318,7 +2318,7 @@ fn dictation_preferences_serialize_selected_device_id_as_camel_case() {
 }
 
 #[test]
-fn save_user_preferences_preserves_unknown_keys_and_round_trips_dictation_preference() {
+fn save_user_preferences_writes_config_and_cleans_known_legacy_settings() {
     let lock = crate::test_utils::SK_PATH_TEST_LOCK
         .get_or_init(|| std::sync::Mutex::new(()))
         .lock()
@@ -2330,8 +2330,7 @@ fn save_user_preferences_preserves_unknown_keys_and_round_trips_dictation_prefer
 
     let settings_path = kit_dir.join("settings.json");
     let original = json!({
-        "theme": { "presetId": "nord" },
-        "customTool": { "enabled": true }
+        "theme": { "presetId": "nord" }
     });
     std::fs::write(
         &settings_path,
@@ -2347,12 +2346,16 @@ fn save_user_preferences_preserves_unknown_keys_and_round_trips_dictation_prefer
     };
     crate::config::save_user_preferences(&preferences).expect("save merged user preferences");
 
-    let raw: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(&settings_path).expect("read saved settings"),
-    )
-    .expect("parse saved settings");
-    assert_eq!(raw["dictation"]["selectedDeviceId"], "usb-mic");
-    assert_eq!(raw["customTool"]["enabled"], true);
+    assert!(
+        !settings_path.exists(),
+        "known legacy settings file should be removed after config migration"
+    );
+
+    let config_path = kit_dir.join("config.ts");
+    let config_contents = std::fs::read_to_string(&config_path).expect("read saved config");
+    assert!(config_contents.contains("dictation"));
+    assert!(config_contents.contains("selectedDeviceId"));
+    assert!(config_contents.contains("usb-mic"));
 
     let loaded = crate::config::load_user_preferences();
     assert_eq!(

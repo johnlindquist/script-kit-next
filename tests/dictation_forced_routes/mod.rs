@@ -6,18 +6,24 @@ const OVERLAY_SOURCE: &str = include_str!("../../src/dictation/window.rs");
 const TYPES_SOURCE: &str = include_str!("../../src/dictation/types.rs");
 const EXECUTION_SCRIPTS_SOURCE: &str = include_str!("../../src/app_impl/execution_scripts.rs");
 
-#[test]
-fn dictation_to_app_entry_registered() {
-    assert!(BUILTINS_SOURCE.contains("builtin/dictation-to-app"));
-    assert!(BUILTINS_SOURCE.contains("Dictate to App"));
-    assert!(BUILTINS_SOURCE.contains("BuiltInFeature::DictationToFrontmostApp"));
+fn production_source(source: &str) -> &str {
+    source.split("#[cfg(test)]").next().unwrap_or(source)
 }
 
 #[test]
-fn dictation_to_notes_entry_registered() {
-    assert!(BUILTINS_SOURCE.contains("builtin/dictation-to-notes"));
-    assert!(BUILTINS_SOURCE.contains("Dictate to Notes"));
-    assert!(BUILTINS_SOURCE.contains("BuiltInFeature::DictationToNotes"));
+fn dictation_forced_route_variants_remain_internal() {
+    let builtins_source = production_source(BUILTINS_SOURCE);
+
+    assert!(builtins_source.contains("BuiltInFeature::DictationToFrontmostApp"));
+    assert!(builtins_source.contains("BuiltInFeature::DictationToNotes"));
+    assert!(
+        !builtins_source.contains("builtin/dictation-to-app"),
+        "forced app dictation should no longer be advertised as a top-level launcher entry"
+    );
+    assert!(
+        !builtins_source.contains("builtin/dictation-to-notes"),
+        "forced notes dictation should no longer be advertised as a top-level launcher entry"
+    );
 }
 
 #[test]

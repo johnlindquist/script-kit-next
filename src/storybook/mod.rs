@@ -17,6 +17,7 @@ mod browser;
 pub mod confirm_popup_playground;
 pub mod context_picker_popup_playground;
 mod diagnostics;
+pub mod dictation_ui_variations;
 pub mod footer_variations;
 pub mod input_variations;
 pub mod integrated_surface_shell;
@@ -59,6 +60,10 @@ pub use diagnostics::{
     load_adopted_surface_resolution_snapshot, load_story_catalog_snapshot,
     AdoptedSurfaceResolutionEntry, AdoptedSurfaceResolutionSnapshot, StoryCatalogEntry,
     StoryCatalogSnapshot, StorySurfaceSummary, StoryVariantSummary,
+};
+pub use dictation_ui_variations::{
+    dictation_ui_story_variants, render_dictation_ui_compare_thumbnail,
+    render_dictation_ui_gallery, render_dictation_ui_story_preview,
 };
 pub use footer_variations::{
     config_from_footer_variation_spec, config_from_storybook_footer_selection,
