@@ -1,18 +1,18 @@
 ---
 title: "Verification and Testing"
 slug: "verification-and-testing"
-sourceSnapshot: "fa760732"
+sourceSnapshot: "49ebc9f4"
 sourceDocuments:
-  - "raw/fa760732/CLAUDE.md"
-  - "raw/fa760732/tests/context_snapshot.rs"
-  - "raw/fa760732/tests/context_part_resolution.rs"
-  - "raw/fa760732/tests/tab_ai_context.rs"
+  - "raw/49ebc9f4/CLAUDE.md"
+  - "raw/49ebc9f4/tests/context_snapshot.rs"
+  - "raw/49ebc9f4/tests/context_part_resolution.rs"
+  - "raw/49ebc9f4/tests/tab_ai_context.rs"
 relatedPages:
   - "project-overview"
   - "ai-context-and-mcp"
   - "tab-ai-harness"
 generatedBy: "scripts/wiki/ingest.ts"
-generatedAt: "2026-04-06T18:08:02.732Z"
+generatedAt: "2026-04-11T01:39:53.007Z"
 ---
 
 # Verification and Testing
@@ -32,10 +32,10 @@ The repository's required verification gate and the existing contract tests arou
 - `tests/tab_ai_context.rs` — ACP chat context tests. Integration tests for the compatibility-named ACP Chat context blob schema and serialization.
 
 ## Source Documents
-- [raw/fa760732/CLAUDE.md](../raw/fa760732/CLAUDE.md)
-- [raw/fa760732/tests/context_snapshot.rs](../raw/fa760732/tests/context_snapshot.rs)
-- [raw/fa760732/tests/context_part_resolution.rs](../raw/fa760732/tests/context_part_resolution.rs)
-- [raw/fa760732/tests/tab_ai_context.rs](../raw/fa760732/tests/tab_ai_context.rs)
+- [raw/49ebc9f4/CLAUDE.md](../raw/49ebc9f4/CLAUDE.md)
+- [raw/49ebc9f4/tests/context_snapshot.rs](../raw/49ebc9f4/tests/context_snapshot.rs)
+- [raw/49ebc9f4/tests/context_part_resolution.rs](../raw/49ebc9f4/tests/context_part_resolution.rs)
+- [raw/49ebc9f4/tests/tab_ai_context.rs](../raw/49ebc9f4/tests/tab_ai_context.rs)
 
 ## Related Pages
 - [project-overview](./project-overview.md)
