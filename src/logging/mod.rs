@@ -951,7 +951,7 @@ fn init_internal() -> LoggingGuard {
         _session_guard: session_guard,
     }
 }
-/// Get the log directory path (~/.scriptkit/logs/)
+/// Get the log directory path (typically ~/.scriptkit/logs/ or respects SK_PATH)
 fn get_log_dir() -> PathBuf {
     if cfg!(test) {
         return std::env::temp_dir()
@@ -960,9 +960,7 @@ fn get_log_dir() -> PathBuf {
             .join("logs");
     }
 
-    dirs::home_dir()
-        .map(|h| h.join(".scriptkit").join("logs"))
-        .unwrap_or_else(|| std::env::temp_dir().join("script-kit-logs"))
+    crate::setup::get_kit_path().join("logs")
 }
 /// Get the path to the JSONL log file
 pub fn log_path() -> PathBuf {

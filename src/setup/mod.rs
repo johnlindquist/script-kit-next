@@ -1526,26 +1526,10 @@ fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
     }
 }
 /// Fast check: looks for bun in common locations and PATH without spawning a process.
-fn bun_is_discoverable() -> bool {
-    let mut candidates: Vec<PathBuf> = Vec::new();
-
-    // Common install locations
-    if let Some(home) = dirs::home_dir() {
-        candidates.push(home.join(".bun").join("bin").join(bun_exe_name()));
-    }
-    candidates.push(PathBuf::from("/opt/homebrew/bin").join(bun_exe_name()));
-    candidates.push(PathBuf::from("/usr/local/bin").join(bun_exe_name()));
-    candidates.push(PathBuf::from("/usr/bin").join(bun_exe_name()));
-
-    // PATH scan
-    if let Ok(path_var) = std::env::var("PATH") {
-        for dir in std::env::split_paths(&path_var) {
-            candidates.push(dir.join(bun_exe_name()));
-        }
-    }
-
-    candidates.into_iter().any(|p| p.exists())
+pub(crate) fn bun_is_discoverable() -> bool {
+    crate::executor::find_executable("bun").is_some()
 }
+#[allow(dead_code)]
 fn bun_exe_name() -> &'static str {
     #[cfg(windows)]
     {

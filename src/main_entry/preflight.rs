@@ -92,6 +92,13 @@
             loaded_config.hotkey.modifiers, loaded_config.hotkey.key, loaded_config.bun_path
         ),
     );
+
+    // Set BUN_PATH environment variable from config if present
+    // This ensures find_executable("bun") respects the user's custom path
+    if let Some(ref bun_path) = loaded_config.bun_path {
+        std::env::set_var("BUN_PATH", bun_path);
+    }
+
     clipboard_history::set_max_text_content_len(
         loaded_config.get_clipboard_history_max_text_length(),
     );

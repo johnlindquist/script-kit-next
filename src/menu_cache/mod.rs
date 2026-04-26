@@ -25,11 +25,7 @@ pub struct MenuBarItem {
 static MENU_CACHE_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 /// Get the path to the menu cache database
 fn get_menu_cache_db_path() -> PathBuf {
-    let kit_dir = dirs::home_dir()
-        .map(|h| h.join(".scriptkit"))
-        .unwrap_or_else(|| PathBuf::from(".scriptkit"));
-
-    kit_dir.join("db").join("menu-cache.sqlite")
+    crate::setup::get_kit_path().join("db").join("menu-cache.sqlite")
 }
 /// Initialize the menu cache database
 ///

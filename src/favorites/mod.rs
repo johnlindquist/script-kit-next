@@ -10,9 +10,7 @@ pub struct Favorites {
 
 #[allow(dead_code)] // Used via lib.rs path (script_kit_gpui::favorites)
 fn favorites_file_path() -> PathBuf {
-    dirs::home_dir()
-        .map(|home| home.join(".scriptkit").join("favorites.json"))
-        .unwrap_or_else(|| PathBuf::from(".scriptkit").join("favorites.json"))
+    crate::setup::get_kit_path().join("favorites.json")
 }
 
 #[allow(dead_code)] // Used via lib.rs path

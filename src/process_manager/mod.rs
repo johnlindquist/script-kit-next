@@ -47,12 +47,7 @@ impl ProcessManager {
 
     /// Create a new ProcessManager with default paths
     pub fn new() -> Self {
-        let kit_dir = dirs::home_dir()
-            .map(|h| h.join(".scriptkit"))
-            .unwrap_or_else(|| {
-                // Use system temp directory instead of hardcoded /tmp for better security
-                std::env::temp_dir().join(".scriptkit")
-            });
+        let kit_dir = crate::setup::get_kit_path();
 
         Self {
             active_processes: RwLock::new(HashMap::new()),

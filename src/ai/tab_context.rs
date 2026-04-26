@@ -1767,10 +1767,7 @@ pub struct TabAiExecutionReceipt {
 ///
 /// Located at `~/.scriptkit/scripts/.tab-ai-executions.jsonl`.
 pub fn tab_ai_execution_audit_path() -> Result<std::path::PathBuf, String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "tab_ai_execution_audit_path: HOME is not set".to_string())?;
-    Ok(std::path::Path::new(&home)
-        .join(".scriptkit")
+    Ok(crate::setup::get_kit_path()
         .join("scripts")
         .join(".tab-ai-executions.jsonl"))
 }
@@ -1891,10 +1888,7 @@ pub struct TabAiMemoryEntry {
 ///
 /// Located at `~/.scriptkit/scripts/.tab-ai-memory.json`.
 pub fn tab_ai_memory_index_path() -> Result<std::path::PathBuf, String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "tab_ai_memory_index_path: HOME is not set".to_string())?;
-    Ok(std::path::Path::new(&home)
-        .join(".scriptkit")
+    Ok(crate::setup::get_kit_path()
         .join("scripts")
         .join(".tab-ai-memory.json"))
 }

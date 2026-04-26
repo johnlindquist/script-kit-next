@@ -234,7 +234,17 @@ fn spawn_async_script_refresh_load(
 }
 
 impl ScriptListApp {
+    /// Re-check if bun is available and update the warning banner state
+    pub(crate) fn check_bun(&mut self) {
+        let bun_available = crate::setup::bun_is_discoverable();
+        self.show_bun_warning = !bun_available;
+    }
+
     pub(crate) fn refresh_scripts(&mut self, cx: &mut Context<Self>) {
+        // Re-check bun availability whenever we refresh scripts
+        // This allows the warning banner to clear if the user fixes their path
+        self.check_bun();
+
         let request_id =
             SCRIPT_REFRESH_REQUEST_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
         logging::log(

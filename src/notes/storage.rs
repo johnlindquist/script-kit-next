@@ -25,11 +25,7 @@ fn get_notes_db_path() -> PathBuf {
             .join("notes.sqlite");
     }
 
-    let kit_dir = dirs::home_dir()
-        .map(|h| h.join(".scriptkit"))
-        .unwrap_or_else(|| PathBuf::from(".scriptkit"));
-
-    kit_dir.join("db").join("notes.sqlite")
+    crate::setup::get_kit_path().join("db").join("notes.sqlite")
 }
 
 /// Ensure the notes tables and virtual search table exist.

@@ -208,13 +208,7 @@ impl ShortcutOverrides {
 
 /// Get the default path for shortcut overrides.
 pub fn default_overrides_path() -> std::path::PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| {
-            warn!("Could not determine home directory for shortcut overrides path");
-            std::path::PathBuf::default()
-        })
-        .join(".scriptkit")
-        .join("shortcuts.json")
+    crate::setup::get_kit_path().join("shortcuts.json")
 }
 
 // ============================================================================

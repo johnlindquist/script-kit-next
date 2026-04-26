@@ -349,9 +349,7 @@ impl ScriptKitAcpClient {
 
         let should_approve = 'check: {
             // 1. Operations on ~/.scriptkit paths
-            let scriptkit_dir = dirs::home_dir()
-                .map(|h| h.join(".scriptkit").to_string_lossy().to_string())
-                .unwrap_or_default();
+            let scriptkit_dir = crate::setup::get_kit_path().to_string_lossy().to_string();
             if !scriptkit_dir.is_empty() && input_str.contains(&scriptkit_dir) {
                 break 'check true;
             }

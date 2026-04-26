@@ -95,6 +95,38 @@ static SDK_EXTRACTED: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock
 pub fn find_executable(name: &str) -> Option<PathBuf> {
     info!(category = "EXEC", executable = %name, "Looking for executable");
 
+    // Check for environment override first
+    if name == "bun" {
+        // 1. Check environment variable (highest priority)
+        if let Ok(env_path) = std::env::var("BUN_PATH") {
+            let path = PathBuf::from(env_path);
+            if path.exists() {
+                info!(
+                    category = "EXEC",
+                    path = %path.display(),
+                    "Found bun via BUN_PATH environment variable"
+                );
+                return Some(path);
+            }
+        }
+
+        // 2. Check config.ts bun_path (middle priority)
+        // We use load_config() which might be recursive, but Config::default()
+        // is returned if bun is not found, so it breaks the cycle.
+        let config = crate::config::load_config();
+        if let Some(config_bun_path) = config.bun_path {
+            let path = PathBuf::from(config_bun_path);
+            if path.exists() {
+                info!(
+                    category = "EXEC",
+                    path = %path.display(),
+                    "Found bun via config.ts bun_path"
+                );
+                return Some(path);
+            }
+        }
+    }
+
     // Common paths where executables might be installed
     let common_paths = [
         // User-specific paths
@@ -623,8 +655,12 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
     // Find SDK for preloading
     let sdk_path = find_sdk_path();
 
-    let bun_path = "bun".to_string();
-    let node_path = "node".to_string();
+    let bun_path = find_executable("bun")
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "bun".to_string());
+    let node_path = find_executable("node")
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "node".to_string());
 
     let mut attempts = Vec::new();
     if is_typescript(path) {

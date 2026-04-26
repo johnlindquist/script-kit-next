@@ -266,10 +266,7 @@ impl HarnessConfig {
 
 /// Path to the harness config file.
 pub fn tab_ai_harness_config_path() -> Result<std::path::PathBuf, String> {
-    let home = std::env::var("HOME")
-        .map_err(|_| "tab_ai_harness_config_path: HOME is not set".to_string())?;
-    Ok(std::path::Path::new(&home)
-        .join(".scriptkit")
+    Ok(crate::setup::get_kit_path()
         .join("kit")
         .join("config.ts"))
 }

@@ -20,10 +20,7 @@ pub fn now_epoch_ms() -> u64 {
 
 /// Returns the default path for transaction trace logs.
 pub fn default_transaction_log_path() -> PathBuf {
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."));
-    home.join(".scriptkit")
+    crate::setup::get_kit_path()
         .join("logs")
         .join("transactions.jsonl")
 }

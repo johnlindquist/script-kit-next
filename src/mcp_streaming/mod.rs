@@ -142,11 +142,9 @@ impl AuditLogger {
         Self { log_path }
     }
 
-    /// Create audit logger with default ~/.scriptkit path
+    /// Create audit logger with default path (respects SK_PATH)
     pub fn with_defaults() -> Result<Self> {
-        let kit_path = dirs::home_dir()
-            .context("Failed to get home directory")?
-            .join(".scriptkit");
+        let kit_path = crate::setup::get_kit_path();
         Ok(Self::new(kit_path))
     }
 
