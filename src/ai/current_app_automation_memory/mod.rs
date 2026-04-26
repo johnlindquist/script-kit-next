@@ -52,9 +52,7 @@ pub struct CurrentAppAutomationMemoryDecision {
 }
 
 pub fn current_app_automation_memory_index_path() -> Result<PathBuf> {
-    let home = env::var("HOME").context("HOME is not set")?;
-    Ok(Path::new(&home)
-        .join(".scriptkit")
+    Ok(crate::setup::get_kit_path()
         .join("scripts")
         .join(".current-app-automation-memory.json"))
 }

@@ -225,10 +225,9 @@ pub fn cleanup_old_tab_ai_screenshot_files(max_keep: usize) -> Result<()> {
 
 /// Return the directory for Tab AI screenshot temp files.
 ///
-/// Uses `~/.scriptkit/tmp/` to keep temp files alongside other Script Kit data.
+/// Uses `~/.scriptkit/tmp/` (or respects SK_PATH) to keep temp files alongside other Script Kit data.
 fn screenshot_tmp_dir() -> Result<std::path::PathBuf> {
-    let home = dirs::home_dir().context("could not determine home directory")?;
-    Ok(home.join(".scriptkit").join("tmp"))
+    Ok(crate::setup::get_kit_path().join("tmp"))
 }
 
 /// Return the directory for Tab AI screenshot temp files, using a custom root.

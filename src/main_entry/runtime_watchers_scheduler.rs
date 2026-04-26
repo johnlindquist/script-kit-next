@@ -274,22 +274,9 @@
                                 }
 
                                 // Use bun to run the script directly (non-interactive for scheduled scripts)
-                                // Find bun path (same logic as executor)
-                                let bun_path = std::env::var("BUN_PATH")
-                                    .ok()
-                                    .or_else(|| {
-                                        // Check common locations
-                                        for candidate in &[
-                                            "/opt/homebrew/bin/bun",
-                                            "/usr/local/bin/bun",
-                                            std::env::var("HOME").ok().map(|h| format!("{}/.bun/bin/bun", h)).unwrap_or_default().as_str(),
-                                        ] {
-                                            if std::path::Path::new(candidate).exists() {
-                                                return Some(candidate.to_string());
-                                            }
-                                        }
-                                        None
-                                    })
+                                // Find bun path (centralized in executor)
+                                let bun_path = crate::executor::find_executable("bun")
+                                    .map(|p| p.to_string_lossy().into_owned())
                                     .unwrap_or_else(|| "bun".to_string());
 
                                 // Spawn bun process to run the script

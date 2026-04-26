@@ -62,12 +62,9 @@ pub fn invalidate_alias_cache() {
 
 /// Get the default path for alias overrides.
 ///
-/// Returns `~/.scriptkit/aliases.json`
+/// Returns `~/.scriptkit/aliases.json` (or respects SK_PATH)
 pub fn default_aliases_path() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_default()
-        .join(".scriptkit")
-        .join("aliases.json")
+    crate::setup::get_kit_path().join("aliases.json")
 }
 
 /// Load all alias overrides from ~/.scriptkit/aliases.json.

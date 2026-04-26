@@ -25,13 +25,10 @@ pub use auto_submit::{
 
 pub use errors::{extract_error_message, generate_suggestions, parse_stack_trace};
 
-pub use runner::{execute_script_interactive, ScriptSession};
+pub use runner::{execute_script_interactive, find_executable, ScriptSession};
 
 #[cfg(test)]
-pub(crate) use runner::{
-    find_executable, find_sdk_path, is_javascript, is_typescript, spawn_script, ProcessHandle,
-    SplitSession,
-};
+pub(crate) use runner::SplitSession;
 
 pub use scriptlet::{run_scriptlet, ScriptletExecOptions};
 

@@ -123,9 +123,7 @@ const APP_IDENTIFIER: &str = "com.scriptkit.secrets";
 
 /// Get the path to the secrets file
 fn secrets_path() -> anyhow::Result<PathBuf> {
-    let home =
-        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Could not determine home directory"))?;
-    Ok(home.join(".scriptkit").join("secrets.age"))
+    Ok(crate::setup::get_kit_path().join("secrets.age"))
 }
 
 /// Derive a machine-specific passphrase

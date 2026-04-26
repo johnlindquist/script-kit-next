@@ -79,9 +79,7 @@ impl McpServer {
 
     /// Create server with default settings
     pub fn with_defaults() -> Result<Self> {
-        let kit_path = dirs::home_dir()
-            .context("Failed to get home directory")?
-            .join(".scriptkit");
+        let kit_path = crate::setup::get_kit_path();
 
         let port = std::env::var("MCP_PORT")
             .ok()
