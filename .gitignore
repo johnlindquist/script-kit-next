@@ -23,9 +23,11 @@ node_modules/
 .test-screenshots/
 .test-output/
 .mocks/
+session*.md
 
 # AI-generated bundles (ephemeral)
 *-bundle.md
+expert-bundles/
 
 # Package caches
 .packx_cache/
@@ -54,7 +56,14 @@ gpui-vibrancy-poc/
 credentials.json
 test-screenshots/
 .xpert
+.x*/
 .xorloop-sessions/
+.codex-packx-expert/
+.codex-tasks/
+.hive/
+.notes/
+.opencode/
+.afk/
 .ai/
 TODOS.md
 
