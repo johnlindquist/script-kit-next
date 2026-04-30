@@ -24,6 +24,7 @@ node_modules/
 .test-output/
 .mocks/
 session*.md
+oracle-questions.md
 
 # AI-generated bundles (ephemeral)
 *-bundle.md
