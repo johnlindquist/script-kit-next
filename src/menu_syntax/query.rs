@@ -74,13 +74,13 @@ fn classify_qualifier(token: &str) -> Option<Predicate> {
                 _ => ShortcutPredicate::Literal(value.clone()),
             },
         )),
-        "source" => (!value.is_empty()).then(|| Predicate::Source(value)),
-        "plugin" => (!value.is_empty()).then(|| Predicate::Plugin(value)),
-        "name" => (!value.is_empty()).then(|| Predicate::Name(value)),
-        "desc" | "description" => (!value.is_empty()).then(|| Predicate::Desc(value)),
-        "alias" => (!value.is_empty()).then(|| Predicate::Alias(value)),
-        "tag" => (!value.is_empty()).then(|| Predicate::Tag(value)),
-        "has" => (!value.is_empty()).then(|| Predicate::Has(value)),
+        "source" => (!value.is_empty()).then_some(Predicate::Source(value)),
+        "plugin" => (!value.is_empty()).then_some(Predicate::Plugin(value)),
+        "name" => (!value.is_empty()).then_some(Predicate::Name(value)),
+        "desc" | "description" => (!value.is_empty()).then_some(Predicate::Desc(value)),
+        "alias" => (!value.is_empty()).then_some(Predicate::Alias(value)),
+        "tag" => (!value.is_empty()).then_some(Predicate::Tag(value)),
+        "has" => (!value.is_empty()).then_some(Predicate::Has(value)),
         _ => None,
     }
 }
@@ -88,10 +88,10 @@ fn classify_qualifier(token: &str) -> Option<Predicate> {
 fn tokenize(input: &str) -> Vec<String> {
     let mut tokens: Vec<String> = Vec::new();
     let mut current = String::new();
-    let mut chars = input.chars().peekable();
+    let chars = input.chars().peekable();
     let mut in_quote: Option<char> = None;
 
-    while let Some(c) = chars.next() {
+    for c in chars {
         match in_quote {
             Some(q) if c == q => {
                 in_quote = None;

@@ -1,4 +1,4 @@
-use chrono::{Datelike, Duration, NaiveDate, TimeZone};
+use chrono::{Datelike, Duration, NaiveDate, NaiveTime, TimeZone};
 
 use crate::menu_syntax::date::{DateGranularity, MenuSyntaxClock, RecurrenceWeekday, ResolvedDate};
 use crate::menu_syntax::fragments::{
@@ -154,7 +154,7 @@ fn build_all_day_anchor(
     intent: AnchorIntent,
     clock: &MenuSyntaxClock,
 ) -> ResolvedAnchor {
-    let naive = date.and_hms_opt(0, 0, 0).unwrap();
+    let naive = date.and_time(NaiveTime::MIN);
     let local = match clock.timezone.from_local_datetime(&naive) {
         chrono::LocalResult::Single(dt) => dt,
         chrono::LocalResult::Ambiguous(dt, _) => dt,

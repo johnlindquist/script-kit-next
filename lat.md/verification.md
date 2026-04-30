@@ -32,6 +32,12 @@ The gate runs `lat check` before compile, lint, Rust tests, and SDK tests so bro
 
 `make ship-check` is human-only release validation and should not be run by an AI agent.
 
+## Default nextest profile
+
+The default nextest profile is the CI fast lane; it excludes system-dependent and known-stale source-contract suites until those contracts are refreshed.
+
+The filter lives in [.config/nextest.toml](../.config/nextest.toml). Keep newly stale generated contract suites out of the default profile only when they are already failing on main or block unrelated build health; prefer updating the contract tests when the behavior itself changed.
+
 ## Legacy sources
 
 These docs and commands seeded the verification summary and remain in place while the lattice absorbs the durable rules.

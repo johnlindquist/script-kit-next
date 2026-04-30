@@ -43,11 +43,12 @@ pub enum IcsError {
 }
 
 pub fn build_ics_event(payload: &CapturePayload, opts: &IcsBuildOpts) -> String {
-    let start = payload
-        .dates
-        .first()
-        .expect("capture payload must contain at least one date");
-    let start_dt = parse_rfc3339_utc(&start.iso).expect("capture start date must be RFC3339");
+    let Some(start) = payload.dates.first() else {
+        return String::new();
+    };
+    let Some(start_dt) = parse_rfc3339_utc(&start.iso) else {
+        return String::new();
+    };
     let end_dt = start
         .end_iso
         .as_deref()
@@ -107,7 +108,7 @@ pub fn validate_ics(input: &str) -> Result<ValidatedIcs, IcsError> {
     validate_crlf(input)?;
     for physical in input.split("\r\n") {
         if !physical.is_empty() {
-            let octets = physical.as_bytes().len();
+            let octets = physical.len();
             if octets > 75 {
                 return Err(IcsError::OverlongLine { octets });
             }
@@ -163,11 +164,13 @@ pub fn validate_ics(input: &str) -> Result<ValidatedIcs, IcsError> {
             prop: "DTEND_OR_DURATION".to_string(),
         });
     }
-    let dtend_iso = match dtend {
-        Some(_) => Some(parse_ics_datetime_prop(
-            prop_line(event, "DTEND").expect("DTEND line exists when value exists"),
-        )?),
-        None => None,
+    let dtend_iso = if dtend.is_some() {
+        let line = prop_line(event, "DTEND").ok_or_else(|| IcsError::MissingVeventProp {
+            prop: "DTEND".to_string(),
+        })?;
+        Some(parse_ics_datetime_prop(line)?)
+    } else {
+        None
     };
     let duration = duration.map(ToString::to_string);
     let rrule = prop_value(event, "RRULE").map(ToString::to_string);

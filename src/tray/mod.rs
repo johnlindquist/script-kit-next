@@ -354,7 +354,7 @@ impl TrayManager {
                 "Open Script Kit",
                 true,
                 Some(icon),
-                main_shortcut.clone(),
+                main_shortcut,
             ),
             Err(e) => {
                 tracing::warn!(error = %e, "tray.open_icon_fallback");
@@ -363,7 +363,7 @@ impl TrayManager {
                     "Open Script Kit",
                     true,
                     Some(NativeIcon::Home),
-                    main_shortcut.clone(),
+                    main_shortcut,
                 )
             }
         };
@@ -511,8 +511,11 @@ impl TrayManager {
         // Version row — id matches OpenReleasePage so AppKit dispatches a click
         // to the release page when an update is available. Label/enabled flip
         // via `refresh_version_label`.
-        let (version_label, version_enabled) =
-            version_label_and_enabled(&update_state.read().expect("update state poisoned"));
+        let version_snapshot = update_state
+            .read()
+            .map(|state| state.clone())
+            .unwrap_or_else(|_| UpdateState::Error("Update state unavailable".to_string()));
+        let (version_label, version_enabled) = version_label_and_enabled(&version_snapshot);
         let version_item = MenuItem::with_id(
             TrayMenuAction::OpenReleasePage.id(),
             version_label,
@@ -606,11 +609,7 @@ impl TrayManager {
     /// `updates::check_now` completes — flips the row to enabled "Update
     /// Available: vX.Y.Z" when a newer release is found.
     pub fn refresh_version_label(&self) {
-        let snapshot = self
-            .update_state
-            .read()
-            .expect("update state poisoned")
-            .clone();
+        let snapshot = self.update_state_snapshot();
         let (label, enabled) = version_label_and_enabled(&snapshot);
         self.version_item.set_text(&label);
         self.version_item.set_enabled(enabled);
@@ -621,8 +620,8 @@ impl TrayManager {
     pub fn update_state_snapshot(&self) -> UpdateState {
         self.update_state
             .read()
-            .expect("update state poisoned")
-            .clone()
+            .map(|state| state.clone())
+            .unwrap_or_else(|_| UpdateState::Error("Update state unavailable".to_string()))
     }
 
     /// Shared `Arc<RwLock<UpdateState>>` so the dispatcher can hand it to

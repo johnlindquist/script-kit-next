@@ -295,7 +295,7 @@ fn validate_capture(
                 ));
                 continue;
             };
-            if !KNOWN_CAPTURE_ACCEPTS.iter().any(|k| *k == token.as_str()) {
+            if !KNOWN_CAPTURE_ACCEPTS.contains(&token.as_str()) {
                 issues.push(DoctorIssue::err(
                     accept_path,
                     format!(

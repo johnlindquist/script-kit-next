@@ -139,10 +139,10 @@ pub struct InlinePickerRow {
 /// Return a reference to the currently selected row, skipping the bounds
 /// check callers would otherwise duplicate.
 #[allow(dead_code)]
-pub fn inline_picker_selected_row<'a>(
-    rows: &'a [InlinePickerRow],
+pub fn inline_picker_selected_row(
+    rows: &[InlinePickerRow],
     selected_index: Option<usize>,
-) -> Option<&'a InlinePickerRow> {
+) -> Option<&InlinePickerRow> {
     selected_index.and_then(|idx| rows.get(idx))
 }
 

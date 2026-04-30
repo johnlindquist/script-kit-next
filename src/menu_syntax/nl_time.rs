@@ -210,9 +210,7 @@ fn find_range(
         if tokens[start_idx].lower == "from" && connector_idx >= 2 {
             ignored_idx = Some(start_idx);
             start_idx -= 1;
-        } else if start_idx >= 1 && tokens[start_idx - 1].lower == "from" {
-            ignored_idx = Some(start_idx - 1);
-        } else if start_idx >= 1 && tokens[start_idx - 1].lower == "at" {
+        } else if start_idx >= 1 && matches!(tokens[start_idx - 1].lower.as_str(), "from" | "at") {
             ignored_idx = Some(start_idx - 1);
         }
         let end_idx = connector_idx + 1;
@@ -358,7 +356,7 @@ fn resolve_time_range(
     };
     let mut end_dt = local_dt(date, end_hour, end.minute, clock);
     if end_dt <= start_dt {
-        end_dt = end_dt + Duration::days(1);
+        end_dt += Duration::days(1);
     }
     (start_dt, end_dt)
 }
@@ -395,7 +393,12 @@ fn local_dt(
     minute: u32,
     clock: &MenuSyntaxClock,
 ) -> chrono::DateTime<chrono_tz::Tz> {
-    let naive = NaiveDateTime::new(date, NaiveTime::from_hms_opt(hour, minute, 0).unwrap());
+    let Some(time) = NaiveTime::from_hms_opt(hour, minute, 0) else {
+        return clock
+            .timezone
+            .from_utc_datetime(&date.and_time(NaiveTime::MIN));
+    };
+    let naive = NaiveDateTime::new(date, time);
     match clock.timezone.from_local_datetime(&naive) {
         chrono::LocalResult::Single(dt) => dt,
         chrono::LocalResult::Ambiguous(dt, _) => dt,

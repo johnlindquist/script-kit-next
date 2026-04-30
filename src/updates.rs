@@ -39,7 +39,10 @@ where
     F: FnOnce() + Send + 'static,
 {
     {
-        let mut guard = state.write().expect("update state poisoned");
+        let Ok(mut guard) = state.write() else {
+            on_complete();
+            return;
+        };
         if matches!(*guard, UpdateState::Checking) {
             return;
         }

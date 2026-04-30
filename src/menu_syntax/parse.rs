@@ -206,10 +206,10 @@ fn parse_argv(input: &str) -> MenuSyntaxParse {
 fn split_argv(argv_str: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let mut current = String::new();
-    let mut chars = argv_str.chars().peekable();
+    let chars = argv_str.chars().peekable();
     let mut in_quote: Option<char> = None;
 
-    while let Some(c) = chars.next() {
+    for c in chars {
         match in_quote {
             Some(q) if c == q => {
                 in_quote = None;

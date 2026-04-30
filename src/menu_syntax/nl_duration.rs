@@ -103,11 +103,11 @@ fn unit_seconds(unit: &str) -> Option<u32> {
 }
 
 pub(super) fn duration_iso8601(seconds: u32) -> String {
-    if seconds % 86_400 == 0 {
+    if seconds.is_multiple_of(86_400) {
         format!("P{}D", seconds / 86_400)
-    } else if seconds % 3600 == 0 {
+    } else if seconds.is_multiple_of(3600) {
         format!("PT{}H", seconds / 3600)
-    } else if seconds % 60 == 0 {
+    } else if seconds.is_multiple_of(60) {
         format!("PT{}M", seconds / 60)
     } else {
         format!("PT{}S", seconds)

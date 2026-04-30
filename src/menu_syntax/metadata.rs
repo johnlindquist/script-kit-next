@@ -93,10 +93,7 @@ pub fn handler_specs_from_extra_map(extra: &HashMap<String, Value>) -> Vec<MenuS
 
 pub fn handler_specs_from_value(value: &Value) -> Vec<MenuSyntaxHandlerSpec> {
     match value {
-        Value::Array(items) => items
-            .iter()
-            .filter_map(|item| deserialize_spec(item))
-            .collect(),
+        Value::Array(items) => items.iter().filter_map(deserialize_spec).collect(),
         Value::Object(_) => deserialize_spec(value).map(|s| vec![s]).unwrap_or_default(),
         _ => Vec::new(),
     }
