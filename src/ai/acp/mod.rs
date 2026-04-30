@@ -32,9 +32,11 @@ pub(crate) mod model_selector_popup;
 pub(crate) mod permission_broker;
 pub(crate) mod picker_popup;
 pub(crate) mod popup_window;
+pub(crate) mod portal_contract;
 pub(crate) mod preflight;
 pub(crate) mod provider;
 pub(crate) mod setup_state;
+pub(crate) mod surface_state;
 pub(crate) mod thread;
 pub(crate) mod types;
 pub(crate) mod view;
@@ -66,8 +68,9 @@ pub(crate) use permission_broker::{
     AcpApprovalRequest, AcpApprovalRequestInput, AcpPermissionBroker,
 };
 pub(crate) use preflight::{
-    resolve_acp_launch_with_requirements, resolve_default_acp_launch, setup_title_for_resolution,
-    AcpLaunchBlocker, AcpLaunchRequirements, AcpLaunchResolution,
+    resolve_acp_launch_with_requirements, resolve_default_acp_launch,
+    resolve_explicit_acp_launch_with_requirements, setup_title_for_resolution, AcpLaunchBlocker,
+    AcpLaunchRequirements, AcpLaunchResolution,
 };
 pub(crate) use provider::AcpProvider;
 pub(crate) use setup_state::{AcpInlineSetupState, AcpSetupAction};
@@ -76,8 +79,8 @@ pub(crate) use thread::{
     AcpToolCallState,
 };
 pub(crate) use view::{
-    build_staged_skill_prompt, AcpChatSession, AcpChatView, AcpHistoryResumeRequest,
-    AcpRetryRequest,
+    build_skill_context_part, build_skill_slash_command_text, build_staged_skill_prompt,
+    AcpChatSession, AcpChatView, AcpHistoryResumeRequest, AcpRetryRequest,
 };
 
 pub(crate) fn open_or_focus_chat_with_input(
@@ -88,7 +91,7 @@ pub(crate) fn open_or_focus_chat_with_input(
         entity
             .update(cx, |chat, cx| {
                 if chat.is_setup_mode() {
-                    return Err("ACP Chat is in setup mode".to_string());
+                    return Err("Agent Chat is in setup mode".to_string());
                 }
                 chat.set_input(input, cx);
                 Ok::<(), String>(())
@@ -117,7 +120,7 @@ pub(crate) fn open_or_focus_chat_with_input(
         .selected_agent
         .as_ref()
         .and_then(|entry| entry.config.clone())
-        .ok_or_else(|| "Resolved ACP agent is missing configuration".to_string())?;
+        .ok_or_else(|| "Resolved agent is missing configuration".to_string())?;
     let agent_display_name = agent.display_name().to_string();
     let agent_models = agent.models.clone();
     let persisted_model = crate::config::load_user_preferences().ai.selected_model_id;

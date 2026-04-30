@@ -114,8 +114,8 @@ fn test_get_grouped_results_empty_filter_grouped_view() {
     // Grouped should have SCRIPTS section (no SUGGESTED since frecency is empty)
     assert!(!grouped.is_empty());
 
-    // First item should be MAIN section header (scripts without kit_name default to "main" kit)
-    assert!(matches!(&grouped[0], GroupedListItem::SectionHeader(s, _) if s.starts_with("MAIN")));
+    // First item should be Main section header (scripts without kit_name default to "main" kit)
+    assert!(matches!(&grouped[0], GroupedListItem::SectionHeader(s, _) if s.starts_with("Main")));
 }
 
 #[test]
@@ -177,7 +177,7 @@ fn test_get_grouped_results_with_frecency() {
     // Results should contain all items
     assert_eq!(results.len(), 3);
 
-    // Grouped should have both SUGGESTED and SCRIPTS sections
+    // Grouped should have both Suggested and Main sections
     let section_headers: Vec<&str> = grouped
         .iter()
         .filter_map(|item| match item {
@@ -187,13 +187,32 @@ fn test_get_grouped_results_with_frecency() {
         .collect();
 
     assert!(
-        section_headers.iter().any(|s| s.starts_with("SUGGESTED")),
-        "Expected a SUGGESTED section header"
+        section_headers.iter().any(|s| s.starts_with("Suggested")),
+        "Expected a Suggested section header"
     );
-    // Scripts without kit_name default to "main" kit, so we get "MAIN" section instead of "SCRIPTS"
+    // Scripts without kit_name default to "main" kit, so we get "Main" section instead of "Scripts"
     assert!(
-        section_headers.iter().any(|s| s.starts_with("MAIN")),
-        "Expected a MAIN section header"
+        section_headers.iter().any(|s| s.starts_with("Main")),
+        "Expected a Main section header"
+    );
+}
+
+#[test]
+fn grouped_view_source_uses_title_case_section_labels() {
+    let source = std::fs::read_to_string("src/scripts/grouping/grouped_view.rs")
+        .expect("Failed to read grouped_view.rs");
+
+    assert!(
+        source.contains("\"Suggested\".to_string()")
+            && source.contains("\"Commands\".to_string()")
+            && source.contains("\"Apps\".to_string()"),
+        "grouped view should build title-case launcher section labels without count suffixes"
+    );
+    assert!(
+        !source.contains("main_section.label.to_uppercase()")
+            && !source.contains("section.label.to_uppercase()")
+            && !source.contains(" · {}"),
+        "grouped view should not uppercase plugin section labels or append count suffixes before rendering"
     );
 }
 
@@ -253,14 +272,14 @@ fn test_get_grouped_results_frecency_script_appears_before_builtins() {
     );
 
     // Verify structure:
-    // grouped[0] = SectionHeader("SUGGESTED")
+    // grouped[0] = SectionHeader("Suggested")
     // grouped[1] = Item(idx) where results[idx] is the frecency script
-    // Then type-based sections: SCRIPTS, COMMANDS, etc.
+    // Then type-based sections: Main, Commands, etc.
 
-    // First should be SUGGESTED header
+    // First should be Suggested header
     assert!(
-        matches!(&grouped[0], GroupedListItem::SectionHeader(s, _) if s.starts_with("SUGGESTED")),
-        "First item should be SUGGESTED section header, got {:?}",
+        matches!(&grouped[0], GroupedListItem::SectionHeader(s, _) if s.starts_with("Suggested")),
+        "First item should be Suggested section header, got {:?}",
         grouped[0]
     );
 
@@ -289,16 +308,16 @@ fn test_get_grouped_results_frecency_script_appears_before_builtins() {
         })
         .collect();
 
-    // Should have SUGGESTED, MAIN (kit-based section), and COMMANDS sections
-    // Scripts without kit_name default to "main" kit, so we get "MAIN" section instead of "SCRIPTS"
+    // Should have Suggested, Main (kit-based section), and Commands sections
+    // Scripts without kit_name default to the Main kit, so we get "Main" instead of "Scripts"
     assert!(
-        section_headers.iter().any(|s| s.starts_with("MAIN")),
-        "Should have MAIN section for non-recent script. Headers: {:?}",
+        section_headers.iter().any(|s| s.starts_with("Main")),
+        "Should have Main section for non-recent script. Headers: {:?}",
         section_headers
     );
     assert!(
-        section_headers.iter().any(|s| s.starts_with("COMMANDS")),
-        "Should have COMMANDS section for builtins. Headers: {:?}",
+        section_headers.iter().any(|s| s.starts_with("Commands")),
+        "Should have Commands section for builtins. Headers: {:?}",
         section_headers
     );
 
@@ -378,10 +397,10 @@ fn test_get_grouped_results_builtin_with_frecency_vs_script_frecency() {
         None,
     );
 
-    // Both should be in SUGGESTED, but script should come FIRST (higher frecency)
+    // Both should be in Suggested, but script should come FIRST (higher frecency)
     assert!(
-        matches!(&grouped[0], GroupedListItem::SectionHeader(s, _) if s.starts_with("SUGGESTED")),
-        "First item should be SUGGESTED header"
+        matches!(&grouped[0], GroupedListItem::SectionHeader(s, _) if s.starts_with("Suggested")),
+        "First item should be Suggested header"
     );
 
     // The first ITEM in SUGGESTED should be the user script (higher frecency)
@@ -411,4 +430,3 @@ fn test_get_grouped_results_builtin_with_frecency_vs_script_frecency() {
         }
     );
 }
-

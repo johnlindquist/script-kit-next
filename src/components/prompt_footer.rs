@@ -31,6 +31,7 @@ use std::rc::Rc;
 
 use crate::designs::DesignColors;
 use crate::theme::Theme;
+use crate::ui::chrome::alpha_from_opacity;
 use crate::ui_foundation::{hstack, HexColorExt};
 use crate::utils;
 use crate::window_resize::layout::FOOTER_HEIGHT;
@@ -43,10 +44,6 @@ pub const PROMPT_FOOTER_INFO_TEXT_MAX_WIDTH_PX: f32 = 220.0;
 const PROMPT_FOOTER_SECTION_GAP_PX: f32 = 8.0;
 /// Shared horizontal spacing between footer buttons/divider.
 const PROMPT_FOOTER_BUTTON_GAP_PX: f32 = 4.0;
-/// Light-mode hover opacity for footer action buttons.
-pub(crate) const PROMPT_FOOTER_BUTTON_HOVER_OPACITY_LIGHT: u8 = 0x26;
-/// Dark-mode hover opacity for footer action buttons.
-pub(crate) const PROMPT_FOOTER_BUTTON_HOVER_OPACITY_DARK: u8 = 0x2e;
 /// Active/pressed opacity for footer action buttons.
 pub(crate) const PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY: u8 = 0x3a;
 /// Footer button font size delta from base UI font size.
@@ -96,6 +93,12 @@ pub struct PromptFooterColors {
     pub surface: u32,
     /// Background color for footer surface
     pub background: u32,
+    /// Hover overlay alpha derived from the active theme.
+    pub hover_alpha: u8,
+    /// Primary text color for focused/active overlays (matches selection style).
+    pub text_primary: u32,
+    /// Selected opacity alpha (0–255) for active/toggle states.
+    pub selected_alpha: u8,
     /// Whether we're in light mode (affects opacity)
     pub is_light_mode: bool,
 }
@@ -110,6 +113,9 @@ impl PromptFooterColors {
             surface: theme.colors.background.main,
             // Match selected item surface token for footer consistency.
             background: theme.colors.accent.selected_subtle,
+            hover_alpha: alpha_from_opacity(theme.get_opacity().hover) as u8,
+            text_primary: theme.colors.text.primary,
+            selected_alpha: alpha_from_opacity(theme.get_opacity().selected) as u8,
             is_light_mode: !theme.is_dark_mode(),
         }
     }
@@ -160,16 +166,11 @@ fn is_footer_button_activation_key(key: &str) -> bool {
 }
 
 fn footer_button_hover_rgba(colors: PromptFooterColors) -> u32 {
-    let opacity = if colors.is_light_mode {
-        PROMPT_FOOTER_BUTTON_HOVER_OPACITY_LIGHT
-    } else {
-        PROMPT_FOOTER_BUTTON_HOVER_OPACITY_DARK
-    };
-    (colors.background << 8) | (opacity as u32)
+    (colors.background << 8) | (colors.hover_alpha as u32)
 }
 
 fn footer_button_active_rgba(colors: PromptFooterColors) -> u32 {
-    (colors.background << 8) | (PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY as u32)
+    (colors.text_primary << 8) | (colors.selected_alpha as u32)
 }
 
 /// Configuration for PromptFooter display
@@ -436,7 +437,10 @@ impl PromptFooter {
             .child(shortcut_element);
 
         if active {
-            button = button.bg(active_bg).cursor_pointer();
+            button = button
+                .bg(active_bg)
+                .hover(move |s| s.bg(active_bg))
+                .cursor_pointer();
         } else if is_clickable {
             button = button
                 .cursor_pointer()
@@ -641,7 +645,6 @@ mod tests {
         footer_surface_rgba, PromptFooterColors, PromptFooterConfig, PROMPT_FOOTER_BORDER_OPACITY,
         PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY, PROMPT_FOOTER_BUTTON_FONT_DELTA_PX,
         PROMPT_FOOTER_BUTTON_FONT_MIN_PX, PROMPT_FOOTER_BUTTON_GAP_PX,
-        PROMPT_FOOTER_BUTTON_HOVER_OPACITY_DARK, PROMPT_FOOTER_BUTTON_HOVER_OPACITY_LIGHT,
         PROMPT_FOOTER_DIVIDER_HEIGHT_PX, PROMPT_FOOTER_DIVIDER_WIDTH_PX,
         PROMPT_FOOTER_HELPER_FONT_DELTA_PX, PROMPT_FOOTER_HELPER_FONT_MIN_PX,
         PROMPT_FOOTER_INFO_FONT_DELTA_PX, PROMPT_FOOTER_INFO_FONT_MIN_PX,
@@ -658,6 +661,9 @@ mod tests {
             border: 0,
             surface: 0x112233,
             background: 0x2255aa,
+            hover_alpha: 0,
+            text_primary: 0xffffff,
+            selected_alpha: 0x4d,
             is_light_mode: true,
         };
 
@@ -674,6 +680,9 @@ mod tests {
             border: 0,
             surface: 0x112233,
             background: 0x2255aa,
+            hover_alpha: 0,
+            text_primary: 0xffffff,
+            selected_alpha: 0x4d,
             is_light_mode: false,
         };
 
@@ -709,6 +718,7 @@ mod tests {
         assert_eq!(resolved.border, expected.border);
         assert_eq!(resolved.surface, expected.surface);
         assert_eq!(resolved.background, expected.background);
+        assert_eq!(resolved.hover_alpha, expected.hover_alpha);
         assert_eq!(resolved.is_light_mode, expected.is_light_mode);
     }
 
@@ -722,6 +732,7 @@ mod tests {
         assert_eq!(resolved.border, expected.border);
         assert_eq!(resolved.surface, expected.surface);
         assert_eq!(resolved.background, expected.background);
+        assert_eq!(resolved.hover_alpha, expected.hover_alpha);
         assert_eq!(resolved.is_light_mode, expected.is_light_mode);
     }
 
@@ -733,6 +744,9 @@ mod tests {
             border: 0,
             surface: 0,
             background: 0,
+            hover_alpha: 0,
+            text_primary: 0xffffff,
+            selected_alpha: 0x4d,
             is_light_mode: true,
         };
         let dark = PromptFooterColors {
@@ -752,38 +766,58 @@ mod tests {
             border: 0,
             surface: 0,
             background: 0x2255aa,
+            hover_alpha: 0x38,
+            text_primary: 0xffffff,
+            selected_alpha: 0x4d,
             is_light_mode: false,
+        };
+
+        assert_eq!(super::footer_button_hover_rgba(colors), 0x2255aa38);
+    }
+
+    #[test]
+    fn test_prompt_footer_colors_from_theme_uses_hover_opacity() {
+        let mut theme = crate::theme::Theme::light_default();
+        let mut opacity = theme.get_opacity();
+        opacity.hover = 0.18;
+        theme.opacity = Some(opacity);
+
+        let colors = PromptFooterColors::from_theme(&theme);
+        assert_eq!(colors.hover_alpha, 0x2e);
+    }
+
+    #[test]
+    fn test_footer_button_hover_rgba_uses_light_theme_hover_opacity() {
+        let colors = PromptFooterColors {
+            accent: 0,
+            text_muted: 0,
+            border: 0,
+            surface: 0,
+            background: 0x2255aa,
+            hover_alpha: 0x2e,
+            text_primary: 0xffffff,
+            selected_alpha: 0x4d,
+            is_light_mode: true,
         };
 
         assert_eq!(super::footer_button_hover_rgba(colors), 0x2255aa2e);
     }
 
     #[test]
-    fn test_footer_button_hover_rgba_keeps_existing_light_opacity() {
+    fn test_footer_button_active_rgba_uses_text_primary_with_selected_opacity() {
         let colors = PromptFooterColors {
             accent: 0,
             text_muted: 0,
             border: 0,
             surface: 0,
             background: 0x2255aa,
-            is_light_mode: true,
-        };
-
-        assert_eq!(super::footer_button_hover_rgba(colors), 0x2255aa26);
-    }
-
-    #[test]
-    fn test_footer_button_active_rgba_uses_background_token_with_pressed_opacity() {
-        let colors = PromptFooterColors {
-            accent: 0,
-            text_muted: 0,
-            border: 0,
-            surface: 0,
-            background: 0x2255aa,
+            hover_alpha: 0,
+            text_primary: 0xf0f4f8,
+            selected_alpha: 0x4d,
             is_light_mode: false,
         };
 
-        assert_eq!(super::footer_button_active_rgba(colors), 0x2255aa3a);
+        assert_eq!(super::footer_button_active_rgba(colors), 0xf0f4f84d);
     }
 
     #[test]
@@ -825,8 +859,6 @@ mod tests {
     fn test_prompt_footer_layout_tokens_stay_consistent_when_spacing_is_adjusted() {
         assert_eq!(PROMPT_FOOTER_SECTION_GAP_PX, 8.0);
         assert_eq!(PROMPT_FOOTER_BUTTON_GAP_PX, 4.0);
-        assert_eq!(PROMPT_FOOTER_BUTTON_HOVER_OPACITY_LIGHT, 0x26);
-        assert_eq!(PROMPT_FOOTER_BUTTON_HOVER_OPACITY_DARK, 0x2e);
         assert_eq!(PROMPT_FOOTER_BUTTON_ACTIVE_OPACITY, 0x3a);
         assert_eq!(PROMPT_FOOTER_BUTTON_FONT_DELTA_PX, 2.0);
         assert_eq!(PROMPT_FOOTER_BUTTON_FONT_MIN_PX, 10.0);

@@ -1,5 +1,5 @@
-// Test: ACP Chat setup card when no API keys are configured
-// This test verifies the setup UX when opening ACP Chat without any API keys
+// Test: Agent Chat setup card when no agents are configured
+// This test verifies the setup UX when opening Agent Chat without any configured agents
 
 import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';

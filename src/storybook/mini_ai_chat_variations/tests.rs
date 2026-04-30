@@ -44,12 +44,23 @@ fn mini_ai_chat_story_variants_cover_every_spec() {
 }
 
 #[test]
-fn mini_ai_chat_story_variants_mark_surface() {
+fn mini_ai_chat_story_variants_mark_surface_and_presenter_representation() {
     for variant in mini_ai_chat_story_variants() {
         assert_eq!(
             variant.props.get("surface").map(String::as_str),
             Some("miniAiChat"),
             "variant {} missing surface=miniAiChat prop",
+            variant.stable_id()
+        );
+        assert_eq!(
+            variant.props.get("representation").map(String::as_str),
+            Some("presenterFixture"),
+            "variant {} should render through the shared presenter",
+            variant.stable_id()
+        );
+        assert!(
+            !variant.props.contains_key("fixtureSurface"),
+            "variant {} should not require runtime fixture assets",
             variant.stable_id()
         );
     }

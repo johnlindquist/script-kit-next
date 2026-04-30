@@ -8,35 +8,34 @@ use crate::dictation::visualizer::silent_bars;
 // Overlay geometry & waveform contract constants
 // ---------------------------------------------------------------------------
 
-/// Compact pill width in pixels (matches vercel-voice 392px overlay).
-pub(crate) const OVERLAY_WIDTH_PX: f32 = 392.0;
-/// Compact pill height in pixels (matches vercel-voice 40px overlay).
-pub(crate) const OVERLAY_HEIGHT_PX: f32 = 40.0;
-/// Confirming phase uses the same pill height — content swaps inline like
-/// vercel-voice (no vertical expansion that would push off-screen).
-/// Fully-rounded corner radius (half of height for pill shape).
-pub(crate) const OVERLAY_RADIUS_PX: f32 = 20.0;
-/// Horizontal padding inside the pill.
-pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 16.0;
+/// Compact capsule width in pixels.
+pub(crate) const OVERLAY_WIDTH_PX: f32 = 312.0;
+/// Compact capsule height in pixels.
+pub(crate) const OVERLAY_HEIGHT_PX: f32 = 32.0;
+/// Confirming phase uses the same capsule height so content swaps inline.
+/// Fully-rounded corner radius (half of height for capsule shape).
+pub(crate) const OVERLAY_RADIUS_PX: f32 = 16.0;
+/// Horizontal padding inside the capsule.
+pub(crate) const OVERLAY_HORIZONTAL_PADDING_PX: f32 = 11.0;
 /// Gap between inner content columns.
-pub(crate) const OVERLAY_CONTENT_GAP_PX: f32 = 12.0;
+pub(crate) const OVERLAY_CONTENT_GAP_PX: f32 = 8.0;
 /// Font size for timer, status, and transcript text.
 pub(crate) const STATUS_TEXT_SIZE_PX: f32 = 11.5;
 /// Right-side spacer width to balance the timer column.
 pub(crate) const TIMER_SPACER_WIDTH_PX: f32 = 32.0;
 /// Width of the right-hand target badge slot (replaces spacer when target is shown).
-pub(crate) const TARGET_BADGE_SLOT_WIDTH_PX: f32 = 72.0;
+pub(crate) const TARGET_BADGE_SLOT_WIDTH_PX: f32 = 86.0;
 
-/// Number of waveform bars (matches vercel-voice 9-bar visualizer).
+/// Number of waveform bars in the compact capsule visualizer.
 pub(crate) const WAVEFORM_BAR_COUNT: usize = 9;
 /// Width of each waveform bar in pixels.
-pub(crate) const WAVEFORM_BAR_WIDTH_PX: f32 = 4.0;
+pub(crate) const WAVEFORM_BAR_WIDTH_PX: f32 = 3.0;
 /// Gap between waveform bars in pixels.
-pub(crate) const WAVEFORM_BAR_GAP_PX: f32 = 4.0;
+pub(crate) const WAVEFORM_BAR_GAP_PX: f32 = 3.0;
 /// Minimum waveform bar height (silent level).
 pub(crate) const WAVEFORM_BAR_MIN_HEIGHT_PX: f32 = 4.0;
 /// Maximum waveform bar height (peak level).
-pub(crate) const WAVEFORM_BAR_MAX_HEIGHT_PX: f32 = 20.0;
+pub(crate) const WAVEFORM_BAR_MAX_HEIGHT_PX: f32 = 18.0;
 
 /// Number of transcribing-state dots.
 pub(crate) const TRANSCRIBING_DOT_COUNT: usize = 3;
@@ -48,19 +47,17 @@ pub(crate) const TRANSCRIBING_DOT_GAP_PX: f32 = 4.0;
 /// Threshold: if any bar exceeds this, we treat audio as "active" (green).
 const SOUND_THRESHOLD: f32 = 0.10;
 
-/// Bottom offset from the screen edge (dock clearance), matching vercel-voice.
+/// Bottom offset from the screen edge for dock clearance.
 const OVERLAY_BOTTOM_OFFSET_PX: f32 = 15.0;
 
 // ---------------------------------------------------------------------------
-// Glassmorphism constants (matching vercel-voice RecordingOverlay.css)
+// Compact capsule surface constants
 // ---------------------------------------------------------------------------
 
-/// Overlay background: rgba(18,18,22,0.24).
-const GLASSMORPHISM_BG: u32 = 0x121216;
-const GLASSMORPHISM_BG_OPACITY: f32 = 0.24;
-/// Border: rgba(255,255,255,0.18).
-const GLASSMORPHISM_BORDER: u32 = 0xFFFFFF;
-const GLASSMORPHISM_BORDER_OPACITY: f32 = 0.18;
+/// Overlay background opacity layered over the theme title-bar surface.
+const CAPSULE_BG_OPACITY: f32 = 0.32;
+/// Native neutral rim opacity, similar to the main menu window edge.
+const CAPSULE_NATIVE_RIM_OPACITY: f32 = 0.34;
 
 // ---------------------------------------------------------------------------
 // Overlay helper functions
@@ -81,7 +78,7 @@ pub(crate) fn waveform_bar_opacity(level: f32) -> f32 {
 
 /// Compute waveform bar height from a 0.0–1.0 audio level.
 ///
-/// Matches vercel-voice JS: `4 + pow(v, 0.7) * 16`, clamped to max height.
+/// Compact capsule curve: `min + pow(v, 0.7) * (max - min)`.
 pub(crate) fn waveform_bar_height(level: f32) -> f32 {
     (WAVEFORM_BAR_MIN_HEIGHT_PX
         + level.clamp(0.0, 1.0).powf(0.7)
@@ -92,6 +89,24 @@ pub(crate) fn waveform_bar_height(level: f32) -> f32 {
 /// Returns true if any bar exceeds the sound threshold.
 pub(crate) fn has_sound(bars: &[f32; WAVEFORM_BAR_COUNT]) -> bool {
     bars.iter().any(|&bar| bar > SOUND_THRESHOLD)
+}
+
+/// Build the overlay badge label for the current delivery target.
+///
+/// External-app dictation names the tracked frontmost app, matching the
+/// clipboard flow's "Paste to <app>" hint while keeping internal targets
+/// explicit.
+pub(crate) fn target_badge_label(target: crate::dictation::DictationTarget) -> SharedString {
+    if matches!(target, crate::dictation::DictationTarget::ExternalApp) {
+        if let Some(name) = crate::frontmost_app_tracker::get_last_real_app()
+            .map(|app| app.name.trim().to_string())
+            .filter(|name| !name.is_empty())
+        {
+            return name.into();
+        }
+    }
+
+    target.overlay_label().into()
 }
 
 /// Pulse cycle duration in seconds (matches vercel-voice 1.4s).
@@ -672,8 +687,12 @@ impl DictationOverlay {
         let mut label = div()
             .text_size(px(STATUS_TEXT_SIZE_PX - 1.0))
             .font_family(FONT_MONO)
-            .text_color(theme.colors.text.muted.with_opacity(OPACITY_SELECTED))
-            .child(self.state.target.overlay_label());
+            .text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))
+            .max_w(px(TARGET_BADGE_SLOT_WIDTH_PX - 18.0))
+            .overflow_hidden()
+            .text_ellipsis()
+            .whitespace_nowrap()
+            .child(target_badge_label(self.state.target));
         if interactive {
             label = label.cursor_pointer();
         }
@@ -818,14 +837,16 @@ impl Render for DictationOverlay {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = get_cached_theme();
 
-        // Glassmorphism surface: use theme bg with low opacity for vibrancy blur,
-        // and theme border with subtle opacity for glass edge.
-        let mut surface_bg = rgb(theme.colors.background.main);
-        surface_bg.a = GLASSMORPHISM_BG_OPACITY;
-        let mut border_color = rgb(theme.colors.ui.border);
-        border_color.a = GLASSMORPHISM_BORDER_OPACITY;
+        // Compact capsule surface: quiet theme surface plus a neutral native rim.
+        let mut surface_bg = rgb(theme.colors.background.title_bar);
+        surface_bg.a = CAPSULE_BG_OPACITY;
+        let border_color = theme
+            .colors
+            .text
+            .primary
+            .with_opacity(CAPSULE_NATIVE_RIM_OPACITY);
 
-        let timer_color = theme.colors.text.muted.with_opacity(OPACITY_SELECTED);
+        let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
         let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
         let text_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
 
@@ -848,13 +869,19 @@ impl Render for DictationOverlay {
                     .w_full()
                     // Left: timer
                     .child(
-                        div().flex().flex_row().items_center().gap(px(8.)).child(
-                            div()
-                                .text_size(px(STATUS_TEXT_SIZE_PX))
-                                .font_family(FONT_MONO)
-                                .text_color(timer_color)
-                                .child(timer_text),
-                        ),
+                        div()
+                            .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(
+                                div()
+                                    .text_size(px(STATUS_TEXT_SIZE_PX))
+                                    .font_family(FONT_MONO)
+                                    .text_color(timer_color)
+                                    .child(timer_text),
+                            ),
                     )
                     // Center: waveform bars (flex-grow to fill)
                     .child(
@@ -1009,10 +1036,10 @@ impl Render for DictationOverlay {
             _ => div(),
         };
 
-        // Same pill radius for all phases — confirming swaps content inline.
+        // Same capsule radius for all phases; confirming swaps content inline.
         let radius = OVERLAY_RADIUS_PX;
 
-        // Inner pill surface — glassmorphism styling, padding, rounded corners.
+        // Inner capsule surface: theme-backed fill, neutral rim, compact padding.
         let surface = div()
             .flex()
             .flex_row()
@@ -1027,6 +1054,12 @@ impl Render for DictationOverlay {
             .rounded(px(radius))
             .border_1()
             .border_color(border_color)
+            .shadow(vec![gpui::BoxShadow {
+                color: theme.colors.ui.border.with_opacity(0.22),
+                offset: gpui::point(px(0.0), px(8.0)),
+                blur_radius: px(20.0),
+                spread_radius: px(0.0),
+            }])
             .child(inner);
 
         // Outer root claims the full popup content bounds so no GPUI inset
@@ -1046,15 +1079,20 @@ pub(crate) fn finished_label() -> SharedString {
     "Done".into()
 }
 
-/// Render waveform bars matching vercel-voice `.bars-container` styling.
+/// Render waveform bars for the compact capsule.
 ///
-/// Uses theme success color when sound is detected, error color when silent.
+/// Uses theme success color when sound is detected, muted text when silent.
 fn render_waveform_bars(bars: &[f32; WAVEFORM_BAR_COUNT], active: bool) -> impl IntoElement {
     let theme = get_cached_theme();
     let bar_hex = if active {
         theme.colors.ui.success
     } else {
-        theme.colors.ui.error
+        theme.colors.text.primary
+    };
+    let inactive_opacity_scale = if active {
+        1.0
+    } else {
+        theme.get_opacity().text_hint
     };
 
     let mut container = div()
@@ -1065,7 +1103,7 @@ fn render_waveform_bars(bars: &[f32; WAVEFORM_BAR_COUNT], active: bool) -> impl 
         .h(px(WAVEFORM_BAR_MAX_HEIGHT_PX));
 
     for &level in bars {
-        let bar_color = bar_hex.with_opacity(waveform_bar_opacity(level));
+        let bar_color = bar_hex.with_opacity(waveform_bar_opacity(level) * inactive_opacity_scale);
         container = container.child(
             div()
                 .w(px(WAVEFORM_BAR_WIDTH_PX))
@@ -1106,6 +1144,220 @@ fn render_transcribing_dots(opacities: &[f32; TRANSCRIBING_DOT_COUNT]) -> impl I
     }
 
     container
+}
+
+/// Render the live compact capsule from a fixed state for Storybook previews.
+///
+/// This keeps canonical Dictation stories on the same constants, waveform
+/// math, phase copy, and target-badge styling as the runtime overlay without
+/// opening a real floating window.
+pub(crate) fn render_dictation_overlay_state_preview(
+    state: &DictationOverlayState,
+) -> gpui::AnyElement {
+    let theme = get_cached_theme();
+    let mut surface_bg = rgb(theme.colors.background.title_bar);
+    surface_bg.a = CAPSULE_BG_OPACITY;
+    let border_color = theme
+        .colors
+        .text
+        .primary
+        .with_opacity(CAPSULE_NATIVE_RIM_OPACITY);
+    let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
+    let muted_text = theme.colors.text.muted.with_opacity(OPACITY_TEXT_MUTED);
+    let text_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);
+
+    if matches!(state.phase, DictationSessionPhase::Idle) {
+        return div()
+            .w(px(OVERLAY_WIDTH_PX))
+            .h(px(OVERLAY_HEIGHT_PX))
+            .into_any_element();
+    }
+
+    let inner = match &state.phase {
+        DictationSessionPhase::Recording => {
+            let timer_text = format_elapsed(state.elapsed);
+            let active = has_sound(&state.bars);
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .w_full()
+                .child(
+                    div().flex().flex_row().items_center().gap(px(8.)).child(
+                        div()
+                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                            .font_family(FONT_MONO)
+                            .text_color(timer_color)
+                            .child(timer_text),
+                    ),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_center()
+                        .child(render_waveform_bars(&state.bars, active)),
+                )
+                .child(render_static_target_badge_slot(state.target))
+        }
+        DictationSessionPhase::Confirming => {
+            let timer_text = format_elapsed(state.elapsed);
+            let stop_color = theme.colors.ui.error.with_opacity(OPACITY_ACTIVE);
+            let continue_color = theme.colors.ui.success.with_opacity(OPACITY_ACTIVE);
+            let stop_bg = theme.colors.ui.error.with_opacity(0.14);
+            let continue_bg = theme.colors.ui.success.with_opacity(0.08);
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .w_full()
+                .child(
+                    div().flex().flex_row().items_center().gap(px(8.)).child(
+                        div()
+                            .text_size(px(STATUS_TEXT_SIZE_PX))
+                            .font_family(FONT_MONO)
+                            .text_color(timer_color)
+                            .child(timer_text),
+                    ),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_center()
+                        .gap(px(10.))
+                        .child(
+                            div()
+                                .id("dictation-stop-button")
+                                .px(px(8.))
+                                .py(px(2.))
+                                .bg(stop_bg)
+                                .rounded(px(999.))
+                                .border_1()
+                                .border_color(theme.colors.ui.error.with_opacity(0.45))
+                                .text_size(px(STATUS_TEXT_SIZE_PX))
+                                .font_family(FONT_MONO)
+                                .text_color(stop_color)
+                                .child(CONFIRM_STOP_LABEL),
+                        )
+                        .child(
+                            div()
+                                .id("dictation-continue-button")
+                                .px(px(8.))
+                                .py(px(2.))
+                                .bg(continue_bg)
+                                .rounded(px(999.))
+                                .border_1()
+                                .border_color(theme.colors.ui.success.with_opacity(0.35))
+                                .text_size(px(STATUS_TEXT_SIZE_PX))
+                                .font_family(FONT_MONO)
+                                .text_color(continue_color)
+                                .child(CONFIRM_CONTINUE_LABEL),
+                        ),
+                )
+                .child(render_static_target_badge_slot(state.target))
+        }
+        DictationSessionPhase::Transcribing => div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_center()
+            .w_full()
+            .child(render_transcribing_dots(
+                &transcribing_dot_opacities_static(),
+            )),
+        DictationSessionPhase::Finished => div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_center()
+            .w_full()
+            .child(
+                div()
+                    .text_size(px(STATUS_TEXT_SIZE_PX))
+                    .font_family(FONT_MONO)
+                    .text_color(text_color)
+                    .overflow_hidden()
+                    .child(finished_label()),
+            ),
+        DictationSessionPhase::Failed(msg) => {
+            let err_text: SharedString = format!("Error: {msg}").into();
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_center()
+                .w_full()
+                .child(
+                    div()
+                        .text_size(px(STATUS_TEXT_SIZE_PX))
+                        .font_family(FONT_MONO)
+                        .text_color(muted_text)
+                        .overflow_hidden()
+                        .child(err_text),
+                )
+        }
+        DictationSessionPhase::Delivering | DictationSessionPhase::Idle => div(),
+    };
+
+    div()
+        .w(px(OVERLAY_WIDTH_PX))
+        .h(px(OVERLAY_HEIGHT_PX))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .overflow_hidden()
+        .px(px(OVERLAY_HORIZONTAL_PADDING_PX))
+        .gap(px(OVERLAY_CONTENT_GAP_PX))
+        .bg(surface_bg)
+        .rounded(px(OVERLAY_RADIUS_PX))
+        .border_1()
+        .border_color(border_color)
+        .shadow(vec![gpui::BoxShadow {
+            color: theme.colors.ui.border.with_opacity(0.22),
+            offset: gpui::point(px(0.0), px(8.0)),
+            blur_radius: px(20.0),
+            spread_radius: px(0.0),
+        }])
+        .child(inner)
+        .into_any_element()
+}
+
+fn render_static_target_badge_slot(target: crate::dictation::DictationTarget) -> impl IntoElement {
+    let theme = get_cached_theme();
+    let label = div()
+        .text_size(px(STATUS_TEXT_SIZE_PX - 1.0))
+        .font_family(FONT_MONO)
+        .text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))
+        .max_w(px(TARGET_BADGE_SLOT_WIDTH_PX - 18.0))
+        .overflow_hidden()
+        .text_ellipsis()
+        .whitespace_nowrap()
+        .child(target_badge_label(target));
+
+    let badge = div()
+        .id("dictation-target-badge")
+        .px(px(8.))
+        .py(px(2.))
+        .rounded(px(999.))
+        .bg(theme.colors.background.main.with_opacity(OPACITY_SUBTLE))
+        .border_1()
+        .border_color(theme.colors.ui.border.with_opacity(OPACITY_SUBTLE))
+        .cursor_default()
+        .child(label);
+
+    div()
+        .w(px(TARGET_BADGE_SLOT_WIDTH_PX))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_end()
+        .child(badge)
 }
 
 // ---------------------------------------------------------------------------

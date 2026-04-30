@@ -10,10 +10,11 @@ struct SettingsItem {
 #[derive(Clone)]
 enum SettingsAction {
     ChooseTheme,
-    ConfigureVercelApiKey,
-    ConfigureOpenAiApiKey,
-    ConfigureAnthropicApiKey,
     SelectMicrophone,
+    ClearSuggested,
+    CheckPermissions,
+    RequestAccessibilityPermission,
+    OpenAccessibilitySettings,
     DisableWindowSnapping,
     SnapModeSimple,
     SnapModeExpanded,
@@ -32,7 +33,8 @@ fn settings_item_matches_filter(item: &SettingsItem, filter: &str) -> bool {
 }
 
 fn filtered_settings_items<'a>(items: &'a [SettingsItem], filter: &str) -> Vec<&'a SettingsItem> {
-    items.iter()
+    items
+        .iter()
         .filter(|item| settings_item_matches_filter(item, filter))
         .collect()
 }
@@ -46,28 +48,34 @@ fn get_settings_items() -> Vec<SettingsItem> {
             action: SettingsAction::ChooseTheme,
         },
         SettingsItem {
-            name: "Configure Vercel AI Gateway",
-            description: "Set up the Vercel AI Gateway API key for ACP Chat",
-            icon: "key-round",
-            action: SettingsAction::ConfigureVercelApiKey,
-        },
-        SettingsItem {
-            name: "Configure OpenAI API Key",
-            description: "Set up the OpenAI API key for ACP Chat",
-            icon: "key-round",
-            action: SettingsAction::ConfigureOpenAiApiKey,
-        },
-        SettingsItem {
-            name: "Configure Anthropic API Key",
-            description: "Set up the Anthropic API key for ACP Chat",
-            icon: "key-round",
-            action: SettingsAction::ConfigureAnthropicApiKey,
-        },
-        SettingsItem {
             name: "Select Microphone",
             description: "Choose which microphone to use for dictation",
             icon: "mic",
             action: SettingsAction::SelectMicrophone,
+        },
+        SettingsItem {
+            name: "Clear Suggested Items",
+            description: "Reset Suggested and Recently Used launcher history",
+            icon: "eraser",
+            action: SettingsAction::ClearSuggested,
+        },
+        SettingsItem {
+            name: "Check Permissions",
+            description: "Run a check for the macOS permissions Script Kit needs",
+            icon: "circle-check",
+            action: SettingsAction::CheckPermissions,
+        },
+        SettingsItem {
+            name: "Request Accessibility Permission",
+            description: "Prompt macOS to grant Script Kit accessibility access",
+            icon: "key-round",
+            action: SettingsAction::RequestAccessibilityPermission,
+        },
+        SettingsItem {
+            name: "Open Accessibility Settings",
+            description: "Open the Accessibility pane in macOS System Settings",
+            icon: "accessibility",
+            action: SettingsAction::OpenAccessibilitySettings,
         },
     ];
 
@@ -140,45 +148,6 @@ impl ScriptListApp {
                 );
                 self.open_theme_chooser_view(cx);
             }
-            SettingsAction::ConfigureVercelApiKey => {
-                tracing::info!(
-                    correlation_id = "settings-hub",
-                    action = "configure_vercel_api_key",
-                    "settings.action_executed"
-                );
-                self.show_api_key_prompt(
-                    "SCRIPT_KIT_VERCEL_API_KEY",
-                    "Enter your Vercel AI Gateway API key",
-                    "Vercel AI Gateway",
-                    cx,
-                );
-            }
-            SettingsAction::ConfigureOpenAiApiKey => {
-                tracing::info!(
-                    correlation_id = "settings-hub",
-                    action = "configure_openai_api_key",
-                    "settings.action_executed"
-                );
-                self.show_api_key_prompt(
-                    "SCRIPT_KIT_OPENAI_API_KEY",
-                    "Enter your OpenAI API key",
-                    "OpenAI",
-                    cx,
-                );
-            }
-            SettingsAction::ConfigureAnthropicApiKey => {
-                tracing::info!(
-                    correlation_id = "settings-hub",
-                    action = "configure_anthropic_api_key",
-                    "settings.action_executed"
-                );
-                self.show_api_key_prompt(
-                    "SCRIPT_KIT_ANTHROPIC_API_KEY",
-                    "Enter your Anthropic API key",
-                    "Anthropic",
-                    cx,
-                );
-            }
             SettingsAction::SelectMicrophone => {
                 tracing::info!(
                     correlation_id = "settings-hub",
@@ -203,6 +172,99 @@ impl ScriptListApp {
                         crate::builtins::SettingsCommandType::SelectMicrophone,
                     ),
                     icon: Some("mic".to_string()),
+                    group: crate::builtins::BuiltInGroup::Core,
+                };
+
+                self.execute_builtin(&entry, cx);
+            }
+            SettingsAction::ClearSuggested => {
+                tracing::info!(
+                    correlation_id = "settings-hub",
+                    action = "clear_suggested",
+                    "settings.action_executed"
+                );
+
+                let entry = crate::builtins::BuiltInEntry {
+                    id: crate::config::canonical_builtin_command_id("builtin/clear-suggested"),
+                    name: "Clear Suggested".to_string(),
+                    description: "Clear all items from Suggested / Recently Used".to_string(),
+                    keywords: vec![
+                        "clear".to_string(),
+                        "suggested".to_string(),
+                        "recent".to_string(),
+                        "frecency".to_string(),
+                        "reset".to_string(),
+                        "history".to_string(),
+                    ],
+                    feature: crate::builtins::BuiltInFeature::FrecencyCommand(
+                        crate::builtins::FrecencyCommandType::ClearSuggested,
+                    ),
+                    icon: Some("eraser".to_string()),
+                    group: crate::builtins::BuiltInGroup::Core,
+                };
+
+                self.execute_builtin(&entry, cx);
+            }
+            SettingsAction::CheckPermissions => {
+                let entry = crate::builtins::BuiltInEntry {
+                    id: crate::config::canonical_builtin_command_id("builtin/check-permissions"),
+                    name: "Check Permissions".to_string(),
+                    description: "Run a check for all required macOS permissions".to_string(),
+                    keywords: vec![
+                        "check".to_string(),
+                        "permissions".to_string(),
+                        "accessibility".to_string(),
+                        "privacy".to_string(),
+                    ],
+                    feature: crate::builtins::BuiltInFeature::PermissionCommand(
+                        crate::builtins::PermissionCommandType::CheckPermissions,
+                    ),
+                    icon: Some("circle-check".to_string()),
+                    group: crate::builtins::BuiltInGroup::Core,
+                };
+
+                self.execute_builtin(&entry, cx);
+            }
+            SettingsAction::RequestAccessibilityPermission => {
+                let entry = crate::builtins::BuiltInEntry {
+                    id: crate::config::canonical_builtin_command_id(
+                        "builtin/request-accessibility",
+                    ),
+                    name: "Request Accessibility Permission".to_string(),
+                    description:
+                        "Request accessibility permission for Script Kit in System Settings"
+                            .to_string(),
+                    keywords: vec![
+                        "request".to_string(),
+                        "accessibility".to_string(),
+                        "permission".to_string(),
+                    ],
+                    feature: crate::builtins::BuiltInFeature::PermissionCommand(
+                        crate::builtins::PermissionCommandType::RequestAccessibility,
+                    ),
+                    icon: Some("key-round".to_string()),
+                    group: crate::builtins::BuiltInGroup::Core,
+                };
+
+                self.execute_builtin(&entry, cx);
+            }
+            SettingsAction::OpenAccessibilitySettings => {
+                let entry = crate::builtins::BuiltInEntry {
+                    id: crate::config::canonical_builtin_command_id(
+                        "builtin/accessibility-settings",
+                    ),
+                    name: "Open Accessibility Settings".to_string(),
+                    description: "Open Accessibility settings in System Preferences".to_string(),
+                    keywords: vec![
+                        "accessibility".to_string(),
+                        "settings".to_string(),
+                        "permission".to_string(),
+                        "open".to_string(),
+                    ],
+                    feature: crate::builtins::BuiltInFeature::PermissionCommand(
+                        crate::builtins::PermissionCommandType::OpenAccessibilitySettings,
+                    ),
+                    icon: Some("accessibility".to_string()),
                     group: crate::builtins::BuiltInGroup::Core,
                 };
 
@@ -278,7 +340,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::minimal("settings", 2, false, false),
+            &crate::components::PromptChromeAudit::minimal_list("settings", true),
         );
 
         let tokens = get_tokens(self.current_design);
@@ -302,8 +364,43 @@ impl ScriptListApp {
                   cx: &mut Context<Self>| {
                 this.hide_mouse_cursor(cx);
 
+                if this.shortcut_recorder_state.is_some() {
+                    return;
+                }
+
                 let key = event.keystroke.key.as_str();
+                let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
+                let modifiers = &event.keystroke.modifiers;
+
+                match this.route_key_to_actions_dialog(
+                    key,
+                    key_char,
+                    modifiers,
+                    ActionsDialogHost::BuiltinList,
+                    window,
+                    cx,
+                ) {
+                    ActionsRoute::NotHandled => {}
+                    ActionsRoute::Handled => {
+                        tracing::debug!(
+                            target: "script_kit::actions",
+                            event = "builtin_view_actions_key_routed",
+                            surface = "settings",
+                            key = %key,
+                        );
+                        return;
+                    }
+                    ActionsRoute::Execute { action_id } => {
+                        this.execute_action_for_actions_host(
+                            ActionsDialogHost::BuiltinList,
+                            action_id,
+                            window,
+                            cx,
+                        );
+                        return;
+                    }
+                }
 
                 if is_key_escape(key) {
                     if !this.clear_builtin_view_filter(cx) {
@@ -441,77 +538,66 @@ impl ScriptListApp {
                 .into_any_element()
         };
 
-        div()
-            .flex()
-            .flex_col()
+        let header = div()
             .w_full()
-            .h_full()
-            .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("settings")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
             .child(
-                div()
-                    .w_full()
-                    .px(px(crate::ui::chrome::HEADER_PADDING_X))
-                    .py(px(crate::ui::chrome::HEADER_PADDING_Y))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_3()
-                    .child(
-                        div().flex_1().flex().flex_row().items_center().child(
-                            Input::new(&self.gpui_input_state)
-                                .w_full()
-                                .h(px(28.))
-                                .px(px(0.))
-                                .py(px(0.))
-                                .with_size(Size::Size(px(design_typography.font_size_xl)))
-                                .appearance(false)
-                                .bordered(false)
-                                .focus_bordered(false),
-                        ),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_dimmed))
-                            .child(format!(
-                                "{} setting{}",
-                                item_count,
-                                if item_count == 1 { "" } else { "s" }
-                            )),
-                    ),
+                div().flex_1().flex().flex_row().items_center().child(
+                    Input::new(&self.gpui_input_state)
+                        .w_full()
+                        .h(px(28.))
+                        .px(px(0.))
+                        .py(px(0.))
+                        .with_size(Size::Size(px(design_typography.font_size_xl)))
+                        .appearance(false)
+                        .bordered(false)
+                        .focus_bordered(false),
+                ),
             )
-            .child(crate::components::SectionDivider::new())
-            .child(
-                div()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .w_full()
-                    .overflow_hidden()
-                    .py(px(design_spacing.padding_xs))
-                    .child(list_element),
-            )
-            .child(
-                if matches!(
-                    crate::footer_popup::active_main_window_footer_surface(),
-                    Some("settings")
-                ) {
-                    crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(
-                    )
-                } else {
-                    crate::components::render_simple_hint_strip(
-                        vec![
-                            gpui::SharedString::from("↵ Open"),
-                            gpui::SharedString::from("Esc Back"),
-                        ],
-                        None,
-                    )
-                },
-            )
-            .into_any_element()
+            .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                "{} setting{}",
+                item_count,
+                if item_count == 1 { "" } else { "s" }
+            )));
+
+        let content = div()
+            .flex_1()
+            .min_h(px(0.))
+            .w_full()
+            .overflow_hidden()
+            .py(px(design_spacing.padding_xs))
+            .child(list_element);
+
+        let footer = if matches!(
+            crate::footer_popup::active_main_window_footer_surface(),
+            Some("settings")
+        ) {
+            Some(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
+        } else {
+            Some(crate::components::render_simple_hint_strip(
+                vec![
+                    gpui::SharedString::from("↵ Open"),
+                    gpui::SharedString::from("Esc Back"),
+                ],
+                None,
+            ))
+        };
+
+        crate::components::render_minimal_list_prompt_shell_with_footer(
+            design_visual.radius_lg,
+            crate::ui_foundation::get_vibrancy_background(&self.theme),
+            header,
+            content,
+            footer,
+        )
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("settings")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
+        .into_any_element()
     }
 }

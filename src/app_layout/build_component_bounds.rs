@@ -30,6 +30,7 @@ impl ScriptListApp {
         // Determine the current view type and build appropriate bounds
         let view_name = match &self.current_view {
             AppView::ScriptList => "ScriptList",
+            AppView::About { .. } => "About",
             AppView::ArgPrompt { .. } => "ArgPrompt",
             AppView::DivPrompt { .. } => "DivPrompt",
             AppView::EditorPrompt { .. } => "EditorPrompt",
@@ -46,6 +47,7 @@ impl ScriptListApp {
             AppView::ClipboardHistoryView { .. } => "ClipboardHistory",
             AppView::AppLauncherView { .. } => "AppLauncher",
             AppView::WindowSwitcherView { .. } => "WindowSwitcher",
+            AppView::BrowserTabsView { .. } => "BrowserTabs",
             AppView::DesignGalleryView { .. } => "DesignGallery",
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => "DesignExplorer",
@@ -67,8 +69,14 @@ impl ScriptListApp {
             AppView::SettingsView { .. } => "Settings",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowse",
             AppView::AcpHistoryView { .. } => "AcpHistory",
+            AppView::BrowserHistoryView { .. } => "BrowserHistory",
+            AppView::DictationHistoryView { .. } => "DictationHistory",
             AppView::NotesBrowseView { .. } => "NotesBrowse",
             AppView::AcpChatView { .. } => "AcpChat",
+            AppView::ScriptIssuesView { .. } => "ScriptIssues",
+            AppView::SdkReferenceView { .. } => "SdkReference",
+            AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalog",
+            AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
         };
 
         // Header bounds (includes padding + input + divider) - common to all views

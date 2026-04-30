@@ -31,9 +31,10 @@ pub(crate) use builders::resolve_file_search_secondary_action_id;
 pub(crate) use builders::AcpActionsDialogHost;
 #[allow(unused_imports)]
 pub(crate) use builders::{
-    acp_switch_agent_id_from_action, acp_switch_model_id_from_action, get_acp_chat_actions,
-    get_acp_chat_actions_with_agents, get_acp_chat_root_route_for_host, get_global_actions,
-    get_script_context_actions, get_scriptlet_context_actions_with_custom,
+    acp_switch_agent_id_from_action, acp_switch_model_id_from_action,
+    acp_switch_profile_name_from_action, get_acp_chat_actions, get_acp_chat_actions_with_agents,
+    get_acp_chat_root_route_for_host, get_global_actions, get_script_context_actions,
+    get_scriptlet_context_actions_with_custom,
 };
 pub use builders::{
     get_ai_command_bar_actions, get_new_chat_actions, get_note_switcher_actions,
@@ -45,6 +46,8 @@ pub use builders::{
 };
 pub use command_bar::{CommandBar, CommandBarConfig};
 pub(crate) use dialog::matching_action_id_for_keystroke;
+#[allow(unused_imports)] // Used by the binary target through include!()-ed app_impl code.
+pub(crate) use dialog::matching_filtered_action_id_for_keystroke;
 pub(crate) use dialog::AcpActionsDialogContext;
 pub use dialog::{
     ActionsDialog, ActionsDialogActivation, ActionsDialogEscapeOutcome, ActionsDialogRoute,

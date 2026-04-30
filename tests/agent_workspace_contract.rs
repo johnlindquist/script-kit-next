@@ -49,34 +49,38 @@ fn test_setup_seeds_root_agent_workspace() {
             "Root GUIDE.md must exist"
         );
 
-        // Skills seeded into authoring plugin
+        // Skills seeded into Script Kit plugin
         for skill in &[
-            "script-authoring",
-            "scriptlets",
-            "agents",
-            "config",
-            "troubleshooting",
+            "new-script",
+            "new-scriptlet",
+            "new-agent",
+            "update-config",
+            "configure-mcp",
+            "troubleshoot",
+            "manage-notes",
+            "start-chat",
+            "add-actions",
         ] {
             let skill_path = kit_root
-                .join("kit")
-                .join("authoring")
+                .join("plugins")
+                .join("scriptkit")
                 .join("skills")
                 .join(skill)
                 .join("SKILL.md");
             assert!(
                 skill_path.exists(),
-                "kit/authoring/skills/{skill}/SKILL.md must exist at {}",
+                "plugins/scriptkit/skills/{skill}/SKILL.md must exist at {}",
                 skill_path.display()
             );
         }
         assert!(
             kit_root
-                .join("kit")
-                .join("authoring")
+                .join("plugins")
+                .join("scriptkit")
                 .join("skills")
                 .join("README.md")
                 .exists(),
-            "kit/authoring/skills/README.md must exist"
+            "plugins/scriptkit/skills/README.md must exist"
         );
 
         // Example scripts seeded into examples plugin
@@ -87,123 +91,123 @@ fn test_setup_seeds_root_agent_workspace() {
             "path-picker.ts",
         ] {
             let example_path = kit_root
-                .join("kit")
+                .join("plugins")
                 .join("examples")
                 .join("scripts")
                 .join(example);
             assert!(
                 example_path.exists(),
-                "kit/examples/scripts/{example} must exist at {}",
+                "plugins/examples/scripts/{example} must exist at {}",
                 example_path.display()
             );
         }
         assert!(
             kit_root
-                .join("kit")
+                .join("plugins")
                 .join("examples")
                 .join("skills")
                 .join("review-pr")
                 .join("SKILL.md")
                 .exists(),
-            "kit/examples/skills/review-pr/SKILL.md must exist"
+            "plugins/examples/skills/review-pr/SKILL.md must exist"
         );
         assert!(
             kit_root
-                .join("kit")
+                .join("plugins")
                 .join("examples")
                 .join("skills")
                 .join("plan-feature")
                 .join("SKILL.md")
                 .exists(),
-            "kit/examples/skills/plan-feature/SKILL.md must exist"
+            "plugins/examples/skills/plan-feature/SKILL.md must exist"
         );
         assert!(
             kit_root
-                .join("kit")
+                .join("plugins")
                 .join("examples")
                 .join("skills")
                 .join("explain-code")
                 .join("SKILL.md")
                 .exists(),
-            "kit/examples/skills/explain-code/SKILL.md must exist"
+            "plugins/examples/skills/explain-code/SKILL.md must exist"
         );
         assert!(
             kit_root
-                .join("kit")
+                .join("plugins")
                 .join("examples")
                 .join("README.md")
                 .exists(),
-            "kit/examples/README.md must exist"
+            "plugins/examples/README.md must exist"
         );
 
-        // Plugin manifests exist for main and authoring
+        // Plugin manifests exist for main and Script Kit
         assert!(
             kit_root
-                .join("kit")
+                .join("plugins")
                 .join("main")
                 .join("plugin.json")
                 .exists(),
-            "kit/main/plugin.json must exist"
+            "plugins/main/plugin.json must exist"
         );
         assert!(
             kit_root
-                .join("kit")
-                .join("authoring")
+                .join("plugins")
+                .join("scriptkit")
                 .join("plugin.json")
                 .exists(),
-            "kit/authoring/plugin.json must exist"
+            "plugins/scriptkit/plugin.json must exist"
         );
 
-        // Kit subtree still exists
+        // Workspace-owned files live at the root
+        assert!(kit_root.join("config.ts").exists(), "config.ts must exist");
         assert!(
-            kit_root.join("kit").join("config.ts").exists(),
-            "kit/config.ts must exist"
+            kit_root.join("theme.json").exists(),
+            "theme.json must exist"
         );
         assert!(
-            kit_root.join("kit").join("theme.json").exists(),
-            "kit/theme.json must exist"
+            kit_root.join("package.json").exists(),
+            "package.json must exist"
         );
         assert!(
-            kit_root.join("kit").join("package.json").exists(),
-            "kit/package.json must exist"
-        );
-        assert!(
-            kit_root.join("kit").join("tsconfig.json").exists(),
-            "kit/tsconfig.json must exist"
-        );
-        assert!(
-            kit_root.join("kit").join("main").join("scripts").exists(),
-            "kit/main/scripts/ must exist"
+            kit_root.join("tsconfig.json").exists(),
+            "tsconfig.json must exist"
         );
         assert!(
             kit_root
-                .join("kit")
+                .join("plugins")
+                .join("main")
+                .join("scripts")
+                .exists(),
+            "plugins/main/scripts/ must exist"
+        );
+        assert!(
+            kit_root
+                .join("plugins")
                 .join("main")
                 .join("scriptlets")
                 .exists(),
-            "kit/main/scriptlets/ must exist"
+            "plugins/main/scriptlets/ must exist"
         );
         assert!(
-            kit_root.join("kit").join("main").join("agents").exists(),
-            "kit/main/agents/ must exist"
+            kit_root
+                .join("plugins")
+                .join("main")
+                .join("agents")
+                .exists(),
+            "plugins/main/agents/ must exist"
         );
         assert!(
-            kit_root.join("kit").join("main").join("skills").exists(),
-            "kit/main/skills/ must exist"
+            kit_root
+                .join("plugins")
+                .join("main")
+                .join("skills")
+                .exists(),
+            "plugins/main/skills/ must exist"
         );
 
-        // kit/CLAUDE.md and kit/AGENTS.md are redirect stubs
-        let kit_claude = fs::read_to_string(kit_root.join("kit").join("CLAUDE.md"))
-            .expect("kit/CLAUDE.md should be readable");
         assert!(
-            kit_claude.contains("../CLAUDE.md"),
-            "kit/CLAUDE.md should redirect to root"
-        );
-        let kit_agents = fs::read_to_string(kit_root.join("kit").join("AGENTS.md"))
-            .expect("kit/AGENTS.md should be readable");
-        assert!(
-            kit_agents.contains("../AGENTS.md"),
-            "kit/AGENTS.md should redirect to root"
+            !kit_root.join("kit").exists(),
+            "Fresh setup must not create the old kit plugin container"
         );
 
         // SDK
@@ -253,16 +257,16 @@ fn test_setup_idempotent_preserves_user_content() {
         // First run — creates everything
         let _ = ensure_kit_setup();
 
-        // Simulate user editing a file in kit/main/scripts
+        // Simulate user editing a file in plugins/main/scripts
         let user_script = kit_root
-            .join("kit")
+            .join("plugins")
             .join("main")
             .join("scripts")
             .join("my-custom.ts");
         fs::write(&user_script, "import \"@scriptkit/sdk\";\n// custom").unwrap();
 
         // Also write custom config
-        let config_path = kit_root.join("kit").join("config.ts");
+        let config_path = kit_root.join("config.ts");
         let original_config = fs::read_to_string(&config_path).unwrap();
         let custom_config = format!("{original_config}\n// user customization");
         fs::write(&config_path, &custom_config).unwrap();
@@ -306,17 +310,21 @@ fn test_seeded_skills_do_not_reference_legacy_v1_contract() {
             "require(",
         ];
 
-        // Check all skill files (now under authoring plugin)
+        // Check all skill files (now under Script Kit plugin)
         for skill in &[
-            "script-authoring",
-            "scriptlets",
-            "agents",
-            "config",
-            "troubleshooting",
+            "new-script",
+            "new-scriptlet",
+            "new-agent",
+            "update-config",
+            "configure-mcp",
+            "troubleshoot",
+            "manage-notes",
+            "start-chat",
+            "add-actions",
         ] {
             let skill_path = kit_root
-                .join("kit")
-                .join("authoring")
+                .join("plugins")
+                .join("scriptkit")
                 .join("skills")
                 .join(skill)
                 .join("SKILL.md");
@@ -325,7 +333,7 @@ fn test_seeded_skills_do_not_reference_legacy_v1_contract() {
             for legacy in &legacy_patterns {
                 assert!(
                     !content.contains(legacy),
-                    "kit/authoring/skills/{skill}/SKILL.md must not contain legacy pattern '{legacy}'"
+                    "plugins/scriptkit/skills/{skill}/SKILL.md must not contain legacy pattern '{legacy}'"
                 );
             }
         }
@@ -338,7 +346,7 @@ fn test_seeded_skills_do_not_reference_legacy_v1_contract() {
             "path-picker.ts",
         ] {
             let example_path = kit_root
-                .join("kit")
+                .join("plugins")
                 .join("examples")
                 .join("scripts")
                 .join(example);
@@ -347,7 +355,7 @@ fn test_seeded_skills_do_not_reference_legacy_v1_contract() {
             for legacy in &legacy_patterns {
                 assert!(
                     !content.contains(legacy),
-                    "kit/examples/scripts/{example} must not contain legacy pattern '{legacy}'"
+                    "plugins/examples/scripts/{example} must not contain legacy pattern '{legacy}'"
                 );
             }
         }
@@ -382,10 +390,10 @@ fn test_sdk_reference_uses_scriptkit_sdk_and_new_paths() {
         "sdk_package must be @scriptkit/sdk"
     );
 
-    // Script directory must point to the new kit/main/scripts path
+    // Script directory must point to the new plugins/main/scripts path
     assert!(
-        doc.script_directory.contains("kit/main/scripts"),
-        "script_directory must use ~/.scriptkit/kit/main/scripts/, got: {}",
+        doc.script_directory.contains("plugins/main/scripts"),
+        "script_directory must use ~/.scriptkit/plugins/main/scripts/, got: {}",
         doc.script_directory
     );
 
@@ -438,7 +446,7 @@ fn test_create_script_action_opens_current_scripts_dir() {
 }
 
 /// Every seeded example script must use `@scriptkit/sdk` and `export const metadata`,
-/// use Bun-first patterns (no Node-only APIs), and live under kit/examples/scripts/.
+/// use Bun-first patterns (no Node-only APIs), and live under plugins/examples/scripts/.
 #[test]
 fn test_seeded_examples_are_sdk_based_and_bun_first() {
     with_temp_sk_path(|kit_root| {
@@ -451,7 +459,7 @@ fn test_seeded_examples_are_sdk_based_and_bun_first() {
             "path-picker.ts",
         ];
 
-        let examples_dir = kit_root.join("kit").join("examples").join("scripts");
+        let examples_dir = kit_root.join("plugins").join("examples").join("scripts");
 
         for example in &examples {
             let path = examples_dir.join(example);
@@ -487,8 +495,8 @@ fn test_seeded_examples_are_sdk_based_and_bun_first() {
             }
         }
 
-        // Examples must NOT exist in kit/main/scripts/ (no pollution)
-        let main_scripts = kit_root.join("kit").join("main").join("scripts");
+        // Examples must NOT exist in plugins/main/scripts/ (no pollution)
+        let main_scripts = kit_root.join("plugins").join("main").join("scripts");
         for example in &examples {
             // The example filenames should not appear as auto-installed entries
             // (hello-world.ts is a special case — the fresh-install sample script
@@ -496,7 +504,7 @@ fn test_seeded_examples_are_sdk_based_and_bun_first() {
             if *example != "hello-world.ts" {
                 assert!(
                     !main_scripts.join(example).exists(),
-                    "{example} must not be auto-installed into kit/main/scripts/"
+                    "{example} must not be auto-installed into plugins/main/scripts/"
                 );
             }
         }
@@ -504,11 +512,11 @@ fn test_seeded_examples_are_sdk_based_and_bun_first() {
         // README must exist alongside the scripts
         assert!(
             kit_root
-                .join("kit")
+                .join("plugins")
                 .join("examples")
                 .join("README.md")
                 .exists(),
-            "kit/examples/README.md must exist"
+            "plugins/examples/README.md must exist"
         );
     });
 }
@@ -577,11 +585,11 @@ fn test_script_creation_dirs_follow_sk_path_override() {
     with_temp_sk_path(|kit_root| {
         assert_eq!(
             script_creation::scripts_dir(),
-            kit_root.join("kit").join("main").join("scripts")
+            kit_root.join("plugins").join("main").join("scripts")
         );
         assert_eq!(
             script_creation::scriptlets_dir(),
-            kit_root.join("kit").join("main").join("scriptlets")
+            kit_root.join("plugins").join("main").join("scriptlets")
         );
     });
 }
@@ -593,14 +601,14 @@ fn test_scriptlets_howto_matches_current_harness_authoring_contract() {
         let _ = ensure_kit_setup();
         let howto = fs::read_to_string(
             kit_root
-                .join("kit")
+                .join("plugins")
                 .join("examples")
                 .join("scriptlets")
                 .join("howto.md"),
         )
-        .expect("read kit/examples/scriptlets/howto.md");
+        .expect("read plugins/examples/scriptlets/howto.md");
 
-        assert!(howto.contains("~/.scriptkit/kit/main/scriptlets/"));
+        assert!(howto.contains("~/.scriptkit/plugins/main/scriptlets/"));
         assert!(!howto.contains("YOUR-KIT-NAME"));
         assert!(!howto.contains("kit/work/scriptlets"));
         assert!(!howto.contains("kit/personal/scriptlets"));
@@ -610,7 +618,7 @@ fn test_scriptlets_howto_matches_current_harness_authoring_contract() {
 }
 
 /// MCP resource descriptions for scripts:// and kit://scripts must reference plugin-scoped
-/// discovery and mention kit/main as the default personal plugin.
+/// discovery and mention plugins/main as the default personal plugin.
 #[test]
 fn test_resource_definitions_use_plugin_scoped_discovery() {
     use script_kit_gpui::mcp_resources::get_resource_definitions;
@@ -623,8 +631,8 @@ fn test_resource_definitions_use_plugin_scoped_discovery() {
             .unwrap_or_else(|| panic!("resource {uri} must exist"));
         let description = resource.description.clone().unwrap_or_default();
         assert!(
-            description.contains("kit/main/scripts"),
-            "{uri} description must mention kit/main/scripts as the default personal plugin: {description}"
+            description.contains("plugins/main/scripts"),
+            "{uri} description must mention plugins/main/scripts as the default personal plugin: {description}"
         );
         assert!(
             description.contains("plugin"),
@@ -648,8 +656,8 @@ fn test_sdk_reference_script_directory_mentions_plugin_discovery() {
         serde_json::from_str(&content.text).expect("valid JSON document");
 
     assert!(
-        doc.script_directory.contains("kit/main/scripts"),
-        "script_directory must mention kit/main/scripts: {}",
+        doc.script_directory.contains("plugins/main/scripts"),
+        "script_directory must mention plugins/main/scripts: {}",
         doc.script_directory
     );
     assert!(
@@ -658,7 +666,7 @@ fn test_sdk_reference_script_directory_mentions_plugin_discovery() {
         doc.script_directory
     );
     assert!(
-        doc.scriptlet_pattern.contains("kit/*/scriptlets/"),
+        doc.scriptlet_pattern.contains("plugins/*/scriptlets/"),
         "scriptlet_pattern must use plugin-scoped glob: {}",
         doc.scriptlet_pattern
     );
@@ -694,18 +702,28 @@ fn test_seeded_workspace_has_full_artifact_authoring_pack() {
         let _ = ensure_kit_setup();
 
         for path in [
-            "kit/authoring/skills/script-authoring/SKILL.md",
-            "kit/authoring/skills/scriptlets/SKILL.md",
-            "kit/authoring/skills/agents/SKILL.md",
-            "kit/examples/scripts/hello-world.ts",
-            "kit/examples/skills/review-pr/SKILL.md",
-            "kit/examples/skills/plan-feature/SKILL.md",
-            "kit/examples/skills/explain-code/SKILL.md",
-            "kit/examples/scriptlets/main.md",
-            "kit/examples/scriptlets/advanced.md",
-            "kit/examples/scriptlets/howto.md",
-            "kit/examples/agents/review-pr.claude.md",
-            "kit/examples/agents/plan-feature.i.gemini.md",
+            "plugins/scriptkit/skills/new-script/SKILL.md",
+            "plugins/scriptkit/skills/new-scriptlet/SKILL.md",
+            "plugins/scriptkit/skills/new-agent/SKILL.md",
+            "plugins/scriptkit/skills/configure-mcp/SKILL.md",
+            "plugins/examples/scripts/hello-world.ts",
+            "plugins/examples/scripts/lib/oauth-device-flow.ts",
+            "plugins/examples/scripts/github-device-login.ts",
+            "plugins/examples/scripts/microsoft-graph-device-login.ts",
+            "plugins/examples/scripts/google-calendar-device-login.ts",
+            "plugins/examples/scripts/generic-oauth-device-flow.ts",
+            "plugins/examples/scripts/power-syntax-capture-github-local.ts",
+            "plugins/examples/scripts/power-syntax-refine-fixture.ts",
+            "plugins/examples/scripts/power-syntax-command-env-dump.ts",
+            "plugins/examples/skills/review-pr/SKILL.md",
+            "plugins/examples/skills/plan-feature/SKILL.md",
+            "plugins/examples/skills/explain-code/SKILL.md",
+            "plugins/examples/scriptlets/main.md",
+            "plugins/examples/scriptlets/power-syntax.md",
+            "plugins/examples/scriptlets/advanced.md",
+            "plugins/examples/scriptlets/howto.md",
+            "plugins/examples/agents/review-pr.claude.md",
+            "plugins/examples/agents/plan-feature.i.gemini.md",
         ] {
             assert!(
                 kit_root.join(path).exists(),
@@ -724,22 +742,22 @@ fn test_root_docs_route_scripts_scriptlets_and_agents_to_real_paths() {
         let root_claude = fs::read_to_string(kit_root.join("CLAUDE.md")).expect("read CLAUDE.md");
         let root_agents = fs::read_to_string(kit_root.join("AGENTS.md")).expect("read AGENTS.md");
         let examples_readme =
-            fs::read_to_string(kit_root.join("kit").join("examples").join("README.md"))
-                .expect("read kit/examples/README.md");
+            fs::read_to_string(kit_root.join("plugins").join("examples").join("README.md"))
+                .expect("read plugins/examples/README.md");
 
         for content in [&root_claude, &root_agents] {
             for needle in [
-                "~/.scriptkit/kit/main/scripts/",
-                "~/.scriptkit/kit/main/scriptlets/",
-                "~/.scriptkit/kit/main/skills/",
-                "~/.scriptkit/kit/main/agents/",
-                "~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md",
-                "~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md",
-                "~/.scriptkit/kit/authoring/skills/agents/SKILL.md",
-                "~/.scriptkit/kit/examples/scripts/",
-                "~/.scriptkit/kit/examples/skills/",
-                "~/.scriptkit/kit/examples/scriptlets/",
-                "~/.scriptkit/kit/examples/agents/",
+                "~/.scriptkit/plugins/main/scripts/",
+                "~/.scriptkit/plugins/main/scriptlets/",
+                "~/.scriptkit/plugins/main/skills/",
+                "~/.scriptkit/plugins/main/agents/",
+                "~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md",
+                "~/.scriptkit/plugins/scriptkit/skills/new-scriptlet/SKILL.md",
+                "~/.scriptkit/plugins/scriptkit/skills/new-agent/SKILL.md",
+                "~/.scriptkit/plugins/examples/scripts/",
+                "~/.scriptkit/plugins/examples/skills/",
+                "~/.scriptkit/plugins/examples/scriptlets/",
+                "~/.scriptkit/plugins/examples/agents/",
             ] {
                 assert!(content.contains(needle), "doc missing `{needle}`");
             }
@@ -748,7 +766,7 @@ fn test_root_docs_route_scripts_scriptlets_and_agents_to_real_paths() {
         for needle in ["## Scripts", "## Skills", "## Scriptlets", "## Agents"] {
             assert!(
                 examples_readme.contains(needle),
-                "kit/examples/README.md missing `{needle}` section"
+                "plugins/examples/README.md missing `{needle}` section"
             );
         }
     });
@@ -765,18 +783,22 @@ fn test_seeded_content_uses_plugin_and_skill_first_language() {
         let root_agents = fs::read_to_string(kit_root.join("AGENTS.md")).expect("read AGENTS.md");
         let skills_readme = fs::read_to_string(
             kit_root
-                .join("kit")
-                .join("authoring")
+                .join("plugins")
+                .join("scriptkit")
                 .join("skills")
                 .join("README.md"),
         )
         .expect("read skills README.md");
         let examples_readme =
-            fs::read_to_string(kit_root.join("kit").join("examples").join("README.md"))
+            fs::read_to_string(kit_root.join("plugins").join("examples").join("README.md"))
                 .expect("read examples README.md");
-        let start_here =
-            fs::read_to_string(kit_root.join("kit").join("examples").join("START_HERE.md"))
-                .expect("read START_HERE.md");
+        let start_here = fs::read_to_string(
+            kit_root
+                .join("plugins")
+                .join("examples")
+                .join("START_HERE.md"),
+        )
+        .expect("read START_HERE.md");
 
         // --- Plugins described as the package boundary ---
         for (label, content) in [
@@ -806,8 +828,8 @@ fn test_seeded_content_uses_plugin_and_skill_first_language() {
         // --- Skills path referenced in root docs ---
         for (label, content) in [("CLAUDE.md", &root_claude), ("AGENTS.md", &root_agents)] {
             assert!(
-                content.contains("kit/main/skills/"),
-                "{label} must reference the plugin-scoped skills path kit/main/skills/"
+                content.contains("plugins/main/skills/"),
+                "{label} must reference the plugin-scoped skills path plugins/main/skills/"
             );
         }
 
@@ -830,16 +852,16 @@ fn test_seeded_content_uses_plugin_and_skill_first_language() {
         // --- Agents skill doc itself already describes compatibility ---
         let agents_skill = fs::read_to_string(
             kit_root
-                .join("kit")
-                .join("authoring")
+                .join("plugins")
+                .join("scriptkit")
                 .join("skills")
-                .join("agents")
+                .join("new-agent")
                 .join("SKILL.md"),
         )
-        .expect("read agents SKILL.md");
+        .expect("read new-agent SKILL.md");
         assert!(
             agents_skill.contains("Compatibility") || agents_skill.contains("compatibility"),
-            "agents/SKILL.md must label agents as compatibility"
+            "new-agent/SKILL.md must label agents as compatibility"
         );
     });
 }

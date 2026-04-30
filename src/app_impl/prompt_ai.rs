@@ -30,13 +30,14 @@ impl AiScriptGenerationStage {
 pub(crate) const AI_SCRIPT_GENERATION_SYSTEM_PROMPT: &str = r#"You are ScriptKitScriptGenerator.
 Generate a complete Script Kit TypeScript script and return code only.
 Requirements:
-- Include metadata comments at the top:
-  // Name: <script name>
-  // Description: <short summary>
+- Include `export const metadata = { name, description }` near the top.
 - Include exactly one SDK import near the top:
   import "@scriptkit/sdk";
+- Default to the shared main-menu-sized prompt flow. Prefer `arg()` / `fields()` / `select()` before inventing a denser surface.
+- Treat expanded split-view previews as rare exceptions for information-dense selection tasks.
+- Avoid `setPreview()`, `setPanel()`, and choice `preview` fields for ordinary commands.
 - Use top-level await with Script Kit APIs directly when useful:
-  arg(), div(), editor(), notify(), md()
+  arg(), fields(), select(), div(), editor(), notify(), md()
 - For file tasks, prefer Script Kit helpers like home() and writeFile().
 - Return a full runnable script with practical defaults and no extra explanation."#;
 
@@ -753,5 +754,12 @@ import "@scriptkit/sdk";
     fn test_ai_script_generation_system_prompt_references_scriptkit_sdk_not_legacy_kit() {
         assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("import \"@scriptkit/sdk\";"));
         assert!(!AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("@johnlindquist/kit"));
+    }
+
+    #[test]
+    fn test_ai_script_generation_system_prompt_defaults_to_main_menu_dimensions() {
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("main-menu-sized prompt flow"));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("expanded split-view previews as rare exceptions"));
+        assert!(AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("Avoid `setPreview()`, `setPanel()`, and choice `preview` fields"));
     }
 }

@@ -1,9 +1,11 @@
+use gpui::prelude::FluentBuilder as _;
 use gpui::*;
 
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::list_item::FONT_MONO;
 use crate::theme::get_cached_theme;
 use crate::theme::opacity::{OPACITY_HIDDEN, OPACITY_ICON_MUTED, OPACITY_MUTED, OPACITY_NEAR_FULL};
+use crate::ui::chrome::alpha_from_opacity;
 
 use super::types::{
     TOAST_ACTIONS_GAP_PX, TOAST_ACTIONS_MARGIN_TOP_PX, TOAST_BORDER_WIDTH_PX, TOAST_CONTENT_GAP_PX,
@@ -22,6 +24,7 @@ impl RenderOnce for Toast {
         // Check vibrancy to conditionally apply shadow
         let theme = get_cached_theme();
         let vibrancy_enabled = theme.is_vibrancy_enabled();
+        let hover_overlay_alpha = alpha_from_opacity(theme.get_opacity().hover) as u8;
 
         // Icon opacity: full for error (must stay prominent), muted for others
         let icon_opacity = if is_error {
@@ -36,7 +39,10 @@ impl RenderOnce for Toast {
             .flex_col()
             .w_full()
             .max_w(px(TOAST_MAX_WIDTH_PX))
-            .bg(rgba((colors.background << 8) | 0xF0)) // 94% opacity
+            .when_some(
+                crate::ui_foundation::get_vibrancy_background(&theme),
+                |d, bg| d.bg(bg),
+            )
             .border_l(px(TOAST_BORDER_WIDTH_PX))
             .border_color(rgb(colors.border))
             .rounded(px(TOAST_RADIUS_PX));
@@ -113,7 +119,10 @@ impl RenderOnce for Toast {
                     border: colors.border,
                     focus_ring: colors.action_text,
                     focus_tint: colors.action_background,
-                    hover_overlay: ToastColors::overlay_with_alpha(colors.action_background, 0x26),
+                    hover_overlay: ToastColors::overlay_with_alpha(
+                        colors.action_background,
+                        hover_overlay_alpha,
+                    ),
                 };
                 let action_btn = Button::new(label.clone(), button_colors)
                     .variant(ButtonVariant::Ghost)
@@ -140,7 +149,10 @@ impl RenderOnce for Toast {
                 border: 0x00000000, // no border
                 focus_ring: colors.dismiss,
                 focus_tint: colors.action_background,
-                hover_overlay: ToastColors::overlay_with_alpha(colors.action_background, 0x26),
+                hover_overlay: ToastColors::overlay_with_alpha(
+                    colors.action_background,
+                    hover_overlay_alpha,
+                ),
             };
             Some(
                 div()

@@ -2,32 +2,41 @@ use super::*;
 
 impl ChatPrompt {
     pub(super) fn handle_submit(&mut self, cx: &mut Context<Self>) {
-        let text = self.input.text().to_string();
+        let display_text = self.input.text().to_string();
+        let outbound_text = self.expand_pasted_text_tokens(&display_text);
         let pending_image = self.pending_image.take();
         let pending_render = self.pending_image_render.take();
 
-        if text.trim().is_empty() && pending_image.is_none() {
+        if display_text.trim().is_empty() && pending_image.is_none() {
             return;
         }
-        logging::log("CHAT", &format!("User submitted: {}", text));
+        logging::log("CHAT", &format!("User submitted: {}", display_text));
         self.input.clear();
+        self.pasted_text_tokens.clear();
         self.clear_script_generation_status();
 
         // If built-in AI mode is enabled, handle the AI call directly
         if self.has_builtin_ai() {
             // Cache the render image for conversation history display
             // We need the user message ID, which will be generated in handle_builtin_ai_submit
-            self.handle_builtin_ai_submit(text, pending_image, pending_render, cx);
+            self.handle_builtin_ai_submit(
+                display_text,
+                outbound_text,
+                pending_image,
+                pending_render,
+                cx,
+            );
         } else {
             // Use SDK callback for script-driven chat
-            (self.on_submit)(self.id.clone(), text);
+            (self.on_submit)(self.id.clone(), outbound_text);
         }
     }
 
     /// Handle submission in built-in AI mode - calls AI provider directly
     pub(super) fn handle_builtin_ai_submit(
         &mut self,
-        text: String,
+        display_text: String,
+        outbound_text: String,
         pending_image: Option<String>,
         pending_render: Option<Arc<RenderImage>>,
         cx: &mut Context<Self>,
@@ -38,7 +47,7 @@ impl ChatPrompt {
         }
 
         // Step 1: Expand @context mentions (e.g., @clipboard, @file:path)
-        let expanded_text = expand_context(&text, cx);
+        let expanded_text = expand_context(&outbound_text, cx);
 
         // Step 2: Process slash commands (e.g., /explain, /fix, /test)
         let (system_context, user_message_text) = transform_with_command(&expanded_text);
@@ -55,7 +64,7 @@ impl ChatPrompt {
         }
 
         // Add user message to UI (ChatPromptMessage::user auto-generates UUID)
-        let user_message = ChatPromptMessage::user(text.clone());
+        let user_message = ChatPromptMessage::user(display_text.clone());
         let user_message_id = user_message.id.clone().unwrap_or_default();
         self.messages.push(user_message);
 

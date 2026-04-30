@@ -208,7 +208,7 @@ fn builtin_execution_routes_mini_ai_to_deferred_handoff() {
     assert!(
         source.contains("cmd.is_legacy_harness_alias()")
             && source.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
-        "builtin_execution.rs must route MiniAi through the shared ACP Chat compatibility entry point"
+        "builtin_execution.rs must route MiniAi through the shared Agent Chat compatibility entry point"
     );
 }
 

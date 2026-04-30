@@ -8,13 +8,15 @@ use gpui::{
 };
 
 use crate::ai::context_picker_row::{
-    render_dense_monoline_picker_row, CONTEXT_PICKER_SYNOPSIS_HEIGHT,
+    render_soft_compact_picker_row, CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
 };
 use crate::ai::window::context_picker::empty_state_hints;
-use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerTrigger};
+use crate::ai::window::context_picker::types::{
+    ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger,
+};
 use crate::components::inline_dropdown::{
-    inline_dropdown_visible_range, InlineDropdown, InlineDropdownColors, InlineDropdownEmptyState,
-    InlineDropdownSynopsis,
+    inline_dropdown_visible_range_from_start, InlineDropdown, InlineDropdownColors,
+    InlineDropdownEmptyState, InlineDropdownSynopsis,
 };
 
 use super::view::AcpChatView;
@@ -23,6 +25,7 @@ use super::view::AcpChatView;
 pub(crate) struct AcpMentionPopupSnapshot {
     pub(crate) trigger: ContextPickerTrigger,
     pub(crate) selected_index: usize,
+    pub(crate) visible_start: usize,
     pub(crate) items: Vec<ContextPickerItem>,
     pub(crate) width: f32,
 }
@@ -45,6 +48,14 @@ struct AcpMentionPopupSlot {
 }
 
 static ACP_MENTION_POPUP_WINDOW: OnceLock<Mutex<Option<AcpMentionPopupSlot>>> = OnceLock::new();
+
+fn clear_mention_popup_window_slot() {
+    if let Some(storage) = ACP_MENTION_POPUP_WINDOW.get() {
+        if let Ok(mut guard) = storage.lock() {
+            *guard = None;
+        }
+    }
+}
 
 pub(crate) fn close_mention_popup_window(cx: &mut App) {
     if let Some(storage) = ACP_MENTION_POPUP_WINDOW.get() {
@@ -122,7 +133,10 @@ fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
         return super::popup_window::dense_picker_height(0);
     }
 
-    super::popup_window::dense_picker_height(snapshot.items.len()) + CONTEXT_PICKER_SYNOPSIS_HEIGHT
+    super::popup_window::dense_picker_height_for_row_height(
+        snapshot.items.len(),
+        SOFT_COMPACT_PICKER_ROW_HEIGHT,
+    ) + CONTEXT_PICKER_SYNOPSIS_HEIGHT
 }
 
 pub(crate) fn popup_bounds(
@@ -210,6 +224,7 @@ pub(crate) struct AcpMentionPopupWindow {
     snapshot: AcpMentionPopupSnapshot,
     source_view: WeakEntity<AcpChatView>,
     focus_handle: FocusHandle,
+    mouse_armed_row: Option<(usize, String)>,
 }
 
 impl AcpMentionPopupWindow {
@@ -222,15 +237,26 @@ impl AcpMentionPopupWindow {
             snapshot,
             source_view,
             focus_handle: cx.focus_handle(),
+            mouse_armed_row: None,
         }
     }
 
     fn set_snapshot(&mut self, snapshot: AcpMentionPopupSnapshot) {
+        if let Some((armed_index, armed_id)) = self.mouse_armed_row.as_ref() {
+            let still_same_row = snapshot
+                .items
+                .get(*armed_index)
+                .is_some_and(|item| item.id.as_ref() == armed_id.as_str());
+            if !still_same_row {
+                self.mouse_armed_row = None;
+            }
+        }
         self.snapshot = snapshot;
     }
 
     fn visible_range(&self) -> std::ops::Range<usize> {
-        inline_dropdown_visible_range(
+        inline_dropdown_visible_range_from_start(
+            self.snapshot.visible_start,
             self.snapshot.selected_index,
             self.snapshot.items.len(),
             super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS,
@@ -246,6 +272,71 @@ impl AcpMentionPopupWindow {
             });
         } else {
             close_mention_popup_window(cx);
+        }
+    }
+
+    fn select_item(&mut self, index: usize, cx: &mut Context<Self>) {
+        if let Some(view) = self.source_view.upgrade() {
+            view.update(cx, |view, cx| {
+                view.select_mention_index(index);
+                cx.notify();
+            });
+            if !self.snapshot.items.is_empty() {
+                self.snapshot.selected_index =
+                    index.min(self.snapshot.items.len().saturating_sub(1));
+                let visible = inline_dropdown_visible_range_from_start(
+                    self.snapshot.visible_start,
+                    self.snapshot.selected_index,
+                    self.snapshot.items.len(),
+                    super::popup_window::DENSE_PICKER_MAX_VISIBLE_ROWS,
+                );
+                self.snapshot.visible_start = visible.start;
+            }
+            cx.notify();
+        } else {
+            close_mention_popup_window(cx);
+        }
+    }
+
+    fn handle_row_click(
+        &mut self,
+        index: usize,
+        event: &gpui::ClickEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(item) = self.snapshot.items.get(index) else {
+            return;
+        };
+        let item_id = item.id.to_string();
+        let is_actionable = !matches!(item.kind, ContextPickerItemKind::Inert);
+        let was_mouse_armed = self
+            .mouse_armed_row
+            .as_ref()
+            .is_some_and(|(armed_index, armed_id)| *armed_index == index && armed_id == &item_id);
+        let click_count = event.click_count();
+        let should_accept =
+            is_actionable && should_submit_acp_picker_row_click(was_mouse_armed, click_count);
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_picker_row_click",
+            row_index = index,
+            item_id = %item_id,
+            click_count,
+            was_mouse_armed,
+            is_actionable,
+            should_accept,
+        );
+
+        if should_accept {
+            self.mouse_armed_row = None;
+            self.activate_item(index, cx);
+            clear_mention_popup_window_slot();
+            window.remove_window();
+        } else {
+            self.mouse_armed_row = Some((index, item_id));
+            self.select_item(index, cx);
         }
     }
 
@@ -265,11 +356,58 @@ impl AcpMentionPopupWindow {
         }
     }
 
+    fn render_picker_row(
+        &self,
+        idx: usize,
+        item: &ContextPickerItem,
+        is_selected: bool,
+        colors: InlineDropdownColors,
+    ) -> gpui::Stateful<gpui::Div> {
+        if self.snapshot.trigger == ContextPickerTrigger::Slash {
+            if let ContextPickerItemKind::SlashCommand(payload) = &item.kind {
+                let label = SharedString::from(format!("/{}", payload.slash_name()));
+                let shifted_label_hits = item
+                    .label_highlight_indices
+                    .iter()
+                    .map(|ix| ix + 1)
+                    .collect::<Vec<_>>();
+
+                return render_soft_compact_picker_row(
+                    SharedString::from(format!("acp-mention-popup-row-{idx}")),
+                    label,
+                    Some(SharedString::from(payload.owner_label())),
+                    &shifted_label_hits,
+                    &[],
+                    is_selected,
+                    colors,
+                );
+            }
+
+            return render_soft_compact_picker_row(
+                SharedString::from(format!("acp-mention-popup-row-{idx}")),
+                item.label.clone(),
+                None,
+                &item.label_highlight_indices,
+                &[],
+                is_selected,
+                colors,
+            );
+        }
+
+        render_soft_compact_picker_row(
+            SharedString::from(format!("acp-mention-popup-row-{idx}")),
+            item.label.clone(),
+            Some(item.meta.clone()),
+            &item.label_highlight_indices,
+            &item.meta_highlight_indices,
+            is_selected,
+            colors,
+        )
+    }
+
     fn render_picker(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
         let theme = crate::theme::get_cached_theme();
         let colors = InlineDropdownColors::popup_from_theme(&theme);
-        let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
-        let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
         let visible = self.visible_range();
         let selected_item = self
             .snapshot
@@ -291,25 +429,16 @@ impl AcpMentionPopupWindow {
                     .map(|(idx, item)| {
                         let is_selected = idx == self.snapshot.selected_index;
                         let source_view = self.source_view.clone();
-                        render_dense_monoline_picker_row(
-                            SharedString::from(format!("acp-mention-popup-row-{idx}")),
-                            item.label.clone(),
-                            item.meta.clone(),
-                            &item.label_highlight_indices,
-                            &item.meta_highlight_indices,
-                            is_selected,
-                            fg,
-                            muted_fg,
-                        )
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, _event, _window, cx| {
-                            if source_view.upgrade().is_none() {
-                                close_mention_popup_window(cx);
-                                return;
-                            }
-                            this.activate_item(idx, cx);
-                        }))
-                        .into_any_element()
+                        self.render_picker_row(idx, item, is_selected, colors)
+                            .cursor_pointer()
+                            .on_click(cx.listener(move |this, event, window, cx| {
+                                if source_view.upgrade().is_none() {
+                                    close_mention_popup_window(cx);
+                                    return;
+                                }
+                                this.handle_row_click(idx, event, window, cx);
+                            }))
+                            .into_any_element()
                     }),
             )
             .into_any_element();
@@ -343,8 +472,8 @@ impl AcpMentionPopupWindow {
 
         let theme = crate::theme::get_cached_theme();
         let colors = InlineDropdownColors::popup_from_theme(&theme);
-        let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
-        let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
+        let fg = colors.foreground;
+        let muted_fg = colors.muted_foreground;
 
         let mut chips: Vec<gpui::AnyElement> = Vec::new();
         for hint in empty_state_hints(self.snapshot.trigger).iter() {
@@ -396,6 +525,11 @@ impl AcpMentionPopupWindow {
     }
 }
 
+#[inline]
+fn should_submit_acp_picker_row_click(was_mouse_armed: bool, click_count: usize) -> bool {
+    was_mouse_armed || click_count >= 2
+}
+
 impl Focusable for AcpMentionPopupWindow {
     fn focus_handle(&self, _cx: &App) -> FocusHandle {
         self.focus_handle.clone()
@@ -417,8 +551,15 @@ impl Render for AcpMentionPopupWindow {
 
 #[cfg(test)]
 mod tests {
-    use super::{popup_bounds, popup_height, AcpMentionPopupSnapshot};
-    use crate::ai::window::context_picker::types::ContextPickerTrigger;
+    use super::{
+        popup_bounds, popup_height, should_submit_acp_picker_row_click, AcpMentionPopupSnapshot,
+    };
+    use crate::ai::context_picker_row::{
+        CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
+    };
+    use crate::ai::window::context_picker::types::{
+        ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger, SlashCommandPayload,
+    };
     use gpui::SharedString;
 
     #[test]
@@ -426,6 +567,7 @@ mod tests {
         let snapshot = AcpMentionPopupSnapshot {
             trigger: ContextPickerTrigger::Mention,
             selected_index: 0,
+            visible_start: 0,
             items: (0..16)
                 .map(|ix| crate::ai::window::context_picker::types::ContextPickerItem {
                     id: SharedString::from(format!("item-{ix}")),
@@ -448,6 +590,46 @@ mod tests {
     }
 
     #[test]
+    fn mention_popup_height_uses_soft_compact_rows_for_both_triggers() {
+        let items: Vec<ContextPickerItem> = (0..12)
+            .map(|ix| ContextPickerItem {
+                id: SharedString::from(format!("slash-cmd:default:cmd-{ix}")),
+                label: SharedString::from(format!("cmd-{ix}")),
+                description: SharedString::from(format!("Description {ix}")),
+                meta: SharedString::from(format!("/cmd-{ix}")),
+                kind: ContextPickerItemKind::SlashCommand(SlashCommandPayload::Default {
+                    name: format!("cmd-{ix}"),
+                }),
+                score: 0,
+                label_highlight_indices: Vec::new(),
+                meta_highlight_indices: Vec::new(),
+            })
+            .collect();
+
+        let slash_snapshot = AcpMentionPopupSnapshot {
+            trigger: ContextPickerTrigger::Slash,
+            selected_index: 0,
+            visible_start: 0,
+            items: items.clone(),
+            width: 320.0,
+        };
+        let mention_snapshot = AcpMentionPopupSnapshot {
+            trigger: ContextPickerTrigger::Mention,
+            selected_index: 0,
+            visible_start: 0,
+            items,
+            width: 320.0,
+        };
+
+        let expected_height = super::super::popup_window::dense_picker_height_for_row_height(
+            12,
+            SOFT_COMPACT_PICKER_ROW_HEIGHT,
+        ) + CONTEXT_PICKER_SYNOPSIS_HEIGHT;
+        assert_eq!(popup_height(&slash_snapshot), expected_height);
+        assert_eq!(popup_height(&mention_snapshot), expected_height);
+    }
+
+    #[test]
     fn popup_bounds_offsets_from_parent_origin() {
         let parent = gpui::Bounds {
             origin: gpui::point(gpui::px(100.0), gpui::px(40.0)),
@@ -458,5 +640,17 @@ mod tests {
         assert_eq!(f32::from(bounds.origin.y), 100.0);
         assert_eq!(f32::from(bounds.size.width), 320.0);
         assert_eq!(f32::from(bounds.size.height), 84.0);
+    }
+
+    #[test]
+    fn acp_picker_click_requires_second_single_click_after_mouse_focus() {
+        assert!(!should_submit_acp_picker_row_click(false, 1));
+        assert!(should_submit_acp_picker_row_click(true, 1));
+    }
+
+    #[test]
+    fn acp_picker_click_still_submits_on_native_double_click() {
+        assert!(should_submit_acp_picker_row_click(false, 2));
+        assert!(should_submit_acp_picker_row_click(false, 3));
     }
 }

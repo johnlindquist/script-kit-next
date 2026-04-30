@@ -434,3 +434,68 @@ pub fn configure_as_floating_panel() {
 pub fn configure_as_floating_panel() {
     // No-op on non-macOS platforms
 }
+
+/// Idempotent main-panel setup that only records success after the
+/// post-configure invariant report passes.
+///
+/// Oracle-Session `window-activation-invariants-guard` PR1 — the `PANEL_CONFIGURED`
+/// atomic was previously set unconditionally after `configure_as_floating_panel()`
+/// returned, but that function returns `()` and early-returns when the main
+/// window is not registered yet. The atomic could flip to `true` without any
+/// configuration actually happening, defeating the one-shot guard.
+///
+/// This helper replaces the six duplicated
+/// `PANEL_CONFIGURED.load`/`configure_*`/`PANEL_CONFIGURED.store` blocks across
+/// `src/main_sections/window_visibility.rs`, `src/main_entry/app_run_setup.rs`,
+/// `src/main_entry/runtime_stdin_match_core.rs`, and
+/// `src/main_entry/runtime_stdin.rs`. The atomic is stored only when the
+/// post-configure invariant report is clean.
+///
+/// Returns `true` when the panel is (now or already was) configured and
+/// passes invariants. Returns `false` when configuration did not converge
+/// — callers can still proceed to show the window, but the one-shot guard
+/// stays open so the next show path retries.
+pub fn ensure_main_panel_configured(context: &'static str) -> bool {
+    // The PANEL_CONFIGURED static lives at the crate root (see
+    // `src/main.rs:279`). It is a caller-owned one-shot that must only flip
+    // to `true` after a successful post-configure invariant report.
+    if crate::PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
+        return true;
+    }
+
+    configure_as_floating_panel();
+    swizzle_gpui_blurred_view();
+
+    let theme = crate::theme::get_cached_theme();
+    let is_dark = theme.should_use_dark_vibrancy();
+    let material = theme.get_vibrancy().material;
+    configure_window_vibrancy_material_for_appearance(is_dark, material);
+
+    #[cfg(target_os = "macos")]
+    {
+        let report = assert_main_panel_invariants(
+            context,
+            PanelInvariantPhase::AfterConfigure,
+        );
+        if report.ok() {
+            crate::PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
+            true
+        } else {
+            logging::log(
+                "PANEL",
+                &format!(
+                    "ensure_main_panel_configured({}): invariants failed — leaving one-shot open for retry",
+                    context
+                ),
+            );
+            false
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = context;
+        crate::PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
+        true
+    }
+}

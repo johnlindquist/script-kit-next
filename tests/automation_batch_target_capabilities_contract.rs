@@ -1,0 +1,165 @@
+//! Source-level contract for targeted automation batch capabilities.
+//!
+//! Target-specific batch command support should live behind named capability
+//! helpers before any future extraction of the async execution loops.
+
+const PROMPT_HANDLER: &str = include_str!("../src/prompt_handler/mod.rs");
+
+fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
+    let start = source
+        .find(start_pat)
+        .unwrap_or_else(|| panic!("missing source start: {start_pat}"));
+    let end_rel = source[start..]
+        .find(end_pat)
+        .unwrap_or_else(|| panic!("missing source end: {end_pat}"));
+    &source[start..start + end_rel]
+}
+
+fn count_occurrences(haystack: &str, needle: &str) -> usize {
+    haystack.match_indices(needle).count()
+}
+
+// @lat: [[lat.md/automation#Automation#Batch target capabilities]]
+#[test]
+fn prompt_handler_declares_batch_target_capability_owner() {
+    for required in [
+        "enum AutomationBatchTargetKind",
+        "struct BatchTargetCapabilities",
+        "fn batch_target_kind_for_resolved_target(",
+        "fn supported_batch_commands_for_target(",
+        "fn unsupported_batch_command_error(",
+        "fn is_acp_wait_condition(",
+    ] {
+        assert!(
+            PROMPT_HANDLER.contains(required),
+            "prompt_handler must declare {required}"
+        );
+    }
+}
+
+#[test]
+fn supported_command_lists_are_named_by_target_kind() {
+    let body = source_between(
+        PROMPT_HANDLER,
+        "impl BatchTargetCapabilities",
+        "\nfn batch_target_kind_for_resolved_target(",
+    );
+
+    for (kind, commands) in [
+        (
+            "AutomationBatchTargetKind::AcpDetached",
+            &[
+                "\"setInput\"",
+                "\"waitFor\"",
+                "\"selectByValue\"",
+                "\"selectBySemanticId\"",
+            ][..],
+        ),
+        (
+            "AutomationBatchTargetKind::Notes",
+            &["\"setInput\"", "\"waitFor\""][..],
+        ),
+        (
+            "AutomationBatchTargetKind::ActionsDialog",
+            &[
+                "\"setInput\"",
+                "\"selectByValue\"",
+                "\"selectBySemanticId\"",
+                "\"waitFor\"",
+            ][..],
+        ),
+        (
+            "AutomationBatchTargetKind::PromptPopup",
+            &["\"selectByValue\"", "\"selectBySemanticId\"", "\"waitFor\""][..],
+        ),
+    ] {
+        let arm = source_between(body, kind, "concise_unsupported_message:");
+        for command in commands {
+            assert!(
+                arm.contains(command),
+                "{kind} capability list must include {command}"
+            );
+        }
+    }
+}
+
+#[test]
+fn unsupported_command_errors_are_generated_by_the_helper() {
+    let helper_body = source_between(
+        PROMPT_HANDLER,
+        "fn unsupported_batch_command_error(",
+        "\nfn is_acp_wait_condition(",
+    );
+
+    assert!(helper_body.contains("protocol::TransactionErrorCode::UnsupportedCommand"));
+    assert!(helper_body.contains("supported_batch_commands_for_target(kind).join(\", \")"));
+    assert!(helper_body.contains("ActionsDialog batch supports:"));
+    assert!(helper_body.contains("PromptPopup batch supports:"));
+    assert_eq!(
+        count_occurrences(PROMPT_HANDLER, "TransactionErrorCode::UnsupportedCommand"),
+        1,
+        "target batch branches must not copy unsupported-command construction"
+    );
+
+    for required in [
+        "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::AcpDetached",
+        "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::Notes",
+        "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::ActionsDialog",
+        "unsupported_batch_command_error(\n                                            AutomationBatchTargetKind::PromptPopup",
+    ] {
+        assert!(
+            PROMPT_HANDLER.contains(required),
+            "target branch must call the shared unsupported helper: {required}"
+        );
+    }
+}
+
+#[test]
+fn acp_wait_condition_classification_is_shared() {
+    let helper_body = source_between(
+        PROMPT_HANDLER,
+        "fn is_acp_wait_condition(",
+        "\n/// Resolve an automation target",
+    );
+
+    for condition in [
+        "AcpReady",
+        "AcpPickerOpen",
+        "AcpPickerClosed",
+        "AcpItemAccepted",
+        "AcpCursorAt",
+        "AcpStatus",
+        "AcpInputMatch",
+        "AcpInputContains",
+        "AcpAcceptedViaKey",
+        "AcpAcceptedLabel",
+        "AcpAcceptedCursorAt",
+        "AcpInputLayoutMatch",
+        "AcpSetupVisible",
+        "AcpSetupReasonCode",
+        "AcpSetupPrimaryAction",
+        "AcpSetupAgentPickerOpen",
+        "AcpSetupSelectedAgent",
+    ] {
+        assert!(
+            helper_body.contains(condition),
+            "ACP wait classifier must include {condition}"
+        );
+    }
+
+    assert!(PROMPT_HANDLER.contains("let is_acp_condition = is_acp_wait_condition(&condition);"));
+    assert!(PROMPT_HANDLER.contains("let is_acp = is_acp_wait_condition(condition);"));
+}
+
+#[test]
+fn batch_prompt_popup_routing_uses_the_resolved_target_kind() {
+    let body = source_between(
+        PROMPT_HANDLER,
+        "PromptMessage::Batch {",
+        "\n            PromptMessage::ForceSubmit",
+    );
+
+    assert!(body
+        .contains("let batch_target_kind = batch_target_kind_for_resolved_target(&batch_target);"));
+    assert!(body.contains("batch_target_kind == AutomationBatchTargetKind::PromptPopup"));
+}

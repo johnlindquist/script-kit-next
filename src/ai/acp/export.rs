@@ -5,7 +5,7 @@
 
 use super::thread::{AcpThreadMessage, AcpThreadMessageRole};
 
-const ACP_CHAT_CONVERSATION_HEADING: &str = "# ACP Chat Conversation\n\n";
+const ACP_CHAT_CONVERSATION_HEADING: &str = "# Agent Chat Conversation\n\n";
 
 fn role_label(role: &AcpThreadMessageRole) -> &'static str {
     match role {

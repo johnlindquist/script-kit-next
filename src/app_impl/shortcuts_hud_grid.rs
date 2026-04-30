@@ -60,34 +60,18 @@ impl ScriptListApp {
         false
     }
 
-    /// Check if the current view is a dismissable prompt
+    /// Check if the current view is a dismissable prompt.
     ///
-    /// Dismissable prompts are those that feel "closeable" with escape:
-    /// - ArgPrompt, DivPrompt, FormPrompt, SelectPrompt, PathPrompt, DropPrompt, TemplatePrompt
-    /// - Built-in views (ClipboardHistory, AppLauncher, WindowSwitcher, DesignGallery)
-    /// - ScriptList
-    ///
-    /// Non-dismissable prompts:
-    /// - TermPrompt, EditorPrompt (these require explicit Cmd+W to close)
-    /// - EnvPrompt (stays open on blur so user can copy API keys from other windows)
+    /// Per-view dismiss behavior is owned by [`AppView::dismiss_policy`] in
+    /// `src/main_sections/app_view_state.rs` — rustc exhaustiveness there
+    /// is the contract. This wrapper stays for callers that only care about
+    /// the `WindowBlur` click-outside path. Oracle-Session
+    /// `shortcuts-hud-grid-dismiss-logic`.
     #[allow(dead_code)]
     pub(crate) fn is_dismissable_view(&self) -> bool {
-        !matches!(
-            self.current_view,
-            AppView::TermPrompt { .. }
-                | AppView::EditorPrompt { .. }
-                | AppView::ScratchPadView { .. }
-                | AppView::QuickTerminalView { .. }
-                | AppView::AcpChatView { .. }
-                | AppView::EnvPrompt { .. }
-                | AppView::WebcamView { .. }
-                | AppView::NamingPrompt { .. }
-                | AppView::CreationFeedback { .. }
-                | AppView::EmojiPickerView { .. }
-                | AppView::CreateAiPresetView { .. }
-                | AppView::ProcessManagerView { .. }
-                | AppView::CurrentAppCommandsView { .. }
-        )
+        self.current_view
+            .dismiss_policy()
+            .closes_main_window_on(DismissTrigger::WindowBlur)
     }
 
     /// Show a HUD (heads-up display) overlay message

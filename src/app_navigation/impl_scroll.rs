@@ -4,14 +4,23 @@ fn main_list_footer_overlay_height() -> gpui::Pixels {
 }
 
 #[inline]
+fn main_list_footer_reveal_clearance_height() -> gpui::Pixels {
+    gpui::px(8.0)
+}
+
+pub(crate) fn main_list_footer_overlay_total_padding() -> gpui::Pixels {
+    main_list_footer_overlay_height() + main_list_footer_reveal_clearance_height()
+}
+
+#[inline]
 fn script_list_row_height(item: &GroupedListItem) -> f32 {
     match item {
-        GroupedListItem::SectionHeader(..) => crate::list_item::SECTION_HEADER_HEIGHT,
-        GroupedListItem::Item(..) => crate::list_item::LIST_ITEM_HEIGHT,
+        GroupedListItem::SectionHeader(..) => crate::list_item::effective_section_header_height(),
+        GroupedListItem::Item(..) => crate::list_item::effective_list_item_height(),
     }
 }
 
-fn script_list_content_height(items: &[GroupedListItem]) -> f32 {
+pub(crate) fn script_list_content_height(items: &[GroupedListItem]) -> f32 {
     items.iter().map(script_list_row_height).sum()
 }
 
@@ -68,11 +77,13 @@ fn footer_safe_scroll_offset_for_item(
 
     let viewport_height = viewport_height.as_f32();
     let footer_overlay_height = footer_overlay_height.as_f32();
-    let max_scroll_top = (script_list_content_height(items) - viewport_height).max(0.0);
+    let safe_viewport_height = viewport_height - footer_overlay_height;
+    let max_scroll_top = (script_list_content_height(items) - safe_viewport_height).max(0.0);
     let current_scroll_top = script_list_pixel_top_for_offset(items, current_offset);
     let target_top = script_list_pixel_top_for_item(items, target_ix);
     let target_bottom = target_top + script_list_row_height(&items[target_ix]);
-    let safe_bottom = current_scroll_top + viewport_height - footer_overlay_height;
+    // @lat: [[design#Footer-safe list reveal]]
+    let safe_bottom = current_scroll_top + safe_viewport_height;
 
     if target_bottom <= safe_bottom {
         return None;
@@ -95,6 +106,36 @@ fn scrollbar_fade_opacity(progress: f32) -> crate::transitions::Opacity {
 }
 
 impl ScriptListApp {
+    pub(crate) fn sync_main_list_selection_to_visible_window(&mut self, reason: &'static str) {
+        let viewport_height = self.main_list_state.viewport_bounds().size.height;
+        let safe_height = viewport_height - main_list_footer_overlay_total_padding();
+        if safe_height <= gpui::px(0.0) {
+            return;
+        }
+
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let scroll_top = self.main_list_state.logical_scroll_top();
+        let Some(target) = crate::scrolling::selection_owned::reanchor_grouped_selection(
+            &grouped_items,
+            self.selected_index,
+            scroll_top,
+            safe_height,
+        ) else {
+            return;
+        };
+
+        tracing::info!(
+            target: "script_kit::scroll",
+            event = "launcher_selection_resynced_from_scrollbar",
+            reason,
+            selected_before = self.selected_index,
+            selected_after = target,
+            scroll_top_item_ix = scroll_top.item_ix,
+        );
+        self.selected_index = target;
+        self.last_scrolled_index = Some(target);
+    }
+
     fn adjust_selected_item_above_footer_overlay(&mut self, target: usize) {
         let viewport_height = self.main_list_state.viewport_bounds().size.height;
         if viewport_height <= gpui::px(0.0) {
@@ -107,7 +148,7 @@ impl ScriptListApp {
                 &grouped_items,
                 self.main_list_state.logical_scroll_top(),
                 viewport_height,
-                main_list_footer_overlay_height(),
+                main_list_footer_overlay_total_padding(),
                 target,
             )
         };
@@ -264,8 +305,8 @@ impl ScriptListApp {
                 None
             } else {
                 let clamped_index = self.selected_index.min(len.saturating_sub(1));
-                let first_selectable = self.cached_grouped_first_selectable_index;
-                let last_selectable = self.cached_grouped_last_selectable_index;
+                let first_selectable = self.main_menu_result_caches.first_selectable_index();
+                let last_selectable = self.main_menu_result_caches.last_selectable_index();
 
                 if let (Some(first), Some(last)) = (first_selectable, last_selectable) {
                     let target =
@@ -428,7 +469,7 @@ impl ScriptListApp {
                 ValidationState::Empty
             } else {
                 let clamped_index = self.selected_index.min(item_count.saturating_sub(1));
-                let has_selectable = self.cached_grouped_first_selectable_index.is_some();
+                let has_selectable = self.main_menu_result_caches.has_selectable_grouped_item();
                 ValidationState::NonEmpty {
                     valid_idx: validated_selection_index(&grouped_items, clamped_index),
                     has_selectable,
@@ -447,9 +488,7 @@ impl ScriptListApp {
                 self.hovered_index = None;
                 self.last_scrolled_index = None;
 
-                // Clear legacy fallback state
-                self.fallback_mode = false;
-                self.cached_fallbacks.clear();
+                self.main_menu_fallback_state.clear();
 
                 if changed {
                     cx.notify();
@@ -461,8 +500,7 @@ impl ScriptListApp {
                 has_selectable,
             } => {
                 // List has items - coerce selection to a valid selectable item
-                self.fallback_mode = false;
-                self.cached_fallbacks.clear();
+                self.main_menu_fallback_state.clear();
 
                 if valid_idx == 0 && !has_selectable {
                     // No selectable items (list is all headers) - reset to 0
@@ -586,6 +624,37 @@ mod scroll_fade_tests {
             8,
         )
         .expect("target should be pushed above the footer overlay");
+
+        assert_eq!(adjusted.item_ix, 0);
+        assert_eq!(adjusted.offset_in_item, gpui::px(30.0));
+    }
+
+    #[test]
+    fn test_footer_safe_scroll_offset_allows_trailing_scroll_budget_for_last_row() {
+        // @lat: [[design#Footer-safe list reveal]]
+        let rows = vec![
+            GroupedListItem::Item(0),
+            GroupedListItem::Item(1),
+            GroupedListItem::Item(2),
+            GroupedListItem::Item(3),
+            GroupedListItem::Item(4),
+            GroupedListItem::Item(5),
+            GroupedListItem::Item(6),
+            GroupedListItem::Item(7),
+            GroupedListItem::Item(8),
+        ];
+
+        let adjusted = footer_safe_scroll_offset_for_item(
+            &rows,
+            gpui::ListOffset {
+                item_ix: 0,
+                offset_in_item: gpui::px(0.0),
+            },
+            gpui::px(360.0),
+            gpui::px(30.0),
+            8,
+        )
+        .expect("last row should get the extra footer-height trailing scroll budget");
 
         assert_eq!(adjusted.item_ix, 0);
         assert_eq!(adjusted.offset_in_item, gpui::px(30.0));

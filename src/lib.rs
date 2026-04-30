@@ -11,6 +11,8 @@
 // Provides ActionsDialog with configurable layout for script actions, AI command bar, etc.
 pub mod actions;
 
+pub mod about;
+pub mod branding;
 pub mod calculator;
 #[cfg(target_os = "macos")]
 pub mod camera;
@@ -27,6 +29,7 @@ pub mod debug_grid;
 pub mod designs;
 pub mod editor;
 pub mod emoji;
+pub mod emoji_usage;
 pub mod error;
 pub mod executor;
 pub mod focus_coordinator;
@@ -36,24 +39,32 @@ pub mod hotkeys;
 pub mod icons;
 pub mod list_item;
 pub mod logging;
+pub mod menu_syntax;
 pub mod navigation;
 pub mod panel;
+pub mod pasted_image;
+pub mod pasted_text;
 pub mod perf;
 pub mod platform;
 pub mod prompts;
 pub mod protocol;
 pub mod scripts;
+pub mod scrolling;
 pub mod selected_text;
 pub mod shortcuts;
+pub mod sync;
 pub mod syntax;
 pub mod term_prompt;
 pub mod terminal;
+#[doc(hidden)]
+pub mod test_support;
 pub mod theme;
 pub mod toast_manager;
 
 #[cfg(not(test))]
 pub mod tray;
 pub mod ui;
+pub mod updates;
 pub mod utils;
 pub mod warning_banner;
 pub mod window_manager;
@@ -109,7 +120,54 @@ pub mod action_helpers;
 
 // Built-in features registry
 pub mod app_launcher;
+pub mod browser_history;
+pub mod browser_tabs;
 pub mod builtins;
+
+// Typed handle for path-prompt action ids. Physically lives under
+// `src/app_impl/` (pulled into the binary via `include!`); the lib
+// re-exports the same file so the inline round-trip tests run under
+// `cargo test --lib` and MCP/integration consumers can parse ids too.
+#[path = "app_impl/path_action.rs"]
+pub mod path_action;
+
+// Pure planner from `TriggerBuiltin` to `AppRoute`. Same re-export
+// pattern as `path_action` — the physical file lives in `src/app_impl/`
+// but the lib crate also carries it so the exhaustive-coverage tests
+// and any future golden-transcript consumers can exercise the planner
+// under `cargo test --lib`.
+#[path = "app_impl/routes.rs"]
+pub mod routes;
+
+// Pure menu-syntax trigger popup state machine + row adapter. Same
+// `#[path]` re-export pattern as `path_action` and `routes` — the
+// binary consumes it via `app_impl::menu_syntax_trigger_popup` while
+// the lib crate carries it so unit tests for the state transitions and
+// the `TriggerPickerRow` → `InlinePickerRow` adapter run under
+// `cargo test --lib`. GPUI wiring and keyboard dispatch land in commit
+// D2; this commit ships the pure-library half.
+#[path = "app_impl/menu_syntax_trigger_popup.rs"]
+pub mod menu_syntax_trigger_popup;
+
+// Pure adapter that bridges `menu_syntax::current_actions` (pure spec) into
+// the Cmd+K actions-dialog (live UI). Same `#[path]` re-export pattern as
+// `path_action` / `routes` / `menu_syntax_trigger_popup` so unit tests for
+// the section title + replace/prepend mode run under `cargo test --lib`.
+#[path = "app_impl/menu_syntax_actions.rs"]
+pub mod menu_syntax_actions;
+
+// Pure adapter that flattens `menu_syntax::ai::MenuSyntaxAiResponse` into
+// the renderable proposal snapshot the inline-AI hint surface consumes.
+// Same `#[path]` re-export pattern so unit tests for the response→proposal
+// mapping run under `cargo test --lib`.
+#[path = "app_impl/menu_syntax_ai.rs"]
+pub mod menu_syntax_ai;
+
+// Pure applier for AI proposals (Tab/Enter Accept, Esc Dismiss). Same
+// `#[path]` re-export pattern as menu_syntax_ai so the unit tests run
+// under `cargo test --lib`.
+#[path = "app_impl/menu_syntax_ai_apply.rs"]
+pub mod menu_syntax_ai_apply;
 
 // Fallback commands - Raycast-style fallback actions when no scripts match
 pub mod fallbacks;
@@ -179,6 +237,7 @@ pub mod ocr;
 
 // Script scheduling with cron expressions and natural language
 pub mod scheduler;
+pub mod script_sharing;
 
 // Plugin inventory — canonical plugin manifest, discovery, and skill indexing
 pub mod plugins;
@@ -223,6 +282,9 @@ pub mod mcp_resources;
 // Provides JSON command protocol for testing and automation
 pub mod stdin_commands;
 
+// Protocol-boundary metrics / counters for the JSONL ingress.
+pub mod protocol_stats;
+
 // Confirmation dialog - modal confirmation window for destructive actions
 pub mod confirm;
 #[allow(dead_code)]
@@ -238,7 +300,7 @@ pub mod ai;
 
 // Agents - mdflow agent integration
 // Executable markdown prompts that run against Claude, Gemini, Codex, or Copilot
-// Located in ~/.scriptkit/*/agents/*.md
+// Located in ~/.scriptkit/plugins/*/agents/*.md
 pub mod agents;
 
 // Secrets - age-encrypted secrets storage
@@ -302,6 +364,14 @@ pub fn get_main_window_handle() -> Option<gpui::AnyWindowHandle> {
 /// - Used by hotkey toggle to show/hide main window
 /// - Used by Notes/AI to prevent main window from appearing when they close
 static MAIN_WINDOW_VISIBLE: AtomicBool = AtomicBool::new(false);
+
+// Oracle-Session `window-activation-invariants-guard` PR1.
+// One-shot guard for the main NSPanel's floating-panel configuration. Only
+// `platform::ensure_main_panel_configured()` is allowed to flip this — and only
+// after `assert_main_panel_invariants` reports `ok()`. Living in the lib crate
+// keeps the atomic reachable from `src/platform/app_window_management.rs`,
+// which is `include!`-merged into `platform::`.
+pub(crate) static PANEL_CONFIGURED: AtomicBool = AtomicBool::new(false);
 
 /// Tracks whether a script requested hiding the window (via Hide message)
 /// When ScriptExit is received, if this is true, we show the window again

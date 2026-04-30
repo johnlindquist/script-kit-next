@@ -40,18 +40,21 @@ fn test_prompt_header_colors_from_theme_uses_on_accent_text_token_for_logo() {
 fn test_prompt_header_colors_from_dark_theme_uses_stronger_hover_overlay() {
     let mut theme = Theme::dark_default();
     theme.colors.accent.selected_subtle = 0x112233;
+    let mut opacity = theme.get_opacity();
+    opacity.hover = 0.22;
+    theme.opacity = Some(opacity);
 
     let colors = PromptHeaderColors::from_theme(&theme);
-    assert_eq!(colors.hover_overlay, 0x1122332e);
+    assert_eq!(colors.hover_overlay, 0x11223338);
 }
 
 #[test]
-fn test_prompt_header_colors_from_light_theme_keeps_existing_hover_overlay() {
+fn test_prompt_header_colors_from_light_theme_uses_theme_hover_overlay() {
     let mut theme = Theme::light_default();
     theme.colors.accent.selected_subtle = 0x112233;
 
     let colors = PromptHeaderColors::from_theme(&theme);
-    assert_eq!(colors.hover_overlay, 0x11223326);
+    assert_eq!(colors.hover_overlay, 0x1122330a);
 }
 
 #[test]
@@ -160,8 +163,8 @@ fn test_render_input_area_uses_theme_tokens_for_input_and_placeholder_text() {
     let section = render_input_area_section();
 
     assert!(
-        section.contains("colors.text_dimmed.to_rgb()"),
-        "PromptHeader placeholder text should use text_dimmed theme token. Section:\n{}",
+        section.contains("colors.text_primary.rgba8(colors.alpha_placeholder as u8)"),
+        "PromptHeader placeholder text should use text_primary plus placeholder alpha. Section:\n{}",
         section
     );
     assert!(

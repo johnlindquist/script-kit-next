@@ -130,7 +130,7 @@ pub struct AiApp {
     /// Whether we're showing the API key input field (configure mode)
     pub(super) showing_api_key_input: bool,
 
-    /// Focused setup button index (0=Configure Vercel AI Gateway, 1=Connect to Claude Code)
+    /// Focused setup button index (0=Open Agent Catalog)
     pub(super) setup_button_focus_index: usize,
 
     /// API key input state (for configure flow)
@@ -238,6 +238,16 @@ pub struct AiApp {
 
     /// Feedback timestamp for "Copied!" transcript action state
     pub(super) chat_transcript_copied_at: Option<std::time::Instant>,
+
+    /// Task handle for the copy-message feedback reset timer.
+    /// Stored (not detached) so a rapid re-copy cancels the prior timer.
+    pub(super) copy_feedback_reset_task: Option<gpui::Task<()>>,
+
+    /// Task handle for the chat-transcript copy feedback reset timer.
+    pub(super) chat_transcript_feedback_reset_task: Option<gpui::Task<()>>,
+
+    /// Task handle for the export-chat feedback reset timer.
+    pub(super) export_feedback_reset_task: Option<gpui::Task<()>>,
 
     /// Debounce task for search input — cancelled and replaced on each keystroke.
     /// When the user types, we delay the DB query by 150ms; if another keystroke

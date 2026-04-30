@@ -319,22 +319,36 @@ fn turn_finished_returns_to_idle_from_streaming() {
 // 4. Tab AI routing — source code contracts
 // =========================================================================
 
-const TAB_AI_MODE_SOURCE: &str = include_str!("../../app_impl/tab_ai_mode.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../../app_impl/tab_ai_mode/mod.rs");
 const ACTIONS_TOGGLE_SOURCE: &str = include_str!("../../app_impl/actions_toggle.rs");
 const STARTUP_SOURCE: &str = include_str!("../../app_impl/startup.rs");
 const STARTUP_NEW_ACTIONS_SOURCE: &str = include_str!("../../app_impl/startup_new_actions.rs");
 const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../../app_impl/startup_new_tab.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../../main_sections/render_impl.rs");
 const APP_VIEW_STATE_SOURCE: &str = include_str!("../../main_sections/app_view_state.rs");
+const UI_WINDOW_SOURCE: &str = include_str!("../../app_impl/ui_window.rs");
 const APP_RUN_SETUP_SOURCE: &str = include_str!("../../main_entry/app_run_setup.rs");
 const RUNTIME_STDIN_SOURCE: &str = include_str!("../../main_entry/runtime_stdin.rs");
 const HANDLE_ACTION_SOURCE: &str = include_str!("../../app_actions/handle_action/mod.rs");
+const REGISTRIES_STATE_SOURCE: &str = include_str!("../../app_impl/registries_state.rs");
 const ACP_MOD_SOURCE: &str = include_str!("mod.rs");
 const ACP_HISTORY_POPUP_SOURCE: &str = include_str!("history_popup.rs");
 const ACP_MODEL_SELECTOR_POPUP_SOURCE: &str = include_str!("model_selector_popup.rs");
 const ACP_PICKER_POPUP_SOURCE: &str = include_str!("picker_popup.rs");
 const ACP_CHAT_WINDOW_SOURCE: &str = include_str!("chat_window.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
+const ACP_CLIENT_SOURCE: &str = include_str!("client.rs");
+const ACP_THREAD_SOURCE: &str = include_str!("thread.rs");
+
+fn acp_source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
+    let start = source
+        .find(start_pat)
+        .unwrap_or_else(|| panic!("missing source start: {start_pat}"));
+    let end_rel = source[start..]
+        .find(end_pat)
+        .unwrap_or_else(|| panic!("missing source end: {end_pat}"));
+    &source[start..start + end_rel]
+}
 
 #[test]
 fn app_view_has_acp_chat_view_variant() {
@@ -390,6 +404,24 @@ fn startup_new_tab_guard_checks_acp_chat_view() {
 }
 
 #[test]
+fn startup_plain_enter_routes_to_acp_picker_when_open() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("pub(crate) fn handle_enter_key"),
+        "AcpChatView must expose a plain-Enter picker handler for app interceptors"
+    );
+    assert!(
+        STARTUP_SOURCE.contains("let is_plain_enter")
+            && STARTUP_SOURCE.contains("chat.handle_enter_key(cx)"),
+        "startup.rs should route plain Enter to ACP picker acceptance when embedded ACP owns the mention menu"
+    );
+    assert!(
+        STARTUP_NEW_TAB_SOURCE.contains("let is_plain_enter")
+            && STARTUP_NEW_TAB_SOURCE.contains("chat.handle_enter_key(cx)"),
+        "startup_new_tab.rs should preserve the same plain Enter ACP picker routing"
+    );
+}
+
+#[test]
 fn acp_escape_defers_to_actions_dialog_before_unwinding_chat() {
     for (name, source) in [
         ("startup.rs", STARTUP_SOURCE),
@@ -414,6 +446,164 @@ fn acp_escape_defers_to_actions_dialog_before_unwinding_chat() {
             "ACP escape block must still close the ACP chat when actions are closed in {name}"
         );
     }
+}
+
+// @lat: [[lat.md/acp-chat#ACP Chat#Footer activity indicator]]
+#[test]
+fn acp_plain_escape_cancels_streaming_before_host_close() {
+    let escape_block_start = ACP_VIEW_SOURCE
+        .find("event = \"acp_escape_cancel_streaming_requested\"")
+        .expect("ACP view must log the Escape streaming cancellation path");
+    let escape_block = &ACP_VIEW_SOURCE[escape_block_start.saturating_sub(400)
+        ..(escape_block_start + 800).min(ACP_VIEW_SOURCE.len())];
+
+    assert!(
+        escape_block.contains("AcpThreadStatus::Streaming")
+            && escape_block.contains("thread.cancel_streaming(cx)"),
+        "plain Escape helper must cancel active ACP streaming"
+    );
+
+    let focused_escape_start = ACP_VIEW_SOURCE
+        .find("if self.cancel_streaming_from_escape(cx)")
+        .expect("focused ACP Escape path must call the shared cancellation helper");
+    let focused_escape_block = &ACP_VIEW_SOURCE
+        [focused_escape_start..(focused_escape_start + 500).min(ACP_VIEW_SOURCE.len())];
+    assert!(
+        focused_escape_block.contains("cx.stop_propagation()")
+            && focused_escape_block.contains("return;"),
+        "focused ACP Escape cancellation must stop before the host-close branch"
+    );
+    assert!(
+        focused_escape_start
+            < ACP_VIEW_SOURCE
+                .find("embedded_acp_escape_host_close_requested")
+                .expect("focused ACP Escape close path must remain present"),
+        "Escape cancellation must be checked before Escape closes Agent Chat"
+    );
+}
+
+// @lat: [[lat.md/acp-chat#ACP Chat#Entry paths]]
+#[test]
+fn acp_root_escape_interceptor_cancels_streaming_before_returning_to_menu() {
+    for (name, source) in [
+        ("startup.rs", STARTUP_SOURCE),
+        ("startup_new_actions.rs", STARTUP_NEW_ACTIONS_SOURCE),
+    ] {
+        let cancel_pos = source
+            .find("chat.cancel_streaming_from_escape(cx)")
+            .unwrap_or_else(|| panic!("{name} must let ACP consume Escape while streaming"));
+        let close_pos = source
+            .find("event = \"embedded_acp_escape_return_to_origin\"")
+            .unwrap_or_else(|| panic!("{name} must retain idle Escape return-to-origin path"));
+        assert!(
+            cancel_pos < close_pos,
+            "{name} must try ACP streaming cancellation before Escape returns to the main menu"
+        );
+        assert!(
+            source[cancel_pos..close_pos].contains("cx.stop_propagation()")
+                && source[cancel_pos..close_pos].contains("return;"),
+            "{name} must stop propagation after ACP streaming cancellation"
+        );
+    }
+
+    assert!(
+        ACP_VIEW_SOURCE.contains("pub(crate) fn cancel_streaming_from_escape")
+            && ACP_VIEW_SOURCE.contains("thread.cancel_streaming(cx)")
+            && ACP_VIEW_SOURCE.contains("event = \"acp_escape_cancel_streaming_requested\""),
+        "AcpChatView should expose a shared Escape cancellation helper for focused and host routes"
+    );
+}
+
+// @lat: [[lat.md/acp-chat#ACP Chat#Entry paths]]
+#[test]
+fn acp_stdin_simulate_key_escape_cancels_streaming_before_returning_to_menu() {
+    for (name, source) in [
+        ("runtime_stdin.rs", RUNTIME_STDIN_SOURCE),
+        ("app_run_setup.rs", APP_RUN_SETUP_SOURCE),
+    ] {
+        let cancel_pos = source
+            .find("chat.cancel_streaming_from_escape(cx)")
+            .unwrap_or_else(|| panic!("{name} must route simulated Escape through ACP cancel"));
+        let close_pos = source
+            .find("SimulateKey: Escape - return to main menu from Agent Chat")
+            .unwrap_or_else(|| panic!("{name} must retain idle simulated Escape close path"));
+        assert!(
+            cancel_pos < close_pos,
+            "{name} must cancel ACP streaming before simulated Escape returns to the main menu"
+        );
+        assert!(
+            source[cancel_pos..close_pos]
+                .contains("SimulateKey: Escape - cancel Agent Chat streaming"),
+            "{name} must log the simulated Escape streaming-cancel route"
+        );
+    }
+}
+
+// @lat: [[lat.md/acp-chat#ACP Chat#Telemetry]]
+#[test]
+fn acp_cancel_streaming_sends_session_cancel_to_agent() {
+    assert!(
+        ACP_THREAD_SOURCE.contains("self.connection.cancel_turn(self.ui_thread_id.clone())"),
+        "AcpThread::cancel_streaming must enqueue an ACP cancel request"
+    );
+    assert!(
+        ACP_CLIENT_SOURCE.contains("AcpCancelCommand::CancelTurn")
+            && ACP_CLIENT_SOURCE.contains("CancelNotification::new")
+            && ACP_CLIENT_SOURCE.contains(".cancel(CancelNotification::new")
+            && ACP_CLIENT_SOURCE.contains("event = \"acp_session_cancel_requested\""),
+        "ACP runtime must translate UI cancellation into a session/cancel notification"
+    );
+}
+
+// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+#[test]
+fn acp_plain_up_recalls_latest_user_prompt_when_composer_is_empty() {
+    let up_block_start = ACP_VIEW_SOURCE
+        .find("event = \"acp_plain_up_recalled_last_user_prompt\"")
+        .expect("ACP view must log the plain Up prompt recall path");
+    let up_block = &ACP_VIEW_SOURCE
+        [up_block_start.saturating_sub(700)..(up_block_start + 300).min(ACP_VIEW_SOURCE.len())];
+
+    assert!(
+        up_block.contains("!modifiers.platform")
+            && up_block.contains("crate::ui_foundation::is_key_up(key)")
+            && up_block.contains("thread.recall_last_user_message(cx)")
+            && up_block.contains("cx.stop_propagation()"),
+        "plain Up should be consumed only when it recalls the latest user prompt"
+    );
+    assert!(
+        ACP_THREAD_SOURCE.contains("pub(crate) fn recall_last_user_message")
+            && ACP_THREAD_SOURCE.contains("!self.input.is_empty()")
+            && ACP_THREAD_SOURCE.contains("AcpThreadStatus::Idle | AcpThreadStatus::Error")
+            && ACP_THREAD_SOURCE.contains("message.role == AcpThreadMessageRole::User")
+            && ACP_THREAD_SOURCE.contains("self.input.set_cursor(0)"),
+        "AcpThread should recall the last user message only from an empty idle/error composer"
+    );
+}
+
+// @lat: [[lat.md/acp-chat#ACP Chat#ACP composer]]
+#[test]
+fn acp_cmd_0_resets_agent_chat_zoom_through_theme_sync() {
+    let cmd_0_block_start = ACP_VIEW_SOURCE
+        .find("event = \"acp_cmd_0_reset_agent_chat_zoom\"")
+        .expect("ACP view must log the Cmd+0 reset path");
+    let cmd_0_block = &ACP_VIEW_SOURCE[cmd_0_block_start.saturating_sub(900)
+        ..(cmd_0_block_start + 500).min(ACP_VIEW_SOURCE.len())];
+
+    assert!(
+        cmd_0_block.contains("FontConfig::default()")
+            && cmd_0_block.contains("fonts.ui_size = defaults.ui_size")
+            && cmd_0_block.contains("fonts.mono_size = defaults.mono_size")
+            && cmd_0_block.contains("persist_theme_and_sync_all_windows"),
+        "Cmd+0 should reset Agent Chat font sizing through the shared theme sync path"
+    );
+    assert!(
+        ACP_VIEW_SOURCE
+            .contains("modifiers.platform && !modifiers.alt && !modifiers.shift && key == \"0\"")
+            && ACP_VIEW_SOURCE.contains("self.reset_agent_chat_zoom(cx);")
+            && ACP_VIEW_SOURCE.contains("\"acp_cmd_0_reset_agent_chat_zoom\""),
+        "ACP key handling should route Cmd+0 to the zoom reset helper"
+    );
 }
 
 #[test]
@@ -603,7 +793,7 @@ fn acp_footer_actions_hint_uses_shared_clickable_toggle_path() {
     );
     assert!(
         ACP_VIEW_SOURCE.contains("\"⌘K Actions\"")
-            && ACP_VIEW_SOURCE.contains("this.trigger_toggle_actions(window, cx);"),
+            && ACP_VIEW_SOURCE.contains("chat.trigger_toggle_actions(window, cx);"),
         "ACP footer Actions hint must route through the shared clickable footer renderer"
     );
     assert!(
@@ -619,6 +809,96 @@ fn acp_footer_actions_hint_uses_shared_clickable_toggle_path() {
             && ACP_CHAT_WINDOW_SOURCE.contains("toggle_detached_actions(cx);")
             && ACP_CHAT_WINDOW_SOURCE.contains("close_chat_window(cx);"),
         "detached ACP hosts must wire footer clicks to the detached actions toggle and close paths"
+    );
+}
+
+// @lat: [[lat.md/acp-chat#ACP Chat#Agent switching]]
+#[test]
+fn acp_actions_dialog_preserves_route_backed_agent_actions() {
+    let acp_dialog_start = ACTIONS_TOGGLE_SOURCE
+        .find("let is_acp_actions_dialog = acp_context.is_some();")
+        .expect("actions toggle must identify ACP dialogs before construction");
+    let acp_dialog_block = &ACTIONS_TOGGLE_SOURCE
+        [acp_dialog_start..(acp_dialog_start + 3500).min(ACTIONS_TOGGLE_SOURCE.len())];
+
+    assert!(
+        acp_dialog_block.contains("ActionsDialog::with_acp_chat("),
+        "ACP actions must be constructed with the route-backed ACP dialog"
+    );
+    assert!(
+        acp_dialog_block.contains("if !is_acp_actions_dialog")
+            && ACTIONS_TOGGLE_SOURCE.contains("dialog.set_menu_syntax_section")
+            && ACTIONS_TOGGLE_SOURCE.contains(".set_focused_scriptlet"),
+        "generic script/global action rebuild hooks must be gated away from ACP actions"
+    );
+
+    let root_route_block_start = ACTIONS_TOGGLE_SOURCE
+        .find("ActionsDialog::with_acp_chat(")
+        .expect("ACP dialog constructor call missing");
+    let rebuild_pos = ACTIONS_TOGGLE_SOURCE[root_route_block_start..]
+        .find("dialog.set_menu_syntax_section")
+        .map(|pos| root_route_block_start + pos)
+        .expect("shared menu syntax hook missing");
+    let guard_pos = ACTIONS_TOGGLE_SOURCE[root_route_block_start..rebuild_pos]
+        .rfind("if !is_acp_actions_dialog")
+        .map(|pos| root_route_block_start + pos)
+        .expect("ACP guard must appear before generic menu syntax rebuild");
+    assert!(
+        guard_pos < rebuild_pos,
+        "ACP guard must prevent set_menu_syntax_section(None) from replacing Change Agent/Model with global actions"
+    );
+}
+
+// @lat: [[lat.md/acp-chat#ACP Chat#Footer activity indicator]]
+#[test]
+fn acp_footer_omits_global_cmd_enter_ai_button() {
+    let footer_start = UI_WINDOW_SOURCE
+        .find("fn acp_footer_buttons")
+        .expect("native ACP footer builder missing");
+    let footer_block =
+        &UI_WINDOW_SOURCE[footer_start..(footer_start + 900).min(UI_WINDOW_SOURCE.len())];
+    assert!(
+        !footer_block.contains("FooterAction::Ai"),
+        "native ACP footer should not show the global Cmd+Enter AI button"
+    );
+
+    let external_footer_start = ACP_VIEW_SOURCE
+        .find("fn render_external_host_footer_from_snapshot")
+        .expect("external ACP footer renderer missing");
+    let external_footer_block = &ACP_VIEW_SOURCE
+        [external_footer_start..(external_footer_start + 2600).min(ACP_VIEW_SOURCE.len())];
+    assert!(
+        !external_footer_block.contains("\"⌘↵ AI\""),
+        "external ACP footer should not show the global Cmd+Enter AI hint"
+    );
+    assert!(
+        footer_block.contains("FooterAction::Actions")
+            && external_footer_block.contains("\"⌘K Actions\""),
+        "ACP footers must keep the Actions affordance after removing the AI button"
+    );
+}
+
+#[test]
+fn acp_embedded_cmd_k_uses_host_actions_callback() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("event = \"acp_cmd_k_route\"")
+            && ACP_VIEW_SOURCE.contains("embedded_host_callback")
+            && ACP_VIEW_SOURCE.contains("self.trigger_toggle_actions(window, cx);")
+            && ACP_VIEW_SOURCE.contains("cx.stop_propagation();"),
+        "Cmd+K inside focused embedded ACP must open the host actions menu locally"
+    );
+    assert!(
+        !ACP_VIEW_SOURCE.contains("propagate_to_main_window"),
+        "embedded ACP Cmd+K must not depend on bubbling to the launcher interceptor"
+    );
+}
+
+#[test]
+fn acp_detached_cmd_k_keeps_detached_actions_path() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("detached_local")
+            && ACP_VIEW_SOURCE.contains("toggle_detached_actions(cx);"),
+        "detached ACP Cmd+K must keep using the detached actions window path"
     );
 }
 
@@ -654,6 +934,176 @@ fn acp_picker_refresh_and_navigation_sync_popup_window() {
             .count()
             >= 2,
         "picker navigation should resync the detached popup window"
+    );
+}
+
+#[test]
+fn acp_picker_parent_mouse_down_dismisses_slash_and_mention_popup() {
+    let render_body = acp_source_between(
+        ACP_VIEW_SOURCE,
+        "impl Render for AcpChatView",
+        "#[cfg(test)]",
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("pub(crate) fn dismiss_mention_picker")
+            && ACP_VIEW_SOURCE.contains("self.mention_session.take()")
+            && ACP_VIEW_SOURCE.contains("self.sync_mention_popup_window_from_cached_parent(cx);"),
+        "AcpChatView must expose a shared picker dismiss helper for both slash and @ mention sessions"
+    );
+    assert!(
+        render_body.contains(".on_any_mouse_down(cx.listener(|this, _event, _window, cx| {")
+            && render_body.contains("this.dismiss_mention_picker(cx);"),
+        "ACP chat root mouse-down should dismiss the shared slash/@ picker when clicking outside the popup window"
+    );
+}
+
+#[test]
+fn acp_picker_outside_dismiss_suppresses_unchanged_trigger_reopen() {
+    let dismiss = acp_source_between(
+        ACP_VIEW_SOURCE,
+        "pub(crate) fn dismiss_mention_picker",
+        "/// Access the live thread entity",
+    );
+    assert!(
+        dismiss.contains("self.dismissed_mention_trigger = Some(AcpDismissedMentionTrigger")
+            && dismiss.contains("trigger_range: session.trigger_range.clone()")
+            && dismiss.contains("query: session.query.clone()"),
+        "outside-click dismiss must remember the exact active slash/@ trigger so unchanged composer text does not reopen the popup"
+    );
+
+    let refresh = acp_source_between(
+        ACP_VIEW_SOURCE,
+        "pub(super) fn refresh_mention_session",
+        "/// Log the visible window range",
+    );
+    assert!(
+        refresh.contains("dismissed_trigger_still_active")
+            && refresh.contains("self.dismissed_mention_trigger.as_ref() == Some(&active_trigger)")
+            && refresh.contains("if !dismissed_trigger_still_active")
+            && refresh.contains("self.dismissed_mention_trigger = None;"),
+        "refresh_mention_session must keep the dismissed trigger closed until the input/cursor context changes"
+    );
+}
+
+#[test]
+fn acp_picker_row_click_matches_actions_dialog_mouse_arming() {
+    assert!(
+        ACP_PICKER_POPUP_SOURCE.contains("mouse_armed_row: Option<(usize, String)>")
+            && ACP_PICKER_POPUP_SOURCE.contains("fn should_submit_acp_picker_row_click")
+            && ACP_PICKER_POPUP_SOURCE.contains("was_mouse_armed || click_count >= 2"),
+        "ACP slash/@ picker rows must use actions-dialog-style mouse arming: first click focuses, second or double-click accepts"
+    );
+    assert!(
+        ACP_PICKER_POPUP_SOURCE.contains("fn handle_row_click")
+            && ACP_PICKER_POPUP_SOURCE.contains("this.handle_row_click(idx, event, window, cx);")
+            && ACP_PICKER_POPUP_SOURCE.contains("self.select_item(index, cx);")
+            && ACP_PICKER_POPUP_SOURCE.contains("self.activate_item(index, cx);"),
+        "ACP picker row clicks must route through a shared handler that selects before accepting"
+    );
+}
+
+#[test]
+fn acp_picker_mouse_focus_does_not_recreate_popup_window() {
+    let select_item = acp_source_between(
+        ACP_PICKER_POPUP_SOURCE,
+        "fn select_item",
+        "fn handle_row_click",
+    );
+    assert!(
+        !select_item.contains("sync_mention_popup_window_from_cached_parent"),
+        "first mouse click should update selection in the existing popup instead of resyncing/recreating the popup window"
+    );
+    assert!(
+        select_item.contains("self.snapshot.selected_index")
+            && select_item.contains("self.snapshot.visible_start = visible.start"),
+        "mouse focus should still update the popup's local selected row"
+    );
+}
+
+#[test]
+fn acp_picker_mouse_submit_dismisses_popup_window() {
+    let click_handler = acp_source_between(
+        ACP_PICKER_POPUP_SOURCE,
+        "fn handle_row_click",
+        "fn apply_hint",
+    );
+    let activate = click_handler
+        .find("self.activate_item(index, cx);")
+        .expect("mouse submit should activate the focused picker item");
+    let clear_slot = click_handler
+        .find("clear_mention_popup_window_slot();")
+        .expect("mouse submit should clear the popup slot");
+    let remove_window = click_handler
+        .find("window.remove_window();")
+        .expect("mouse submit should remove the popup window directly");
+    assert!(
+        activate < clear_slot && clear_slot < remove_window,
+        "double-click or second-click submit must dismiss the slash/@ picker popup after activation"
+    );
+    assert!(
+        click_handler.contains("is_actionable && should_submit_acp_picker_row_click"),
+        "inert picker rows must not be dismissed as submitted actions"
+    );
+}
+
+#[test]
+fn acp_close_paths_close_slash_and_mention_popup() {
+    let detached_cmd_w_block = acp_source_between(
+        ACP_VIEW_SOURCE,
+        "event = \"detached_acp_cmd_w_close_requested\"",
+        "this.handle_key_down(event, window, cx);",
+    );
+    let detached_cmd_w_prepare = detached_cmd_w_block
+        .find("this.prepare_for_host_hide(cx);")
+        .expect("detached Cmd+W block must prepare ACP host hide");
+    let detached_cmd_w_remove = detached_cmd_w_block
+        .find("window.remove_window();")
+        .expect("detached Cmd+W block must remove the window");
+    assert!(
+        detached_cmd_w_prepare < detached_cmd_w_remove,
+        "detached ACP Cmd+W must close slash/@ picker popups before removing the window"
+    );
+
+    let detached_close_helper = acp_source_between(
+        ACP_CHAT_WINDOW_SOURCE,
+        "pub fn close_chat_window",
+        "// Detached ACP action allowlist",
+    );
+    let detached_helper_prepare = detached_close_helper
+        .find("view.prepare_for_host_hide(cx);")
+        .expect("close_chat_window must prepare ACP host hide");
+    let detached_helper_remove = detached_close_helper
+        .find("window.remove_window();")
+        .expect("close_chat_window must remove the window");
+    assert!(
+        detached_helper_prepare < detached_helper_remove,
+        "detached close_chat_window must close slash/@ picker popups before removing the window"
+    );
+
+    let detached_titlebar_close = acp_source_between(
+        ACP_CHAT_WINDOW_SOURCE,
+        "pub fn open_chat_window_with_thread",
+        "/// Return a strong reference to the detached ACP chat view entity",
+    );
+    assert!(
+        detached_titlebar_close.contains("view_entity_slot_on_close")
+            && detached_titlebar_close.contains("view.prepare_for_host_hide(cx);"),
+        "detached titlebar close must prepare the ACP view so slash/@ picker popups cannot outlive chat"
+    );
+}
+
+#[test]
+fn reset_to_script_list_runs_embedded_acp_teardown() {
+    let reset_start = REGISTRIES_STATE_SOURCE
+        .find("pub(crate) fn reset_to_script_list")
+        .expect("reset_to_script_list should exist");
+    let reset_body = &REGISTRIES_STATE_SOURCE[reset_start..];
+
+    assert!(
+        reset_body.contains("view.prepare_for_host_hide(cx);")
+            && reset_body.contains("crate::windows::ensure_embedded_ai_window(false);")
+            && reset_body.contains("AcpSurfaceEvent::EmbeddedClosed"),
+        "reset_to_script_list must close embedded ACP popups and automation state before returning to ScriptList"
     );
 }
 
@@ -699,8 +1149,9 @@ fn acp_history_toggle_uses_recent_close_debounce() {
         "ACP history popup should track recent closes and suppress immediate reopen races like the shared actions dialog"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("view.toggle_history_popup(window, cx);"),
-        "embedded ACP history host should route footer/shortcut toggles through the ACP view toggle path"
+        TAB_AI_MODE_SOURCE.contains("view.set_on_open_history_command")
+            && TAB_AI_MODE_SOURCE.contains("app.open_embedded_acp_history_popup(window, cx);"),
+        "embedded ACP history host should wire the footer and shortcut into the dedicated embedded history popup path"
     );
 }
 
@@ -709,8 +1160,7 @@ fn acp_history_popup_window_observes_focus_loss_and_escape() {
     assert!(
         ACP_HISTORY_POPUP_SOURCE.contains("activation_subscription: Option<Subscription>")
             && ACP_HISTORY_POPUP_SOURCE.contains("fn ensure_activation_subscription(")
-            && ACP_HISTORY_POPUP_SOURCE
-                .contains("cx.observe_window_activation(window, move |this, window, cx| {")
+            && ACP_HISTORY_POPUP_SOURCE.contains("observe_window_activation(")
             && ACP_HISTORY_POPUP_SOURCE.contains("this.request_close(window, cx, \"focus_lost\");"),
         "ACP history popup window should observe activation changes and close on focus loss"
     );
@@ -729,7 +1179,7 @@ fn acp_history_popup_window_observes_focus_loss_and_escape() {
     assert!(
         ACP_VIEW_SOURCE.contains(".id(\"acp-history-popup-backdrop\")")
             && ACP_VIEW_SOURCE.contains("this.dismiss_history_popup(cx);")
-            && ACP_VIEW_SOURCE.contains(".bottom(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))"),
+            && ACP_VIEW_SOURCE.contains(".bottom(px(self.inline_footer_height()))"),
         "ACP host should render an outside-click backdrop above chat content so clicks outside the popup close it without swallowing the footer toggle"
     );
 }
@@ -764,9 +1214,9 @@ fn acp_history_popup_window_supports_actions_style_search_and_keyboard_navigatio
 #[test]
 fn acp_history_enter_resumes_selected_chat() {
     assert!(
-        ACP_VIEW_SOURCE.contains("if !modifiers.shift && !modifiers.platform {")
+        ACP_VIEW_SOURCE.contains("if modifiers.platform {")
             && ACP_VIEW_SOURCE.contains("self.select_history_from_popup(&entry, cx);"),
-        "plain Enter in ACP history should resume the selected conversation in the ACP thread"
+        "embedded ACP history keyboard handling should route the resume action through select_history_from_popup"
     );
     assert!(
         ACP_HISTORY_POPUP_SOURCE.contains("if has_shift {")
@@ -806,8 +1256,83 @@ fn acp_view_exposes_escape_popup_dismiss_helper() {
                 .contains("self.sync_model_selector_popup_window_from_cached_parent(cx);")
             && ACP_VIEW_SOURCE.contains("self.history_menu.is_some()")
             && ACP_VIEW_SOURCE.contains("self.mention_session = None;")
-            && ACP_VIEW_SOURCE.contains("self.sync_mention_popup_window_from_cached_parent(cx);"),
+            && ACP_VIEW_SOURCE.contains("self.sync_mention_popup_window_from_cached_parent(cx);")
+            && ACP_VIEW_SOURCE.contains("if self.attach_menu_open {")
+            && ACP_VIEW_SOURCE.contains("|| self.attach_menu_open"),
         "ACP view should expose a helper that dismisses the detached ACP popups on Escape"
+    );
+}
+
+#[test]
+fn acp_picker_portals_require_host_callbacks_before_staging() {
+    let portal_fn_start = ACP_VIEW_SOURCE
+        .find("fn open_picker_portal(")
+        .expect("open_picker_portal should exist");
+    let portal_fn =
+        &ACP_VIEW_SOURCE[portal_fn_start..(portal_fn_start + 1800).min(ACP_VIEW_SOURCE.len())];
+
+    let callback_guard_idx = portal_fn
+        .find("let Some(callback) = self.on_open_portal.clone() else {")
+        .expect("picker portals should require a host callback");
+    let stage_idx = portal_fn
+        .find("self.stage_pending_portal_session(")
+        .expect("picker portals should still stage after the guard");
+
+    assert!(
+        callback_guard_idx < stage_idx,
+        "picker portals should only stage pending portal state after a host callback is available"
+    );
+    assert!(
+        portal_fn.contains("event = \"acp_portal_open_blocked_missing_host_callback\""),
+        "missing picker portal callbacks should emit a warning log"
+    );
+}
+
+#[test]
+fn detached_acp_limits_portals_to_history() {
+    assert!(
+        ACP_CHAT_WINDOW_SOURCE.contains("view.set_allowed_portal_kinds(vec![PortalKind::AcpHistory]);")
+            && ACP_CHAT_WINDOW_SOURCE.contains("view.set_on_open_portal(move |kind, cx| match kind {")
+            && ACP_CHAT_WINDOW_SOURCE.contains("PortalKind::AcpHistory => {")
+            && ACP_CHAT_WINDOW_SOURCE.contains("open_history_portal_in_detached_chat_window(cx)")
+            && ACP_CHAT_WINDOW_SOURCE.contains("cancel_portal_session_in_detached_chat_window(kind, cx)")
+            && ACP_CHAT_WINDOW_SOURCE.contains("reason = \"unsupported_in_detached_host\""),
+        "detached ACP should expose only the locally supported history portal, clear staged portal state on open failure, and log rejected portal requests"
+    );
+}
+
+#[test]
+fn acp_history_popup_attach_consumes_pending_history_portal_session() {
+    let popup_select_fn_start = ACP_VIEW_SOURCE
+        .find("pub(crate) fn select_history_from_popup")
+        .expect("select_history_from_popup should exist");
+    let popup_select_fn = &ACP_VIEW_SOURCE
+        [popup_select_fn_start..(popup_select_fn_start + 1400).min(ACP_VIEW_SOURCE.len())];
+
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn has_pending_history_portal_session(&self) -> bool")
+            && ACP_VIEW_SOURCE.contains("fn build_history_attachment_part(")
+            && ACP_VIEW_SOURCE.contains("event = \"acp_history_portal_selection_attached_via_contract\"")
+            && ACP_VIEW_SOURCE.contains("self.attach_portal_part(part, cx);")
+            && ACP_VIEW_SOURCE.contains("let had_pending_history_portal = self.has_pending_history_portal_session();")
+            && popup_select_fn.contains("if had_pending_history_portal {")
+            && popup_select_fn.contains("event = \"acp_history_popup_attach_failed\"")
+            && popup_select_fn.contains("self.cancel_pending_portal_session(")
+            && popup_select_fn.contains("PortalKind::AcpHistory")
+            && popup_select_fn.contains("return;"),
+        "ACP history attachment should consume the staged AcpHistory portal session instead of bypassing the shared replacement contract"
+    );
+}
+
+#[test]
+fn acp_history_popup_dismiss_restores_pending_history_portal_session() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("event = \"acp_history_portal_dismissed_via_popup\"")
+            && ACP_VIEW_SOURCE.contains("event = \"acp_history_portal_dismissed_from_window\"")
+            && ACP_VIEW_SOURCE.contains("self.has_pending_history_portal_session()")
+            && ACP_VIEW_SOURCE.contains("self.cancel_pending_portal_session(")
+            && ACP_VIEW_SOURCE.contains("PortalKind::AcpHistory"),
+        "ACP history popup dismissals should cancel the staged AcpHistory portal session so the composer text and caret are restored on close"
     );
 }
 
@@ -1185,12 +1710,12 @@ fn events_have_setup_required_variant() {
 fn ai_setup_surface_no_longer_mentions_claude_only_copy() {
     const SETUP_RENDER_SOURCE: &str = include_str!("../../ai/window/render_setup.rs");
     assert!(
-        SETUP_RENDER_SOURCE.contains("ACP Agent Required"),
-        "setup card title must say ACP Agent Required"
+        SETUP_RENDER_SOURCE.contains("Agent Required"),
+        "setup card title must say Agent Required"
     );
     assert!(
-        SETUP_RENDER_SOURCE.contains("Add ACP Agent"),
-        "setup card must offer Add ACP Agent"
+        SETUP_RENDER_SOURCE.contains("Open Agent Catalog"),
+        "setup card must offer Open Agent Catalog"
     );
     assert!(
         !SETUP_RENDER_SOURCE.contains("Connect to Claude Code"),
@@ -1277,12 +1802,12 @@ fn acp_retry_request_from_setup_state_without_agent() {
 fn tab_ai_mode_consumes_retry_request_before_preference() {
     // Verify the open path checks for retry request before loading preference.
     assert!(
-        TAB_AI_MODE_SOURCE.contains("take_acp_retry_request_from_current_view"),
+        TAB_AI_MODE_SOURCE.contains("take_acp_retry_request_for_open"),
         "tab_ai_mode must check for retry request from current view"
     );
     // The retry request should be checked before load_preferred_acp_agent_id.
     let retry_pos = TAB_AI_MODE_SOURCE
-        .find("take_acp_retry_request_from_current_view")
+        .find("take_acp_retry_request_for_open")
         .expect("must have retry request extraction");
     let pref_pos = TAB_AI_MODE_SOURCE
         .find("load_preferred_acp_agent_id")
@@ -2170,4 +2695,32 @@ fn acp_slash_and_main_menu_skill_launch_share_prompt_contract() {
         }
         other => panic!("expected SkillFile part, got {other:?}"),
     }
+}
+
+#[test]
+fn acp_main_menu_skill_stage_matches_slash_selection_without_submit() {
+    let body = acp_source_between(
+        ACP_VIEW_SOURCE,
+        "pub(crate) fn stage_selected_plugin_skill_from_main_menu(",
+        "    /// Reuse the current live thread for a fresh external entry intent.",
+    );
+
+    for required in [
+        "build_skill_slash_command_text(&skill.skill_id)",
+        "build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path)",
+        "thread.replace_pending_context_parts(vec![part], \"main_menu_selected_skill\", cx);",
+        "thread.input.set_text(command_text.clone());",
+        "thread.input.set_cursor(cursor_after);",
+        "thread.mark_context_bootstrap_ready(cx);",
+    ] {
+        assert!(
+            body.contains(required),
+            "main-menu skill staging must preserve slash-selection behavior: {required}"
+        );
+    }
+
+    assert!(
+        !body.contains("submit_input("),
+        "main-menu skill staging must not auto-submit"
+    );
 }

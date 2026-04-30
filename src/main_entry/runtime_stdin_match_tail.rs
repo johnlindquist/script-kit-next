@@ -5,24 +5,24 @@
                                 }
                             }
                             ExternalCommand::OpenAi => {
-                                logging::log("STDIN", "Opening ACP Chat via openAi compatibility alias");
+                                logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenMiniAi => {
-                                logging::log("STDIN", "Opening ACP Chat via openMiniAi compatibility alias");
+                                logging::log("STDIN", "Opening Agent Chat via openMiniAi compatibility alias");
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenAiWithMockData => {
                                 logging::log(
                                     "STDIN",
-                                    "Ignoring deprecated mock-data AI alias and opening ACP Chat",
+                                    "Ignoring deprecated mock-data AI alias and opening Agent Chat",
                                 );
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenMiniAiWithMockData => {
                                 logging::log(
                                     "STDIN",
-                                    "Ignoring deprecated mini mock-data AI alias and opening ACP Chat",
+                                    "Ignoring deprecated mini mock-data AI alias and opening Agent Chat",
                                 );
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
@@ -205,7 +205,7 @@
                                         });
                                         Ok(())
                                     }
-                                    _ => Err("ACP chat view is not active".to_string()),
+                                    _ => Err("Agent Chat view is not active".to_string()),
                                 };
                                 match result {
                                     Ok(()) => {
@@ -233,6 +233,95 @@
                                             status = "error",
                                             error = %error,
                                             "STDIN ACP command finished"
+                                        );
+                                    }
+                                }
+                            }
+                            ExternalCommand::PasteClipboardIntoAcp { ref request_id } => {
+                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                tracing::info!(
+                                    category = "STDIN",
+                                    event = "stdin_acp_command_received",
+                                    command = "pasteClipboardIntoAcp",
+                                    request_id = ?request_id,
+                                    "STDIN ACP command received"
+                                );
+                                let result = match &view.current_view {
+                                    AppView::AcpChatView { entity } => {
+                                        let entity = entity.clone();
+                                        let pasted = entity
+                                            .update(ctx, |chat, cx| chat.paste_text_from_clipboard(cx));
+                                        if pasted {
+                                            Ok(())
+                                        } else {
+                                            Err("clipboard is empty or text fetch failed"
+                                                .to_string())
+                                        }
+                                    }
+                                    _ => Err("Agent Chat view is not active".to_string()),
+                                };
+                                match result {
+                                    Ok(()) => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "stdin_acp_command_finished",
+                                            command = "pasteClipboardIntoAcp",
+                                            request_id = ?request_id,
+                                            status = "success",
+                                            "STDIN ACP command finished"
+                                        );
+                                    }
+                                    Err(error) => {
+                                        logging::log(
+                                            "STDIN",
+                                            &format!("Failed to paste clipboard into ACP: {}", error),
+                                        );
+                                        tracing::error!(
+                                            category = "STDIN",
+                                            event = "stdin_acp_command_finished",
+                                            command = "pasteClipboardIntoAcp",
+                                            request_id = ?request_id,
+                                            status = "error",
+                                            error = %error,
+                                            "STDIN ACP command finished"
+                                        );
+                                    }
+                                }
+                            }
+                            ExternalCommand::PushDictationResult {
+                                ref transcript,
+                                ref target,
+                                ref request_id,
+                            } => {
+                                let rid = request_id.as_ref().map(|id| id.as_str());
+                                let target_label = target.as_deref().unwrap_or("unspecified");
+                                match view.deliver_stdin_dictation_result(
+                                    transcript.clone(),
+                                    target.as_deref(),
+                                    ctx,
+                                ) {
+                                    Ok(delivery_target) => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "push_dictation_result_delivered",
+                                            command = "pushDictationResult",
+                                            request_id = ?rid,
+                                            transcript_len = transcript.len(),
+                                            requested_target = target_label,
+                                            delivery_target = ?delivery_target,
+                                            "pushDictationResult RPC delivered through dictation pipeline"
+                                        );
+                                    }
+                                    Err(error) => {
+                                        tracing::error!(
+                                            category = "STDIN",
+                                            event = "push_dictation_result_failed",
+                                            command = "pushDictationResult",
+                                            request_id = ?rid,
+                                            transcript_len = transcript.len(),
+                                            requested_target = target_label,
+                                            error = %error,
+                                            "pushDictationResult RPC failed"
                                         );
                                     }
                                 }
@@ -265,6 +354,34 @@
                                     }
                                 }
                             }
+                            ExternalCommand::GetConfigFingerprint { ref request_id } => {
+                                let rid = request_id.as_ref().map(|id| id.as_str());
+                                match crate::config::current_config_fingerprint_receipt() {
+                                    Some(receipt) => {
+                                        let json = serde_json::to_string(&receipt).unwrap_or_default();
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "config_fingerprint_result",
+                                            command = "getConfigFingerprint",
+                                            request_id = ?rid,
+                                            ok = true,
+                                            state = %json,
+                                            "config.ts fingerprint snapshot"
+                                        );
+                                    }
+                                    None => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "config_fingerprint_result",
+                                            command = "getConfigFingerprint",
+                                            request_id = ?rid,
+                                            ok = false,
+                                            error_code = "config_file_missing",
+                                            "config.ts not found or metadata unreadable"
+                                        );
+                                    }
+                                }
+                            }
                             ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, ref depth } => {
                                 logging::log("STDIN", &format!(
                                     "ShowGrid: size={}, bounds={}, box_model={}, guides={}, dimensions={}, depth={:?}",
@@ -291,6 +408,6 @@
                             }
                             ExternalCommand::ShowShortcutRecorder { ref command_id, ref command_name } => {
                                 logging::log("STDIN", &format!("ShowShortcutRecorder: command_id='{}', command_name='{}'", command_id, command_name));
-                                view.show_shortcut_recorder(command_id.clone(), command_name.clone(), ctx);
+                                view.show_shortcut_recorder(command_id.clone(), command_name.clone(), window, ctx);
                             }
                         }

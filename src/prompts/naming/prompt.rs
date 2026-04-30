@@ -1,6 +1,18 @@
 use super::*;
 use validation::{build_filename, build_submit_payload, derive_naming_state, normalize_extension};
 
+/// A starter template selected in the
+/// [`crate::main_sections::app_view_state::AppView::ScriptTemplateCatalogView`]
+/// and threaded through the naming dialog. `label` is the human-readable title
+/// shown inside the naming dialog; `id` is the opaque identifier used by
+/// [`crate::mcp_resources::find_script_template`] to resolve the template on
+/// submit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TemplateSelection {
+    pub id: String,
+    pub label: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct NamingPromptConfig {
     pub placeholder: Option<String>,
@@ -9,6 +21,7 @@ pub struct NamingPromptConfig {
     pub target: NamingTarget,
     pub target_directory: PathBuf,
     pub design_variant: DesignVariant,
+    pub template: Option<TemplateSelection>,
 }
 
 impl NamingPromptConfig {
@@ -24,6 +37,7 @@ impl NamingPromptConfig {
             target,
             target_directory,
             design_variant: DesignVariant::Default,
+            template: None,
         }
     }
 
@@ -39,6 +53,18 @@ impl NamingPromptConfig {
 
     pub fn design_variant(mut self, design_variant: DesignVariant) -> Self {
         self.design_variant = design_variant;
+        self
+    }
+
+    /// Seed the naming dialog with a starter template. The template id is
+    /// carried through to [`crate::prompts::NamingSubmitResult::template_id`]
+    /// so the caller can overwrite the freshly-created file with the template
+    /// body before the editor opens.
+    pub fn template(mut self, id: impl Into<String>, label: impl Into<String>) -> Self {
+        self.template = Some(TemplateSelection {
+            id: id.into(),
+            label: label.into(),
+        });
         self
     }
 }
@@ -59,6 +85,7 @@ pub struct NamingPrompt {
     pub on_submit: SubmitCallback,
     pub theme: Arc<theme::Theme>,
     pub design_variant: DesignVariant,
+    pub template: Option<TemplateSelection>,
 }
 
 impl NamingPrompt {
@@ -85,6 +112,7 @@ impl NamingPrompt {
             on_submit,
             theme,
             design_variant: config.design_variant,
+            template: config.template,
         };
 
         prompt.refresh_derived_state();
@@ -137,7 +165,13 @@ impl NamingPrompt {
             return;
         }
 
-        match build_submit_payload(&self.friendly_name_trimmed, &self.filename, self.target) {
+        let template_id = self.template.as_ref().map(|t| t.id.as_str());
+        match build_submit_payload(
+            &self.friendly_name_trimmed,
+            &self.filename,
+            self.target,
+            template_id,
+        ) {
             Ok(payload) => {
                 (self.on_submit)(self.id.clone(), Some(payload));
             }

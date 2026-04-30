@@ -126,10 +126,10 @@ impl AcpInlineSetupState {
                 reason_code: "authenticationRequired",
                 title: "Authentication required".into(),
                 body: if auth_methods.is_empty() {
-                    "The selected ACP agent needs authentication, but another compatible ready agent is available.".into()
+                    "The selected agent needs authentication, but another compatible ready agent is available.".into()
                 } else {
                     format!(
-                        "The selected ACP agent needs authentication ({}) but another compatible ready agent is available.",
+                        "The selected agent needs authentication ({}) but another compatible ready agent is available.",
                         auth_methods.join(", ")
                     ).into()
                 },
@@ -143,10 +143,10 @@ impl AcpInlineSetupState {
                 reason_code: "authenticationRequired",
                 title: "Authentication required".into(),
                 body: if auth_methods.is_empty() {
-                    "Authenticate the selected ACP agent, then retry this chat.".into()
+                    "Authenticate the selected agent, then retry this chat.".into()
                 } else {
                     format!(
-                        "Authenticate the selected ACP agent, then retry this chat. Available methods: {}.",
+                        "Authenticate the selected agent, then retry this chat. Available methods: {}.",
                         auth_methods.join(", ")
                     )
                     .into()
@@ -159,9 +159,9 @@ impl AcpInlineSetupState {
             },
             _ if can_switch => Self {
                 reason_code: "runtimeSetupRequired",
-                title: "ACP agent setup required".into(),
+                title: "Agent setup required".into(),
                 body:
-                    "The selected ACP agent cannot continue, but another compatible ready agent is available."
+                    "The selected agent cannot continue, but another compatible ready agent is available."
                         .into(),
                 primary_action: AcpSetupAction::SelectAgent,
                 secondary_action: Some(AcpSetupAction::Retry),
@@ -171,7 +171,7 @@ impl AcpInlineSetupState {
             },
             _ => Self {
                 reason_code: "runtimeSetupRequired",
-                title: "ACP agent setup required".into(),
+                title: "Agent setup required".into(),
                 body: format!("Agent reported setup requirement: {reason}").into(),
                 primary_action: AcpSetupAction::Retry,
                 secondary_action: Some(AcpSetupAction::OpenCatalog),
@@ -209,8 +209,8 @@ impl AcpInlineSetupState {
         match resolution.blocker {
             Some(AcpLaunchBlocker::NoAgentsAvailable) => Self {
                 reason_code: "noAgentsAvailable",
-                title: "No ACP agents available".into(),
-                body: "Add an ACP agent in ~/.scriptkit/acp/agents.json, then retry.".into(),
+                title: "No agents available".into(),
+                body: "Add an agent in ~/.scriptkit/acp/agents.json, then retry.".into(),
                 primary_action: AcpSetupAction::OpenCatalog,
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
@@ -220,7 +220,7 @@ impl AcpInlineSetupState {
             Some(AcpLaunchBlocker::AgentNotInstalled) if can_switch_capable => Self {
                 reason_code: "agentNotInstalled",
                 title: "Agent install required".into(),
-                body: "The preferred ACP agent is not installed, but another compatible ready agent is available.".into(),
+                body: "The preferred agent is not installed, but another compatible ready agent is available.".into(),
                 primary_action: AcpSetupAction::SelectAgent,
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
@@ -231,7 +231,7 @@ impl AcpInlineSetupState {
                 reason_code: "agentNotInstalled",
                 title: "Agent install required".into(),
                 body: format!(
-                    "The preferred ACP agent is not installed. {}",
+                    "The preferred agent is not installed. {}",
                     capability_gap_message(launch_requirements)
                 ).into(),
                 primary_action: AcpSetupAction::Install,
@@ -246,7 +246,7 @@ impl AcpInlineSetupState {
                 body: selected_agent
                     .as_ref()
                     .and_then(|agent| agent.install_hint.clone())
-                    .unwrap_or_else(|| "Install the selected ACP agent, then retry.".into()),
+                    .unwrap_or_else(|| "Install the selected agent, then retry.".into()),
                 primary_action: AcpSetupAction::Install,
                 secondary_action: Some(AcpSetupAction::SelectAgent),
                 selected_agent,
@@ -256,7 +256,7 @@ impl AcpInlineSetupState {
             Some(AcpLaunchBlocker::AuthenticationRequired) if can_switch_capable => Self {
                 reason_code: "authenticationRequired",
                 title: "Authentication required".into(),
-                body: "The selected ACP agent needs authentication, but another compatible ready agent is available.".into(),
+                body: "The selected agent needs authentication, but another compatible ready agent is available.".into(),
                 primary_action: AcpSetupAction::SelectAgent,
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
@@ -267,7 +267,7 @@ impl AcpInlineSetupState {
                 reason_code: "authenticationRequired",
                 title: "Authentication required".into(),
                 body: format!(
-                    "Authenticate the selected ACP agent to continue this request. {}",
+                    "Authenticate the selected agent to continue this request. {}",
                     capability_gap_message(launch_requirements)
                 ).into(),
                 primary_action: AcpSetupAction::Authenticate,
@@ -279,7 +279,7 @@ impl AcpInlineSetupState {
             Some(AcpLaunchBlocker::AuthenticationRequired) => Self {
                 reason_code: "authenticationRequired",
                 title: "Authentication required".into(),
-                body: "Authenticate the selected ACP agent, then retry this chat.".into(),
+                body: "Authenticate the selected agent, then retry this chat.".into(),
                 primary_action: AcpSetupAction::Authenticate,
                 secondary_action: Some(AcpSetupAction::SelectAgent),
                 selected_agent,
@@ -289,7 +289,7 @@ impl AcpInlineSetupState {
             Some(AcpLaunchBlocker::AgentMisconfigured) if can_switch_capable => Self {
                 reason_code: "agentMisconfigured",
                 title: "Agent configuration required".into(),
-                body: "The selected ACP agent is misconfigured, but another compatible ready agent is available.".into(),
+                body: "The selected agent is misconfigured, but another compatible ready agent is available.".into(),
                 primary_action: AcpSetupAction::SelectAgent,
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
@@ -300,7 +300,7 @@ impl AcpInlineSetupState {
                 reason_code: "agentMisconfigured",
                 title: "Agent configuration required".into(),
                 body: format!(
-                    "Fix the selected ACP agent configuration to continue this request. {}",
+                    "Fix the selected agent configuration to continue this request. {}",
                     capability_gap_message(launch_requirements)
                 ).into(),
                 primary_action: AcpSetupAction::OpenCatalog,
@@ -322,8 +322,8 @@ impl AcpInlineSetupState {
             },
             Some(AcpLaunchBlocker::UnsupportedAgent) => Self {
                 reason_code: "unsupportedAgent",
-                title: "Unsupported ACP agent".into(),
-                body: "The selected ACP agent is not available on this machine.".into(),
+                title: "Unsupported agent".into(),
+                body: "The selected agent is not available on this machine.".into(),
                 primary_action: AcpSetupAction::SelectAgent,
                 secondary_action: Some(AcpSetupAction::OpenCatalog),
                 selected_agent,
@@ -332,8 +332,8 @@ impl AcpInlineSetupState {
             },
             Some(AcpLaunchBlocker::CapabilityMismatch) if can_switch_capable => Self {
                 reason_code: "capabilityMismatch",
-                title: "ACP capability mismatch".into(),
-                body: "The selected ACP agent cannot satisfy this request, but another ready compatible agent is available.".into(),
+                title: "Agent capability mismatch".into(),
+                body: "The selected agent cannot satisfy this request, but another ready compatible agent is available.".into(),
                 primary_action: AcpSetupAction::SelectAgent,
                 secondary_action: Some(AcpSetupAction::Retry),
                 selected_agent,
@@ -342,7 +342,7 @@ impl AcpInlineSetupState {
             },
             Some(AcpLaunchBlocker::CapabilityMismatch) => Self {
                 reason_code: "capabilityMismatch",
-                title: "ACP capability mismatch".into(),
+                title: "Agent capability mismatch".into(),
                 body: capability_gap_message(launch_requirements).into(),
                 primary_action: AcpSetupAction::Retry,
                 secondary_action: Some(AcpSetupAction::OpenCatalog),
@@ -352,8 +352,8 @@ impl AcpInlineSetupState {
             },
             None => Self {
                 reason_code: "ready",
-                title: "ACP ready".into(),
-                body: "The selected ACP agent is ready to launch.".into(),
+                title: "Agent ready".into(),
+                body: "The selected agent is ready to launch.".into(),
                 primary_action: AcpSetupAction::Retry,
                 secondary_action: None,
                 selected_agent,

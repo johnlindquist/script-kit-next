@@ -53,7 +53,7 @@ pub struct ChatPrompt {
     pub(super) script_generation_mode: bool,
     pub(super) script_generation_status: Option<String>,
     pub(super) script_generation_status_is_error: bool,
-    // Setup card keyboard focus (0 = Configure Vercel, 1 = Claude Code)
+    // Setup card keyboard focus (0 = Configure API Key, 1 = Claude Code)
     pub(super) setup_focus_index: usize,
     pub(super) on_configure: Option<ChatConfigureCallback>,
     // Callback for "Connect to Claude Code" (enables Claude Code in config)
@@ -71,6 +71,7 @@ pub struct ChatPrompt {
     pub(super) pending_image: Option<String>,
     pub(super) pending_image_render: Option<Arc<RenderImage>>,
     pub(super) image_render_cache: HashMap<String, Arc<RenderImage>>,
+    pub(super) pasted_text_tokens: Vec<crate::pasted_text::PastedTextToken>,
     /// When true, renders input as a borderless text field (cursor + text + placeholder only).
     pub(super) mini_mode: bool,
 }
@@ -146,6 +147,7 @@ impl ChatPrompt {
             pending_image: None,
             pending_image_render: None,
             image_render_cache: HashMap::new(),
+            pasted_text_tokens: Vec::new(),
             mini_mode: false,
         }
     }
@@ -243,7 +245,15 @@ impl ChatPrompt {
             if let Ok(text) = clipboard.get_text() {
                 let normalized = Self::normalize_pasted_text(&text);
                 if !normalized.is_empty() {
-                    self.input.insert_str(&normalized);
+                    let prepared = crate::pasted_text::prepare_pasted_text(
+                        &normalized,
+                        &self.pasted_text_tokens,
+                    );
+                    if let Some(token) = prepared.token {
+                        self.pasted_text_tokens.push(token);
+                    }
+                    self.input.insert_str(&prepared.insertion_text);
+                    self.sync_pasted_text_tokens();
                     self.reset_cursor_blink();
                     cx.notify();
                     return true;
@@ -251,6 +261,17 @@ impl ChatPrompt {
             }
         }
         false
+    }
+
+    pub(super) fn sync_pasted_text_tokens(&mut self) {
+        crate::pasted_text::sync_pasted_text_tokens(
+            &mut self.pasted_text_tokens,
+            self.input.text(),
+        );
+    }
+
+    pub(super) fn expand_pasted_text_tokens(&self, text: &str) -> String {
+        crate::pasted_text::expand_pasted_text_tokens(text, &self.pasted_text_tokens)
     }
 
     /// Set custom models for the chat

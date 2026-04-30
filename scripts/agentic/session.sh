@@ -3,7 +3,18 @@
 #
 # Usage:
 #   session.sh start  [SESSION_NAME]   — Create or resume a session (default: "default")
-#   session.sh send   SESSION_NAME CMD — Send a JSON command (fire-and-forget)
+#   session.sh send   SESSION_NAME CMD [--await-parse [--timeout MS]]
+#                                      — Send a JSON command. Default: fire-and-forget
+#                                        (returns `sent:true` without waiting). With
+#                                        `--await-parse`, tails app.log for the next
+#                                        `stdin_command_parsed` or `stdin_parse_failed`
+#                                        event emitted after the send offset and
+#                                        returns `parseOutcome:"parsed"` +
+#                                        `commandType:<kind>` on success, or
+#                                        `parseOutcome:"parseError"` + `error:<msg>`
+#                                        on failure (closes the "silent-drop on
+#                                        unknown variant" gap Pass #8 Run 4 probe
+#                                        exposed — see tool-session-send-parse-receipt).
 #   session.sh rpc    SESSION_NAME CMD [--expect TYPE] [--timeout MS]
 #                                      — Send a JSON command and await the response
 #   session.sh stop   [SESSION_NAME]   — Stop a session and clean up
@@ -15,12 +26,18 @@
 set -euo pipefail
 
 SCHEMA_VERSION=1
-SESSION_DIR="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions}"
+SESSION_DIR_RAW="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions}"
+canonical_session_dir() {
+  local dir="$1"
+  mkdir -p "$dir"
+  (cd "$dir" && pwd -P)
+}
+SESSION_DIR="$(canonical_session_dir "$SESSION_DIR_RAW")"
 PROJECT_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BINARY="${PROJECT_ROOT}/target/debug/script-kit-gpui"
 READY_TIMEOUT_MS="${SCRIPT_KIT_SESSION_READY_TIMEOUT_MS:-3000}"
 READY_LOG_MARKER_APP="APP_READY|main-window-ready show=false focus=false stdin-safe"
-READY_LOG_MARKER_STARTUP="|STARTUP|STARTUP_READY "
+READY_LOG_MARKER_STARTUP="STARTUP_READY "
 READY_WAIT_MS_RESULT=0
 READY_MARKER_RESULT="none"
 
@@ -96,6 +113,79 @@ wait_for_ready_log() {
   return 1
 }
 
+path_aliases() {
+  local file_path="$1"
+  printf '%s\n' "$file_path"
+  if [ "$SESSION_DIR_RAW" != "$SESSION_DIR" ] && [[ "$file_path" == "$SESSION_DIR"* ]]; then
+    printf '%s\n' "${SESSION_DIR_RAW}${file_path#"$SESSION_DIR"}"
+  fi
+}
+
+regex_escape() {
+  printf '%s' "$1" | sed 's/[][(){}.^$*+?|\\]/\\&/g'
+}
+
+session_forwarder_pids() {
+  local pipe_path="$1"
+  local input_fifo="$2"
+  local candidate
+  local pipe_pattern
+  local input_pattern
+
+  while IFS= read -r candidate; do
+    pipe_pattern="$(regex_escape "$candidate")"
+    pgrep -f "$pipe_pattern" 2>/dev/null || true
+  done < <(path_aliases "$pipe_path")
+
+  while IFS= read -r candidate; do
+    input_pattern="$(regex_escape "$candidate")"
+    pgrep -f "cat ${input_pattern}" 2>/dev/null || true
+  done < <(path_aliases "$input_fifo")
+}
+
+is_descendant_of() {
+  local pid="$1"
+  local ancestor="${2:-}"
+
+  if [ -z "$ancestor" ]; then
+    return 1
+  fi
+
+  while [ -n "$pid" ] && [ "$pid" != "0" ] && [ "$pid" != "1" ]; do
+    if [ "$pid" = "$ancestor" ]; then
+      return 0
+    fi
+    pid="$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')"
+  done
+
+  return 1
+}
+
+cleanup_orphan_session_forwarders() {
+  local pipe_path="$1"
+  local input_fifo="$2"
+  local keep_pid="${3:-}"
+
+  while IFS= read -r orphan_pid; do
+    if [ -z "$orphan_pid" ]; then
+      continue
+    fi
+    if [ -n "$keep_pid" ] && is_descendant_of "$orphan_pid" "$keep_pid"; then
+      continue
+    fi
+    if [ "$orphan_pid" = "$$" ]; then
+      continue
+    fi
+    kill "$orphan_pid" 2>/dev/null || true
+  done < <(session_forwarder_pids "$pipe_path" "$input_fifo")
+}
+
+send_startup_keepalive() {
+  local input_fifo="$1"
+  local app_pid="$2"
+  printf '{"type":"getState","requestId":"session-start-%s"}\n' "$app_pid" > "$input_fifo" 2>/dev/null
+}
+
 # --- start ------------------------------------------------------------------
 
 cmd_start() {
@@ -134,6 +224,7 @@ cmd_start() {
     fi
 
     if [ "$can_resume" = true ]; then
+      cleanup_orphan_session_forwarders "$primary_pipe" "$input_fifo" "$old_fwd_pid"
       log "Resuming existing session '${name}' (pid ${old_pid})"
       json_envelope "ok" \
         "session:\"${name}\"" \
@@ -155,6 +246,7 @@ cmd_start() {
       if [ -n "$old_fwd_pid" ] && kill -0 "$old_fwd_pid" 2>/dev/null; then
         kill "$old_fwd_pid" 2>/dev/null || true
       fi
+      cleanup_orphan_session_forwarders "$primary_pipe" "$input_fifo"
       rm -rf "${sdir}"
     fi
   fi
@@ -178,6 +270,7 @@ cmd_start() {
   # into the app pipe while keeping the write end open across shells.
   rm -f "$input_fifo"
   mkfifo "$input_fifo"
+  cleanup_orphan_session_forwarders "$pipe_path" "$input_fifo"
 
   # Create the responses artifact file
   : > "$responses_path"
@@ -214,6 +307,10 @@ cmd_start() {
   nohup "$BINARY" < "$pipe_path" > "$log_path" 2>&1 &
   local app_pid=$!
   echo "$app_pid" > "$pid_path"
+  local startup_keepalive=false
+  if send_startup_keepalive "$input_fifo" "$app_pid"; then
+    startup_keepalive=true
+  fi
 
   # Wait for the earliest safe readiness marker instead of a fixed sleep.
   local ready=false
@@ -257,7 +354,8 @@ cmd_start() {
     "resumed:false" \
     "ready:${ready}" \
     "readyWaitMs:${ready_wait_ms}" \
-    "readyMarker:\"${ready_marker}\""
+    "readyMarker:\"${ready_marker}\"" \
+    "startupKeepalive:${startup_keepalive}"
 }
 
 # --- send -------------------------------------------------------------------
@@ -265,15 +363,54 @@ cmd_start() {
 cmd_send() {
   local name="${1:-default}"
   local cmd="${2:-}"
+  shift 2 2>/dev/null || true
+
+  # Parse optional flags: --await-parse, --timeout MS
+  local await_parse=""
+  local timeout_ms=2000
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --await-parse) await_parse="1"; shift ;;
+      --timeout)     timeout_ms="${2:-2000}"; shift 2 ;;
+      *)             shift ;;
+    esac
+  done
+
+  # Reject non-numeric --timeout before any arithmetic below — otherwise
+  # `set -u` at `deadline_ms=$(( now_ms + timeout_ms ))` treats the
+  # string as an unbound variable and `set -e` kills the function with
+  # no JSON envelope (anomaly session-send-await-parse-timeout-non-numeric,
+  # Run 5 Pass #8). Contract pinned by
+  # tests/session_send_await_parse_contract.rs::cmd_send_rejects_non_numeric_timeout.
+  if [ -n "$await_parse" ] && ! [[ "$timeout_ms" =~ ^[0-9]+$ ]]; then
+    json_error "invalid_timeout" "--timeout must be a non-negative integer; got: ${timeout_ms}"
+    return 1
+  fi
 
   if [ -z "$cmd" ]; then
-    json_error "missing_command" "Usage: session.sh send SESSION_NAME JSON_COMMAND"
+    json_error "missing_command" "Usage: session.sh send SESSION_NAME JSON_COMMAND [--await-parse [--timeout MS]]"
+    return 1
+  fi
+
+  # Reject flag-as-command: arg-order typo where a flag binds to $2 and
+  # the JSON payload ends up consumed by the flag-parse loop's catch-all.
+  # Pre-fix, `send SESSION --await-parse JSON` wrote the literal bytes
+  # `--await-parse\n` (13 bytes) to the input FIFO and returned
+  # `{sent:true}`; the stdin parser logged
+  # `stdin_parse_failed line_len=13 error="invalid number at line 1 column 2"`
+  # but the caller saw no signal. Anomaly
+  # `attacker-session-send-argorder-swallow`, Run 8 Pass #20 (commit
+  # d3a15cefc). Contract pinned by
+  # tests/session_send_await_parse_contract.rs::cmd_send_rejects_flag_as_command.
+  if [[ "$cmd" == --* ]]; then
+    json_error "flag_as_command" "First non-session arg looks like a flag (got: '${cmd}'). Usage: session.sh send SESSION_NAME JSON_COMMAND [--await-parse [--timeout MS]] — flags go AFTER the JSON payload."
     return 1
   fi
 
   local sdir
   sdir="$(session_dir "$name")"
   local input_fifo="${sdir}/input"
+  local log_path="${sdir}/app.log"
 
   if [ ! -p "$input_fifo" ]; then
     json_error "no_session" "Session '${name}' not found or input FIFO missing."
@@ -303,13 +440,136 @@ cmd_send() {
     return 1
   fi
 
+  # Record app.log offset BEFORE sending so we only scan the event emitted
+  # for THIS send. stdin is line-serialized in the app, so the next
+  # stdin_command_parsed or stdin_parse_failed after this offset
+  # corresponds to this send.
+  local start_offset=0
+  if [ -n "$await_parse" ] && [ -f "$log_path" ]; then
+    start_offset="$(wc -c < "$log_path" | tr -d ' ')"
+  fi
+
   # Write command to the input FIFO (non-blocking via timeout)
-  if printf '%s\n' "$cmd" > "$input_fifo" 2>/dev/null; then
-    json_envelope "ok" "session:\"${name}\"" "sent:true"
-  else
+  if ! printf '%s\n' "$cmd" > "$input_fifo" 2>/dev/null; then
     json_error "send_failed" "Failed to write to session '${name}' input FIFO."
     return 1
   fi
+
+  if [ -z "$await_parse" ]; then
+    json_envelope "ok" "session:\"${name}\"" "sent:true"
+    return 0
+  fi
+
+  # Poll app.log from start_offset for the next parse outcome event.
+  # Uses millisecond-resolution deadline via bash's $EPOCHREALTIME when
+  # available, else falls back to seconds-resolution.
+  local now_ms
+  if [ -n "${EPOCHREALTIME:-}" ]; then
+    now_ms="$(printf '%s' "$EPOCHREALTIME" | awk -F. '{printf "%d", $1*1000 + int(substr($2"000000",1,3))}')"
+  else
+    now_ms="$(($(date +%s) * 1000))"
+  fi
+  local deadline_ms=$(( now_ms + timeout_ms ))
+
+  # Extract requestId from the sent payload so the happy-path grep can
+  # scope on `cid=stdin:req:<request_id> ` instead of first-event-past-
+  # offset. Without this scoping, two concurrent --await-parse sends
+  # share a pre-send offset window and BOTH latch onto whichever parse
+  # event landed first — anomaly
+  # session-send-await-parse-concurrent-cross-correlation filed Pass #8
+  # Run 5, where 5 parallel sends with distinct commandTypes all
+  # reported commandType:"show" instead of their own.
+  #
+  # Only trust values that match a conservative charset (letters,
+  # digits, `-_.:/`) — anything outside that (shell metachars,
+  # whitespace, newlines) falls back to the legacy offset-first grep
+  # to avoid grep-injection via attacker-controlled requestId.
+  #
+  # Contract pinned by
+  # tests/session_send_await_parse_contract.rs::cmd_send_scopes_happy_path_grep_on_request_id.
+  local req_id=""
+  req_id="$(printf '%s' "$cmd" | sed -nE 's/.*"requestId"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p' | head -n1)"
+  if ! [[ "$req_id" =~ ^[A-Za-z0-9_.:/-]+$ ]]; then
+    req_id=""
+  fi
+
+  while :; do
+    if [ -f "$log_path" ]; then
+      # Read everything after start_offset. Use `tail -c +N` where N is
+      # 1-indexed (start_offset+1 = byte after the recorded offset).
+      local tail_content=""
+      tail_content="$(tail -c "+$((start_offset + 1))" "$log_path" 2>/dev/null || true)"
+      # stdin_command_parsed — happy path. When req_id is set, scope
+      # the match to this send's correlation_id so concurrent sends
+      # don't cross-correlate. When req_id is empty (no requestId in
+      # payload), fall back to the legacy offset-first grep which
+      # assumes single-caller serial usage.
+      local parsed_line=""
+      if [ -n "$req_id" ]; then
+        parsed_line="$(printf '%s' "$tail_content" | grep -F -- "cid=stdin:req:${req_id} " | grep -m1 'event_type=stdin_command_parsed' || true)"
+      else
+        parsed_line="$(printf '%s' "$tail_content" | grep -m1 'event_type=stdin_command_parsed' || true)"
+      fi
+      if [ -n "$parsed_line" ]; then
+        local command_type
+        command_type="$(printf '%s' "$parsed_line" | sed -nE 's/.*command_type=([^ ]+).*/\1/p')"
+        json_envelope "ok" \
+          "session:\"${name}\"" \
+          "sent:true" \
+          "parseOutcome:\"parsed\"" \
+          "commandType:\"${command_type:-unknown}\""
+        return 0
+      fi
+      # stdin_parse_failed — sad path. Symmetric with the happy-path
+      # scope: when req_id is set, filter on `cid=stdin:req:${req_id} `
+      # so concurrent parse failures de-interleave. Requires the Rust
+      # listener to emit `correlation_id = "stdin:req:<request_id>"` on
+      # the parse-failed tracing span even when full deserialization
+      # fails — achieved by `extract_request_id_lenient` in
+      # src/stdin_commands/mod.rs. Without that Rust-side lenient
+      # extract, this grep would match zero lines under concurrency
+      # (the only such events carry `stdin:parse:<uuid>` instead) and
+      # we'd fall through to `timeout`. Fallback to legacy offset-first
+      # grep preserves the single-caller precondition for payloads that
+      # lack an extractable requestId (e.g. malformed JSON where the
+      # `"requestId":"..."` structure is itself broken). Contract
+      # pinned by tests/session_send_await_parse_contract.rs::cmd_send_scopes_sad_path_grep_on_request_id.
+      local failed_line=""
+      if [ -n "$req_id" ]; then
+        failed_line="$(printf '%s' "$tail_content" | grep -F -- "cid=stdin:req:${req_id} " | grep -m1 'event_type=stdin_parse_failed' || true)"
+      else
+        failed_line="$(printf '%s' "$tail_content" | grep -m1 'event_type=stdin_parse_failed' || true)"
+      fi
+      if [ -n "$failed_line" ]; then
+        # Extract `error=…` up to ` at line ` (or end of line). Truncate
+        # to 200 chars and JSON-escape backslashes + double quotes so the
+        # envelope stays valid regardless of serde's error text.
+        local err_msg
+        err_msg="$(printf '%s' "$failed_line" | sed -nE 's/.*error=(.*)/\1/p' | sed -E 's/ at line [0-9]+ column [0-9]+.*$//' | cut -c1-200 | sed 's/\\/\\\\/g; s/"/\\"/g')"
+        json_envelope "ok" \
+          "session:\"${name}\"" \
+          "sent:true" \
+          "parseOutcome:\"parseError\"" \
+          "error:\"${err_msg}\""
+        return 0
+      fi
+    fi
+
+    if [ -n "${EPOCHREALTIME:-}" ]; then
+      now_ms="$(printf '%s' "$EPOCHREALTIME" | awk -F. '{printf "%d", $1*1000 + int(substr($2"000000",1,3))}')"
+    else
+      now_ms="$(($(date +%s) * 1000))"
+    fi
+    if [ "$now_ms" -ge "$deadline_ms" ]; then
+      json_envelope "ok" \
+        "session:\"${name}\"" \
+        "sent:true" \
+        "parseOutcome:\"timeout\"" \
+        "timeoutMs:${timeout_ms}"
+      return 0
+    fi
+    sleep 0.05
+  done
 }
 
 # --- rpc --------------------------------------------------------------------
@@ -334,6 +594,20 @@ cmd_rpc() {
   )"
   if [ -z "$request_id" ]; then
     json_error "missing_request_id" "RPC command must contain a requestId field."
+    return 1
+  fi
+  # Round-trip gate: reject requestIds whose sed-extracted bytes won't match
+  # the Rust-side JSON-decoded value. Control chars (NUL, newline, tab, etc.)
+  # and backslash-bearing escape sequences (`\u0000`, `\n`, `\t`, `\\`) are
+  # the observed failure classes — the sed extractor keeps them literal while
+  # the app's serde JSON parser decodes them, so the request_id string used
+  # to correlate with responses.ndjson never matches and the caller gets a
+  # silent `timeout` envelope. See Run 8 Pass #24 anomaly
+  # `attacker-stdin-requestid-nul-newline-match-loss` (audits/afk/stories.md);
+  # acceptance option (a). Pinned by
+  # tests/session_rpc_requestid_charset_reject_contract.rs.
+  if [[ "$request_id" == *'\'* ]] || [[ "$request_id" =~ [[:cntrl:]] ]]; then
+    json_error "invalid_request_id_charset" "RPC requestId must not contain control characters or backslash-bearing escape sequences — such bytes round-trip differently between the sender-side sed extractor and the Rust-side JSON parser and produce silent timeouts. Use requestIds matching [A-Za-z0-9_.:/-]+ to stay within the Rust correlation charset."
     return 1
   fi
 
@@ -407,6 +681,48 @@ cmd_rpc() {
   local result
   local exit_code=0
   result="$(bun "${PROJECT_ROOT}/scripts/agentic/await-response.ts" "${await_args[@]}")" || exit_code=$?
+
+  # Post-hoc parse-failure surfacing. If await-response.ts exited
+  # non-zero (typically generic `timeout`), check the app.log tail since
+  # start_offset for a `stdin_parse_failed` event scoped to this request.
+  # Without this, a malformed payload returns a misleading timeout error
+  # with no indication that the app's parser rejected the command. The
+  # Rust listener emits `correlation_id=stdin:req:<request_id>` on parse
+  # failures via `extract_request_id_lenient` (src/stdin_commands/mod.rs)
+  # — same cid scheme as the happy path. Trailing space in the grep
+  # pattern prevents prefix matches (e.g. `p15-get` vs `p15-get-notarget`).
+  # Contract pinned by tests/session_rpc_parse_error_surface_contract.rs.
+  if [ "$exit_code" -ne 0 ] && [ -f "$log_path" ]; then
+    local new_size
+    new_size="$(wc -c < "$log_path" | tr -d '[:space:]')"
+    if [ "$new_size" -gt "$start_offset" ]; then
+      local tail_bytes=$(( new_size - start_offset ))
+      local failed_line
+      # Charset gate for grep scoping — mirrors cmd_send's gate at line
+      # ~390. Rust's extract_request_id_lenient (src/stdin_commands/mod.rs)
+      # accepts only `[A-Za-z0-9_.:/-]` as a correlation id; payloads with
+      # requestIds outside that charset (e.g. `a+b`, `a\b`) get an
+      # auto-generated `stdin:parse:<uuid>` cid instead, which the scoped
+      # `cid=stdin:req:${request_id}` grep would never match — silently
+      # degrading the post-hoc scan to a generic `timeout` envelope even
+      # though app.log HAS a correlated parse-failure line (just under a
+      # uuid cid). Fall back to unscoped grep on the log tail when the
+      # charset gate fails, preserving parse-error surfacing at the cost
+      # of de-interleaving across concurrent malformed sends (the same
+      # trade cmd_send makes on lines 390-392, 408-410, 438-440). Pinned
+      # by tests/session_rpc_parse_error_surface_contract.rs::cmd_rpc_falls_back_to_unscoped_grep_on_charset_boundary.
+      if [[ "$request_id" =~ ^[A-Za-z0-9_.:/-]+$ ]]; then
+        failed_line="$(tail -c "$tail_bytes" "$log_path" 2>/dev/null | grep -F -- "cid=stdin:req:${request_id} " | grep -m1 'event_type=stdin_parse_failed' || true)"
+      else
+        failed_line="$(tail -c "$tail_bytes" "$log_path" 2>/dev/null | grep -m1 'event_type=stdin_parse_failed' || true)"
+      fi
+      if [ -n "$failed_line" ]; then
+        local err_msg
+        err_msg="$(printf '%s' "$failed_line" | sed -nE 's/.*error=(.*)/\1/p' | sed -E 's/ at line [0-9]+ column [0-9]+.*$//' | cut -c1-200 | sed 's/\\/\\\\/g; s/"/\\"/g')"
+        result="$(printf '{"schemaVersion":1,"status":"error","session":"%s","requestId":"%s","error":{"code":"parse_error","message":"%s"}}' "$name" "$request_id" "$err_msg")"
+      fi
+    fi
+  fi
 
   # Append to responses artifact
   if [ -n "$result" ]; then
@@ -516,6 +832,7 @@ cmd_stop() {
     kill "$fwd_pid" 2>/dev/null || true
     wait "$fwd_pid" 2>/dev/null || true
   fi
+  cleanup_orphan_session_forwarders "${sdir}/pipe" "${sdir}/input"
 
   # Kill app
   if [ -f "${sdir}/pid" ]; then

@@ -1,0 +1,19 @@
+# Oracle-Session `protocol-builtin-boundary-engineering-plan` PR — MCP
+# JSON-RPC 2.0 in-process transcript fixture. One case per line. Each
+# case is `{name, request, outcome, ...}` where `request` is the raw
+# JSONL sent to `parse_request` + `handle_request_with_context` and
+# `outcome` is either:
+#   - { "ok": { "resultKeys": [string, ...] } }  — success, response.result
+#     must contain every listed key (shape match, not exact equality).
+#   - { "error": { "code": int } }               — error response, error.code
+#     must equal the listed JSON-RPC code.
+# `id` is optional; when present the response id must equal this value.
+{ "name": "initialize returns serverInfo + capabilities", "request": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{}}", "id": 1, "outcome": { "ok": { "resultKeys": ["serverInfo", "capabilities"] } } }
+{ "name": "tools/list returns tools array", "request": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}", "id": 2, "outcome": { "ok": { "resultKeys": ["tools"] } } }
+{ "name": "resources/list returns resources array", "request": "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"resources/list\",\"params\":{}}", "id": 3, "outcome": { "ok": { "resultKeys": ["resources"] } } }
+{ "name": "parse error: malformed JSON returns -32700", "request": "{not json", "outcome": { "error": { "code": -32700 } } }
+{ "name": "invalid request: missing jsonrpc field returns -32600", "request": "{\"id\":4,\"method\":\"initialize\",\"params\":{}}", "outcome": { "error": { "code": -32600 } } }
+{ "name": "invalid request: wrong jsonrpc version returns -32600", "request": "{\"jsonrpc\":\"1.0\",\"id\":5,\"method\":\"initialize\",\"params\":{}}", "outcome": { "error": { "code": -32600 } } }
+{ "name": "invalid request: missing method returns -32600", "request": "{\"jsonrpc\":\"2.0\",\"id\":6,\"params\":{}}", "outcome": { "error": { "code": -32600 } } }
+{ "name": "method not found: unknown method returns -32601", "request": "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"definitely/not/a/method\",\"params\":{}}", "id": 7, "outcome": { "error": { "code": -32601 } } }
+{ "name": "method not found: camelCase-not-registered returns -32601", "request": "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"toolsList\",\"params\":{}}", "id": 8, "outcome": { "error": { "code": -32601 } } }

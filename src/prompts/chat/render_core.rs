@@ -228,6 +228,26 @@ impl Render for ChatPrompt {
                     }
                 }
                 ChatInputKeyAction::DelegateToInput => {
+                    if crate::ui_foundation::is_key_backspace(key)
+                        || crate::ui_foundation::is_key_delete(key)
+                    {
+                        if let Some((next_text, next_cursor)) =
+                            crate::pasted_text::remove_pasted_text_token_at_cursor(
+                                this.input.text(),
+                                this.input.cursor(),
+                                crate::ui_foundation::is_key_delete(key),
+                                &mut this.pasted_text_tokens,
+                            )
+                        {
+                            this.input.set_text(next_text);
+                            this.input.set_cursor(next_cursor);
+                            this.reset_cursor_blink();
+                            cx.notify();
+                            cx.stop_propagation();
+                            return;
+                        }
+                    }
+
                     let handled = this.input.handle_key(
                         key_lower.as_str(),
                         key_char,
@@ -238,6 +258,7 @@ impl Render for ChatPrompt {
                     );
 
                     if handled {
+                        this.sync_pasted_text_tokens();
                         this.reset_cursor_blink();
                         cx.notify();
                     }
@@ -379,65 +400,46 @@ impl Render for ChatPrompt {
                 .min_h(px(0.))
                 .on_scroll_wheel(
                     cx.listener(move |this, event: &ScrollWheelEvent, _window, cx| {
-                        let delta_y = event.delta.pixel_delta(px(1.0)).y;
-                        let direction = if delta_y > px(0.) {
+                        let at_bottom_before = this.turns_list_is_at_bottom();
+                        let delta_y = crate::scrolling::free_scroll::apply_vertical_wheel_scroll(
+                            &this.turns_list_state,
+                            event,
+                        );
+                        let direction = if delta_y > 0.0 {
                             ChatScrollDirection::Up
-                        } else if delta_y < px(0.) {
+                        } else if delta_y < 0.0 {
                             ChatScrollDirection::Down
                         } else {
                             ChatScrollDirection::None
                         };
 
-                        let at_bottom_before = this.turns_list_is_at_bottom();
                         let previous_manual_mode = this.user_has_scrolled_up;
-                        let was_up = matches!(direction, ChatScrollDirection::Up);
-                        let was_down = matches!(direction, ChatScrollDirection::Down);
+                        let at_bottom_after = this.turns_list_is_at_bottom();
 
                         tracing::debug!(
                             target: "script_kit::chat_scroll",
-                            event = "wheel",
-                            phase = "before",
+                            event = "wheel_applied",
                             direction = ?direction,
-                            delta_y = ?delta_y,
+                            delta_y_px = delta_y,
                             at_bottom_before,
+                            at_bottom_after,
                             previous_manual_mode,
                             turn_count = this.conversation_turns_cache.len(),
                             scroll_top_item_ix = this.turns_list_state.logical_scroll_top().item_ix,
                         );
 
-                        cx.spawn(async move |this, cx| {
-                            cx.background_executor()
-                                .timer(std::time::Duration::from_millis(1))
-                                .await;
+                        this.apply_scroll_follow_decision(
+                            "wheel",
+                            direction,
+                            at_bottom_before,
+                            at_bottom_after,
+                            cx,
+                        );
 
-                            this.update(cx, |this, cx| {
-                                let direction = if was_up {
-                                    ChatScrollDirection::Up
-                                } else if was_down {
-                                    ChatScrollDirection::Down
-                                } else {
-                                    ChatScrollDirection::None
-                                };
-
-                                let at_bottom_after = this.turns_list_is_at_bottom();
-                                this.apply_scroll_follow_decision(
-                                    "wheel",
-                                    direction,
-                                    at_bottom_before,
-                                    at_bottom_after,
-                                    cx,
-                                );
-
-                                // Mirror the scroll-follow decision into GPUI's
-                                // native follow-tail so the list auto-scrolls on
-                                // content growth without manual bottom-anchoring.
-                                let has_turns = !this.conversation_turns_cache.is_empty();
-                                this.turns_list_state
-                                    .set_follow_tail(has_turns && !this.user_has_scrolled_up);
-                            })
-                            .ok();
-                        })
-                        .detach();
+                        let has_turns = !this.conversation_turns_cache.is_empty();
+                        this.turns_list_state
+                            .set_follow_tail(has_turns && !this.user_has_scrolled_up);
+                        cx.stop_propagation();
                     }),
                 )
                 .child(turns_list)
@@ -462,7 +464,7 @@ impl Render for ChatPrompt {
                                     .text_color(rgb(theme_colors.text.primary))
                                     .text_xs()
                                     .cursor_pointer()
-                                    .hover(|d| d.bg(rgba((theme_colors.ui.border << 8) | 0xFF)))
+                                    .hover(|d| d.bg(rgba((theme_colors.ui.border << 8) | 0xE6)))
                                     .on_click(cx.listener(|this, _event, _window, cx| {
                                         this.force_scroll_turns_to_bottom();
                                         cx.notify();

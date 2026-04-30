@@ -6,19 +6,21 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
 
 use agent_client_protocol::{
-    Agent, AuthCapabilities, ClientCapabilities, ClientSideConnection, FileSystemCapabilities,
-    Implementation, InitializeRequest, ModelId, NewSessionRequest, PromptRequest, ProtocolVersion,
-    SessionId, SetSessionModelRequest,
+    Agent, AuthCapabilities, CancelNotification, ClientCapabilities, ClientSideConnection,
+    FileSystemCapabilities, Implementation, InitializeRequest, Meta, ModelId, NewSessionRequest,
+    PromptRequest, ProtocolVersion, SessionId, SetSessionModelRequest,
 };
+use serde_json::json;
 
 use super::config::AcpAgentConfig;
-use super::events::{AcpCommand, AcpEvent, AcpEventRx, AcpPromptTurnRequest};
+use super::events::{AcpCancelCommand, AcpCommand, AcpEvent, AcpEventRx, AcpPromptTurnRequest};
 use super::handlers::{ApprovalFn, ScriptKitAcpClient};
 use super::types::AcpSessionBinding;
 
@@ -28,6 +30,7 @@ use super::types::AcpSessionBinding;
 /// the new `start_turn()` path (for `AcpThread` / `AcpChatView`).
 pub(crate) struct AcpRuntime {
     tx: async_channel::Sender<AcpCommand>,
+    cancel_tx: async_channel::Sender<AcpCancelCommand>,
 }
 
 /// Type alias for clarity in the new ACP chat view path.
@@ -49,6 +52,8 @@ impl AcpRuntime {
         approve: Option<ApprovalFn>,
     ) -> Result<Self> {
         let (tx, rx) = async_channel::bounded::<AcpCommand>(8);
+        let (cancel_tx, cancel_rx) = async_channel::bounded::<AcpCancelCommand>(8);
+        let (agent, session_system_prompt) = configure_profile_system_prompt_for_agent(agent);
 
         std::thread::Builder::new()
             .name(format!("acp-{}", agent.id))
@@ -66,20 +71,24 @@ impl AcpRuntime {
 
                 let local = tokio::task::LocalSet::new();
                 local.block_on(&runtime, async move {
-                    if let Err(e) = run_acp_event_loop(agent, rx, approve).await {
+                    if let Err(e) =
+                        run_acp_event_loop(agent, rx, cancel_rx, approve, session_system_prompt)
+                            .await
+                    {
                         tracing::error!(error = %e, "acp_event_loop_exited_with_error");
                     }
                 });
             })
             .context("Failed to spawn ACP worker thread")?;
 
-        Ok(Self { tx })
+        Ok(Self { tx, cancel_tx })
     }
 
     /// Create an `AcpRuntime` from an existing command sender (test only).
     #[cfg(test)]
     pub(crate) fn from_sender(tx: async_channel::Sender<AcpCommand>) -> Self {
-        Self { tx }
+        let (cancel_tx, _cancel_rx) = async_channel::bounded::<AcpCancelCommand>(1);
+        Self { tx, cancel_tx }
     }
 
     /// Start a new event-driven turn and return a receiver for typed events.
@@ -91,6 +100,32 @@ impl AcpRuntime {
 
         self.tx
             .send_blocking(AcpCommand::StartTurn { request, event_tx })
+            .context("ACP worker channel closed")?;
+
+        Ok(event_rx)
+    }
+
+    pub(crate) fn cancel_turn(&self, ui_thread_id: String) -> Result<()> {
+        self.cancel_tx
+            .send_blocking(AcpCancelCommand::CancelTurn { ui_thread_id })
+            .context("ACP cancel channel closed")
+    }
+
+    /// Preflight: create (or reuse) the ACP session for `ui_thread_id` without
+    /// sending a prompt, so the agent's advertised model list and any setup
+    /// requirements reach the thread before the user submits anything.
+    ///
+    /// The returned receiver carries one-shot events (`ModelsAvailable` on
+    /// success, `SetupRequired` or `Failed` on error) and then closes.
+    pub(crate) fn prepare_session(&self, ui_thread_id: String, cwd: PathBuf) -> Result<AcpEventRx> {
+        let (event_tx, event_rx) = async_channel::bounded(8);
+
+        self.tx
+            .send_blocking(AcpCommand::PrepareSession {
+                ui_thread_id,
+                cwd,
+                event_tx,
+            })
             .context("ACP worker channel closed")?;
 
         Ok(event_rx)
@@ -126,6 +161,63 @@ impl AcpRuntime {
     }
 }
 
+fn is_claude_code_harness_agent(agent: &AcpAgentConfig) -> bool {
+    agent.id == "claude-code"
+}
+
+/// Inject the selected profile's system prompt into the agent.
+///
+/// For the `claude-code` harness, we append `--append-system-prompt <prompt>`
+/// to the agent's CLI args — that harness does not forward `session/new` meta
+/// to the underlying CLI. For every other agent we return the prompt so the
+/// session/new call site can pass it via ACP meta fields.
+fn configure_profile_system_prompt_for_agent(
+    mut agent: AcpAgentConfig,
+) -> (AcpAgentConfig, Option<String>) {
+    let Some((profile_name, system_prompt)) = super::config::load_selected_profile_system_prompt()
+    else {
+        return (agent, None);
+    };
+
+    if is_claude_code_harness_agent(&agent) {
+        agent.args.push("--append-system-prompt".to_string());
+        agent.args.push(system_prompt);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_profile_system_prompt_cli_appended",
+            agent_id = %agent.id,
+            profile_name = %profile_name,
+        );
+        (agent, None)
+    } else {
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_profile_system_prompt_session_new_forwarded",
+            agent_id = %agent.id,
+            profile_name = %profile_name,
+        );
+        (agent, Some(system_prompt))
+    }
+}
+
+fn new_session_request_with_system_prompt(
+    cwd: impl Into<PathBuf>,
+    system_prompt: Option<&str>,
+) -> NewSessionRequest {
+    let request = NewSessionRequest::new(cwd);
+    let Some(system_prompt) = system_prompt
+        .map(str::trim)
+        .filter(|prompt| !prompt.is_empty())
+    else {
+        return request;
+    };
+
+    let mut meta = Meta::new();
+    meta.insert("system_prompt".to_string(), json!(system_prompt));
+    meta.insert("systemPrompt".to_string(), json!(system_prompt));
+    request.meta(meta)
+}
+
 /// Build the ACP initialize request with full capability advertisement.
 ///
 /// Advertises read + write filesystem access, terminal support, and
@@ -154,7 +246,9 @@ pub(crate) fn build_initialize_request() -> InitializeRequest {
 async fn run_acp_event_loop(
     agent: AcpAgentConfig,
     rx: async_channel::Receiver<AcpCommand>,
+    cancel_rx: async_channel::Receiver<AcpCancelCommand>,
     approve: Option<ApprovalFn>,
+    session_system_prompt: Option<String>,
 ) -> Result<()> {
     // ── Spawn the agent subprocess ──────────────────────────────────
     let mut cmd = tokio::process::Command::new(&agent.command);
@@ -207,6 +301,7 @@ async fn run_acp_event_loop(
             tokio::task::spawn_local(fut);
         },
     );
+    let connection = Rc::new(connection);
 
     // Spawn the I/O pump
     tokio::task::spawn_local(async move {
@@ -265,12 +360,14 @@ async fn run_acp_event_loop(
             AcpCommand::StartTurn { request, event_tx } => {
                 let result = handle_prompt_turn(
                     &connection,
+                    &cancel_rx,
                     &event_sinks_handle,
                     &mut sessions,
                     request,
                     event_tx.clone(),
                     &agent.id,
                     &initialize_state,
+                    session_system_prompt.as_deref(),
                 )
                 .await;
 
@@ -281,6 +378,45 @@ async fn run_acp_event_loop(
                         })
                         .await;
                 }
+            }
+            AcpCommand::PrepareSession {
+                ui_thread_id,
+                cwd,
+                event_tx,
+            } => {
+                let result = ensure_session_and_announce_models(
+                    &connection,
+                    &event_sinks_handle,
+                    &mut sessions,
+                    &ui_thread_id,
+                    &cwd,
+                    &event_tx,
+                    &agent.id,
+                    &initialize_state,
+                    session_system_prompt.as_deref(),
+                )
+                .await;
+
+                match result {
+                    Ok(Some(_acp_session_id)) => {
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_prepare_session_ok",
+                            ui_thread = %ui_thread_id,
+                        );
+                    }
+                    Ok(None) => {
+                        // Session refused with auth_required — event already emitted.
+                    }
+                    Err(error) => {
+                        let _ = event_tx
+                            .send(AcpEvent::Failed {
+                                error: error.to_string(),
+                            })
+                            .await;
+                    }
+                }
+                drop(event_tx);
             }
             AcpCommand::StreamPrompt {
                 ui_session_id,
@@ -297,6 +433,7 @@ async fn run_acp_event_loop(
                     cwd,
                     &messages,
                     on_chunk,
+                    session_system_prompt.as_deref(),
                 )
                 .await;
 
@@ -312,28 +449,46 @@ async fn run_acp_event_loop(
     tracing::info!(agent = %agent.id, "acp_event_loop_channel_closed");
 
     // Clean up: kill the child process
-    let _ = child.kill().await;
+    if let Err(error) = child.kill().await {
+        tracing::warn!(agent = %agent.id, error = %error, "acp_child_kill_failed");
+    }
 
     Ok(())
 }
 
-/// Handle a single event-driven prompt turn within the ACP event loop.
+/// Ensure an ACP session exists for `ui_thread_id`, emitting `ModelsAvailable`
+/// (and a `SetupRequired` on auth failure) through `event_tx`.
+///
+/// Returns:
+/// - `Ok(Some(session_id))` if the session was created or reused.
+/// - `Ok(None)` if the agent refused with `auth_required` (a `SetupRequired`
+///   event was emitted so the UI can present the runtime setup card).
+/// - `Err(_)` on any other `session/new` failure; the caller decides how to
+///   surface it (the prompt-turn path emits `Failed`).
+///
+/// On first creation the agent's `SessionModelState` (if advertised) is mapped
+/// into `AcpModelEntry` values and emitted as `ModelsAvailable` so the thread
+/// can replace the hardcoded bootstrap list with the agent's live catalog.
 #[allow(clippy::too_many_arguments)]
-async fn handle_prompt_turn(
+async fn ensure_session_and_announce_models(
     connection: &ClientSideConnection,
     event_sinks: &Arc<parking_lot::Mutex<HashMap<String, super::events::AcpEventTx>>>,
     sessions: &mut HashMap<String, AcpSessionBinding>,
-    request: AcpPromptTurnRequest,
-    event_tx: super::events::AcpEventTx,
+    ui_thread_id: &str,
+    cwd: &std::path::Path,
+    event_tx: &super::events::AcpEventTx,
     agent_id: &str,
     initialize_state: &super::config::AcpAgentRuntimeState,
-) -> Result<()> {
-    // Get or create ACP session
-    let acp_session_id = if let Some(binding) = sessions.get(&request.ui_thread_id) {
-        binding.agent_session_id.clone()
+    session_system_prompt: Option<&str>,
+) -> Result<Option<String>> {
+    let (acp_session_id, agent_model_state) = if let Some(binding) = sessions.get(ui_thread_id) {
+        (binding.agent_session_id.clone(), None)
     } else {
         let session_result = connection
-            .new_session(NewSessionRequest::new(&request.cwd))
+            .new_session(new_session_request_with_system_prompt(
+                cwd.to_path_buf(),
+                session_system_prompt,
+            ))
             .await;
 
         let session_response = match session_result {
@@ -341,7 +496,6 @@ async fn handle_prompt_turn(
             Err(error) => {
                 let error_text = error.to_string();
                 if error_text.contains("auth_required") {
-                    // Persist NeedsAuthentication so preflight blocks next time.
                     super::config::persist_acp_agent_runtime_state(
                         agent_id.to_string(),
                         super::config::AcpAgentRuntimeState {
@@ -370,18 +524,18 @@ async fn handle_prompt_turn(
                     tracing::info!(
                         target: "script_kit::tab_ai",
                         event = "acp_auth_required",
-                        ui_thread = %request.ui_thread_id,
+                        ui_thread = %ui_thread_id,
                         agent_id = %agent_id,
                     );
-                    return Ok(());
+                    return Ok(None);
                 }
                 return Err(error).context("ACP session/new failed");
             }
         };
 
         let acp_sid = session_response.session_id.0.to_string();
+        let agent_model_state = session_response.models.clone();
 
-        // Persist Authenticated on successful session creation.
         super::config::persist_acp_agent_runtime_state(
             agent_id.to_string(),
             super::config::AcpAgentRuntimeState {
@@ -401,25 +555,102 @@ async fn handle_prompt_turn(
         );
 
         tracing::info!(
-            ui_thread = %request.ui_thread_id,
+            ui_thread = %ui_thread_id,
             acp_session = %acp_sid,
-            "acp_session_created_for_turn"
+            "acp_session_created"
         );
 
         sessions.insert(
-            request.ui_thread_id.clone(),
+            ui_thread_id.to_string(),
             AcpSessionBinding {
-                ui_session_id: request.ui_thread_id.clone(),
+                ui_session_id: ui_thread_id.to_string(),
                 agent_session_id: acp_sid.clone(),
             },
         );
-        acp_sid
+        (acp_sid, agent_model_state)
     };
 
-    // Bind the event sink so session_notification forwards typed events
     event_sinks
         .lock()
         .insert(acp_session_id.clone(), event_tx.clone());
+
+    if let Some(state) = agent_model_state {
+        let models: Vec<super::config::AcpModelEntry> = state
+            .available_models
+            .iter()
+            .map(|info| super::config::AcpModelEntry {
+                id: info.model_id.0.to_string(),
+                display_name: Some(info.name.clone()),
+                context_window: None,
+            })
+            .collect();
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_session_models_advertised",
+            session = %acp_session_id,
+            current_model = %state.current_model_id.0,
+            model_count = models.len(),
+        );
+        let _ = event_tx
+            .send(AcpEvent::ModelsAvailable {
+                current_model_id: Some(state.current_model_id.0.to_string()),
+                models,
+            })
+            .await;
+    }
+
+    Ok(Some(acp_session_id))
+}
+
+/// Handle a single event-driven prompt turn within the ACP event loop.
+#[allow(clippy::too_many_arguments)]
+#[tracing::instrument(
+    name = "acp_turn",
+    skip_all,
+    fields(
+        session = tracing::field::Empty,
+        stop_reason = tracing::field::Empty,
+    )
+)]
+async fn handle_prompt_turn(
+    connection: &Rc<ClientSideConnection>,
+    cancel_rx: &async_channel::Receiver<AcpCancelCommand>,
+    event_sinks: &Arc<parking_lot::Mutex<HashMap<String, super::events::AcpEventTx>>>,
+    sessions: &mut HashMap<String, AcpSessionBinding>,
+    request: AcpPromptTurnRequest,
+    event_tx: super::events::AcpEventTx,
+    agent_id: &str,
+    initialize_state: &super::config::AcpAgentRuntimeState,
+    session_system_prompt: Option<&str>,
+) -> Result<()> {
+    tracing::info!(agent = %agent_id, "acp_turn_start");
+
+    let acp_session_id = match ensure_session_and_announce_models(
+        connection,
+        event_sinks,
+        sessions,
+        &request.ui_thread_id,
+        &request.cwd,
+        &event_tx,
+        agent_id,
+        initialize_state,
+        session_system_prompt,
+    )
+    .await?
+    {
+        Some(id) => id,
+        None => return Ok(()),
+    };
+
+    tracing::Span::current().record("session", acp_session_id.as_str());
+    let ui_thread_id = request.ui_thread_id.clone();
+    while cancel_rx.try_recv().is_ok() {
+        tracing::debug!(
+            target: "script_kit::tab_ai",
+            event = "acp_stale_cancel_drained_before_prompt",
+            ui_thread = %ui_thread_id,
+        );
+    }
 
     // Set session model if the UI selected one (non-fatal on failure)
     if let Some(model_id) = &request.model_id {
@@ -446,21 +677,71 @@ async fn handle_prompt_turn(
         }
     }
 
-    // Send prompt — this blocks until the agent's prompt turn completes
-    let prompt_response = connection
-        .prompt(PromptRequest::new(
-            SessionId::new(acp_session_id.as_str()),
-            request.blocks,
-        ))
-        .await
-        .context("ACP session/prompt failed")?;
+    // Send prompt and keep listening for an out-of-band cancel request. ACP
+    // requires clients to continue reading until the agent returns Cancelled.
+    let prompt_connection = Rc::clone(connection);
+    let prompt_session_id = acp_session_id.clone();
+    let (prompt_done_tx, prompt_done_rx) = async_channel::bounded::<
+        agent_client_protocol::Result<agent_client_protocol::PromptResponse>,
+    >(1);
+    tokio::task::spawn_local(async move {
+        let result = prompt_connection
+            .prompt(PromptRequest::new(
+                SessionId::new(prompt_session_id.as_str()),
+                request.blocks,
+            ))
+            .await;
+        let _ = prompt_done_tx.send(result).await;
+    });
+    let prompt_response = loop {
+        if let Ok(result) = prompt_done_rx.try_recv() {
+            break result.context("ACP session/prompt failed")?;
+        }
+        while let Ok(AcpCancelCommand::CancelTurn {
+            ui_thread_id: cancel_ui_thread_id,
+        }) = cancel_rx.try_recv()
+        {
+            if cancel_ui_thread_id != ui_thread_id {
+                tracing::debug!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_cancel_ignored_for_other_thread",
+                    requested_ui_thread = %cancel_ui_thread_id,
+                    active_ui_thread = %ui_thread_id,
+                );
+                continue;
+            }
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_session_cancel_requested",
+                session = %acp_session_id,
+                ui_thread = %ui_thread_id,
+            );
+            if let Err(error) = connection
+                .cancel(CancelNotification::new(SessionId::new(
+                    acp_session_id.as_str(),
+                )))
+                .await
+            {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_session_cancel_failed",
+                    session = %acp_session_id,
+                    error = %error,
+                );
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    };
 
     // Clean up the event sink
     event_sinks.lock().remove(&acp_session_id);
 
+    let stop_reason_str = format!("{:?}", prompt_response.stop_reason);
+    tracing::Span::current().record("stop_reason", stop_reason_str.as_str());
+
     let _ = event_tx
         .send(AcpEvent::TurnFinished {
-            stop_reason: format!("{:?}", prompt_response.stop_reason),
+            stop_reason: stop_reason_str,
         })
         .await;
 
@@ -474,6 +755,14 @@ async fn handle_prompt_turn(
 
 /// Handle a single prompt request within the ACP event loop (legacy path).
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(
+    name = "acp_turn",
+    skip_all,
+    fields(
+        session = tracing::field::Empty,
+        stop_reason = tracing::field::Empty,
+    )
+)]
 async fn handle_stream_prompt(
     connection: &ClientSideConnection,
     sessions: &mut HashMap<String, AcpSessionBinding>,
@@ -482,7 +771,10 @@ async fn handle_stream_prompt(
     cwd: PathBuf,
     messages: &[crate::ai::providers::ProviderMessage],
     on_chunk: crate::ai::providers::StreamCallback,
+    session_system_prompt: Option<&str>,
 ) -> Result<()> {
+    tracing::info!(ui_session = %ui_session_id, "acp_turn_start");
+
     // Install the callback so session_notification can forward chunks
     *on_chunk_handle.lock() = Some(on_chunk);
 
@@ -491,7 +783,10 @@ async fn handle_stream_prompt(
         binding.agent_session_id.clone()
     } else {
         let session_response = connection
-            .new_session(NewSessionRequest::new(&cwd))
+            .new_session(new_session_request_with_system_prompt(
+                cwd.clone(),
+                session_system_prompt,
+            ))
             .await
             .context("ACP session/new failed")?;
 
@@ -512,6 +807,8 @@ async fn handle_stream_prompt(
         acp_sid
     };
 
+    tracing::Span::current().record("session", acp_session_id.as_str());
+
     // Build prompt content blocks from provider messages
     let blocks = super::types::build_prompt_blocks(messages);
 
@@ -527,6 +824,11 @@ async fn handle_stream_prompt(
         ))
         .await
         .context("ACP session/prompt failed")?;
+
+    tracing::Span::current().record(
+        "stop_reason",
+        format!("{:?}", prompt_response.stop_reason).as_str(),
+    );
 
     tracing::info!(
         stop_reason = ?prompt_response.stop_reason,
@@ -633,5 +935,42 @@ mod tests {
             result.is_ok() || result.is_err(),
             "start_turn should return a result"
         );
+    }
+
+    #[test]
+    fn prepare_session_enqueues_command() {
+        // Verify that `prepare_session` enqueues an `AcpCommand::PrepareSession`
+        // carrying the ui thread id, cwd, and an open event sender. A stub
+        // worker reads from the channel so the command is captured.
+        let (tx, rx) = async_channel::bounded::<AcpCommand>(1);
+        let runtime = AcpRuntime::from_sender(tx);
+
+        let event_rx = runtime
+            .prepare_session("thread-42".to_string(), PathBuf::from("/tmp/project"))
+            .expect("prepare_session should enqueue");
+        assert!(
+            !event_rx.is_closed(),
+            "event receiver should be open until the worker drops the sender"
+        );
+
+        let cmd = rx.try_recv().expect("PrepareSession should have been sent");
+        match cmd {
+            AcpCommand::PrepareSession {
+                ui_thread_id,
+                cwd,
+                event_tx,
+            } => {
+                assert_eq!(ui_thread_id, "thread-42");
+                assert_eq!(cwd, PathBuf::from("/tmp/project"));
+                assert!(
+                    !event_tx.is_closed(),
+                    "the event sender shipped with the command must be writable"
+                );
+            }
+            other => panic!(
+                "expected PrepareSession, got {:?}",
+                std::mem::discriminant(&other)
+            ),
+        }
     }
 }

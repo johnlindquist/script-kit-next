@@ -1,0 +1,19 @@
+{"input":{},"expected":"MissingKey"}
+{"input":{"name":"   ","builtinId":""},"expected":"MissingKey"}
+{"input":{"name":42,"builtinId":null},"expected":"MissingKey"}
+{"input":{"name":"clipboard"},"expected":"Resolved::ClipboardHistory::NameAlias"}
+{"input":{"name":"Clipboard-History"},"expected":"Resolved::ClipboardHistory::NameAlias"}
+{"input":{"name":"builtin/clipboard-history"},"expected":"Resolved::ClipboardHistory::NameAsCommandId"}
+{"input":{"builtinId":"builtin/clipboard-history"},"expected":"Resolved::ClipboardHistory::BuiltinIdField"}
+{"input":{"name":"clipboard","builtinId":"builtin/clipboard-history"},"expected":"Resolved::ClipboardHistory::BothAgree"}
+{"input":{"name":"emoji","builtinId":"builtin/emoji-picker"},"expected":"Resolved::EmojiPicker::BothAgree"}
+{"input":{"name":"clipboard","builtinId":"builtin/emoji-picker"},"expected":"Conflict::ClipboardHistory::EmojiPicker"}
+{"input":{"name":"totally-fake"},"expected":"Unknown::NameOnly::totally-fake"}
+{"input":{"builtinId":"builtin/not-a-thing"},"expected":"Unknown::BuiltinIdOnly::builtin/not-a-thing"}
+{"input":{"name":"bad","builtinId":"builtin/also-bad"},"expected":"Unknown::Both::bad::builtin/also-bad"}
+{"input":{"name":"tab-ai"},"expected":"Resolved::TabAi::NameAlias"}
+{"input":{"builtinId":"builtin/ai-chat"},"expected":"Resolved::TabAi::BuiltinIdField"}
+{"input":{"name":"processes"},"expected":"Resolved::ProcessManager::NameAlias"}
+{"input":{"name":"current-app"},"expected":"Resolved::CurrentAppCommands::NameAlias"}
+{"input":{"name":"current-app-commands"},"expected":"Resolved::CurrentAppCommands::NameAsCommandId"}
+{"input":{"builtinId":"builtin/current-app-commands"},"expected":"Resolved::CurrentAppCommands::BuiltinIdField"}

@@ -1,4 +1,5 @@
 use super::*;
+use super::path_action::PathAction;
 
 impl ScriptListApp {
     pub(crate) fn execute_path_action(
@@ -16,10 +17,13 @@ impl ScriptListApp {
             ),
         );
 
-        let action_id = action_id.strip_prefix("file:").unwrap_or(action_id);
+        let Some(action) = PathAction::from_action_id(action_id) else {
+            logging::log("UI", &format!("Unknown path action: {}", action_id));
+            return;
+        };
 
-        match action_id {
-            "select_file" | "open_directory" => {
+        match action {
+            PathAction::SelectFile | PathAction::OpenDirectory => {
                 // For select/open, trigger submission through the path prompt
                 // We need to trigger the submit callback with this path
                 path_prompt_entity.update(cx, |prompt, cx| {
@@ -32,7 +36,7 @@ impl ScriptListApp {
                         prompt.selected_index = idx;
                     }
                     // For directories, navigate into them; for files, submit
-                    if path_info.is_dir && action_id == "open_directory" {
+                    if path_info.is_dir && action == PathAction::OpenDirectory {
                         prompt.navigate_to(&path_info.path, cx);
                     } else {
                         // Submit the selected path
@@ -42,7 +46,7 @@ impl ScriptListApp {
                     }
                 });
             }
-            "copy_path" => {
+            PathAction::CopyPath => {
                 // Copy full path to clipboard
                 self.copy_to_clipboard_with_feedback(
                     &path_info.path,
@@ -51,7 +55,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            "copy_filename" => {
+            PathAction::CopyFilename => {
                 // Copy just the filename to clipboard
                 self.copy_to_clipboard_with_feedback(
                     &path_info.name,
@@ -60,7 +64,7 @@ impl ScriptListApp {
                     cx,
                 );
             }
-            "open_in_finder" => {
+            PathAction::OpenInFinder => {
                 let file_manager = if cfg!(target_os = "macos") {
                     "Finder"
                 } else if cfg!(target_os = "windows") {
@@ -87,7 +91,7 @@ impl ScriptListApp {
                     }
                 }
             }
-            "open_in_editor" => {
+            PathAction::OpenInEditor => {
                 // Open in configured editor
                 let editor = self.config.get_editor();
                 let path_str = path_info.path.clone();
@@ -108,24 +112,27 @@ impl ScriptListApp {
                     }
                 }
             }
-            "open_in_terminal" => {
-                match crate::file_search::open_in_terminal(&path_info.path, path_info.is_dir) {
-                    Ok(terminal_path) => {
-                        logging::log("UI", &format!("Opened terminal at: {}", terminal_path));
-                        self.show_hud(
-                            format!("Opened Terminal at {}", terminal_path),
-                            Some(HUD_SHORT_MS),
-                            cx,
-                        );
-                        self.hide_main_and_reset(cx);
+            PathAction::OpenInQuickTerminal => {
+                match crate::action_helpers::resolve_quick_terminal_cwd(std::path::Path::new(
+                    &path_info.path,
+                )) {
+                    Ok(cwd) => {
+                        logging::log("UI", &format!("Opened Quick Terminal at: {}", cwd.display()));
+                        self.open_quick_terminal(Some(cwd), cx);
                     }
                     Err(e) => {
-                        logging::log("ERROR", &format!("Failed to open terminal: {}", e));
-                        self.show_error_toast(format!("Failed to open terminal: {}", e), cx);
+                        logging::log(
+                            "ERROR",
+                            &format!("Failed to open Quick Terminal: {}", e),
+                        );
+                        self.show_error_toast(
+                            format!("Failed to open Quick Terminal: {}", e),
+                            cx,
+                        );
                     }
                 }
             }
-            "move_to_trash" => {
+            PathAction::MoveToTrash => {
                 let path_info = path_info.clone();
                 let path_prompt_entity = path_prompt_entity.clone();
                 let message = format!("Move \"{}\" to Trash?", path_info.name);
@@ -188,9 +195,6 @@ impl ScriptListApp {
                 })
                 .detach();
                 return;
-            }
-            _ => {
-                logging::log("UI", &format!("Unknown path action: {}", action_id));
             }
         }
 

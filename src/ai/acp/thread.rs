@@ -472,6 +472,34 @@ impl AcpThread {
         cx.notify();
     }
 
+    /// Recall the latest user-authored turn into the composer.
+    ///
+    /// Mirrors common agent prompt-history behavior: plain Up on an empty,
+    /// idle composer brings back the previous user prompt with the caret at
+    /// the beginning so another Up-like navigation gesture stays natural.
+    pub(crate) fn recall_last_user_message(&mut self, cx: &mut Context<Self>) -> bool {
+        if !matches!(self.status, AcpThreadStatus::Idle | AcpThreadStatus::Error)
+            || !self.input.is_empty()
+        {
+            return false;
+        }
+
+        let Some(body) = self
+            .messages
+            .iter()
+            .rev()
+            .find(|message| message.role == AcpThreadMessageRole::User)
+            .map(|message| message.body.to_string())
+        else {
+            return false;
+        };
+
+        self.input.set_text(body);
+        self.input.set_cursor(0);
+        cx.notify();
+        true
+    }
+
     /// Submit the current input as a new user turn.
     ///
     /// If context is still bootstrapping (`Preparing`), the submit is queued
@@ -1102,6 +1130,12 @@ impl AcpThread {
                 }
                 changed = true;
             }
+            AcpEvent::ModelsAvailable {
+                current_model_id,
+                models,
+            } => {
+                changed |= self.apply_agent_models(current_model_id, models);
+            }
             AcpEvent::TurnFinished { .. } => {
                 if self.pending_permission.take().is_some() {
                     changed = true;
@@ -1491,9 +1525,97 @@ impl AcpThread {
         &self.available_models
     }
 
+    /// Replace the available model list with the agent's live advertisement
+    /// from `session/new`. Preserves the user's current selection if it is
+    /// still in the new list; otherwise falls back to the agent's declared
+    /// current model, or the first entry. Returns `true` if anything changed.
+    fn apply_agent_models(
+        &mut self,
+        current_model_id: Option<String>,
+        models: Vec<super::config::AcpModelEntry>,
+    ) -> bool {
+        if models.is_empty() {
+            return false;
+        }
+
+        let mut changed = self.available_models != models;
+        self.available_models = models;
+
+        let selection_still_valid = self
+            .selected_model_id
+            .as_deref()
+            .map(|sel| self.available_models.iter().any(|m| m.id == sel))
+            .unwrap_or(false);
+
+        if !selection_still_valid {
+            let fallback = current_model_id
+                .as_deref()
+                .and_then(|id| self.available_models.iter().find(|m| m.id == id))
+                .or_else(|| self.available_models.first());
+            if let Some(entry) = fallback {
+                self.selected_model_id = Some(entry.id.clone());
+                self.selected_model_display_name = Some(SharedString::from(
+                    entry
+                        .display_name
+                        .clone()
+                        .unwrap_or_else(|| entry.id.clone()),
+                ));
+                changed = true;
+            }
+        }
+
+        changed
+    }
+
     /// Currently selected model ID, if any.
     pub(crate) fn selected_model_id(&self) -> Option<&str> {
         self.selected_model_id.as_deref()
+    }
+
+    /// Fire-and-forget: ask the ACP worker to create-or-reuse the session for
+    /// this thread and emit a fresh `ModelsAvailable` event. Called when the
+    /// user invokes the actions dialog so the Change Model picker reflects the
+    /// agent's live catalog (including models released after the hardcoded
+    /// fallback was written).
+    ///
+    /// If the worker is unreachable the call is a no-op; the picker will fall
+    /// back to whatever `available_models` already held.
+    pub(crate) fn refresh_models(&mut self, cx: &mut Context<Self>) {
+        let rx = match self
+            .connection
+            .prepare_session(self.ui_thread_id.clone(), self.cwd.clone())
+        {
+            Ok(rx) => rx,
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_refresh_models_channel_closed",
+                    ui_thread = %self.ui_thread_id,
+                    error = %error,
+                );
+                return;
+            }
+        };
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_refresh_models_requested",
+            ui_thread = %self.ui_thread_id,
+        );
+
+        let entity = cx.entity().downgrade();
+        cx.spawn(async move |_this, cx| {
+            while let Ok(event) = rx.recv().await {
+                let Some(weak) = entity.upgrade() else {
+                    break;
+                };
+                cx.update(|cx| {
+                    weak.update(cx, |this, cx| {
+                        this.apply_event(event, cx);
+                    });
+                });
+            }
+        })
+        .detach();
     }
 
     /// Select a model by ID. Updates the display name, persists to config, and notifies.
@@ -1574,6 +1696,13 @@ impl AcpThread {
     pub(crate) fn cancel_streaming(&mut self, cx: &mut Context<Self>) {
         if !matches!(self.status, AcpThreadStatus::Streaming) {
             return;
+        }
+        if let Err(error) = self.connection.cancel_turn(self.ui_thread_id.clone()) {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "acp_cancel_turn_enqueue_failed",
+                error = %error,
+            );
         }
         self.stream_task = None;
         self.stream_started_at = None;
@@ -1711,6 +1840,70 @@ impl AcpThread {
             pending_block_count = self.pending_context_blocks.len(),
         );
         cx.notify();
+    }
+
+    /// Replace all pending typed context parts in one host-owned handoff.
+    ///
+    /// Used by host surfaces that stage a fresh context payload on an
+    /// existing ACP view and must not append onto stale chips from a prior
+    /// entry path.
+    pub(crate) fn replace_pending_context_parts(
+        &mut self,
+        parts: Vec<crate::ai::message_parts::AiContextPart>,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.replace_pending_context_parts_inner(parts, reason);
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_pending_context_parts_replaced",
+            reason,
+            part_count = self.pending_context_parts.len(),
+            ambient_enabled = self.pending_ambient_context_enabled,
+        );
+        cx.notify();
+    }
+
+    fn replace_pending_context_parts_inner(
+        &mut self,
+        parts: Vec<crate::ai::message_parts::AiContextPart>,
+        reason: &'static str,
+    ) {
+        self.clear_all_pending_context(reason);
+        self.pending_context_parts = parts;
+        self.pending_context_consumed = false;
+        self.queued_submit_while_bootstrapping = false;
+
+        let ambient_label = self
+            .pending_context_parts
+            .iter()
+            .find_map(|part| part.ambient_chip_label().map(|value| value.to_string()));
+        let has_ambient_bootstrap = self
+            .pending_context_parts
+            .iter()
+            .any(|part| part.is_ambient_bootstrap_resource());
+        let has_promoted_ambient_chip = self
+            .pending_context_parts
+            .iter()
+            .any(|part| part.is_ambient_context_chip());
+
+        self.pending_ambient_context_enabled = has_ambient_bootstrap || has_promoted_ambient_chip;
+
+        if has_ambient_bootstrap {
+            self.context_bootstrap_state = AcpContextBootstrapState::Preparing;
+            self.context_bootstrap_note = ambient_label
+                .as_deref()
+                .map(Self::ambient_capture_preparing_note);
+        } else if has_promoted_ambient_chip {
+            self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+            self.context_bootstrap_note = ambient_label
+                .as_deref()
+                .map(Self::ambient_capture_ready_note);
+        } else {
+            self.context_bootstrap_state = AcpContextBootstrapState::Ready;
+            self.context_bootstrap_note = None;
+        }
     }
 
     /// Remove a typed context part by index.
@@ -1856,6 +2049,14 @@ impl AcpThread {
         }
     }
 
+    pub(super) fn replace_pending_context_parts_test(
+        &mut self,
+        parts: Vec<crate::ai::message_parts::AiContextPart>,
+        reason: &'static str,
+    ) {
+        self.replace_pending_context_parts_inner(parts, reason);
+    }
+
     /// Stage Ask Anything context without GPUI context (skips `cx.notify()`).
     pub(super) fn stage_ask_anything_context_test(
         &mut self,
@@ -1933,6 +2134,12 @@ impl AcpThread {
                 if let Some(cost) = cost_usd {
                     self.usage_cost_usd = Some(cost);
                 }
+            }
+            super::AcpEvent::ModelsAvailable {
+                current_model_id,
+                models,
+            } => {
+                self.apply_agent_models(current_model_id, models);
             }
             super::AcpEvent::TurnFinished { .. } => {
                 self.set_status(AcpThreadStatus::Idle);
@@ -2063,7 +2270,7 @@ mod tests {
     fn prepare_turn_blocks_no_guidance_in_exploration_mode() {
         let mut thread = test_thread(vec![ContentBlock::Text(TextContent::new("context"))], false);
 
-        // Even authoring-like intents get no guidance — users invoke /script-authoring explicitly
+        // Even authoring-like intents get no guidance — users invoke /new-script explicitly
         let blocks = thread.prepare_turn_blocks("build a clipboard cleanup script");
 
         // context + input = 2 blocks (no guidance, exploration mode)
@@ -2154,6 +2361,143 @@ mod tests {
         assert!(
             thread.messages.is_empty(),
             "mode changes should not produce messages"
+        );
+    }
+
+    #[test]
+    fn models_available_replaces_list_and_surfaces_new_models() {
+        use super::super::config::AcpModelEntry;
+
+        let mut thread = test_thread(Vec::new(), true);
+        // Seed the thread with the old hardcoded fallback list so we can
+        // prove that ModelsAvailable actually replaces it.
+        thread.available_models = vec![
+            AcpModelEntry {
+                id: "claude-sonnet-4-6".into(),
+                display_name: Some("Sonnet 4.6".into()),
+                context_window: Some(200_000),
+            },
+            AcpModelEntry {
+                id: "claude-opus-4-6".into(),
+                display_name: Some("Opus 4.6".into()),
+                context_window: Some(200_000),
+            },
+        ];
+
+        // Simulate what the ACP client produces when claude-code-acp advertises
+        // Opus 4.7 in its session/new response.
+        let agent_list = vec![
+            AcpModelEntry {
+                id: "claude-opus-4-7".into(),
+                display_name: Some("Opus 4.7".into()),
+                context_window: None,
+            },
+            AcpModelEntry {
+                id: "claude-sonnet-4-6".into(),
+                display_name: Some("Sonnet 4.6".into()),
+                context_window: None,
+            },
+            AcpModelEntry {
+                id: "claude-haiku-4-5".into(),
+                display_name: Some("Haiku 4.5".into()),
+                context_window: None,
+            },
+        ];
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ModelsAvailable {
+                current_model_id: Some("claude-opus-4-7".into()),
+                models: agent_list.clone(),
+            },
+        );
+
+        let ids: Vec<&str> = thread
+            .available_models()
+            .iter()
+            .map(|m| m.id.as_str())
+            .collect();
+        assert_eq!(
+            ids,
+            vec!["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"],
+            "agent-advertised list should replace the hardcoded fallback"
+        );
+        assert!(
+            ids.contains(&"claude-opus-4-7"),
+            "Opus 4.7 must surface when the agent advertises it"
+        );
+        // The stale fallback-only entry must be gone.
+        assert!(
+            !ids.contains(&"claude-opus-4-6"),
+            "old fallback entries should not leak through"
+        );
+    }
+
+    #[test]
+    fn models_available_preserves_user_selection_when_still_valid() {
+        use super::super::config::AcpModelEntry;
+
+        let mut thread = test_thread(Vec::new(), true);
+        thread.selected_model_id = Some("claude-sonnet-4-6".into());
+        thread.selected_model_display_name = Some(SharedString::from("Sonnet 4.6"));
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ModelsAvailable {
+                current_model_id: Some("claude-opus-4-7".into()),
+                models: vec![
+                    AcpModelEntry {
+                        id: "claude-opus-4-7".into(),
+                        display_name: Some("Opus 4.7".into()),
+                        context_window: None,
+                    },
+                    AcpModelEntry {
+                        id: "claude-sonnet-4-6".into(),
+                        display_name: Some("Sonnet 4.6".into()),
+                        context_window: None,
+                    },
+                ],
+            },
+        );
+
+        assert_eq!(
+            thread.selected_model_id(),
+            Some("claude-sonnet-4-6"),
+            "user's persisted selection must be preserved when still in the new list"
+        );
+    }
+
+    #[test]
+    fn models_available_falls_back_to_current_when_selection_dropped() {
+        use super::super::config::AcpModelEntry;
+
+        let mut thread = test_thread(Vec::new(), true);
+        // User had a selection that the agent no longer lists.
+        thread.selected_model_id = Some("claude-retired-model".into());
+
+        apply_event_test(
+            &mut thread,
+            AcpEvent::ModelsAvailable {
+                current_model_id: Some("claude-opus-4-7".into()),
+                models: vec![
+                    AcpModelEntry {
+                        id: "claude-opus-4-7".into(),
+                        display_name: Some("Opus 4.7".into()),
+                        context_window: None,
+                    },
+                    AcpModelEntry {
+                        id: "claude-sonnet-4-6".into(),
+                        display_name: Some("Sonnet 4.6".into()),
+                        context_window: None,
+                    },
+                ],
+            },
+        );
+
+        assert_eq!(
+            thread.selected_model_id(),
+            Some("claude-opus-4-7"),
+            "selection should fall back to the agent's declared current model"
         );
     }
 
@@ -2835,6 +3179,53 @@ mod tests {
         assert!(
             !thread.queued_submit_while_bootstrapping,
             "reused entry intents should not inherit an old queued submit"
+        );
+    }
+
+    #[test]
+    fn replace_pending_context_parts_clears_previous_parts_and_resets_consumption() {
+        let mut thread = test_thread(vec![ContentBlock::Text(TextContent::new("hidden"))], false);
+        thread.add_context_part_test(focused_target_part("old-chip"));
+        thread.pending_context_consumed = true;
+        thread.pending_ambient_context_enabled = true;
+        thread.context_bootstrap_state = AcpContextBootstrapState::Preparing;
+        thread.context_bootstrap_note = Some("Capturing Current Context…".into());
+        thread.queued_submit_while_bootstrapping = true;
+
+        let replacement = vec![crate::ai::message_parts::AiContextPart::TextBlock {
+            label: "Selected Text".to_string(),
+            source: "notes://123#selection=0-5".to_string(),
+            text: "hello".to_string(),
+            mime_type: None,
+        }];
+
+        thread.replace_pending_context_parts_test(replacement.clone(), "test_replace");
+
+        assert_eq!(thread.pending_context_parts, replacement);
+        assert!(
+            thread.pending_context_blocks.is_empty(),
+            "replacing pending parts should clear hidden staged blocks"
+        );
+        assert!(
+            !thread.pending_context_consumed,
+            "replacing pending parts should re-arm first-submit consumption"
+        );
+        assert!(
+            !thread.pending_ambient_context_enabled,
+            "non-ambient replacement should disable stale ambient state"
+        );
+        assert_eq!(
+            thread.context_bootstrap_state,
+            AcpContextBootstrapState::Ready,
+            "non-ambient replacement should clear stale bootstrap state"
+        );
+        assert_eq!(
+            thread.context_bootstrap_note, None,
+            "non-ambient replacement should clear stale bootstrap note"
+        );
+        assert!(
+            !thread.queued_submit_while_bootstrapping,
+            "replacement should clear stale queued submit state"
         );
     }
 }

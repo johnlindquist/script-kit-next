@@ -288,7 +288,7 @@ fn main() {
         let initial_variant = initial_variant_for_window.clone();
 
         let _window_handle = cx
-            .open_window(options, move |_window, cx| {
+            .open_window(options, move |window, cx| {
                 let initial_story = initial_story.clone();
                 let initial_variant = initial_variant.clone();
 
@@ -321,6 +321,7 @@ fn main() {
                         }
                     }
 
+                    browser.prepare_live_preview(window, cx);
                     browser
                 })
             })

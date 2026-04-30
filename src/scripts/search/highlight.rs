@@ -249,5 +249,7 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
 
             indices
         }
+        // Script issues row is synthetic and not matched against the query
+        SearchResult::ScriptIssue(_) => MatchIndices::default(),
     }
 }

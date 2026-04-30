@@ -265,6 +265,14 @@ impl NotesApp {
         // In ACP mode, intercept host-owned shortcuts before propagating to ACP.
         if self.surface_mode == NotesSurfaceMode::Acp {
             if is_key_escape(key) {
+                if let Some(ref entity) = self.embedded_acp_chat {
+                    let dismissed = entity.update(cx, |chat, cx| chat.dismiss_escape_popup(cx));
+                    if dismissed {
+                        tracing::info!(event = "notes_acp_escape_dismissed_local_popup");
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
                 self.switch_to_notes_surface(window, cx);
                 cx.stop_propagation();
                 return;
@@ -302,11 +310,6 @@ impl NotesApp {
 
         if is_key_escape(key) {
             cx.stop_propagation();
-            if self.show_shortcuts_help {
-                self.show_shortcuts_help = false;
-                cx.notify();
-                return;
-            }
             if self.show_actions_panel || self.command_bar.is_open() {
                 self.close_actions_panel(window, cx);
                 return;
@@ -400,7 +403,6 @@ impl NotesApp {
                 key if modifiers.shift && key.eq_ignore_ascii_case("o") => {
                     if self.open_focused_note_mention_portal(window, cx) {
                         cx.stop_propagation();
-                        return;
                     }
                 }
                 key if key.eq_ignore_ascii_case("p") => {
@@ -446,7 +448,6 @@ impl NotesApp {
                         if self.open_selected_note_cart_in_embedded_acp("NotesWindowCmdShiftA", cx)
                         {
                             cx.stop_propagation();
-                            return;
                         }
                     }
                 }
@@ -555,10 +556,6 @@ impl NotesApp {
                 }
                 key if key.eq_ignore_ascii_case("e") => {
                     self.insert_formatting("`", "`", window, cx);
-                    cx.stop_propagation();
-                }
-                "/" => {
-                    self.toggle_shortcuts_help(cx);
                     cx.stop_propagation();
                 }
                 key if key.eq_ignore_ascii_case("j") => {

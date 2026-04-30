@@ -395,6 +395,45 @@ fn test_notes_keyboard_stops_propagation_at_start_of_global_escape_chain() {
 }
 
 #[test]
+fn test_notes_acp_escape_dismisses_local_popup_before_leaving_surface() {
+    const KEYBOARD_SOURCE: &str = include_str!("keyboard.rs");
+    let acp_escape_branch = KEYBOARD_SOURCE
+        .find("if self.surface_mode == NotesSurfaceMode::Acp {")
+        .and_then(|start| {
+            KEYBOARD_SOURCE[start..]
+                .find("if modifiers.platform {")
+                .map(|end| &KEYBOARD_SOURCE[start..start + end])
+        })
+        .expect("Expected Notes ACP keyboard branch");
+
+    let dismiss_idx = acp_escape_branch
+        .find("chat.dismiss_escape_popup(cx)")
+        .expect("Notes ACP escape should check for local popup dismissal");
+    let dismissed_branch_idx = acp_escape_branch
+        .find("if dismissed {")
+        .expect("Notes ACP escape should branch on dismissed popup state");
+    let stop_idx = acp_escape_branch
+        .find("cx.stop_propagation();")
+        .expect("Notes ACP escape should stop propagation after dismissing local popup state");
+    let return_idx = acp_escape_branch
+        .find("return;")
+        .expect("Notes ACP escape should return after dismissing local popup state");
+    let switch_idx = acp_escape_branch
+        .find("self.switch_to_notes_surface(window, cx);")
+        .expect("Notes ACP escape should still fall back to leaving ACP mode");
+
+    assert!(
+        dismiss_idx < switch_idx
+            && dismiss_idx < dismissed_branch_idx
+            && dismissed_branch_idx < stop_idx
+            && stop_idx < return_idx
+            && return_idx < switch_idx
+            && acp_escape_branch.contains("event = \"notes_acp_escape_dismissed_local_popup\""),
+        "Notes ACP escape should dismiss local ACP popup state before returning to the editor"
+    );
+}
+
+#[test]
 fn test_notes_actions_panel_uses_shared_disabled_opacity_constant() {
     const ACTIONS_PANEL_SOURCE: &str = include_str!("../actions_panel.rs");
     assert!(
@@ -614,8 +653,34 @@ fn test_notes_acp_actions_close_requests_embedded_chat_refocus() {
     const ACP_HOST_SOURCE: &str = include_str!("acp_host.rs");
     assert!(
         ACP_HOST_SOURCE
-            .contains("app.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);"),
+            .contains("self.request_focus_surface(focus::NotesFocusSurface::AcpChat, window, cx);")
+            && ACP_HOST_SOURCE
+                .contains("self.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);"),
         "Closing the Notes-hosted ACP actions popup should restore ACP focus"
+    );
+    assert!(
+        ACP_HOST_SOURCE
+            .contains("app.close_notes_acp_actions_via_host(\"dialog_on_close\", None, cx);"),
+        "Dialog on_close should route Notes ACP actions close through the shared host helper"
+    );
+}
+
+#[test]
+fn test_notes_acp_host_routes_close_paths_through_host_helpers() {
+    const ACP_HOST_SOURCE: &str = include_str!("acp_host.rs");
+    assert!(
+        ACP_HOST_SOURCE.contains(
+            "app.close_embedded_acp_via_host(\"acp_close_requested\", Some(window), cx);"
+        ) && ACP_HOST_SOURCE.contains(
+            "self.close_notes_acp_actions_via_host(\"toggle_existing_window\", Some(window), cx);"
+        ) && ACP_HOST_SOURCE
+            .contains("app.close_notes_acp_actions_via_host(\"dialog_on_close\", None, cx);")
+            && ACP_HOST_SOURCE.contains(
+                "app.close_embedded_acp_via_host(\"acp_action_close\", Some(window), cx);"
+            )
+            && ACP_HOST_SOURCE
+                .contains("event = \"notes_acp_action_cancel_consumed_after_on_close\""),
+        "Notes embedded ACP close and ACP-actions close should route through shared host helpers"
     );
 }
 
@@ -634,10 +699,20 @@ fn test_notes_acp_uses_shared_external_footer_renderer() {
             && RENDER_SOURCE.contains(".when_some(acp_footer, |d, footer| d.child(footer))"),
         "Notes ACP surface should render the shared ACP footer below the embedded chat view"
     );
+    let footer_hints = &ACP_VIEW_SOURCE[ACP_VIEW_SOURCE
+        .find("render_selectable_hint_icons(")
+        .expect("ACP footer should render selectable hints")..];
+    let run_pos = footer_hints
+        .find("\"↵ Run\"")
+        .expect("ACP footer should render the Run hint");
+    let ai_pos = footer_hints
+        .find("\"⌘↵ AI\"")
+        .expect("ACP footer should render the AI hint");
+    let actions_pos = footer_hints
+        .find("\"⌘K Actions\"")
+        .expect("ACP footer should render the Actions hint");
     assert!(
-        ACP_VIEW_SOURCE.contains("SelectableHint::new(\"↵ Run\"")
-            && ACP_VIEW_SOURCE.contains("SelectableHint::new(\"⌘↵ AI\"")
-            && ACP_VIEW_SOURCE.contains("SelectableHint::new(\"⌘K Actions\""),
+        run_pos < ai_pos && ai_pos < actions_pos,
         "Notes-hosted ACP should mirror the main-window ACP footer labels and order"
     );
 }

@@ -55,7 +55,9 @@ fn fixture_scriptlets() -> Vec<Arc<Scriptlet>> {
             shortcut: None,
             keyword: Some("!gh".into()),
             group: Some("Productivity".into()),
-            file_path: Some("/tmp/test-scriptkit/kit/main/scriptlets/urls.md#open-github".into()),
+            file_path: Some(
+                "/tmp/test-scriptkit/plugins/main/scriptlets/urls.md#open-github".into(),
+            ),
             command: Some("open-github".into()),
             alias: None,
             plugin_id: String::new(),
@@ -241,7 +243,7 @@ fn sdk_reference_documents_script_directory_and_patterns() {
     let content = mcp_resources::read_resource("kit://sdk-reference", &[], &[], None).unwrap();
     let doc: SdkReferenceDocument = serde_json::from_str(&content.text).unwrap();
 
-    assert!(doc.script_directory.contains("kit/main/scripts"));
+    assert!(doc.script_directory.contains("plugins/main/scripts"));
     assert!(doc.scriptlet_pattern.contains("scriptlets"));
     assert!(doc.metadata_format.contains("export const metadata"));
 }

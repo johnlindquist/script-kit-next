@@ -795,6 +795,37 @@ fn render_focused_info_for_result(
                 .child(focused_info_divider(style))
                 .child(focused_info_type_indicator("Skill", style));
         }
+        scripts::SearchResult::ScriptIssue(issue) => {
+            let mut summary_row = div().flex().flex_row().gap(px(s.gap_sm)).pb(px(s.padding_sm));
+            summary_row = summary_row.child(focused_info_badge(
+                &format!("{} failed", issue.failed_count),
+                style.badge_bg_rgba,
+                style.badge_border_rgba,
+                style.badge_text_hex,
+            ));
+            if issue.fatal_count > 0 {
+                summary_row = summary_row.child(focused_info_badge(
+                    &format!("{} fatal", issue.fatal_count),
+                    style.badge_bg_rgba,
+                    style.badge_border_rgba,
+                    style.badge_text_hex,
+                ));
+            }
+            if issue.warning_count > 0 {
+                summary_row = summary_row.child(focused_info_badge(
+                    &format!("{} warning", issue.warning_count),
+                    style.badge_bg_rgba,
+                    style.badge_border_rgba,
+                    style.badge_text_hex,
+                ));
+            }
+            content = content
+                .child(summary_row)
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Issues", style));
+            let _ = match_indices;
+            let _ = shortcut_display;
+        }
     }
 
     content
@@ -954,6 +985,7 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::Skill(_) => None, // Skills don't track frecency
                     scripts::SearchResult::Fallback(_) => None, // Fallbacks don't track frecency
+                    scripts::SearchResult::ScriptIssue(_) => None, // Diagnostic row doesn't track frecency
                 };
 
                 // Check if this item is "suggested" (has frecency data above min_score)
@@ -1056,9 +1088,11 @@ impl ScriptListApp {
                     scripts::SearchResult::Agent(m) => {
                         // Agents use their path as identifier
                         Some(
-                            ScriptInfo::new(
+                            ScriptInfo::agent(
                                 &m.agent.name,
-                                format!("agent:{}", m.agent.path.to_string_lossy()),
+                                m.agent.path.to_string_lossy().to_string(),
+                                override_shortcut,
+                                override_alias,
                             )
                             .with_frecency(is_suggested, frecency_path),
                         )
@@ -1088,6 +1122,12 @@ impl ScriptListApp {
                             "Run",
                         ))
                     }
+                    scripts::SearchResult::ScriptIssue(m) => Some(ScriptInfo::with_action_verb(
+                        &m.title,
+                        "script-issues".to_string(),
+                        false,
+                        "Inspect",
+                    )),
                 }
             } else {
                 None

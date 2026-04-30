@@ -66,8 +66,8 @@ fn test_extract_kit_from_path_nested() {
     // kit_root is ~/.scriptkit, not home directory
     let kit_root = Path::new("/Users/test/.scriptkit");
 
-    // Nested kit path: ~/.scriptkit/my-kit/scriptlets/file.md -> kit = "my-kit"
-    let nested_path = Path::new("/Users/test/.scriptkit/my-kit/scriptlets/file.md");
+    // Nested plugin path: ~/.scriptkit/plugins/my-kit/scriptlets/file.md -> kit = "my-kit"
+    let nested_path = Path::new("/Users/test/.scriptkit/plugins/my-kit/scriptlets/file.md");
     let kit = extract_kit_from_path(nested_path, kit_root);
     assert_eq!(kit, Some("my-kit".to_string()));
 }
@@ -78,8 +78,8 @@ fn test_extract_kit_from_path_main_kit() {
     // kit_root is ~/.scriptkit, not home directory
     let kit_root = Path::new("/Users/test/.scriptkit");
 
-    // Main kit path: ~/.scriptkit/main/scriptlets/file.md -> kit = "main"
-    let main_path = Path::new("/Users/test/.scriptkit/main/scriptlets/file.md");
+    // Main kit path: ~/.scriptkit/plugins/main/scriptlets/file.md -> kit = "main"
+    let main_path = Path::new("/Users/test/.scriptkit/plugins/main/scriptlets/file.md");
     let kit = extract_kit_from_path(main_path, kit_root);
     assert_eq!(kit, Some("main".to_string()));
 }
@@ -87,11 +87,11 @@ fn test_extract_kit_from_path_main_kit() {
 #[test]
 fn test_build_scriptlet_file_path() {
     use std::path::Path;
-    let md_path = Path::new("/Users/test/.scriptkit/main/scriptlets/my-scripts.md");
+    let md_path = Path::new("/Users/test/.scriptkit/plugins/main/scriptlets/my-scripts.md");
     let result = build_scriptlet_file_path(md_path, "my-slug");
     assert_eq!(
         result,
-        "/Users/test/.scriptkit/main/scriptlets/my-scripts.md#my-slug"
+        "/Users/test/.scriptkit/plugins/main/scriptlets/my-scripts.md#my-slug"
     );
 }
 
@@ -138,4 +138,3 @@ fn test_scriptlet_new_fields() {
     );
     assert_eq!(scriptlet.command, Some("test".to_string()));
 }
-

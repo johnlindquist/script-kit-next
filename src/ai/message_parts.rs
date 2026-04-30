@@ -937,7 +937,7 @@ mod tests {
             path: file_path.to_string_lossy().to_string(),
             label: "/review".to_string(),
             skill_name: "Review".to_string(),
-            owner_label: "Authoring".to_string(),
+            owner_label: "Script Kit".to_string(),
             slash_name: "review".to_string(),
         };
 
@@ -945,7 +945,7 @@ mod tests {
             resolve_context_part_to_prompt_block(&part, &[], &[]).expect("resolve should succeed");
 
         assert!(block.contains("Use the attached skill \"Review\""));
-        assert!(block.contains("from plugin \"Authoring\""));
+        assert!(block.contains("from plugin \"Script Kit\""));
         assert!(block.contains("<skill path=\""));
         assert!(block.contains("Review the current diff."));
         assert!(block.contains("</skill>"));

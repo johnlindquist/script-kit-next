@@ -1411,7 +1411,7 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn builtin_exception_surfaces_emit_chrome_audit() {
+    fn builtin_special_surfaces_emit_expected_chrome_audit() {
         let kit_store = include_str!("../render_builtins/kit_store.rs");
         assert!(
             kit_store.contains("PromptChromeAudit::exception("),
@@ -1426,8 +1426,8 @@ mod prompt_layout_shell_tests {
 
         let settings = include_str!("../render_builtins/settings.rs");
         assert!(
-            settings.contains("PromptChromeAudit::exception("),
-            "settings.rs should classify as exception"
+            settings.contains("PromptChromeAudit::minimal_list("),
+            "settings.rs should classify as minimal_list"
         );
     }
 
@@ -1734,8 +1734,9 @@ mod prompt_layout_shell_tests {
         let render_code = &source[..render_fn_end];
 
         assert!(
-            render_code.contains("render_minimal_list_prompt_shell("),
-            "app_launcher should return the shared minimal list prompt shell"
+            render_code.contains("render_minimal_list_prompt_shell(")
+                || render_code.contains("render_minimal_list_prompt_shell_with_footer("),
+            "app_launcher should return the shared minimal list prompt shell wrapper"
         );
         assert!(
             render_code.contains(".key_context(\"app_launcher\")"),
@@ -1781,12 +1782,13 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn path_prompt_entity_uses_minimal_scaffold_and_hint_strip() {
+    fn path_prompt_entity_uses_minimal_shell_and_hint_strip() {
         let source = include_str!("../prompts/path/render.rs");
 
         assert!(
-            source.contains("render_minimal_list_prompt_scaffold("),
-            "path prompt entity should use the shared minimal list prompt scaffold"
+            source.contains("render_minimal_list_prompt_shell(")
+                || source.contains("render_minimal_list_prompt_shell_with_footer("),
+            "path prompt entity should use the shared minimal list prompt shell"
         );
         assert!(
             source.contains("universal_prompt_hints()"),

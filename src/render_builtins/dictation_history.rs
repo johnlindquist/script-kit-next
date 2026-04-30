@@ -1,0 +1,460 @@
+impl ScriptListApp {
+    fn dictation_history_meta(entry: &crate::dictation::DictationHistoryEntry) -> String {
+        format!(
+            "{} · {} · {}",
+            entry.target,
+            crate::dictation::format_history_duration_ms(entry.audio_duration_ms),
+            crate::dictation::format_history_timestamp(&entry.timestamp)
+        )
+    }
+
+    fn dictation_history_attachment_part(
+        entry: &crate::dictation::DictationHistoryEntry,
+    ) -> crate::ai::message_parts::AiContextPart {
+        crate::ai::message_parts::AiContextPart::ResourceUri {
+            uri: format!("kit://dictation-history?id={}", entry.id),
+            label: format!("Dictation: {}", entry.preview),
+        }
+    }
+
+    /// Render the saved dictation history browser (list + preview).
+    fn render_dictation_history(
+        &mut self,
+        filter: String,
+        selected_index: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        use gpui_component::scroll::ScrollableElement as _;
+
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::expanded("dictation_history", false),
+        );
+
+        let tokens = get_tokens(self.current_design);
+        let design_spacing = tokens.spacing();
+        let design_typography = tokens.typography();
+
+        let all_entries = crate::dictation::load_history();
+        let text_primary = self.theme.colors.text.primary;
+        let text_dimmed = self.theme.colors.text.dimmed;
+        let text_muted = self.theme.colors.text.muted;
+
+        let hits = crate::dictation::search_history(&filter, 100);
+        let filtered_entries: Vec<crate::dictation::DictationHistoryEntry> =
+            hits.into_iter().map(|hit| hit.entry).collect();
+        let filtered_len = filtered_entries.len();
+        let selected_index = if let Some(reanchored) =
+            Self::builtin_reanchor_selection_from_scroll_handle(
+                selected_index,
+                &self.dictation_history_scroll_handle,
+                filtered_len,
+            )
+        {
+            tracing::info!(
+                target: "script_kit::scroll",
+                event = "builtin_selection_resynced_from_scrollbar",
+                view = "dictation_history",
+                reason = "render",
+                selected_before = selected_index,
+                selected_after = reanchored,
+            );
+            if let AppView::DictationHistoryView { selected_index, .. } = &mut self.current_view {
+                *selected_index = reanchored;
+            }
+            reanchored
+        } else {
+            selected_index
+        };
+        let selected_entry = filtered_entries.get(selected_index).cloned();
+        let in_portal = self.is_in_attachment_portal();
+
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  window: &mut Window,
+                  cx: &mut Context<Self>| {
+                this.hide_mouse_cursor(cx);
+
+                let key = event.keystroke.key.as_str();
+                let key_char = event.keystroke.key_char.as_deref();
+                let has_cmd = event.keystroke.modifiers.platform;
+                let modifiers = &event.keystroke.modifiers;
+
+                match this.route_key_to_actions_dialog(
+                    key,
+                    key_char,
+                    modifiers,
+                    ActionsDialogHost::DictationHistory,
+                    window,
+                    cx,
+                ) {
+                    ActionsRoute::NotHandled => {}
+                    ActionsRoute::Handled => {
+                        cx.stop_propagation();
+                        return;
+                    }
+                    ActionsRoute::Execute { action_id } => {
+                        this.handle_action(action_id, window, cx);
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
+
+                if is_key_escape(key) {
+                    if this.is_in_attachment_portal() {
+                        this.close_attachment_portal_cancel(cx);
+                        cx.stop_propagation();
+                        return;
+                    }
+                    if !this.clear_builtin_view_filter(cx) {
+                        this.go_back_or_close(window, cx);
+                    }
+                    cx.stop_propagation();
+                    return;
+                }
+
+                if has_cmd && key.eq_ignore_ascii_case("w") {
+                    this.close_and_reset_window(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+
+                let view_state = if let AppView::DictationHistoryView {
+                    filter,
+                    selected_index,
+                } = &this.current_view
+                {
+                    Some((filter.clone(), *selected_index))
+                } else {
+                    None
+                };
+
+                let Some((current_filter, current_selected)) = view_state else {
+                    return;
+                };
+
+                let hits = crate::dictation::search_history(&current_filter, 100);
+                let filtered: Vec<crate::dictation::DictationHistoryEntry> =
+                    hits.into_iter().map(|hit| hit.entry).collect();
+                let current_filtered_len = filtered.len();
+                let selected_entry = filtered.get(current_selected).cloned();
+
+                if is_key_up(key) {
+                    if current_selected > 0 {
+                        if let AppView::DictationHistoryView { selected_index, .. } =
+                            &mut this.current_view
+                        {
+                            *selected_index = current_selected - 1;
+                            this.dictation_history_scroll_handle
+                                .scroll_to_item(*selected_index);
+                        }
+                        cx.notify();
+                    }
+                    cx.stop_propagation();
+                } else if is_key_down(key) {
+                    if current_selected < current_filtered_len.saturating_sub(1) {
+                        if let AppView::DictationHistoryView { selected_index, .. } =
+                            &mut this.current_view
+                        {
+                            *selected_index = current_selected + 1;
+                            this.dictation_history_scroll_handle
+                                .scroll_to_item(*selected_index);
+                        }
+                        cx.notify();
+                    }
+                    cx.stop_propagation();
+                } else if is_key_enter(key) {
+                    if has_cmd {
+                        if let Some(entry) = selected_entry {
+                            cx.write_to_clipboard(gpui::ClipboardItem::new_string(
+                                entry.transcript,
+                            ));
+                            this.show_hud(
+                                "Copied dictation to clipboard".to_string(),
+                                Some(HUD_MEDIUM_MS),
+                                cx,
+                            );
+                        }
+                    } else if this.is_in_attachment_portal() {
+                        if let Some(entry) = selected_entry {
+                            let part = Self::dictation_history_attachment_part(&entry);
+                            this.close_attachment_portal_with_part(part, cx);
+                        }
+                    } else if selected_entry.is_some() {
+                        this.handle_action("dictation_history_paste".to_string(), window, cx);
+                    }
+                    cx.stop_propagation();
+                } else if has_cmd && key.eq_ignore_ascii_case("k") {
+                    if let Some(entry) = selected_entry {
+                        this.toggle_dictation_history_actions(entry, window, cx);
+                    }
+                    cx.stop_propagation();
+                } else if modifiers.control && has_cmd && key.eq_ignore_ascii_case("a") {
+                    if selected_entry.is_some() {
+                        this.handle_action(
+                            "dictation_history_attach_to_ai".to_string(),
+                            window,
+                            cx,
+                        );
+                    }
+                    cx.stop_propagation();
+                } else if key.eq_ignore_ascii_case("backspace") && has_cmd {
+                    if selected_entry.is_some() {
+                        this.handle_action("dictation_history_delete".to_string(), window, cx);
+                    }
+                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
+                }
+            },
+        );
+
+        let list_colors = ListItemColors::from_theme(&self.theme);
+        let list_element: AnyElement = if filtered_len == 0 {
+            div()
+                .w_full()
+                .py(px(design_spacing.padding_xl))
+                .text_center()
+                .text_color(rgb(text_muted))
+                .font_family(design_typography.font_family)
+                .child(if filter.is_empty() {
+                    "No saved dictation yet"
+                } else {
+                    "No dictations match your filter"
+                })
+                .into_any_element()
+        } else {
+            let selected = selected_index;
+            div()
+                .id("dictation-history-list")
+                .w_full()
+                .min_h(px(0.))
+                .flex()
+                .flex_col()
+                .track_scroll(&self.dictation_history_scroll_handle)
+                .overflow_y_scrollbar()
+                .children(
+                    filtered_entries
+                        .iter()
+                        .enumerate()
+                        .map(|(display_ix, entry)| {
+                            let item = ListItem::new(entry.preview.clone(), list_colors)
+                                .description_opt(Some(Self::dictation_history_meta(entry)))
+                                .selected(display_ix == selected)
+                                .with_accent_bar(true);
+
+                            div()
+                                .id(gpui::ElementId::Integer(display_ix as u64))
+                                .child(item)
+                        }),
+                )
+                .into_any_element()
+        };
+
+        let preview_panel: AnyElement = match selected_entry {
+            Some(entry) => div()
+                .w_full()
+                .h_full()
+                .min_w_0()
+                .min_h(px(0.))
+                .overflow_y_scrollbar()
+                .px(px(design_spacing.padding_lg))
+                .py(px(design_spacing.padding_md))
+                .font_family(design_typography.font_family)
+                .child(
+                    div()
+                        .w_full()
+                        .min_w_0()
+                        .text_xs()
+                        .text_color(rgb(text_muted))
+                        .child(Self::dictation_history_meta(&entry)),
+                )
+                .child(
+                    div()
+                        .w_full()
+                        .min_w_0()
+                        .pt(px(design_spacing.padding_md))
+                        .text_sm()
+                        .text_color(rgb(text_primary))
+                        .child(entry.transcript),
+                )
+                .into_any_element(),
+            None => div()
+                .w_full()
+                .h_full()
+                .min_h(px(0.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(rgb(text_muted))
+                .font_family(design_typography.font_family)
+                .child("Select a dictation to preview it")
+                .into_any_element(),
+        };
+
+        let header_element = div()
+            .flex_1()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            .child(
+                div().flex_1().flex().flex_row().items_center().child(
+                    Input::new(&self.gpui_input_state)
+                        .w_full()
+                        .h(px(28.))
+                        .px(px(0.))
+                        .py(px(0.))
+                        .with_size(Size::Size(px(design_typography.font_size_xl)))
+                        .appearance(false)
+                        .bordered(false)
+                        .focus_bordered(false),
+                ),
+            )
+            .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                "{} dictation{}",
+                all_entries.len(),
+                if all_entries.len() == 1 { "" } else { "s" }
+            )));
+
+        let list_pane = div()
+            .relative()
+            .w_full()
+            .h_full()
+            .min_h(px(0.))
+            .py(px(design_spacing.padding_xs))
+            .on_scroll_wheel(cx.listener(
+                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                    let view_state = if let AppView::DictationHistoryView {
+                        filter,
+                        selected_index,
+                    } = &this.current_view
+                    {
+                        Some((filter.clone(), *selected_index))
+                    } else {
+                        None
+                    };
+
+                    let Some((current_filter, current_selected)) = view_state else {
+                        return;
+                    };
+
+                    let hits = crate::dictation::search_history(&current_filter, 100);
+                    let filtered_entries: Vec<crate::dictation::DictationHistoryEntry> =
+                        hits.into_iter().map(|hit| hit.entry).collect();
+                    let filtered_len = filtered_entries.len();
+
+                    let Some(new_selected) = this.builtin_scroll_target_from_wheel(
+                        event,
+                        current_selected,
+                        filtered_len,
+                    ) else {
+                        if filtered_len > 0 {
+                            cx.stop_propagation();
+                        }
+                        return;
+                    };
+
+                    if let AppView::DictationHistoryView { selected_index, .. } =
+                        &mut this.current_view
+                    {
+                        *selected_index = new_selected;
+                    }
+
+                    this.dictation_history_scroll_handle
+                        .scroll_to_item(new_selected);
+                    Self::log_builtin_scroll_event(
+                        "dictation_history",
+                        "scroll_to_item",
+                        "wheel",
+                        filtered_len,
+                        Some(new_selected),
+                        Some(new_selected),
+                        Some(&current_filter),
+                        "mouse",
+                    );
+                    cx.notify();
+                    cx.stop_propagation();
+                },
+            ))
+            .child(list_element);
+
+        let hints = if in_portal {
+            vec![
+                "↵ Attach".into(),
+                "⌘↵ Copy".into(),
+                "Esc Cancel".into(),
+                "Attaching to Agent Chat".into(),
+            ]
+        } else {
+            vec![
+                "↵ Paste".into(),
+                "⌘↵ Copy".into(),
+                "⌃⌘A AI".into(),
+                "⌘K Actions".into(),
+                "⌘⌫ Delete".into(),
+                "Esc Back".into(),
+            ]
+        };
+        crate::components::emit_prompt_hint_audit("dictation_history", &hints);
+
+        crate::components::render_expanded_view_scaffold_with_hints(
+            header_element,
+            list_pane,
+            preview_panel,
+            hints,
+            None,
+        )
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("dictation_history")
+        .on_key_down(handle_key)
+        .track_focus(&self.focus_handle)
+        .into_any_element()
+    }
+}
+
+#[cfg(test)]
+mod dictation_history_scroll_contract {
+    const SOURCE: &str = include_str!("dictation_history.rs");
+
+    #[test]
+    fn dictation_history_tracks_scroll_and_copy_shortcuts() {
+        assert!(
+            SOURCE.contains(".track_scroll(&self.dictation_history_scroll_handle)"),
+            "dictation history should track its dedicated scroll handle"
+        );
+        assert!(
+            SOURCE.contains(".on_scroll_wheel(cx.listener("),
+            "dictation history should intercept wheel events on the list pane"
+        );
+        assert!(
+            SOURCE.contains("builtin_scroll_target_from_wheel"),
+            "dictation history wheel scrolling should use the shared builtin helper"
+        );
+        assert!(
+            SOURCE.contains("Input::new(&self.gpui_input_state)"),
+            "dictation history should expose the shared search input"
+        );
+        assert!(
+            SOURCE.contains("render_expanded_view_scaffold_with_hints("),
+            "dictation history should use the shared expanded scaffold"
+        );
+        assert!(
+            SOURCE.contains("builtin_reanchor_selection_from_scroll_handle"),
+            "dictation history should reanchor selection after ScrollHandle movement"
+        );
+        assert!(
+            SOURCE.contains("\"dictation_history_paste\""),
+            "dictation history should route Enter through the paste action"
+        );
+        assert!(
+            SOURCE.contains("\"dictation_history_delete\""),
+            "dictation history should surface the delete action"
+        );
+        assert!(
+            SOURCE.contains("toggle_dictation_history_actions"),
+            "dictation history should expose a dedicated actions menu"
+        );
+    }
+}

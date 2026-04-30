@@ -235,6 +235,7 @@ pub(crate) fn typed_mention_prefix_for_target_kind(kind: &str) -> &'static str {
         "script" => "script",
         "scriptlet" => "scriptlet",
         "note" => "note",
+        "browser_history_entry" => "browser-history",
         "builtin" | "menu_command" => "cmd",
         "search_query" => "search",
         "input" => "input",
@@ -425,8 +426,9 @@ pub fn parse_inline_context_mentions_with_aliases(
 ) -> Vec<InlineContextMention> {
     let mut out = Vec::new();
     for span in inline_token_spans(text) {
-        // Resolution order: built-in → @file:/path → alias registry
+        // Resolution order: built-in → typed dictation entry → @file:/path → alias registry
         let part = resolve_builtin_mention_token(&span.token)
+            .or_else(|| parse_dictation_history_mention(&span.token))
             .or_else(|| parse_file_mention(&span.token))
             .or_else(|| aliases.get(&span.token).cloned());
 
@@ -513,6 +515,9 @@ pub fn mention_range_for_atomic_delete_with_aliases(
 pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
     match part {
         AiContextPart::ResourceUri { uri, .. } => {
+            if let Some(id) = uri.strip_prefix("kit://dictation-history?id=") {
+                return Some(format_typed_mention_token("dictation", id));
+            }
             crate::ai::context_contract::context_attachment_specs()
                 .iter()
                 .find(|spec| spec.uri == uri.as_str())
@@ -520,6 +525,11 @@ pub(crate) fn part_to_inline_token(part: &AiContextPart) -> Option<String> {
                 .map(ToString::to_string)
         }
         AiContextPart::FilePath { path, .. } => {
+            if let AiContextPart::FilePath { label, .. } = part {
+                if let Some(token) = crate::pasted_image::token_for_label(label) {
+                    return Some(token);
+                }
+            }
             let prefix = typed_mention_prefix(path);
             let name = typed_mention_display_name(path);
             Some(format_typed_mention_token(prefix, &name))
@@ -636,10 +646,30 @@ fn parse_file_mention(trimmed: &str) -> Option<AiContextPart> {
     Some(AiContextPart::FilePath { path, label })
 }
 
+pub(crate) fn dictation_history_part_for_entry(
+    entry: &crate::dictation::DictationHistoryEntry,
+) -> AiContextPart {
+    AiContextPart::ResourceUri {
+        uri: format!("kit://dictation-history?id={}", entry.id),
+        label: format!("Dictation: {}", entry.preview),
+    }
+}
+
+fn parse_dictation_history_mention(trimmed: &str) -> Option<AiContextPart> {
+    let (prefix, value) = typed_mention_token_parts(trimmed)?;
+    if prefix != "dictation" {
+        return None;
+    }
+
+    let entry = crate::dictation::get_history_entry(value.trim())?;
+    Some(dictation_history_part_for_entry(&entry))
+}
+
 mod sync;
 pub(crate) use sync::{
     build_inline_mention_sync_plan, build_inline_mention_sync_plan_with_aliases,
-    caret_after_replacement, remove_inline_mention_at_cursor, replace_text_in_char_range,
+    caret_after_replacement, remove_inline_mention_at_cursor,
+    remove_inline_mention_at_cursor_with_aliases, replace_text_in_char_range,
     should_claim_inline_mention_ownership, visible_context_chip_indices, InlineMentionSyncPlan,
 };
 

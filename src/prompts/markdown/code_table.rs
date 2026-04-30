@@ -126,28 +126,38 @@ pub(super) fn build_code_block_element(
     }
 
     let mut body = div()
+        .id(SharedString::from(format!("code-scroll-{}", copy_state_id)))
         .w_full()
         .px(px(10.0))
         .py(px(8.0))
         .flex()
         .flex_col()
-        .gap(px(2.0));
+        .items_start()
+        .gap(px(2.0))
+        .overflow_x_scroll()
+        .overflow_y_hidden();
 
     for line in lines {
         let mut line_div = div()
             .flex()
             .flex_row()
-            .w_full()
+            .flex_none()
             .font_family(FONT_MONO)
             .text_sm()
+            .whitespace_nowrap()
             .min_h(px(16.0));
 
         if line.spans.is_empty() {
             line_div = line_div.child(" ");
         } else {
             for span in &line.spans {
-                line_div =
-                    line_div.child(div().text_color(rgb(span.color)).child(span.text.clone()));
+                line_div = line_div.child(
+                    div()
+                        .flex_shrink_0()
+                        .whitespace_nowrap()
+                        .text_color(rgb(span.color))
+                        .child(span.text.clone()),
+                );
             }
         }
 

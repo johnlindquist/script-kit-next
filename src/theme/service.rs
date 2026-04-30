@@ -14,7 +14,7 @@
 //! ```
 //!
 //! The service will:
-//! 1. Watch ~/.scriptkit/kit/theme.json for changes
+//! 1. Watch ~/.scriptkit/theme.json for changes
 //! 2. Sync gpui-component theme when changes are detected
 //! 3. Notify all registered windows to re-render
 //!
@@ -145,7 +145,7 @@ fn log_theme_validation_diagnostics(theme_json: &serde_json::Value) -> (usize, u
 }
 
 fn validate_theme_json_before_reload() {
-    let theme_path = crate::setup::get_kit_path().join("kit").join("theme.json");
+    let theme_path = crate::setup::theme_json_path();
     let contents = match std::fs::read_to_string(&theme_path) {
         Ok(contents) => contents,
         Err(error) => {

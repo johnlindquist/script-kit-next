@@ -253,6 +253,7 @@ impl ScriptListApp {
     ) {
         self.theme = std::sync::Arc::new(next_theme);
         self.sync_open_actions_dialog_theme(cx);
+        self.sync_open_terminal_theme(cx);
         sync_theme_chooser_preview(cx, &self.theme, reason);
         // Sync native vibrancy so the window material matches the theme
         let is_dark = self.theme.should_use_dark_vibrancy();
@@ -303,6 +304,7 @@ impl ScriptListApp {
     ) {
         self.theme = original;
         self.sync_open_actions_dialog_theme(cx);
+        self.sync_open_terminal_theme(cx);
         sync_theme_chooser_preview(cx, &self.theme, reason);
         // Sync native vibrancy for the restored theme
         let is_dark = self.theme.should_use_dark_vibrancy();
@@ -582,7 +584,38 @@ impl ScriptListApp {
                   cx: &mut Context<Self>| {
                 this.hide_mouse_cursor(cx);
                 let key = event.keystroke.key.as_str();
+                let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
+                let modifiers = &event.keystroke.modifiers;
+
+                match this.route_key_to_actions_dialog(
+                    key,
+                    key_char,
+                    modifiers,
+                    ActionsDialogHost::BuiltinList,
+                    window,
+                    cx,
+                ) {
+                    ActionsRoute::NotHandled => {}
+                    ActionsRoute::Handled => {
+                        tracing::debug!(
+                            target: "script_kit::actions",
+                            event = "builtin_view_actions_key_routed",
+                            surface = "theme_chooser",
+                            key = %key,
+                        );
+                        return;
+                    }
+                    ActionsRoute::Execute { action_id } => {
+                        this.execute_action_for_actions_host(
+                            ActionsDialogHost::BuiltinList,
+                            action_id,
+                            window,
+                            cx,
+                        );
+                        return;
+                    }
+                }
 
                 // Escape: clear filter first if present, otherwise restore original and close
                 // Escape: clear filter first if present, otherwise undo all changes and close

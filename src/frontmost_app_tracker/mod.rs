@@ -53,6 +53,34 @@ pub struct TrackedApp {
     /// Cached focused window title for the app, if available.
     pub window_title: Option<String>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct MenuCacheIdentity {
+    pid: i32,
+    bundle_id: String,
+}
+
+fn tracked_app_matches(app: Option<&TrackedApp>, identity: &MenuCacheIdentity) -> bool {
+    app.map(|app| app.pid == identity.pid && app.bundle_id == identity.bundle_id)
+        .unwrap_or(false)
+}
+
+fn fetching_request_matches(
+    state: &TrackerState,
+    identity: &MenuCacheIdentity,
+    generation: u64,
+) -> bool {
+    state.fetching_menu_identity.as_ref() == Some(identity)
+        && state.fetching_menu_generation == generation
+}
+
+fn advance_fetch_generation(state: &mut TrackerState) -> u64 {
+    state.fetching_menu_generation = state.fetching_menu_generation.wrapping_add(1);
+    if state.fetching_menu_generation == 0 {
+        state.fetching_menu_generation = 1;
+    }
+    state.fetching_menu_generation
+}
 /// Global state for the frontmost app tracker
 #[derive(Default)]
 struct TrackerState {
@@ -60,13 +88,12 @@ struct TrackerState {
     last_real_app: Option<TrackedApp>,
     /// Cached menu bar items for the last real app
     cached_menu_items: Vec<MenuBarItem>,
-    /// Bundle ID currently being fetched, if any.
-    /// Using Option<String> instead of a boolean flag avoids race conditions:
-    /// - Thread A starts fetching for "com.app.A", sets fetching_bundle_id = Some("com.app.A")
-    /// - Thread B starts fetching for "com.app.B", sets fetching_bundle_id = Some("com.app.B")
-    /// - Thread A finishes first: only clears if still "com.app.A" (which it isn't)
-    /// - Thread B finishes: clears correctly since it's still "com.app.B"
-    fetching_bundle_id: Option<String>,
+    /// Identity that owns the current cached menu items, if any.
+    cached_menu_identity: Option<MenuCacheIdentity>,
+    /// Exact app identity currently being fetched, if any.
+    fetching_menu_identity: Option<MenuCacheIdentity>,
+    /// Monotonic request generation for the active fetch.
+    fetching_menu_generation: u64,
 }
 /// Global tracker state, protected by RwLock for concurrent access
 static TRACKER_STATE: LazyLock<RwLock<TrackerState>> =
@@ -370,19 +397,32 @@ pub fn get_last_real_app_bundle_id() -> Option<String> {
 ///
 /// Returns an empty Vec if no menu items are cached.
 pub fn get_cached_menu_items() -> Vec<MenuBarItem> {
-    TRACKER_STATE.read().cached_menu_items.clone()
+    let state = TRACKER_STATE.read();
+    let Some(tracked) = state.last_real_app.as_ref() else {
+        return Vec::new();
+    };
+
+    let cache_matches = state
+        .cached_menu_identity
+        .as_ref()
+        .map(|identity| identity.pid == tracked.pid && identity.bundle_id == tracked.bundle_id)
+        .unwrap_or(false);
+
+    if cache_matches {
+        state.cached_menu_items.clone()
+    } else {
+        Vec::new()
+    }
 }
 
 #[cfg(target_os = "macos")]
 pub fn replace_cached_menu_items(pid: i32, bundle_id: &str, items: Vec<MenuBarItem>) {
+    let identity = MenuCacheIdentity {
+        pid,
+        bundle_id: bundle_id.to_string(),
+    };
     let mut state = TRACKER_STATE.write();
-    let same_app = state
-        .last_real_app
-        .as_ref()
-        .map(|app| app.pid == pid && app.bundle_id == bundle_id)
-        .unwrap_or(false);
-
-    if !same_app {
+    if !tracked_app_matches(state.last_real_app.as_ref(), &identity) {
         logging::log(
             "APP",
             &format!(
@@ -395,8 +435,9 @@ pub fn replace_cached_menu_items(pid: i32, bundle_id: &str, items: Vec<MenuBarIt
 
     let item_count = items.len();
     state.cached_menu_items = items;
-    if state.fetching_bundle_id.as_deref() == Some(bundle_id) {
-        state.fetching_bundle_id = None;
+    state.cached_menu_identity = Some(identity.clone());
+    if state.fetching_menu_identity.as_ref() == Some(&identity) {
+        state.fetching_menu_identity = None;
     }
 
     logging::log(
@@ -410,13 +451,17 @@ pub fn replace_cached_menu_items(pid: i32, bundle_id: &str, items: Vec<MenuBarIt
 /// Check if menu items are currently being fetched in the background.
 #[allow(dead_code)] // Public API for future use
 pub fn is_fetching_menu() -> bool {
-    TRACKER_STATE.read().fetching_bundle_id.is_some()
+    TRACKER_STATE.read().fetching_menu_identity.is_some()
 }
 /// Get the bundle ID currently being fetched, if any.
 /// This is more informative than `is_fetching_menu()` for debugging.
 #[allow(dead_code)] // Public API for future use
 pub fn get_fetching_bundle_id() -> Option<String> {
-    TRACKER_STATE.read().fetching_bundle_id.clone()
+    TRACKER_STATE
+        .read()
+        .fetching_menu_identity
+        .as_ref()
+        .map(|identity| identity.bundle_id.clone())
 }
 /// Capture the current frontmost app (used at startup and for manual refresh)
 #[cfg(target_os = "macos")]
@@ -468,6 +513,9 @@ fn capture_current_frontmost_app() {
             {
                 let mut state = TRACKER_STATE.write();
                 state.last_real_app = Some(tracked.clone());
+                state.cached_menu_items.clear();
+                state.cached_menu_identity = None;
+                state.fetching_menu_identity = None;
             }
 
             // Fetch menu items in background
@@ -628,6 +676,8 @@ fn setup_workspace_observer() {
                             let mut state = TRACKER_STATE.write();
                             state.last_real_app = Some(tracked.clone());
                             state.cached_menu_items.clear(); // Clear old cache
+                            state.cached_menu_identity = None;
+                            state.fetching_menu_identity = None;
                         }
 
                         // Fetch menu items in background
@@ -687,11 +737,16 @@ fn setup_workspace_observer() {
 /// Fetch menu items asynchronously for the given app
 #[cfg(target_os = "macos")]
 fn fetch_menu_items_async(pid: i32, bundle_id: String) {
-    // Mark which bundle we're fetching for (replaces boolean flag to avoid race)
-    {
+    let identity = MenuCacheIdentity {
+        pid,
+        bundle_id: bundle_id.clone(),
+    };
+    let generation = {
         let mut state = TRACKER_STATE.write();
-        state.fetching_bundle_id = Some(bundle_id.clone());
-    }
+        let generation = advance_fetch_generation(&mut state);
+        state.fetching_menu_identity = Some(identity.clone());
+        generation
+    };
 
     std::thread::spawn(move || {
         let start = std::time::Instant::now();
@@ -701,39 +756,56 @@ fn fetch_menu_items_async(pid: i32, bundle_id: String) {
                 let elapsed = start.elapsed();
                 let count = items.len();
 
-                logging::log(
-                    "APP",
-                    &format!(
-                        "Pre-fetched {} menu items for {} in {:.2}ms",
-                        count,
-                        bundle_id,
-                        elapsed.as_secs_f64() * 1000.0
-                    ),
-                );
-
-                // Update cache
                 let mut state = TRACKER_STATE.write();
+                let active_request_matches =
+                    fetching_request_matches(&state, &identity, generation);
 
-                // Only update if still tracking the same app
-                if state.last_real_app.as_ref().map(|a| &a.bundle_id) == Some(&bundle_id) {
+                if tracked_app_matches(state.last_real_app.as_ref(), &identity)
+                    && active_request_matches
+                {
                     state.cached_menu_items = items;
+                    state.cached_menu_identity = Some(identity.clone());
+                    state.fetching_menu_identity = None;
+                    logging::log(
+                        "APP",
+                        &format!(
+                            "Published cached menu items for {} PID {} with {} top-level items in {:.2}ms",
+                            bundle_id,
+                            pid,
+                            count,
+                            elapsed.as_secs_f64() * 1000.0
+                        ),
+                    );
+                } else {
+                    let reason = if !tracked_app_matches(state.last_real_app.as_ref(), &identity) {
+                        "the tracked app changed"
+                    } else {
+                        "a newer menu fetch superseded it"
+                    };
+                    logging::log(
+                        "APP",
+                        &format!(
+                            "Skipped cached menu publish for {} PID {} because {}",
+                            bundle_id, pid, reason
+                        ),
+                    );
                 }
-                // Only clear fetching state if we're still the one fetching
-                // (avoids race where a newer fetch started for a different app)
-                if state.fetching_bundle_id.as_ref() == Some(&bundle_id) {
-                    state.fetching_bundle_id = None;
+                if active_request_matches {
+                    state.fetching_menu_identity = None;
                 }
             }
             Err(e) => {
                 logging::log(
                     "WARN",
-                    &format!("Failed to pre-fetch menu items for {}: {}", bundle_id, e),
+                    &format!(
+                        "Failed to pre-fetch menu items for {} PID {}: {}",
+                        bundle_id, pid, e
+                    ),
                 );
 
                 let mut state = TRACKER_STATE.write();
-                // Only clear fetching state if we're still the one fetching
-                if state.fetching_bundle_id.as_ref() == Some(&bundle_id) {
-                    state.fetching_bundle_id = None;
+                if fetching_request_matches(&state, &identity, generation) {
+                    state.fetching_menu_identity = None;
                 }
             }
         }
@@ -790,50 +862,119 @@ mod tests {
 
     static TRACKER_STATE_TEST_LOCK: Mutex<()> = Mutex::new(());
 
+    fn restore_tracker_state(
+        last_real_app: Option<TrackedApp>,
+        cached_menu_items: Vec<MenuBarItem>,
+        cached_menu_identity: Option<MenuCacheIdentity>,
+        fetching_menu_identity: Option<MenuCacheIdentity>,
+        fetching_menu_generation: u64,
+    ) {
+        let mut state = TRACKER_STATE.write();
+        state.last_real_app = last_real_app;
+        state.cached_menu_items = cached_menu_items;
+        state.cached_menu_identity = cached_menu_identity;
+        state.fetching_menu_identity = fetching_menu_identity;
+        state.fetching_menu_generation = fetching_menu_generation;
+    }
+
     #[test]
     fn test_tracker_state_default() {
         let state = TrackerState::default();
         assert!(state.last_real_app.is_none());
         assert!(state.cached_menu_items.is_empty());
-        assert!(state.fetching_bundle_id.is_none());
+        assert!(state.cached_menu_identity.is_none());
+        assert!(state.fetching_menu_identity.is_none());
+        assert_eq!(state.fetching_menu_generation, 0);
     }
 
     #[test]
-    fn test_fetching_bundle_id_race_condition_fix() {
-        // Test that the bundle_id tracking correctly handles concurrent fetches
-        // Scenario: Thread A starts fetching for "com.app.A", then Thread B
-        // starts for "com.app.B". Thread A finishes first - should NOT clear
-        // the fetching state since B is now the active fetch.
-
-        // Simulate Thread A starting fetch
+    fn test_fetching_menu_identity_race_condition_fix() {
         let mut state = TrackerState {
-            fetching_bundle_id: Some("com.app.A".to_string()),
+            fetching_menu_identity: Some(MenuCacheIdentity {
+                pid: 1,
+                bundle_id: "com.app.A".to_string(),
+            }),
             ..Default::default()
         };
-        assert_eq!(state.fetching_bundle_id.as_deref(), Some("com.app.A"));
-
-        // Thread B starts fetching (overwrites A)
-        state.fetching_bundle_id = Some("com.app.B".to_string());
-        assert_eq!(state.fetching_bundle_id.as_deref(), Some("com.app.B"));
-
-        // Thread A finishes - should NOT clear state (it's for B now)
-        if state.fetching_bundle_id.as_deref() == Some("com.app.A") {
-            state.fetching_bundle_id = None;
-        }
-        // State should still show B as fetching
         assert_eq!(
-            state.fetching_bundle_id.as_deref(),
-            Some("com.app.B"),
+            state.fetching_menu_identity.as_ref(),
+            Some(&MenuCacheIdentity {
+                pid: 1,
+                bundle_id: "com.app.A".to_string(),
+            })
+        );
+
+        state.fetching_menu_identity = Some(MenuCacheIdentity {
+            pid: 2,
+            bundle_id: "com.app.B".to_string(),
+        });
+        assert_eq!(
+            state.fetching_menu_identity.as_ref(),
+            Some(&MenuCacheIdentity {
+                pid: 2,
+                bundle_id: "com.app.B".to_string(),
+            })
+        );
+
+        if state.fetching_menu_identity.as_ref()
+            == Some(&MenuCacheIdentity {
+                pid: 1,
+                bundle_id: "com.app.A".to_string(),
+            })
+        {
+            state.fetching_menu_identity = None;
+        }
+        assert_eq!(
+            state.fetching_menu_identity.as_ref(),
+            Some(&MenuCacheIdentity {
+                pid: 2,
+                bundle_id: "com.app.B".to_string(),
+            }),
             "Thread A should not clear B's fetch state"
         );
 
-        // Thread B finishes - should clear state
-        if state.fetching_bundle_id.as_deref() == Some("com.app.B") {
-            state.fetching_bundle_id = None;
+        if state.fetching_menu_identity.as_ref()
+            == Some(&MenuCacheIdentity {
+                pid: 2,
+                bundle_id: "com.app.B".to_string(),
+            })
+        {
+            state.fetching_menu_identity = None;
         }
         assert!(
-            state.fetching_bundle_id.is_none(),
+            state.fetching_menu_identity.is_none(),
             "Thread B should clear its own fetch state"
+        );
+    }
+
+    #[test]
+    fn test_fetching_menu_generation_blocks_stale_same_identity_completion() {
+        let identity = MenuCacheIdentity {
+            pid: 2,
+            bundle_id: "com.app.A".to_string(),
+        };
+        let mut state = TrackerState {
+            fetching_menu_identity: Some(identity.clone()),
+            fetching_menu_generation: 2,
+            ..Default::default()
+        };
+
+        assert!(
+            !fetching_request_matches(&state, &identity, 1),
+            "older same-identity fetches must not match the active request"
+        );
+        assert!(
+            fetching_request_matches(&state, &identity, 2),
+            "latest same-identity fetch must remain active"
+        );
+
+        if fetching_request_matches(&state, &identity, 1) {
+            state.fetching_menu_identity = None;
+        }
+        assert_eq!(
+            state.fetching_menu_identity.as_ref(),
+            Some(&identity),
+            "stale same-identity completion must not clear the active fetch"
         );
     }
 
@@ -855,7 +996,11 @@ mod tests {
     #[test]
     fn test_get_last_real_app_bundle_id_returns_none_when_not_set() {
         let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
-        let previous = TRACKER_STATE.read().last_real_app.clone();
+        let previous_last_real_app = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached_items = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_cached_identity = TRACKER_STATE.read().cached_menu_identity.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_menu_identity.clone();
+        let previous_fetching_generation = TRACKER_STATE.read().fetching_menu_generation;
 
         let mut state = TRACKER_STATE.write();
         state.last_real_app = None;
@@ -863,13 +1008,23 @@ mod tests {
 
         assert_eq!(get_last_real_app_bundle_id(), None);
 
-        TRACKER_STATE.write().last_real_app = previous;
+        restore_tracker_state(
+            previous_last_real_app,
+            previous_cached_items,
+            previous_cached_identity,
+            previous_fetching,
+            previous_fetching_generation,
+        );
     }
 
     #[test]
     fn test_get_last_real_app_bundle_id_returns_bundle_id_when_set() {
         let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
-        let previous = TRACKER_STATE.read().last_real_app.clone();
+        let previous_last_real_app = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached_items = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_cached_identity = TRACKER_STATE.read().cached_menu_identity.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_menu_identity.clone();
+        let previous_fetching_generation = TRACKER_STATE.read().fetching_menu_generation;
 
         let mut state = TRACKER_STATE.write();
         state.last_real_app = Some(TrackedApp {
@@ -885,16 +1040,24 @@ mod tests {
             Some("com.example.bundle")
         );
 
-        TRACKER_STATE.write().last_real_app = previous;
+        restore_tracker_state(
+            previous_last_real_app,
+            previous_cached_items,
+            previous_cached_identity,
+            previous_fetching,
+            previous_fetching_generation,
+        );
     }
 
     #[cfg(target_os = "macos")]
     #[test]
     fn test_replace_cached_menu_items_updates_matching_tracked_app() {
         let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
-        let previous = TRACKER_STATE.read().last_real_app.clone();
-        let previous_cached = TRACKER_STATE.read().cached_menu_items.clone();
-        let previous_fetching = TRACKER_STATE.read().fetching_bundle_id.clone();
+        let previous_last_real_app = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached_items = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_cached_identity = TRACKER_STATE.read().cached_menu_identity.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_menu_identity.clone();
+        let previous_fetching_generation = TRACKER_STATE.read().fetching_menu_generation;
 
         {
             let mut state = TRACKER_STATE.write();
@@ -905,7 +1068,12 @@ mod tests {
                 window_title: None,
             });
             state.cached_menu_items = Vec::new();
-            state.fetching_bundle_id = Some("com.example.bundle".to_string());
+            state.cached_menu_identity = None;
+            state.fetching_menu_identity = Some(MenuCacheIdentity {
+                pid: 42,
+                bundle_id: "com.example.bundle".to_string(),
+            });
+            state.fetching_menu_generation = 1;
         }
 
         let replacement = vec![MenuBarItem {
@@ -920,22 +1088,34 @@ mod tests {
 
         let state = TRACKER_STATE.read();
         assert_eq!(state.cached_menu_items, replacement);
-        assert!(state.fetching_bundle_id.is_none());
+        assert_eq!(
+            state.cached_menu_identity.as_ref(),
+            Some(&MenuCacheIdentity {
+                pid: 42,
+                bundle_id: "com.example.bundle".to_string(),
+            })
+        );
+        assert!(state.fetching_menu_identity.is_none());
         drop(state);
 
-        let mut state = TRACKER_STATE.write();
-        state.last_real_app = previous;
-        state.cached_menu_items = previous_cached;
-        state.fetching_bundle_id = previous_fetching;
+        restore_tracker_state(
+            previous_last_real_app,
+            previous_cached_items,
+            previous_cached_identity,
+            previous_fetching,
+            previous_fetching_generation,
+        );
     }
 
     #[cfg(target_os = "macos")]
     #[test]
     fn test_replace_cached_menu_items_ignores_stale_app() {
         let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
-        let previous = TRACKER_STATE.read().last_real_app.clone();
-        let previous_cached = TRACKER_STATE.read().cached_menu_items.clone();
-        let previous_fetching = TRACKER_STATE.read().fetching_bundle_id.clone();
+        let previous_last_real_app = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached_items = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_cached_identity = TRACKER_STATE.read().cached_menu_identity.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_menu_identity.clone();
+        let previous_fetching_generation = TRACKER_STATE.read().fetching_menu_generation;
 
         let existing = vec![MenuBarItem {
             title: "Edit".to_string(),
@@ -954,7 +1134,15 @@ mod tests {
                 window_title: None,
             });
             state.cached_menu_items = existing.clone();
-            state.fetching_bundle_id = Some("com.example.current".to_string());
+            state.cached_menu_identity = Some(MenuCacheIdentity {
+                pid: 7,
+                bundle_id: "com.example.current".to_string(),
+            });
+            state.fetching_menu_identity = Some(MenuCacheIdentity {
+                pid: 7,
+                bundle_id: "com.example.current".to_string(),
+            });
+            state.fetching_menu_generation = 1;
         }
 
         replace_cached_menu_items(
@@ -972,15 +1160,28 @@ mod tests {
         let state = TRACKER_STATE.read();
         assert_eq!(state.cached_menu_items, existing);
         assert_eq!(
-            state.fetching_bundle_id.as_deref(),
-            Some("com.example.current")
+            state.cached_menu_identity.as_ref(),
+            Some(&MenuCacheIdentity {
+                pid: 7,
+                bundle_id: "com.example.current".to_string(),
+            })
+        );
+        assert_eq!(
+            state.fetching_menu_identity.as_ref(),
+            Some(&MenuCacheIdentity {
+                pid: 7,
+                bundle_id: "com.example.current".to_string(),
+            })
         );
         drop(state);
 
-        let mut state = TRACKER_STATE.write();
-        state.last_real_app = previous;
-        state.cached_menu_items = previous_cached;
-        state.fetching_bundle_id = previous_fetching;
+        restore_tracker_state(
+            previous_last_real_app,
+            previous_cached_items,
+            previous_cached_identity,
+            previous_fetching,
+            previous_fetching_generation,
+        );
     }
 
     #[test]
@@ -1044,6 +1245,63 @@ mod tests {
         assert!(
             should_update(&new_app, &current_relaunched),
             "MUST update when same bundle_id but different PID (app relaunched)"
+        );
+    }
+
+    #[test]
+    fn test_get_cached_menu_items_returns_empty_when_identity_is_stale() {
+        let _lock = TRACKER_STATE_TEST_LOCK.lock().unwrap();
+        let previous_last_real_app = TRACKER_STATE.read().last_real_app.clone();
+        let previous_cached_items = TRACKER_STATE.read().cached_menu_items.clone();
+        let previous_cached_identity = TRACKER_STATE.read().cached_menu_identity.clone();
+        let previous_fetching = TRACKER_STATE.read().fetching_menu_identity.clone();
+        let previous_fetching_generation = TRACKER_STATE.read().fetching_menu_generation;
+
+        let cached_items = vec![MenuBarItem {
+            title: "File".to_string(),
+            enabled: true,
+            shortcut: None,
+            children: vec![],
+            ax_element_path: vec![0],
+        }];
+
+        {
+            let mut state = TRACKER_STATE.write();
+            state.last_real_app = Some(TrackedApp {
+                pid: 2,
+                bundle_id: "com.example.bundle".to_string(),
+                name: "Example".to_string(),
+                window_title: None,
+            });
+            state.cached_menu_items = cached_items.clone();
+            state.cached_menu_identity = Some(MenuCacheIdentity {
+                pid: 1,
+                bundle_id: "com.example.bundle".to_string(),
+            });
+            state.fetching_menu_identity = None;
+        }
+
+        assert!(
+            get_cached_menu_items().is_empty(),
+            "same-bundle cache must be hidden after a PID change"
+        );
+
+        {
+            let mut state = TRACKER_STATE.write();
+            state.cached_menu_identity = Some(MenuCacheIdentity {
+                pid: 2,
+                bundle_id: "com.example.bundle".to_string(),
+            });
+        }
+
+        assert_eq!(get_cached_menu_items(), cached_items);
+
+        restore_tracker_state(
+            previous_last_real_app,
+            previous_cached_items,
+            previous_cached_identity,
+            previous_fetching,
+            previous_fetching_generation,
         );
     }
 

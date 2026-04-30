@@ -12,6 +12,7 @@ mod transaction_resources;
 // --- merged from part_000.rs ---
 use crate::scripts::Script;
 use crate::scripts::Scriptlet;
+use crate::scripts::{FailedScript, ScriptValidationIssue, ValidationReport};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -131,7 +132,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
         McpResource {
             uri: "scripts://".to_string(),
             name: "Scripts".to_string(),
-            description: Some("List of all available scripts discovered from installed plugins (kit/main/scripts/ is the default personal plugin). Scripts are loaded from all plugin roots under ~/.scriptkit/kit/*/scripts/.".to_string()),
+            description: Some("List of all available scripts discovered from installed plugins (plugins/main/scripts/ is the default personal plugin). Scripts are loaded from all plugin roots under ~/.scriptkit/plugins/*/scripts/.".to_string()),
             mime_type: "application/json".to_string(),
         },
         McpResource {
@@ -162,7 +163,7 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             uri: "kit://scripts".to_string(),
             name: "Scripts (versioned)".to_string(),
             description: Some(
-                "Schema-versioned list of all scripts discovered from installed plugins with metadata. kit/main/scripts/ is the default personal plugin. Safe for repeated reads."
+                "Schema-versioned list of all scripts discovered from installed plugins with metadata. plugins/main/scripts/ is the default personal plugin. Safe for repeated reads."
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),
@@ -181,6 +182,24 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             name: "SDK Reference".to_string(),
             description: Some(
                 "Concise Script Kit SDK function reference, script metadata format, and directory conventions for harness script creation."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
+            uri: FAILED_SCRIPTS_RESOURCE_URI.to_string(),
+            name: "Failed Scripts".to_string(),
+            description: Some(
+                "Scripts that were excluded from the kept catalog at startup because they fail validation — currently duplicate `shortcut` / `alias` / `keyword` / `trigger` bindings. Each entry names the offending path, the fatal issues, and related colliding scripts so authors can repair the metadata. Backed by `crate::scripts::read_scripts_report()`."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
+            uri: SCRIPT_TEMPLATES_RESOURCE_URI.to_string(),
+            name: "Script Templates".to_string(),
+            description: Some(
+                "Curated starter-script templates for the launcher's New Script from Template catalog. Same Rust-owned data the in-launcher catalog renders, so templates cannot drift between the UI and any MCP harness. v1 templates omit binding fields (`alias`, `shortcut`, `keyword`, `trigger`) so newly-created scripts cannot be immediately hidden by validation."
                     .to_string(),
             ),
             mime_type: "application/json".to_string(),
@@ -249,6 +268,15 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             mime_type: "application/json".to_string(),
         },
         McpResource {
+            uri: "kit://dictation-history".to_string(),
+            name: "Dictation History".to_string(),
+            description: Some(
+                "Saved dictation history. Supports ?id=<entry-id> for a single transcript and ?limit=N (default 10) for newest-first JSON summaries."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
+        McpResource {
             uri: "kit://calendar".to_string(),
             name: "Calendar".to_string(),
             description: Some(
@@ -266,10 +294,39 @@ pub fn get_resource_definitions() -> Vec<McpResource> {
             ),
             mime_type: "application/json".to_string(),
         },
+        McpResource {
+            uri: STDIN_COMMANDS_REFERENCE_URI.to_string(),
+            name: "Stdin JSONL Commands".to_string(),
+            description: Some(
+                "Canonical list of stdin JSONL `type` verbs accepted by the ExternalCommand parser. Payload is audited against `stdin_commands::all_external_command_verbs()` so documentation and runtime cannot drift."
+                    .to_string(),
+            ),
+            mime_type: "text/markdown".to_string(),
+        },
+        McpResource {
+            uri: TRIGGER_BUILTINS_REFERENCE_URI.to_string(),
+            name: "Trigger Built-ins".to_string(),
+            description: Some(
+                "Canonical `builtin/...` command IDs accepted by `triggerBuiltin`. Payload is audited against `trigger_registry::all_trigger_builtin_command_ids()` to guarantee the list never goes stale."
+                    .to_string(),
+            ),
+            mime_type: "text/markdown".to_string(),
+        },
+        McpResource {
+            uri: PROTOCOL_STATS_DIAGNOSTICS_URI.to_string(),
+            name: "Protocol Stats".to_string(),
+            description: Some(
+                "Rust↔Bun protocol-boundary counters plus a machine-readable `health.ok` / `health.flags` summary. Exposes `snapshot` (per-counter totals), `health` (threshold-crossed flags), and `thresholds` so MCP consumers can render a boundary health chip without hardcoding limits."
+                    .to_string(),
+            ),
+            mime_type: "application/json".to_string(),
+        },
     ];
     resources.extend(transaction_resources::transaction_resource_definitions());
     resources
 }
+
+pub const PROTOCOL_STATS_DIAGNOSTICS_URI: &str = "kit://diagnostics/protocol-stats";
 /// Read a specific resource by URI
 ///
 /// # Arguments
@@ -294,6 +351,8 @@ pub fn read_resource(
         "kit://scripts" => read_kit_scripts_resource(scripts),
         "kit://scriptlets" => read_kit_scriptlets_resource(scriptlets),
         "kit://sdk-reference" => read_sdk_reference_resource(),
+        FAILED_SCRIPTS_RESOURCE_URI => read_kit_failed_scripts_resource(),
+        SCRIPT_TEMPLATES_RESOURCE_URI => read_kit_script_templates_resource(),
         _ if uri == "kit://context"
             || uri.starts_with("kit://context?")
             || uri == "kit://context/schema"
@@ -310,6 +369,9 @@ pub fn read_resource(
         _ if uri == "kit://dictation" || uri.starts_with("kit://dictation?") => {
             read_dictation_resource(uri)
         }
+        _ if uri == "kit://dictation-history" || uri.starts_with("kit://dictation-history?") => {
+            read_dictation_history_resource(uri)
+        }
         _ if uri == "kit://calendar" || uri.starts_with("kit://calendar?") => {
             read_calendar_resource(uri)
         }
@@ -320,6 +382,9 @@ pub fn read_resource(
         "kit://git-diff" => read_git_diff_resource(),
         "kit://processes" => read_processes_resource(),
         "kit://system" => read_system_info_resource(),
+        STDIN_COMMANDS_REFERENCE_URI => read_stdin_commands_resource(),
+        TRIGGER_BUILTINS_REFERENCE_URI => read_trigger_builtins_resource(),
+        PROTOCOL_STATS_DIAGNOSTICS_URI => read_protocol_stats_resource(),
         _ if transaction_resources::is_transaction_resource_uri(uri) => {
             transaction_resources::read_transaction_resource(uri)
         }
@@ -380,6 +445,24 @@ fn read_scriptlets_resource(scriptlets: &[Arc<Scriptlet>]) -> Result<ResourceCon
 // Schema-versioned script/scriptlet/sdk-reference resources
 // ---------------------------------------------------------------
 
+/// URI for the stdin JSONL verb reference resource.
+///
+/// Declared payload entries live inside
+/// `<!-- drift-audit:stdin-verbs:start -->` / `<!-- drift-audit:stdin-verbs:end -->`
+/// and are audited against
+/// [`crate::stdin_commands::all_external_command_verbs`] by
+/// `tests/mcp_resource_drift.rs`.
+pub const STDIN_COMMANDS_REFERENCE_URI: &str = "kit://stdin-commands";
+
+/// URI for the canonical triggerBuiltin command-id reference resource.
+///
+/// Declared payload entries live inside
+/// `<!-- drift-audit:trigger-builtin-ids:start -->` /
+/// `<!-- drift-audit:trigger-builtin-ids:end -->` and are audited against
+/// [`crate::builtins::trigger_registry::all_trigger_builtin_command_ids`]
+/// by `tests/mcp_resource_drift.rs`.
+pub const TRIGGER_BUILTINS_REFERENCE_URI: &str = "kit://trigger-builtins";
+
 /// Schema version for the `kit://clipboard-history` resource envelope.
 pub const CLIPBOARD_HISTORY_RESOURCE_SCHEMA_VERSION: u32 = 1;
 
@@ -393,8 +476,35 @@ pub const SCRIPTS_RESOURCE_SCHEMA_VERSION: u32 = 1;
 pub const SCRIPTLETS_RESOURCE_SCHEMA_VERSION: u32 = 1;
 
 /// Schema version for the `kit://sdk-reference` resource.
-/// Bumped to 4: adds public UI introspection and deterministic transaction APIs.
-pub const SDK_REFERENCE_SCHEMA_VERSION: u32 = 4;
+/// Bumped to 5: adds per-function GPUI support status (`support`,
+/// `unsupportedNote`) so agents can refuse to generate calls into
+/// SDK APIs the current GPUI shell does not implement.
+pub const SDK_REFERENCE_SCHEMA_VERSION: u32 = 5;
+
+/// URI for the `kit://failed-scripts` resource.
+///
+/// Surfaces the `ValidationReport.failed_scripts` list so authors can see
+/// which scripts were excluded from the kept catalog (today: duplicate
+/// `shortcut` / `alias` / `keyword` / `trigger` bindings) instead of
+/// silently disappearing from the launcher. Backed by
+/// [`crate::scripts::read_scripts_report`].
+pub const FAILED_SCRIPTS_RESOURCE_URI: &str = "kit://failed-scripts";
+
+/// Schema version for the `kit://failed-scripts` resource envelope.
+pub const FAILED_SCRIPTS_RESOURCE_SCHEMA_VERSION: u32 = 1;
+
+/// URI for the `kit://script-templates` resource.
+///
+/// Surfaces curated starter templates for newly created scripts so the
+/// launcher's template catalog and any MCP harness share one Rust-owned
+/// source of truth. v1 templates intentionally omit collision-bearing
+/// binding fields (`alias`, `shortcut`, `keyword`, `trigger`) so a
+/// newly-created script cannot be immediately hidden by
+/// [`crate::scripts::validation::validate_script_catalog`].
+pub const SCRIPT_TEMPLATES_RESOURCE_URI: &str = "kit://script-templates";
+
+/// Schema version for the `kit://script-templates` resource envelope.
+pub const SCRIPT_TEMPLATES_RESOURCE_SCHEMA_VERSION: u32 = 1;
 
 /// Schema-versioned envelope for script metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -414,7 +524,71 @@ pub struct ScriptletsResourceDocument {
     pub scriptlets: Vec<ScriptletResourceEntry>,
 }
 
+/// A single failed-script entry for the `kit://failed-scripts` resource.
+///
+/// Mirrors [`crate::scripts::FailedScript`] but uses `Vec` for the fatal-issue
+/// list so the resource envelope round-trips cleanly through
+/// `serde_json::from_str` without Arc-slice deserialization surprises.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct FailedScriptEntry {
+    pub path: std::path::PathBuf,
+    pub name: String,
+    pub fatal: Vec<ScriptValidationIssue>,
+}
+
+impl From<&FailedScript> for FailedScriptEntry {
+    fn from(failed: &FailedScript) -> Self {
+        Self {
+            path: failed.path.clone(),
+            name: failed.name.clone(),
+            fatal: failed.fatal.iter().cloned().collect(),
+        }
+    }
+}
+
+/// Schema-versioned envelope for the `kit://failed-scripts` resource.
+///
+/// Carries both an envelope `schema_version` (this document format) and the
+/// inner `validation_schema_version` from [`crate::scripts::VALIDATION_SCHEMA_VERSION`]
+/// so consumers can detect changes at either layer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FailedScriptsResourceDocument {
+    pub schema_version: u32,
+    pub validation_schema_version: u32,
+    pub total_candidates: usize,
+    pub valid_count: usize,
+    pub fatal_count: usize,
+    pub warning_count: usize,
+    pub failed_scripts: Vec<FailedScriptEntry>,
+    pub warnings: Vec<ScriptValidationIssue>,
+}
+
+/// GPUI support status for a single SDK function.
+///
+/// `Supported` is the default; absent JSON fields deserialize as
+/// `Supported` so older clients that do not know about this enum
+/// continue to round-trip. `Unsupported` entries are documented in
+/// `scripts/kit-sdk.ts` but the GPUI app does not currently handle
+/// their message (typically they `console.warn` and resolve to nothing
+/// or throw). `Experimental` is reserved for partially-implemented
+/// APIs so the next marking wave does not require another schema bump.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SdkSupport {
+    #[default]
+    Supported,
+    Unsupported,
+    Experimental,
+}
+
 /// A single SDK function reference entry.
+///
+/// `support` is always serialized so agents can rely on a stable
+/// `"support": "supported" | "unsupported" | "experimental"` field
+/// rather than inferring state from absence. `unsupported_note` is
+/// skipped when `None` to keep the envelope lean for the common case.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SdkFunctionRef {
@@ -422,6 +596,101 @@ pub struct SdkFunctionRef {
     pub signature: String,
     pub description: String,
     pub category: String,
+    #[serde(default)]
+    pub support: SdkSupport,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unsupported_note: Option<String>,
+}
+
+impl SdkFunctionRef {
+    fn supported(
+        name: impl Into<String>,
+        signature: impl Into<String>,
+        description: impl Into<String>,
+        category: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            signature: signature.into(),
+            description: description.into(),
+            category: category.into(),
+            support: SdkSupport::Supported,
+            unsupported_note: None,
+        }
+    }
+
+    fn unsupported(
+        name: impl Into<String>,
+        signature: impl Into<String>,
+        description: impl Into<String>,
+        category: impl Into<String>,
+        note: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            signature: signature.into(),
+            description: description.into(),
+            category: category.into(),
+            support: SdkSupport::Unsupported,
+            unsupported_note: Some(note.into()),
+        }
+    }
+}
+
+/// SDK inventory flagged "not yet implemented in the GPUI app" by
+/// `scripts/kit-sdk.ts`. Sourced from the `console.warn(...)` lines
+/// and NOTE comments in that file. Only entries that also appear in
+/// [`build_sdk_function_refs`] are marked in the generated SDK
+/// reference — adding missing entries is deliberately out of scope
+/// for this pass so the reference does not silently grow. The list
+/// is consumed by
+/// [`tests::sdk_reference_marks_every_documented_unsupported_api`]
+/// as a canonical test input; it is deliberately kept in the non-test
+/// binary so future agents can `rg` for it.
+#[allow(dead_code)]
+const SDK_NOT_YET_IMPLEMENTED_IN_GPUI: &[&str] = &[
+    "beep",
+    "say",
+    "setStatus",
+    "keyboard.type",
+    "keyboard.tap",
+    "mouse.move",
+    "mouse.click",
+    "setPanel",
+    "setPreview",
+    "setPrompt",
+    "mini",
+    "micro",
+    "hotkey",
+    "widget",
+    "menu",
+];
+
+/// Default explanation for "not yet implemented" SDK APIs. The
+/// [`SdkFunctionRef::unsupported`] constructor takes a custom note so
+/// a function can point the user at a working alternative — this
+/// constant is exposed for tests that want to pin the generic wording.
+#[allow(dead_code)]
+const SDK_UNSUPPORTED_IN_GPUI_NOTE: &str =
+    "Defined in scripts/kit-sdk.ts, but the GPUI app does not handle this message yet; it logs a warning and may no-op or throw at runtime.";
+
+/// Needles for scanning starter-template bodies for references to
+/// unsupported SDK APIs. A template that contains any of these
+/// substrings is rejected by
+/// [`tests::script_templates_do_not_reference_unsupported_sdk_apis`].
+#[cfg(test)]
+fn unsupported_sdk_reference_scan_needles() -> Vec<String> {
+    build_sdk_function_refs()
+        .into_iter()
+        .filter(|entry| entry.support == SdkSupport::Unsupported)
+        .flat_map(|entry| {
+            if entry.name.contains('.') {
+                vec![format!("{}(", entry.name), format!("{}.", entry.name)]
+            } else {
+                vec![format!("{}(", entry.name)]
+            }
+        })
+        .collect()
 }
 
 /// Mandatory Bun verification contract for final user-authored scripts.
@@ -447,7 +716,7 @@ pub struct HarnessVerificationContract {
 #[serde(rename_all = "camelCase")]
 pub struct HarnessWorkflow {
     /// Dedicated directory for test/temp scripts that won't pollute the user's
-    /// main `~/.scriptkit/kit/main/scripts/` collection.
+    /// main `~/.scriptkit/plugins/main/scripts/` collection.
     pub test_script_directory: String,
     /// Dedicated directory for test scriptlet extension files.
     pub test_scriptlet_directory: String,
@@ -481,6 +750,49 @@ pub struct SdkReferenceDocument {
     pub functions: Vec<SdkFunctionRef>,
     /// Non-interactive workflow for harness-driven script creation and execution.
     pub harness_workflow: HarnessWorkflow,
+}
+
+/// Optional metadata defaults written into a newly-created script.
+///
+/// v1 templates intentionally omit collision-bearing binding fields
+/// (`alias`, `shortcut`, `keyword`, `trigger`) — those are what
+/// [`crate::scripts::validation::detect_binding_collisions`] uses to
+/// fatally exclude duplicates. A starter script should never land on
+/// disk in a hidden state.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptTemplateMetadataDefaults {
+    /// `description:` value in the `export const metadata = { … }` block.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// A single starter-script template.
+///
+/// The `body_template` body is a fully-formed TypeScript file with a
+/// `{{NAME}}` placeholder substituted by [`render_script_template_file`]
+/// at write time — so the `metadata.name` in the on-disk file matches
+/// the friendly name the user typed into the naming prompt.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptTemplateRef {
+    pub id: String,
+    pub title: String,
+    pub description: String,
+    pub category: String,
+    pub filename_hint: String,
+    pub body_template: String,
+    #[serde(default)]
+    pub metadata_defaults: ScriptTemplateMetadataDefaults,
+}
+
+/// Schema-versioned envelope for `kit://script-templates`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ScriptTemplatesResourceDocument {
+    pub schema_version: u32,
+    pub count: usize,
+    pub templates: Vec<ScriptTemplateRef>,
 }
 
 // ---------------------------------------------------------------
@@ -581,143 +893,479 @@ struct FocusedItemDiagnosticsMeta {
 
 fn build_sdk_function_refs() -> Vec<SdkFunctionRef> {
     vec![
-        SdkFunctionRef {
-            name: "arg".into(),
-            signature: "await arg(prompt: string, choices?: Choice[]): Promise<string>".into(),
-            description: "Prompt the user with an input field, optionally with a list of choices."
-                .into(),
+        SdkFunctionRef::supported(
+            "arg",
+            "await arg(prompt: string, choices?: Choice[]): Promise<string>",
+            "Prompt the user with an input field, optionally with a list of choices.",
+            "prompts",
+        ),
+        SdkFunctionRef::supported(
+            "div",
+            "await div(html: string): Promise<void>",
+            "Display HTML content in a panel.",
+            "prompts",
+        ),
+        SdkFunctionRef::supported(
+            "editor",
+            "await editor(options?: EditorOptions): Promise<string>",
+            "Open a full-screen code editor and return the content.",
+            "prompts",
+        ),
+        SdkFunctionRef::supported(
+            "term",
+            "await term(command?: string): Promise<string>",
+            "Open an interactive terminal, optionally running a command.",
+            "prompts",
+        ),
+        SdkFunctionRef::supported(
+            "drop",
+            "await drop(options?: DropOptions): Promise<DroppedItem[]>",
+            "Accept drag-and-drop files from the user.",
+            "prompts",
+        ),
+        SdkFunctionRef::supported(
+            "template",
+            "await template(template: string): Promise<string>",
+            "Fill in a template string with user-provided values.",
+            "prompts",
+        ),
+        SdkFunctionRef::supported(
+            "exec",
+            "await exec(command: string, args?: string[]): Promise<ExecResult>",
+            "Execute a shell command and return its output.",
+            "system",
+        ),
+        SdkFunctionRef::supported(
+            "clipboard",
+            "await clipboard.readText(): Promise<string>",
+            "Read the current clipboard text content.",
+            "clipboard",
+        ),
+        SdkFunctionRef::supported(
+            "copy",
+            "await copy(text: string): Promise<void>",
+            "Copy text to the clipboard.",
+            "clipboard",
+        ),
+        SdkFunctionRef::supported(
+            "paste",
+            "await paste(text: string): Promise<void>",
+            "Paste text to the focused application.",
+            "clipboard",
+        ),
+        SdkFunctionRef::supported(
+            "notify",
+            "notify(message: string | { title?: string; body?: string }): void",
+            "Show an OS-level system notification (macOS Notification Center). Distinct from hud(message), which is an in-launcher overlay.",
+            "feedback",
+        ),
+        SdkFunctionRef::supported(
+            "setSelectedText",
+            "await setSelectedText(text: string): Promise<void>",
+            "Replace the selected text in the focused application.",
+            "system",
+        ),
+        SdkFunctionRef::supported(
+            "getSelectedText",
+            "await getSelectedText(): Promise<string>",
+            "Read the selected text from the focused application.",
+            "system",
+        ),
+        SdkFunctionRef::supported(
+            "readFile",
+            "await readFile(path: string): Promise<string>",
+            "Read a file's contents as UTF-8 text.",
+            "filesystem",
+        ),
+        SdkFunctionRef::supported(
+            "writeFile",
+            "await writeFile(path: string, content: string): Promise<void>",
+            "Write UTF-8 text content to a file.",
+            "filesystem",
+        ),
+        SdkFunctionRef::supported(
+            "home",
+            "home(...paths: string[]): string",
+            "Resolve a path relative to the user's home directory.",
+            "filesystem",
+        ),
+        SdkFunctionRef::supported(
+            "getState",
+            "await getState(): Promise<PromptState>",
+            "Read the current Script Kit prompt state without mutating the UI.",
+            "automation",
+        ),
+        SdkFunctionRef::supported(
+            "getElements",
+            "await getElements(limit?: number): Promise<ElementsSnapshot>",
+            "Return visible UI elements with semantic IDs, focus, selection, truncation, and warnings.",
+            "automation",
+        ),
+        SdkFunctionRef::supported(
+            "waitFor",
+            "await waitFor(condition: WaitCondition, options?: WaitForOptions): Promise<WaitForResult>",
+            "Poll until a UI condition is satisfied or the timeout expires. Returns { success, elapsed, error?, trace? }. On failure, error contains a stable code (wait_condition_timeout | element_not_found | unsupported_prompt | action_failed), a human message, and an optional suggestion. Pass trace: 'onFailure' in options to get poll-by-poll diagnostics on timeout.",
+            "automation",
+        ),
+        SdkFunctionRef::supported(
+            "batch",
+            "await batch(commands: BatchCommand[], options?: BatchOptions): Promise<BatchResult>",
+            "Execute a deterministic sequence of UI commands. Returns { success, results, failedAt?, totalElapsed, trace? }. Each result entry includes index, success, command, elapsed, value?, and a structured error with stable code on failure. Pass trace: 'onFailure' at the top-level message (not inside options) for per-command diagnostics. Error codes: wait_condition_timeout, element_not_found, selection_not_found, unsupported_command, unsupported_prompt, action_failed.",
+            "automation",
+        ),
+        SdkFunctionRef::unsupported(
+            "menu",
+            "await menu(icon: string, scripts?: string[]): Promise<void>",
+            "Show a menu-bar icon with quick-access scripts.",
+            "system",
+            "menu(...) is defined in scripts/kit-sdk.ts but the GPUI app does not yet handle the `menu` protocol message; use the built-in tray icon (System Actions) today.",
+        ),
+    ]
+}
+
+/// Cheap UI-facing slice of the SDK reference document.
+///
+/// Callers reuse the same Rust data that powers `kit://sdk-reference`
+/// so the in-product SDK Reference view never drifts from the MCP
+/// resource or hand-authors a second API list.
+pub fn sdk_reference_entries_for_ui() -> std::sync::Arc<[SdkFunctionRef]> {
+    std::sync::Arc::from(build_sdk_reference_document().functions)
+}
+
+/// Case-insensitive substring match across `name`, `signature`, `description`,
+/// and `category`. Returns the indices (into `entries`) of matching rows, in
+/// source order. An empty or whitespace-only filter returns every row.
+pub fn filter_sdk_reference_entries(entries: &[SdkFunctionRef], filter: &str) -> Vec<usize> {
+    let q = filter.trim().to_lowercase();
+    entries
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, entry)| {
+            if q.is_empty()
+                || entry.name.to_lowercase().contains(&q)
+                || entry.signature.to_lowercase().contains(&q)
+                || entry.description.to_lowercase().contains(&q)
+                || entry.category.to_lowercase().contains(&q)
+            {
+                Some(idx)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// A visible SDK Reference row projected from the shared MCP-backed catalog.
+#[derive(Debug, Clone, Copy)]
+pub struct SdkReferenceVisibleRow<'a> {
+    pub display_index: usize,
+    pub source_index: usize,
+    pub entry: &'a SdkFunctionRef,
+}
+
+/// Visible SDK Reference rows in display order.
+pub fn sdk_reference_visible_rows<'a>(
+    entries: &'a [SdkFunctionRef],
+    filter: &str,
+) -> Vec<SdkReferenceVisibleRow<'a>> {
+    filter_sdk_reference_entries(entries, filter)
+        .into_iter()
+        .enumerate()
+        .filter_map(|(display_index, source_index)| {
+            entries
+                .get(source_index)
+                .map(|entry| SdkReferenceVisibleRow {
+                    display_index,
+                    source_index,
+                    entry,
+                })
+        })
+        .collect()
+}
+
+pub fn sdk_reference_visible_row_names(entries: &[SdkFunctionRef], filter: &str) -> Vec<String> {
+    sdk_reference_visible_rows(entries, filter)
+        .into_iter()
+        .map(|row| row.entry.name.clone())
+        .collect()
+}
+
+pub fn sdk_reference_dataset_and_visible_counts(
+    entries: &[SdkFunctionRef],
+    filter: &str,
+) -> (usize, usize) {
+    (
+        entries.len(),
+        sdk_reference_visible_rows(entries, filter).len(),
+    )
+}
+
+pub fn sdk_reference_selected_visible_entry<'a>(
+    entries: &'a [SdkFunctionRef],
+    filter: &str,
+    selected_index: usize,
+) -> Option<SdkReferenceVisibleRow<'a>> {
+    sdk_reference_visible_rows(entries, filter)
+        .get(selected_index)
+        .copied()
+}
+
+pub fn sdk_reference_visible_target_rows<'a>(
+    entries: &'a [SdkFunctionRef],
+    filter: &str,
+    limit: usize,
+) -> Vec<SdkReferenceVisibleRow<'a>> {
+    sdk_reference_visible_rows(entries, filter)
+        .into_iter()
+        .take(limit)
+        .collect()
+}
+
+/// Markdown preview for a single SDK function — used by the in-product
+/// SDK Reference view (preview pane + Cmd+C clipboard copy).
+///
+/// Unsupported entries are prepended with a blockquote warning so a
+/// snippet pasted into an editor still carries the "this will no-op or
+/// throw" signal even after it leaves the launcher.
+pub fn format_sdk_reference_entry_markdown(entry: &SdkFunctionRef) -> String {
+    let mut out = String::new();
+    if entry.support == SdkSupport::Unsupported {
+        out.push_str("> ⚠ Unsupported in GPUI — this function is defined in kit-sdk.ts but currently no-ops or throws.\n");
+        if let Some(note) = entry.unsupported_note.as_deref() {
+            out.push_str("> ");
+            out.push_str(note);
+            out.push('\n');
+        }
+        out.push('\n');
+    }
+    out.push_str(&format!(
+        "# {name}\n\n`{signature}`\n\n_{category}_\n\n{description}\n",
+        name = entry.name,
+        signature = entry.signature,
+        category = entry.category,
+        description = entry.description,
+    ));
+    out
+}
+
+/// Curated v1 starter templates.
+///
+/// Ordering is load-bearing: `blank-starter` is row #1 so the fastest
+/// "new script" path (Enter → Enter → name → editor) feels identical
+/// to the pre-catalog experience.
+///
+/// **Invariant:** no template may emit `alias:`, `shortcut:`, `keyword:`,
+/// or `trigger:` in its body. `detect_binding_collisions` would mark a
+/// fresh duplicate as fatal and hide the script from the launcher —
+/// defeating the whole "first useful automation" purpose of templates.
+fn build_script_templates() -> Vec<ScriptTemplateRef> {
+    vec![
+        ScriptTemplateRef {
+            id: "blank-starter".into(),
+            title: "Blank Starter".into(),
+            description: "An empty script shape with an arg prompt and div output — the fastest path from naming to a working script.".into(),
+            category: "starter".into(),
+            filename_hint: "my-script".into(),
+            body_template: concat!(
+                "import \"@scriptkit/sdk\";\n",
+                "\n",
+                "export const metadata = {\n",
+                "  name: \"{{NAME}}\",\n",
+                "  description: \"{{DESCRIPTION}}\",\n",
+                "};\n",
+                "\n",
+                "const value = await arg(\"Enter a value\");\n",
+                "\n",
+                "await div(md(`## You typed\\n\\n${value}`));\n",
+            ).into(),
+            metadata_defaults: ScriptTemplateMetadataDefaults {
+                description: Some("A blank starter script".into()),
+            },
+        },
+        ScriptTemplateRef {
+            id: "choice-list".into(),
+            title: "Choice List".into(),
+            description: "Prompt the user to pick one option from a fixed list, then show the selection.".into(),
             category: "prompts".into(),
-        },
-        SdkFunctionRef {
-            name: "div".into(),
-            signature: "await div(html: string): Promise<void>".into(),
-            description: "Display HTML content in a panel.".into(),
-            category: "prompts".into(),
-        },
-        SdkFunctionRef {
-            name: "editor".into(),
-            signature: "await editor(options?: EditorOptions): Promise<string>".into(),
-            description: "Open a full-screen code editor and return the content.".into(),
-            category: "prompts".into(),
-        },
-        SdkFunctionRef {
-            name: "term".into(),
-            signature: "await term(command?: string): Promise<string>".into(),
-            description: "Open an interactive terminal, optionally running a command.".into(),
-            category: "prompts".into(),
-        },
-        SdkFunctionRef {
-            name: "drop".into(),
-            signature: "await drop(options?: DropOptions): Promise<DroppedItem[]>".into(),
-            description: "Accept drag-and-drop files from the user.".into(),
-            category: "prompts".into(),
-        },
-        SdkFunctionRef {
-            name: "template".into(),
-            signature: "await template(template: string): Promise<string>".into(),
-            description: "Fill in a template string with user-provided values.".into(),
-            category: "prompts".into(),
-        },
-        SdkFunctionRef {
-            name: "exec".into(),
-            signature: "await exec(command: string, args?: string[]): Promise<ExecResult>".into(),
-            description: "Execute a shell command and return its output.".into(),
-            category: "system".into(),
-        },
-        SdkFunctionRef {
-            name: "clipboard".into(),
-            signature: "await clipboard.readText(): Promise<string>".into(),
-            description: "Read the current clipboard text content.".into(),
-            category: "clipboard".into(),
-        },
-        SdkFunctionRef {
-            name: "copy".into(),
-            signature: "await copy(text: string): Promise<void>".into(),
-            description: "Copy text to the clipboard.".into(),
-            category: "clipboard".into(),
-        },
-        SdkFunctionRef {
-            name: "paste".into(),
-            signature: "await paste(text: string): Promise<void>".into(),
-            description: "Paste text to the focused application.".into(),
-            category: "clipboard".into(),
-        },
-        SdkFunctionRef {
-            name: "notify".into(),
-            signature: "await notify(message: string): Promise<void>".into(),
-            description: "Show a system notification.".into(),
-            category: "feedback".into(),
-        },
-        SdkFunctionRef {
-            name: "setSelectedText".into(),
-            signature: "await setSelectedText(text: string): Promise<void>".into(),
-            description: "Replace the selected text in the focused application.".into(),
-            category: "system".into(),
-        },
-        SdkFunctionRef {
-            name: "getSelectedText".into(),
-            signature: "await getSelectedText(): Promise<string>".into(),
-            description: "Read the selected text from the focused application.".into(),
-            category: "system".into(),
-        },
-        SdkFunctionRef {
-            name: "readFile".into(),
-            signature: "await readFile(path: string): Promise<string>".into(),
-            description: "Read a file's contents as UTF-8 text.".into(),
-            category: "filesystem".into(),
-        },
-        SdkFunctionRef {
-            name: "writeFile".into(),
-            signature: "await writeFile(path: string, content: string): Promise<void>".into(),
-            description: "Write UTF-8 text content to a file.".into(),
-            category: "filesystem".into(),
-        },
-        SdkFunctionRef {
-            name: "home".into(),
-            signature: "home(...paths: string[]): string".into(),
-            description: "Resolve a path relative to the user's home directory.".into(),
-            category: "filesystem".into(),
-        },
-        SdkFunctionRef {
-            name: "getState".into(),
-            signature: "await getState(): Promise<PromptState>".into(),
-            description: "Read the current Script Kit prompt state without mutating the UI."
-                .into(),
-            category: "automation".into(),
-        },
-        SdkFunctionRef {
-            name: "getElements".into(),
-            signature: "await getElements(limit?: number): Promise<ElementsSnapshot>".into(),
-            description:
-                "Return visible UI elements with semantic IDs, focus, selection, truncation, and warnings."
-                    .into(),
-            category: "automation".into(),
-        },
-        SdkFunctionRef {
-            name: "waitFor".into(),
-            signature:
-                "await waitFor(condition: WaitCondition, options?: WaitForOptions): Promise<WaitForResult>"
-                    .into(),
-            description: "Poll until a UI condition is satisfied or the timeout expires. Returns { success, elapsed, error?, trace? }. On failure, error contains a stable code (wait_condition_timeout | element_not_found | unsupported_prompt | action_failed), a human message, and an optional suggestion. Pass trace: 'onFailure' in options to get poll-by-poll diagnostics on timeout.".into(),
-            category: "automation".into(),
-        },
-        SdkFunctionRef {
-            name: "batch".into(),
-            signature:
-                "await batch(commands: BatchCommand[], options?: BatchOptions): Promise<BatchResult>"
-                    .into(),
-            description: "Execute a deterministic sequence of UI commands. Returns { success, results, failedAt?, totalElapsed, trace? }. Each result entry includes index, success, command, elapsed, value?, and a structured error with stable code on failure. Pass trace: 'onFailure' at the top-level message (not inside options) for per-command diagnostics. Error codes: wait_condition_timeout, element_not_found, selection_not_found, unsupported_command, unsupported_prompt, action_failed.".into(),
-            category: "automation".into(),
+            filename_hint: "pick-one".into(),
+            body_template: concat!(
+                "import \"@scriptkit/sdk\";\n",
+                "\n",
+                "export const metadata = {\n",
+                "  name: \"{{NAME}}\",\n",
+                "  description: \"{{DESCRIPTION}}\",\n",
+                "};\n",
+                "\n",
+                "const choice = await arg(\"Pick one\", [\"A\", \"B\", \"C\"]);\n",
+                "\n",
+                "await div(md(`## Selected\\n\\n${choice}`));\n",
+            ).into(),
+            metadata_defaults: ScriptTemplateMetadataDefaults {
+                description: Some("Prompt the user to pick one option from a list".into()),
+            },
         },
     ]
 }
 
-fn build_sdk_reference_document() -> SdkReferenceDocument {
+/// Pure builder for the `kit://script-templates` resource envelope.
+pub fn build_script_templates_document() -> ScriptTemplatesResourceDocument {
+    let templates = build_script_templates();
+    ScriptTemplatesResourceDocument {
+        schema_version: SCRIPT_TEMPLATES_RESOURCE_SCHEMA_VERSION,
+        count: templates.len(),
+        templates,
+    }
+}
+
+/// Cheap UI-facing slice of the template catalog. Same objects the MCP
+/// resource returns, so the in-launcher catalog and any agent reading
+/// `kit://script-templates` cannot drift.
+pub fn script_template_entries_for_ui() -> std::sync::Arc<[ScriptTemplateRef]> {
+    std::sync::Arc::from(build_script_templates())
+}
+
+/// Case-insensitive substring match across `title`, `description`, and
+/// `category`. Returns the indices (into `entries`) of matching rows in
+/// source order. An empty or whitespace-only filter returns every row.
+pub fn filter_script_template_entries(entries: &[ScriptTemplateRef], filter: &str) -> Vec<usize> {
+    let q = filter.trim().to_lowercase();
+    entries
+        .iter()
+        .enumerate()
+        .filter_map(|(idx, entry)| {
+            if q.is_empty()
+                || entry.title.to_lowercase().contains(&q)
+                || entry.description.to_lowercase().contains(&q)
+                || entry.category.to_lowercase().contains(&q)
+            {
+                Some(idx)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// A visible starter-template row projected from the shared MCP-backed catalog.
+#[derive(Debug, Clone, Copy)]
+pub struct ScriptTemplateCatalogVisibleRow<'a> {
+    pub display_index: usize,
+    pub source_index: usize,
+    pub template: &'a ScriptTemplateRef,
+}
+
+/// Visible starter-template rows in display order.
+pub fn script_template_catalog_visible_rows<'a>(
+    entries: &'a [ScriptTemplateRef],
+    filter: &str,
+) -> Vec<ScriptTemplateCatalogVisibleRow<'a>> {
+    filter_script_template_entries(entries, filter)
+        .into_iter()
+        .enumerate()
+        .filter_map(|(display_index, source_index)| {
+            entries
+                .get(source_index)
+                .map(|template| ScriptTemplateCatalogVisibleRow {
+                    display_index,
+                    source_index,
+                    template,
+                })
+        })
+        .collect()
+}
+
+pub fn script_template_catalog_visible_row_names(
+    entries: &[ScriptTemplateRef],
+    filter: &str,
+) -> Vec<String> {
+    script_template_catalog_visible_rows(entries, filter)
+        .into_iter()
+        .map(|row| row.template.title.clone())
+        .collect()
+}
+
+pub fn script_template_catalog_dataset_and_visible_counts(
+    entries: &[ScriptTemplateRef],
+    filter: &str,
+) -> (usize, usize) {
+    (
+        entries.len(),
+        script_template_catalog_visible_rows(entries, filter).len(),
+    )
+}
+
+pub fn script_template_catalog_selected_visible_template<'a>(
+    entries: &'a [ScriptTemplateRef],
+    filter: &str,
+    selected_index: usize,
+) -> Option<ScriptTemplateCatalogVisibleRow<'a>> {
+    script_template_catalog_visible_rows(entries, filter)
+        .get(selected_index)
+        .copied()
+}
+
+pub fn script_template_catalog_visible_target_rows<'a>(
+    entries: &'a [ScriptTemplateRef],
+    filter: &str,
+    limit: usize,
+) -> Vec<ScriptTemplateCatalogVisibleRow<'a>> {
+    script_template_catalog_visible_rows(entries, filter)
+        .into_iter()
+        .take(limit)
+        .collect()
+}
+
+/// Instantiate a template's `body_template` for on-disk write.
+///
+/// Substitutes `{{NAME}}` with `friendly_name` and `{{DESCRIPTION}}` with
+/// the template's `metadata_defaults.description` (falling back to the
+/// template title). The returned string is the exact content that
+/// [`crate::app_impl::naming_dialog::ScriptListApp::handle_naming_dialog_completion`]
+/// writes over the freshly-created script file between
+/// [`crate::script_creation::create_new_script`] and
+/// [`crate::script_creation::open_in_editor`].
+pub fn render_script_template_file(template: &ScriptTemplateRef, friendly_name: &str) -> String {
+    let description = template
+        .metadata_defaults
+        .description
+        .as_deref()
+        .unwrap_or(&template.title);
+    template
+        .body_template
+        .replace("{{NAME}}", friendly_name)
+        .replace("{{DESCRIPTION}}", description)
+}
+
+/// Markdown preview for a single template — used by the catalog view's
+/// preview pane and Cmd+C clipboard copy.
+pub fn format_script_template_markdown(template: &ScriptTemplateRef) -> String {
+    format!(
+        "# {title}\n\n_{category}_\n\n{description}\n\n```ts\n{body}```\n",
+        title = template.title,
+        category = template.category,
+        description = template.description,
+        body = template.body_template,
+    )
+}
+
+/// Resolve a template by `id`. Used by
+/// [`crate::app_impl::naming_dialog::ScriptListApp::handle_naming_dialog_completion`]
+/// to turn the `template_id` carried through [`crate::prompts::NamingSubmitResult`]
+/// back into the in-memory [`ScriptTemplateRef`] consumed by
+/// [`render_script_template_file`].
+pub fn find_script_template(id: &str) -> Option<ScriptTemplateRef> {
+    build_script_templates_document()
+        .templates
+        .into_iter()
+        .find(|template| template.id == id)
+}
+
+pub(crate) fn build_sdk_reference_document() -> SdkReferenceDocument {
     SdkReferenceDocument {
         schema_version: SDK_REFERENCE_SCHEMA_VERSION,
         sdk_package: "@scriptkit/sdk".into(),
-        script_directory: "~/.scriptkit/kit/main/scripts/ (default personal plugin; all plugins under kit/*/scripts/ are discovered)".into(),
-        scriptlet_pattern: "~/.scriptkit/kit/*/scriptlets/*.md".into(),
+        script_directory: "~/.scriptkit/plugins/main/scripts/ (default personal plugin; all plugins under plugins/*/scripts/ are discovered)".into(),
+        scriptlet_pattern: "~/.scriptkit/plugins/*/scriptlets/*.md".into(),
         metadata_format:
             "export const metadata = { name: \"My Script\", description: \"What it does\" }".into(),
         functions: build_sdk_function_refs(),
@@ -810,7 +1458,7 @@ fn build_harness_workflow() -> HarnessWorkflow {
             "import \"@scriptkit/sdk\";\n",
             "\n",
             "await copy(new Date().toISOString().slice(0, 10));\n",
-            "await notify(\"Copied today's date\");\n",
+            "hud(\"Copied today's date\");\n",
             "```\n",
         ).into(),
     }
@@ -831,6 +1479,58 @@ fn read_kit_scripts_resource(scripts: &[Arc<Script>]) -> Result<ResourceContent,
         .map_err(|e| format!("Failed to serialize scripts document: {e}"))?;
     Ok(ResourceContent {
         uri: "kit://scripts".to_string(),
+        mime_type: "application/json".to_string(),
+        text: json,
+    })
+}
+
+/// Pure builder for [`FailedScriptsResourceDocument`]. Split from the
+/// resource handler so tests can exercise envelope shape against hand-built
+/// [`ValidationReport`]s without touching the filesystem.
+pub(crate) fn build_failed_scripts_document(
+    report: &ValidationReport,
+) -> FailedScriptsResourceDocument {
+    FailedScriptsResourceDocument {
+        schema_version: FAILED_SCRIPTS_RESOURCE_SCHEMA_VERSION,
+        validation_schema_version: report.schema_version,
+        total_candidates: report.total_candidates,
+        valid_count: report.valid_count,
+        fatal_count: report.fatal_count,
+        warning_count: report.warning_count,
+        failed_scripts: report
+            .failed_scripts
+            .iter()
+            .map(FailedScriptEntry::from)
+            .collect(),
+        warnings: report.warnings.iter().cloned().collect(),
+    }
+}
+
+/// Read kit://failed-scripts schema-versioned resource.
+///
+/// Calls [`crate::scripts::read_scripts_report`] at read time (rather than
+/// requiring a cached report threaded through [`read_resource`]), so the
+/// response always reflects the current disk state. This is cheap relative
+/// to MCP request cadence — script loading already runs at startup.
+fn read_kit_failed_scripts_resource() -> Result<ResourceContent, String> {
+    let report = crate::scripts::read_scripts_report();
+    let doc = build_failed_scripts_document(&report.validation);
+    let json = serde_json::to_string_pretty(&doc)
+        .map_err(|e| format!("Failed to serialize failed-scripts document: {e}"))?;
+    Ok(ResourceContent {
+        uri: FAILED_SCRIPTS_RESOURCE_URI.to_string(),
+        mime_type: "application/json".to_string(),
+        text: json,
+    })
+}
+
+/// Read kit://script-templates schema-versioned resource.
+fn read_kit_script_templates_resource() -> Result<ResourceContent, String> {
+    let doc = build_script_templates_document();
+    let json = serde_json::to_string_pretty(&doc)
+        .map_err(|e| format!("Failed to serialize script-templates document: {e}"))?;
+    Ok(ResourceContent {
+        uri: SCRIPT_TEMPLATES_RESOURCE_URI.to_string(),
         mime_type: "application/json".to_string(),
         text: json,
     })
@@ -882,6 +1582,12 @@ const CLIPBOARD_HISTORY_DEFAULT_LIMIT: usize = 10;
 
 /// Maximum limit for clipboard history entries.
 const CLIPBOARD_HISTORY_MAX_LIMIT: usize = 50;
+
+/// Default limit for dictation history entries returned.
+const DICTATION_HISTORY_DEFAULT_LIMIT: usize = 10;
+
+/// Maximum limit for dictation history entries.
+const DICTATION_HISTORY_MAX_LIMIT: usize = 50;
 
 /// Parsed clipboard history request — either a list query or a single-entry lookup.
 #[derive(Debug)]
@@ -1004,6 +1710,81 @@ fn read_clipboard_history_resource(uri: &str) -> Result<ResourceContent, String>
                     .map_err(|e| format!("Failed to serialize clipboard history: {e}"))?
             };
 
+            Ok(ResourceContent {
+                uri: uri.to_string(),
+                mime_type: "application/json".to_string(),
+                text: json,
+            })
+        }
+    }
+}
+
+#[derive(Debug)]
+enum DictationHistoryRequest {
+    List { limit: usize },
+    SingleEntry { id: String },
+}
+
+fn parse_dictation_history_request(uri: &str) -> Result<DictationHistoryRequest, String> {
+    if uri == "kit://dictation-history" {
+        return Ok(DictationHistoryRequest::List {
+            limit: DICTATION_HISTORY_DEFAULT_LIMIT,
+        });
+    }
+
+    let (_base, query) = uri
+        .split_once('?')
+        .ok_or_else(|| format!("Resource not found: {uri}"))?;
+
+    let mut limit = DICTATION_HISTORY_DEFAULT_LIMIT;
+    let mut entry_id: Option<String> = None;
+
+    for pair in query.split('&').filter(|p| !p.is_empty()) {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, "1"));
+        match key {
+            "id" => entry_id = Some(value.to_string()),
+            "limit" => {
+                limit = value
+                    .parse::<usize>()
+                    .map_err(|_| {
+                        format!("Invalid limit value: {value}. Expected a positive integer.")
+                    })?
+                    .min(DICTATION_HISTORY_MAX_LIMIT);
+            }
+            _ => {
+                return Err(format!(
+                    "Invalid kit://dictation-history parameter: {key}. Supported parameters: id, limit."
+                ));
+            }
+        }
+    }
+
+    if let Some(id) = entry_id {
+        Ok(DictationHistoryRequest::SingleEntry { id })
+    } else {
+        Ok(DictationHistoryRequest::List { limit })
+    }
+}
+
+fn read_dictation_history_resource(uri: &str) -> Result<ResourceContent, String> {
+    match parse_dictation_history_request(uri)? {
+        DictationHistoryRequest::SingleEntry { id } => {
+            let entry = crate::dictation::get_history_entry(&id)
+                .ok_or_else(|| format!("Dictation history entry not found: {id}"))?;
+            Ok(ResourceContent {
+                uri: uri.to_string(),
+                mime_type: "text/plain".to_string(),
+                text: entry.transcript,
+            })
+        }
+        DictationHistoryRequest::List { limit } => {
+            let entries: Vec<crate::dictation::DictationHistoryEntry> =
+                crate::dictation::load_history()
+                    .into_iter()
+                    .take(limit)
+                    .collect();
+            let json = serde_json::to_string_pretty(&entries)
+                .map_err(|e| format!("Failed to serialize dictation history: {e}"))?;
             Ok(ResourceContent {
                 uri: uri.to_string(),
                 mime_type: "application/json".to_string(),
@@ -1505,6 +2286,140 @@ fn read_system_info_resource() -> Result<ResourceContent, String> {
     Ok(ResourceContent {
         uri: "kit://system".to_string(),
         mime_type: "text/plain".to_string(),
+        text,
+    })
+}
+
+/// Read the `kit://stdin-commands` drift-audited reference resource.
+///
+/// Emits markdown prose documenting the stdin JSONL envelope, with a
+/// `<!-- drift-audit:stdin-verbs:start -->` … `:end` block that enumerates
+/// every accepted `type` verb in the shape `- \`verbName\`: description`.
+/// `tests/mcp_resource_drift.rs` pins the block against
+/// [`crate::stdin_commands::all_external_command_verbs`].
+fn read_stdin_commands_resource() -> Result<ResourceContent, String> {
+    let mut body = String::new();
+    body.push_str(
+        "# Stdin JSONL Commands\n\n\
+         Script Kit GPUI accepts one JSON object per line on stdin. Each \
+         command is dispatched through `ExternalCommand` after the optional \
+         `protocolVersion` gate in `src/stdin_commands/mod.rs`.\n\n\
+         Example:\n\n\
+         ```json\n\
+         {\"type\":\"triggerBuiltin\",\"builtinId\":\"builtin/clipboard-history\"}\n\
+         ```\n\n\
+         The list below is the only source agents should trust for the \
+         accepted `type` verb spelling. It is kept in sync with the \
+         `ExternalCommand::command_type` match by the drift-audit in \
+         `tests/mcp_resource_drift.rs`.\n\n\
+         ## Verbs\n\n\
+         <!-- drift-audit:stdin-verbs:start -->\n",
+    );
+    for verb in crate::stdin_commands::all_external_command_verbs() {
+        body.push_str(&format!(
+            "- `{verb}`: Dispatched as `ExternalCommand::{variant}` in `src/stdin_commands/mod.rs`.\n",
+            variant = stdin_verb_variant_hint(verb),
+        ));
+    }
+    body.push_str("<!-- drift-audit:stdin-verbs:end -->\n");
+
+    Ok(ResourceContent {
+        uri: STDIN_COMMANDS_REFERENCE_URI.to_string(),
+        mime_type: "text/markdown".to_string(),
+        text: body,
+    })
+}
+
+/// Map a stdin verb back to its `ExternalCommand` variant name for the
+/// resource prose. Purely cosmetic — the drift audit is on the verb, not
+/// the hint string.
+fn stdin_verb_variant_hint(verb: &str) -> &'static str {
+    match verb {
+        "run" => "Run",
+        "show" => "Show",
+        "hide" => "Hide",
+        "setFilter" => "SetFilter",
+        "triggerBuiltin" => "TriggerBuiltin",
+        "simulateKey" => "SimulateKey",
+        "openNotes" => "OpenNotes",
+        "openAi" => "OpenAi",
+        "openMiniAi" => "OpenMiniAi",
+        "openAiWithMockData" => "OpenAiWithMockData",
+        "openMiniAiWithMockData" => "OpenMiniAiWithMockData",
+        "showAiCommandBar" => "ShowAiCommandBar",
+        "simulateAiKey" => "SimulateAiKey",
+        "captureWindow" => "CaptureWindow",
+        "setAiSearch" => "SetAiSearch",
+        "setAiInput" => "SetAiInput",
+        "setAcpInput" => "SetAcpInput",
+        "getAiWindowState" => "GetAiWindowState",
+        "showGrid" => "ShowGrid",
+        "hideGrid" => "HideGrid",
+        "showShortcutRecorder" => "ShowShortcutRecorder",
+        "executeFallback" => "ExecuteFallback",
+        "triggerAction" => "TriggerAction",
+        "pasteClipboardIntoAcp" => "PasteClipboardIntoAcp",
+        "pushDictationResult" => "PushDictationResult",
+        "getConfigFingerprint" => "GetConfigFingerprint",
+        _ => "(unknown)",
+    }
+}
+
+/// Read the `kit://trigger-builtins` drift-audited reference resource.
+///
+/// Emits markdown prose listing every canonical `builtin/...` command id
+/// accepted by the `triggerBuiltin` stdin verb, wrapped in a
+/// `<!-- drift-audit:trigger-builtin-ids:start -->` block.
+/// `tests/mcp_resource_drift.rs` pins the block against
+/// [`crate::builtins::trigger_registry::all_trigger_builtin_command_ids`].
+fn read_trigger_builtins_resource() -> Result<ResourceContent, String> {
+    let mut body = String::new();
+    body.push_str(
+        "# Trigger Built-ins\n\n\
+         Canonical `builtin/...` command IDs accepted by the `triggerBuiltin` \
+         stdin verb. Legacy lowercase aliases (e.g. `clipboard`, `apps`) are \
+         still resolved via the registry in \
+         `src/builtins/trigger_registry.rs`, but new callers should use the \
+         canonical IDs below.\n\n\
+         Example:\n\n\
+         ```json\n\
+         {\"type\":\"triggerBuiltin\",\"builtinId\":\"builtin/clipboard-history\"}\n\
+         ```\n\n\
+         The list below is the only source agents should trust. It is kept \
+         in sync with `TriggerBuiltin::ALL` by the drift-audit in \
+         `tests/mcp_resource_drift.rs`.\n\n\
+         ## Command IDs\n\n\
+         <!-- drift-audit:trigger-builtin-ids:start -->\n",
+    );
+    for id in crate::builtins::trigger_registry::all_trigger_builtin_command_ids() {
+        body.push_str(&format!(
+            "- `{id}`: Canonical trigger-builtin command id.\n",
+        ));
+    }
+    body.push_str("<!-- drift-audit:trigger-builtin-ids:end -->\n");
+
+    Ok(ResourceContent {
+        uri: TRIGGER_BUILTINS_REFERENCE_URI.to_string(),
+        mime_type: "text/markdown".to_string(),
+        text: body,
+    })
+}
+
+/// Read the `kit://diagnostics/protocol-stats` resource
+/// (Oracle-Session `protocol-builtin-boundary-refactor-plan` PR4).
+///
+/// Returns a serialized [`crate::protocol_stats::ProtocolStatsReport`]
+/// so MCP consumers can render a live protocol-boundary health chip
+/// without shelling out to logs. camelCase field names are baked into
+/// the struct via `serde(rename_all = "camelCase")` so the wire shape
+/// is stable.
+fn read_protocol_stats_resource() -> Result<ResourceContent, String> {
+    let report = crate::protocol_stats::current_report();
+    let text = serde_json::to_string_pretty(&report)
+        .map_err(|e| format!("failed to serialize protocol stats report: {e}"))?;
+    Ok(ResourceContent {
+        uri: PROTOCOL_STATS_DIAGNOSTICS_URI.to_string(),
+        mime_type: "application/json".to_string(),
         text,
     })
 }
@@ -2143,6 +3058,10 @@ mod tests {
         scriptlets.into_iter().map(Arc::new).collect()
     }
 
+    fn provider_json_test_lock() -> &'static std::sync::Mutex<()> {
+        crate::test_utils::PROVIDER_JSON_TEST_LOCK.get_or_init(|| std::sync::Mutex::new(()))
+    }
+
     // =======================================================
     // TDD Tests - Written FIRST per spec requirements
     // =======================================================
@@ -2192,7 +3111,11 @@ mod tests {
         // REQUIREMENT: resources/list returns all three resources
         let resources = get_resource_definitions();
 
-        assert_eq!(resources.len(), 19, "Should have exactly 19 resources");
+        assert_eq!(
+            resources.len(),
+            25,
+            "Resource registry count should be updated when new MCP resources land"
+        );
 
         let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
         assert!(uris.contains(&"kit://state"), "Should include kit://state");
@@ -2214,8 +3137,10 @@ mod tests {
         for resource in &resources {
             assert!(!resource.name.is_empty(), "Resource should have a name");
             assert!(
-                resource.mime_type == "application/json" || resource.mime_type == "text/plain",
-                "Should be JSON or text mime type, got: {}",
+                resource.mime_type == "application/json"
+                    || resource.mime_type == "text/plain"
+                    || resource.mime_type == "text/markdown",
+                "Should be JSON, text, or markdown mime type, got: {}",
                 resource.mime_type
             );
             assert!(resource.description.is_some(), "Should have a description");
@@ -2381,7 +3306,7 @@ mod tests {
         assert!(resource_array.is_some());
 
         let resource_array = resource_array.unwrap();
-        assert_eq!(resource_array.len(), 19);
+        assert_eq!(resource_array.len(), resources.len());
 
         // First resource should have expected fields
         let first = &resource_array[0];
@@ -2805,7 +3730,7 @@ mod tests {
     fn sdk_reference_includes_metadata_format() {
         let doc = build_sdk_reference_document();
         assert!(doc.metadata_format.contains("export const metadata"));
-        assert!(doc.script_directory.contains("kit/main/scripts"));
+        assert!(doc.script_directory.contains("plugins/main/scripts"));
         assert!(doc.scriptlet_pattern.contains("scriptlets"));
     }
 
@@ -2815,6 +3740,142 @@ mod tests {
         let json = serde_json::to_string(&doc).expect("serialize");
         let parsed: SdkReferenceDocument = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(doc, parsed);
+    }
+
+    // =======================================================
+    // kit://failed-scripts resource tests
+    // =======================================================
+
+    #[test]
+    fn failed_scripts_resource_is_listed() {
+        let resources = get_resource_definitions();
+        let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
+        assert!(
+            uris.contains(&FAILED_SCRIPTS_RESOURCE_URI),
+            "{FAILED_SCRIPTS_RESOURCE_URI} should be in resource definitions"
+        );
+    }
+
+    #[test]
+    fn failed_scripts_resource_lists_validation_failures() {
+        use crate::scripts::{
+            BindingKind, FailedScript, MetadataField, RelatedScript, ScriptValidationIssue,
+            ScriptValidationKind, ValidationReport, ValidationSeverity, VALIDATION_SCHEMA_VERSION,
+        };
+        use std::path::PathBuf;
+
+        // Two scripts colliding on `cmd k` — mirrors what `validate_script_catalog`
+        // would emit for real duplicate-shortcut metadata on disk.
+        let issue_for = |path: &str, peer: &str| ScriptValidationIssue {
+            severity: ValidationSeverity::Fatal,
+            path: PathBuf::from(path),
+            script_name: path.into(),
+            field: Some(MetadataField::Shortcut),
+            message: "Shortcut `cmd k` is declared by 2 scripts".into(),
+            kind: ScriptValidationKind::DuplicateBinding {
+                binding: BindingKind::Shortcut,
+                value: "cmd k".into(),
+            },
+            related: vec![RelatedScript {
+                path: PathBuf::from(peer),
+                name: peer.into(),
+            }],
+        };
+        let failed = vec![
+            FailedScript {
+                path: PathBuf::from("/tmp/a.ts"),
+                name: "a".into(),
+                fatal: Arc::from(vec![issue_for("/tmp/a.ts", "/tmp/b.ts")]),
+            },
+            FailedScript {
+                path: PathBuf::from("/tmp/b.ts"),
+                name: "b".into(),
+                fatal: Arc::from(vec![issue_for("/tmp/b.ts", "/tmp/a.ts")]),
+            },
+        ];
+        let report = ValidationReport {
+            schema_version: VALIDATION_SCHEMA_VERSION,
+            total_candidates: 2,
+            valid_count: 0,
+            fatal_count: 2,
+            warning_count: 0,
+            failed_scripts: Arc::from(failed),
+            warnings: Arc::from(Vec::<ScriptValidationIssue>::new()),
+        };
+
+        let doc = build_failed_scripts_document(&report);
+        assert_eq!(doc.schema_version, FAILED_SCRIPTS_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(doc.validation_schema_version, VALIDATION_SCHEMA_VERSION);
+        assert_eq!(doc.total_candidates, 2);
+        assert_eq!(doc.valid_count, 0);
+        assert_eq!(doc.fatal_count, 2);
+        assert_eq!(doc.failed_scripts.len(), 2);
+
+        // Each failure must name its peer so the author can repair both sides.
+        for entry in &doc.failed_scripts {
+            assert_eq!(entry.fatal.len(), 1);
+            assert_eq!(entry.fatal[0].related.len(), 1);
+            assert!(matches!(
+                entry.fatal[0].kind,
+                ScriptValidationKind::DuplicateBinding {
+                    binding: BindingKind::Shortcut,
+                    ..
+                }
+            ));
+        }
+
+        let json = serde_json::to_string(&doc).expect("serialize");
+        assert!(json.contains("\"schemaVersion\""));
+        assert!(!json.contains("\"schema_version\""));
+        assert!(json.contains("\"duplicateBinding\""));
+        let parsed: FailedScriptsResourceDocument =
+            serde_json::from_str(&json).expect("round-trip");
+        assert_eq!(parsed.failed_scripts.len(), 2);
+    }
+
+    #[test]
+    fn failed_scripts_resource_empty_report_serializes_cleanly() {
+        use crate::scripts::{ValidationReport, VALIDATION_SCHEMA_VERSION};
+
+        let report = ValidationReport {
+            schema_version: VALIDATION_SCHEMA_VERSION,
+            total_candidates: 0,
+            valid_count: 0,
+            fatal_count: 0,
+            warning_count: 0,
+            failed_scripts: Arc::from(Vec::new()),
+            warnings: Arc::from(Vec::new()),
+        };
+        let doc = build_failed_scripts_document(&report);
+        assert_eq!(doc.fatal_count, 0);
+        assert!(doc.failed_scripts.is_empty());
+        assert!(doc.warnings.is_empty());
+
+        let json = serde_json::to_string(&doc).expect("serialize");
+        let parsed: FailedScriptsResourceDocument =
+            serde_json::from_str(&json).expect("round-trip");
+        assert_eq!(
+            parsed.schema_version,
+            FAILED_SCRIPTS_RESOURCE_SCHEMA_VERSION
+        );
+    }
+
+    #[test]
+    fn failed_scripts_resource_read_returns_parseable_envelope() {
+        // End-to-end: resolves the URI through `read_resource` which calls
+        // `read_scripts_report()` internally. Machine state may be non-empty,
+        // so assert envelope shape, not failure count.
+        let content = read_resource(FAILED_SCRIPTS_RESOURCE_URI, &[], &[], None)
+            .expect("resource should resolve");
+        assert_eq!(content.uri, FAILED_SCRIPTS_RESOURCE_URI);
+        assert_eq!(content.mime_type, "application/json");
+
+        let doc: FailedScriptsResourceDocument =
+            serde_json::from_str(&content.text).expect("valid envelope JSON");
+        assert_eq!(doc.schema_version, FAILED_SCRIPTS_RESOURCE_SCHEMA_VERSION);
+        // If any script failed, its fatal-issue total must be at least as large
+        // as the distinct failed-script count (each failed script has ≥1 issue).
+        assert!(doc.fatal_count >= doc.failed_scripts.len());
     }
 
     #[test]
@@ -3070,6 +4131,9 @@ mod tests {
 
     #[test]
     fn dictation_resource_empty_fallback_has_explicit_envelope() {
+        let _guard = provider_json_test_lock()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         clear_provider_json_slots();
         std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
 
@@ -3091,6 +4155,9 @@ mod tests {
 
     #[test]
     fn calendar_resource_empty_fallback_has_explicit_envelope() {
+        let _guard = provider_json_test_lock()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         clear_provider_json_slots();
         std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
 
@@ -3112,6 +4179,9 @@ mod tests {
 
     #[test]
     fn notifications_resource_empty_fallback_has_explicit_envelope() {
+        let _guard = provider_json_test_lock()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         clear_provider_json_slots();
         std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
 
@@ -3133,6 +4203,9 @@ mod tests {
 
     #[test]
     fn dictation_resource_prefers_slot_data() {
+        let _guard = provider_json_test_lock()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         clear_provider_json_slots();
         publish_dictation_json(
             r#"{"schemaVersion":1,"type":"dictation","ok":true,"available":true,"source":"slot","items":[{"text":"hello"}]}"#,
@@ -3153,6 +4226,9 @@ mod tests {
 
     #[test]
     fn calendar_resource_prefers_slot_data() {
+        let _guard = provider_json_test_lock()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         clear_provider_json_slots();
         publish_calendar_json(
             r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":true,"source":"slot","items":[{"title":"Demo"}]}"#,
@@ -3173,6 +4249,9 @@ mod tests {
 
     #[test]
     fn notifications_resource_prefers_slot_data() {
+        let _guard = provider_json_test_lock()
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         clear_provider_json_slots();
         publish_notifications_json(
             r#"{"schemaVersion":1,"type":"notifications","ok":true,"available":true,"source":"slot","items":[{"title":"Build complete"}]}"#,
@@ -3189,5 +4268,508 @@ mod tests {
         assert_eq!(value["items"].as_array().expect("items array").len(), 1);
 
         clear_provider_json_slots();
+    }
+
+    fn sdk_ref(name: &str, signature: &str, description: &str, category: &str) -> SdkFunctionRef {
+        SdkFunctionRef::supported(name, signature, description, category)
+    }
+
+    #[test]
+    fn filter_sdk_reference_entries_empty_filter_returns_all_indices() {
+        let entries = vec![
+            sdk_ref("arg", "arg(prompt)", "Prompt user", "input"),
+            sdk_ref("div", "div(html)", "Render HTML", "output"),
+        ];
+        let indices = filter_sdk_reference_entries(&entries, "");
+        assert_eq!(indices, vec![0, 1]);
+    }
+
+    #[test]
+    fn filter_sdk_reference_entries_whitespace_filter_returns_all_indices() {
+        let entries = vec![sdk_ref("arg", "arg(p)", "Prompt", "input")];
+        let indices = filter_sdk_reference_entries(&entries, "   ");
+        assert_eq!(indices, vec![0]);
+    }
+
+    #[test]
+    fn filter_sdk_reference_entries_matches_case_insensitively_across_fields() {
+        let entries = vec![
+            sdk_ref("arg", "arg(prompt)", "Prompts the user", "input"),
+            sdk_ref("div", "div(html)", "Renders HTML content", "output"),
+            sdk_ref("path", "path(opts)", "File picker", "input"),
+        ];
+        assert_eq!(filter_sdk_reference_entries(&entries, "INPUT"), vec![0, 2]);
+        assert_eq!(filter_sdk_reference_entries(&entries, "html"), vec![1]);
+        assert_eq!(filter_sdk_reference_entries(&entries, "picker"), vec![2]);
+        assert_eq!(
+            filter_sdk_reference_entries(&entries, "no-such-thing"),
+            Vec::<usize>::new()
+        );
+    }
+
+    #[test]
+    fn format_sdk_reference_entry_markdown_contains_all_fields() {
+        let entry = sdk_ref(
+            "arg",
+            "arg(prompt: string)",
+            "Prompts the user for input",
+            "input",
+        );
+        let md = format_sdk_reference_entry_markdown(&entry);
+        assert!(md.contains("# arg"), "missing heading: {md}");
+        assert!(
+            md.contains("`arg(prompt: string)`"),
+            "missing signature: {md}"
+        );
+        assert!(md.contains("_input_"), "missing category: {md}");
+        assert!(
+            md.contains("Prompts the user for input"),
+            "missing description: {md}"
+        );
+    }
+
+    #[test]
+    fn sdk_support_serde_roundtrips_lowercase() {
+        // Pins the wire shape: lowercase strings, not PascalCase.
+        let supported = serde_json::to_string(&SdkSupport::Supported).expect("serialize");
+        let unsupported = serde_json::to_string(&SdkSupport::Unsupported).expect("serialize");
+        let experimental = serde_json::to_string(&SdkSupport::Experimental).expect("serialize");
+        assert_eq!(supported, "\"supported\"");
+        assert_eq!(unsupported, "\"unsupported\"");
+        assert_eq!(experimental, "\"experimental\"");
+
+        for raw in [&supported, &unsupported, &experimental] {
+            let parsed: SdkSupport = serde_json::from_str(raw).expect("deserialize");
+            let again = serde_json::to_string(&parsed).expect("re-serialize");
+            assert_eq!(&again, raw, "round-trip mismatch for {raw}");
+        }
+    }
+
+    #[test]
+    fn sdk_function_ref_deserializes_old_shape_as_supported() {
+        // Pins backward compatibility: older JSON without `support` still
+        // parses, defaulting to Supported with no note.
+        let json = r#"{
+            "name": "arg",
+            "signature": "arg(prompt)",
+            "description": "Prompt",
+            "category": "prompts"
+        }"#;
+        let parsed: SdkFunctionRef = serde_json::from_str(json).expect("legacy shape must parse");
+        assert_eq!(parsed.support, SdkSupport::Supported);
+        assert!(parsed.unsupported_note.is_none());
+    }
+
+    #[test]
+    fn sdk_function_ref_always_serializes_support_field() {
+        // Agents should not have to infer support from field absence.
+        let entry = SdkFunctionRef::supported("arg", "arg(p)", "Prompt", "prompts");
+        let json = serde_json::to_string(&entry).expect("serialize");
+        assert!(
+            json.contains("\"support\":\"supported\""),
+            "support field must be serialized for Supported entries: {json}"
+        );
+        assert!(
+            !json.contains("unsupportedNote"),
+            "Option::None should not emit unsupportedNote: {json}"
+        );
+    }
+
+    #[test]
+    fn sdk_reference_marks_notify_as_supported_system_notification_api() {
+        // Pins the user's correction: notify() is intentional OS-level
+        // feedback (macOS Notification Center via notify-rust), distinct
+        // from hud(message) which is in-launcher. Both must coexist, and
+        // kit://sdk-reference must not treat notify() as a dead end.
+        let doc = build_sdk_reference_document();
+        let notify = doc
+            .functions
+            .iter()
+            .find(|entry| entry.name == "notify")
+            .expect("notify must appear in the SDK reference");
+        assert_eq!(notify.support, SdkSupport::Supported);
+        assert!(
+            notify.unsupported_note.is_none(),
+            "notify is Supported; it must not carry an unsupported_note"
+        );
+        let description = notify.description.as_str();
+        assert!(
+            description.to_lowercase().contains("system notification")
+                || description.to_lowercase().contains("notification center"),
+            "notify description must advertise it as an OS-level notification API: {description}"
+        );
+        assert!(
+            description.contains("hud"),
+            "notify description must contrast itself with hud(message) so readers can pick the right API: {description}"
+        );
+    }
+
+    #[test]
+    fn sdk_reference_marks_every_documented_unsupported_api() {
+        // Pins the expanded/contracted list safely: every name in the
+        // SDK_NOT_YET_IMPLEMENTED_IN_GPUI inventory that also appears in the
+        // reference MUST be labeled Unsupported with a note. Names NOT in the
+        // reference are skipped deliberately (this PR does not expand the
+        // reference inventory).
+        let doc = build_sdk_reference_document();
+        for unsupported_name in SDK_NOT_YET_IMPLEMENTED_IN_GPUI {
+            if let Some(entry) = doc
+                .functions
+                .iter()
+                .find(|entry| entry.name == *unsupported_name)
+            {
+                assert_eq!(
+                    entry.support,
+                    SdkSupport::Unsupported,
+                    "`{unsupported_name}` appears in kit-sdk.ts's 'not yet implemented' inventory but is marked Supported in the SDK reference"
+                );
+                assert!(
+                    entry.unsupported_note.is_some(),
+                    "`{unsupported_name}` must carry an unsupported_note explaining the status"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn filter_sdk_reference_entries_includes_unsupported_results() {
+        // Pins: unsupported entries stay discoverable. Filtering does NOT
+        // skip them — the label is the only thing that changes.
+        let entries = vec![
+            sdk_ref("arg", "arg(prompt)", "Prompt user", "prompts"),
+            SdkFunctionRef::unsupported(
+                "notify",
+                "notify(message)",
+                "Show notification",
+                "feedback",
+                "Use hud(...) in GPUI today.",
+            ),
+        ];
+        assert_eq!(filter_sdk_reference_entries(&entries, "notify"), vec![1]);
+        assert_eq!(
+            filter_sdk_reference_entries(&entries, "hud"),
+            Vec::<usize>::new()
+        );
+    }
+
+    #[test]
+    fn format_sdk_reference_entry_markdown_warns_for_unsupported() {
+        let entry = SdkFunctionRef::unsupported(
+            "notify",
+            "notify(message)",
+            "Show notification",
+            "feedback",
+            "Use hud(message) instead.",
+        );
+        let md = format_sdk_reference_entry_markdown(&entry);
+        assert!(
+            md.starts_with("> ⚠ Unsupported in GPUI"),
+            "unsupported entry markdown must lead with a blockquote warning: {md}"
+        );
+        assert!(
+            md.contains("Use hud(message) instead."),
+            "unsupported entry markdown must surface the note: {md}"
+        );
+        // Body sections still present.
+        assert!(md.contains("# notify"), "missing heading: {md}");
+        assert!(md.contains("`notify(message)`"), "missing signature: {md}");
+        assert!(md.contains("_feedback_"), "missing category: {md}");
+        assert!(
+            md.contains("Show notification"),
+            "missing description: {md}"
+        );
+    }
+
+    #[test]
+    fn format_sdk_reference_entry_markdown_does_not_warn_for_supported() {
+        let entry = sdk_ref("arg", "arg(p)", "Prompt", "prompts");
+        let md = format_sdk_reference_entry_markdown(&entry);
+        assert!(
+            !md.contains("Unsupported in GPUI"),
+            "supported entry markdown must not carry an unsupported warning: {md}"
+        );
+    }
+
+    #[test]
+    fn sdk_reference_supported_count_exceeds_unsupported_count() {
+        let doc = build_sdk_reference_document();
+        let supported = doc
+            .functions
+            .iter()
+            .filter(|f| f.support == SdkSupport::Supported)
+            .count();
+        let unsupported = doc
+            .functions
+            .iter()
+            .filter(|f| f.support == SdkSupport::Unsupported)
+            .count();
+        assert!(
+            unsupported > 0,
+            "at least one SDK entry (notify) must be labeled unsupported"
+        );
+        assert!(
+            supported > unsupported,
+            "SDK reference is meant to guide authors to working APIs: supported ({supported}) should exceed unsupported ({unsupported})"
+        );
+    }
+
+    #[test]
+    fn sdk_reference_schema_version_is_five() {
+        // Pin the current schema version so any accidental bump is visible
+        // in the diff and stays paired with an envelope-shape change.
+        assert_eq!(SDK_REFERENCE_SCHEMA_VERSION, 5);
+    }
+
+    #[test]
+    fn script_templates_do_not_reference_unsupported_sdk_apis() {
+        // Starter templates cannot silently depend on a stub SDK API. If a
+        // future template calls e.g. `notify(...)` or `keyboard.type(...)`,
+        // this test must fail so the template author either chooses a
+        // working API or we intentionally upgrade the SDK entry's support
+        // status first.
+        let templates = build_script_templates_document().templates;
+        let needles = unsupported_sdk_reference_scan_needles();
+        assert!(
+            !needles.is_empty(),
+            "needle list must be non-empty — if every SDK entry becomes Supported, the needle builder drifted and this test becomes a no-op"
+        );
+        for template in &templates {
+            let rendered = render_script_template_file(template, "Demo");
+            for needle in &needles {
+                assert!(
+                    !rendered.contains(needle.as_str()),
+                    "Template `{}` references unsupported SDK API `{needle}`. Rendered body:\n{rendered}",
+                    template.id
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn harness_workflow_examples_do_not_reference_unsupported_sdk_apis() {
+        // The kit://sdk-reference harness workflow ships concrete example
+        // scripts (test-script + scriptlet) that agents and users copy
+        // verbatim. After i008 started flagging `notify` as Unsupported in
+        // kit://sdk-reference, any example that still calls `notify(...)`
+        // contradicts the product. This test pins the invariant.
+        let workflow = build_harness_workflow();
+        let examples: [(&str, &str); 2] = [
+            ("example_test_script", workflow.example_test_script.as_str()),
+            ("example_scriptlet", workflow.example_scriptlet.as_str()),
+        ];
+        let needles = unsupported_sdk_reference_scan_needles();
+        assert!(
+            !needles.is_empty(),
+            "needle list must be non-empty — if every SDK entry becomes Supported, the needle builder drifted and this test becomes a no-op"
+        );
+        for (label, body) in &examples {
+            for needle in &needles {
+                assert!(
+                    !body.contains(needle.as_str()),
+                    "Harness workflow `{label}` references unsupported SDK API `{needle}`.\nBody:\n{body}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn harness_workflow_example_scriptlet_uses_hud_for_feedback() {
+        // Pins the intent of the copy-today's-date scriptlet: because the
+        // desired feedback is launcher-local (flash a confirmation while the
+        // launcher is the active surface), the canonical example uses
+        // `hud(...)` rather than `notify(...)`. `notify(...)` is a
+        // Supported, real OS-notification API — equally legitimate when the
+        // caller wants Notification Center delivery that lasts past a dismiss
+        // — but mixing it into this example would misinform authors about
+        // when to pick each one.
+        let workflow = build_harness_workflow();
+        assert!(
+            workflow
+                .example_scriptlet
+                .contains("hud(\"Copied today's date\")"),
+            "example_scriptlet must give launcher-local feedback via `hud(...)`; reach for `notify(...)` only when you want OS Notification Center delivery.\nBody:\n{}",
+            workflow.example_scriptlet
+        );
+        assert!(
+            !workflow.example_scriptlet.contains("notify("),
+            "example_scriptlet must not call `notify(...)`; this copy-date scriptlet is a launcher-local feedback example — `hud(message)` is the right choice here.\nBody:\n{}",
+            workflow.example_scriptlet
+        );
+    }
+
+    // =======================================================
+    // kit://script-templates resource tests
+    // =======================================================
+
+    fn template_ref(id: &str, title: &str, description: &str, category: &str) -> ScriptTemplateRef {
+        ScriptTemplateRef {
+            id: id.to_string(),
+            title: title.to_string(),
+            description: description.to_string(),
+            category: category.to_string(),
+            filename_hint: id.to_string(),
+            body_template: "// placeholder for {{NAME}}\n".to_string(),
+            metadata_defaults: ScriptTemplateMetadataDefaults::default(),
+        }
+    }
+
+    #[test]
+    fn script_templates_document_has_schema_version_and_templates() {
+        let doc = build_script_templates_document();
+        assert_eq!(doc.schema_version, SCRIPT_TEMPLATES_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(doc.count, doc.templates.len());
+        assert!(
+            !doc.templates.is_empty(),
+            "v1 should ship at least one starter template"
+        );
+        // Blank Starter must stay in row #1 so the fast path feels identical
+        // to the pre-catalog experience.
+        assert_eq!(
+            doc.templates[0].id, "blank-starter",
+            "Blank Starter must be the first row"
+        );
+    }
+
+    #[test]
+    fn script_template_ids_are_unique() {
+        let doc = build_script_templates_document();
+        let mut ids: Vec<&str> = doc.templates.iter().map(|t| t.id.as_str()).collect();
+        ids.sort();
+        let original_len = ids.len();
+        ids.dedup();
+        assert_eq!(
+            ids.len(),
+            original_len,
+            "Template ids must be unique: {ids:?}"
+        );
+    }
+
+    #[test]
+    fn filter_script_template_entries_matches_title_description_and_category() {
+        let entries = vec![
+            template_ref("t-1", "Blank Starter", "Empty shape", "starter"),
+            template_ref("t-2", "Choice List", "Pick one from a list", "prompts"),
+            template_ref("t-3", "Daily Note", "Writes today's text", "files"),
+        ];
+        let all = filter_script_template_entries(&entries, "");
+        assert_eq!(all, vec![0, 1, 2]);
+        let whitespace = filter_script_template_entries(&entries, "   ");
+        assert_eq!(whitespace, vec![0, 1, 2]);
+
+        // Title match (case-insensitive).
+        assert_eq!(filter_script_template_entries(&entries, "CHOICE"), vec![1]);
+        // Description match.
+        assert_eq!(filter_script_template_entries(&entries, "today"), vec![2]);
+        // Category match.
+        assert_eq!(filter_script_template_entries(&entries, "starter"), vec![0]);
+        // No matches.
+        assert_eq!(
+            filter_script_template_entries(&entries, "no-such-thing"),
+            Vec::<usize>::new()
+        );
+    }
+
+    #[test]
+    fn render_script_template_file_includes_metadata_name() {
+        let template = ScriptTemplateRef {
+            id: "demo".into(),
+            title: "Demo".into(),
+            description: "test".into(),
+            category: "starter".into(),
+            filename_hint: "demo".into(),
+            body_template: concat!(
+                "export const metadata = {\n",
+                "  name: \"{{NAME}}\",\n",
+                "  description: \"{{DESCRIPTION}}\",\n",
+                "};\n",
+            )
+            .into(),
+            metadata_defaults: ScriptTemplateMetadataDefaults {
+                description: Some("seeded description".into()),
+            },
+        };
+        let rendered = render_script_template_file(&template, "My Friendly Name");
+        assert!(
+            rendered.contains("name: \"My Friendly Name\""),
+            "friendly name should be substituted into metadata.name: {rendered}"
+        );
+        assert!(
+            rendered.contains("description: \"seeded description\""),
+            "description default should be substituted: {rendered}"
+        );
+        assert!(
+            !rendered.contains("{{NAME}}"),
+            "all placeholders should be replaced: {rendered}"
+        );
+        assert!(
+            !rendered.contains("{{DESCRIPTION}}"),
+            "all placeholders should be replaced: {rendered}"
+        );
+    }
+
+    #[test]
+    fn render_script_template_file_falls_back_to_title_when_no_description_default() {
+        let mut template = ScriptTemplateRef {
+            id: "demo".into(),
+            title: "Demo Title".into(),
+            description: "card text".into(),
+            category: "starter".into(),
+            filename_hint: "demo".into(),
+            body_template: "{{DESCRIPTION}}".into(),
+            metadata_defaults: ScriptTemplateMetadataDefaults::default(),
+        };
+        template.metadata_defaults.description = None;
+        let rendered = render_script_template_file(&template, "unused");
+        assert_eq!(
+            rendered, "Demo Title",
+            "missing description_default should fall back to title"
+        );
+    }
+
+    #[test]
+    fn find_script_template_returns_template_by_id() {
+        let found = find_script_template("blank-starter").expect("blank-starter must exist");
+        assert_eq!(found.id, "blank-starter");
+    }
+
+    #[test]
+    fn find_script_template_returns_none_for_unknown_id() {
+        assert!(find_script_template("no-such-template-id").is_none());
+    }
+
+    #[test]
+    fn starter_templates_do_not_emit_collision_binding_fields() {
+        let doc = build_script_templates_document();
+        for template in &doc.templates {
+            let rendered = render_script_template_file(template, "Demo");
+            for banned in ["alias:", "shortcut:", "keyword:", "trigger:"] {
+                assert!(
+                    !rendered.contains(banned),
+                    "Template `{}` must not emit `{}` (would be fatally hidden by validate_script_catalog). Rendered:\n{}",
+                    template.id,
+                    banned,
+                    rendered
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn script_templates_resource_is_listed_and_readable() {
+        let resources = get_resource_definitions();
+        let uris: Vec<&str> = resources.iter().map(|r| r.uri.as_str()).collect();
+        assert!(
+            uris.contains(&SCRIPT_TEMPLATES_RESOURCE_URI),
+            "{SCRIPT_TEMPLATES_RESOURCE_URI} should be in resource definitions"
+        );
+
+        let content = read_resource(SCRIPT_TEMPLATES_RESOURCE_URI, &[], &[], None)
+            .expect("script-templates resource should be readable");
+        assert_eq!(content.uri, SCRIPT_TEMPLATES_RESOURCE_URI);
+        assert_eq!(content.mime_type, "application/json");
+        let doc: ScriptTemplatesResourceDocument =
+            serde_json::from_str(&content.text).expect("valid JSON envelope");
+        assert_eq!(doc.schema_version, SCRIPT_TEMPLATES_RESOURCE_SCHEMA_VERSION);
+        assert_eq!(doc.count, doc.templates.len());
     }
 }

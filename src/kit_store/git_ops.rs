@@ -6,7 +6,7 @@ use std::process::Command;
 
 use tracing::info;
 
-/// Clone a kit repository into the canonical plugin root `<kit_path>/kit/<plugin-id>/`.
+/// Clone a kit repository into the canonical plugin root `<kit_path>/plugins/<plugin-id>/`.
 ///
 /// After cloning, writes a `plugin.json` manifest if one does not already exist in
 /// the repository, so the plugin is immediately discoverable by `discover_plugins()`.
@@ -298,12 +298,10 @@ fn is_windows_reserved_device_name(name: &str) -> bool {
 mod tests {
     use super::{build_git_clone_command, extract_repo_name, install_kit};
     use crate::setup::SK_PATH_ENV;
+    use crate::test_utils::SK_PATH_TEST_LOCK;
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::process::Command;
-    use std::sync::Mutex;
-
-    static SK_PATH_LOCK: Mutex<()> = Mutex::new(());
 
     fn create_bare_repo_with_package_name(
         dir: &Path,
@@ -430,13 +428,17 @@ mod tests {
 
     #[test]
     fn install_kit_uses_manifest_id_for_canonical_path() {
-        let _lock = SK_PATH_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _lock = SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let temp_dir = tempfile::tempdir().expect("create temp dir");
         let kit_root = temp_dir.path().join("sk-test");
         let repos_dir = temp_dir.path().join("repos");
         fs::create_dir_all(&repos_dir).expect("create repos dir");
-        fs::create_dir_all(kit_root.join("kit")).expect("create kit dir");
+        fs::create_dir_all(kit_root.join("plugins")).expect("create plugins dir");
 
+        let previous_sk_path = std::env::var(SK_PATH_ENV).ok();
         std::env::set_var(SK_PATH_ENV, kit_root.to_str().expect("path str"));
 
         let bare_repo =
@@ -446,14 +448,20 @@ mod tests {
         let (plugin_id, install_path) = install_kit(repo_url).expect("install should succeed");
 
         assert_eq!(plugin_id, "manifest-plugin");
-        assert_eq!(install_path, kit_root.join("kit").join("manifest-plugin"));
+        assert_eq!(
+            install_path,
+            kit_root.join("plugins").join("manifest-plugin")
+        );
         assert!(install_path.exists(), "canonical plugin root should exist");
         assert!(
-            !kit_root.join("kit").join("repo-name").exists(),
+            !kit_root.join("plugins").join("repo-name").exists(),
             "repo basename path should not remain after canonicalization"
         );
 
-        std::env::remove_var(SK_PATH_ENV);
+        match previous_sk_path {
+            Some(path) => std::env::set_var(SK_PATH_ENV, path),
+            None => std::env::remove_var(SK_PATH_ENV),
+        }
     }
 
     #[test]

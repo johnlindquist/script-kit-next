@@ -67,6 +67,24 @@ pub struct AcpStateSnapshot {
     /// Context chip count (staged context parts in the composer).
     pub context_chip_count: usize,
 
+    /// Human-readable summary of staged context chips (comma-joined labels).
+    ///
+    /// Present when `context_chip_count > 0`. Sharpens the bare count into a
+    /// descriptive list (e.g. `"Theme Designer, Current Context"`) so
+    /// automation assertions can go from "a chip is present" to "the *right*
+    /// chip is present".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub context_summary: Option<String>,
+
+    /// Active dictation session phase, if any (`recording`, `confirming`,
+    /// `transcribing`, `delivering`, `finished`, `failed`, or `idle`).
+    ///
+    /// `None` when no dictation session is active. Populated from
+    /// `DictationSessionPhase::as_automation_str()` so the string vocabulary
+    /// stays in lockstep with the runtime enum.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dictation_phase: Option<String>,
+
     /// Whether the context bootstrap is still in progress.
     pub context_ready: bool,
 
@@ -103,6 +121,8 @@ impl Default for AcpStateSnapshot {
             picker: None,
             last_accepted_item: None,
             context_chip_count: 0,
+            context_summary: None,
+            dictation_phase: None,
             context_ready: true,
             has_pending_permission: false,
             input_layout: None,
@@ -782,6 +802,8 @@ mod tests {
                 cursor_after: 14,
             }),
             context_chip_count: 1,
+            context_summary: Some("context".to_string()),
+            dictation_phase: Some("recording".to_string()),
             context_ready: true,
             has_pending_permission: false,
             input_layout: Some(AcpInputLayoutMetrics {
@@ -806,9 +828,21 @@ mod tests {
         assert!(parsed["messageCount"].is_number());
         assert!(parsed["lastAcceptedItem"].is_object());
         assert!(parsed["contextChipCount"].is_number());
+        assert_eq!(parsed["contextSummary"], "context");
+        assert_eq!(parsed["dictationPhase"], "recording");
         assert!(parsed["contextReady"].is_boolean());
         assert!(parsed["hasPendingPermission"].is_boolean());
         assert!(parsed["inputLayout"].is_object());
+    }
+
+    #[test]
+    fn acp_state_snapshot_default_omits_dictation_phase() {
+        let snap = AcpStateSnapshot::default();
+        let json = serde_json::to_value(&snap).expect("serialize");
+        assert!(
+            json.get("dictationPhase").is_none(),
+            "dictationPhase should be omitted when None"
+        );
     }
 
     // ── Deserialization from external JSON ──────────────────────

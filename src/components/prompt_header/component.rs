@@ -67,9 +67,9 @@ impl PromptHeader {
             self.config.filter_text.clone().into()
         };
 
-        // Text color: dimmed for placeholder (whisper chrome), primary for input
+        // Text color: text_primary at placeholder alpha for empty, full for active input
         let text_color = if filter_is_empty {
-            colors.text_dimmed.to_rgb()
+            colors.text_primary.rgba8(colors.alpha_placeholder as u8)
         } else {
             colors.text_primary.to_rgb()
         };
@@ -92,7 +92,7 @@ impl PromptHeader {
                     .overflow_hidden()
                     .whitespace_nowrap()
                     .text_ellipsis()
-                    .text_color(colors.text_muted.to_rgb())
+                    .text_color(colors.text_primary.rgba8(colors.alpha_placeholder as u8))
                     .tooltip(move |window, cx| Tooltip::new(prefix_text.clone()).build(window, cx))
                     .child(prefix.clone()),
             );
@@ -299,7 +299,7 @@ impl PromptHeader {
             // ⌘K indicator
             .child(
                 div()
-                    .text_color(colors.text_dimmed.to_rgb())
+                    .text_color(colors.text_primary.rgba8(colors.alpha_placeholder as u8))
                     .text_size(px(colors.caption_font_size))
                     .child("⌘K"),
             )
@@ -308,7 +308,7 @@ impl PromptHeader {
             .child(
                 div()
                     .mx(rems(0.25))
-                    .text_color(colors.text_dimmed.rgba8(0x60))
+                    .text_color(colors.text_primary.rgba8(colors.alpha_placeholder as u8))
                     .text_size(px(colors.supporting_font_size))
                     .child("|"),
             )
@@ -340,7 +340,7 @@ impl PromptHeader {
                     .text_sm()
                     .font_weight(FontWeight::MEDIUM)
                     .font_family(crate::list_item::FONT_SYSTEM_UI)
-                    .text_color(colors.text_muted.to_rgb())
+                    .text_color(colors.text_primary.rgba8(colors.alpha_placeholder as u8))
                     .hover(move |style| {
                         style
                             .bg(rgba(colors.hover_overlay))
@@ -363,7 +363,7 @@ impl PromptHeader {
                     .text_xs()
                     .font_weight(FontWeight::MEDIUM)
                     .font_family(crate::list_item::FONT_SYSTEM_UI)
-                    .text_color(colors.text_muted.to_rgb())
+                    .text_color(colors.text_primary.rgba8(colors.alpha_placeholder as u8))
                     .hover(move |style| {
                         style
                             .bg(rgba(colors.hover_overlay))

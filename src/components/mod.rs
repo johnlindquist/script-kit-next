@@ -36,6 +36,8 @@ pub mod form_fields;
 mod form_fields_tests;
 pub mod hint_strip;
 pub(crate) mod inline_dropdown;
+pub mod inline_picker;
+pub mod inline_popup_window;
 pub mod inline_prompt_input;
 pub(crate) mod launcher_ask_ai_hint;
 pub mod minimal_prompt_shell;
@@ -71,8 +73,8 @@ pub use hint_strip::{
 #[allow(unused_imports)]
 pub(crate) use inline_dropdown::{
     inline_dropdown_clamp_selected_index, inline_dropdown_select_next, inline_dropdown_select_prev,
-    inline_dropdown_visible_range, InlineDropdown, InlineDropdownColors, InlineDropdownEmptyState,
-    InlineDropdownSynopsis,
+    inline_dropdown_visible_range, inline_dropdown_visible_range_from_start, InlineDropdown,
+    InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis,
 };
 #[allow(unused_imports)]
 pub use inline_prompt_input::InlinePromptInput;

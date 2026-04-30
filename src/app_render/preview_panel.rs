@@ -84,7 +84,7 @@ impl ScriptListApp {
         let filter_for_log = self.filter_text.clone();
 
         // Only log when meaningful state changed (flag set by render_script_list)
-        if self.log_this_render {
+        if self.main_menu_render_diagnostics.log_this_render {
             logging::log(
                 "PREVIEW_PERF",
                 &format!(
@@ -97,17 +97,15 @@ impl ScriptListApp {
 
         // Get grouped results to map from selected_index to actual result (cached)
         let selected_index = self.selected_index;
-        let (grouped_items, flat_results) = self.get_grouped_results_cached();
-        let grouped_items = grouped_items.clone();
-        let flat_results = flat_results.clone();
+        self.get_grouped_results_cached();
 
-        // Get the result index from the grouped item
-        let selected_result_idx = match grouped_items.get(selected_index) {
-            Some(GroupedListItem::Item(idx)) => Some(*idx),
-            _ => None,
-        };
-        let selected_result =
-            selected_result_idx.and_then(|result_idx| flat_results.get(result_idx).cloned());
+        let selected_result_idx = self
+            .main_menu_result_caches
+            .flat_result_index_for_grouped_item(selected_index);
+        let selected_result = selected_result_idx.and_then(|result_idx| {
+            self.main_menu_result_caches
+                .cloned_search_result_for_flat_index(result_idx)
+        });
         let selected_calculator = selected_result_idx
             .and_then(|result_idx| self.inline_calculator_for_result_index(result_idx))
             .cloned();

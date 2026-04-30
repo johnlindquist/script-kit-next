@@ -50,6 +50,12 @@ mod consistent_structured_fields;
 #[path = "source_audits/builtin_dispatch_consistency.rs"]
 mod builtin_dispatch_consistency;
 
+#[path = "source_audits/trigger_builtin_sdk_literals.rs"]
+mod trigger_builtin_sdk_literals;
+
+#[path = "source_audits/trigger_builtin_registry_consistency.rs"]
+mod trigger_builtin_registry_consistency;
+
 #[path = "source_audits/emoji_picker.rs"]
 mod emoji_picker;
 
@@ -73,6 +79,36 @@ mod scroll_reveal;
 
 #[path = "source_audits/actions_popup_contract.rs"]
 mod actions_popup_contract;
+
+#[path = "source_audits/acp_turn_lifecycle_spans.rs"]
+mod acp_turn_lifecycle_spans;
+
+#[path = "source_audits/scriptlist_hide_bounds_reset.rs"]
+mod scriptlist_hide_bounds_reset;
+
+#[path = "source_audits/embedded_ai_acp_read_target.rs"]
+mod embedded_ai_acp_read_target;
+
+#[path = "source_audits/stdin_check_accessibility_wired.rs"]
+mod stdin_check_accessibility_wired;
+
+#[path = "source_audits/stdin_get_window_bounds_wired.rs"]
+mod stdin_get_window_bounds_wired;
+
+#[path = "source_audits/stdin_frontmost_window_wired.rs"]
+mod stdin_frontmost_window_wired;
+
+#[path = "source_audits/stdin_get_selected_text_wired.rs"]
+mod stdin_get_selected_text_wired;
+
+#[path = "source_audits/stdin_request_accessibility_wired.rs"]
+mod stdin_request_accessibility_wired;
+
+#[path = "source_audits/stdin_set_selected_text_wired.rs"]
+mod stdin_set_selected_text_wired;
+
+#[path = "source_audits/acp_session_update_span.rs"]
+mod acp_session_update_span;
 
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old

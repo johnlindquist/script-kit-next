@@ -9,8 +9,12 @@ use super::adoption::{
     adopted_surface_live, resolve_surface_live, AdoptableSurface, SurfaceSelectionResolution,
     VariationId,
 };
-use super::runtime_fixture;
+use super::mini_ai_chat_presenter::{
+    render_mini_ai_chat_presentation, MiniAiChatPresentationMessage, MiniAiChatPresentationModel,
+    MiniAiChatRole, MiniAiChatSuggestion,
+};
 use super::StoryVariant;
+use crate::theme::get_cached_theme;
 
 // ─── Production constants (synced from src/ai/window/types.rs) ──────────
 
@@ -368,8 +372,7 @@ pub fn mini_ai_chat_story_variants() -> Vec<StoryVariant> {
             StoryVariant::default_named(spec.id.as_str(), spec.id.name())
                 .description(spec.id.description())
                 .with_prop("surface", "miniAiChat")
-                .with_prop("representation", "runtimeFixture")
-                .with_prop("fixtureSurface", "mini-ai-chat")
+                .with_prop("representation", "presenterFixture")
                 .with_prop("variantId", spec.id.as_str())
                 .with_prop(
                     "showTitlebarBorder",
@@ -405,14 +408,50 @@ pub fn adopted_mini_ai_chat_style() -> MiniAiChatStyle {
     adopted_surface_live::<MiniAiChatSurface>()
 }
 
-/// Render a Mini ACP Chat storybook preview using the runtime-fixture host.
+/// Render a Mini Agent Chat storybook preview through the shared presenter.
 pub fn render_mini_ai_chat_story_preview(stable_id: &str) -> gpui::AnyElement {
-    runtime_fixture::render_runtime_fixture("mini-ai-chat", stable_id, false)
+    let (style, _) = resolve_mini_ai_chat_style(Some(stable_id));
+    render_mini_ai_chat_presentation(&sample_mini_ai_chat_model(), style, &get_cached_theme())
 }
 
-/// Render a Mini ACP Chat compare-mode thumbnail via the runtime-fixture host.
+/// Render a Mini Agent Chat compare-mode thumbnail through the shared presenter.
 pub fn render_mini_ai_chat_compare_thumbnail(stable_id: &str) -> gpui::AnyElement {
-    runtime_fixture::render_runtime_fixture("mini-ai-chat", stable_id, true)
+    render_mini_ai_chat_story_preview(stable_id)
+}
+
+fn sample_mini_ai_chat_model() -> MiniAiChatPresentationModel {
+    MiniAiChatPresentationModel {
+        title: "New Chat".into(),
+        is_streaming: true,
+        model_name: "Sonnet".into(),
+        input_text: "Refine the launcher states".into(),
+        input_placeholder: "Ask anything...".into(),
+        messages: vec![
+            MiniAiChatPresentationMessage {
+                role: MiniAiChatRole::User,
+                content: "Can you compare these visual states?".into(),
+            },
+            MiniAiChatPresentationMessage {
+                role: MiniAiChatRole::Assistant,
+                content: "I grouped the stable states first and left experiments separate.".into(),
+            },
+        ],
+        show_welcome: false,
+        welcome_suggestions: vec![
+            MiniAiChatSuggestion {
+                title: "Summarize current state".into(),
+                shortcut: "\u{2318}1".into(),
+            },
+            MiniAiChatSuggestion {
+                title: "Attach latest output".into(),
+                shortcut: "\u{2318}2".into(),
+            },
+            MiniAiChatSuggestion {
+                title: "Open actions".into(),
+                shortcut: "\u{2318}K".into(),
+            },
+        ],
+    }
 }
 
 #[cfg(test)]

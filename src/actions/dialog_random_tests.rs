@@ -307,8 +307,13 @@ fn score_action_description_only_match() {
 
 #[test]
 fn score_action_shortcut_only_match() {
-    let action = Action::new("script:run", "Run Script", None, ActionCategory::ScriptContext)
-        .with_shortcut("⌘enter");
+    let action = Action::new(
+        "script:run",
+        "Run Script",
+        None,
+        ActionCategory::ScriptContext,
+    )
+    .with_shortcut("⌘enter");
     // "enter" doesn't match title prefix/contains/fuzzy but matches shortcut (lowercase)
     let score = ActionsDialog::score_action(&action, "enter");
     // "enter" doesn't appear in "run script", no description, but shortcut_lower = "⌘enter" contains "enter"
@@ -764,7 +769,9 @@ fn chat_zero_models() {
     assert!(actions.iter().any(|a| a.id == "chat:change_model"));
     assert!(actions.iter().any(|a| a.id == "chat:continue_in_chat"));
     // No flat model rows in root — models live in the drill-down picker
-    assert!(!actions.iter().any(|a| a.id.starts_with("chat:select_model_")));
+    assert!(!actions
+        .iter()
+        .any(|a| a.id.starts_with("chat:select_model_")));
 }
 
 #[test]
@@ -1286,7 +1293,7 @@ fn command_bar_default_config() {
     assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Bottom);
     assert!(!config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
     assert!(config.close_on_select);
     assert!(config.close_on_click_outside);
     assert!(config.close_on_escape);
@@ -1299,7 +1306,7 @@ fn command_bar_ai_style() {
     assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
     assert!(config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
 }
 
 #[test]
@@ -1309,7 +1316,7 @@ fn command_bar_notes_style() {
     assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
     assert!(config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
 }
 
 #[test]
@@ -1324,7 +1331,7 @@ fn command_bar_main_menu_style() {
     assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
     assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
     assert!(!config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
 }
 
 // =========================================================================
@@ -1592,7 +1599,7 @@ fn path_context_common_actions() {
     assert!(ids.contains(&"file:copy_path"));
     assert!(ids.contains(&"file:open_in_finder"));
     assert!(ids.contains(&"file:open_in_editor"));
-    assert!(ids.contains(&"file:open_in_terminal"));
+    assert!(ids.contains(&"file:open_in_quick_terminal"));
     assert!(ids.contains(&"file:copy_filename"));
     assert!(ids.contains(&"file:move_to_trash"));
 }
@@ -1709,7 +1716,7 @@ fn actions_dialog_config_default() {
     assert_eq!(config.section_style, SectionStyle::Headers);
     assert_eq!(config.anchor, AnchorPosition::Bottom);
     assert!(!config.show_icons);
-    assert!(config.show_footer);
+    assert!(!config.show_footer);
 }
 
 // =========================================================================
@@ -1788,17 +1795,14 @@ fn clipboard_action_ids_are_snake_case() {
 // =========================================================================
 
 #[test]
-fn script_deeplink_description_contains_formatted_name() {
+fn script_deeplink_description_uses_portable_share_copy() {
     let script = ScriptInfo::new("My Cool Script", "/path/test.ts");
     let actions = get_script_context_actions(&script);
     let deeplink = find_action(&actions, "copy_deeplink").unwrap();
-    assert!(
-        deeplink
-            .description
-            .as_ref()
-            .unwrap()
-            .contains("my-cool-script"),
-        "Deeplink description should contain formatted name"
+    assert_eq!(deeplink.title, "Share");
+    assert_eq!(
+        deeplink.description.as_deref(),
+        Some("Copy a portable Script Kit share link to clipboard")
     );
 }
 

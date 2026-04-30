@@ -1402,9 +1402,8 @@ fn dictation_focus_settle_matches_reference_contract() {
 #[test]
 fn dictation_hotkey_routes_through_builtin_toggle_flow() {
     // Verify both entry-point files have a dictation hotkey listener that
-    // routes through the forced frontmost-app builtin, preserving the global
-    // shortcut's default external-app behavior without introducing a duplicate
-    // dictation implementation.
+    // routes through the ACP submit builtin without introducing a
+    // duplicate dictation implementation.
     for (label, path) in [
         (
             "runtime_tray_hotkeys.rs",
@@ -1419,8 +1418,8 @@ fn dictation_hotkey_routes_through_builtin_toggle_flow() {
             "{label} must consume the dictation hotkey channel"
         );
         assert!(
-            src.contains("builtin/dictation-to-app"),
-            "{label} must route dictation hotkey through builtin/dictation-to-app"
+            src.contains("builtin/dictation-to-ai"),
+            "{label} must route dictation hotkey through builtin/dictation-to-ai"
         );
         // Must NOT contain a second toggle_dictation call — only the builtin path owns that.
         let hotkey_section_start = src
@@ -1655,12 +1654,12 @@ fn overlay_waveform_height_matches_compact_contract() {
         "silent bar height must be 4.0"
     );
     assert!(
-        (super::window::waveform_bar_height(1.0) - 20.0).abs() < 0.001,
-        "peak bar height must be 20.0"
+        (super::window::waveform_bar_height(1.0) - 18.0).abs() < 0.001,
+        "peak bar height must be 18.0"
     );
     let mid = super::window::waveform_bar_height(0.5);
     assert!(
-        mid > 4.0 && mid < 20.0,
+        mid > 4.0 && mid < 18.0,
         "mid-level bar height must stay inside compact overlay bounds, got {mid}"
     );
 }
@@ -1686,11 +1685,14 @@ fn overlay_waveform_opacity_stays_clamped() {
 fn overlay_dot_and_window_constants_match_target_contract() {
     use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED};
 
-    assert_eq!(super::window::OVERLAY_WIDTH_PX, 392.0);
-    assert_eq!(super::window::OVERLAY_HEIGHT_PX, 40.0);
-    assert_eq!(super::window::OVERLAY_RADIUS_PX, 20.0);
+    assert_eq!(super::window::OVERLAY_WIDTH_PX, 312.0);
+    assert_eq!(super::window::OVERLAY_HEIGHT_PX, 32.0);
+    assert_eq!(super::window::OVERLAY_RADIUS_PX, 16.0);
     assert_eq!(super::window::STATUS_TEXT_SIZE_PX, 11.5);
     assert_eq!(super::window::WAVEFORM_BAR_COUNT, 9);
+    assert_eq!(super::window::WAVEFORM_BAR_WIDTH_PX, 3.0);
+    assert_eq!(super::window::WAVEFORM_BAR_GAP_PX, 3.0);
+    assert_eq!(super::window::WAVEFORM_BAR_MAX_HEIGHT_PX, 18.0);
     assert_eq!(super::window::TRANSCRIBING_DOT_COUNT, 3);
     // Reduced-motion (static) fallback matches the original contract.
     assert_eq!(
@@ -1783,18 +1785,17 @@ fn overlay_has_sound_detects_active_audio() {
 }
 
 #[test]
-fn dictation_overlay_derives_colors_from_theme_and_glassmorphism() {
+fn dictation_overlay_derives_colors_from_theme_and_compact_capsule_chrome() {
     let source =
         std::fs::read_to_string("src/dictation/window.rs").expect("read dictation window.rs");
 
-    // Glassmorphism constants for overlay surface and border.
     assert!(
-        source.contains("GLASSMORPHISM_BG"),
-        "overlay surface must use glassmorphism background constant"
+        source.contains("CAPSULE_BG_OPACITY"),
+        "overlay surface must use compact capsule background opacity"
     );
     assert!(
-        source.contains("GLASSMORPHISM_BORDER"),
-        "overlay border must use glassmorphism border constant"
+        source.contains("CAPSULE_NATIVE_RIM_OPACITY"),
+        "overlay border must use neutral native rim opacity"
     );
     // Theme tokens still used for content colors.
     assert!(
@@ -1802,8 +1803,8 @@ fn dictation_overlay_derives_colors_from_theme_and_glassmorphism() {
         "active waveform / transcribing state must use theme success color"
     );
     assert!(
-        source.contains("theme.colors.ui.error"),
-        "inactive waveform must use theme error color"
+        source.contains("theme.colors.text.primary"),
+        "inactive waveform must use muted theme primary text color"
     );
     assert!(
         source.contains("theme.colors.text.primary.with_opacity"),
@@ -2280,6 +2281,9 @@ fn apply_device_selection_persists_selected_device_id_and_clears_to_default() {
         .lock()
         .unwrap_or_else(|error| error.into_inner());
     let temp_dir = tempfile::tempdir().expect("create temp Script Kit dir");
+    let kit_dir = temp_dir.path().to_path_buf();
+    std::fs::create_dir_all(&kit_dir).expect("create Script Kit dir");
+    let previous_sk_path = std::env::var(crate::setup::SK_PATH_ENV).ok();
     std::env::set_var(crate::setup::SK_PATH_ENV, temp_dir.path());
 
     crate::dictation::apply_device_selection(&DictationDeviceSelectionAction::UseDevice(
@@ -2299,7 +2303,10 @@ fn apply_device_selection_persists_selected_device_id_and_clears_to_default() {
     let cleared = crate::config::load_user_preferences();
     assert_eq!(cleared.dictation.selected_device_id, None);
 
-    std::env::remove_var(crate::setup::SK_PATH_ENV);
+    match previous_sk_path {
+        Some(path) => std::env::set_var(crate::setup::SK_PATH_ENV, path),
+        None => std::env::remove_var(crate::setup::SK_PATH_ENV),
+    }
     drop(lock);
 }
 
@@ -2324,8 +2331,8 @@ fn save_user_preferences_writes_config_and_cleans_known_legacy_settings() {
         .lock()
         .unwrap_or_else(|error| error.into_inner());
     let temp_dir = tempfile::tempdir().expect("create temp Script Kit dir");
-    let kit_dir = temp_dir.path().join("kit");
-    std::fs::create_dir_all(&kit_dir).expect("create kit dir");
+    let kit_dir = temp_dir.path().to_path_buf();
+    std::fs::create_dir_all(&kit_dir).expect("create Script Kit dir");
     std::env::set_var(crate::setup::SK_PATH_ENV, temp_dir.path());
 
     let settings_path = kit_dir.join("settings.json");
@@ -2967,51 +2974,51 @@ fn overlay_confirming_phase_renders_stop_continue() {
 }
 
 // ---------------------------------------------------------------------------
-// Overlay: glassmorphism styling
+// Overlay: compact capsule styling
 // ---------------------------------------------------------------------------
 
 #[test]
-fn overlay_uses_glassmorphism_styling() {
+fn overlay_uses_compact_capsule_styling() {
     let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
 
     assert!(
-        window_src.contains("GLASSMORPHISM_BG"),
-        "overlay must define glassmorphism background constant"
+        window_src.contains("CAPSULE_BG_OPACITY"),
+        "overlay must define compact capsule background opacity"
     );
     assert!(
-        window_src.contains("GLASSMORPHISM_BORDER"),
-        "overlay must define glassmorphism border constant"
+        window_src.contains("CAPSULE_NATIVE_RIM_OPACITY"),
+        "overlay must define native rim opacity"
     );
     assert!(
-        window_src.contains("0x121216"),
-        "glassmorphism bg must match vercel-voice rgba(18,18,22)"
+        window_src.contains("theme.colors.background.title_bar"),
+        "capsule surface must derive from the theme title-bar surface"
     );
     assert!(
-        window_src.contains("0xFFFFFF"),
-        "glassmorphism border must match vercel-voice rgba(255,255,255)"
+        window_src.contains("theme.colors.text.primary"),
+        "native rim must derive from neutral theme text"
     );
 }
 
 // ---------------------------------------------------------------------------
-// Overlay: vercel-voice dimension parity
+// Overlay: compact capsule dimension contract
 // ---------------------------------------------------------------------------
 
 #[test]
-fn overlay_dimensions_match_vercel_voice_contract() {
+fn overlay_dimensions_match_compact_capsule_contract() {
     assert_eq!(
         super::window::OVERLAY_WIDTH_PX,
-        392.0,
-        "overlay width must be 392px matching vercel-voice"
+        312.0,
+        "overlay width must match the compact capsule direction"
     );
     assert_eq!(
         super::window::OVERLAY_HEIGHT_PX,
-        40.0,
-        "overlay height must be 40px matching vercel-voice"
+        32.0,
+        "overlay height must match the compact capsule direction"
     );
     assert_eq!(
         super::window::OVERLAY_RADIUS_PX,
-        20.0,
-        "overlay radius must be half of height for pill shape"
+        16.0,
+        "overlay radius must be half of height for capsule shape"
     );
 }
 
@@ -3232,6 +3239,55 @@ fn silent_audio_path_never_attempts_paste_or_prompt_delivery() {
     assert!(
         !none_arm_src.contains("try_set_prompt_input"),
         "Ok(None) arm must NEVER call try_set_prompt_input — no transcript exists"
+    );
+    assert!(
+        !none_arm_src.contains("open_tab_ai_acp_with_entry_intent"),
+        "Ok(None) arm must NEVER open ACP — no transcript exists to seed or submit"
+    );
+    assert!(
+        none_arm_src.contains("WindowEvent::AbortDictation"),
+        "Ok(None) arm must abort the dictation session so ACP-targeted silence does not reveal ScriptList"
+    );
+    assert!(
+        !none_arm_src.contains("WindowEvent::FinishDictation"),
+        "Ok(None) arm must not finish successfully because ACP finish reveals a transcript-backed chat"
+    );
+}
+
+#[test]
+fn acp_dictation_delivery_suppresses_focused_launcher_context() {
+    let src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("read builtin_execution.rs");
+
+    let handler_src = dictation_handler_source(&src);
+    let tab_ai_arm_start = handler_src
+        .find("DictationTarget::TabAiHarness =>")
+        .expect("handler must route TabAiHarness dictation");
+    let tab_ai_arm = &handler_src[tab_ai_arm_start..tab_ai_arm_start + 900];
+
+    assert!(
+        tab_ai_arm.contains("open_tab_ai_acp_with_entry_intent_suppressing_focused_part"),
+        "ACP dictation should submit the transcript as the prompt without inheriting the selected ScriptList item as context"
+    );
+}
+
+#[test]
+fn orchestrator_focus_main_commands_queue_app_focus_after_reveal() {
+    let bridge_src = std::fs::read_to_string("src/app_impl/window_orchestrator_bridge.rs")
+        .expect("read window_orchestrator_bridge.rs");
+
+    assert!(
+        bridge_src.contains("WindowCommand::FocusMain(token)"),
+        "the orchestrator bridge must consume FocusMain commands instead of leaving them as executor no-ops"
+    );
+    assert!(
+        bridge_src.contains("this.pending_focus = Some(target);")
+            && bridge_src.contains("cx.notify();"),
+        "FocusMain commands must queue ScriptListApp pending_focus after reveal so the next render applies keyboard focus"
+    );
+    assert!(
+        bridge_src.contains("FocusToken::ChatComposer => Some(FocusTarget::AcpChat)"),
+        "ACP dictation's ChatComposer token must map to the dedicated AcpChat focus target"
     );
 }
 
@@ -4574,7 +4630,35 @@ fn overlay_target_badge_uses_pointer_affordances_and_cycles() {
 }
 
 #[test]
-fn builtin_dictation_configures_target_cycle_and_external_app_alternate() {
+fn overlay_timer_and_target_badge_use_readable_primary_text() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    assert!(
+        window_src
+            .contains("let timer_color = theme.colors.text.primary.with_opacity(OPACITY_ACTIVE);"),
+        "timer must use active primary text, not muted translucent text"
+    );
+    assert!(
+        window_src.contains(".text_color(theme.colors.text.primary.with_opacity(OPACITY_ACTIVE))")
+            && window_src.contains("target_badge_label(self.state.target)"),
+        "target badge must use readable primary text and the dynamic label helper"
+    );
+}
+
+#[test]
+fn external_app_badge_names_the_tracked_frontmost_app() {
+    let window_src = std::fs::read_to_string("src/dictation/window.rs").expect("read window.rs");
+
+    assert!(
+        window_src.contains("pub(crate) fn target_badge_label(")
+            && window_src.contains("crate::frontmost_app_tracker::get_last_real_app()")
+            && window_src.contains("target.overlay_label().into()"),
+        "external-app badge labels should prefer the tracked frontmost app name and fall back to the static target label"
+    );
+}
+
+#[test]
+fn builtin_dictation_configures_target_cycle_and_acp_alternate() {
     let builtin_src = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
         .expect("read builtin_execution.rs");
 
@@ -4585,8 +4669,8 @@ fn builtin_dictation_configures_target_cycle_and_external_app_alternate() {
     assert!(
         builtin_src.contains("set_dictation_target_cycle")
             && builtin_src.contains("DictationTarget::ExternalApp")
-            && builtin_src.contains("DictationTarget::MainWindowFilter"),
-        "dictation start paths must configure a cycle that includes MainWindowFilter for external-app sessions"
+            && builtin_src.contains("DictationTarget::TabAiHarness"),
+        "dictation start paths must configure a cycle that includes ACP chat submit as an alternate"
     );
 }
 
@@ -4685,9 +4769,10 @@ fn missing_model_transcription_recovery_opens_download_prompt() {
     let parakeet_branch_start = handler_src
         .find("Parakeet model not downloaded")
         .expect("handler must detect the Parakeet-missing error string");
-    // Scope to ~500 chars after the detection to capture the branch body.
+    // Scope far enough after the detection to capture the full recovery branch,
+    // including the early return after cleanup / prompt dispatch.
     let branch_src = &handler_src[parakeet_branch_start
-        ..parakeet_branch_start + 500.min(handler_src.len() - parakeet_branch_start)];
+        ..parakeet_branch_start + 900.min(handler_src.len() - parakeet_branch_start)];
 
     // Must close the dictation overlay before opening the prompt.
     assert!(
@@ -4778,7 +4863,7 @@ fn dictation_target_enum_includes_main_window_filter_variant() {
         DictationTarget::TabAiHarness => {}
         DictationTarget::ExternalApp => {}
     }
-    assert_eq!(target.overlay_label(), "Main");
+    assert_eq!(target.overlay_label(), "Script Kit");
 }
 
 #[test]

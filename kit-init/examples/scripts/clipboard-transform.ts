@@ -40,5 +40,12 @@ if (!text.trim()) {
   }
 
   await copy(result);
-  await notify(`Transformed and copied!`);
+  await arg("Transformed and copied", [
+    { name: "Done", description: `${result.length} characters copied`, value: "done" },
+    { name: "Preview", description: "Show the transformed text", value: "preview" },
+  ]).then(async (next) => {
+    if (next === "preview") {
+      await div(`<pre class="p-4 text-sm overflow-auto h-full whitespace-pre-wrap">${result}</pre>`);
+    }
+  });
 }

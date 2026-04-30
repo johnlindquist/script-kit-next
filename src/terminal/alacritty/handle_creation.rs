@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use tracing::{info, instrument, trace, warn};
 
+use crate::theme::Theme;
+
 use super::*;
 
 impl TerminalHandle {
@@ -19,6 +21,17 @@ impl TerminalHandle {
         Self::with_scrollback(cols, rows, DEFAULT_SCROLLBACK_LINES)
     }
 
+    /// Creates a new terminal handle with the default shell and Script Kit theme.
+    #[instrument(
+        level = "info",
+        name = "terminal_new_with_theme",
+        fields(cols, rows),
+        skip(theme)
+    )]
+    pub fn new_with_theme(cols: u16, rows: u16, theme: &Theme) -> Result<Self> {
+        Self::create_internal(None, cols, rows, DEFAULT_SCROLLBACK_LINES, Some(theme))
+    }
+
     /// Creates a new terminal handle running a specific command.
     ///
     /// # Arguments
@@ -32,7 +45,18 @@ impl TerminalHandle {
     /// Returns an error if PTY creation or command spawning fails.
     #[instrument(level = "info", name = "terminal_with_command", fields(cmd = %cmd, cols, rows))]
     pub fn with_command(cmd: &str, cols: u16, rows: u16) -> Result<Self> {
-        Self::create_internal(Some(cmd), cols, rows, DEFAULT_SCROLLBACK_LINES)
+        Self::create_internal(Some(cmd), cols, rows, DEFAULT_SCROLLBACK_LINES, None)
+    }
+
+    /// Creates a new terminal handle running a command with Script Kit theme colors.
+    #[instrument(
+        level = "info",
+        name = "terminal_with_command_and_theme",
+        fields(cmd = %cmd, cols, rows),
+        skip(theme)
+    )]
+    pub fn with_command_and_theme(cmd: &str, cols: u16, rows: u16, theme: &Theme) -> Result<Self> {
+        Self::create_internal(Some(cmd), cols, rows, DEFAULT_SCROLLBACK_LINES, Some(theme))
     }
 
     /// Creates a new terminal handle with custom scrollback size.
@@ -52,7 +76,7 @@ impl TerminalHandle {
         fields(cols, rows, scrollback_lines)
     )]
     pub fn with_scrollback(cols: u16, rows: u16, scrollback_lines: usize) -> Result<Self> {
-        Self::create_internal(None, cols, rows, scrollback_lines)
+        Self::create_internal(None, cols, rows, scrollback_lines, None)
     }
 
     /// Internal creation method.
@@ -61,6 +85,7 @@ impl TerminalHandle {
         cols: u16,
         rows: u16,
         scrollback_lines: usize,
+        theme: Option<&Theme>,
     ) -> Result<Self> {
         use std::sync::atomic::{AtomicBool, Ordering};
         use std::sync::mpsc;
@@ -83,7 +108,9 @@ impl TerminalHandle {
         let size = TerminalSize::new(cols, rows);
         let state = TerminalState::new(config, &size, event_proxy.clone());
         let state = Arc::new(Mutex::new(state));
-        let theme = ThemeAdapter::dark_default();
+        let theme = theme
+            .map(ThemeAdapter::from_theme)
+            .unwrap_or_else(ThemeAdapter::dark_default);
 
         let (pty_output_tx, pty_output_rx) = mpsc::channel();
 

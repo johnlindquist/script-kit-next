@@ -82,12 +82,29 @@ impl ScriptListApp {
         }
     }
 
+    /// Apply a filter text change synchronously, without coalescer delay.
+    ///
+    /// Verbatim-echo contract (Run 4 Pass #8 attacker probe
+    /// `stdin-setfilter-inputvalue-unbounded`, closed Run 8 Pass #23):
+    /// `text` is stored into `self.filter_text` with no length cap,
+    /// truncation, or encoding transformation — whatever the stdin
+    /// `setFilter` command supplied arrives in `getState.inputValue`
+    /// byte-for-byte. The only enforced bound is the stdin line cap at
+    /// `MAX_STDIN_COMMAND_BYTES` (16 * 1024 bytes), applied by
+    /// `read_stdin_line_bounded` in `src/stdin_commands/mod.rs:1003`.
+    /// Callers consuming `getState.inputValue` MUST handle payloads up
+    /// to that cap. Pinned by
+    /// `tests/stdin_setfilter_input_value_verbatim_contract.rs`.
     pub(crate) fn set_filter_text_immediate(
         &mut self,
         text: String,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        // Run 12 Pass 11 — clear any pending Cmd+Enter inline AI proposal so
+        // it doesn't survive a filter change (otherwise the proposal would
+        // appear stale against an unrelated input).
+        self.pending_menu_syntax_ai_proposal = None;
         self.suppress_filter_events = true;
         self.filter_text = text.clone();
         self.gpui_input_state.update(cx, |state, cx| {
@@ -99,27 +116,61 @@ impl ScriptListApp {
         self.suppress_filter_events = false;
         self.pending_filter_sync = false;
 
+        // Route filter to the active subview's variant field when current_view
+        // is a builtin subview (ClipboardHistoryView, EmojiPickerView, etc.).
+        // Without this, stdin `setFilter` on a subview would only update
+        // `self.filter_text` and leave the subview's own `filter` field stale,
+        // so `getState.visibleChoiceCount` (computed from the variant's filter)
+        // would never reflect the narrowed dataset. Sub-gap (2) of the
+        // `empty-clipboard-state` story.
+        let handled_by_subview = self.write_filter_to_current_subview(&text);
+
         // Menu bar items are now pre-fetched by frontmost_app_tracker
         // No lazy loading needed - items are already in cache when we open
+
+        if !handled_by_subview && matches!(self.current_view, AppView::ScriptList) {
+            self.set_menu_syntax_mode_from_filter(&text);
+            self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
+            self.invalidate_grouped_cache();
+        } else {
+            self.menu_syntax_mode = crate::menu_syntax::MenuSyntaxMode::default();
+        }
+
+        if self.menu_syntax_mode.is_menu_syntax_for(&text)
+            || self.menu_syntax_trigger_popup_state.snapshot.is_some()
+        {
+            // Menu syntax owns the result list entirely — clear any stale
+            // fallback items so pressing Enter routes to execute_selected,
+            // not execute_selected_fallback. Also clear when the trigger
+            // popup is open for a partial trigger like `+t` (where
+            // `is_menu_syntax_for` still returns false because the parser
+            // doesn't yet recognize `+t` as a full target).
+            self.main_menu_fallback_state.clear();
+        }
 
         self.computed_filter_text = text.clone();
         self.filter_coalescer.reset();
         self.reconcile_script_list_after_filter_change("set_filter_text_immediate", cx);
 
-        // Update fallback mode immediately based on filter results
-        // This ensures SimulateKey commands can check fallback_mode correctly
-        // NOTE: validate_selection_bounds already clears fallback_mode and cached_fallbacks,
-        // but we need special handling for legacy SimulateKey compatibility
-        if !text.is_empty() {
+        // Update fallback state immediately based on filter results
+        // This ensures SimulateKey commands can check fallback state correctly
+        // NOTE: validate_selection_bounds already clears main_menu_fallback_state,
+        // but we need special handling for legacy SimulateKey compatibility.
+        // Skip when a subview handled the filter: `get_filtered_results_cached`
+        // and `collect_fallbacks` are ScriptList-only and would incorrectly
+        // flip a builtin subview into the script-list fallback mode.
+        if !handled_by_subview
+            && !text.is_empty()
+            && !self.menu_syntax_mode.is_menu_syntax_for(&text)
+            && self.menu_syntax_trigger_popup_state.snapshot.is_none()
+        {
             let results = self.get_filtered_results_cached();
             if results.is_empty() {
                 // No matches - check if we should enter fallback mode
                 use crate::fallbacks::collect_fallbacks;
                 let fallbacks = collect_fallbacks(&text, self.scripts.as_slice());
                 if !fallbacks.is_empty() {
-                    self.fallback_mode = true;
-                    self.cached_fallbacks = fallbacks;
-                    self.fallback_selected_index = 0;
+                    self.main_menu_fallback_state.replace_items(fallbacks);
                 }
             }
         }
@@ -127,6 +178,132 @@ impl ScriptListApp {
         self.rebuild_main_window_preflight_if_needed();
         self.update_window_size_deferred(window, cx);
         cx.notify();
+    }
+
+    /// Write the given filter text into the current view's `filter` field
+    /// when `current_view` is one of the shared-input builtin subviews.
+    ///
+    /// Returns `true` when a subview was handled — callers should skip any
+    /// ScriptList-only bookkeeping (fallback mode, ranker, etc.) in that case.
+    /// Returns `false` for `ScriptList`, `FileSearchView` (dedicated routing
+    /// via `restart_file_search_stream_for_query`), and non-filter views.
+    pub(crate) fn write_filter_to_current_subview(&mut self, text: &str) -> bool {
+        match &mut self.current_view {
+            AppView::ClipboardHistoryView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::AppLauncherView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::WindowSwitcherView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::BrowserTabsView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::DesignGalleryView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::ThemeChooserView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::ProcessManagerView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::SettingsView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::SearchAiPresetsView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::FavoritesBrowseView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::CurrentAppCommandsView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::AcpHistoryView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::BrowserHistoryView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::DictationHistoryView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::NotesBrowseView {
+                filter,
+                selected_index,
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            AppView::EmojiPickerView {
+                filter,
+                selected_index,
+                ..
+            } => {
+                Self::sync_builtin_query_state(filter, selected_index, text);
+                true
+            }
+            _ => false,
+        }
     }
 
     pub(crate) fn clear_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {

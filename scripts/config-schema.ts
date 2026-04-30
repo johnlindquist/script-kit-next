@@ -48,9 +48,9 @@
  * 3. SCRIPT - User scripts (by filename without extension)
  *    Format: `script/{script-name}`
  *    Examples:
- *      - "script/my-custom-script"    → ~/.scriptkit/kit/main/scripts/my-custom-script.ts
- *      - "script/daily-standup"       → ~/.scriptkit/kit/main/scripts/daily-standup.ts
- *      - "script/git-commit-helper"   → ~/.scriptkit/kit/main/scripts/git-commit-helper.ts
+ *      - "script/my-custom-script"    → ~/.scriptkit/plugins/main/scripts/my-custom-script.ts
+ *      - "script/daily-standup"       → ~/.scriptkit/plugins/main/scripts/daily-standup.ts
+ *      - "script/git-commit-helper"   → ~/.scriptkit/plugins/main/scripts/git-commit-helper.ts
  *
  * 4. SCRIPTLET - Inline scriptlets (by UUID)
  *    Format: `scriptlet/{uuid}`
@@ -228,7 +228,7 @@
  * │                           CONFIGURATION FILE                               │
  * └───────────────────────────────────────────────────────────────────────────┘
  *
- * LOCATION: ~/.scriptkit/kit/config.ts
+ * LOCATION: ~/.scriptkit/config.ts
  *
  * PURPOSE: Controls Script Kit's behavior, appearance, and built-in features.
  * The config file is a TypeScript module that exports a default Config object.
@@ -246,7 +246,14 @@
  * ```typescript
  * theme: { presetId: "nord" },
  * dictation: { selectedDeviceId: "usb-mic" },
- * ai: { selectedAcpAgentId: "codex-acp", selectedModelId: "gpt-5.4" },
+ * ai: {
+ *   selectedAcpAgentId: "codex-acp",
+ *   selectedModelId: "gpt-5.4",
+ *   profiles: [
+ *     { id: "writing", label: "Long-form writing", selectedModelId: "gpt-5.4", systemPromptSlug: "writing" }
+ *   ],
+ *   activeProfileId: "writing"
+ * },
  * windowManagement: { snapMode: "expanded" },
  * ```
  *
@@ -561,7 +568,7 @@
  * ```
  *
  * USE CASE: Users with visual impairments, large monitors
- * NOTE: Theme colors are controlled separately in ~/.scriptkit/kit/theme.json
+ * NOTE: Theme colors are controlled separately in ~/.scriptkit/theme.json
  *       High contrast themes should be configured there, not here.
  *
  * ═══════════════════════════════════════════════════════════════════════════
@@ -652,7 +659,11 @@
  * | dictation.selectedDeviceId | string | unset                      | no       |
  * | ai.selectedModelId | string         | unset                       | no       |
  * | ai.selectedAcpAgentId | string      | unset                       | no       |
+ * | ai.profiles       | AiProfile[]    | unset                       | no       |
+ * | ai.activeProfileId | string         | unset                       | no       |
  * | windowManagement.snapMode | SnapMode | unset                     | no       |
+ * | windowAppearance.vibrancy | WindowVibrancyMaterial | unset       | no       |
+ * | windowAppearance.animations | WindowAnimationMode | unset        | no       |
  * | bun_path          | string         | auto-detected               | no       |
  * | editor            | string         | $EDITOR or "code"           | no       |
  *
@@ -677,9 +688,9 @@
  * - UI scale should be 0.5-2.0 for reasonable display
  *
  * RELATED FILES:
- * - ~/.scriptkit/kit/theme.json - Color themes and visual appearance
- * - ~/.scriptkit/kit/config.ts - Hotkeys, runtime preferences, Claude Code, command overrides
- * - ~/.scriptkit/kit/main/scripts/ - User scripts
+ * - ~/.scriptkit/theme.json - Color themes and visual appearance
+ * - ~/.scriptkit/config.ts - Hotkeys, runtime preferences, Claude Code, command overrides
+ * - ~/.scriptkit/plugins/main/scripts/ - User scripts
  * - ~/.scriptkit/sdk/       - SDK runtime files
  */
 
@@ -752,11 +763,11 @@ export type AppCommandId = `app/${string}`;
  * Format: `script/{script-name}`
  * 
  * The script name is the filename without the .ts extension.
- * Scripts are located in ~/.scriptkit/kit/main/scripts/
+ * Scripts are located in ~/.scriptkit/plugins/main/scripts/
  *
- * @example "script/my-custom-script" → ~/.scriptkit/kit/main/scripts/my-custom-script.ts
- * @example "script/daily-standup" → ~/.scriptkit/kit/main/scripts/daily-standup.ts
- * @example "script/git-commit-helper" → ~/.scriptkit/kit/main/scripts/git-commit-helper.ts
+ * @example "script/my-custom-script" → ~/.scriptkit/plugins/main/scripts/my-custom-script.ts
+ * @example "script/daily-standup" → ~/.scriptkit/plugins/main/scripts/daily-standup.ts
+ * @example "script/git-commit-helper" → ~/.scriptkit/plugins/main/scripts/git-commit-helper.ts
  */
 export type ScriptCommandId = `script/${string}`;
 
@@ -905,6 +916,346 @@ export interface CommandConfig {
 export type CommandsConfig = Partial<Record<CommandId, CommandConfig>>;
 
 // =============================================================================
+// MCP CONFIGURATION TYPES
+// =============================================================================
+
+export type McpTransport = "stdio" | "http";
+
+export interface McpBaseServerConfig {
+  name?: string;
+  description?: string;
+  enabled?: boolean;
+}
+
+export interface McpStdioServerConfig extends McpBaseServerConfig {
+  transport: "stdio";
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+}
+
+export interface McpHttpServerConfig extends McpBaseServerConfig {
+  transport: "http";
+  endpoint: string;
+  headers?: Record<string, string>;
+}
+
+export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig;
+
+export interface McpConfig {
+  enabled?: boolean;
+  servers?: Record<string, McpServerConfig>;
+}
+
+// =============================================================================
+// WINDOW APPEARANCE CONFIGURATION TYPES
+// =============================================================================
+
+/**
+ * Native window vibrancy material preference.
+ *
+ * - `"default"` keeps Script Kit's current built-in popover-like material.
+ * - `"none"` disables vibrancy for an opaque window without NSVisualEffectView.
+ * - `"hud"` uses AppKit's native HUD material.
+ * - `"popover"` uses AppKit's native popover material.
+ * - `"sidebar"` uses AppKit's native sidebar material.
+ */
+export type WindowVibrancyMaterial =
+  | "default"
+  | "none"
+  | "hud"
+  | "popover"
+  | "sidebar";
+
+/**
+ * Window show/hide animation behavior.
+ *
+ * `"system"` honors macOS Reduce Motion. `"reduced"` forces a quick fade only.
+ * `"off"` disables all show/hide animations.
+ */
+export type WindowAnimationMode = "system" | "reduced" | "off";
+
+/**
+ * Window appearance preferences for vibrancy and show/hide animation behavior.
+ *
+ * Schema only - runtime still uses built-in defaults until a follow-up wires
+ * src/app_impl/ui_window.rs to honor these knobs. Panel level and
+ * non-activating behavior are intentionally not configurable because they are
+ * focus-safety invariants: NSPanel non-activating behavior plus accessory app
+ * policy preserve show-without-activating behavior.
+ */
+export interface WindowAppearanceConfig {
+  /**
+   * Vibrancy material for the main launcher and popup-family windows.
+   *
+   * @default undefined (use built-in material)
+   */
+  vibrancy?: WindowVibrancyMaterial;
+
+  /**
+   * Show/hide animation mode for launcher and popup-family windows.
+   *
+   * @default undefined (use built-in animation behavior)
+   */
+  animations?: WindowAnimationMode;
+}
+
+// =============================================================================
+// POWER SYNTAX CONFIGURATION TYPES
+// =============================================================================
+
+export type PowerSyntaxCaptureSigil = ";" | "+" | "both";
+export type PowerSyntaxCommandSigil = ">" | "disabled";
+
+/**
+ * Cmd+Enter AI preferences for Power Syntax composers.
+ *
+ * Schema only - runtime still uses built-in defaults until a follow-up wires
+ * src/menu_syntax/parse.rs to honor these knobs. When modelId or systemPrompt
+ * is unset, the runtime should fall back to the active Agent Chat model.
+ */
+export interface PowerSyntaxCmdEnterAiConfig {
+  /**
+   * Enable Cmd+Enter AI assistance from Power Syntax composer states.
+   *
+   * @default true
+   */
+  enabled?: boolean;
+
+  /**
+   * Optional model ID override for Cmd+Enter AI.
+   *
+   * Falls back to the active Agent Chat model when unset.
+   *
+   * @default undefined
+   * @example "gpt-5.4"
+   */
+  modelId?: string;
+
+  /**
+   * Optional system prompt override for Cmd+Enter AI.
+   *
+   * Falls back to the active Agent Chat model when unset.
+   *
+   * @default undefined
+   */
+  systemPrompt?: string;
+}
+
+/**
+ * Power Syntax launcher sigil preferences.
+ *
+ * Schema only - runtime still uses built-in defaults until a follow-up wires
+ * src/menu_syntax/parse.rs to honor these knobs.
+ */
+export interface PowerSyntaxConfig {
+  /**
+   * Enable Power Syntax capture, refine, and command surfaces.
+   *
+   * @default true
+   */
+  enabled?: boolean;
+
+  /**
+   * Capture sigil policy for `;` and legacy `+` capture input.
+   *
+   * `"both"` keeps legacy `+` working while making `;` preferred. Setting `"+"`
+   * disables `;`; setting `";"` disables `+`.
+   *
+   * @default "both"
+   */
+  captureSigil?: PowerSyntaxCaptureSigil;
+
+  /**
+   * Command invocation sigil policy.
+   *
+   * `"disabled"` turns off `>` invocation entirely.
+   *
+   * @default ">"
+   */
+  commandSigil?: PowerSyntaxCommandSigil;
+
+  /**
+   * Cmd+Enter AI preferences for Power Syntax composer states.
+   *
+   * modelId and systemPrompt fall back to the active Agent Chat model when unset.
+   *
+   * @default undefined
+   */
+  cmdEnterAi?: PowerSyntaxCmdEnterAiConfig;
+}
+
+// =============================================================================
+// TRAY AND UPDATE CONFIGURATION TYPES
+// =============================================================================
+
+/**
+ * Status-bar tray menu visibility preferences.
+ *
+ * Schema only - runtime still uses built-in defaults until a follow-up wires
+ * src/tray and src/main_entry/app_run_setup.rs to honor these knobs.
+ */
+export interface TrayConfig {
+  /**
+   * Show the dynamic "<App> Commands" header row for the frontmost app.
+   *
+   * Hide if you do not use app-specific command discovery and want a compact
+   * tray menu.
+   *
+   * @default true
+   */
+  showCurrentAppCommands?: boolean;
+
+  /**
+   * Show the Open Notes tray row.
+   *
+   * Hide if you do not use Notes from the tray to keep the menu compact.
+   *
+   * @default true
+   */
+  showNotes?: boolean;
+
+  /**
+   * Show the Open Agent Chat tray row.
+   *
+   * Hide if you do not use Agent Chat to keep the tray menu compact.
+   *
+   * @default true
+   */
+  showAgentChat?: boolean;
+
+  /**
+   * Show the Reload Scripts tray row.
+   *
+   * Hide if you reload scripts through another workflow and want fewer tray
+   * actions.
+   *
+   * @default true
+   */
+  showReloadScripts?: boolean;
+
+  /**
+   * Show Help and Feedback tray rows.
+   *
+   * Hide if you already know the support paths and want a minimal tray menu.
+   *
+   * @default true
+   */
+  showHelp?: boolean;
+
+  /**
+   * Show the Follow Us, GitHub, and Discord tray rows.
+   *
+   * Hide if you do not use social/community links from the tray.
+   *
+   * @default true
+   */
+  showSocialLinks?: boolean;
+
+  /**
+   * Show Check for Updates and the Version tray row.
+   *
+   * Hide if you prefer not to expose update actions in the tray menu.
+   *
+   * @default true
+   */
+  showUpdateCheck?: boolean;
+}
+
+/**
+ * Update-checking preferences.
+ *
+ * Schema only - runtime still uses built-in defaults until a follow-up wires
+ * src/tray and src/main_entry/app_run_setup.rs to honor these knobs.
+ */
+export interface UpdatesConfig {
+  /**
+   * Automatically check GitHub for a new release after launch.
+   *
+   * Default is true. Disabling this skips the 5-seconds-after-launch GitHub
+   * check; users can still trigger Check for Updates... manually from the tray.
+   *
+   * @default true
+   */
+  autoCheck?: boolean;
+}
+
+/**
+ * Named ACP Chat configuration profile stored in `~/.scriptkit/config.ts`.
+ */
+export interface AiProfile {
+  /**
+   * Stable profile identifier.
+   *
+   * @example "writing"
+   */
+  id: string;
+
+  /**
+   * Human-readable profile label shown in launchers and pickers.
+   *
+   * @example "Long-form writing"
+   */
+  label: string;
+
+  /**
+   * Model ID to use when this profile is active.
+   *
+   * @example "gpt-5.4"
+   */
+  selectedModelId?: string;
+
+  /**
+   * ACP agent ID to use when this profile is active.
+   *
+   * @example "codex-acp"
+   */
+  selectedAcpAgentId?: string;
+
+  /**
+   * System prompt slug to apply when this profile is active.
+   *
+   * @example "writing"
+   */
+  systemPromptSlug?: string;
+}
+
+/**
+ * ACP Chat runtime preferences stored in `~/.scriptkit/config.ts`.
+ */
+export interface AiPreferences {
+  /**
+   * Last-selected model ID.
+   *
+   * @example "gpt-5.4"
+   */
+  selectedModelId?: string;
+
+  /**
+   * Last-selected ACP agent ID.
+   *
+   * @example "codex-acp"
+   */
+  selectedAcpAgentId?: string;
+
+  /**
+   * Named AI configuration profiles available for quick switching.
+   *
+   * @default undefined (no named profiles)
+   */
+  profiles?: AiProfile[];
+
+  /**
+   * Active profile identifier from `profiles`.
+   *
+   * @default undefined (use top-level AI preferences)
+   * @example "writing"
+   */
+  activeProfileId?: string;
+}
+
+// =============================================================================
 // EXTENDED CONFIG TYPE
 // =============================================================================
 
@@ -971,6 +1322,152 @@ export interface Config extends BaseConfig {
    * ```
    */
   commands?: CommandsConfig;
+
+  /**
+   * Canonical command IDs to hide from the launcher main menu.
+   *
+   * Hidden commands remain resolvable via `triggerBuiltin`, hotkeys, and other
+   * programmatic paths — this only filters them out of visible lists.
+   *
+   * @default undefined (no commands hidden)
+   * @example
+   * ```typescript
+   * hiddenCommands: [
+   *   "builtin/clipboard-history",
+   *   "script/deprecated-tool"
+   * ]
+   * ```
+   */
+  hiddenCommands?: string[];
+
+  /**
+   * Model Context Protocol server configuration exposed to AI tooling.
+   *
+   * Set `enabled` to true and add named server definitions when you want Script
+   * Kit to expose external MCP servers. Leaving this undefined, or setting
+   * `enabled: false`, is safe and is the default.
+   *
+   * @default undefined (MCP server config disabled; `enabled: false` is safe)
+   * @example
+   * ```typescript
+   * mcp: {
+   *   enabled: true,
+   *   servers: {
+   *     filesystem: {
+   *       transport: "stdio",
+   *       command: "npx",
+   *       args: ["-y", "@modelcontextprotocol/server-filesystem"]
+   *     }
+   *   }
+   * }
+   * ```
+   */
+  mcp?: McpConfig;
+
+  /**
+   * ACP Chat runtime preferences.
+   *
+   * Top-level selections remain the backward-compatible default. Named profiles
+   * add optional model, agent, and system prompt combinations for quick switching.
+   *
+   * @default undefined (use ACP defaults)
+   * @example
+   * ```typescript
+   * ai: {
+   *   selectedAcpAgentId: "codex-acp",
+   *   selectedModelId: "gpt-5.4",
+   *   profiles: [
+   *     {
+   *       id: "writing",
+   *       label: "Long-form writing",
+   *       selectedModelId: "gpt-5.4",
+   *       systemPromptSlug: "writing"
+   *     }
+   *   ],
+   *   activeProfileId: "writing"
+   * }
+   * ```
+   */
+  ai?: AiPreferences;
+
+  /**
+   * Window vibrancy material and show/hide animation preferences.
+   *
+   * Schema only - runtime still uses built-in defaults until a follow-up wires
+   * src/app_impl/ui_window.rs to honor these knobs. Panel level and
+   * non-activating behavior are intentionally not configurable because they are
+   * focus-safety invariants: NSPanel non-activating behavior plus accessory app
+   * policy preserve show-without-activating behavior.
+   *
+   * @default undefined (use built-in window appearance defaults)
+   * @example
+   * ```typescript
+   * windowAppearance: {
+   *   vibrancy: "default",
+   *   animations: "system"
+   * }
+   * ```
+   */
+  windowAppearance?: WindowAppearanceConfig;
+
+  /**
+   * Power Syntax launcher sigil preferences.
+   *
+   * Schema only - runtime still uses built-in defaults until a follow-up wires
+   * src/menu_syntax/parse.rs to honor these knobs.
+   *
+   * @default undefined (use built-in Power Syntax defaults)
+   * @example
+   * ```typescript
+   * powerSyntax: {
+   *   enabled: true,
+   *   captureSigil: "both",
+   *   commandSigil: ">",
+   *   cmdEnterAi: {
+   *     enabled: true
+   *   }
+   * }
+   * ```
+   */
+  powerSyntax?: PowerSyntaxConfig;
+
+  /**
+   * Status-bar tray menu visibility preferences.
+   *
+   * Schema only - runtime still uses built-in defaults until a follow-up wires
+   * src/tray and src/main_entry/app_run_setup.rs to honor these knobs.
+   *
+   * @default undefined (use built-in tray defaults)
+   * @example
+   * ```typescript
+   * tray: {
+   *   showCurrentAppCommands: true,
+   *   showNotes: true,
+   *   showAgentChat: false,
+   *   showReloadScripts: true,
+   *   showHelp: true,
+   *   showSocialLinks: false,
+   *   showUpdateCheck: true
+   * }
+   * ```
+   */
+  tray?: TrayConfig;
+
+  /**
+   * Update-checking preferences.
+   *
+   * Schema only - runtime still uses built-in defaults until a follow-up wires
+   * src/tray and src/main_entry/app_run_setup.rs to honor these knobs.
+   *
+   * @default undefined (use built-in update defaults)
+   * @example
+   * ```typescript
+   * updates: {
+   *   autoCheck: true
+   * }
+   * ```
+   */
+  updates?: UpdatesConfig;
 }
 
 // =============================================================================

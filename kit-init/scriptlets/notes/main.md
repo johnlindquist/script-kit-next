@@ -24,7 +24,9 @@ const request = {
   limit: 10,
 };
 await copy(JSON.stringify(request, null, 2));
-await notify("Copied Notes getElements example");
+await arg("Copied Notes getElements example", [
+  { name: "Done", description: "The request JSON is on the clipboard", value: "done" },
+]);
 ```
 
 ## Copy waitFor Example
@@ -46,7 +48,9 @@ const request = {
   pollInterval: 25,
 };
 await copy(JSON.stringify(request, null, 2));
-await notify("Copied Notes waitFor example");
+await arg("Copied Notes waitFor example", [
+  { name: "Done", description: "The request JSON is on the clipboard", value: "done" },
+]);
 ```
 
 ## Copy batch setInput Example
@@ -66,5 +70,7 @@ const request = {
   commands: [{ type: "setInput", text: "Hello from automation" }],
 };
 await copy(JSON.stringify(request, null, 2));
-await notify("Copied Notes batch example");
+await arg("Copied Notes batch example", [
+  { name: "Done", description: "The request JSON is on the clipboard", value: "done" },
+]);
 ```

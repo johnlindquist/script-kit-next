@@ -144,7 +144,7 @@ fn test_add_property_no_trailing_comma() {
 }
 
 #[test]
-fn test_add_property_already_exists() {
+fn test_add_property_replaces_existing_value() {
     let content = r#"export default {
   hotkey: { key: ";" },
   claudeCode: { enabled: false },
@@ -153,7 +153,13 @@ fn test_add_property_already_exists() {
     let property = ConfigProperty::new("claudeCode", "{ enabled: true }");
     let result = add_property(content, &property);
 
-    assert_eq!(result, EditResult::AlreadySet);
+    match result {
+        EditResult::Modified(new_content) => {
+            assert!(new_content.contains("claudeCode: { enabled: true }"));
+            assert!(!new_content.contains("enabled: false"));
+        }
+        other => panic!("Expected Modified result, got {:?}", other),
+    }
 }
 
 #[test]
@@ -479,7 +485,7 @@ fn test_output_has_no_corruption_patterns() {
 #[test]
 fn test_full_user_config() {
     let config_path =
-        std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
+        std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/config.ts").as_ref());
 
     if !config_path.exists() {
         println!(

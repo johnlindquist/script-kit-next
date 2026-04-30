@@ -1,7 +1,7 @@
         // Note: Appearance watching is now handled by GPUI's observe_window_appearance
         // (set up during window creation above), replacing the custom AppearanceWatcher.
 
-        // Config reload watcher - watches ~/.scriptkit/kit/config.ts for changes
+        // Config reload watcher - watches ~/.scriptkit/config.ts for changes
         // Only spawn if watcher started successfully
         // Uses adaptive polling: starts at 200ms, increases to 2s when idle
         if config_watcher_ok {
@@ -36,7 +36,7 @@
             }).detach();
         }
 
-        // Script/scriptlets reload watcher - watches ~/.scriptkit/*/scripts/ and ~/.scriptkit/*/scriptlets/
+        // Script/scriptlets reload watcher - watches ~/.scriptkit/plugins/*/scripts/ and ~/.scriptkit/plugins/*/scriptlets/
         // Uses incremental updates for scriptlet files, full reload for scripts
         // Also re-scans for scheduled scripts to pick up new/modified schedules
         // Only spawn if watcher started successfully

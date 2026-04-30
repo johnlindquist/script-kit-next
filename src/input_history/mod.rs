@@ -7,8 +7,9 @@
 // --- merged from part_000.rs ---
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument};
 /// Maximum number of entries to store in history
 const MAX_ENTRIES: usize = 100;
 /// Input history with navigation state
@@ -20,6 +21,8 @@ const MAX_ENTRIES: usize = 100;
 pub struct InputHistory {
     /// Stored entries (most recent first)
     entries: Vec<String>,
+    /// Remembers which result was submitted for a normalized query
+    selected_results: HashMap<String, String>,
     /// Current navigation index (None = not navigating, Some(i) = at entries[i])
     /// This is ephemeral and not persisted
     #[serde(skip)]
@@ -39,6 +42,7 @@ impl InputHistory {
         let file_path = Self::default_path();
         InputHistory {
             entries: Vec::new(),
+            selected_results: HashMap::new(),
             current_index: None,
             file_path,
         }
@@ -49,6 +53,7 @@ impl InputHistory {
     pub fn with_path(path: PathBuf) -> Self {
         InputHistory {
             entries: Vec::new(),
+            selected_results: HashMap::new(),
             current_index: None,
             file_path: path,
         }
@@ -57,6 +62,25 @@ impl InputHistory {
     /// Get the default history file path
     fn default_path() -> PathBuf {
         PathBuf::from(shellexpand::tilde("~/.scriptkit/input_history.json").as_ref())
+    }
+
+    fn normalize_query(text: &str) -> Option<String> {
+        let collapsed = text.split_whitespace().collect::<Vec<_>>().join(" ");
+        if collapsed.is_empty() {
+            None
+        } else {
+            Some(collapsed.to_lowercase())
+        }
+    }
+
+    fn prune_selected_results(&mut self) {
+        let live_queries: HashSet<String> = self
+            .entries
+            .iter()
+            .filter_map(|entry| Self::normalize_query(entry))
+            .collect();
+        self.selected_results
+            .retain(|query, _| live_queries.contains(query));
     }
 
     /// Load history from disk
@@ -81,12 +105,14 @@ impl InputHistory {
             serde_json::from_str(&content).with_context(|| "Failed to parse input history JSON")?;
 
         self.entries = data.entries;
+        self.selected_results = data.selected_results;
         self.current_index = None; // Always reset navigation on load
 
         // Enforce max entries in case file was manually edited
         if self.entries.len() > MAX_ENTRIES {
             self.entries.truncate(MAX_ENTRIES);
         }
+        self.prune_selected_results();
 
         info!(
             path = %self.file_path.display(),
@@ -109,6 +135,7 @@ impl InputHistory {
         // Serialize just the entries
         let data = InputHistoryData {
             entries: self.entries.clone(),
+            selected_results: self.selected_results.clone(),
         };
         let json =
             serde_json::to_string_pretty(&data).context("Failed to serialize input history")?;
@@ -146,6 +173,14 @@ impl InputHistory {
     /// - Resets navigation state
     #[instrument(name = "input_history_add", skip(self))]
     pub fn add_entry(&mut self, text: &str) {
+        self.add_entry_with_selection(text, None);
+    }
+
+    #[instrument(
+        name = "input_history_add_with_selection",
+        skip(self, selected_result_key)
+    )]
+    pub fn add_entry_with_selection(&mut self, text: &str, selected_result_key: Option<String>) {
         // Skip empty entries
         let text = text.trim();
         if text.is_empty() {
@@ -164,14 +199,27 @@ impl InputHistory {
             self.entries.truncate(MAX_ENTRIES);
         }
 
+        if let (Some(query_key), Some(result_key)) =
+            (Self::normalize_query(text), selected_result_key)
+        {
+            self.selected_results.insert(query_key, result_key);
+        }
+        self.prune_selected_results();
+
         // Reset navigation
         self.current_index = None;
 
         debug!(
             entry = text,
             total_entries = self.entries.len(),
+            remembered_results = self.selected_results.len(),
             "Added entry to input history"
         );
+    }
+
+    pub fn preferred_result_key(&self, query: &str) -> Option<&str> {
+        let query_key = Self::normalize_query(query)?;
+        self.selected_results.get(&query_key).map(String::as_str)
     }
 
     /// Navigate up (to older entries)
@@ -280,6 +328,7 @@ impl InputHistory {
     #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.entries.clear();
+        self.selected_results.clear();
         self.current_index = None;
         debug!("Cleared input history");
     }
@@ -288,6 +337,8 @@ impl InputHistory {
 #[derive(Debug, Serialize, Deserialize)]
 struct InputHistoryData {
     entries: Vec<String>,
+    #[serde(default)]
+    selected_results: HashMap<String, String>,
 }
 
 // --- merged from part_001.rs ---
@@ -513,6 +564,47 @@ mod tests {
     }
 
     #[test]
+    fn test_add_entry_with_selection_records_preferred_result() {
+        let (mut history, path) = create_test_history();
+
+        history
+            .add_entry_with_selection("  Open   Tab  ", Some("script/main:open-tab".to_string()));
+
+        assert_eq!(
+            history.preferred_result_key("open tab"),
+            Some("script/main:open-tab")
+        );
+        assert_eq!(
+            history.preferred_result_key("OPEN\tTAB"),
+            Some("script/main:open-tab")
+        );
+
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_save_and_load_preserves_selected_results() {
+        let (_, path) = create_test_history();
+
+        {
+            let mut history = InputHistory::with_path(path.clone());
+            history.add_entry_with_selection("Open Tab", Some("script/main:open-tab".to_string()));
+            history.save().unwrap();
+        }
+
+        {
+            let mut history = InputHistory::with_path(path.clone());
+            history.load().unwrap();
+            assert_eq!(
+                history.preferred_result_key("open tab"),
+                Some("script/main:open-tab")
+            );
+        }
+
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
     fn test_load_missing_file() {
         let mut history = InputHistory::with_path(PathBuf::from("/nonexistent/path/history.json"));
         let result = history.load();
@@ -538,13 +630,37 @@ mod tests {
 
         // Write file with too many entries
         let entries: Vec<String> = (0..100).map(|i| format!("entry{}", i)).collect();
-        let data = InputHistoryData { entries };
+        let data = InputHistoryData {
+            entries,
+            selected_results: HashMap::new(),
+        };
         fs::write(&path, serde_json::to_string(&data).unwrap()).unwrap();
 
         let mut history = InputHistory::with_path(path.clone());
         history.load().unwrap();
 
         assert_eq!(history.len(), MAX_ENTRIES);
+
+        cleanup_temp_file(&path);
+    }
+
+    #[test]
+    fn test_selected_results_prune_with_truncated_entries() {
+        let (mut history, path) = create_test_history();
+
+        for i in 0..120 {
+            history.add_entry_with_selection(
+                &format!("entry{}", i),
+                Some(format!("script/main:entry{}", i)),
+            );
+        }
+
+        assert_eq!(history.len(), MAX_ENTRIES);
+        assert_eq!(
+            history.preferred_result_key("entry119"),
+            Some("script/main:entry119")
+        );
+        assert_eq!(history.preferred_result_key("entry0"), None);
 
         cleanup_temp_file(&path);
     }

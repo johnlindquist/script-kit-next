@@ -51,7 +51,7 @@ fn score(
     }
 
     if resolved.kind == AutomationWindowKind::Main
-        && (title.contains("Notes") || title.contains("AI"))
+        && (title.contains("Notes") || title.contains("AI") || title.contains("Agent Chat"))
     {
         s -= 200;
     }
@@ -170,7 +170,7 @@ fn main_target_penalizes_secondary_windows() {
 
     let main = score(&resolved, "Script Kit", false, 800, 600);
     let notes = score(&resolved, "Notes", false, 800, 600);
-    let ai = score(&resolved, "ACP Chat", false, 800, 600);
+    let ai = score(&resolved, "Agent Chat", false, 800, 600);
 
     assert!(main > notes, "main={main} should beat notes={notes}");
     assert!(main > ai, "main={main} should beat ai={ai}");

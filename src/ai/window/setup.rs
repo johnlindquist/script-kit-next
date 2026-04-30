@@ -89,11 +89,15 @@ impl AiApp {
             .unwrap_or(false)
     }
 
-    pub(super) const SETUP_BUTTON_COUNT: usize = 2;
+    pub(super) const SETUP_BUTTON_COUNT: usize = 1;
 
     pub(super) fn next_setup_button_focus_index(current: usize, delta: isize) -> usize {
-        let count = Self::SETUP_BUTTON_COUNT as isize;
-        ((current % Self::SETUP_BUTTON_COUNT) as isize + delta).rem_euclid(count) as usize
+        let count = Self::SETUP_BUTTON_COUNT;
+        if count <= 1 {
+            return 0;
+        }
+
+        ((current % count) as isize + delta).rem_euclid(count as isize) as usize
     }
 
     pub(super) fn move_setup_button_focus(&mut self, delta: isize, cx: &mut Context<Self>) {
@@ -280,7 +284,7 @@ impl AiApp {
         use crate::config::editor::{self, WriteOutcome};
 
         let config_path =
-            std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
+            std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/config.ts").as_ref());
         let config = crate::config::load_config();
         let bun_path = config.bun_path.as_deref();
 

@@ -4,7 +4,7 @@
  * 
  * AST-based config.ts shortcut remover.
  * 
- * This script modifies ~/.scriptkit/kit/config.ts to remove a command shortcut
+ * This script modifies ~/.scriptkit/config.ts to remove a command shortcut
  * by line-based parsing to preserve formatting and comments.
  * 
  * Usage:
@@ -28,7 +28,7 @@ if (args.length < 1) {
 const [commandId] = args;
 
 // Config file path
-const configPath = path.join(process.env.HOME || '', '.scriptkit', 'kit', 'config.ts');
+const configPath = path.join(process.env.HOME || '', '.scriptkit', 'config.ts');
 
 /**
  * Remove a command entry from config.ts by line-based parsing.

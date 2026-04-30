@@ -1,0 +1,81 @@
+//! Source-level contract for main-menu skill launch into ACP.
+//!
+//! Selecting a skill from the main menu must behave like accepting that skill
+//! from ACP slash mode: visible `/skill ` composer text, attached skill context,
+//! and no automatic submit.
+
+const TAB_AI_MODE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
+const ACP_VIEW: &str = include_str!("../src/ai/acp/view.rs");
+
+fn source_between<'a>(source: &'a str, start_pat: &str, end_pat: &str) -> &'a str {
+    let start = source
+        .find(start_pat)
+        .unwrap_or_else(|| panic!("missing source start: {start_pat}"));
+    let end_rel = source[start..]
+        .find(end_pat)
+        .unwrap_or_else(|| panic!("missing source end: {end_pat}"));
+    &source[start..start + end_rel]
+}
+
+fn compact(source: &str) -> String {
+    source.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+// @lat: [[lat.md/acp-chat#ACP Chat#Entry paths]]
+#[test]
+fn main_menu_skill_launch_opens_acp_without_entry_intent_submit() {
+    let body = compact(source_between(
+        TAB_AI_MODE,
+        "pub(crate) fn open_acp_with_selected_skill(",
+        "    pub(crate) fn open_tab_ai_acp_with_slash_picker(",
+    ));
+
+    for required in [
+        "crate::ai::acp::build_skill_slash_command_text(&skill.skill_id)",
+        "crate::ai::acp::build_skill_context_part(&skill.title,owner,&skill.skill_id,&skill.path)",
+        "self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(None,cx);",
+        "chat.stage_selected_plugin_skill_from_main_menu(skill,cx)",
+    ] {
+        assert!(
+            body.contains(&compact(required)),
+            "main-menu skill launch must stage slash-style skill selection: {required}"
+        );
+    }
+
+    assert!(
+        !body.contains("build_staged_skill_prompt"),
+        "main-menu skill launch must not build an auto-submit entry prompt"
+    );
+    assert!(
+        !body.contains("open_tab_ai_acp_with_entry_intent(Some"),
+        "main-menu skill launch must not pass selected skills as entry intents"
+    );
+}
+
+#[test]
+fn acp_stages_main_menu_skill_like_slash_selection_without_submit() {
+    let body = source_between(
+        ACP_VIEW,
+        "pub(crate) fn stage_selected_plugin_skill_from_main_menu(",
+        "    /// Reuse the current live thread for a fresh external entry intent.",
+    );
+
+    for required in [
+        "build_skill_slash_command_text(&skill.skill_id)",
+        "build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path)",
+        "thread.replace_pending_context_parts(vec![part], \"main_menu_selected_skill\", cx);",
+        "thread.input.set_text(command_text.clone());",
+        "thread.input.set_cursor(cursor_after);",
+        "thread.mark_context_bootstrap_ready(cx);",
+    ] {
+        assert!(
+            body.contains(required),
+            "ACP skill staging must preserve slash-selection behavior: {required}"
+        );
+    }
+
+    assert!(
+        !body.contains("submit_input("),
+        "ACP skill staging must not auto-submit"
+    );
+}

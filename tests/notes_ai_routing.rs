@@ -64,8 +64,8 @@ fn notes_keyboard_claims_cmd_enter() {
 
 #[test]
 fn chip_prefix_map_includes_action_and_note() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode.rs");
+    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
         source.contains("\"action\" => \"Action\""),
@@ -81,6 +81,10 @@ fn chip_prefix_map_includes_action_and_note() {
 fn notes_embedded_acp_stages_note_cart_as_mentions() {
     let source = fs::read_to_string("src/notes/window/panels.rs")
         .expect("Failed to read src/notes/window/panels.rs");
+    let host_source = fs::read_to_string("src/notes/window/acp_host.rs")
+        .expect("Failed to read src/notes/window/acp_host.rs");
+    let acp_view_source =
+        fs::read_to_string("src/ai/acp/view.rs").expect("Failed to read src/ai/acp/view.rs");
 
     assert!(
         source.contains("notes_cart_open_embedded_acp_requested"),
@@ -99,16 +103,29 @@ fn notes_embedded_acp_stages_note_cart_as_mentions() {
         "Notes cart handoff must preserve selection provenance in the text-block source"
     );
     assert!(
-        source.contains("part_to_inline_token(&part)"),
-        "Notes cart handoff must render staged parts as inline @mention tokens"
+        source.contains("self.ensure_embedded_acp_view(None, cx)"),
+        "Notes cart handoff must reuse the shared embedded ACP bootstrap helper"
     );
     assert!(
-        source.contains("chat.register_typed_alias(inline_token.clone(), part)"),
-        "Notes cart handoff must register typed aliases for staged mention tokens"
+        source.contains("chat.stage_inline_context_parts_from_host(parts, source, cx)"),
+        "Notes cart handoff must delegate staged mention rendering to the shared ACP host helper"
     );
     assert!(
-        source.contains("chat.register_inline_owned_token(inline_token);"),
-        "Notes cart handoff must claim inline ownership for staged mention tokens"
+        host_source.contains("fn wire_acp_host_callbacks(")
+            && host_source.contains("fn ensure_embedded_acp_view(")
+            && host_source.contains("self.wire_acp_host_callbacks(&view, cx);"),
+        "Notes first-open cart handoff must go through the shared host wiring path"
+    );
+    assert!(
+        acp_view_source.contains("event = \"acp_host_inline_context_staged\"")
+            && acp_view_source
+                .contains("thread.replace_pending_context_parts(staged_parts, source, cx);")
+            && acp_view_source.contains("format_typed_label_mention_token("),
+        "Shared ACP host staging must replace prior parts and build deterministic inline tokens"
+    );
+    assert!(
+        host_source.contains("event = \"notes_embedded_acp_view_ensured\""),
+        "Shared Notes ACP bootstrap helper must emit the ensure log for first-open and reuse"
     );
 }
 
@@ -144,11 +161,76 @@ fn shared_chip_label_formatter_exists_in_ai_module() {
 
 #[test]
 fn tab_ai_mode_delegates_to_shared_chip_label_formatter() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode.rs");
+    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
         source.contains("crate::ai::format_explicit_target_chip_label(target)"),
         "tab_ai_mode chip label formatter must delegate to the shared formatter"
+    );
+}
+
+#[test]
+fn notes_cart_first_open_uses_shared_notes_host_contract() {
+    let host_source = fs::read_to_string("src/notes/window/acp_host.rs")
+        .expect("Failed to read src/notes/window/acp_host.rs");
+
+    assert!(
+        host_source.contains("chat.set_allowed_portal_kinds(vec![")
+            && host_source.contains("PortalKind::AcpHistory"),
+        "Notes host contract must keep ACP history as the only locally hosted portal kind"
+    );
+    assert!(
+        host_source.contains("chat.set_on_open_portal(move |kind, cx|")
+            && host_source.contains("Self::handle_acp_portal_static(chat_entity, kind, cx);"),
+        "Notes host wiring must continue to route portal opens through the shared static handler"
+    );
+}
+
+#[test]
+fn notes_cart_reopen_replaces_previous_pending_parts() {
+    let acp_view_source =
+        fs::read_to_string("src/ai/acp/view.rs").expect("Failed to read src/ai/acp/view.rs");
+    let thread_source =
+        fs::read_to_string("src/ai/acp/thread.rs").expect("Failed to read src/ai/acp/thread.rs");
+
+    assert!(
+        acp_view_source.contains("self.typed_mention_aliases.clear();")
+            && acp_view_source.contains("self.inline_owned_context_tokens.clear();")
+            && acp_view_source
+                .contains("thread.replace_pending_context_parts(staged_parts, source, cx);"),
+        "ACP host staging must clear stale composer aliases/tokens before replacing staged parts"
+    );
+    assert!(
+        thread_source.contains("event = \"acp_pending_context_parts_replaced\""),
+        "Thread replacement path must emit an explicit replacement log for runtime verification"
+    );
+}
+
+#[test]
+fn notes_target_staging_uses_shared_host_replacement_path() {
+    let source = fs::read_to_string("src/notes/window/panels.rs")
+        .expect("Failed to read src/notes/window/panels.rs");
+
+    let fn_start = source
+        .find("fn stage_note_target_in_embedded_acp(")
+        .expect("stage_note_target_in_embedded_acp must exist");
+    let fn_body = &source[fn_start..];
+    let next_fn = fn_body[1..]
+        .find("\n    pub(crate) fn ")
+        .unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        fn_body.contains("chat.stage_inline_context_parts_from_host("),
+        "stage_note_target_in_embedded_acp must use the shared host replacement helper"
+    );
+    assert!(
+        !fn_body.contains("thread.add_context_part("),
+        "stage_note_target_in_embedded_acp must stop appending direct thread context parts"
+    );
+    assert!(
+        source.contains("event = \"notes_embedded_acp_target_staged_via_shared_host_path\""),
+        "notes target staging should emit a migration breadcrumb log for runtime verification"
     );
 }

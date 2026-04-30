@@ -11,7 +11,7 @@ mod from_dialog_builtin_action_validation_tests {
     //! contexts to ensure invariants hold: ordering, value/has_action correctness,
     //! section label consistency, description presence, icon assignment, and
     //! cross-context guarantees.
-    
+
     use super::builders::{
         get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
         get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
@@ -32,23 +32,23 @@ mod from_dialog_builtin_action_validation_tests {
     use crate::prompts::PathInfo;
     use crate::protocol::ProtocolAction;
     use crate::scriptlets::{Scriptlet, ScriptletAction};
-    
+
     // =========================================================================
     // Helpers
     // =========================================================================
-    
+
     fn action_ids(actions: &[Action]) -> Vec<&str> {
         actions.iter().map(|a| a.id.as_str()).collect()
     }
-    
+
     fn find_action<'a>(actions: &'a [Action], id: &str) -> Option<&'a Action> {
         actions.iter().find(|a| a.id == id)
     }
-    
+
     // =========================================================================
     // 1. Primary action is always first across ALL script-like contexts
     // =========================================================================
-    
+
     #[test]
     fn run_script_always_first_for_basic_script() {
         let script = ScriptInfo::new("hello", "/path/hello.ts");
@@ -56,7 +56,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert_eq!(actions[0].id, "run_script");
         assert!(actions[0].title.starts_with("Run"));
     }
-    
+
     #[test]
     fn run_script_always_first_for_script_with_shortcut_alias_frecency() {
         let script = ScriptInfo::with_shortcut_and_alias(
@@ -69,21 +69,21 @@ mod from_dialog_builtin_action_validation_tests {
         let actions = get_script_context_actions(&script);
         assert_eq!(actions[0].id, "run_script");
     }
-    
+
     #[test]
     fn run_script_always_first_for_builtin() {
         let builtin = ScriptInfo::builtin("Clipboard History");
         let actions = get_script_context_actions(&builtin);
         assert_eq!(actions[0].id, "run_script");
     }
-    
+
     #[test]
     fn run_script_always_first_for_scriptlet() {
         let scriptlet = ScriptInfo::scriptlet("Open URL", "/path/urls.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&scriptlet, None);
         assert_eq!(actions[0].id, "run_script");
     }
-    
+
     #[test]
     fn run_script_always_first_for_agent() {
         let mut agent = ScriptInfo::new("my-agent", "/path/agent.md");
@@ -92,11 +92,11 @@ mod from_dialog_builtin_action_validation_tests {
         let actions = get_script_context_actions(&agent);
         assert_eq!(actions[0].id, "run_script");
     }
-    
+
     // =========================================================================
     // 2. Built-in actions never have has_action=true
     // =========================================================================
-    
+
     #[test]
     fn script_context_built_in_actions_have_has_action_false() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -108,7 +108,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn file_context_built_in_actions_have_has_action_false() {
         let file = FileInfo {
@@ -125,7 +125,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn clipboard_context_built_in_actions_have_has_action_false() {
         let entry = ClipboardEntryInfo {
@@ -144,7 +144,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn path_context_built_in_actions_have_has_action_false() {
         let path = PathInfo::new("test", "/test", false);
@@ -156,7 +156,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn ai_command_bar_built_in_actions_have_has_action_false() {
         for action in &get_ai_command_bar_actions() {
@@ -167,7 +167,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn notes_command_bar_built_in_actions_have_has_action_false() {
         let info = NotesInfo {
@@ -183,11 +183,11 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     // =========================================================================
     // 3. Built-in actions have no value field (value is for SDK routing)
     // =========================================================================
-    
+
     #[test]
     fn script_context_built_in_actions_have_no_value() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -199,7 +199,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn file_context_built_in_actions_have_no_value() {
         let file = FileInfo {
@@ -216,11 +216,11 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     // =========================================================================
     // 4. Scriptlet custom actions DO have has_action=true and value
     // =========================================================================
-    
+
     #[test]
     fn scriptlet_custom_actions_have_has_action_and_value() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -243,7 +243,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(custom[0].has_action);
         assert!(custom[0].value.is_some());
     }
-    
+
     #[test]
     fn scriptlet_built_in_actions_still_have_no_has_action() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -270,11 +270,11 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     // =========================================================================
     // 5. Destructive clipboard actions always appear last
     // =========================================================================
-    
+
     #[test]
     fn clipboard_destructive_actions_last_for_text_unpinned() {
         let entry = ClipboardEntryInfo {
@@ -292,7 +292,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert_eq!(ids[len - 2], "clip:clipboard_delete_multiple");
         assert_eq!(ids[len - 1], "clip:clipboard_delete_all");
     }
-    
+
     #[test]
     fn clipboard_destructive_actions_last_for_image_pinned() {
         let entry = ClipboardEntryInfo {
@@ -310,11 +310,11 @@ mod from_dialog_builtin_action_validation_tests {
         assert_eq!(ids[len - 2], "clip:clipboard_delete_multiple");
         assert_eq!(ids[len - 1], "clip:clipboard_delete_all");
     }
-    
+
     // =========================================================================
     // 6. Section label consistency — no typos, same spelling across contexts
     // =========================================================================
-    
+
     #[test]
     fn ai_command_bar_section_labels_are_known() {
         let known = [
@@ -337,7 +337,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn notes_command_bar_section_labels_are_known() {
         let known = ["Notes", "Edit", "Copy", "Export", "AI", "Settings"];
@@ -357,7 +357,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn new_chat_section_labels_are_known() {
         let known = ["Last Used Settings", "Presets", "Models"];
@@ -388,11 +388,11 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     // =========================================================================
     // 7. Action count stability — deterministic for same input
     // =========================================================================
-    
+
     #[test]
     fn script_context_action_count_is_deterministic() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -402,7 +402,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert_eq!(count1, count2);
         assert_eq!(count2, count3);
     }
-    
+
     #[test]
     fn clipboard_action_count_is_deterministic() {
         let entry = ClipboardEntryInfo {
@@ -417,16 +417,16 @@ mod from_dialog_builtin_action_validation_tests {
         let count2 = get_clipboard_history_context_actions(&entry).len();
         assert_eq!(count1, count2);
     }
-    
+
     #[test]
     fn ai_command_bar_action_count_is_exactly_twelve() {
         assert_eq!(get_ai_command_bar_actions().len(), 35);
     }
-    
+
     // =========================================================================
     // 8. Enter shortcut on primary actions across contexts
     // =========================================================================
-    
+
     #[test]
     fn file_open_file_has_enter_shortcut() {
         let file = FileInfo {
@@ -438,7 +438,7 @@ mod from_dialog_builtin_action_validation_tests {
         let actions = get_file_context_actions(&file);
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     #[test]
     fn file_open_directory_has_enter_shortcut() {
         let dir = FileInfo {
@@ -450,23 +450,23 @@ mod from_dialog_builtin_action_validation_tests {
         let actions = get_file_context_actions(&dir);
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     #[test]
     fn path_select_file_has_enter_shortcut() {
         let path = PathInfo::new("file.txt", "/file.txt", false);
         let actions = get_path_context_actions(&path);
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     // --- merged from part_02.rs ---
-    
+
     #[test]
     fn path_open_directory_has_enter_shortcut() {
         let path = PathInfo::new("dir", "/dir", true);
         let actions = get_path_context_actions(&path);
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     #[test]
     fn clipboard_paste_has_enter_shortcut() {
         let entry = ClipboardEntryInfo {
@@ -480,11 +480,11 @@ mod from_dialog_builtin_action_validation_tests {
         let actions = get_clipboard_history_context_actions(&entry);
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     // =========================================================================
     // 9. Chat model actions — edge cases with many models
     // =========================================================================
-    
+
     #[test]
     fn chat_ten_models_all_present_exactly_one_checkmark() {
         let models: Vec<ChatModelInfo> = (0..10)
@@ -557,24 +557,24 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     // =========================================================================
     // 10. Grouped items — real actions produce valid grouped output
     // =========================================================================
-    
+
     #[test]
     fn ai_actions_grouped_with_headers_have_correct_structure() {
         let actions = get_ai_command_bar_actions();
         let filtered: Vec<usize> = (0..actions.len()).collect();
         let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
-    
+
         // Last item should not be a header (it should be an action)
         assert!(
             matches!(grouped.last(), Some(GroupedActionItem::Item(_))),
             "Last grouped item should be an action, not a header"
         );
     }
-    
+
     #[test]
     fn ai_actions_grouped_with_separators_have_no_headers() {
         let actions = get_ai_command_bar_actions();
@@ -589,7 +589,7 @@ mod from_dialog_builtin_action_validation_tests {
             "Separators style should have no headers"
         );
     }
-    
+
     #[test]
     fn notes_actions_grouped_header_count_matches_section_count() {
         let info = NotesInfo {
@@ -599,7 +599,7 @@ mod from_dialog_builtin_action_validation_tests {
         };
         let actions = get_notes_command_bar_actions(&info);
         let filtered: Vec<usize> = (0..actions.len()).collect();
-    
+
         let header_count_from_fn = count_section_headers(&actions, &filtered);
         let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
         let header_count_from_grouped = grouped
@@ -608,24 +608,24 @@ mod from_dialog_builtin_action_validation_tests {
             .count();
         assert_eq!(header_count_from_fn, header_count_from_grouped);
     }
-    
+
     // =========================================================================
     // 11. Coerce selection — real grouped items from AI actions
     // =========================================================================
-    
+
     #[test]
     fn coerce_selection_on_real_ai_grouped_actions_finds_valid_item() {
         let actions = get_ai_command_bar_actions();
         let filtered: Vec<usize> = (0..actions.len()).collect();
         let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
-    
+
         // Coerce at index 0 (which is likely a header) should find an item
         let result = coerce_action_selection(&grouped, 0);
         assert!(
             result.is_some(),
             "Should find an item in AI grouped actions"
         );
-    
+
         // The selected row should be an Item, not a header
         if let Some(idx) = result {
             assert!(
@@ -634,13 +634,13 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn coerce_selection_on_every_row_returns_valid_or_none() {
         let actions = get_ai_command_bar_actions();
         let filtered: Vec<usize> = (0..actions.len()).collect();
         let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
-    
+
         for i in 0..grouped.len() {
             let result = coerce_action_selection(&grouped, i);
             if let Some(idx) = result {
@@ -653,11 +653,11 @@ mod from_dialog_builtin_action_validation_tests {
             }
         }
     }
-    
+
     // =========================================================================
     // 12. Score consistency — same action + same query = same score
     // =========================================================================
-    
+
     #[test]
     fn score_action_is_deterministic() {
         let action = Action::new(
@@ -673,19 +673,19 @@ mod from_dialog_builtin_action_validation_tests {
         assert_eq!(score1, score2);
         assert_eq!(score2, score3);
     }
-    
+
     #[test]
     fn score_action_prefix_beats_contains_beats_fuzzy() {
         let prefix = Action::new("e", "Edit Script", None, ActionCategory::ScriptContext);
         let contains = Action::new("c", "Copy Edit Path", None, ActionCategory::ScriptContext);
         let fuzzy = Action::new("f", "Examine Data", None, ActionCategory::ScriptContext);
-    
+
         let prefix_score = ActionsDialog::score_action(&prefix, "edit");
         let contains_score = ActionsDialog::score_action(&contains, "edit");
         // "edit" in "examine data": fuzzy? e-x-a-m-i-n-e- -d-i-t → not a fuzzy match for "edit"
         // Actually e at 0, d at 8, i at 9, t at 10... need e-d-i-t in order: yes that fuzzy matches
         let _fuzzy_score = ActionsDialog::score_action(&fuzzy, "edit");
-    
+
         assert!(
             prefix_score > contains_score,
             "Prefix({}) should beat contains({})",
@@ -695,11 +695,11 @@ mod from_dialog_builtin_action_validation_tests {
         // Contains may or may not beat fuzzy depending on implementation, but both should be > 0
         assert!(contains_score > 0);
     }
-    
+
     // =========================================================================
     // 13. Description presence for critical actions
     // =========================================================================
-    
+
     #[test]
     fn script_run_action_has_description() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -710,7 +710,7 @@ mod from_dialog_builtin_action_validation_tests {
             "run_script should have a description"
         );
     }
-    
+
     #[test]
     fn script_edit_action_has_description() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -721,7 +721,7 @@ mod from_dialog_builtin_action_validation_tests {
             "edit_script should have a description"
         );
     }
-    
+
     #[test]
     fn clipboard_delete_all_has_description() {
         let entry = ClipboardEntryInfo {
@@ -739,7 +739,7 @@ mod from_dialog_builtin_action_validation_tests {
             "clipboard_delete_all should have a description"
         );
     }
-    
+
     #[test]
     fn path_move_to_trash_has_description() {
         let path = PathInfo::new("test", "/test", false);
@@ -750,11 +750,11 @@ mod from_dialog_builtin_action_validation_tests {
             "move_to_trash should have a description"
         );
     }
-    
+
     // =========================================================================
     // 14. Deeplink action present across all script-like contexts
     // =========================================================================
-    
+
     #[test]
     fn deeplink_present_for_script() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -762,7 +762,7 @@ mod from_dialog_builtin_action_validation_tests {
         let ids = action_ids(&actions);
         assert!(ids.contains(&"copy_deeplink"));
     }
-    
+
     #[test]
     fn deeplink_present_for_builtin() {
         let builtin = ScriptInfo::builtin("Clipboard History");
@@ -770,7 +770,7 @@ mod from_dialog_builtin_action_validation_tests {
         let ids = action_ids(&actions);
         assert!(ids.contains(&"copy_deeplink"));
     }
-    
+
     #[test]
     fn deeplink_present_for_scriptlet() {
         let scriptlet = ScriptInfo::scriptlet("Open URL", "/path/urls.md", None, None);
@@ -778,7 +778,7 @@ mod from_dialog_builtin_action_validation_tests {
         let ids = action_ids(&actions);
         assert!(ids.contains(&"copy_deeplink"));
     }
-    
+
     #[test]
     fn deeplink_present_for_agent() {
         let mut agent = ScriptInfo::new("my-agent", "/path/agent.md");
@@ -788,11 +788,11 @@ mod from_dialog_builtin_action_validation_tests {
         let ids = action_ids(&actions);
         assert!(ids.contains(&"copy_deeplink"));
     }
-    
+
     // =========================================================================
     // 15. Shortcut management actions: mutually exclusive add vs update/remove
     // =========================================================================
-    
+
     #[test]
     fn shortcut_add_vs_update_remove_mutually_exclusive_for_scripts() {
         // No shortcut → add only
@@ -802,7 +802,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(ids.contains(&"add_shortcut"));
         assert!(!ids.contains(&"update_shortcut"));
         assert!(!ids.contains(&"remove_shortcut"));
-    
+
         // Has shortcut → update+remove only
         let has_sc = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".into()));
         let has_sc_actions = get_script_context_actions(&has_sc);
@@ -811,7 +811,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(ids.contains(&"update_shortcut"));
         assert!(ids.contains(&"remove_shortcut"));
     }
-    
+
     #[test]
     fn alias_add_vs_update_remove_mutually_exclusive_for_scripts() {
         // No alias → add only
@@ -821,7 +821,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(ids.contains(&"add_alias"));
         assert!(!ids.contains(&"update_alias"));
         assert!(!ids.contains(&"remove_alias"));
-    
+
         // Has alias → update+remove only
         let has_al =
             ScriptInfo::with_shortcut_and_alias("test", "/path/test.ts", None, Some("ts".into()));
@@ -831,11 +831,11 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(ids.contains(&"update_alias"));
         assert!(ids.contains(&"remove_alias"));
     }
-    
+
     // =========================================================================
     // 16. File context — Application type has open as primary
     // =========================================================================
-    
+
     #[test]
     fn file_application_primary_is_open_file() {
         let app = FileInfo {
@@ -848,7 +848,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert_eq!(actions[0].id, "file:open_file");
         assert!(actions[0].title.contains("Safari.app"));
     }
-    
+
     #[test]
     fn file_document_primary_is_open_file() {
         let doc = FileInfo {
@@ -860,7 +860,7 @@ mod from_dialog_builtin_action_validation_tests {
         let actions = get_file_context_actions(&doc);
         assert_eq!(actions[0].id, "file:open_file");
     }
-    
+
     #[test]
     fn file_image_primary_is_open_file() {
         let img = FileInfo {
@@ -872,11 +872,11 @@ mod from_dialog_builtin_action_validation_tests {
         let actions = get_file_context_actions(&img);
         assert_eq!(actions[0].id, "file:open_file");
     }
-    
+
     // =========================================================================
     // 17. Note switcher — many notes all unique IDs
     // =========================================================================
-    
+
     #[test]
     fn note_switcher_fifty_notes_all_unique_ids() {
         let notes: Vec<NoteSwitcherNoteInfo> = (0..50)
@@ -898,9 +898,9 @@ mod from_dialog_builtin_action_validation_tests {
         ids.dedup();
         assert_eq!(total, ids.len(), "Note switcher IDs should be unique");
     }
-    
+
     // --- merged from part_03.rs ---
-    
+
     #[test]
     fn note_switcher_pinned_current_same_note_gets_star_icon() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -916,11 +916,11 @@ mod from_dialog_builtin_action_validation_tests {
         assert_eq!(actions[0].icon, Some(IconName::StarFilled));
         assert!(actions[0].title.starts_with("• "));
     }
-    
+
     // =========================================================================
     // 18. New chat actions — icons are correct per section
     // =========================================================================
-    
+
     #[test]
     fn new_chat_last_used_all_get_bolt_icon() {
         let last_used: Vec<NewChatModelInfo> = (0..3)
@@ -941,7 +941,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn new_chat_models_all_get_settings_icon() {
         let models: Vec<NewChatModelInfo> = (0..3)
@@ -962,7 +962,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn new_chat_presets_preserve_custom_icons() {
         let presets = vec![
@@ -981,11 +981,11 @@ mod from_dialog_builtin_action_validation_tests {
         assert_eq!(actions[0].icon, Some(IconName::Code));
         assert_eq!(actions[1].icon, Some(IconName::Star));
     }
-    
+
     // =========================================================================
     // 19. CommandBarConfig — field preservation across presets
     // =========================================================================
-    
+
     #[test]
     fn command_bar_all_presets_close_on_escape() {
         assert!(CommandBarConfig::default().close_on_escape);
@@ -994,7 +994,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(CommandBarConfig::main_menu_style().close_on_escape);
         assert!(CommandBarConfig::no_search().close_on_escape);
     }
-    
+
     #[test]
     fn command_bar_all_presets_close_on_click_outside() {
         assert!(CommandBarConfig::default().close_on_click_outside);
@@ -1003,7 +1003,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(CommandBarConfig::main_menu_style().close_on_click_outside);
         assert!(CommandBarConfig::no_search().close_on_click_outside);
     }
-    
+
     #[test]
     fn command_bar_all_presets_close_on_select() {
         assert!(CommandBarConfig::default().close_on_select);
@@ -1012,11 +1012,11 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(CommandBarConfig::main_menu_style().close_on_select);
         assert!(CommandBarConfig::no_search().close_on_select);
     }
-    
+
     // =========================================================================
     // 20. Fuzzy match with real action titles
     // =========================================================================
-    
+
     #[test]
     fn fuzzy_match_works_on_real_action_titles() {
         // Common user search patterns against actual action titles
@@ -1028,7 +1028,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(ActionsDialog::fuzzy_match("reset ranking", "rr"));
         assert!(ActionsDialog::fuzzy_match("view logs", "vl"));
     }
-    
+
     #[test]
     fn fuzzy_match_fails_for_reversed_chars() {
         // "se" should not fuzzy match "edit script" (s comes after e)
@@ -1036,14 +1036,15 @@ mod from_dialog_builtin_action_validation_tests {
         // "se": s at 5, then e at... no e after index 5. So it fails.
         assert!(!ActionsDialog::fuzzy_match("edit script", "se"));
     }
-    
+
     // =========================================================================
     // 21. Action verb propagation in primary action
     // =========================================================================
-    
+
     #[test]
     fn action_verb_launch_propagates_to_run_action() {
-        let script = ScriptInfo::with_action_verb("App Launcher", "builtin:launcher", false, "Launch");
+        let script =
+            ScriptInfo::with_action_verb("App Launcher", "builtin:launcher", false, "Launch");
         let actions = get_script_context_actions(&script);
         let run = find_action(&actions, "run_script").unwrap();
         assert!(
@@ -1052,7 +1053,7 @@ mod from_dialog_builtin_action_validation_tests {
             run.title
         );
     }
-    
+
     #[test]
     fn action_verb_switch_to_propagates_to_run_action() {
         let script =
@@ -1061,7 +1062,7 @@ mod from_dialog_builtin_action_validation_tests {
         let run = find_action(&actions, "run_script").unwrap();
         assert_eq!(run.title, "Switch To");
     }
-    
+
     #[test]
     fn action_verb_open_propagates_to_run_action() {
         let script = ScriptInfo::with_action_verb("Notes", "builtin:notes", false, "Open");
@@ -1073,11 +1074,11 @@ mod from_dialog_builtin_action_validation_tests {
             run.title
         );
     }
-    
+
     // =========================================================================
     // 22. title_lower correctness across all contexts
     // =========================================================================
-    
+
     #[test]
     fn title_lower_matches_title_for_all_clipboard_actions() {
         let entry = ClipboardEntryInfo {
@@ -1097,7 +1098,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn title_lower_matches_title_for_all_file_actions() {
         let file = FileInfo {
@@ -1115,7 +1116,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn title_lower_matches_title_for_all_path_actions() {
         let path = PathInfo::new("test", "/test", false);
@@ -1128,7 +1129,7 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     #[test]
     fn title_lower_matches_title_for_all_chat_actions() {
         let info = ChatPromptInfo {
@@ -1150,11 +1151,11 @@ mod from_dialog_builtin_action_validation_tests {
             );
         }
     }
-    
+
     // =========================================================================
     // 23. Scriptlet with zero custom actions still has built-in actions
     // =========================================================================
-    
+
     #[test]
     fn scriptlet_zero_custom_actions_has_built_in_set() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -1166,7 +1167,7 @@ mod from_dialog_builtin_action_validation_tests {
         );
         assert_eq!(actions[0].id, "run_script");
     }
-    
+
     #[test]
     fn scriptlet_none_scriptlet_has_built_in_set() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -1174,18 +1175,18 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(!actions.is_empty());
         assert_eq!(actions[0].id, "run_script");
     }
-    
+
     // =========================================================================
     // 24. ProtocolAction default behavior
     // =========================================================================
-    
+
     #[test]
     fn protocol_action_new_defaults_to_visible_and_closable() {
         let pa = ProtocolAction::new("Test".into());
         assert!(pa.is_visible());
         assert!(pa.should_close());
     }
-    
+
     #[test]
     fn protocol_action_explicit_false_overrides_defaults() {
         let pa = ProtocolAction {
@@ -1196,18 +1197,18 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(!pa.is_visible());
         assert!(!pa.should_close());
     }
-    
+
     #[test]
     fn protocol_action_with_value_sets_value_and_keeps_has_action_false() {
         let pa = ProtocolAction::with_value("Submit".into(), "val".into());
         assert_eq!(pa.value, Some("val".into()));
         assert!(!pa.has_action);
     }
-    
+
     // =========================================================================
     // 25. Cross-context: minimum action counts
     // =========================================================================
-    
+
     #[test]
     fn script_context_has_at_least_seven_actions() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -1218,7 +1219,7 @@ mod from_dialog_builtin_action_validation_tests {
             count
         );
     }
-    
+
     #[test]
     fn file_context_has_at_least_four_actions() {
         let file = FileInfo {
@@ -1234,7 +1235,7 @@ mod from_dialog_builtin_action_validation_tests {
             count
         );
     }
-    
+
     #[test]
     fn clipboard_context_has_at_least_eight_actions() {
         let entry = ClipboardEntryInfo {
@@ -1252,7 +1253,7 @@ mod from_dialog_builtin_action_validation_tests {
             count
         );
     }
-    
+
     #[test]
     fn path_context_has_at_least_six_actions() {
         let path = PathInfo::new("test", "/test", false);
@@ -1263,7 +1264,7 @@ mod from_dialog_builtin_action_validation_tests {
             count
         );
     }
-    
+
     #[test]
     fn chat_context_always_has_continue_in_chat() {
         let info = ChatPromptInfo {
@@ -1276,11 +1277,11 @@ mod from_dialog_builtin_action_validation_tests {
         let ids = action_ids(&actions);
         assert!(ids.contains(&"chat:continue_in_chat"));
     }
-    
+
     // =========================================================================
     // 26. Scriptlet with many custom actions — all ordered after run
     // =========================================================================
-    
+
     #[test]
     fn scriptlet_ten_custom_actions_all_after_run() {
         let script = ScriptInfo::scriptlet("Big", "/path/big.md", None, None);
@@ -1319,16 +1320,16 @@ mod from_dialog_builtin_action_validation_tests {
             }
         }
     }
-    
+
     // =========================================================================
     // 27. Format shortcut hint — roundtrip patterns
     // =========================================================================
-    
+
     #[test]
     fn format_shortcut_hint_cmd_enter() {
         assert_eq!(ActionsDialog::format_shortcut_hint("cmd+enter"), "⌘↵");
     }
-    
+
     #[test]
     fn format_shortcut_hint_cmd_shift_delete() {
         let result = ActionsDialog::format_shortcut_hint("cmd+shift+delete");
@@ -1336,7 +1337,7 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(result.contains('⇧'));
         assert!(result.contains('⌫'));
     }
-    
+
     #[test]
     fn format_shortcut_hint_ctrl_alt_letter() {
         let result = ActionsDialog::format_shortcut_hint("ctrl+alt+z");
@@ -1344,32 +1345,32 @@ mod from_dialog_builtin_action_validation_tests {
         assert!(result.contains('⌥'));
         assert!(result.contains('Z'));
     }
-    
+
     // --- merged from part_04.rs ---
-    
+
     // =========================================================================
     // 28. Deeplink name — preserves unicode alphanumerics
     // =========================================================================
-    
+
     #[test]
     fn deeplink_name_preserves_numbers_in_script_name() {
         assert_eq!(to_deeplink_name("Script 123"), "script-123");
     }
-    
+
     #[test]
     fn deeplink_name_handles_empty_string() {
         assert_eq!(to_deeplink_name(""), "_unnamed");
     }
-    
+
     #[test]
     fn deeplink_name_handles_all_whitespace() {
         assert_eq!(to_deeplink_name("   "), "_unnamed");
     }
-    
+
     // =========================================================================
     // 29. Notes — minimum actions for every permutation
     // =========================================================================
-    
+
     #[test]
     fn notes_all_eight_permutations_have_at_least_two_actions() {
         for sel in [false, true] {
@@ -1393,11 +1394,11 @@ mod from_dialog_builtin_action_validation_tests {
             }
         }
     }
-    
+
     // =========================================================================
     // 30. Action with_section chains correctly
     // =========================================================================
-    
+
     #[test]
     fn action_with_section_chains_preserve_other_fields() {
         let action = Action::new(
@@ -1409,7 +1410,7 @@ mod from_dialog_builtin_action_validation_tests {
         .with_shortcut("⌘T")
         .with_icon(IconName::Star)
         .with_section("My Section");
-    
+
         assert_eq!(action.id, "test");
         assert_eq!(action.title, "Test Action");
         assert_eq!(action.description, Some("A description".into()));
@@ -1440,7 +1441,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
     //! - New chat action ID format and empty section handling
     //! - CommandBarConfig preset dialog_config field specifics
     //! - Grouped items with SectionStyle::None
-    
+
     use super::builders::{
         get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
         get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
@@ -1460,19 +1461,19 @@ mod from_dialog_builtin_action_validation_tests_2 {
     use crate::file_search::{FileInfo, FileType};
     use crate::prompts::PathInfo;
     use crate::scriptlets::{Scriptlet, ScriptletAction};
-    
+
     // =========================================================================
     // Helpers
     // =========================================================================
-    
+
     fn action_ids(actions: &[Action]) -> Vec<&str> {
         actions.iter().map(|a| a.id.as_str()).collect()
     }
-    
+
     fn find_action<'a>(actions: &'a [Action], id: &str) -> Option<&'a Action> {
         actions.iter().find(|a| a.id == id)
     }
-    
+
     fn has_duplicates(ids: &[&str]) -> Option<String> {
         let mut seen = std::collections::HashSet::new();
         for id in ids {
@@ -1482,11 +1483,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
         }
         None
     }
-    
+
     // =========================================================================
     // 1. Action ID uniqueness within each context
     // =========================================================================
-    
+
     #[test]
     fn script_context_action_ids_are_unique() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -1498,7 +1499,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             has_duplicates(&ids)
         );
     }
-    
+
     #[test]
     fn file_context_action_ids_are_unique() {
         let file = FileInfo {
@@ -1515,7 +1516,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             has_duplicates(&ids)
         );
     }
-    
+
     #[test]
     fn clipboard_context_action_ids_are_unique() {
         let entry = ClipboardEntryInfo {
@@ -1534,7 +1535,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             has_duplicates(&ids)
         );
     }
-    
+
     #[test]
     fn path_context_action_ids_are_unique() {
         let path = PathInfo::new("test", "/test", false);
@@ -1546,7 +1547,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             has_duplicates(&ids)
         );
     }
-    
+
     #[test]
     fn ai_command_bar_action_ids_are_unique() {
         let actions = get_ai_command_bar_actions();
@@ -1557,7 +1558,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             has_duplicates(&ids)
         );
     }
-    
+
     #[test]
     fn notes_command_bar_action_ids_are_unique() {
         let info = NotesInfo {
@@ -1573,7 +1574,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             has_duplicates(&ids)
         );
     }
-    
+
     #[test]
     fn chat_context_action_ids_are_unique() {
         let info = ChatPromptInfo {
@@ -1601,11 +1602,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             has_duplicates(&ids)
         );
     }
-    
+
     // =========================================================================
     // 2. All actions have non-empty title and ID
     // =========================================================================
-    
+
     #[test]
     fn all_script_actions_have_nonempty_title_and_id() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -1618,7 +1619,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     #[test]
     fn all_ai_actions_have_nonempty_title_and_id() {
         for action in &get_ai_command_bar_actions() {
@@ -1630,11 +1631,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     // =========================================================================
     // 3. AI command bar — every action has an icon
     // =========================================================================
-    
+
     #[test]
     fn ai_command_bar_all_actions_have_icons() {
         let actions = get_ai_command_bar_actions();
@@ -1646,11 +1647,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     // =========================================================================
     // 4. AI command bar — every action has a section
     // =========================================================================
-    
+
     #[test]
     fn ai_command_bar_all_actions_have_sections() {
         let actions = get_ai_command_bar_actions();
@@ -1662,11 +1663,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     // =========================================================================
     // 5. description_lower matches description across contexts
     // =========================================================================
-    
+
     #[test]
     fn description_lower_matches_description_for_script_actions() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -1696,7 +1697,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             }
         }
     }
-    
+
     #[test]
     fn description_lower_matches_description_for_ai_actions() {
         for action in &get_ai_command_bar_actions() {
@@ -1725,7 +1726,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             }
         }
     }
-    
+
     #[test]
     fn description_lower_matches_description_for_path_actions() {
         let path = PathInfo::new("test", "/test", false);
@@ -1747,11 +1748,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             }
         }
     }
-    
+
     // =========================================================================
     // 6. shortcut_lower matches shortcut across contexts
     // =========================================================================
-    
+
     #[test]
     fn shortcut_lower_matches_shortcut_for_script_actions() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -1775,7 +1776,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             }
         }
     }
-    
+
     #[test]
     fn shortcut_lower_matches_shortcut_for_clipboard_actions() {
         let entry = ClipboardEntryInfo {
@@ -1804,11 +1805,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             }
         }
     }
-    
+
     // =========================================================================
     // 7. Notes conditional actions — selection + non-trash required
     // =========================================================================
-    
+
     #[test]
     fn notes_duplicate_only_when_selected_and_not_trash() {
         // has_selection=true, is_trash_view=false → duplicate present
@@ -1823,7 +1824,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             ids.contains(&"duplicate_note"),
             "Should have duplicate_note with selection + non-trash"
         );
-    
+
         // has_selection=false → no duplicate
         let info_no_sel = NotesInfo {
             has_selection: false,
@@ -1836,7 +1837,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             !ids_no_sel.contains(&"duplicate_note"),
             "Should NOT have duplicate_note without selection"
         );
-    
+
         // is_trash_view=true → no duplicate
         let info_trash = NotesInfo {
             has_selection: true,
@@ -1850,7 +1851,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Should NOT have duplicate_note in trash view"
         );
     }
-    
+
     #[test]
     fn notes_find_in_note_only_when_selected_and_not_trash() {
         let info = NotesInfo {
@@ -1861,7 +1862,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions_1 = get_notes_command_bar_actions(&info);
         let ids = action_ids(&actions_1);
         assert!(ids.contains(&"find_in_note"));
-    
+
         let info_no_sel = NotesInfo {
             has_selection: false,
             is_trash_view: false,
@@ -1871,9 +1872,9 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let ids_no_sel = action_ids(&actions_2);
         assert!(!ids_no_sel.contains(&"find_in_note"));
     }
-    
+
     // --- merged from part_02.rs ---
-    
+
     #[test]
     fn notes_format_only_when_selected_and_not_trash() {
         let info = NotesInfo {
@@ -1884,7 +1885,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions_1 = get_notes_command_bar_actions(&info);
         let ids = action_ids(&actions_1);
         assert!(ids.contains(&"format"));
-    
+
         let info_trash = NotesInfo {
             has_selection: true,
             is_trash_view: true,
@@ -1894,7 +1895,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let ids_trash = action_ids(&actions_2);
         assert!(!ids_trash.contains(&"format"));
     }
-    
+
     #[test]
     fn notes_copy_section_only_when_selected_and_not_trash() {
         let info = NotesInfo {
@@ -1907,7 +1908,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert!(ids.contains(&"copy_note_as"));
         assert!(ids.contains(&"copy_deeplink"));
         assert!(ids.contains(&"create_quicklink"));
-    
+
         let info_no_sel = NotesInfo {
             has_selection: false,
             is_trash_view: false,
@@ -1919,7 +1920,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert!(!ids_no_sel.contains(&"copy_deeplink"));
         assert!(!ids_no_sel.contains(&"create_quicklink"));
     }
-    
+
     #[test]
     fn notes_export_only_when_selected_and_not_trash() {
         let info = NotesInfo {
@@ -1930,7 +1931,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions_1 = get_notes_command_bar_actions(&info);
         let ids = action_ids(&actions_1);
         assert!(ids.contains(&"export"));
-    
+
         let info_no_sel = NotesInfo {
             has_selection: false,
             is_trash_view: false,
@@ -1940,11 +1941,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let ids_no_sel = action_ids(&actions_2);
         assert!(!ids_no_sel.contains(&"export"));
     }
-    
+
     // =========================================================================
     // 8. Notes auto-sizing toggle — only when disabled
     // =========================================================================
-    
+
     #[test]
     fn notes_auto_sizing_only_when_disabled() {
         let info_disabled = NotesInfo {
@@ -1958,7 +1959,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             ids_disabled.contains(&"enable_auto_sizing"),
             "Should show enable_auto_sizing when disabled"
         );
-    
+
         let info_enabled = NotesInfo {
             has_selection: false,
             is_trash_view: false,
@@ -1971,11 +1972,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Should NOT show enable_auto_sizing when already enabled"
         );
     }
-    
+
     // =========================================================================
     // 9. Chat conditional actions — copy_response / clear_conversation
     // =========================================================================
-    
+
     #[test]
     fn chat_copy_response_only_when_has_response() {
         let with_response = ChatPromptInfo {
@@ -1987,7 +1988,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions_1 = get_chat_context_actions(&with_response);
         let ids = action_ids(&actions_1);
         assert!(ids.contains(&"chat:copy_response"));
-    
+
         let without_response = ChatPromptInfo {
             current_model: None,
             available_models: vec![],
@@ -1998,7 +1999,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let ids_no = action_ids(&actions_2);
         assert!(!ids_no.contains(&"chat:copy_response"));
     }
-    
+
     #[test]
     fn chat_clear_conversation_only_when_has_messages() {
         let with_messages = ChatPromptInfo {
@@ -2010,7 +2011,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions_1 = get_chat_context_actions(&with_messages);
         let ids = action_ids(&actions_1);
         assert!(ids.contains(&"chat:clear_conversation"));
-    
+
         let without_messages = ChatPromptInfo {
             current_model: None,
             available_models: vec![],
@@ -2021,7 +2022,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let ids_no = action_ids(&actions_2);
         assert!(!ids_no.contains(&"chat:clear_conversation"));
     }
-    
+
     #[test]
     fn chat_empty_models_still_has_continue_in_chat() {
         let info = ChatPromptInfo {
@@ -2039,7 +2040,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert_eq!(actions[0].id, "chat:change_model");
         assert_eq!(actions[1].id, "chat:continue_in_chat");
     }
-    
+
     #[test]
     fn chat_full_context_has_all_actions() {
         let info = ChatPromptInfo {
@@ -2059,11 +2060,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert!(ids.contains(&"chat:copy_response"));
         assert!(ids.contains(&"chat:clear_conversation"));
     }
-    
+
     // =========================================================================
     // 10. Clipboard content-type-specific actions
     // =========================================================================
-    
+
     #[test]
     fn clipboard_image_has_ocr_action() {
         let entry = ClipboardEntryInfo {
@@ -2081,7 +2082,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Image entry should have OCR action"
         );
     }
-    
+
     #[test]
     fn clipboard_text_has_no_ocr_action() {
         let entry = ClipboardEntryInfo {
@@ -2099,7 +2100,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Text entry should NOT have OCR action"
         );
     }
-    
+
     #[test]
     fn clipboard_image_has_more_actions_than_text() {
         let text_entry = ClipboardEntryInfo {
@@ -2127,11 +2128,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             text_count
         );
     }
-    
+
     // =========================================================================
     // 11. Clipboard pin/unpin mutual exclusivity
     // =========================================================================
-    
+
     #[test]
     fn clipboard_pinned_has_unpin_not_pin() {
         let entry = ClipboardEntryInfo {
@@ -2153,7 +2154,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Pinned entry should NOT have pin"
         );
     }
-    
+
     #[test]
     fn clipboard_unpinned_has_pin_not_unpin() {
         let entry = ClipboardEntryInfo {
@@ -2175,11 +2176,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Unpinned entry should NOT have unpin"
         );
     }
-    
+
     // =========================================================================
     // 12. Clipboard frontmost app name in paste title
     // =========================================================================
-    
+
     #[test]
     fn clipboard_paste_title_includes_app_name() {
         let entry = ClipboardEntryInfo {
@@ -2198,7 +2199,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             paste.title
         );
     }
-    
+
     #[test]
     fn clipboard_paste_title_fallback_when_no_app() {
         let entry = ClipboardEntryInfo {
@@ -2217,11 +2218,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             paste.title
         );
     }
-    
+
     // =========================================================================
     // 13. Path context — is_dir differences
     // =========================================================================
-    
+
     #[test]
     fn path_directory_primary_is_open_directory() {
         let path = PathInfo::new("my-dir", "/my-dir", true);
@@ -2229,7 +2230,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert_eq!(actions[0].id, "file:open_directory");
         assert!(actions[0].title.contains("my-dir"));
     }
-    
+
     #[test]
     fn path_file_primary_is_select_file() {
         let path = PathInfo::new("file.txt", "/file.txt", false);
@@ -2237,7 +2238,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert_eq!(actions[0].id, "file:select_file");
         assert!(actions[0].title.contains("file.txt"));
     }
-    
+
     #[test]
     fn path_trash_description_varies_by_is_dir() {
         let dir_path = PathInfo::new("dir", "/dir", true);
@@ -2248,7 +2249,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Directory trash description should mention 'folder', got '{:?}'",
             dir_trash.description
         );
-    
+
         let file_path = PathInfo::new("file.txt", "/file.txt", false);
         let file_actions = get_path_context_actions(&file_path);
         let file_trash = find_action(&file_actions, "file:move_to_trash").unwrap();
@@ -2258,11 +2259,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             file_trash.description
         );
     }
-    
+
     // =========================================================================
     // 14. File context — is_dir differences
     // =========================================================================
-    
+
     #[test]
     fn file_directory_primary_is_open_directory() {
         let dir = FileInfo {
@@ -2274,7 +2275,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions = get_file_context_actions(&dir);
         assert_eq!(actions[0].id, "file:open_directory");
     }
-    
+
     #[test]
     fn file_non_directory_primary_is_open_file() {
         let file = FileInfo {
@@ -2286,7 +2287,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions = get_file_context_actions(&file);
         assert_eq!(actions[0].id, "file:open_file");
     }
-    
+
     #[test]
     fn file_directory_has_no_quick_look() {
         let dir = FileInfo {
@@ -2302,11 +2303,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Directories should not have quick_look"
         );
     }
-    
+
     // =========================================================================
     // 15. Agent-specific action invariants
     // =========================================================================
-    
+
     #[test]
     fn agent_has_edit_with_agent_title() {
         let mut agent = ScriptInfo::new("my-agent", "/path/agent.md");
@@ -2320,9 +2321,9 @@ mod from_dialog_builtin_action_validation_tests_2 {
             edit.title
         );
     }
-    
+
     // --- merged from part_03.rs ---
-    
+
     #[test]
     fn agent_has_reveal_and_copy_path() {
         let mut agent = ScriptInfo::new("my-agent", "/path/agent.md");
@@ -2334,7 +2335,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert!(ids.contains(&"copy_path"));
         assert!(ids.contains(&"copy_content"));
     }
-    
+
     #[test]
     fn agent_lacks_view_logs() {
         let mut agent = ScriptInfo::new("my-agent", "/path/agent.md");
@@ -2347,11 +2348,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Agent should not have view_logs"
         );
     }
-    
+
     // =========================================================================
     // 16. Builtin lacks file-specific actions
     // =========================================================================
-    
+
     #[test]
     fn builtin_lacks_edit_view_logs_reveal_copy_path_copy_content() {
         let builtin = ScriptInfo::builtin("Clipboard History");
@@ -2363,7 +2364,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert!(!ids.contains(&"file:copy_path"));
         assert!(!ids.contains(&"copy_content"));
     }
-    
+
     #[test]
     fn builtin_has_run_shortcut_alias_deeplink() {
         let builtin = ScriptInfo::builtin("Clipboard History");
@@ -2374,11 +2375,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert!(ids.contains(&"add_alias"));
         assert!(ids.contains(&"copy_deeplink"));
     }
-    
+
     // =========================================================================
     // 17. Note switcher edge cases
     // =========================================================================
-    
+
     #[test]
     fn note_switcher_empty_shows_no_notes_placeholder() {
         let actions = get_note_switcher_actions(&[]);
@@ -2387,7 +2388,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert!(actions[0].title.contains("No notes"));
         assert_eq!(actions[0].icon, Some(IconName::Plus));
     }
-    
+
     #[test]
     fn note_switcher_singular_character_count() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -2410,7 +2411,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Singular should NOT contain 'chars'"
         );
     }
-    
+
     #[test]
     fn note_switcher_plural_character_count() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -2433,7 +2434,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             actions[0].description
         );
     }
-    
+
     #[test]
     fn note_switcher_zero_characters_plural() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -2452,7 +2453,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             actions[0].description
         );
     }
-    
+
     #[test]
     fn note_switcher_icon_hierarchy_pinned_over_current() {
         // Pinned + current = StarFilled (pinned wins)
@@ -2468,7 +2469,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].icon, Some(IconName::StarFilled));
     }
-    
+
     #[test]
     fn note_switcher_icon_current_only() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -2483,7 +2484,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].icon, Some(IconName::Check));
     }
-    
+
     #[test]
     fn note_switcher_icon_default() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -2498,7 +2499,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].icon, Some(IconName::File));
     }
-    
+
     #[test]
     fn note_switcher_current_has_bullet_prefix() {
         let notes = vec![
@@ -2532,7 +2533,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Non-current note should NOT have '• ' prefix"
         );
     }
-    
+
     #[test]
     fn note_switcher_all_have_notes_section() {
         let notes: Vec<NoteSwitcherNoteInfo> = (0..5)
@@ -2556,11 +2557,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     // =========================================================================
     // 18. Score bonuses for description and shortcut matches
     // =========================================================================
-    
+
     #[test]
     fn score_description_only_match_returns_nonzero() {
         // Title doesn't match, but description contains the query
@@ -2577,7 +2578,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             score
         );
     }
-    
+
     #[test]
     fn score_shortcut_only_match_returns_nonzero() {
         let action = Action::new(
@@ -2594,7 +2595,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             score
         );
     }
-    
+
     #[test]
     fn score_no_match_returns_zero() {
         let action = Action::new(
@@ -2607,7 +2608,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let score = ActionsDialog::score_action(&action, "zzzznotfound");
         assert_eq!(score, 0, "No match should return 0");
     }
-    
+
     #[test]
     fn score_title_plus_description_bonus_stacks() {
         let action = Action::new(
@@ -2624,11 +2625,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             score
         );
     }
-    
+
     // =========================================================================
     // 19. New chat action ID format and empty sections
     // =========================================================================
-    
+
     #[test]
     fn new_chat_last_used_ids_are_indexed() {
         let last = vec![
@@ -2649,7 +2650,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert_eq!(actions[0].id, "last_used_p::a");
         assert_eq!(actions[1].id, "last_used_p::b");
     }
-    
+
     #[test]
     fn new_chat_preset_ids_use_preset_id() {
         let presets = vec![NewChatPresetInfo {
@@ -2660,7 +2661,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let actions = get_new_chat_actions(&[], &presets, &[]);
         assert_eq!(actions[0].id, "preset_code-review");
     }
-    
+
     #[test]
     fn new_chat_model_ids_are_indexed() {
         let models = vec![
@@ -2681,7 +2682,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert_eq!(actions[0].id, "model_anthropic::claude");
         assert_eq!(actions[1].id, "model_openai::gpt4");
     }
-    
+
     #[test]
     fn new_chat_empty_all_sections_returns_empty() {
         let actions = get_new_chat_actions(&[], &[], &[]);
@@ -2690,7 +2691,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "All empty sections should return empty actions"
         );
     }
-    
+
     #[test]
     fn new_chat_model_descriptions_have_provider() {
         let models = vec![NewChatModelInfo {
@@ -2706,7 +2707,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Model description should be provider_display_name"
         );
     }
-    
+
     #[test]
     fn new_chat_last_used_descriptions_have_provider() {
         let last = vec![NewChatModelInfo {
@@ -2722,7 +2723,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Last used description should be provider_display_name"
         );
     }
-    
+
     #[test]
     fn new_chat_presets_have_no_description() {
         let presets = vec![NewChatPresetInfo {
@@ -2736,53 +2737,53 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Presets should include an explicit preset description"
         );
     }
-    
+
     // =========================================================================
     // 20. Global actions always empty
     // =========================================================================
-    
+
     #[test]
     fn global_actions_always_returns_empty() {
         use super::builders::get_global_actions;
         let actions = get_global_actions();
         assert!(actions.is_empty(), "Global actions should always be empty");
     }
-    
+
     // =========================================================================
     // 21. Deeplink name edge cases
     // =========================================================================
-    
+
     #[test]
     fn deeplink_name_multiple_spaces_collapsed() {
         assert_eq!(to_deeplink_name("My   Script   Name"), "my-script-name");
     }
-    
+
     #[test]
     fn deeplink_name_underscores_become_hyphens() {
         assert_eq!(to_deeplink_name("my_script_name"), "my-script-name");
     }
-    
+
     #[test]
     fn deeplink_name_mixed_case_special_chars() {
         assert_eq!(to_deeplink_name("Hello (World) #1!"), "hello-world-1");
     }
-    
+
     #[test]
     fn deeplink_name_leading_trailing_special_chars() {
         assert_eq!(to_deeplink_name("---hello---"), "hello");
     }
-    
+
     // --- merged from part_04.rs ---
-    
+
     #[test]
     fn deeplink_name_single_word() {
         assert_eq!(to_deeplink_name("script"), "script");
     }
-    
+
     // =========================================================================
     // 22. CommandBarConfig preset dialog_config specifics
     // =========================================================================
-    
+
     #[test]
     fn command_bar_ai_style_has_search_top_and_headers() {
         let config = CommandBarConfig::ai_style();
@@ -2795,9 +2796,9 @@ mod from_dialog_builtin_action_validation_tests_2 {
             SectionStyle::Headers
         ));
         assert!(config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
-    
+
     #[test]
     fn command_bar_main_menu_has_search_bottom_and_separators() {
         let config = CommandBarConfig::main_menu_style();
@@ -2810,7 +2811,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             SectionStyle::Headers
         ));
         assert!(!config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
 
     #[test]
@@ -2825,9 +2826,9 @@ mod from_dialog_builtin_action_validation_tests_2 {
             SectionStyle::Headers
         ));
         assert!(config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
-    
+
     #[test]
     fn command_bar_no_search_has_hidden_search() {
         let config = CommandBarConfig::no_search();
@@ -2836,11 +2837,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             SearchPosition::Hidden
         ));
     }
-    
+
     // =========================================================================
     // 23. Grouped items with SectionStyle::None
     // =========================================================================
-    
+
     #[test]
     fn grouped_items_none_style_has_no_headers_or_separators() {
         let actions = get_ai_command_bar_actions();
@@ -2853,7 +2854,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     #[test]
     fn grouped_items_none_style_count_matches_filtered() {
         let actions = get_ai_command_bar_actions();
@@ -2861,11 +2862,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::None);
         assert_eq!(grouped.len(), filtered.len());
     }
-    
+
     // =========================================================================
     // 24. Coerce selection on notes grouped actions
     // =========================================================================
-    
+
     #[test]
     fn coerce_selection_on_notes_grouped_finds_valid_item() {
         let info = NotesInfo {
@@ -2885,11 +2886,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             assert!(matches!(grouped[idx], GroupedActionItem::Item(_)));
         }
     }
-    
+
     // =========================================================================
     // 25. title_lower correctness for AI and notes contexts
     // =========================================================================
-    
+
     #[test]
     fn title_lower_matches_title_for_all_ai_actions() {
         for action in &get_ai_command_bar_actions() {
@@ -2901,7 +2902,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     #[test]
     fn title_lower_matches_title_for_all_notes_actions() {
         let info = NotesInfo {
@@ -2918,7 +2919,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     #[test]
     fn title_lower_matches_title_for_note_switcher_actions() {
         let notes = vec![
@@ -2950,11 +2951,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     // =========================================================================
     // 26. Scriptlet custom action with shortcut and description
     // =========================================================================
-    
+
     #[test]
     fn scriptlet_custom_action_shortcut_is_formatted() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -2980,7 +2981,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             sc
         );
     }
-    
+
     #[test]
     fn scriptlet_custom_action_description_propagated() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -3004,11 +3005,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             Some("A detailed description")
         );
     }
-    
+
     // =========================================================================
     // 27. All actions have ActionCategory::ScriptContext
     // =========================================================================
-    
+
     #[test]
     fn all_script_actions_are_script_context_category() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -3020,7 +3021,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     #[test]
     fn all_clipboard_actions_are_script_context_category() {
         let entry = ClipboardEntryInfo {
@@ -3039,7 +3040,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     #[test]
     fn all_file_actions_are_script_context_category() {
         let file = FileInfo {
@@ -3056,7 +3057,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     #[test]
     fn all_ai_actions_are_script_context_category() {
         for action in &get_ai_command_bar_actions() {
@@ -3067,11 +3068,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     // =========================================================================
     // 28. File context primary action title includes filename
     // =========================================================================
-    
+
     #[test]
     fn file_primary_action_title_includes_filename() {
         let file = FileInfo {
@@ -3087,7 +3088,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             actions[0].title
         );
     }
-    
+
     #[test]
     fn file_directory_primary_title_includes_dirname() {
         let dir = FileInfo {
@@ -3103,11 +3104,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             actions[0].title
         );
     }
-    
+
     // =========================================================================
     // 29. Frecency reset ranking conditional
     // =========================================================================
-    
+
     #[test]
     fn frecency_not_suggested_lacks_reset_ranking() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -3115,18 +3116,20 @@ mod from_dialog_builtin_action_validation_tests_2 {
         let ids = action_ids(&actions_tmp);
         assert!(!ids.contains(&"reset_ranking"));
     }
-    
+
     #[test]
     fn frecency_suggested_has_reset_ranking() {
-        let script = ScriptInfo::new("test", "/path/test.ts").with_frecency(true, Some("/path".into()));
+        let script =
+            ScriptInfo::new("test", "/path/test.ts").with_frecency(true, Some("/path".into()));
         let actions_tmp = get_script_context_actions(&script);
         let ids = action_ids(&actions_tmp);
         assert!(ids.contains(&"reset_ranking"));
     }
-    
+
     #[test]
     fn frecency_suggested_reset_ranking_is_last() {
-        let script = ScriptInfo::new("test", "/path/test.ts").with_frecency(true, Some("/path".into()));
+        let script =
+            ScriptInfo::new("test", "/path/test.ts").with_frecency(true, Some("/path".into()));
         let actions = get_script_context_actions(&script);
         let last = actions.last().unwrap();
         assert_eq!(
@@ -3134,11 +3137,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "reset_ranking should be the last action"
         );
     }
-    
+
     // =========================================================================
     // 30. All actions have descriptions (broad check)
     // =========================================================================
-    
+
     #[test]
     fn all_script_context_actions_have_descriptions() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -3150,7 +3153,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     #[test]
     fn all_ai_command_bar_actions_have_descriptions() {
         for action in &get_ai_command_bar_actions() {
@@ -3161,7 +3164,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     #[test]
     fn all_path_actions_have_descriptions() {
         let path = PathInfo::new("test", "/test", false);
@@ -3173,7 +3176,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     #[test]
     fn all_file_actions_have_descriptions() {
         let file = FileInfo {
@@ -3190,11 +3193,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     // =========================================================================
     // 31. Clipboard has_action=false and no value for all entries
     // =========================================================================
-    
+
     #[test]
     fn clipboard_all_actions_have_no_value() {
         let entry = ClipboardEntryInfo {
@@ -3213,9 +3216,9 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     // --- merged from part_05.rs ---
-    
+
     #[test]
     fn path_all_actions_have_no_value() {
         let path = PathInfo::new("test", "/test", false);
@@ -3227,11 +3230,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             );
         }
     }
-    
+
     // =========================================================================
     // 32. Section header count consistency for AI with headers
     // =========================================================================
-    
+
     #[test]
     fn ai_section_header_count_is_eight() {
         let actions = get_ai_command_bar_actions();
@@ -3242,12 +3245,12 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "AI command bar should have 8 section headers (Response, Actions, Attachments, Export, Context, Actions, Help, Settings)"
         );
     }
-    
+
     // =========================================================================
     // 33. Scriptlet context actions from get_scriptlet_context_actions_with_custom
     //     have all the same universal actions as script context
     // =========================================================================
-    
+
     #[test]
     fn scriptlet_context_has_shortcut_alias_deeplink() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -3257,7 +3260,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert!(ids.contains(&"add_alias"));
         assert!(ids.contains(&"copy_deeplink"));
     }
-    
+
     #[test]
     fn scriptlet_context_has_edit_reveal_copy() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -3268,11 +3271,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
         assert!(ids.contains(&"copy_scriptlet_path"));
         assert!(ids.contains(&"copy_content"));
     }
-    
+
     // =========================================================================
     // 34. Notes new_note always present across all permutations
     // =========================================================================
-    
+
     #[test]
     fn notes_new_note_always_present() {
         for sel in [false, true] {
@@ -3296,7 +3299,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             }
         }
     }
-    
+
     #[test]
     fn notes_browse_notes_always_present() {
         for sel in [false, true] {
@@ -3320,11 +3323,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
             }
         }
     }
-    
+
     // =========================================================================
     // 35. Fuzzy match on real action IDs across contexts
     // =========================================================================
-    
+
     #[test]
     fn fuzzy_match_on_clipboard_action_titles() {
         let entry = ClipboardEntryInfo {
@@ -3343,7 +3346,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             .unwrap();
         assert!(ActionsDialog::fuzzy_match(&paste_keep.title_lower, "pke"));
     }
-    
+
     #[test]
     fn fuzzy_match_on_notes_action_titles() {
         let info = NotesInfo {
@@ -3356,11 +3359,11 @@ mod from_dialog_builtin_action_validation_tests_2 {
         // "nn" matches "new note" → n at 0, n at 4
         assert!(ActionsDialog::fuzzy_match(&new_note.title_lower, "nn"));
     }
-    
+
     // =========================================================================
     // 36. Grouped items headers style produces section headers
     // =========================================================================
-    
+
     #[test]
     fn grouped_items_headers_style_has_section_headers() {
         let actions = get_ai_command_bar_actions();
@@ -3375,7 +3378,7 @@ mod from_dialog_builtin_action_validation_tests_2 {
             "Headers style should produce at least one section header"
         );
     }
-    
+
     #[test]
     fn grouped_items_separators_style_has_separator_items() {
         let actions = get_ai_command_bar_actions();
@@ -3414,7 +3417,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
     //! - Chat model checkmark only on current model
     //! - Notes conditional section counts across all 8 permutations
     //! - CommandBarConfig notes_style specifics
-    
+
     use super::builders::{
         get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
         get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
@@ -3434,19 +3437,19 @@ mod from_dialog_builtin_action_validation_tests_3 {
     use crate::prompts::PathInfo;
     use crate::scriptlets::{Scriptlet, ScriptletAction};
     use std::collections::HashSet;
-    
+
     // =========================================================================
     // Helpers
     // =========================================================================
-    
+
     fn action_ids(actions: &[Action]) -> Vec<&str> {
         actions.iter().map(|a| a.id.as_str()).collect()
     }
-    
+
     fn find_action<'a>(actions: &'a [Action], id: &str) -> Option<&'a Action> {
         actions.iter().find(|a| a.id == id)
     }
-    
+
     fn sections_in_order(actions: &[Action]) -> Vec<&str> {
         let mut sections = Vec::new();
         for a in actions {
@@ -3462,11 +3465,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
         }
         sections
     }
-    
+
     // =========================================================================
     // 1. Shortcut uniqueness within context — no two actions share a hotkey
     // =========================================================================
-    
+
     #[test]
     fn script_context_shortcuts_are_unique() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -3483,7 +3486,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             }
         }
     }
-    
+
     #[test]
     fn clipboard_context_text_shortcuts_are_unique() {
         let entry = ClipboardEntryInfo {
@@ -3507,7 +3510,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             }
         }
     }
-    
+
     #[test]
     fn file_context_shortcuts_are_unique() {
         let file = FileInfo {
@@ -3529,7 +3532,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             }
         }
     }
-    
+
     #[test]
     fn path_context_shortcuts_are_unique() {
         let path = PathInfo {
@@ -3550,7 +3553,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             }
         }
     }
-    
+
     #[test]
     fn ai_command_bar_shortcuts_are_unique() {
         let actions = get_ai_command_bar_actions();
@@ -3566,11 +3569,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             }
         }
     }
-    
+
     // =========================================================================
     // 2. Action ordering stability — same inputs always produce same output
     // =========================================================================
-    
+
     #[test]
     fn script_context_ordering_is_deterministic() {
         let script = ScriptInfo::with_shortcut_and_alias(
@@ -3580,14 +3583,14 @@ mod from_dialog_builtin_action_validation_tests_3 {
             Some("st".into()),
         )
         .with_frecency(true, Some("/path/stable.ts".into()));
-    
+
         let a1 = get_script_context_actions(&script);
         let a2 = get_script_context_actions(&script);
         let a3 = get_script_context_actions(&script);
         let ids_1 = action_ids(&a1);
         let ids_2 = action_ids(&a2);
         let ids_3 = action_ids(&a3);
-    
+
         assert_eq!(
             ids_1, ids_2,
             "Action ordering should be stable across calls"
@@ -3597,7 +3600,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "Action ordering should be stable across calls"
         );
     }
-    
+
     #[test]
     fn clipboard_ordering_is_deterministic() {
         let entry = ClipboardEntryInfo {
@@ -3614,7 +3617,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let ids_2 = action_ids(&a2);
         assert_eq!(ids_1, ids_2);
     }
-    
+
     #[test]
     fn notes_command_bar_ordering_is_deterministic() {
         let info = NotesInfo {
@@ -3628,11 +3631,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let ids_2 = action_ids(&a2);
         assert_eq!(ids_1, ids_2);
     }
-    
+
     // =========================================================================
     // 3. Cross-context action exclusivity
     // =========================================================================
-    
+
     #[test]
     fn clipboard_ids_never_appear_in_file_context() {
         let file = FileInfo {
@@ -3643,7 +3646,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         };
         let file_actions = get_file_context_actions(&file);
         let file_ids: HashSet<&str> = action_ids(&file_actions).into_iter().collect();
-    
+
         // Clipboard-specific action IDs
         let clipboard_only = [
             "clip:clipboard_paste",
@@ -3657,7 +3660,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "clip:clipboard_share",
             "clip:clipboard_attach_to_ai",
         ];
-    
+
         for id in &clipboard_only {
             assert!(
                 !file_ids.contains(id),
@@ -3666,7 +3669,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn file_ids_never_appear_in_clipboard_context() {
         let entry = ClipboardEntryInfo {
@@ -3679,7 +3682,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         };
         let clip_actions = get_clipboard_history_context_actions(&entry);
         let clip_ids: HashSet<&str> = action_ids(&clip_actions).into_iter().collect();
-    
+
         let file_only = [
             "file:open_file",
             "file:open_directory",
@@ -3687,7 +3690,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "file:show_info",
             "file:copy_filename",
         ];
-    
+
         for id in &file_only {
             assert!(
                 !clip_ids.contains(id),
@@ -3696,7 +3699,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn script_ids_never_appear_in_path_context() {
         let path = PathInfo {
@@ -3706,7 +3709,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         };
         let path_actions = get_path_context_actions(&path);
         let path_ids: HashSet<&str> = action_ids(&path_actions).into_iter().collect();
-    
+
         let script_only = [
             "run_script",
             "edit_script",
@@ -3716,7 +3719,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "copy_deeplink",
             "reset_ranking",
         ];
-    
+
         for id in &script_only {
             assert!(
                 !path_ids.contains(id),
@@ -3725,11 +3728,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     // =========================================================================
     // 4. with_shortcut_opt builder correctness
     // =========================================================================
-    
+
     #[test]
     fn with_shortcut_opt_some_sets_shortcut() {
         let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
@@ -3737,19 +3740,19 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert_eq!(action.shortcut, Some("⌘T".to_string()));
         assert_eq!(action.shortcut_lower, Some("⌘t".to_string()));
     }
-    
+
     #[test]
     fn with_shortcut_opt_none_leaves_shortcut_none() {
-        let action =
-            Action::new("test", "Test", None, ActionCategory::ScriptContext).with_shortcut_opt(None);
+        let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
+            .with_shortcut_opt(None);
         assert!(action.shortcut.is_none());
         assert!(action.shortcut_lower.is_none());
     }
-    
+
     // =========================================================================
     // 5. AI command bar section ordering: Response > Actions > Attachments > Export > Context > Actions > Help > Settings
     // =========================================================================
-    
+
     #[test]
     fn ai_command_bar_section_order_is_correct() {
         let actions = get_ai_command_bar_actions();
@@ -3769,7 +3772,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "AI command bar sections should be in correct order"
         );
     }
-    
+
     #[test]
     fn ai_command_bar_response_section_has_three_actions() {
         let actions = get_ai_command_bar_actions();
@@ -3779,7 +3782,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             .count();
         assert_eq!(response_count, 3, "Response section should have 3 actions");
     }
-    
+
     #[test]
     fn ai_command_bar_actions_section_has_four_actions() {
         let actions = get_ai_command_bar_actions();
@@ -3789,7 +3792,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             .count();
         assert_eq!(actions_count, 4, "Actions section should have 4 actions");
     }
-    
+
     #[test]
     fn ai_command_bar_attachments_section_has_two_actions() {
         let actions = get_ai_command_bar_actions();
@@ -3802,7 +3805,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "Attachments section should have 4 actions"
         );
     }
-    
+
     #[test]
     fn ai_command_bar_settings_section_has_one_action() {
         let actions = get_ai_command_bar_actions();
@@ -3812,11 +3815,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             .count();
         assert_eq!(settings_count, 2, "Settings section should have 2 actions");
     }
-    
+
     // =========================================================================
     // 6. Notes command bar section ordering: Notes > Edit > Copy > Export > AI > Settings
     // =========================================================================
-    
+
     #[test]
     fn notes_command_bar_section_order_full() {
         let info = NotesInfo {
@@ -3832,9 +3835,9 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "Notes command bar sections should be in correct order"
         );
     }
-    
+
     // --- merged from part_02.rs ---
-    
+
     #[test]
     fn notes_command_bar_section_order_no_selection() {
         // Without selection, only Notes and Settings sections should appear
@@ -3851,7 +3854,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "Notes without selection should only have Notes and Settings"
         );
     }
-    
+
     #[test]
     fn notes_command_bar_section_order_trash_view() {
         // In trash view, even with selection, only Notes appears (plus Settings if not auto-sizing)
@@ -3868,7 +3871,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "Notes in trash view should match the current section sequence"
         );
     }
-    
+
     #[test]
     fn notes_command_bar_auto_sizing_enabled_hides_settings() {
         // With auto-sizing already enabled, Settings section should be absent
@@ -3885,11 +3888,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "With auto-sizing on and no selection, only Notes section"
         );
     }
-    
+
     // =========================================================================
     // 7. New chat section ordering: Last Used Settings > Presets > Models
     // =========================================================================
-    
+
     #[test]
     fn new_chat_section_order_all_populated() {
         let last_used = vec![NewChatModelInfo {
@@ -3913,7 +3916,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let sections = sections_in_order(&actions);
         assert_eq!(sections, vec!["Last Used Settings", "Presets", "Models"],);
     }
-    
+
     #[test]
     fn new_chat_section_order_no_last_used() {
         let presets = vec![NewChatPresetInfo {
@@ -3931,17 +3934,17 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let sections = sections_in_order(&actions);
         assert_eq!(sections, vec!["Presets", "Models"]);
     }
-    
+
     #[test]
     fn new_chat_all_empty_returns_no_actions() {
         let actions = get_new_chat_actions(&[], &[], &[]);
         assert!(actions.is_empty());
     }
-    
+
     // =========================================================================
     // 8. Scriptlet with multiple custom H3 actions
     // =========================================================================
-    
+
     #[test]
     fn scriptlet_custom_actions_maintain_order() {
         let script = ScriptInfo::scriptlet("Multi Action", "/path/multi.md", None, None);
@@ -3979,13 +3982,13 @@ mod from_dialog_builtin_action_validation_tests_3 {
                 description: None,
             },
         ];
-    
+
         let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
         let ids = action_ids(&actions);
-    
+
         // run_script must be first
         assert_eq!(ids[0], "run_script");
-    
+
         // Custom actions follow run in declaration order
         let alpha_idx = ids
             .iter()
@@ -3999,11 +4002,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             .iter()
             .position(|id| *id == "scriptlet_action:gamma-cmd")
             .unwrap();
-    
+
         assert_eq!(alpha_idx, 1);
         assert_eq!(beta_idx, 2);
         assert_eq!(gamma_idx, 3);
-    
+
         // Custom actions all have has_action=true
         for id in &[
             "scriptlet_action:alpha-cmd",
@@ -4023,11 +4026,12 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn scriptlet_custom_action_id_format() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
-        let mut scriptlet = Scriptlet::new("Test".to_string(), "bash".to_string(), "echo".to_string());
+        let mut scriptlet =
+            Scriptlet::new("Test".to_string(), "bash".to_string(), "echo".to_string());
         scriptlet.actions = vec![ScriptletAction {
             name: "Do Something".to_string(),
             command: "do-something".to_string(),
@@ -4037,17 +4041,17 @@ mod from_dialog_builtin_action_validation_tests_3 {
             shortcut: None,
             description: None,
         }];
-    
+
         let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
         let custom = find_action(&actions, "scriptlet_action:do-something").unwrap();
         assert!(custom.id.starts_with("scriptlet_action:"));
         assert_eq!(custom.title, "Do Something");
     }
-    
+
     // =========================================================================
     // 9. Action title formatting with varied action_verbs
     // =========================================================================
-    
+
     #[test]
     fn action_verb_appears_in_primary_title() {
         let verbs = ["Run", "Launch", "Switch to", "Open", "Execute"];
@@ -4055,11 +4059,15 @@ mod from_dialog_builtin_action_validation_tests_3 {
             let script = ScriptInfo::with_action_verb("MyItem", "/path/item", false, *verb);
             let actions = get_script_context_actions(&script);
             let primary = &actions[0];
-            let expected = if *verb == "Switch to" { "Switch To" } else { *verb };
+            let expected = if *verb == "Switch to" {
+                "Switch To"
+            } else {
+                *verb
+            };
             assert_eq!(primary.title, expected);
         }
     }
-    
+
     #[test]
     fn scriptlet_primary_uses_action_verb() {
         let script = ScriptInfo::scriptlet("Open URL", "/path/url.md", None, None);
@@ -4071,11 +4079,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
         );
         assert!(primary.title.contains("Open URL"));
     }
-    
+
     // =========================================================================
     // 10. Path context shortcut assignments
     // =========================================================================
-    
+
     #[test]
     fn path_file_has_enter_on_primary() {
         let path = PathInfo {
@@ -4087,7 +4095,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert_eq!(actions[0].id, "file:select_file");
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     #[test]
     fn path_dir_has_enter_on_primary() {
         let path = PathInfo {
@@ -4099,7 +4107,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert_eq!(actions[0].id, "file:open_directory");
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     #[test]
     fn path_context_has_trash_shortcut() {
         let path = PathInfo {
@@ -4111,7 +4119,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let trash = find_action(&actions, "file:move_to_trash").unwrap();
         assert_eq!(trash.shortcut.as_deref(), Some("⌘⌫"));
     }
-    
+
     #[test]
     fn path_context_has_all_expected_actions() {
         let path = PathInfo {
@@ -4121,13 +4129,13 @@ mod from_dialog_builtin_action_validation_tests_3 {
         };
         let actions = get_path_context_actions(&path);
         let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
-    
+
         let expected = [
             "file:select_file",
             "file:copy_path",
             "file:open_in_finder",
             "file:open_in_editor",
-            "file:open_in_terminal",
+            "file:open_in_quick_terminal",
             "file:copy_filename",
             "file:move_to_trash",
         ];
@@ -4139,7 +4147,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn path_dir_context_has_open_directory_not_select_file() {
         let path = PathInfo {
@@ -4152,11 +4160,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert!(ids.contains("file:open_directory"));
         assert!(!ids.contains("file:select_file"));
     }
-    
+
     // =========================================================================
     // 11. Clipboard ordering invariant: paste first, deletes last
     // =========================================================================
-    
+
     #[test]
     fn clipboard_paste_always_first_text() {
         let entry = ClipboardEntryInfo {
@@ -4170,7 +4178,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let actions = get_clipboard_history_context_actions(&entry);
         assert_eq!(actions[0].id, "clip:clipboard_paste");
     }
-    
+
     #[test]
     fn clipboard_paste_always_first_image() {
         let entry = ClipboardEntryInfo {
@@ -4184,7 +4192,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let actions = get_clipboard_history_context_actions(&entry);
         assert_eq!(actions[0].id, "clip:clipboard_paste");
     }
-    
+
     #[test]
     fn clipboard_delete_actions_always_last_three() {
         let entry = ClipboardEntryInfo {
@@ -4198,7 +4206,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let actions = get_clipboard_history_context_actions(&entry);
         let len = actions.len();
         assert!(len >= 3);
-    
+
         let last_three_ids: Vec<&str> = actions[len - 3..].iter().map(|a| a.id.as_str()).collect();
         assert_eq!(
             last_three_ids,
@@ -4210,7 +4218,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "Last 3 clipboard actions should be the destructive ones in order"
         );
     }
-    
+
     #[test]
     fn clipboard_delete_actions_always_last_three_image() {
         let entry = ClipboardEntryInfo {
@@ -4223,7 +4231,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         };
         let actions = get_clipboard_history_context_actions(&entry);
         let len = actions.len();
-    
+
         let last_three_ids: Vec<&str> = actions[len - 3..].iter().map(|a| a.id.as_str()).collect();
         assert_eq!(
             last_three_ids,
@@ -4234,11 +4242,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             ],
         );
     }
-    
+
     // =========================================================================
     // 12. Mixed flag combinations on ScriptInfo
     // =========================================================================
-    
+
     #[test]
     fn script_with_both_shortcut_and_alias_has_update_remove_for_both() {
         let script = ScriptInfo::with_shortcut_and_alias(
@@ -4249,7 +4257,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         );
         let actions = get_script_context_actions(&script);
         let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
-    
+
         assert!(ids.contains("update_shortcut"));
         assert!(ids.contains("remove_shortcut"));
         assert!(!ids.contains("add_shortcut"));
@@ -4257,41 +4265,41 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert!(ids.contains("remove_alias"));
         assert!(!ids.contains("add_alias"));
     }
-    
+
     #[test]
     fn builtin_with_frecency_has_reset_ranking_and_no_edit() {
         let builtin = ScriptInfo::builtin("Clipboard History")
             .with_frecency(true, Some("builtin:clipboard".into()));
         let actions = get_script_context_actions(&builtin);
         let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
-    
+
         assert!(ids.contains("reset_ranking"));
         assert!(ids.contains("run_script"));
         assert!(ids.contains("copy_deeplink"));
         assert!(!ids.contains("edit_script"));
         assert!(!ids.contains("view_logs"));
     }
-    
+
     // --- merged from part_03.rs ---
-    
+
     #[test]
     fn agent_with_shortcut_shows_update_not_add() {
         let mut agent = ScriptInfo::new("my-agent", "/path/agent.md");
         agent.is_agent = true;
         agent.is_script = false;
         agent.shortcut = Some("cmd+a".into());
-    
+
         let actions = get_script_context_actions(&agent);
         let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
         assert!(ids.contains("update_shortcut"));
         assert!(!ids.contains("add_shortcut"));
         assert!(ids.contains("edit_script")); // agent gets edit_script with title "Edit Agent"
     }
-    
+
     // =========================================================================
     // 13. Note switcher icon hierarchy for all is_current × is_pinned combos
     // =========================================================================
-    
+
     #[test]
     fn note_switcher_pinned_current_gets_star_icon() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -4306,7 +4314,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].icon, Some(IconName::StarFilled));
     }
-    
+
     #[test]
     fn note_switcher_pinned_not_current_gets_star_icon() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -4321,7 +4329,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].icon, Some(IconName::StarFilled));
     }
-    
+
     #[test]
     fn note_switcher_current_not_pinned_gets_check_icon() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -4336,7 +4344,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].icon, Some(IconName::Check));
     }
-    
+
     #[test]
     fn note_switcher_neither_pinned_nor_current_gets_file_icon() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -4351,7 +4359,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].icon, Some(IconName::File));
     }
-    
+
     #[test]
     fn note_switcher_current_note_has_bullet_prefix() {
         let notes = vec![
@@ -4384,7 +4392,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "Non-current note should not have bullet prefix"
         );
     }
-    
+
     #[test]
     fn note_switcher_char_count_plural() {
         let notes = vec![
@@ -4421,7 +4429,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert_eq!(actions[1].description.as_deref(), Some("1 char"));
         assert_eq!(actions[2].description.as_deref(), Some("42 chars"));
     }
-    
+
     #[test]
     fn note_switcher_empty_shows_no_notes_message() {
         let actions = get_note_switcher_actions(&[]);
@@ -4430,50 +4438,50 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert_eq!(actions[0].title, "No notes yet");
         assert_eq!(actions[0].icon, Some(IconName::Plus));
     }
-    
+
     // =========================================================================
     // 14. to_deeplink_name with unicode / emoji edge cases
     // =========================================================================
-    
+
     #[test]
     fn deeplink_name_with_accented_chars() {
         assert_eq!(to_deeplink_name("café"), "caf%C3%A9");
     }
-    
+
     #[test]
     fn deeplink_name_with_numbers() {
         assert_eq!(to_deeplink_name("Script123"), "script123");
     }
-    
+
     #[test]
     fn deeplink_name_empty_string() {
         assert_eq!(to_deeplink_name(""), "_unnamed");
     }
-    
+
     #[test]
     fn deeplink_name_only_special_chars() {
         assert_eq!(to_deeplink_name("!@#$%"), "_unnamed");
     }
-    
+
     #[test]
     fn deeplink_name_leading_trailing_spaces() {
         assert_eq!(to_deeplink_name("  hello  "), "hello");
     }
-    
+
     #[test]
     fn deeplink_name_consecutive_hyphens_collapsed() {
         assert_eq!(to_deeplink_name("a---b"), "a-b");
     }
-    
+
     #[test]
     fn deeplink_name_mixed_case_numbers_symbols() {
         assert_eq!(to_deeplink_name("My Script (v2.0)"), "my-script-v2-0");
     }
-    
+
     // =========================================================================
     // 15. Score stacking — title + description bonuses accumulate
     // =========================================================================
-    
+
     #[test]
     fn score_prefix_match_is_100() {
         let action = Action::new(
@@ -4489,7 +4497,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "Prefix 'edit' should get 100 for title + 15 for description containing 'edit'"
         );
     }
-    
+
     #[test]
     fn score_contains_match_is_50() {
         let action = Action::new(
@@ -4506,7 +4514,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             score
         );
     }
-    
+
     #[test]
     fn score_description_only_match() {
         let action = Action::new(
@@ -4519,7 +4527,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let score = ActionsDialog::score_action(&action, "launch");
         assert_eq!(score, 15, "'launch' only in description should give 15");
     }
-    
+
     #[test]
     fn score_shortcut_only_match() {
         let action = Action::new(
@@ -4537,7 +4545,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             score
         );
     }
-    
+
     #[test]
     fn score_no_match_is_zero() {
         let action = Action::new(
@@ -4549,7 +4557,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let score = ActionsDialog::score_action(&action, "zzzzz");
         assert_eq!(score, 0, "No match should score 0");
     }
-    
+
     #[test]
     fn score_prefix_plus_description_stack() {
         let action = Action::new(
@@ -4561,17 +4569,16 @@ mod from_dialog_builtin_action_validation_tests_3 {
         // "copy" is a prefix of title AND contained in description
         let score = ActionsDialog::score_action(&action, "copy");
         assert_eq!(
-            score,
-            100,
+            score, 100,
             "Prefix match should score 100 when description does not contain the query, got {}",
             score
         );
     }
-    
+
     // =========================================================================
     // 16. File context primary title includes filename
     // =========================================================================
-    
+
     #[test]
     fn file_context_primary_title_includes_filename() {
         let file = FileInfo {
@@ -4587,7 +4594,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             actions[0].title
         );
     }
-    
+
     #[test]
     fn file_context_dir_primary_title_includes_dirname() {
         let file = FileInfo {
@@ -4603,11 +4610,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             actions[0].title
         );
     }
-    
+
     // =========================================================================
     // 17. Chat model checkmark only on current model
     // =========================================================================
-    
+
     #[test]
     fn chat_model_checkmark_on_current_only() {
         let info = ChatPromptInfo {
@@ -4682,7 +4689,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn chat_continue_in_chat_always_present() {
         // Even with no models, continue_in_chat should be present
@@ -4698,9 +4705,9 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "continue_in_chat should always be present"
         );
     }
-    
+
     // --- merged from part_04.rs ---
-    
+
     #[test]
     fn chat_copy_response_only_with_response() {
         let without = ChatPromptInfo {
@@ -4714,7 +4721,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             !actions_without.iter().any(|a| a.id == "chat:copy_response"),
             "copy_response should be absent without response"
         );
-    
+
         let with = ChatPromptInfo {
             current_model: None,
             available_models: vec![],
@@ -4727,7 +4734,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "copy_response should be present with response"
         );
     }
-    
+
     #[test]
     fn chat_clear_conversation_only_with_messages() {
         let without = ChatPromptInfo {
@@ -4737,8 +4744,10 @@ mod from_dialog_builtin_action_validation_tests_3 {
             has_response: false,
         };
         let actions_without = get_chat_context_actions(&without);
-        assert!(!actions_without.iter().any(|a| a.id == "chat:clear_conversation"),);
-    
+        assert!(!actions_without
+            .iter()
+            .any(|a| a.id == "chat:clear_conversation"),);
+
         let with = ChatPromptInfo {
             current_model: None,
             available_models: vec![],
@@ -4746,14 +4755,16 @@ mod from_dialog_builtin_action_validation_tests_3 {
             has_response: false,
         };
         let actions_with = get_chat_context_actions(&with);
-        assert!(actions_with.iter().any(|a| a.id == "chat:clear_conversation"));
+        assert!(actions_with
+            .iter()
+            .any(|a| a.id == "chat:clear_conversation"));
     }
-    
+
     // =========================================================================
     // 18. Notes conditional action counts across all 8 permutations
     //     (has_selection × is_trash × auto_sizing)
     // =========================================================================
-    
+
     #[test]
     fn notes_8_permutations_action_counts() {
         let bools = [false, true];
@@ -4766,7 +4777,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
                         auto_sizing_enabled: auto,
                     };
                     let actions = get_notes_command_bar_actions(&info);
-    
+
                     // new_note and browse_notes always present
                     assert!(
                         actions.iter().any(|a| a.id == "new_note"),
@@ -4782,7 +4793,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
                         trash,
                         auto
                     );
-    
+
                     // Conditional: duplicate, find, format, copy, export
                     // only when has_selection && !is_trash_view
                     let has_conditionals = sel && !trash;
@@ -4811,7 +4822,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
                             auto
                         );
                     }
-    
+
                     // enable_auto_sizing only when auto_sizing_enabled is false
                     assert_eq!(
                         actions.iter().any(|a| a.id == "enable_auto_sizing"),
@@ -4824,11 +4835,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             }
         }
     }
-    
+
     // =========================================================================
     // 19. CommandBarConfig notes_style specifics
     // =========================================================================
-    
+
     #[test]
     fn command_bar_notes_style_search_top_separators_icons() {
         let config = CommandBarConfig::notes_style();
@@ -4852,17 +4863,17 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert!(config.close_on_select);
         assert!(config.close_on_click_outside);
     }
-    
+
     // =========================================================================
     // 20. Grouped items build correctness
     // =========================================================================
-    
+
     #[test]
     fn grouped_items_headers_style_produces_section_headers() {
         let actions = get_ai_command_bar_actions();
         let filtered: Vec<usize> = (0..actions.len()).collect();
         let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
-    
+
         // Should contain at least one SectionHeader
         let header_count = grouped
             .iter()
@@ -4874,13 +4885,13 @@ mod from_dialog_builtin_action_validation_tests_3 {
             header_count
         );
     }
-    
+
     #[test]
     fn grouped_items_none_style_has_no_headers() {
         let actions = get_ai_command_bar_actions();
         let filtered: Vec<usize> = (0..actions.len()).collect();
         let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::None);
-    
+
         let header_count = grouped
             .iter()
             .filter(|g| matches!(g, GroupedActionItem::SectionHeader(_)))
@@ -4890,13 +4901,13 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "None style should produce no section headers"
         );
     }
-    
+
     #[test]
     fn grouped_items_separators_style_has_no_headers() {
         let actions = get_ai_command_bar_actions();
         let filtered: Vec<usize> = (0..actions.len()).collect();
         let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Separators);
-    
+
         let header_count = grouped
             .iter()
             .filter(|g| matches!(g, GroupedActionItem::SectionHeader(_)))
@@ -4906,18 +4917,18 @@ mod from_dialog_builtin_action_validation_tests_3 {
             "Separators style should produce no section headers"
         );
     }
-    
+
     #[test]
     fn grouped_items_empty_filtered_returns_empty() {
         let actions = get_ai_command_bar_actions();
         let grouped = build_grouped_items_static(&actions, &[], SectionStyle::Headers);
         assert!(grouped.is_empty());
     }
-    
+
     // =========================================================================
     // 21. Coerce action selection correctness
     // =========================================================================
-    
+
     #[test]
     fn coerce_selection_on_item_returns_same_index() {
         let rows = vec![
@@ -4927,7 +4938,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         ];
         assert_eq!(coerce_action_selection(&rows, 1), Some(1));
     }
-    
+
     #[test]
     fn coerce_selection_on_header_skips_to_next_item() {
         let rows = vec![
@@ -4938,7 +4949,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         // Index 0 is a header, should coerce to index 1
         assert_eq!(coerce_action_selection(&rows, 0), Some(1));
     }
-    
+
     #[test]
     fn coerce_selection_on_trailing_header_goes_up() {
         let rows = vec![
@@ -4948,12 +4959,12 @@ mod from_dialog_builtin_action_validation_tests_3 {
         // Index 1 is a header at the end, should coerce back to index 0
         assert_eq!(coerce_action_selection(&rows, 1), Some(0));
     }
-    
+
     #[test]
     fn coerce_selection_empty_returns_none() {
         assert_eq!(coerce_action_selection(&[], 0), None);
     }
-    
+
     #[test]
     fn coerce_selection_all_headers_returns_none() {
         let rows = vec![
@@ -4962,11 +4973,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
         ];
         assert_eq!(coerce_action_selection(&rows, 0), None);
     }
-    
+
     // =========================================================================
     // 22. Action cached lowercase fields consistency
     // =========================================================================
-    
+
     #[test]
     fn action_title_lower_matches_title() {
         let action = Action::new(
@@ -4976,7 +4987,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘⇧C");
-    
+
         assert_eq!(action.title_lower, "my title with caps");
         assert_eq!(
             action.description_lower,
@@ -4984,7 +4995,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         );
         assert_eq!(action.shortcut_lower, Some("⌘⇧c".to_string()));
     }
-    
+
     #[test]
     fn all_script_actions_have_consistent_lowercase_caches() {
         let script = ScriptInfo::new("Test Script", "/path/test.ts");
@@ -5013,7 +5024,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             }
         }
     }
-    
+
     #[test]
     fn all_clipboard_actions_have_consistent_lowercase_caches() {
         let entry = ClipboardEntryInfo {
@@ -5033,7 +5044,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn all_ai_command_bar_actions_have_consistent_lowercase_caches() {
         for a in &get_ai_command_bar_actions() {
@@ -5046,11 +5057,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             }
         }
     }
-    
+
     // =========================================================================
     // 23. New chat action descriptions
     // =========================================================================
-    
+
     #[test]
     fn new_chat_last_used_has_provider_description() {
         let last_used = vec![NewChatModelInfo {
@@ -5063,7 +5074,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let a = &actions[0];
         assert_eq!(a.description.as_deref(), Some("Uses Anthropic"));
     }
-    
+
     #[test]
     fn new_chat_presets_have_no_description() {
         let presets = vec![NewChatPresetInfo {
@@ -5075,7 +5086,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let a = &actions[0];
         assert_eq!(a.description.as_deref(), Some("Uses General preset"));
     }
-    
+
     #[test]
     fn new_chat_models_have_provider_description() {
         let models = vec![NewChatModelInfo {
@@ -5088,11 +5099,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let a = &actions[0];
         assert_eq!(a.description.as_deref(), Some("Uses OpenAI"));
     }
-    
+
     // =========================================================================
     // 24. New chat action ID format
     // =========================================================================
-    
+
     #[test]
     fn new_chat_last_used_ids_are_indexed() {
         let last_used = vec![
@@ -5113,7 +5124,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert_eq!(actions[0].id, "last_used_p::m1");
         assert_eq!(actions[1].id, "last_used_p::m2");
     }
-    
+
     #[test]
     fn new_chat_preset_ids_use_preset_id() {
         let presets = vec![
@@ -5132,9 +5143,9 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert_eq!(actions[0].id, "preset_gen");
         assert_eq!(actions[1].id, "preset_code");
     }
-    
+
     // --- merged from part_05.rs ---
-    
+
     #[test]
     fn new_chat_model_ids_are_indexed() {
         let models = vec![
@@ -5155,18 +5166,18 @@ mod from_dialog_builtin_action_validation_tests_3 {
         assert_eq!(actions[0].id, "model_a::claude");
         assert_eq!(actions[1].id, "model_o::gpt");
     }
-    
+
     // =========================================================================
     // 25. All AI command bar actions have icon and section
     // =========================================================================
-    
+
     #[test]
     fn ai_command_bar_all_have_icon() {
         for a in &get_ai_command_bar_actions() {
             assert!(a.icon.is_some(), "AI action '{}' should have an icon", a.id);
         }
     }
-    
+
     #[test]
     fn ai_command_bar_all_have_section() {
         for a in &get_ai_command_bar_actions() {
@@ -5177,11 +5188,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     // =========================================================================
     // 26. Notes command bar conditional icons
     // =========================================================================
-    
+
     #[test]
     fn notes_command_bar_all_have_icons_when_full() {
         let info = NotesInfo {
@@ -5197,7 +5208,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn notes_command_bar_all_have_sections_when_full() {
         let info = NotesInfo {
@@ -5213,11 +5224,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     // =========================================================================
     // 27. Clipboard attach_to_ai action present
     // =========================================================================
-    
+
     #[test]
     fn clipboard_text_has_attach_to_ai() {
         let entry = ClipboardEntryInfo {
@@ -5229,9 +5240,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions.iter().any(|a| a.id == "clip:clipboard_attach_to_ai"));
+        assert!(actions
+            .iter()
+            .any(|a| a.id == "clip:clipboard_attach_to_ai"));
     }
-    
+
     #[test]
     fn clipboard_image_has_attach_to_ai() {
         let entry = ClipboardEntryInfo {
@@ -5243,19 +5256,21 @@ mod from_dialog_builtin_action_validation_tests_3 {
             frontmost_app_name: None,
         };
         let actions = get_clipboard_history_context_actions(&entry);
-        assert!(actions.iter().any(|a| a.id == "clip:clipboard_attach_to_ai"));
+        assert!(actions
+            .iter()
+            .any(|a| a.id == "clip:clipboard_attach_to_ai"));
     }
-    
+
     // =========================================================================
     // 28. Scriptlet context built-in action set
     // =========================================================================
-    
+
     #[test]
     fn scriptlet_context_has_expected_builtin_ids() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
         let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
-    
+
         let expected = [
             "run_script",
             "add_shortcut",
@@ -5270,28 +5285,28 @@ mod from_dialog_builtin_action_validation_tests_3 {
             assert!(ids.contains(id), "Scriptlet context should have '{}'", id);
         }
     }
-    
+
     #[test]
     fn scriptlet_context_action_order_run_before_builtin() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
         let actions = get_scriptlet_context_actions_with_custom(&script, None);
         let ids = action_ids(&actions);
-    
+
         let run_idx = ids.iter().position(|id| *id == "run_script").unwrap();
         let edit_idx = ids.iter().position(|id| *id == "edit_scriptlet").unwrap();
         let deeplink_idx = ids.iter().position(|id| *id == "copy_deeplink").unwrap();
-    
+
         assert!(run_idx < edit_idx, "run should come before edit_scriptlet");
         assert!(
             edit_idx < deeplink_idx,
             "edit_scriptlet should come before copy_deeplink"
         );
     }
-    
+
     // =========================================================================
     // 29. Path context trash description varies by is_dir
     // =========================================================================
-    
+
     #[test]
     fn path_trash_description_says_file_for_file() {
         let path = PathInfo {
@@ -5301,9 +5316,12 @@ mod from_dialog_builtin_action_validation_tests_3 {
         };
         let actions = get_path_context_actions(&path);
         let trash = find_action(&actions, "file:move_to_trash").unwrap();
-        assert_eq!(trash.description.as_deref(), Some("Moves this file to the Trash"),);
+        assert_eq!(
+            trash.description.as_deref(),
+            Some("Moves this file to the Trash"),
+        );
     }
-    
+
     #[test]
     fn path_trash_description_says_folder_for_dir() {
         let path = PathInfo {
@@ -5313,13 +5331,16 @@ mod from_dialog_builtin_action_validation_tests_3 {
         };
         let actions = get_path_context_actions(&path);
         let trash = find_action(&actions, "file:move_to_trash").unwrap();
-        assert_eq!(trash.description.as_deref(), Some("Moves this folder to the Trash"),);
+        assert_eq!(
+            trash.description.as_deref(),
+            Some("Moves this folder to the Trash"),
+        );
     }
-    
+
     // =========================================================================
     // 30. Note switcher all notes have "Notes" section
     // =========================================================================
-    
+
     #[test]
     fn note_switcher_all_actions_have_notes_section() {
         let notes = vec![
@@ -5353,17 +5374,17 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn note_switcher_empty_state_has_notes_section() {
         let actions = get_note_switcher_actions(&[]);
         assert_eq!(actions[0].section.as_deref(), Some("Notes"));
     }
-    
+
     // =========================================================================
     // 31. New chat action icons
     // =========================================================================
-    
+
     #[test]
     fn new_chat_last_used_has_bolt_icon() {
         let last_used = vec![NewChatModelInfo {
@@ -5375,7 +5396,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let actions = get_new_chat_actions(&last_used, &[], &[]);
         assert_eq!(actions[0].icon, Some(IconName::BoltFilled));
     }
-    
+
     #[test]
     fn new_chat_models_have_settings_icon() {
         let models = vec![NewChatModelInfo {
@@ -5387,7 +5408,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let actions = get_new_chat_actions(&[], &[], &models);
         assert_eq!(actions[0].icon, Some(IconName::Settings));
     }
-    
+
     #[test]
     fn new_chat_preset_uses_custom_icon() {
         let presets = vec![NewChatPresetInfo {
@@ -5398,11 +5419,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let actions = get_new_chat_actions(&[], &presets, &[]);
         assert_eq!(actions[0].icon, Some(IconName::Code));
     }
-    
+
     // =========================================================================
     // 32. Clipboard save actions have correct shortcuts
     // =========================================================================
-    
+
     #[test]
     fn clipboard_save_snippet_shortcut() {
         let entry = ClipboardEntryInfo {
@@ -5417,7 +5438,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let save = find_action(&actions, "clip:clipboard_save_snippet").unwrap();
         assert_eq!(save.shortcut.as_deref(), Some("⇧⌘S"));
     }
-    
+
     #[test]
     fn clipboard_save_file_shortcut() {
         let entry = ClipboardEntryInfo {
@@ -5432,26 +5453,23 @@ mod from_dialog_builtin_action_validation_tests_3 {
         let save = find_action(&actions, "clip:clipboard_save_file").unwrap();
         assert_eq!(save.shortcut.as_deref(), Some("⌥⇧⌘S"));
     }
-    
+
     // =========================================================================
     // 33. Script context deeplink description format
     // =========================================================================
-    
+
     #[test]
     fn script_deeplink_description_contains_url() {
         let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
         let actions = get_script_context_actions(&script);
         let deeplink = find_action(&actions, "copy_deeplink").unwrap();
-        assert!(
-            deeplink
-                .description
-                .as_ref()
-                .unwrap()
-                .contains("scriptkit://run/my-cool-script"),
-            "Deeplink description should contain the URL"
+        assert_eq!(deeplink.title, "Share");
+        assert_eq!(
+            deeplink.description.as_deref(),
+            Some("Copy a portable Script Kit share link to clipboard")
         );
     }
-    
+
     #[test]
     fn scriptlet_deeplink_description_contains_url() {
         let script = ScriptInfo::scriptlet("Open GitHub", "/path/url.md", None, None);
@@ -5463,11 +5481,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             .unwrap()
             .contains("scriptkit://run/open-github"),);
     }
-    
+
     // =========================================================================
     // 34. All built-in actions have ActionCategory::ScriptContext
     // =========================================================================
-    
+
     #[test]
     fn script_context_all_actions_are_script_context_category() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -5480,7 +5498,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn clipboard_all_actions_are_script_context_category() {
         let entry = ClipboardEntryInfo {
@@ -5500,7 +5518,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn file_all_actions_are_script_context_category() {
         let file = FileInfo {
@@ -5518,7 +5536,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn path_all_actions_are_script_context_category() {
         let path = PathInfo {
@@ -5535,7 +5553,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn ai_command_bar_all_actions_are_script_context_category() {
         for a in &get_ai_command_bar_actions() {
@@ -5547,7 +5565,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     #[test]
     fn notes_command_bar_all_actions_are_script_context_category() {
         let info = NotesInfo {
@@ -5564,11 +5582,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             );
         }
     }
-    
+
     // =========================================================================
     // 35. Action count bounds
     // =========================================================================
-    
+
     #[test]
     fn script_context_has_at_least_5_actions() {
         // Any script should have at minimum: run, shortcut, alias, deeplink, + edit/view/reveal/copy
@@ -5580,9 +5598,9 @@ mod from_dialog_builtin_action_validation_tests_3 {
             count
         );
     }
-    
+
     // --- merged from part_06.rs ---
-    
+
     #[test]
     fn builtin_context_has_at_least_4_actions() {
         // Built-in: run, add_shortcut, add_alias, copy_deeplink
@@ -5594,7 +5612,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             count
         );
     }
-    
+
     #[test]
     fn clipboard_text_has_at_least_10_actions() {
         let entry = ClipboardEntryInfo {
@@ -5612,7 +5630,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             count
         );
     }
-    
+
     #[test]
     fn ai_command_bar_has_exactly_35_actions() {
         let count = get_ai_command_bar_actions().len();
@@ -5622,11 +5640,11 @@ mod from_dialog_builtin_action_validation_tests_3 {
             count
         );
     }
-    
+
     // =========================================================================
     // 36. Score fuzzy match
     // =========================================================================
-    
+
     #[test]
     fn score_fuzzy_match_subsequence() {
         let action = Action::new(
@@ -5643,7 +5661,7 @@ mod from_dialog_builtin_action_validation_tests_3 {
             score
         );
     }
-    
+
     #[test]
     fn score_fuzzy_no_match() {
         let action = Action::new(
@@ -5684,7 +5702,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
     //! - Chat with no models, no messages, no response
     //! - Multiple scriptlet custom actions preserve declaration order
     //! - Action constructor lowercase caching with unicode titles
-    
+
     use super::builders::{
         get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
         get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
@@ -5704,19 +5722,19 @@ mod from_dialog_builtin_action_validation_tests_4 {
     use crate::prompts::PathInfo;
     use crate::scriptlets::{Scriptlet, ScriptletAction};
     use std::collections::HashSet;
-    
+
     // =========================================================================
     // Helpers
     // =========================================================================
-    
+
     fn action_ids(actions: &[Action]) -> Vec<&str> {
         actions.iter().map(|a| a.id.as_str()).collect()
     }
-    
+
     fn find_action<'a>(actions: &'a [Action], id: &str) -> Option<&'a Action> {
         actions.iter().find(|a| a.id == id)
     }
-    
+
     fn sections_in_order(actions: &[Action]) -> Vec<&str> {
         let mut sections = Vec::new();
         for a in actions {
@@ -5732,11 +5750,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
         }
         sections
     }
-    
+
     // =========================================================================
     // 1. Agent flag interactions with shortcut/alias/frecency
     // =========================================================================
-    
+
     #[test]
     fn agent_with_shortcut_has_update_and_remove_shortcut() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
@@ -5749,7 +5767,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(ids.contains(&"remove_shortcut"));
         assert!(!ids.contains(&"add_shortcut"));
     }
-    
+
     #[test]
     fn agent_without_shortcut_has_add_shortcut() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
@@ -5761,7 +5779,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(!ids.contains(&"update_shortcut"));
         assert!(!ids.contains(&"remove_shortcut"));
     }
-    
+
     #[test]
     fn agent_with_alias_has_update_and_remove_alias() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
@@ -5774,7 +5792,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(ids.contains(&"remove_alias"));
         assert!(!ids.contains(&"add_alias"));
     }
-    
+
     #[test]
     fn agent_with_frecency_has_reset_ranking() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
@@ -5786,7 +5804,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let ids = action_ids(&actions);
         assert!(ids.contains(&"reset_ranking"));
     }
-    
+
     #[test]
     fn agent_without_frecency_lacks_reset_ranking() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
@@ -5796,7 +5814,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let ids = action_ids(&actions);
         assert!(!ids.contains(&"reset_ranking"));
     }
-    
+
     #[test]
     fn agent_has_edit_agent_title() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
@@ -5806,7 +5824,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let edit = find_action(&actions, "edit_script").unwrap();
         assert_eq!(edit.title, "Edit Agent");
     }
-    
+
     #[test]
     fn agent_has_reveal_copy_path_copy_content() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
@@ -5818,7 +5836,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(ids.contains(&"copy_path"));
         assert!(ids.contains(&"copy_content"));
     }
-    
+
     #[test]
     fn agent_lacks_view_logs() {
         let mut agent = ScriptInfo::new("My Agent", "/path/to/agent.md");
@@ -5828,18 +5846,18 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let ids = action_ids(&actions);
         assert!(!ids.contains(&"view_logs"));
     }
-    
+
     // =========================================================================
     // 2. Custom action verbs propagate into primary action title
     // =========================================================================
-    
+
     #[test]
     fn action_verb_run_in_primary_title() {
         let script = ScriptInfo::new("Test Script", "/path/test.ts");
         let actions = get_script_context_actions(&script);
         assert_eq!(actions[0].title, "Run");
     }
-    
+
     #[test]
     fn action_verb_launch_in_primary_title() {
         let script =
@@ -5847,32 +5865,32 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_script_context_actions(&script);
         assert_eq!(actions[0].title, "Launch");
     }
-    
+
     #[test]
     fn action_verb_switch_to_in_primary_title() {
         let script = ScriptInfo::with_action_verb("My Window", "window:123", false, "Switch to");
         let actions = get_script_context_actions(&script);
         assert_eq!(actions[0].title, "Switch To");
     }
-    
+
     #[test]
     fn action_verb_open_in_primary_title() {
         let script = ScriptInfo::with_action_verb("Clipboard History", "builtin:ch", false, "Open");
         let actions = get_script_context_actions(&script);
         assert_eq!(actions[0].title, "Open");
     }
-    
+
     #[test]
     fn action_verb_execute_in_primary_title() {
         let script = ScriptInfo::with_all("My Task", "/path/task.ts", true, "Execute", None, None);
         let actions = get_script_context_actions(&script);
         assert_eq!(actions[0].title, "Execute");
     }
-    
+
     // =========================================================================
     // 3. Scriptlet context vs script context: systematic comparison
     // =========================================================================
-    
+
     #[test]
     fn scriptlet_context_has_edit_scriptlet_not_edit_script() {
         let scriptlet = ScriptInfo::scriptlet("My Snippet", "/path/to/bundle.md", None, None);
@@ -5881,7 +5899,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(ids.contains(&"edit_scriptlet"));
         assert!(!ids.contains(&"edit_script"));
     }
-    
+
     #[test]
     fn scriptlet_context_has_reveal_scriptlet_not_reveal() {
         let scriptlet = ScriptInfo::scriptlet("My Snippet", "/path/to/bundle.md", None, None);
@@ -5891,7 +5909,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         // The regular reveal_in_finder should NOT be present for scriptlets
         assert!(!ids.contains(&"file:reveal_in_finder"));
     }
-    
+
     #[test]
     fn scriptlet_context_has_copy_scriptlet_path_not_copy_path() {
         let scriptlet = ScriptInfo::scriptlet("My Snippet", "/path/to/bundle.md", None, None);
@@ -5900,7 +5918,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(ids.contains(&"copy_scriptlet_path"));
         assert!(!ids.contains(&"file:copy_path"));
     }
-    
+
     #[test]
     fn scriptlet_and_script_both_have_copy_content() {
         let scriptlet = ScriptInfo::scriptlet("My Snippet", "/path/to/bundle.md", None, None);
@@ -5910,18 +5928,18 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(action_ids(&scriptlet_actions).contains(&"copy_content"));
         assert!(action_ids(&script_actions).contains(&"copy_content"));
     }
-    
+
     #[test]
     fn scriptlet_lacks_view_logs() {
         let scriptlet = ScriptInfo::scriptlet("My Snippet", "/path/to/bundle.md", None, None);
         let actions = get_script_context_actions(&scriptlet);
         assert!(!action_ids(&actions).contains(&"view_logs"));
     }
-    
+
     // =========================================================================
     // 4. Clipboard text vs image action count differential
     // =========================================================================
-    
+
     #[test]
     fn clipboard_image_has_strictly_more_actions_than_text() {
         let text_entry = ClipboardEntryInfo {
@@ -5949,7 +5967,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             text_actions.len()
         );
     }
-    
+
     #[test]
     fn clipboard_image_has_ocr_text_does_not() {
         let text_entry = ClipboardEntryInfo {
@@ -5975,7 +5993,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(!text_ids.contains(&"clip:clipboard_ocr"));
         assert!(image_ids.contains(&"clip:clipboard_ocr"));
     }
-    
+
     #[test]
     fn clipboard_pinned_shows_unpin_unpinned_shows_pin() {
         let pinned = ClipboardEntryInfo {
@@ -6003,11 +6021,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(unpinned_ids.contains(&"clip:clipboard_pin"));
         assert!(!unpinned_ids.contains(&"clip:clipboard_unpin"));
     }
-    
+
     // =========================================================================
     // 5. Path context action IDs are all snake_case
     // =========================================================================
-    
+
     #[test]
     fn path_context_all_ids_are_snake_case() {
         let path = PathInfo {
@@ -6030,7 +6048,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             );
         }
     }
-    
+
     #[test]
     fn path_context_dir_all_ids_are_snake_case() {
         let path = PathInfo {
@@ -6047,11 +6065,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
             );
         }
     }
-    
+
     // =========================================================================
     // 6. File context FileType variants produce consistent action set structure
     // =========================================================================
-    
+
     #[test]
     fn file_context_all_file_types_have_reveal_and_copy_path() {
         let file_types = vec![
@@ -6087,7 +6105,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             );
         }
     }
-    
+
     #[test]
     fn file_context_file_has_open_file_dir_has_open_directory() {
         let file = FileInfo {
@@ -6109,13 +6127,13 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(action_ids(&dir_actions).contains(&"file:open_directory"));
         assert!(!action_ids(&dir_actions).contains(&"file:open_file"));
     }
-    
+
     // --- merged from part_02.rs ---
-    
+
     // =========================================================================
     // 7. Notes section labels exhaustive for full-feature permutation
     // =========================================================================
-    
+
     #[test]
     fn notes_full_feature_has_all_five_sections() {
         let info = NotesInfo {
@@ -6131,7 +6149,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(secs.contains(&"Export"), "Missing Export section");
         assert!(secs.contains(&"Settings"), "Missing Settings section");
     }
-    
+
     #[test]
     fn notes_no_selection_only_has_notes_section() {
         let info = NotesInfo {
@@ -6152,7 +6170,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(!secs.contains(&"Copy"));
         assert!(!secs.contains(&"Export"));
     }
-    
+
     #[test]
     fn notes_trash_view_has_limited_sections() {
         let info = NotesInfo {
@@ -6171,7 +6189,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(!secs.contains(&"Copy"));
         assert!(!secs.contains(&"Export"));
     }
-    
+
     #[test]
     fn notes_auto_sizing_enabled_hides_settings() {
         let info = NotesInfo {
@@ -6183,11 +6201,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let ids = action_ids(&actions);
         assert!(!ids.contains(&"enable_auto_sizing"));
     }
-    
+
     // =========================================================================
     // 8. AI command bar icon-per-section coverage
     // =========================================================================
-    
+
     #[test]
     fn ai_command_bar_every_action_has_icon() {
         let actions = get_ai_command_bar_actions();
@@ -6199,7 +6217,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             );
         }
     }
-    
+
     #[test]
     fn ai_command_bar_every_action_has_section() {
         let actions = get_ai_command_bar_actions();
@@ -6211,7 +6229,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             );
         }
     }
-    
+
     #[test]
     fn ai_command_bar_exactly_seven_sections() {
         let actions = get_ai_command_bar_actions();
@@ -6226,7 +6244,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             unique_sections
         );
     }
-    
+
     #[test]
     fn ai_command_bar_section_order_is_response_actions_attachments_export_actions_help_settings() {
         let actions = get_ai_command_bar_actions();
@@ -6245,17 +6263,17 @@ mod from_dialog_builtin_action_validation_tests_4 {
             ]
         );
     }
-    
+
     // =========================================================================
     // 9. New chat with all-empty inputs
     // =========================================================================
-    
+
     #[test]
     fn new_chat_empty_inputs_produces_empty() {
         let actions = get_new_chat_actions(&[], &[], &[]);
         assert!(actions.is_empty());
     }
-    
+
     #[test]
     fn new_chat_only_models_produces_models_section() {
         let models = vec![NewChatModelInfo {
@@ -6268,7 +6286,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].section.as_deref(), Some("Models"));
     }
-    
+
     #[test]
     fn new_chat_only_presets_produces_presets_section() {
         let presets = vec![NewChatPresetInfo {
@@ -6280,7 +6298,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].section.as_deref(), Some("Presets"));
     }
-    
+
     #[test]
     fn new_chat_only_last_used_produces_last_used_section() {
         let last_used = vec![NewChatModelInfo {
@@ -6293,7 +6311,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions.len(), 1);
         assert_eq!(actions[0].section.as_deref(), Some("Last Used Settings"));
     }
-    
+
     #[test]
     fn new_chat_section_order_is_last_used_presets_models() {
         let last_used = vec![NewChatModelInfo {
@@ -6317,11 +6335,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let order = sections_in_order(&actions);
         assert_eq!(order, vec!["Last Used Settings", "Presets", "Models"]);
     }
-    
+
     // =========================================================================
     // 10. score_action edge cases
     // =========================================================================
-    
+
     #[test]
     fn score_action_empty_query_returns_zero() {
         let action = Action::new("test", "Test Action", None, ActionCategory::ScriptContext);
@@ -6330,7 +6348,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         // Based on implementation: "test action".starts_with("") == true → 100
         assert!(score >= 100);
     }
-    
+
     #[test]
     fn score_action_exact_title_match_gets_prefix_score() {
         let action = Action::new("edit", "Edit Script", None, ActionCategory::ScriptContext);
@@ -6341,14 +6359,14 @@ mod from_dialog_builtin_action_validation_tests_4 {
             score
         );
     }
-    
+
     #[test]
     fn score_action_no_match_returns_zero() {
         let action = Action::new("test", "Test Action", None, ActionCategory::ScriptContext);
         let score = ActionsDialog::score_action(&action, "zzzzz");
         assert_eq!(score, 0, "No match should score 0");
     }
-    
+
     #[test]
     fn score_action_description_only_match_returns_fifteen() {
         let action = Action::new(
@@ -6365,7 +6383,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             score
         );
     }
-    
+
     #[test]
     fn score_action_shortcut_only_match_returns_ten() {
         let action =
@@ -6377,7 +6395,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             score
         );
     }
-    
+
     #[test]
     fn score_action_title_plus_description_stacks() {
         let action = Action::new(
@@ -6394,7 +6412,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             score
         );
     }
-    
+
     #[test]
     fn score_action_single_char_query() {
         let action = Action::new("edit", "Edit Script", None, ActionCategory::ScriptContext);
@@ -6405,83 +6423,83 @@ mod from_dialog_builtin_action_validation_tests_4 {
             score
         );
     }
-    
+
     // =========================================================================
     // 11. fuzzy_match boundary conditions
     // =========================================================================
-    
+
     #[test]
     fn fuzzy_match_empty_needle_always_matches() {
         assert!(ActionsDialog::fuzzy_match("anything", ""));
     }
-    
+
     #[test]
     fn fuzzy_match_empty_haystack_only_matches_empty_needle() {
         assert!(ActionsDialog::fuzzy_match("", ""));
         assert!(!ActionsDialog::fuzzy_match("", "a"));
     }
-    
+
     #[test]
     fn fuzzy_match_needle_longer_than_haystack_fails() {
         assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
     }
-    
+
     #[test]
     fn fuzzy_match_exact_match_succeeds() {
         assert!(ActionsDialog::fuzzy_match("hello", "hello"));
     }
-    
+
     #[test]
     fn fuzzy_match_subsequence_succeeds() {
         assert!(ActionsDialog::fuzzy_match("edit script", "edsc"));
     }
-    
+
     #[test]
     fn fuzzy_match_wrong_order_fails() {
         assert!(!ActionsDialog::fuzzy_match("abc", "cba"));
     }
-    
+
     #[test]
     fn fuzzy_match_case_sensitive() {
         // fuzzy_match is case-sensitive (expects pre-lowercased input)
         assert!(!ActionsDialog::fuzzy_match("hello", "H"));
         assert!(ActionsDialog::fuzzy_match("hello", "h"));
     }
-    
+
     // =========================================================================
     // 12. parse_shortcut_keycaps for all modifier symbols
     // =========================================================================
-    
+
     #[test]
     fn parse_keycaps_modifier_symbols() {
         let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘⇧C");
         assert_eq!(keycaps, vec!["⌘", "⇧", "C"]);
     }
-    
+
     #[test]
     fn parse_keycaps_enter_symbol() {
         let keycaps = ActionsDialog::parse_shortcut_keycaps("↵");
         assert_eq!(keycaps, vec!["↵"]);
     }
-    
+
     #[test]
     fn parse_keycaps_escape_symbol() {
         let keycaps = ActionsDialog::parse_shortcut_keycaps("⎋");
         assert_eq!(keycaps, vec!["⎋"]);
     }
-    
+
     #[test]
     fn parse_keycaps_backspace_symbol() {
         let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘⌫");
         assert_eq!(keycaps, vec!["⌘", "⌫"]);
     }
-    
+
     #[test]
     fn parse_keycaps_space_symbol() {
         let keycaps = ActionsDialog::parse_shortcut_keycaps("␣");
         assert_eq!(keycaps, vec!["␣"]);
     }
-    
+
     #[test]
     fn parse_keycaps_arrow_keys() {
         assert_eq!(ActionsDialog::parse_shortcut_keycaps("↑"), vec!["↑"]);
@@ -6489,71 +6507,71 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(ActionsDialog::parse_shortcut_keycaps("←"), vec!["←"]);
         assert_eq!(ActionsDialog::parse_shortcut_keycaps("→"), vec!["→"]);
     }
-    
+
     #[test]
     fn parse_keycaps_tab_symbol() {
         let keycaps = ActionsDialog::parse_shortcut_keycaps("⇥");
         assert_eq!(keycaps, vec!["⇥"]);
     }
-    
+
     #[test]
     fn parse_keycaps_all_modifiers_combined() {
         let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘⌃⌥⇧X");
         assert_eq!(keycaps, vec!["⌘", "⌃", "⌥", "⇧", "X"]);
     }
-    
+
     #[test]
     fn parse_keycaps_lowercase_becomes_uppercase() {
         let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘e");
         assert_eq!(keycaps, vec!["⌘", "E"]);
     }
-    
+
     // =========================================================================
     // 13. format_shortcut_hint roundtrips for unusual key names
     // =========================================================================
-    
+
     #[test]
     fn format_shortcut_hint_enter() {
         let hint = ActionsDialog::format_shortcut_hint("enter");
         assert_eq!(hint, "↵");
     }
-    
+
     #[test]
     fn format_shortcut_hint_return() {
         let hint = ActionsDialog::format_shortcut_hint("return");
         assert_eq!(hint, "↵");
     }
-    
+
     #[test]
     fn format_shortcut_hint_escape() {
         let hint = ActionsDialog::format_shortcut_hint("escape");
         assert_eq!(hint, "⎋");
     }
-    
+
     #[test]
     fn format_shortcut_hint_esc() {
         let hint = ActionsDialog::format_shortcut_hint("esc");
         assert_eq!(hint, "⎋");
     }
-    
+
     #[test]
     fn format_shortcut_hint_tab() {
         let hint = ActionsDialog::format_shortcut_hint("tab");
         assert_eq!(hint, "⇥");
     }
-    
+
     #[test]
     fn format_shortcut_hint_backspace() {
         let hint = ActionsDialog::format_shortcut_hint("backspace");
         assert_eq!(hint, "⌫");
     }
-    
+
     #[test]
     fn format_shortcut_hint_space() {
         let hint = ActionsDialog::format_shortcut_hint("space");
         assert_eq!(hint, "␣");
     }
-    
+
     #[test]
     fn format_shortcut_hint_arrow_keys() {
         assert_eq!(ActionsDialog::format_shortcut_hint("up"), "↑");
@@ -6561,114 +6579,117 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(ActionsDialog::format_shortcut_hint("left"), "←");
         assert_eq!(ActionsDialog::format_shortcut_hint("right"), "→");
     }
-    
+
     // --- merged from part_03.rs ---
-    
+
     #[test]
     fn format_shortcut_hint_cmd_enter() {
         let hint = ActionsDialog::format_shortcut_hint("cmd+enter");
         assert_eq!(hint, "⌘↵");
     }
-    
+
     #[test]
     fn format_shortcut_hint_ctrl_alt_delete() {
         let hint = ActionsDialog::format_shortcut_hint("ctrl+alt+delete");
         assert_eq!(hint, "⌃⌥⌫");
     }
-    
+
     #[test]
     fn format_shortcut_hint_shift_cmd_c() {
         let hint = ActionsDialog::format_shortcut_hint("shift+cmd+c");
         assert_eq!(hint, "⇧⌘C");
     }
-    
+
     #[test]
     fn format_shortcut_hint_option_variant() {
         let hint = ActionsDialog::format_shortcut_hint("option+a");
         assert_eq!(hint, "⌥A");
     }
-    
+
     #[test]
     fn format_shortcut_hint_command_variant() {
         let hint = ActionsDialog::format_shortcut_hint("command+s");
         assert_eq!(hint, "⌘S");
     }
-    
+
     #[test]
     fn format_shortcut_hint_arrowup_variant() {
         let hint = ActionsDialog::format_shortcut_hint("arrowup");
         assert_eq!(hint, "↑");
     }
-    
+
     #[test]
     fn format_shortcut_hint_arrowdown_variant() {
         let hint = ActionsDialog::format_shortcut_hint("arrowdown");
         assert_eq!(hint, "↓");
     }
-    
+
     // =========================================================================
     // 14. to_deeplink_name with CJK, emoji, RTL characters
     // =========================================================================
-    
+
     #[test]
     fn deeplink_name_ascii_basic() {
         assert_eq!(to_deeplink_name("Hello World"), "hello-world");
     }
-    
+
     #[test]
     fn deeplink_name_underscores_become_hyphens() {
         assert_eq!(to_deeplink_name("hello_world_test"), "hello-world-test");
     }
-    
+
     #[test]
     fn deeplink_name_special_chars_stripped() {
         assert_eq!(to_deeplink_name("test!@#$%^&*()"), "test");
     }
-    
+
     #[test]
     fn deeplink_name_multiple_spaces_collapsed() {
         assert_eq!(to_deeplink_name("foo   bar   baz"), "foo-bar-baz");
     }
-    
+
     #[test]
     fn deeplink_name_leading_trailing_stripped() {
         assert_eq!(to_deeplink_name("  hello  "), "hello");
     }
-    
+
     #[test]
     fn deeplink_name_empty_string() {
         assert_eq!(to_deeplink_name(""), "_unnamed");
     }
-    
+
     #[test]
     fn deeplink_name_only_special_chars() {
         assert_eq!(to_deeplink_name("!@#$%"), "_unnamed");
     }
-    
+
     #[test]
     fn deeplink_name_numbers_preserved() {
         assert_eq!(to_deeplink_name("Script 123"), "script-123");
     }
-    
+
     #[test]
     fn deeplink_name_mixed_case_lowered() {
         assert_eq!(to_deeplink_name("MyScript"), "myscript");
     }
-    
+
     #[test]
     fn deeplink_name_accented_chars() {
-        assert_eq!(to_deeplink_name("café résumé"), "caf%C3%A9-r%C3%A9sum%C3%A9");
+        assert_eq!(
+            to_deeplink_name("café résumé"),
+            "caf%C3%A9-r%C3%A9sum%C3%A9"
+        );
     }
-    
+
     #[test]
     fn deeplink_name_consecutive_hyphens_collapsed() {
         assert_eq!(to_deeplink_name("a--b"), "a-b");
     }
-    
+
     // =========================================================================
     // 15. Grouped items with realistic AI command bar data
     // =========================================================================
-    
+
     #[test]
     fn grouped_items_headers_style_produces_section_headers() {
         let actions = get_ai_command_bar_actions();
@@ -6685,7 +6706,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             header_count
         );
     }
-    
+
     #[test]
     fn grouped_items_none_style_produces_no_headers() {
         let actions = get_ai_command_bar_actions();
@@ -6697,7 +6718,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             .count();
         assert_eq!(header_count, 0, "None style should have 0 headers");
     }
-    
+
     #[test]
     fn grouped_items_separators_style_produces_no_headers() {
         let actions = get_ai_command_bar_actions();
@@ -6709,14 +6730,14 @@ mod from_dialog_builtin_action_validation_tests_4 {
             .count();
         assert_eq!(header_count, 0, "Separators style should have 0 headers");
     }
-    
+
     #[test]
     fn grouped_items_empty_filtered_produces_empty() {
         let actions = get_ai_command_bar_actions();
         let grouped = build_grouped_items_static(&actions, &[], SectionStyle::Headers);
         assert!(grouped.is_empty());
     }
-    
+
     #[test]
     fn grouped_items_item_count_matches_filtered_count() {
         let actions = get_ai_command_bar_actions();
@@ -6728,17 +6749,17 @@ mod from_dialog_builtin_action_validation_tests_4 {
             .count();
         assert_eq!(item_count, filtered.len());
     }
-    
+
     // =========================================================================
     // 16. coerce_action_selection edge cases
     // =========================================================================
-    
+
     #[test]
     fn coerce_selection_empty_rows_returns_none() {
         let rows: Vec<GroupedActionItem> = vec![];
         assert_eq!(coerce_action_selection(&rows, 0), None);
     }
-    
+
     #[test]
     fn coerce_selection_all_headers_returns_none() {
         let rows = vec![
@@ -6748,14 +6769,14 @@ mod from_dialog_builtin_action_validation_tests_4 {
         ];
         assert_eq!(coerce_action_selection(&rows, 0), None);
     }
-    
+
     #[test]
     fn coerce_selection_on_item_returns_same_index() {
         let rows = vec![GroupedActionItem::Item(0), GroupedActionItem::Item(1)];
         assert_eq!(coerce_action_selection(&rows, 0), Some(0));
         assert_eq!(coerce_action_selection(&rows, 1), Some(1));
     }
-    
+
     #[test]
     fn coerce_selection_on_header_skips_to_next_item() {
         let rows = vec![
@@ -6765,7 +6786,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         ];
         assert_eq!(coerce_action_selection(&rows, 0), Some(1));
     }
-    
+
     #[test]
     fn coerce_selection_on_last_header_searches_backward() {
         let rows = vec![
@@ -6774,18 +6795,18 @@ mod from_dialog_builtin_action_validation_tests_4 {
         ];
         assert_eq!(coerce_action_selection(&rows, 1), Some(0));
     }
-    
+
     #[test]
     fn coerce_selection_out_of_bounds_clamps() {
         let rows = vec![GroupedActionItem::Item(0), GroupedActionItem::Item(1)];
         // Index 99 should be clamped to last valid index
         assert_eq!(coerce_action_selection(&rows, 99), Some(1));
     }
-    
+
     // =========================================================================
     // 17. Note switcher section assignment (Pinned vs Recent)
     // =========================================================================
-    
+
     #[test]
     fn note_switcher_pinned_note_has_pinned_section() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -6800,7 +6821,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].section.as_deref(), Some("Pinned"));
     }
-    
+
     #[test]
     fn note_switcher_unpinned_note_has_recent_section() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -6815,7 +6836,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].section.as_deref(), Some("Recent"));
     }
-    
+
     #[test]
     fn note_switcher_mixed_pinned_and_recent() {
         let notes = vec![
@@ -6842,7 +6863,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[0].section.as_deref(), Some("Pinned"));
         assert_eq!(actions[1].section.as_deref(), Some("Recent"));
     }
-    
+
     #[test]
     fn note_switcher_current_note_has_bullet_prefix() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -6861,7 +6882,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             actions[0].title
         );
     }
-    
+
     #[test]
     fn note_switcher_non_current_note_no_bullet_prefix() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -6876,7 +6897,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_note_switcher_actions(&notes);
         assert!(!actions[0].title.starts_with("• "));
     }
-    
+
     #[test]
     fn note_switcher_icon_hierarchy_pinned_beats_current() {
         let notes = vec![
@@ -6923,7 +6944,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[2].icon, Some(IconName::StarFilled)); // pinned only → Star
         assert_eq!(actions[3].icon, Some(IconName::File)); // neither → File
     }
-    
+
     #[test]
     fn note_switcher_char_count_singular() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -6938,7 +6959,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].description.as_deref(), Some("1 char"));
     }
-    
+
     #[test]
     fn note_switcher_char_count_plural() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -6953,7 +6974,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].description.as_deref(), Some("42 chars"));
     }
-    
+
     #[test]
     fn note_switcher_char_count_zero() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -6968,7 +6989,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].description.as_deref(), Some("0 chars"));
     }
-    
+
     #[test]
     fn note_switcher_empty_notes_shows_helpful_message() {
         let actions = get_note_switcher_actions(&[]);
@@ -6977,7 +6998,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[0].title, "No notes yet");
         assert_eq!(actions[0].icon, Some(IconName::Plus));
     }
-    
+
     #[test]
     fn note_switcher_action_id_format() {
         let notes = vec![NoteSwitcherNoteInfo {
@@ -6992,11 +7013,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_note_switcher_actions(&notes);
         assert_eq!(actions[0].id, "note_abc-123-def");
     }
-    
+
     // =========================================================================
     // 18. Clipboard frontmost app edge cases
     // =========================================================================
-    
+
     #[test]
     fn clipboard_paste_title_with_empty_string_app_name() {
         let entry = ClipboardEntryInfo {
@@ -7012,9 +7033,9 @@ mod from_dialog_builtin_action_validation_tests_4 {
         // Even empty string gets formatted with "Paste to "
         assert_eq!(paste.title, "Paste to ");
     }
-    
+
     // --- merged from part_04.rs ---
-    
+
     #[test]
     fn clipboard_paste_title_with_unicode_app_name() {
         let entry = ClipboardEntryInfo {
@@ -7029,7 +7050,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
         assert_eq!(paste.title, "Paste to 日本語App");
     }
-    
+
     #[test]
     fn clipboard_paste_title_without_app_name() {
         let entry = ClipboardEntryInfo {
@@ -7044,11 +7065,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
         assert_eq!(paste.title, "Paste to Active App");
     }
-    
+
     // =========================================================================
     // 19. Chat with no models, no messages, no response
     // =========================================================================
-    
+
     #[test]
     fn chat_no_models_no_messages_no_response() {
         let info = ChatPromptInfo {
@@ -7079,7 +7100,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(ids.contains(&"chat:copy_response"));
         assert!(!ids.contains(&"chat:clear_conversation"));
     }
-    
+
     #[test]
     fn chat_with_messages_only_has_clear_conversation() {
         let info = ChatPromptInfo {
@@ -7094,7 +7115,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert!(!ids.contains(&"chat:copy_response"));
         assert!(ids.contains(&"chat:clear_conversation"));
     }
-    
+
     #[test]
     fn chat_with_all_flags_has_all_actions() {
         let info = ChatPromptInfo {
@@ -7146,11 +7167,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
             "Non-current model should not have checkmark"
         );
     }
-    
+
     // =========================================================================
     // 20. Scriptlet custom actions ordering preservation
     // =========================================================================
-    
+
     #[test]
     fn scriptlet_custom_actions_preserve_declaration_order() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -7188,15 +7209,15 @@ mod from_dialog_builtin_action_validation_tests_4 {
                 description: None,
             },
         ];
-    
+
         let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
-    
+
         let custom_ids: Vec<&str> = actions
             .iter()
             .filter(|a| a.id.starts_with("scriptlet_action:"))
             .map(|a| a.id.as_str())
             .collect();
-    
+
         assert_eq!(
             custom_ids,
             vec![
@@ -7206,7 +7227,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             ]
         );
     }
-    
+
     #[test]
     fn scriptlet_custom_actions_appear_after_run_before_builtins() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -7224,21 +7245,21 @@ mod from_dialog_builtin_action_validation_tests_4 {
             shortcut: Some("cmd+1".to_string()),
             description: Some("A custom action".to_string()),
         }];
-    
+
         let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
         let ids = action_ids(&actions);
-    
+
         let run_idx = ids.iter().position(|id| *id == "run_script").unwrap();
         let custom_idx = ids
             .iter()
             .position(|id| *id == "scriptlet_action:custom")
             .unwrap();
         let edit_idx = ids.iter().position(|id| *id == "edit_scriptlet").unwrap();
-    
+
         assert!(run_idx < custom_idx, "run before custom");
         assert!(custom_idx < edit_idx, "custom before edit");
     }
-    
+
     #[test]
     fn scriptlet_custom_actions_have_has_action_true() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -7256,7 +7277,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             shortcut: None,
             description: None,
         }];
-    
+
         let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
         let custom = find_action(&actions, "scriptlet_action:custom").unwrap();
         assert!(
@@ -7265,7 +7286,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         );
         assert_eq!(custom.value, Some("custom".to_string()));
     }
-    
+
     #[test]
     fn scriptlet_custom_action_shortcut_formatted() {
         let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -7283,7 +7304,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             shortcut: Some("cmd+shift+c".to_string()),
             description: None,
         }];
-    
+
         let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
         let custom = find_action(&actions, "scriptlet_action:copy").unwrap();
         assert_eq!(
@@ -7292,17 +7313,17 @@ mod from_dialog_builtin_action_validation_tests_4 {
             "Shortcut should be formatted with symbols"
         );
     }
-    
+
     // =========================================================================
     // 21. Action constructor lowercase caching
     // =========================================================================
-    
+
     #[test]
     fn action_title_lower_caches_correctly() {
         let action = Action::new("test", "Edit Script", None, ActionCategory::ScriptContext);
         assert_eq!(action.title_lower, "edit script");
     }
-    
+
     #[test]
     fn action_description_lower_caches_correctly() {
         let action = Action::new(
@@ -7313,32 +7334,32 @@ mod from_dialog_builtin_action_validation_tests_4 {
         );
         assert_eq!(action.description_lower, Some("open in editor".to_string()));
     }
-    
+
     #[test]
     fn action_description_lower_none_when_no_description() {
         let action = Action::new("test", "Test", None, ActionCategory::ScriptContext);
         assert_eq!(action.description_lower, None);
     }
-    
+
     #[test]
     fn action_shortcut_lower_set_after_with_shortcut() {
         let action =
             Action::new("test", "Test", None, ActionCategory::ScriptContext).with_shortcut("⌘E");
         assert_eq!(action.shortcut_lower, Some("⌘e".to_string()));
     }
-    
+
     #[test]
     fn action_shortcut_lower_none_without_shortcut() {
         let action = Action::new("test", "Test", None, ActionCategory::ScriptContext);
         assert_eq!(action.shortcut_lower, None);
     }
-    
+
     #[test]
     fn action_title_lower_unicode() {
         let action = Action::new("test", "Café Résumé", None, ActionCategory::ScriptContext);
         assert_eq!(action.title_lower, "café résumé");
     }
-    
+
     #[test]
     fn action_with_shortcut_opt_some_sets_shortcut() {
         let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
@@ -7346,19 +7367,19 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(action.shortcut, Some("⌘X".to_string()));
         assert_eq!(action.shortcut_lower, Some("⌘x".to_string()));
     }
-    
+
     #[test]
     fn action_with_shortcut_opt_none_leaves_shortcut_unset() {
-        let action =
-            Action::new("test", "Test", None, ActionCategory::ScriptContext).with_shortcut_opt(None);
+        let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
+            .with_shortcut_opt(None);
         assert_eq!(action.shortcut, None);
         assert_eq!(action.shortcut_lower, None);
     }
-    
+
     // =========================================================================
     // 22. CommandBarConfig preset field values
     // =========================================================================
-    
+
     #[test]
     fn command_bar_config_ai_style_fields() {
         let config = CommandBarConfig::ai_style();
@@ -7366,7 +7387,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
         assert!(config.dialog_config.show_icons);
     }
-    
+
     #[test]
     fn command_bar_config_main_menu_style_fields() {
         let config = CommandBarConfig::main_menu_style();
@@ -7382,17 +7403,17 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
         assert!(config.dialog_config.show_icons);
     }
-    
+
     #[test]
     fn command_bar_config_no_search_hides_search() {
         let config = CommandBarConfig::no_search();
         assert_eq!(config.dialog_config.search_position, SearchPosition::Hidden);
     }
-    
+
     // =========================================================================
     // 23. Path context primary action varies by is_dir
     // =========================================================================
-    
+
     #[test]
     fn path_dir_primary_is_open_directory() {
         let path = PathInfo {
@@ -7404,7 +7425,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[0].id, "file:open_directory");
         assert!(actions[0].title.contains("Documents"));
     }
-    
+
     #[test]
     fn path_file_primary_is_select_file() {
         let path = PathInfo {
@@ -7416,7 +7437,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[0].id, "file:select_file");
         assert!(actions[0].title.contains("readme.md"));
     }
-    
+
     #[test]
     fn path_trash_description_differs_by_is_dir() {
         let dir_path = PathInfo {
@@ -7433,14 +7454,20 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let file_actions = get_path_context_actions(&file_path);
         let dir_trash = find_action(&dir_actions, "file:move_to_trash").unwrap();
         let file_trash = find_action(&file_actions, "file:move_to_trash").unwrap();
-        assert_eq!(dir_trash.description.as_deref(), Some("Moves this folder to the Trash"));
-        assert_eq!(file_trash.description.as_deref(), Some("Moves this file to the Trash"));
+        assert_eq!(
+            dir_trash.description.as_deref(),
+            Some("Moves this folder to the Trash")
+        );
+        assert_eq!(
+            file_trash.description.as_deref(),
+            Some("Moves this file to the Trash")
+        );
     }
-    
+
     // =========================================================================
     // 24. File context primary title includes name
     // =========================================================================
-    
+
     #[test]
     fn file_primary_title_includes_filename() {
         let info = FileInfo {
@@ -7456,9 +7483,9 @@ mod from_dialog_builtin_action_validation_tests_4 {
             actions[0].title
         );
     }
-    
+
     // --- merged from part_05.rs ---
-    
+
     #[test]
     fn file_dir_primary_title_includes_dirname() {
         let info = FileInfo {
@@ -7474,11 +7501,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
             actions[0].title
         );
     }
-    
+
     // =========================================================================
     // 25. Deeplink description format in script context
     // =========================================================================
-    
+
     #[test]
     fn deeplink_description_contains_url_with_formatted_name() {
         let script = ScriptInfo::new("My Cool Script", "/path/to/script.ts");
@@ -7488,12 +7515,12 @@ mod from_dialog_builtin_action_validation_tests_4 {
             dl.description
                 .as_ref()
                 .unwrap()
-                .contains("scriptkit://run/my-cool-script"),
-            "Deeplink description should contain formatted URL: {:?}",
+                .eq("Copy a portable Script Kit share link to clipboard"),
+            "Script-context copy_deeplink should use portable share copy: {:?}",
             dl.description
         );
     }
-    
+
     #[test]
     fn deeplink_description_for_builtin() {
         let builtin = ScriptInfo::builtin("Clipboard History");
@@ -7505,11 +7532,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
             .unwrap()
             .contains("scriptkit://run/clipboard-history"));
     }
-    
+
     // =========================================================================
     // 26. All built-in actions have has_action=false
     // =========================================================================
-    
+
     #[test]
     fn script_context_all_actions_have_has_action_false() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -7522,7 +7549,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             );
         }
     }
-    
+
     #[test]
     fn clipboard_context_all_actions_have_has_action_false() {
         let entry = ClipboardEntryInfo {
@@ -7542,7 +7569,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             );
         }
     }
-    
+
     #[test]
     fn file_context_all_actions_have_has_action_false() {
         let info = FileInfo {
@@ -7560,7 +7587,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             );
         }
     }
-    
+
     #[test]
     fn path_context_all_actions_have_has_action_false() {
         let path = PathInfo {
@@ -7577,7 +7604,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             );
         }
     }
-    
+
     #[test]
     fn ai_command_bar_all_actions_have_has_action_false() {
         let actions = get_ai_command_bar_actions();
@@ -7589,11 +7616,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
             );
         }
     }
-    
+
     // =========================================================================
     // 27. All actions have non-empty title and ID
     // =========================================================================
-    
+
     #[test]
     fn script_context_all_actions_have_nonempty_title_and_id() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -7603,7 +7630,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             assert!(!action.title.is_empty(), "Action title should not be empty");
         }
     }
-    
+
     #[test]
     fn clipboard_context_all_actions_have_nonempty_title_and_id() {
         let entry = ClipboardEntryInfo {
@@ -7620,7 +7647,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             assert!(!action.title.is_empty());
         }
     }
-    
+
     #[test]
     fn ai_command_bar_all_actions_have_nonempty_title_and_id() {
         let actions = get_ai_command_bar_actions();
@@ -7629,11 +7656,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
             assert!(!action.title.is_empty());
         }
     }
-    
+
     // =========================================================================
     // 28. Action ID uniqueness within contexts
     // =========================================================================
-    
+
     #[test]
     fn script_context_ids_are_unique() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -7645,7 +7672,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             "Duplicate action IDs found in script context"
         );
     }
-    
+
     #[test]
     fn clipboard_text_context_ids_are_unique() {
         let entry = ClipboardEntryInfo {
@@ -7664,7 +7691,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             "Duplicate action IDs found in clipboard text context"
         );
     }
-    
+
     #[test]
     fn clipboard_image_context_ids_are_unique() {
         let entry = ClipboardEntryInfo {
@@ -7683,7 +7710,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             "Duplicate action IDs found in clipboard image context"
         );
     }
-    
+
     #[test]
     fn path_context_ids_are_unique() {
         let path = PathInfo {
@@ -7699,7 +7726,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
             "Duplicate action IDs found in path context"
         );
     }
-    
+
     #[test]
     fn ai_command_bar_ids_are_unique() {
         let actions = get_ai_command_bar_actions();
@@ -7710,11 +7737,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
             "Duplicate action IDs found in AI command bar"
         );
     }
-    
+
     // =========================================================================
     // 29. Clipboard destructive actions always last three
     // =========================================================================
-    
+
     #[test]
     fn clipboard_destructive_actions_are_last_three() {
         let entry = ClipboardEntryInfo {
@@ -7732,7 +7759,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
         assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
-    
+
     #[test]
     fn clipboard_image_destructive_actions_are_last_three() {
         let entry = ClipboardEntryInfo {
@@ -7750,11 +7777,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
         assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
     }
-    
+
     // =========================================================================
     // 30. Clipboard paste is always first, copy is always second
     // =========================================================================
-    
+
     #[test]
     fn clipboard_paste_is_first_copy_is_second() {
         let entry = ClipboardEntryInfo {
@@ -7769,18 +7796,18 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[0].id, "clip:clipboard_paste");
         assert_eq!(actions[1].id, "clip:clipboard_copy");
     }
-    
+
     // =========================================================================
     // 31. All actions have ScriptContext category
     // =========================================================================
-    
+
     #[test]
     fn all_contexts_produce_script_context_category() {
         let script = ScriptInfo::new("test", "/path/test.ts");
         for action in &get_script_context_actions(&script) {
             assert_eq!(action.category, ActionCategory::ScriptContext);
         }
-    
+
         let entry = ClipboardEntryInfo {
             id: "t1".to_string(),
             content_type: ContentType::Text,
@@ -7792,7 +7819,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         for action in &get_clipboard_history_context_actions(&entry) {
             assert_eq!(action.category, ActionCategory::ScriptContext);
         }
-    
+
         let path = PathInfo {
             name: "test".to_string(),
             path: "/tmp/test".to_string(),
@@ -7801,7 +7828,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         for action in &get_path_context_actions(&path) {
             assert_eq!(action.category, ActionCategory::ScriptContext);
         }
-    
+
         let file = FileInfo {
             path: "/tmp/test.txt".to_string(),
             name: "test.txt".to_string(),
@@ -7811,16 +7838,16 @@ mod from_dialog_builtin_action_validation_tests_4 {
         for action in &get_file_context_actions(&file) {
             assert_eq!(action.category, ActionCategory::ScriptContext);
         }
-    
+
         for action in &get_ai_command_bar_actions() {
             assert_eq!(action.category, ActionCategory::ScriptContext);
         }
     }
-    
+
     // =========================================================================
     // 32. Primary action always first across contexts
     // =========================================================================
-    
+
     #[test]
     fn primary_action_first_in_script_context() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -7828,7 +7855,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[0].id, "run_script");
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     #[test]
     fn primary_action_first_in_file_context() {
         let file = FileInfo {
@@ -7841,7 +7868,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[0].id, "file:open_file");
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     #[test]
     fn primary_action_first_in_path_context() {
         let path = PathInfo {
@@ -7853,7 +7880,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[0].id, "file:select_file");
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     #[test]
     fn primary_action_first_in_clipboard_context() {
         let entry = ClipboardEntryInfo {
@@ -7868,11 +7895,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[0].id, "clip:clipboard_paste");
         assert_eq!(actions[0].shortcut.as_deref(), Some("↵"));
     }
-    
+
     // =========================================================================
     // 33. Ordering determinism
     // =========================================================================
-    
+
     #[test]
     fn script_context_ordering_deterministic_across_calls() {
         let script = ScriptInfo::new("test", "/path/test.ts");
@@ -7882,7 +7909,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let ids2 = action_ids(&actions2);
         assert_eq!(ids1, ids2, "Action ordering should be deterministic");
     }
-    
+
     #[test]
     fn clipboard_context_ordering_deterministic_across_calls() {
         let entry = ClipboardEntryInfo {
@@ -7899,7 +7926,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let ids2 = action_ids(&actions2);
         assert_eq!(ids1, ids2);
     }
-    
+
     #[test]
     fn ai_command_bar_ordering_deterministic_across_calls() {
         let actions1 = get_ai_command_bar_actions();
@@ -7908,13 +7935,13 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let ids2 = action_ids(&actions2);
         assert_eq!(ids1, ids2);
     }
-    
+
     // --- merged from part_06.rs ---
-    
+
     // =========================================================================
     // 34. New chat icons per section
     // =========================================================================
-    
+
     #[test]
     fn new_chat_last_used_icon_is_bolt() {
         let last_used = vec![NewChatModelInfo {
@@ -7926,7 +7953,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_new_chat_actions(&last_used, &[], &[]);
         assert_eq!(actions[0].icon, Some(IconName::BoltFilled));
     }
-    
+
     #[test]
     fn new_chat_preset_icon_is_custom() {
         let presets = vec![NewChatPresetInfo {
@@ -7937,7 +7964,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_new_chat_actions(&[], &presets, &[]);
         assert_eq!(actions[0].icon, Some(IconName::Star));
     }
-    
+
     #[test]
     fn new_chat_model_icon_is_settings() {
         let models = vec![NewChatModelInfo {
@@ -7949,11 +7976,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_new_chat_actions(&[], &[], &models);
         assert_eq!(actions[0].icon, Some(IconName::Settings));
     }
-    
+
     // =========================================================================
     // 35. New chat descriptions
     // =========================================================================
-    
+
     #[test]
     fn new_chat_last_used_has_provider_display_name_description() {
         let last_used = vec![NewChatModelInfo {
@@ -7965,7 +7992,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_new_chat_actions(&last_used, &[], &[]);
         assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic"));
     }
-    
+
     #[test]
     fn new_chat_preset_has_no_description() {
         let presets = vec![NewChatPresetInfo {
@@ -7974,9 +8001,12 @@ mod from_dialog_builtin_action_validation_tests_4 {
             icon: IconName::Star,
         }];
         let actions = get_new_chat_actions(&[], &presets, &[]);
-        assert_eq!(actions[0].description.as_deref(), Some("Uses General preset"));
+        assert_eq!(
+            actions[0].description.as_deref(),
+            Some("Uses General preset")
+        );
     }
-    
+
     #[test]
     fn new_chat_model_has_provider_display_name_description() {
         let models = vec![NewChatModelInfo {
@@ -7988,11 +8018,11 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_new_chat_actions(&[], &[], &models);
         assert_eq!(actions[0].description.as_deref(), Some("Uses OpenAI"));
     }
-    
+
     // =========================================================================
     // 36. New chat action ID format
     // =========================================================================
-    
+
     #[test]
     fn new_chat_last_used_id_format() {
         let last_used = vec![
@@ -8013,7 +8043,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         assert_eq!(actions[0].id, "last_used_p::a");
         assert_eq!(actions[1].id, "last_used_p::b");
     }
-    
+
     #[test]
     fn new_chat_preset_id_format() {
         let presets = vec![NewChatPresetInfo {
@@ -8024,7 +8054,7 @@ mod from_dialog_builtin_action_validation_tests_4 {
         let actions = get_new_chat_actions(&[], &presets, &[]);
         assert_eq!(actions[0].id, "preset_code-review");
     }
-    
+
     #[test]
     fn new_chat_model_id_format() {
         let models = vec![
@@ -8062,7 +8092,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
     //! - Score_action with cached lowercase fields
     //! - Scriptlet with_custom multiple custom actions ordering
     //! - CommandBarConfig equality and field access patterns
-    
+
     #[cfg(test)]
     mod tests {
         // --- merged from tests_part_01.rs ---
@@ -8077,18 +8107,18 @@ mod from_dialog_builtin_action_validation_tests_5 {
         use crate::file_search::{FileInfo, FileType};
         use crate::prompts::PathInfo;
         use crate::scriptlets::{Scriptlet, ScriptletAction};
-    
+
         // =========================================================================
         // Helper: collect action IDs from a Vec<Action>
         // =========================================================================
         fn action_ids(actions: &[Action]) -> Vec<&str> {
             actions.iter().map(|a| a.id.as_str()).collect()
         }
-    
+
         // =========================================================================
         // 1. Note switcher description rendering (preview + relative_time combos)
         // =========================================================================
-    
+
         #[test]
         fn note_switcher_desc_preview_and_time() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -8109,7 +8139,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(desc.contains("5m ago"), "Description should contain time");
             assert!(desc.contains(" · "), "Preview and time joined with ' · '");
         }
-    
+
         #[test]
         fn note_switcher_desc_preview_only_no_time() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -8126,7 +8156,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(desc, "Some preview text");
             assert!(!desc.contains(" · "), "No separator when no time");
         }
-    
+
         #[test]
         fn note_switcher_desc_time_only_no_preview() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -8142,7 +8172,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "1h ago");
         }
-    
+
         #[test]
         fn note_switcher_desc_no_preview_no_time_zero_chars() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -8158,7 +8188,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "0 chars");
         }
-    
+
         #[test]
         fn note_switcher_desc_no_preview_no_time_one_char() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -8174,7 +8204,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "1 char");
         }
-    
+
         #[test]
         fn note_switcher_desc_no_preview_no_time_many_chars() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -8190,7 +8220,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "42 chars");
         }
-    
+
         #[test]
         fn note_switcher_preview_truncated_at_60_chars() {
             let long_preview = "A".repeat(80);
@@ -8213,7 +8243,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             // Count: 60 A's + "…" = 61 chars
             assert_eq!(desc.chars().count(), 61);
         }
-    
+
         #[test]
         fn note_switcher_preview_exactly_60_chars_not_truncated() {
             let exact_preview = "B".repeat(60);
@@ -8231,7 +8261,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(desc, &exact_preview);
             assert!(!desc.ends_with('…'));
         }
-    
+
         #[test]
         fn note_switcher_preview_61_chars_truncated() {
             let preview_61 = "C".repeat(61);
@@ -8248,7 +8278,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let desc = actions[0].description.as_ref().unwrap();
             assert!(desc.ends_with('…'));
         }
-    
+
         #[test]
         fn note_switcher_preview_truncated_with_time() {
             let long_preview = "D".repeat(80);
@@ -8267,11 +8297,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(desc.contains("2d ago"));
             assert!(desc.contains(" · "));
         }
-    
+
         // =========================================================================
         // 2. Clipboard action position invariants (beyond first/last)
         // =========================================================================
-    
+
         #[test]
         fn clipboard_text_paste_keep_open_is_third() {
             let entry = ClipboardEntryInfo {
@@ -8285,7 +8315,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_clipboard_history_context_actions(&entry);
             assert_eq!(actions[2].id, "clip:clipboard_paste_keep_open");
         }
-    
+
         #[test]
         fn clipboard_text_share_is_fourth() {
             let entry = ClipboardEntryInfo {
@@ -8299,7 +8329,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_clipboard_history_context_actions(&entry);
             assert_eq!(actions[3].id, "clip:clipboard_share");
         }
-    
+
         #[test]
         fn clipboard_text_attach_ai_is_fifth() {
             let entry = ClipboardEntryInfo {
@@ -8313,7 +8343,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_clipboard_history_context_actions(&entry);
             assert_eq!(actions[4].id, "clip:clipboard_attach_to_ai");
         }
-    
+
         #[test]
         fn clipboard_save_snippet_before_save_file() {
             let entry = ClipboardEntryInfo {
@@ -8339,7 +8369,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 "Save snippet should come before save file"
             );
         }
-    
+
         #[test]
         fn clipboard_delete_order_is_single_then_multiple_then_all() {
             let entry = ClipboardEntryInfo {
@@ -8352,7 +8382,10 @@ mod from_dialog_builtin_action_validation_tests_5 {
             };
             let actions = get_clipboard_history_context_actions(&entry);
             let ids = action_ids(&actions);
-            let del_pos = ids.iter().position(|&id| id == "clip:clipboard_delete").unwrap();
+            let del_pos = ids
+                .iter()
+                .position(|&id| id == "clip:clipboard_delete")
+                .unwrap();
             let del_multi_pos = ids
                 .iter()
                 .position(|&id| id == "clip:clipboard_delete_multiple")
@@ -8364,7 +8397,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(del_pos < del_multi_pos);
             assert!(del_multi_pos < del_all_pos);
         }
-    
+
         #[test]
         fn clipboard_text_unpinned_action_count() {
             let entry = ClipboardEntryInfo {
@@ -8384,7 +8417,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             #[cfg(not(target_os = "macos"))]
             assert_eq!(actions.len(), 11);
         }
-    
+
         #[test]
         fn clipboard_image_pinned_action_count() {
             let entry = ClipboardEntryInfo {
@@ -8405,11 +8438,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             #[cfg(not(target_os = "macos"))]
             assert_eq!(actions.len(), 12);
         }
-    
+
         // =========================================================================
         // 3. AI command bar section item counts
         // =========================================================================
-    
+
         #[test]
         fn ai_command_bar_response_section_has_3_actions() {
             let actions = get_ai_command_bar_actions();
@@ -8419,7 +8452,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .count();
             assert_eq!(response_count, 3);
         }
-    
+
         #[test]
         fn ai_command_bar_actions_section_has_4_actions() {
             let actions = get_ai_command_bar_actions();
@@ -8429,7 +8462,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .count();
             assert_eq!(actions_count, 4);
         }
-    
+
         #[test]
         fn ai_command_bar_attachments_section_has_2_actions() {
             let actions = get_ai_command_bar_actions();
@@ -8449,13 +8482,13 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .count();
             assert_eq!(settings_count, 2);
         }
-    
+
         #[test]
         fn ai_command_bar_total_is_12() {
             let actions = get_ai_command_bar_actions();
             assert_eq!(actions.len(), 35);
         }
-    
+
         #[test]
         fn ai_command_bar_section_order_preserved() {
             let actions = get_ai_command_bar_actions();
@@ -8484,7 +8517,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 ]
             );
         }
-    
+
         #[test]
         fn ai_command_bar_all_have_icons() {
             let actions = get_ai_command_bar_actions();
@@ -8496,35 +8529,43 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 );
             }
         }
-    
-    
+
         // --- merged from tests_part_02.rs ---
         #[test]
         fn ai_command_bar_specific_icons() {
             let actions = get_ai_command_bar_actions();
-            let copy_response = actions.iter().find(|a| a.id == "chat:copy_response").unwrap();
+            let copy_response = actions
+                .iter()
+                .find(|a| a.id == "chat:copy_response")
+                .unwrap();
             assert_eq!(copy_response.icon, Some(IconName::Copy));
-    
+
             let submit = actions.iter().find(|a| a.id == "chat:submit").unwrap();
             assert_eq!(submit.icon, Some(IconName::ArrowUp));
-    
+
             let delete_chat = actions.iter().find(|a| a.id == "chat:delete_chat").unwrap();
             assert_eq!(delete_chat.icon, Some(IconName::Trash));
-    
-            let change_model = actions.iter().find(|a| a.id == "chat:change_model").unwrap();
+
+            let change_model = actions
+                .iter()
+                .find(|a| a.id == "chat:change_model")
+                .unwrap();
             assert_eq!(change_model.icon, Some(IconName::Settings));
         }
-    
+
         // =========================================================================
         // 4. build_grouped_items_static section transitions
         // =========================================================================
-    
+
         #[test]
         fn grouped_items_headers_inserts_header_on_section_change() {
             let actions = vec![
-                Action::new("a1", "Act 1", None, ActionCategory::ScriptContext).with_section("Sec A"),
-                Action::new("a2", "Act 2", None, ActionCategory::ScriptContext).with_section("Sec A"),
-                Action::new("a3", "Act 3", None, ActionCategory::ScriptContext).with_section("Sec B"),
+                Action::new("a1", "Act 1", None, ActionCategory::ScriptContext)
+                    .with_section("Sec A"),
+                Action::new("a2", "Act 2", None, ActionCategory::ScriptContext)
+                    .with_section("Sec A"),
+                Action::new("a3", "Act 3", None, ActionCategory::ScriptContext)
+                    .with_section("Sec B"),
             ];
             let filtered: Vec<usize> = (0..3).collect();
             let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
@@ -8542,7 +8583,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             ));
             assert!(matches!(grouped[4], GroupedActionItem::Item(2)));
         }
-    
+
         #[test]
         fn grouped_items_headers_no_header_for_no_section() {
             let actions = vec![
@@ -8556,12 +8597,14 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(matches!(grouped[0], GroupedActionItem::Item(0)));
             assert!(matches!(grouped[1], GroupedActionItem::Item(1)));
         }
-    
+
         #[test]
         fn grouped_items_separators_no_headers_inserted() {
             let actions = vec![
-                Action::new("a1", "Act 1", None, ActionCategory::ScriptContext).with_section("Sec A"),
-                Action::new("a2", "Act 2", None, ActionCategory::ScriptContext).with_section("Sec B"),
+                Action::new("a1", "Act 1", None, ActionCategory::ScriptContext)
+                    .with_section("Sec A"),
+                Action::new("a2", "Act 2", None, ActionCategory::ScriptContext)
+                    .with_section("Sec B"),
             ];
             let filtered: Vec<usize> = (0..2).collect();
             let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Separators);
@@ -8570,18 +8613,19 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(matches!(grouped[0], GroupedActionItem::Item(0)));
             assert!(matches!(grouped[1], GroupedActionItem::Item(1)));
         }
-    
+
         #[test]
         fn grouped_items_none_no_headers_inserted() {
             let actions = vec![
-                Action::new("a1", "Act 1", None, ActionCategory::ScriptContext).with_section("Sec A"),
+                Action::new("a1", "Act 1", None, ActionCategory::ScriptContext)
+                    .with_section("Sec A"),
             ];
             let filtered: Vec<usize> = vec![0];
             let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::None);
             assert_eq!(grouped.len(), 1);
             assert!(matches!(grouped[0], GroupedActionItem::Item(0)));
         }
-    
+
         #[test]
         fn grouped_items_empty_filtered_produces_empty() {
             let actions = vec![Action::new(
@@ -8594,7 +8638,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
             assert!(grouped.is_empty());
         }
-    
+
         #[test]
         fn grouped_items_headers_three_sections() {
             let actions = vec![
@@ -8612,7 +8656,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .count();
             assert_eq!(header_count, 3);
         }
-    
+
         #[test]
         fn grouped_items_headers_same_section_no_duplicate_header() {
             let actions = vec![
@@ -8625,11 +8669,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             // 1 header + 3 items = 4
             assert_eq!(grouped.len(), 4);
         }
-    
+
         // =========================================================================
         // 5. coerce_action_selection edge cases
         // =========================================================================
-    
+
         #[test]
         fn coerce_selection_all_items_returns_requested() {
             let rows = vec![
@@ -8639,7 +8683,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             ];
             assert_eq!(coerce_action_selection(&rows, 1), Some(1));
         }
-    
+
         #[test]
         fn coerce_selection_header_at_start_goes_down() {
             let rows = vec![
@@ -8648,7 +8692,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             ];
             assert_eq!(coerce_action_selection(&rows, 0), Some(1));
         }
-    
+
         #[test]
         fn coerce_selection_header_at_end_goes_up() {
             let rows = vec![
@@ -8657,7 +8701,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             ];
             assert_eq!(coerce_action_selection(&rows, 1), Some(0));
         }
-    
+
         #[test]
         fn coerce_selection_header_between_items_goes_down() {
             let rows = vec![
@@ -8667,7 +8711,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             ];
             assert_eq!(coerce_action_selection(&rows, 1), Some(2));
         }
-    
+
         #[test]
         fn coerce_selection_two_headers_then_item() {
             let rows = vec![
@@ -8678,18 +8722,18 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(coerce_action_selection(&rows, 0), Some(2));
             assert_eq!(coerce_action_selection(&rows, 1), Some(2));
         }
-    
+
         #[test]
         fn coerce_selection_out_of_bounds_clamped() {
             let rows = vec![GroupedActionItem::Item(0), GroupedActionItem::Item(1)];
             // ix=10 should be clamped to rows.len()-1 = 1, which is an Item
             assert_eq!(coerce_action_selection(&rows, 10), Some(1));
         }
-    
+
         // =========================================================================
         // 6. Large-scale stress tests
         // =========================================================================
-    
+
         #[test]
         fn stress_50_notes_in_switcher() {
             let notes: Vec<NoteSwitcherNoteInfo> = (0..50)
@@ -8705,7 +8749,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .collect();
             let actions = get_note_switcher_actions(&notes);
             assert_eq!(actions.len(), 50);
-    
+
             // First 5 should be Pinned section
             for (i, action) in actions.iter().enumerate().take(5) {
                 assert_eq!(
@@ -8715,7 +8759,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                     i
                 );
             }
-    
+
             // Remaining should be Recent
             for (i, action) in actions.iter().enumerate().take(50).skip(5) {
                 assert_eq!(
@@ -8726,7 +8770,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 );
             }
         }
-    
+
         #[test]
         fn stress_20_models_in_new_chat() {
             let models: Vec<NewChatModelInfo> = (0..20)
@@ -8744,7 +8788,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 assert_eq!(action.section.as_deref(), Some("Models"));
             }
         }
-    
+
         #[test]
         fn stress_mixed_last_used_presets_models() {
             let last_used: Vec<NewChatModelInfo> = (0..3)
@@ -8772,7 +8816,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .collect();
             let actions = get_new_chat_actions(&last_used, &presets, &models);
             assert_eq!(actions.len(), 12); // 3 + 4 + 5
-    
+
             // Verify section counts
             let lu_count = actions
                 .iter()
@@ -8790,7 +8834,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(preset_count, 4);
             assert_eq!(model_count, 5);
         }
-    
+
         #[test]
         fn stress_grouped_items_50_actions_with_sections() {
             let actions: Vec<Action> = (0..50)
@@ -8811,7 +8855,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .collect();
             let filtered: Vec<usize> = (0..50).collect();
             let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
-    
+
             // With alternating sections A, B, C, A, B, C... headers appear at every change
             // Pattern: A at 0, B at 1, C at 2, A at 3, B at 4, C at 5... = 50 changes
             // But adjacent same-section items won't add headers
@@ -8823,17 +8867,17 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .count();
             assert_eq!(item_count, 50);
         }
-    
+
         // =========================================================================
         // 7. Cross-function ScriptInfo consistency
         // =========================================================================
-    
+
         #[test]
         fn scriptlet_same_results_from_both_builders_without_custom() {
             let script = ScriptInfo::scriptlet("Test Scriptlet", "/path/to/test.md", None, None);
             let actions_standard = get_script_context_actions(&script);
             let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
-    
+
             // Standard script context now includes toggle_favorite for scriptlets, while
             // the scriptlet-custom builder omits it when no custom actions are provided.
             let mut ids_standard = action_ids(&actions_standard);
@@ -8844,7 +8888,8 @@ mod from_dialog_builtin_action_validation_tests_5 {
 
         #[test]
         fn scriptlet_with_shortcut_same_from_both_builders() {
-            let script = ScriptInfo::scriptlet("Test", "/path/to/test.md", Some("cmd+t".into()), None);
+            let script =
+                ScriptInfo::scriptlet("Test", "/path/to/test.md", Some("cmd+t".into()), None);
             let actions_standard = get_script_context_actions(&script);
             let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
             let mut ids_standard = action_ids(&actions_standard);
@@ -8855,7 +8900,8 @@ mod from_dialog_builtin_action_validation_tests_5 {
 
         #[test]
         fn scriptlet_with_alias_same_from_both_builders() {
-            let script = ScriptInfo::scriptlet("Test", "/path/to/test.md", None, Some("tst".into()));
+            let script =
+                ScriptInfo::scriptlet("Test", "/path/to/test.md", None, Some("tst".into()));
             let actions_standard = get_script_context_actions(&script);
             let actions_custom = get_scriptlet_context_actions_with_custom(&script, None);
             let mut ids_standard = action_ids(&actions_standard);
@@ -8875,11 +8921,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             ids_standard.retain(|id| *id != "toggle_favorite" && *id != "toggle_info");
             assert_eq!(ids_standard, ids_custom);
         }
-    
+
         // =========================================================================
         // 8. Action description content keyword validation
         // =========================================================================
-    
+
         #[test]
         fn script_run_description_contains_action_verb() {
             let script = ScriptInfo::with_action_verb("Foo", "/path", true, "Launch");
@@ -8890,7 +8936,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 "Run description should contain the action verb"
             );
         }
-    
+
         #[test]
         fn script_edit_description_contains_editor() {
             let script = ScriptInfo::new("Foo", "/path/foo.ts");
@@ -8898,7 +8944,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
             assert!(edit.description.as_ref().unwrap().contains("$EDITOR"));
         }
-    
+
         #[test]
         fn script_view_logs_description_contains_logs() {
             let script = ScriptInfo::new("Foo", "/path/foo.ts");
@@ -8911,7 +8957,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .to_lowercase()
                 .contains("log"));
         }
-    
+
         #[test]
         fn script_copy_path_description_contains_path() {
             let script = ScriptInfo::new("Foo", "/path/foo.ts");
@@ -8924,7 +8970,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .to_lowercase()
                 .contains("path"));
         }
-    
+
         #[test]
         fn clipboard_ocr_description_mentions_text_or_ocr() {
             let entry = ClipboardEntryInfo {
@@ -8936,11 +8982,14 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 frontmost_app_name: None,
             };
             let actions = get_clipboard_history_context_actions(&entry);
-            let ocr = actions.iter().find(|a| a.id == "clip:clipboard_ocr").unwrap();
+            let ocr = actions
+                .iter()
+                .find(|a| a.id == "clip:clipboard_ocr")
+                .unwrap();
             let desc = ocr.description.as_ref().unwrap().to_lowercase();
             assert!(desc.contains("text") || desc.contains("ocr"));
         }
-    
+
         #[test]
         fn path_move_to_trash_description_mentions_delete() {
             let path_info = PathInfo {
@@ -8949,12 +8998,14 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 is_dir: false,
             };
             let actions = get_path_context_actions(&path_info);
-            let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
+            let trash = actions
+                .iter()
+                .find(|a| a.id == "file:move_to_trash")
+                .unwrap();
             let desc = trash.description.as_ref().unwrap().to_lowercase();
             assert!(desc.contains("trash"));
         }
-    
-    
+
         // --- merged from tests_part_03.rs ---
         #[test]
         fn notes_new_note_description_mentions_create() {
@@ -8968,11 +9019,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let desc = new_note.description.as_ref().unwrap().to_lowercase();
             assert!(desc.contains("create") || desc.contains("new"));
         }
-    
+
         // =========================================================================
         // 9. Score_action with cached lowercase fields
         // =========================================================================
-    
+
         #[test]
         fn score_action_uses_title_lower_cache() {
             let action = Action::new(
@@ -8989,7 +9040,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 "Prefix match on title_lower should score 100+"
             );
         }
-    
+
         #[test]
         fn score_action_description_lower_bonus() {
             let action = Action::new(
@@ -9010,7 +9061,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 score
             );
         }
-    
+
         #[test]
         fn score_action_shortcut_lower_bonus() {
             let action = Action::new("test", "Run Script", None, ActionCategory::ScriptContext)
@@ -9024,7 +9075,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 score
             );
         }
-    
+
         #[test]
         fn score_action_empty_query_returns_zero() {
             let action = Action::new("test", "Run Script", None, ActionCategory::ScriptContext);
@@ -9032,26 +9083,29 @@ mod from_dialog_builtin_action_validation_tests_5 {
             // Empty string is a prefix of everything, so it scores 100
             assert_eq!(score, 100);
         }
-    
+
         #[test]
         fn score_action_no_match_returns_zero() {
             let action = Action::new("test", "Run Script", None, ActionCategory::ScriptContext);
             let score = ActionsDialog::score_action(&action, "zzzzz");
             assert_eq!(score, 0);
         }
-    
+
         #[test]
         fn score_action_prefix_beats_contains() {
-            let prefix_action = Action::new("e", "Edit Script", None, ActionCategory::ScriptContext);
-            let contains_action = Action::new("c", "My Edit Tool", None, ActionCategory::ScriptContext);
+            let prefix_action =
+                Action::new("e", "Edit Script", None, ActionCategory::ScriptContext);
+            let contains_action =
+                Action::new("c", "My Edit Tool", None, ActionCategory::ScriptContext);
             let prefix_score = ActionsDialog::score_action(&prefix_action, "edit");
             let contains_score = ActionsDialog::score_action(&contains_action, "edit");
             assert!(prefix_score > contains_score);
         }
-    
+
         #[test]
         fn score_action_contains_beats_fuzzy() {
-            let contains_action = Action::new("c", "My Edit Tool", None, ActionCategory::ScriptContext);
+            let contains_action =
+                Action::new("c", "My Edit Tool", None, ActionCategory::ScriptContext);
             let fuzzy_action = Action::new("f", "Erase Dict", None, ActionCategory::ScriptContext);
             let contains_score = ActionsDialog::score_action(&contains_action, "edit");
             let fuzzy_score = ActionsDialog::score_action(&fuzzy_action, "edit");
@@ -9062,7 +9116,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 fuzzy_score
             );
         }
-    
+
         #[test]
         fn score_action_stacks_title_and_description() {
             let action = Action::new(
@@ -9075,53 +9129,53 @@ mod from_dialog_builtin_action_validation_tests_5 {
             // Prefix match (100) + description match (15) = 115
             assert_eq!(score, 115);
         }
-    
+
         // =========================================================================
         // 10. fuzzy_match edge cases
         // =========================================================================
-    
+
         #[test]
         fn fuzzy_match_empty_needle_always_matches() {
             assert!(ActionsDialog::fuzzy_match("anything", ""));
         }
-    
+
         #[test]
         fn fuzzy_match_empty_haystack_no_match() {
             assert!(!ActionsDialog::fuzzy_match("", "a"));
         }
-    
+
         #[test]
         fn fuzzy_match_both_empty_matches() {
             assert!(ActionsDialog::fuzzy_match("", ""));
         }
-    
+
         #[test]
         fn fuzzy_match_subsequence() {
             assert!(ActionsDialog::fuzzy_match("edit script", "es"));
             assert!(ActionsDialog::fuzzy_match("edit script", "eit"));
             assert!(ActionsDialog::fuzzy_match("edit script", "edsc"));
         }
-    
+
         #[test]
         fn fuzzy_match_no_subsequence() {
             assert!(!ActionsDialog::fuzzy_match("edit", "xyz"));
             assert!(!ActionsDialog::fuzzy_match("abc", "abdc"));
         }
-    
+
         #[test]
         fn fuzzy_match_needle_longer_than_haystack() {
             assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
         }
-    
+
         #[test]
         fn fuzzy_match_exact_equals() {
             assert!(ActionsDialog::fuzzy_match("hello", "hello"));
         }
-    
+
         // =========================================================================
         // 11. Scriptlet with_custom multiple custom actions ordering
         // =========================================================================
-    
+
         #[test]
         fn scriptlet_three_custom_actions_maintain_order() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -9155,10 +9209,10 @@ mod from_dialog_builtin_action_validation_tests_5 {
                     description: None,
                 },
             ];
-    
+
             let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
             let ids = action_ids(&actions);
-    
+
             let first_pos = ids
                 .iter()
                 .position(|&id| id == "scriptlet_action:first")
@@ -9171,11 +9225,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .iter()
                 .position(|&id| id == "scriptlet_action:third")
                 .unwrap();
-    
+
             assert!(first_pos < second_pos);
             assert!(second_pos < third_pos);
         }
-    
+
         #[test]
         fn scriptlet_custom_actions_after_run_before_shortcut() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -9189,22 +9243,22 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 shortcut: None,
                 description: None,
             }];
-    
+
             let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
             let ids = action_ids(&actions);
-    
+
             let run_pos = ids.iter().position(|&id| id == "run_script").unwrap();
             let custom_pos = ids
                 .iter()
                 .position(|&id| id == "scriptlet_action:custom")
                 .unwrap();
             let shortcut_pos = ids.iter().position(|&id| id == "add_shortcut").unwrap();
-    
+
             assert_eq!(run_pos, 0);
             assert!(custom_pos > run_pos);
             assert!(custom_pos < shortcut_pos);
         }
-    
+
         #[test]
         fn scriptlet_custom_actions_all_have_has_action_true() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -9229,7 +9283,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                     description: None,
                 },
             ];
-    
+
             let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
             for action in &actions {
                 if action.id.starts_with("scriptlet_action:") {
@@ -9246,7 +9300,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 }
             }
         }
-    
+
         #[test]
         fn scriptlet_custom_action_value_matches_command() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -9260,7 +9314,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 shortcut: Some("cmd+c".into()),
                 description: Some("Copy stuff desc".into()),
             }];
-    
+
             let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
             let custom = actions
                 .iter()
@@ -9271,11 +9325,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(custom.description.as_deref(), Some("Copy stuff desc"));
             assert_eq!(custom.shortcut.as_deref(), Some("⌘C"));
         }
-    
+
         // =========================================================================
         // 12. CommandBarConfig field validation
         // =========================================================================
-    
+
         #[test]
         fn command_bar_config_ai_style_fields() {
             let config = CommandBarConfig::ai_style();
@@ -9283,12 +9337,12 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
             assert!(config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
             assert!(config.close_on_select);
             assert!(config.close_on_escape);
             assert!(config.close_on_click_outside);
         }
-    
+
         #[test]
         fn command_bar_config_main_menu_style_fields() {
             let config = CommandBarConfig::main_menu_style();
@@ -9296,7 +9350,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert_eq!(config.dialog_config.anchor, AnchorPosition::Bottom);
             assert!(!config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
 
         #[test]
@@ -9314,9 +9368,9 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert_eq!(config.dialog_config.anchor, AnchorPosition::Top);
             assert!(config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
-    
+
         #[test]
         fn command_bar_config_default_all_close_true() {
             let config = CommandBarConfig::default();
@@ -9324,11 +9378,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(config.close_on_escape);
             assert!(config.close_on_click_outside);
         }
-    
+
         // =========================================================================
         // 13. Chat context action interactions
         // =========================================================================
-    
+
         #[test]
         fn chat_no_models_no_messages_no_response() {
             let info = ChatPromptInfo {
@@ -9366,7 +9420,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             // 2 models + continue + copy_response + clear + capture = 6
             assert_eq!(actions.len(), 5);
         }
-    
+
         #[test]
         fn chat_current_model_gets_checkmark() {
             let info = ChatPromptInfo {
@@ -9392,7 +9446,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .find(|a| a.id == "chat:select_model_claude")
                 .unwrap();
             assert!(claude.title.contains("✓"), "Current model should have ✓");
-    
+
             let gpt4 = picker
                 .iter()
                 .find(|a| a.id == "chat:select_model_gpt4")
@@ -9402,8 +9456,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 "Non-current model should not have ✓"
             );
         }
-    
-    
+
         // --- merged from tests_part_04.rs ---
         #[test]
         fn chat_model_descriptions_show_provider() {
@@ -9424,7 +9477,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 .unwrap();
             assert_eq!(claude.description.as_deref(), Some("Uses Anthropic"));
         }
-    
+
         #[test]
         fn chat_copy_response_only_when_has_response() {
             let without = ChatPromptInfo {
@@ -9444,7 +9497,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(!without_actions.iter().any(|a| a.id == "chat:copy_response"));
             assert!(with_actions.iter().any(|a| a.id == "chat:copy_response"));
         }
-    
+
         #[test]
         fn chat_clear_conversation_only_when_has_messages() {
             let without = ChatPromptInfo {
@@ -9461,14 +9514,18 @@ mod from_dialog_builtin_action_validation_tests_5 {
             };
             let without_actions = get_chat_context_actions(&without);
             let with_actions = get_chat_context_actions(&with);
-            assert!(!without_actions.iter().any(|a| a.id == "chat:clear_conversation"));
-            assert!(with_actions.iter().any(|a| a.id == "chat:clear_conversation"));
+            assert!(!without_actions
+                .iter()
+                .any(|a| a.id == "chat:clear_conversation"));
+            assert!(with_actions
+                .iter()
+                .any(|a| a.id == "chat:clear_conversation"));
         }
-    
+
         // =========================================================================
         // 14. Path context specifics
         // =========================================================================
-    
+
         #[test]
         fn path_dir_primary_is_open_directory() {
             let path_info = PathInfo {
@@ -9480,7 +9537,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(actions[0].id, "file:open_directory");
             assert!(actions[0].title.contains("mydir"));
         }
-    
+
         #[test]
         fn path_file_primary_is_select_file() {
             let path_info = PathInfo {
@@ -9492,7 +9549,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(actions[0].id, "file:select_file");
             assert!(actions[0].title.contains("myfile.txt"));
         }
-    
+
         #[test]
         fn path_all_have_descriptions() {
             let path_info = PathInfo {
@@ -9509,7 +9566,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 );
             }
         }
-    
+
         #[test]
         fn path_has_expected_actions() {
             let path_info = PathInfo {
@@ -9522,11 +9579,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(ids.contains(&"file:copy_path"));
             assert!(ids.contains(&"file:open_in_finder"));
             assert!(ids.contains(&"file:open_in_editor"));
-            assert!(ids.contains(&"file:open_in_terminal"));
+            assert!(ids.contains(&"file:open_in_quick_terminal"));
             assert!(ids.contains(&"file:copy_filename"));
             assert!(ids.contains(&"file:move_to_trash"));
         }
-    
+
         #[test]
         fn path_dir_trash_says_folder() {
             let path_info = PathInfo {
@@ -9535,13 +9592,16 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 is_dir: true,
             };
             let actions = get_path_context_actions(&path_info);
-            let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
+            let trash = actions
+                .iter()
+                .find(|a| a.id == "file:move_to_trash")
+                .unwrap();
             assert!(
                 trash.description.as_ref().unwrap().contains("folder"),
                 "Dir trash should say 'folder'"
             );
         }
-    
+
         #[test]
         fn path_file_trash_says_file() {
             let path_info = PathInfo {
@@ -9550,17 +9610,20 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 is_dir: false,
             };
             let actions = get_path_context_actions(&path_info);
-            let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
+            let trash = actions
+                .iter()
+                .find(|a| a.id == "file:move_to_trash")
+                .unwrap();
             assert!(
                 trash.description.as_ref().unwrap().contains("file"),
                 "File trash should say 'file'"
             );
         }
-    
+
         // =========================================================================
         // 15. File context specifics
         // =========================================================================
-    
+
         #[test]
         fn file_open_title_includes_name() {
             let file_info = FileInfo {
@@ -9572,7 +9635,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_file_context_actions(&file_info);
             assert!(actions[0].title.contains("readme.md"));
         }
-    
+
         #[test]
         fn file_dir_open_title_includes_dirname() {
             let file_info = FileInfo {
@@ -9584,7 +9647,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_file_context_actions(&file_info);
             assert!(actions[0].title.contains("Documents"));
         }
-    
+
         #[test]
         fn file_all_have_descriptions() {
             let file_info = FileInfo {
@@ -9602,7 +9665,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 );
             }
         }
-    
+
         #[test]
         fn file_all_have_shortcuts() {
             let file_info = FileInfo {
@@ -9625,11 +9688,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 );
             }
         }
-    
+
         // =========================================================================
         // 16. Notes command bar conditional logic
         // =========================================================================
-    
+
         #[test]
         fn notes_no_selection_no_trash_no_auto() {
             let info = NotesInfo {
@@ -9647,7 +9710,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(!ids.contains(&"format"));
             assert!(!ids.contains(&"export"));
         }
-    
+
         #[test]
         fn notes_with_selection_not_trash_auto_disabled() {
             let info = NotesInfo {
@@ -9668,7 +9731,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(ids.contains(&"export"));
             assert!(ids.contains(&"enable_auto_sizing"));
         }
-    
+
         #[test]
         fn notes_with_selection_in_trash_hides_edit_copy_export() {
             let info = NotesInfo {
@@ -9686,7 +9749,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(!ids.contains(&"copy_note_as"));
             assert!(!ids.contains(&"export"));
         }
-    
+
         #[test]
         fn notes_auto_sizing_enabled_hides_enable_action() {
             let info = NotesInfo {
@@ -9698,7 +9761,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let ids = action_ids(&actions);
             assert!(!ids.contains(&"enable_auto_sizing"));
         }
-    
+
         #[test]
         fn notes_full_feature_action_count() {
             let info = NotesInfo {
@@ -9723,65 +9786,65 @@ mod from_dialog_builtin_action_validation_tests_5 {
             // new_note + browse_notes = 2
             assert_eq!(actions.len(), 2);
         }
-    
+
         // =========================================================================
         // 17. to_deeplink_name comprehensive
         // =========================================================================
-    
+
         #[test]
         fn deeplink_name_basic_spaces() {
             assert_eq!(to_deeplink_name("My Script"), "my-script");
         }
-    
+
         #[test]
         fn deeplink_name_underscores_to_hyphens() {
             assert_eq!(to_deeplink_name("hello_world"), "hello-world");
         }
-    
+
         #[test]
         fn deeplink_name_special_chars_stripped() {
             assert_eq!(to_deeplink_name("test!@#$%^&*()"), "test");
         }
-    
+
         #[test]
         fn deeplink_name_multiple_spaces_collapsed() {
             assert_eq!(to_deeplink_name("a   b   c"), "a-b-c");
         }
-    
+
         #[test]
         fn deeplink_name_leading_trailing_stripped() {
             assert_eq!(to_deeplink_name("  hello  "), "hello");
         }
-    
+
         #[test]
         fn deeplink_name_numbers_preserved() {
             assert_eq!(to_deeplink_name("Test 123"), "test-123");
         }
-    
+
         #[test]
         fn deeplink_name_all_special_returns_empty() {
             assert_eq!(to_deeplink_name("!@#$%"), "_unnamed");
         }
-    
+
         #[test]
         fn deeplink_name_single_word() {
             assert_eq!(to_deeplink_name("hello"), "hello");
         }
-    
+
         #[test]
         fn deeplink_name_already_hyphenated() {
             assert_eq!(to_deeplink_name("my-script"), "my-script");
         }
-    
+
         // =========================================================================
         // 18. format_shortcut_hint specifics
         // =========================================================================
-    
+
         #[test]
         fn format_shortcut_cmd_enter() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+enter"), "⌘↵");
         }
-    
+
         #[test]
         fn format_shortcut_ctrl_shift_escape() {
             assert_eq!(
@@ -9789,32 +9852,32 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 "⌃⇧⎋"
             );
         }
-    
+
         #[test]
         fn format_shortcut_alt_backspace() {
             assert_eq!(ActionsDialog::format_shortcut_hint("alt+backspace"), "⌥⌫");
         }
-    
+
         #[test]
         fn format_shortcut_command_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("command+c"), "⌘C");
         }
-    
+
         #[test]
         fn format_shortcut_meta_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("meta+k"), "⌘K");
         }
-    
+
         #[test]
         fn format_shortcut_option_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("option+tab"), "⌥⇥");
         }
-    
+
         #[test]
         fn format_shortcut_control_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("control+space"), "⌃␣");
         }
-    
+
         #[test]
         fn format_shortcut_arrows() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+up"), "⌘↑");
@@ -9822,54 +9885,53 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+left"), "⌘←");
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+right"), "⌘→");
         }
-    
+
         #[test]
         fn format_shortcut_arrowup_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+arrowup"), "⌘↑");
         }
-    
+
         // =========================================================================
         // 19. parse_shortcut_keycaps specifics
         // =========================================================================
-    
+
         #[test]
         fn parse_keycaps_modifier_plus_letter() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘E");
             assert_eq!(keycaps, vec!["⌘", "E"]);
         }
-    
+
         #[test]
         fn parse_keycaps_two_modifiers_plus_letter() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘⇧C");
             assert_eq!(keycaps, vec!["⌘", "⇧", "C"]);
         }
-    
+
         #[test]
         fn parse_keycaps_enter_symbol() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("↵");
             assert_eq!(keycaps, vec!["↵"]);
         }
-    
+
         #[test]
         fn parse_keycaps_modifier_plus_enter() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘↵");
             assert_eq!(keycaps, vec!["⌘", "↵"]);
         }
-    
-    
+
         // --- merged from tests_part_05.rs ---
         #[test]
         fn parse_keycaps_space_symbol() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("␣");
             assert_eq!(keycaps, vec!["␣"]);
         }
-    
+
         #[test]
         fn parse_keycaps_all_modifiers() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘⌃⌥⇧K");
             assert_eq!(keycaps, vec!["⌘", "⌃", "⌥", "⇧", "K"]);
         }
-    
+
         #[test]
         fn parse_keycaps_arrow_keys() {
             assert_eq!(ActionsDialog::parse_shortcut_keycaps("↑"), vec!["↑"]);
@@ -9877,11 +9939,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(ActionsDialog::parse_shortcut_keycaps("←"), vec!["←"]);
             assert_eq!(ActionsDialog::parse_shortcut_keycaps("→"), vec!["→"]);
         }
-    
+
         // =========================================================================
         // 20. Agent-specific action validation
         // =========================================================================
-    
+
         #[test]
         fn agent_has_edit_agent_title() {
             let mut script = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -9891,7 +9953,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
             assert_eq!(edit.title, "Edit Agent");
         }
-    
+
         #[test]
         fn agent_has_no_view_logs() {
             let mut script = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -9900,7 +9962,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_script_context_actions(&script);
             assert!(!actions.iter().any(|a| a.id == "view_logs"));
         }
-    
+
         #[test]
         fn agent_has_reveal_and_copy() {
             let mut script = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -9912,7 +9974,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(ids.contains(&"copy_path"));
             assert!(ids.contains(&"copy_content"));
         }
-    
+
         #[test]
         fn agent_edit_description_mentions_agent() {
             let mut script = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -9923,11 +9985,11 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let desc = edit.description.as_ref().unwrap().to_lowercase();
             assert!(desc.contains("agent"));
         }
-    
+
         // =========================================================================
         // 21. New chat action details
         // =========================================================================
-    
+
         #[test]
         fn new_chat_last_used_icon_is_bolt() {
             let last_used = vec![NewChatModelInfo {
@@ -9939,7 +10001,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_new_chat_actions(&last_used, &[], &[]);
             assert_eq!(actions[0].icon, Some(IconName::BoltFilled));
         }
-    
+
         #[test]
         fn new_chat_preset_icon_matches_input() {
             let presets = vec![NewChatPresetInfo {
@@ -9950,7 +10012,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_new_chat_actions(&[], &presets, &[]);
             assert_eq!(actions[0].icon, Some(IconName::Star));
         }
-    
+
         #[test]
         fn new_chat_model_icon_is_settings() {
             let models = vec![NewChatModelInfo {
@@ -9962,7 +10024,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_new_chat_actions(&[], &[], &models);
             assert_eq!(actions[0].icon, Some(IconName::Settings));
         }
-    
+
         #[test]
         fn new_chat_presets_have_no_description() {
             let presets = vec![NewChatPresetInfo {
@@ -9974,7 +10036,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let desc = actions[0].description.as_deref().unwrap_or_default();
             assert!(desc.contains("preset"));
         }
-    
+
         #[test]
         fn new_chat_models_have_provider_description() {
             let models = vec![NewChatModelInfo {
@@ -9986,25 +10048,25 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let actions = get_new_chat_actions(&[], &[], &models);
             assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic"));
         }
-    
+
         #[test]
         fn new_chat_empty_all_returns_empty() {
             let actions = get_new_chat_actions(&[], &[], &[]);
             assert!(actions.is_empty());
         }
-    
+
         // =========================================================================
         // 22. Action constructor edge cases
         // =========================================================================
-    
+
         #[test]
         fn action_with_shortcut_opt_none_leaves_none() {
-            let action =
-                Action::new("t", "Test", None, ActionCategory::ScriptContext).with_shortcut_opt(None);
+            let action = Action::new("t", "Test", None, ActionCategory::ScriptContext)
+                .with_shortcut_opt(None);
             assert!(action.shortcut.is_none());
             assert!(action.shortcut_lower.is_none());
         }
-    
+
         #[test]
         fn action_with_shortcut_opt_some_sets_both() {
             let action = Action::new("t", "Test", None, ActionCategory::ScriptContext)
@@ -10012,7 +10074,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert_eq!(action.shortcut.as_deref(), Some("⌘K"));
             assert_eq!(action.shortcut_lower.as_deref(), Some("⌘k"));
         }
-    
+
         #[test]
         fn action_title_lower_computed_on_creation() {
             let action = Action::new(
@@ -10023,7 +10085,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             );
             assert_eq!(action.title_lower, "my uppercase title");
         }
-    
+
         #[test]
         fn action_description_lower_computed_on_creation() {
             let action = Action::new(
@@ -10037,55 +10099,55 @@ mod from_dialog_builtin_action_validation_tests_5 {
                 Some("description with caps")
             );
         }
-    
+
         #[test]
         fn action_no_description_has_none_lower() {
             let action = Action::new("t", "T", None, ActionCategory::ScriptContext);
             assert!(action.description_lower.is_none());
         }
-    
+
         #[test]
         fn action_default_has_action_false() {
             let action = Action::new("t", "T", None, ActionCategory::ScriptContext);
             assert!(!action.has_action);
         }
-    
+
         #[test]
         fn action_default_value_none() {
             let action = Action::new("t", "T", None, ActionCategory::ScriptContext);
             assert!(action.value.is_none());
         }
-    
+
         #[test]
         fn action_default_icon_none() {
             let action = Action::new("t", "T", None, ActionCategory::ScriptContext);
             assert!(action.icon.is_none());
         }
-    
+
         #[test]
         fn action_default_section_none() {
             let action = Action::new("t", "T", None, ActionCategory::ScriptContext);
             assert!(action.section.is_none());
         }
-    
+
         #[test]
         fn action_with_icon_sets_icon() {
-            let action =
-                Action::new("t", "T", None, ActionCategory::ScriptContext).with_icon(IconName::Plus);
+            let action = Action::new("t", "T", None, ActionCategory::ScriptContext)
+                .with_icon(IconName::Plus);
             assert_eq!(action.icon, Some(IconName::Plus));
         }
-    
+
         #[test]
         fn action_with_section_sets_section() {
-            let action =
-                Action::new("t", "T", None, ActionCategory::ScriptContext).with_section("MySection");
+            let action = Action::new("t", "T", None, ActionCategory::ScriptContext)
+                .with_section("MySection");
             assert_eq!(action.section.as_deref(), Some("MySection"));
         }
-    
+
         // =========================================================================
         // 23. ScriptInfo constructor validation
         // =========================================================================
-    
+
         #[test]
         fn script_info_new_defaults() {
             let s = ScriptInfo::new("test", "/path");
@@ -10098,7 +10160,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(!s.is_suggested);
             assert!(s.frecency_path.is_none());
         }
-    
+
         #[test]
         fn script_info_builtin_has_empty_path() {
             let s = ScriptInfo::builtin("Test");
@@ -10107,7 +10169,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(!s.is_scriptlet);
             assert!(!s.is_agent);
         }
-    
+
         #[test]
         fn script_info_scriptlet_sets_flags() {
             let s = ScriptInfo::scriptlet("Test", "/path.md", None, None);
@@ -10115,7 +10177,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(s.is_scriptlet);
             assert!(!s.is_agent);
         }
-    
+
         #[test]
         fn script_info_with_frecency_chaining() {
             let s = ScriptInfo::new("t", "/p").with_frecency(true, Some("/p".into()));
@@ -10125,20 +10187,20 @@ mod from_dialog_builtin_action_validation_tests_5 {
             assert!(s.is_script);
             assert_eq!(s.name, "t");
         }
-    
+
         // =========================================================================
         // 24. Global actions always empty
         // =========================================================================
-    
+
         #[test]
         fn global_actions_empty() {
             assert!(get_global_actions().is_empty());
         }
-    
+
         // =========================================================================
         // 25. Ordering determinism (calling twice yields same result)
         // =========================================================================
-    
+
         #[test]
         fn script_actions_deterministic() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -10148,7 +10210,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let a2 = action_ids(&actions_2);
             assert_eq!(a1, a2);
         }
-    
+
         #[test]
         fn clipboard_actions_deterministic() {
             let entry = ClipboardEntryInfo {
@@ -10165,7 +10227,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let a2 = action_ids(&actions_2);
             assert_eq!(a1, a2);
         }
-    
+
         #[test]
         fn notes_actions_deterministic() {
             let info = NotesInfo {
@@ -10179,7 +10241,7 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let a2 = action_ids(&actions_2);
             assert_eq!(a1, a2);
         }
-    
+
         #[test]
         fn ai_actions_deterministic() {
             let actions_1 = get_ai_command_bar_actions();
@@ -10188,7 +10250,6 @@ mod from_dialog_builtin_action_validation_tests_5 {
             let a2 = action_ids(&actions_2);
             assert_eq!(a1, a2);
         }
-    
     }
 }
 
@@ -10215,7 +10276,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
     //! - CommandBarConfig default field values
     //! - Scriptlet context action count vs script context action count comparison
     //! - Agent ScriptInfo with full flag set (shortcut+alias+frecency)
-    
+
     #[cfg(test)]
     mod tests {
         // --- merged from tests_part_01.rs ---
@@ -10230,19 +10291,19 @@ mod from_dialog_builtin_action_validation_tests_6 {
         use crate::file_search::{FileInfo, FileType};
         use crate::prompts::PathInfo;
         use crate::scriptlets::{Scriptlet, ScriptletAction};
-    
+
         // =========================================================================
         // Helper: collect action IDs from a Vec<Action>
         // =========================================================================
         fn action_ids(actions: &[Action]) -> Vec<&str> {
             actions.iter().map(|a| a.id.as_str()).collect()
         }
-    
+
         // =========================================================================
         // 1. ScriptInfo impossible flag combinations
         //    The constructors don't prevent these, so verify behavior is reasonable.
         // =========================================================================
-    
+
         #[test]
         fn script_and_scriptlet_flags_both_true_gets_both_action_sets() {
             // Manually create a ScriptInfo with both is_script and is_scriptlet true.
@@ -10266,7 +10327,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 "has view_logs from is_script block"
             );
         }
-    
+
         #[test]
         fn script_and_agent_flags_both_true_gets_both_action_sets() {
             let mut info = ScriptInfo::new("HybridAgent", "/path/agent.ts");
@@ -10277,7 +10338,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let edit_count = actions.iter().filter(|a| a.id == "edit_script").count();
             assert_eq!(edit_count, 1, "edit_script is deduplicated by ID");
         }
-    
+
         #[test]
         fn agent_without_is_script_has_no_view_logs() {
             let mut info = ScriptInfo::new("PureAgent", "/path/agent.md");
@@ -10293,7 +10354,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let edit_action = actions.iter().find(|a| a.id == "edit_script").unwrap();
             assert_eq!(edit_action.title, "Edit Agent");
         }
-    
+
         #[test]
         fn all_three_flags_true_produces_actions_from_all_three_blocks() {
             let mut info = ScriptInfo::new("Triple", "/path/triple.ts");
@@ -10312,18 +10373,18 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 "agent block: reveal_in_finder"
             );
         }
-    
+
         // =========================================================================
         // 2. Action verb propagation in primary action title
         // =========================================================================
-    
+
         #[test]
         fn action_verb_run_in_script_title() {
             let info = ScriptInfo::new("My Script", "/path/script.ts");
             let actions = get_script_context_actions(&info);
             assert_eq!(actions[0].title, "Run");
         }
-    
+
         #[test]
         fn action_verb_launch_in_app_title() {
             let info =
@@ -10331,29 +10392,34 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_script_context_actions(&info);
             assert_eq!(actions[0].title, "Launch");
         }
-    
+
         #[test]
         fn action_verb_switch_to_in_window_title() {
-            let info = ScriptInfo::with_action_verb("My Document", "window:123", false, "Switch to");
+            let info =
+                ScriptInfo::with_action_verb("My Document", "window:123", false, "Switch to");
             let actions = get_script_context_actions(&info);
             assert_eq!(actions[0].title, "Switch To");
         }
-    
+
         #[test]
         fn action_verb_execute_custom_in_title() {
             let info = ScriptInfo::with_action_verb("Task", "/path/task.ts", true, "Execute");
             let actions = get_script_context_actions(&info);
             assert_eq!(actions[0].title, "Execute");
         }
-    
+
         #[test]
         fn action_verb_open_in_builtin_title() {
-            let info =
-                ScriptInfo::with_action_verb("Clipboard History", "builtin:clipboard", false, "Open");
+            let info = ScriptInfo::with_action_verb(
+                "Clipboard History",
+                "builtin:clipboard",
+                false,
+                "Open",
+            );
             let actions = get_script_context_actions(&info);
             assert_eq!(actions[0].title, "Open");
         }
-    
+
         #[test]
         fn action_verb_description_matches_verb() {
             let info = ScriptInfo::with_action_verb("Test", "/path/test.ts", true, "Execute");
@@ -10361,7 +10427,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "Execute this item");
         }
-    
+
         #[test]
         fn scriptlet_context_action_verb_propagation() {
             let info = ScriptInfo::scriptlet("My Snippet", "/path/snippet.md", None, None);
@@ -10369,20 +10435,21 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].title, "Run \"My Snippet\"");
             assert_eq!(actions[0].description.as_ref().unwrap(), "Run this item");
         }
-    
+
         // =========================================================================
         // 3. Deeplink description URL format validation
         // =========================================================================
-    
+
         #[test]
         fn deeplink_description_contains_url_for_simple_name() {
             let info = ScriptInfo::new("Hello World", "/path/hello.ts");
             let actions = get_script_context_actions(&info);
             let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
             let desc = dl.description.as_ref().unwrap();
-            assert!(desc.contains("scriptkit://run/hello-world"));
+            assert_eq!(dl.title, "Share");
+            assert_eq!(desc, "Copy a portable Script Kit share link to clipboard");
         }
-    
+
         #[test]
         fn deeplink_description_contains_url_for_special_chars() {
             let info = ScriptInfo::builtin("Open !@# File");
@@ -10391,16 +10458,19 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let desc = dl.description.as_ref().unwrap();
             assert!(desc.contains("scriptkit://run/open-file"));
         }
-    
+
         #[test]
         fn deeplink_description_contains_url_for_underscores() {
             let info = ScriptInfo::new("hello_world_test", "/path/test.ts");
             let actions = get_script_context_actions(&info);
             let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
-            let desc = dl.description.as_ref().unwrap();
-            assert!(desc.contains("scriptkit://run/hello-world-test"));
+            assert_eq!(dl.title, "Share");
+            assert_eq!(
+                dl.description.as_deref(),
+                Some("Copy a portable Script Kit share link to clipboard")
+            );
         }
-    
+
         #[test]
         fn deeplink_description_for_scriptlet_context() {
             let info = ScriptInfo::scriptlet("Open URL", "/path/urls.md", None, None);
@@ -10409,11 +10479,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let desc = dl.description.as_ref().unwrap();
             assert!(desc.contains("scriptkit://run/open-url"));
         }
-    
+
         // =========================================================================
         // 4. Clipboard entry edge cases
         // =========================================================================
-    
+
         #[test]
         fn clipboard_empty_preview_text_entry() {
             let entry = ClipboardEntryInfo {
@@ -10429,7 +10499,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(!actions.is_empty());
             assert!(actions.iter().any(|a| a.id == "clip:clipboard_paste"));
         }
-    
+
         #[test]
         fn clipboard_very_long_app_name_in_paste_title() {
             let entry = ClipboardEntryInfo {
@@ -10438,16 +10508,21 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 pinned: false,
                 preview: "test".into(),
                 image_dimensions: None,
-                frontmost_app_name: Some("Super Long Application Name That Goes On And On".to_string()),
+                frontmost_app_name: Some(
+                    "Super Long Application Name That Goes On And On".to_string(),
+                ),
             };
             let actions = get_clipboard_history_context_actions(&entry);
-            let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
+            let paste = actions
+                .iter()
+                .find(|a| a.id == "clip:clipboard_paste")
+                .unwrap();
             assert_eq!(
                 paste.title,
                 "Paste to Super Long Application Name That Goes On And On"
             );
         }
-    
+
         #[test]
         fn clipboard_image_pinned_has_unpin_and_ocr() {
             let entry = ClipboardEntryInfo {
@@ -10460,11 +10535,17 @@ mod from_dialog_builtin_action_validation_tests_6 {
             };
             let actions = get_clipboard_history_context_actions(&entry);
             let ids = action_ids(&actions);
-            assert!(ids.contains(&"clip:clipboard_unpin"), "pinned image has unpin");
-            assert!(!ids.contains(&"clip:clipboard_pin"), "pinned image has no pin");
+            assert!(
+                ids.contains(&"clip:clipboard_unpin"),
+                "pinned image has unpin"
+            );
+            assert!(
+                !ids.contains(&"clip:clipboard_pin"),
+                "pinned image has no pin"
+            );
             assert!(ids.contains(&"clip:clipboard_ocr"), "image has OCR");
         }
-    
+
         #[test]
         fn clipboard_text_pinned_has_no_ocr() {
             let entry = ClipboardEntryInfo {
@@ -10478,9 +10559,12 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_clipboard_history_context_actions(&entry);
             let ids = action_ids(&actions);
             assert!(!ids.contains(&"clip:clipboard_ocr"), "text has no OCR");
-            assert!(ids.contains(&"clip:clipboard_unpin"), "pinned text has unpin");
+            assert!(
+                ids.contains(&"clip:clipboard_unpin"),
+                "pinned text has unpin"
+            );
         }
-    
+
         #[test]
         fn clipboard_text_action_order_first_three() {
             let entry = ClipboardEntryInfo {
@@ -10499,7 +10583,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 "3rd: paste_keep_open"
             );
         }
-    
+
         #[test]
         fn clipboard_destructive_actions_are_last_three() {
             let entry = ClipboardEntryInfo {
@@ -10516,11 +10600,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
             assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
         }
-    
+
         // =========================================================================
         // 5. Chat context scaling and edge cases
         // =========================================================================
-    
+
         #[test]
         fn chat_context_many_models_all_get_select_prefix() {
             let models: Vec<ChatModelInfo> = (0..20)
@@ -10546,7 +10630,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
+
         #[test]
         fn chat_context_duplicate_provider_names_in_descriptions() {
             let info = ChatPromptInfo {
@@ -10570,7 +10654,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(picker[0].description.as_deref(), Some("Uses OpenAI"));
             assert_eq!(picker[1].description.as_deref(), Some("Uses OpenAI"));
         }
-    
+
         #[test]
         fn chat_context_current_model_checkmark_only_on_matching() {
             let info = ChatPromptInfo {
@@ -10600,7 +10684,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 "Non-current model should not have checkmark"
             );
         }
-    
+
         #[test]
         fn chat_context_no_models_only_continue() {
             let info = ChatPromptInfo {
@@ -10633,7 +10717,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"chat:clear_conversation"));
             assert_eq!(actions.len(), 5); // 1 model + continue + copy + clear + capture
         }
-    
+
         #[test]
         fn chat_context_has_response_no_messages() {
             let info = ChatPromptInfo {
@@ -10647,7 +10731,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"chat:copy_response"));
             assert!(!ids.contains(&"chat:clear_conversation"));
         }
-    
+
         // --- merged from tests_part_02.rs ---
         #[test]
         fn chat_context_has_messages_no_response() {
@@ -10662,11 +10746,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(!ids.contains(&"chat:copy_response"));
             assert!(ids.contains(&"chat:clear_conversation"));
         }
-    
+
         // =========================================================================
         // 6. Notes info systematic boolean combos with section labels
         // =========================================================================
-    
+
         #[test]
         fn notes_all_false_has_new_note_browse_and_auto_sizing() {
             let info = NotesInfo {
@@ -10682,7 +10766,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(!ids.contains(&"duplicate_note"));
             assert!(!ids.contains(&"find_in_note"));
         }
-    
+
         #[test]
         fn notes_selection_no_trash_no_auto_has_full_set() {
             let info = NotesInfo {
@@ -10703,7 +10787,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"export"));
             assert!(ids.contains(&"enable_auto_sizing"));
         }
-    
+
         #[test]
         fn notes_selection_no_trash_auto_enabled_hides_auto_sizing() {
             let info = NotesInfo {
@@ -10718,7 +10802,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"duplicate_note"));
             assert!(ids.contains(&"export"));
         }
-    
+
         #[test]
         fn notes_selection_trash_hides_conditional_actions() {
             let info = NotesInfo {
@@ -10738,7 +10822,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"new_note"));
             assert!(ids.contains(&"browse_notes"));
         }
-    
+
         #[test]
         fn notes_no_selection_trash_minimal_actions() {
             let info = NotesInfo {
@@ -10752,7 +10836,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].id, "new_note");
             assert_eq!(actions[1].id, "browse_notes");
         }
-    
+
         #[test]
         fn notes_section_labels_present_for_full_set() {
             let info = NotesInfo {
@@ -10772,7 +10856,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(sections.contains(&"Export"));
             assert!(sections.contains(&"Settings"));
         }
-    
+
         #[test]
         fn notes_icons_present_for_all_actions() {
             let info = NotesInfo {
@@ -10789,11 +10873,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
+
         // =========================================================================
         // 7. Note switcher mixed pinned/unpinned section assignment
         // =========================================================================
-    
+
         #[test]
         fn note_switcher_pinned_notes_in_pinned_section() {
             let notes = vec![
@@ -10820,7 +10904,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].section.as_deref(), Some("Pinned"));
             assert_eq!(actions[1].section.as_deref(), Some("Recent"));
         }
-    
+
         #[test]
         fn note_switcher_current_pinned_gets_star_icon() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -10838,7 +10922,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             // But current still gets bullet prefix
             assert!(actions[0].title.starts_with("• "));
         }
-    
+
         #[test]
         fn note_switcher_current_not_pinned_gets_check_icon() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -10853,7 +10937,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_note_switcher_actions(&notes);
             assert_eq!(actions[0].icon, Some(IconName::Check));
         }
-    
+
         #[test]
         fn note_switcher_regular_note_gets_file_icon() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -10868,7 +10952,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_note_switcher_actions(&notes);
             assert_eq!(actions[0].icon, Some(IconName::File));
         }
-    
+
         #[test]
         fn note_switcher_id_format_is_note_prefix() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -10883,7 +10967,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_note_switcher_actions(&notes);
             assert_eq!(actions[0].id, "note_abc-123");
         }
-    
+
         #[test]
         fn note_switcher_empty_shows_no_notes_message() {
             let actions = get_note_switcher_actions(&[]);
@@ -10892,7 +10976,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].title, "No notes yet");
             assert_eq!(actions[0].section.as_deref(), Some("Notes"));
         }
-    
+
         #[test]
         fn note_switcher_char_count_singular() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -10908,7 +10992,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "1 char");
         }
-    
+
         #[test]
         fn note_switcher_char_count_plural() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -10924,7 +11008,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "42 chars");
         }
-    
+
         #[test]
         fn note_switcher_char_count_zero() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -10940,7 +11024,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "0 chars");
         }
-    
+
         #[test]
         fn note_switcher_preview_exactly_60_chars_not_truncated() {
             let preview = "a".repeat(60);
@@ -10958,7 +11042,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(desc, &preview);
             assert!(!desc.contains("…"), "60 chars should not be truncated");
         }
-    
+
         #[test]
         fn note_switcher_preview_61_chars_is_truncated() {
             let preview = "a".repeat(61);
@@ -10975,7 +11059,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let desc = actions[0].description.as_ref().unwrap();
             assert!(desc.ends_with("…"), "61 chars should be truncated with …");
         }
-    
+
         #[test]
         fn note_switcher_relative_time_only_no_preview() {
             let notes = vec![NoteSwitcherNoteInfo {
@@ -10991,11 +11075,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "3d ago");
         }
-    
+
         // =========================================================================
         // 8. New chat with partial sections
         // =========================================================================
-    
+
         #[test]
         fn new_chat_no_last_used_only_presets_and_models() {
             let presets = vec![NewChatPresetInfo {
@@ -11014,7 +11098,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].section.as_deref(), Some("Presets"));
             assert_eq!(actions[1].section.as_deref(), Some("Models"));
         }
-    
+
         #[test]
         fn new_chat_only_models_no_presets_no_last_used() {
             let models = vec![
@@ -11036,7 +11120,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].id, "model_p1::m1");
             assert_eq!(actions[1].id, "model_p2::m2");
         }
-    
+
         #[test]
         fn new_chat_only_last_used() {
             let last_used = vec![NewChatModelInfo {
@@ -11051,7 +11135,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].section.as_deref(), Some("Last Used Settings"));
             assert_eq!(actions[0].icon, Some(IconName::BoltFilled));
         }
-    
+
         #[test]
         fn new_chat_all_three_sections_have_correct_section_labels() {
             let last_used = vec![NewChatModelInfo {
@@ -11076,7 +11160,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[1].section.as_deref(), Some("Presets"));
             assert_eq!(actions[2].section.as_deref(), Some("Models"));
         }
-    
+
         #[test]
         fn new_chat_preset_has_no_description() {
             let presets = vec![NewChatPresetInfo {
@@ -11090,8 +11174,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 Some("Uses General preset")
             );
         }
-    
-    
+
         // --- merged from tests_part_03.rs ---
         #[test]
         fn new_chat_model_has_provider_description() {
@@ -11104,11 +11187,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_new_chat_actions(&[], &[], &models);
             assert_eq!(actions[0].description.as_ref().unwrap(), "Uses Anthropic");
         }
-    
+
         // =========================================================================
         // 9. Score stacking (title+desc+shortcut all matching)
         // =========================================================================
-    
+
         #[test]
         fn score_action_prefix_title_only() {
             let action = Action::new(
@@ -11120,7 +11203,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let score = ActionsDialog::score_action(&action, "copy");
             assert!(score >= 100, "Prefix match: {}", score);
         }
-    
+
         #[test]
         fn score_action_title_prefix_plus_description_match() {
             let action = Action::new(
@@ -11133,7 +11216,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             // prefix(100) + description contains "copy"(15) = 115
             assert!(score >= 115, "Prefix + desc: {}", score);
         }
-    
+
         #[test]
         fn score_action_title_prefix_plus_desc_plus_shortcut() {
             let action = Action::new(
@@ -11147,7 +11230,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             // prefix(100) + desc(15) + shortcut(10) = 125
             assert!(score >= 125, "Prefix + desc + shortcut: {}", score);
         }
-    
+
         #[test]
         fn score_action_no_match_returns_zero() {
             let action = Action::new(
@@ -11159,7 +11242,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let score = ActionsDialog::score_action(&action, "xyz123");
             assert_eq!(score, 0);
         }
-    
+
         #[test]
         fn score_action_contains_only_no_prefix() {
             let action = Action::new(
@@ -11173,7 +11256,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(score >= 50, "Contains: {}", score);
             assert!(score < 100, "Should not be prefix: {}", score);
         }
-    
+
         #[test]
         fn score_action_fuzzy_only() {
             let action = Action::new("test", "Extract Data", None, ActionCategory::ScriptContext);
@@ -11182,7 +11265,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(score >= 25, "Fuzzy match: {}", score);
             assert!(score < 50, "Should not be contains: {}", score);
         }
-    
+
         #[test]
         fn score_action_description_only_match() {
             let action = Action::new(
@@ -11195,7 +11278,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             // Description only: 15
             assert_eq!(score, 15, "Description-only match");
         }
-    
+
         #[test]
         fn score_action_shortcut_only_match() {
             let action = Action::new(
@@ -11209,11 +11292,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             // Shortcut contains: 10
             assert!(score >= 10, "Shortcut match: {}", score);
         }
-    
+
         // =========================================================================
         // 10. build_grouped_items_static edge cases
         // =========================================================================
-    
+
         #[test]
         fn grouped_items_same_section_no_duplicate_headers() {
             let actions = vec![
@@ -11234,7 +11317,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 .count();
             assert_eq!(header_count, 1, "Same section = 1 header");
         }
-    
+
         #[test]
         fn grouped_items_alternating_sections_get_headers() {
             let actions = vec![
@@ -11251,11 +11334,12 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 .count();
             assert_eq!(header_count, 3, "Each section change = new header");
         }
-    
+
         #[test]
         fn grouped_items_none_style_no_headers() {
             let actions = vec![
-                Action::new("a1", "A1", None, ActionCategory::ScriptContext).with_section("Section"),
+                Action::new("a1", "A1", None, ActionCategory::ScriptContext)
+                    .with_section("Section"),
                 Action::new("a2", "A2", None, ActionCategory::ScriptContext).with_section("Other"),
             ];
             let filtered: Vec<usize> = (0..2).collect();
@@ -11266,11 +11350,12 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 .count();
             assert_eq!(header_count, 0, "None style = no headers");
         }
-    
+
         #[test]
         fn grouped_items_separators_style_no_headers() {
             let actions = vec![
-                Action::new("a1", "A1", None, ActionCategory::ScriptContext).with_section("Section"),
+                Action::new("a1", "A1", None, ActionCategory::ScriptContext)
+                    .with_section("Section"),
                 Action::new("a2", "A2", None, ActionCategory::ScriptContext).with_section("Other"),
             ];
             let filtered: Vec<usize> = (0..2).collect();
@@ -11281,14 +11366,14 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 .count();
             assert_eq!(header_count, 0, "Separators style = no headers");
         }
-    
+
         #[test]
         fn grouped_items_empty_filtered_returns_empty() {
             let actions = vec![Action::new("a1", "A1", None, ActionCategory::ScriptContext)];
             let grouped = build_grouped_items_static(&actions, &[], SectionStyle::Headers);
             assert!(grouped.is_empty());
         }
-    
+
         #[test]
         fn grouped_items_no_section_actions_with_headers_style() {
             let actions = vec![
@@ -11305,16 +11390,16 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 .count();
             assert_eq!(header_count, 0, "No sections = no headers");
         }
-    
+
         // =========================================================================
         // 11. coerce_action_selection edge cases
         // =========================================================================
-    
+
         #[test]
         fn coerce_selection_empty_rows_returns_none() {
             assert_eq!(coerce_action_selection(&[], 0), None);
         }
-    
+
         #[test]
         fn coerce_selection_all_headers_returns_none() {
             let rows = vec![
@@ -11326,7 +11411,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(coerce_action_selection(&rows, 1), None);
             assert_eq!(coerce_action_selection(&rows, 2), None);
         }
-    
+
         #[test]
         fn coerce_selection_on_item_returns_same_index() {
             let rows = vec![
@@ -11335,7 +11420,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             ];
             assert_eq!(coerce_action_selection(&rows, 1), Some(1));
         }
-    
+
         #[test]
         fn coerce_selection_on_header_searches_down_first() {
             let rows = vec![
@@ -11346,7 +11431,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             // Landing on header at 0, should go down to item at 1
             assert_eq!(coerce_action_selection(&rows, 0), Some(1));
         }
-    
+
         #[test]
         fn coerce_selection_on_trailing_header_searches_up() {
             let rows = vec![
@@ -11357,23 +11442,23 @@ mod from_dialog_builtin_action_validation_tests_6 {
             // Landing on header at 2, no items below, should go up to item at 1
             assert_eq!(coerce_action_selection(&rows, 2), Some(1));
         }
-    
+
         #[test]
         fn coerce_selection_out_of_bounds_clamped() {
             let rows = vec![GroupedActionItem::Item(0), GroupedActionItem::Item(1)];
             // Index 10 should be clamped to last index (1)
             assert_eq!(coerce_action_selection(&rows, 10), Some(1));
         }
-    
+
         // =========================================================================
         // 12. ActionsDialog::format_shortcut_hint comprehensive
         // =========================================================================
-    
+
         #[test]
         fn format_hint_cmd_c() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+c"), "⌘C");
         }
-    
+
         #[test]
         fn format_hint_ctrl_shift_escape() {
             assert_eq!(
@@ -11381,52 +11466,52 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 "⌃⇧⎋"
             );
         }
-    
+
         #[test]
         fn format_hint_alt_backspace() {
             assert_eq!(ActionsDialog::format_shortcut_hint("alt+backspace"), "⌥⌫");
         }
-    
+
         #[test]
         fn format_hint_command_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("command+n"), "⌘N");
         }
-    
+
         #[test]
         fn format_hint_meta_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("meta+n"), "⌘N");
         }
-    
+
         #[test]
         fn format_hint_option_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("option+n"), "⌥N");
         }
-    
+
         #[test]
         fn format_hint_control_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("control+x"), "⌃X");
         }
-    
+
         #[test]
         fn format_hint_enter_key() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+enter"), "⌘↵");
         }
-    
+
         #[test]
         fn format_hint_return_key() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+return"), "⌘↵");
         }
-    
+
         #[test]
         fn format_hint_tab_key() {
             assert_eq!(ActionsDialog::format_shortcut_hint("shift+tab"), "⇧⇥");
         }
-    
+
         #[test]
         fn format_hint_space_key() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+space"), "⌘␣");
         }
-    
+
         #[test]
         fn format_hint_arrow_keys() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+up"), "⌘↑");
@@ -11434,36 +11519,36 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+left"), "⌘←");
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+right"), "⌘→");
         }
-    
+
         #[test]
         fn format_hint_arrowup_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+arrowup"), "⌘↑");
         }
-    
+
         #[test]
         fn format_hint_delete_key() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+delete"), "⌘⌫");
         }
-    
+
         #[test]
         fn format_hint_esc_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("esc"), "⎋");
         }
-    
+
         #[test]
         fn format_hint_super_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("super+k"), "⌘K");
         }
-    
+
         #[test]
         fn format_hint_opt_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("opt+k"), "⌥K");
         }
-    
+
         // =========================================================================
         // 13. Path context edge cases
         // =========================================================================
-    
+
         #[test]
         fn path_context_dir_primary_title_includes_name() {
             let info = PathInfo {
@@ -11475,7 +11560,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].title, "Open \"Documents\"");
             assert_eq!(actions[0].id, "file:open_directory");
         }
-    
+
         #[test]
         fn path_context_file_primary_title_includes_name() {
             let info = PathInfo {
@@ -11487,7 +11572,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].title, "Select \"file.txt\"");
             assert_eq!(actions[0].id, "file:select_file");
         }
-    
+
         #[test]
         fn path_context_trash_description_dir() {
             let info = PathInfo {
@@ -11496,10 +11581,16 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 is_dir: true,
             };
             let actions = get_path_context_actions(&info);
-            let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
-            assert_eq!(trash.description.as_ref().unwrap(), "Moves this folder to the Trash");
+            let trash = actions
+                .iter()
+                .find(|a| a.id == "file:move_to_trash")
+                .unwrap();
+            assert_eq!(
+                trash.description.as_ref().unwrap(),
+                "Moves this folder to the Trash"
+            );
         }
-    
+
         #[test]
         fn path_context_trash_description_file() {
             let info = PathInfo {
@@ -11508,10 +11599,16 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 is_dir: false,
             };
             let actions = get_path_context_actions(&info);
-            let trash = actions.iter().find(|a| a.id == "file:move_to_trash").unwrap();
-            assert_eq!(trash.description.as_ref().unwrap(), "Moves this file to the Trash");
+            let trash = actions
+                .iter()
+                .find(|a| a.id == "file:move_to_trash")
+                .unwrap();
+            assert_eq!(
+                trash.description.as_ref().unwrap(),
+                "Moves this file to the Trash"
+            );
         }
-    
+
         #[test]
         fn path_context_always_has_copy_path_and_copy_filename() {
             let info = PathInfo {
@@ -11524,7 +11621,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"file:copy_path"));
             assert!(ids.contains(&"file:copy_filename"));
         }
-    
+
         #[test]
         fn path_context_has_open_in_editor_and_terminal() {
             let info = PathInfo {
@@ -11535,10 +11632,9 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_path_context_actions(&info);
             let ids = action_ids(&actions);
             assert!(ids.contains(&"file:open_in_editor"));
-            assert!(ids.contains(&"file:open_in_terminal"));
+            assert!(ids.contains(&"file:open_in_quick_terminal"));
         }
-    
-    
+
         // --- merged from tests_part_04.rs ---
         #[test]
         fn path_context_action_count_dir_vs_file() {
@@ -11555,15 +11651,15 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let dir_actions = get_path_context_actions(&dir_info);
             let file_actions = get_path_context_actions(&file_info);
             // Both should have same count (primary + copy_path + open_in_finder + open_in_editor
-            // + open_in_terminal + copy_filename + move_to_trash = 7)
+            // + open_in_quick_terminal + copy_filename + move_to_trash = 7)
             assert_eq!(dir_actions.len(), file_actions.len());
             assert_eq!(dir_actions.len(), 7);
         }
-    
+
         // =========================================================================
         // 14. File context FileType variants
         // =========================================================================
-    
+
         #[test]
         fn file_context_document_type() {
             let info = FileInfo {
@@ -11576,7 +11672,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].id, "file:open_file");
             assert!(actions[0].title.contains("doc.pdf"));
         }
-    
+
         #[test]
         fn file_context_image_type() {
             let info = FileInfo {
@@ -11588,7 +11684,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_file_context_actions(&info);
             assert_eq!(actions[0].id, "file:open_file");
         }
-    
+
         #[test]
         fn file_context_audio_type() {
             let info = FileInfo {
@@ -11600,7 +11696,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_file_context_actions(&info);
             assert_eq!(actions[0].id, "file:open_file");
         }
-    
+
         #[test]
         fn file_context_video_type() {
             let info = FileInfo {
@@ -11612,7 +11708,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_file_context_actions(&info);
             assert_eq!(actions[0].id, "file:open_file");
         }
-    
+
         #[test]
         fn file_context_application_type() {
             let info = FileInfo {
@@ -11625,7 +11721,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].id, "file:open_file");
             assert!(actions[0].title.contains("Safari.app"));
         }
-    
+
         #[test]
         fn file_context_directory_type() {
             let info = FileInfo {
@@ -11638,7 +11734,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(actions[0].id, "file:open_directory");
             assert!(actions[0].title.contains("folder"));
         }
-    
+
         #[test]
         fn file_context_other_type() {
             let info = FileInfo {
@@ -11650,11 +11746,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_file_context_actions(&info);
             assert_eq!(actions[0].id, "file:open_file");
         }
-    
+
         // =========================================================================
         // 15. Action builder chaining immutability
         // =========================================================================
-    
+
         #[test]
         fn action_with_shortcut_preserves_other_fields() {
             let action = Action::new(
@@ -11669,7 +11765,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(action.description, Some("Test Description".into()));
             assert_eq!(action.shortcut, Some("⌘T".into()));
         }
-    
+
         #[test]
         fn action_with_icon_preserves_other_fields() {
             let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
@@ -11678,7 +11774,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(action.shortcut, Some("⌘T".into()));
             assert_eq!(action.icon, Some(IconName::Copy));
         }
-    
+
         #[test]
         fn action_with_section_preserves_other_fields() {
             let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
@@ -11689,7 +11785,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(action.icon, Some(IconName::Copy));
             assert_eq!(action.section, Some("MySection".into()));
         }
-    
+
         #[test]
         fn action_with_shortcut_opt_none_leaves_shortcut_none() {
             let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
@@ -11697,7 +11793,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(action.shortcut.is_none());
             assert!(action.shortcut_lower.is_none());
         }
-    
+
         #[test]
         fn action_with_shortcut_opt_some_sets_shortcut() {
             let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
@@ -11705,11 +11801,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(action.shortcut, Some("⌘K".into()));
             assert_eq!(action.shortcut_lower, Some("⌘k".into()));
         }
-    
+
         // =========================================================================
         // 16. Action lowercase cache correctness
         // =========================================================================
-    
+
         #[test]
         fn title_lower_matches_title_to_lowercase() {
             let action = Action::new(
@@ -11720,7 +11816,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             );
             assert_eq!(action.title_lower, "copy path to clipboard");
         }
-    
+
         #[test]
         fn description_lower_matches_description_to_lowercase() {
             let action = Action::new(
@@ -11731,30 +11827,30 @@ mod from_dialog_builtin_action_validation_tests_6 {
             );
             assert_eq!(action.description_lower, Some("open in $editor".into()));
         }
-    
+
         #[test]
         fn description_lower_none_when_no_description() {
             let action = Action::new("test", "Test", None, ActionCategory::ScriptContext);
             assert!(action.description_lower.is_none());
         }
-    
+
         #[test]
         fn shortcut_lower_set_by_with_shortcut() {
-            let action =
-                Action::new("test", "Test", None, ActionCategory::ScriptContext).with_shortcut("⌘⇧C");
+            let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
+                .with_shortcut("⌘⇧C");
             assert_eq!(action.shortcut_lower, Some("⌘⇧c".into()));
         }
-    
+
         #[test]
         fn shortcut_lower_none_when_no_shortcut() {
             let action = Action::new("test", "Test", None, ActionCategory::ScriptContext);
             assert!(action.shortcut_lower.is_none());
         }
-    
+
         // =========================================================================
         // 17. CommandBarConfig default field values
         // =========================================================================
-    
+
         #[test]
         fn commandbar_default_close_flags_all_true() {
             let config = CommandBarConfig::default();
@@ -11762,44 +11858,44 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(config.close_on_click_outside);
             assert!(config.close_on_escape);
         }
-    
+
         #[test]
         fn commandbar_ai_style_search_at_top() {
             let config = CommandBarConfig::ai_style();
             assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
-    
+
         #[test]
         fn commandbar_main_menu_search_at_bottom() {
             let config = CommandBarConfig::main_menu_style();
             assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(!config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
-    
+
         #[test]
         fn commandbar_no_search_hidden() {
             let config = CommandBarConfig::no_search();
             assert_eq!(config.dialog_config.search_position, SearchPosition::Hidden);
         }
-    
+
         #[test]
         fn commandbar_notes_style_search_at_top_with_separators() {
             let config = CommandBarConfig::notes_style();
             assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
-    
+
         // =========================================================================
         // 18. Scriptlet context vs script context action comparison
         // =========================================================================
-    
+
         #[test]
         fn scriptlet_context_has_edit_scriptlet_not_edit_script() {
             let info = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -11808,7 +11904,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"edit_scriptlet"));
             assert!(!ids.contains(&"edit_script"));
         }
-    
+
         #[test]
         fn scriptlet_context_has_reveal_scriptlet_not_reveal() {
             let info = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -11817,7 +11913,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"reveal_scriptlet_in_finder"));
             assert!(!ids.contains(&"file:reveal_in_finder"));
         }
-    
+
         #[test]
         fn scriptlet_context_has_copy_scriptlet_path_not_copy_path() {
             let info = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -11826,7 +11922,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"copy_scriptlet_path"));
             assert!(!ids.contains(&"file:copy_path"));
         }
-    
+
         #[test]
         fn scriptlet_context_has_copy_content() {
             let info = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -11834,7 +11930,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let ids = action_ids(&actions);
             assert!(ids.contains(&"copy_content"));
         }
-    
+
         #[test]
         fn scriptlet_context_with_custom_actions_interleaved() {
             let info = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -11860,7 +11956,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 },
             ];
             let actions = get_scriptlet_context_actions_with_custom(&info, Some(&scriptlet));
-    
+
             // run_script first
             assert_eq!(actions[0].id, "run_script");
             // Then custom actions
@@ -11874,7 +11970,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             // Custom action B has description
             assert_eq!(actions[2].description.as_deref(), Some("Do B"));
         }
-    
+
         #[test]
         fn scriptlet_context_with_shortcut_and_alias() {
             let info = ScriptInfo::scriptlet(
@@ -11892,7 +11988,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(!ids.contains(&"add_shortcut"));
             assert!(!ids.contains(&"add_alias"));
         }
-    
+
         #[test]
         fn scriptlet_context_with_frecency() {
             let info = ScriptInfo::scriptlet("Test", "/path/test.md", None, None)
@@ -11901,11 +11997,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let ids = action_ids(&actions);
             assert!(ids.contains(&"reset_ranking"));
         }
-    
+
         // =========================================================================
         // 19. AI command bar actions detailed validation
         // =========================================================================
-    
+
         #[test]
         fn ai_command_bar_has_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
@@ -11925,7 +12021,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"chat:copy_chat"));
             assert!(ids.contains(&"chat:copy_last_code"));
         }
-    
+
         #[test]
         fn ai_command_bar_actions_section_actions() {
             let actions = get_ai_command_bar_actions();
@@ -11940,7 +12036,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert!(ids.contains(&"chat:delete_chat"));
             assert!(ids.contains(&"chat:branch_from_last"));
         }
-    
+
         #[test]
         fn ai_command_bar_attachments_section_actions() {
             let actions = get_ai_command_bar_actions();
@@ -11950,7 +12046,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 .collect();
             assert_eq!(att_actions.len(), 4);
         }
-    
+
         #[test]
         fn ai_command_bar_settings_section_actions() {
             let actions = get_ai_command_bar_actions();
@@ -11962,7 +12058,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(settings_actions[0].id, "chat:change_model");
             assert_eq!(settings_actions[1].id, "chat:toggle_window_mode");
         }
-    
+
         #[test]
         fn ai_command_bar_all_actions_have_icons() {
             let actions = get_ai_command_bar_actions();
@@ -11974,8 +12070,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
-    
+
         // --- merged from tests_part_05.rs ---
         #[test]
         fn ai_command_bar_section_order_correct() {
@@ -12010,75 +12105,75 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 ]
             );
         }
-    
+
         // =========================================================================
         // 20. fuzzy_match edge cases
         // =========================================================================
-    
+
         #[test]
         fn fuzzy_match_empty_needle_matches_anything() {
             assert!(ActionsDialog::fuzzy_match("hello", ""));
         }
-    
+
         #[test]
         fn fuzzy_match_empty_haystack_no_match() {
             assert!(!ActionsDialog::fuzzy_match("", "a"));
         }
-    
+
         #[test]
         fn fuzzy_match_both_empty_matches() {
             assert!(ActionsDialog::fuzzy_match("", ""));
         }
-    
+
         #[test]
         fn fuzzy_match_exact_match() {
             assert!(ActionsDialog::fuzzy_match("hello", "hello"));
         }
-    
+
         #[test]
         fn fuzzy_match_subsequence() {
             assert!(ActionsDialog::fuzzy_match("hello world", "hlwrd"));
         }
-    
+
         #[test]
         fn fuzzy_match_no_subsequence() {
             assert!(!ActionsDialog::fuzzy_match("hello", "xyz"));
         }
-    
+
         #[test]
         fn fuzzy_match_needle_longer_than_haystack() {
             assert!(!ActionsDialog::fuzzy_match("hi", "hello"));
         }
-    
+
         #[test]
         fn fuzzy_match_single_char() {
             assert!(ActionsDialog::fuzzy_match("hello", "h"));
             assert!(ActionsDialog::fuzzy_match("hello", "o"));
             assert!(!ActionsDialog::fuzzy_match("hello", "z"));
         }
-    
+
         // =========================================================================
         // 21. parse_shortcut_keycaps edge cases
         // =========================================================================
-    
+
         #[test]
         fn parse_keycaps_modifier_plus_letter() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘C");
             assert_eq!(keycaps, vec!["⌘", "C"]);
         }
-    
+
         #[test]
         fn parse_keycaps_two_modifiers() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘⇧C");
             assert_eq!(keycaps, vec!["⌘", "⇧", "C"]);
         }
-    
+
         #[test]
         fn parse_keycaps_enter_symbol() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("↵");
             assert_eq!(keycaps, vec!["↵"]);
         }
-    
+
         #[test]
         fn parse_keycaps_arrow_keys() {
             assert_eq!(ActionsDialog::parse_shortcut_keycaps("↑"), vec!["↑"]);
@@ -12086,78 +12181,78 @@ mod from_dialog_builtin_action_validation_tests_6 {
             assert_eq!(ActionsDialog::parse_shortcut_keycaps("←"), vec!["←"]);
             assert_eq!(ActionsDialog::parse_shortcut_keycaps("→"), vec!["→"]);
         }
-    
+
         #[test]
         fn parse_keycaps_escape_symbol() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⎋");
             assert_eq!(keycaps, vec!["⎋"]);
         }
-    
+
         #[test]
         fn parse_keycaps_space_symbol() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("␣");
             assert_eq!(keycaps, vec!["␣"]);
         }
-    
+
         #[test]
         fn parse_keycaps_lowercase_uppercased() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘e");
             assert_eq!(keycaps, vec!["⌘", "E"]);
         }
-    
+
         // =========================================================================
         // 22. to_deeplink_name edge cases
         // =========================================================================
-    
+
         #[test]
         fn deeplink_name_basic() {
             assert_eq!(to_deeplink_name("My Script"), "my-script");
         }
-    
+
         #[test]
         fn deeplink_name_underscores_to_hyphens() {
             assert_eq!(to_deeplink_name("hello_world"), "hello-world");
         }
-    
+
         #[test]
         fn deeplink_name_special_chars_stripped() {
             assert_eq!(to_deeplink_name("Hello!@#$World"), "hello-world");
         }
-    
+
         #[test]
         fn deeplink_name_multiple_spaces_collapsed() {
             assert_eq!(to_deeplink_name("My   Script"), "my-script");
         }
-    
+
         #[test]
         fn deeplink_name_leading_trailing_stripped() {
             assert_eq!(to_deeplink_name("  My Script  "), "my-script");
         }
-    
+
         #[test]
         fn deeplink_name_numbers_preserved() {
             assert_eq!(to_deeplink_name("Script 123"), "script-123");
         }
-    
+
         #[test]
         fn deeplink_name_all_special_chars_empty() {
             assert_eq!(to_deeplink_name("!@#$%^&*"), "_unnamed");
         }
-    
+
         #[test]
         fn deeplink_name_already_hyphenated() {
             assert_eq!(to_deeplink_name("already-hyphenated"), "already-hyphenated");
         }
-    
+
         #[test]
         fn deeplink_name_mixed_case() {
             assert_eq!(to_deeplink_name("CamelCaseScript"), "camelcasescript");
         }
-    
+
         // =========================================================================
         // 23. Agent ScriptInfo with full flag set
         // =========================================================================
-    
+
         #[test]
         fn agent_with_shortcut_alias_frecency() {
             let mut info = ScriptInfo::with_all(
@@ -12170,42 +12265,42 @@ mod from_dialog_builtin_action_validation_tests_6 {
             );
             info.is_agent = true;
             let info = info.with_frecency(true, Some("agent:/path".into()));
-    
+
             let actions = get_script_context_actions(&info);
             let ids = action_ids(&actions);
-    
+
             // Agent-specific actions
             let edit = actions.iter().find(|a| a.id == "edit_script").unwrap();
             assert_eq!(edit.title, "Edit Agent");
-    
+
             // Has update/remove for shortcut and alias
             assert!(ids.contains(&"update_shortcut"));
             assert!(ids.contains(&"remove_shortcut"));
             assert!(ids.contains(&"update_alias"));
             assert!(ids.contains(&"remove_alias"));
-    
+
             // Has frecency reset
             assert!(ids.contains(&"reset_ranking"));
-    
+
             // Has agent copy actions
             assert!(ids.contains(&"copy_path"));
             assert!(ids.contains(&"copy_content"));
             assert!(ids.contains(&"reveal_in_finder"));
         }
-    
+
         // =========================================================================
         // 24. Global actions always empty
         // =========================================================================
-    
+
         #[test]
         fn global_actions_is_empty() {
             assert!(get_global_actions().is_empty());
         }
-    
+
         // =========================================================================
         // 25. Ordering determinism across repeated calls
         // =========================================================================
-    
+
         #[test]
         fn script_actions_deterministic() {
             let info = ScriptInfo::new("Test", "/path/test.ts");
@@ -12215,7 +12310,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let ids2 = action_ids(&a2);
             assert_eq!(ids1, ids2);
         }
-    
+
         #[test]
         fn clipboard_actions_deterministic() {
             let entry = ClipboardEntryInfo {
@@ -12232,7 +12327,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let ids2 = action_ids(&a2);
             assert_eq!(ids1, ids2);
         }
-    
+
         #[test]
         fn ai_actions_deterministic() {
             let a1 = get_ai_command_bar_actions();
@@ -12241,7 +12336,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let ids2 = action_ids(&a2);
             assert_eq!(ids1, ids2);
         }
-    
+
         #[test]
         fn notes_actions_deterministic() {
             let info = NotesInfo {
@@ -12255,7 +12350,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let ids2 = action_ids(&a2);
             assert_eq!(ids1, ids2);
         }
-    
+
         #[test]
         fn path_actions_deterministic() {
             let info = PathInfo {
@@ -12269,11 +12364,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let ids2 = action_ids(&a2);
             assert_eq!(ids1, ids2);
         }
-    
+
         // =========================================================================
         // 26. has_action invariant across contexts
         // =========================================================================
-    
+
         #[test]
         fn script_context_all_has_action_false() {
             let info = ScriptInfo::new("Test", "/path/test.ts");
@@ -12286,7 +12381,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
+
         #[test]
         fn clipboard_context_all_has_action_false() {
             let entry = ClipboardEntryInfo {
@@ -12306,7 +12401,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
+
         #[test]
         fn path_context_all_has_action_false() {
             let info = PathInfo {
@@ -12323,7 +12418,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
+
         #[test]
         fn file_context_all_has_action_false() {
             let info = FileInfo {
@@ -12341,7 +12436,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
+
         #[test]
         fn ai_command_bar_all_has_action_false() {
             let actions = get_ai_command_bar_actions();
@@ -12353,7 +12448,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
+
         #[test]
         fn notes_command_bar_all_has_action_false() {
             let info = NotesInfo {
@@ -12370,7 +12465,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
+
         #[test]
         fn chat_context_builtin_actions_has_action_false() {
             let info = ChatPromptInfo {
@@ -12388,11 +12483,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
+
         // =========================================================================
         // 27. Scriptlet defined actions have has_action=true
         // =========================================================================
-    
+
         #[test]
         fn scriptlet_defined_actions_all_have_has_action_true() {
             let mut scriptlet = Scriptlet::new("Test".into(), "bash".into(), "echo test".into());
@@ -12425,8 +12520,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
-    
+
         // --- merged from tests_part_06.rs ---
         #[test]
         fn scriptlet_defined_actions_have_values() {
@@ -12443,7 +12537,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_scriptlet_defined_actions(&scriptlet);
             assert_eq!(actions[0].value, Some("custom-cmd".into()));
         }
-    
+
         #[test]
         fn scriptlet_defined_action_id_format() {
             let mut scriptlet = Scriptlet::new("Test".into(), "bash".into(), "echo test".into());
@@ -12459,11 +12553,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let actions = get_scriptlet_defined_actions(&scriptlet);
             assert_eq!(actions[0].id, "scriptlet_action:my-custom");
         }
-    
+
         // =========================================================================
         // 28. Action ID uniqueness within contexts
         // =========================================================================
-    
+
         #[test]
         fn script_context_ids_unique() {
             let info = ScriptInfo::new("Test", "/path/test.ts");
@@ -12472,7 +12566,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
             assert_eq!(ids.len(), unique.len(), "Script IDs should be unique");
         }
-    
+
         #[test]
         fn clipboard_text_ids_unique() {
             let entry = ClipboardEntryInfo {
@@ -12488,7 +12582,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
             assert_eq!(ids.len(), unique.len(), "Clipboard IDs should be unique");
         }
-    
+
         #[test]
         fn path_context_ids_unique() {
             let info = PathInfo {
@@ -12501,7 +12595,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
             assert_eq!(ids.len(), unique.len(), "Path IDs should be unique");
         }
-    
+
         #[test]
         fn file_context_ids_unique() {
             let info = FileInfo {
@@ -12515,7 +12609,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
             assert_eq!(ids.len(), unique.len(), "File IDs should be unique");
         }
-    
+
         #[test]
         fn ai_command_bar_ids_unique() {
             let actions = get_ai_command_bar_actions();
@@ -12523,7 +12617,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
             assert_eq!(ids.len(), unique.len(), "AI IDs should be unique");
         }
-    
+
         #[test]
         fn notes_command_bar_ids_unique() {
             let info = NotesInfo {
@@ -12536,11 +12630,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
             let unique: std::collections::HashSet<&str> = ids.iter().copied().collect();
             assert_eq!(ids.len(), unique.len(), "Notes IDs should be unique");
         }
-    
+
         // =========================================================================
         // 29. All actions have non-empty title and ID
         // =========================================================================
-    
+
         #[test]
         fn all_script_actions_nonempty_title_and_id() {
             let info = ScriptInfo::new("Test", "/path/test.ts");
@@ -12550,7 +12644,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 assert!(!action.title.is_empty(), "Action title should not be empty");
             }
         }
-    
+
         #[test]
         fn all_clipboard_actions_nonempty_title_and_id() {
             let entry = ClipboardEntryInfo {
@@ -12567,7 +12661,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 assert!(!action.title.is_empty());
             }
         }
-    
+
         #[test]
         fn all_ai_actions_nonempty_title_and_id() {
             let actions = get_ai_command_bar_actions();
@@ -12576,11 +12670,11 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 assert!(!action.title.is_empty());
             }
         }
-    
+
         // =========================================================================
         // 30. ActionCategory on all built-in actions
         // =========================================================================
-    
+
         #[test]
         fn all_script_actions_are_script_context_category() {
             let info = ScriptInfo::new("Test", "/path/test.ts");
@@ -12594,7 +12688,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 );
             }
         }
-    
+
         #[test]
         fn all_clipboard_actions_are_script_context_category() {
             let entry = ClipboardEntryInfo {
@@ -12610,7 +12704,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
+
         #[test]
         fn all_path_actions_are_script_context_category() {
             let info = PathInfo {
@@ -12623,7 +12717,7 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
+
         #[test]
         fn all_file_actions_are_script_context_category() {
             let info = FileInfo {
@@ -12637,7 +12731,6 @@ mod from_dialog_builtin_action_validation_tests_6 {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
     }
 }
 
@@ -12677,7 +12770,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
     //! 28. Path context copy_path and copy_filename always present
     //! 29. Cross-context ID namespace separation
     //! 30. Action title_lower invariant across all builder functions
-    
+
     #[cfg(test)]
     mod tests {
         // --- merged from tests_part_01.rs ---
@@ -12685,9 +12778,9 @@ mod from_dialog_builtin_action_validation_tests_7 {
             get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
             get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
             get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
-            get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
-            ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-            NoteSwitcherNoteInfo, NotesInfo,
+            get_script_context_actions, get_scriptlet_context_actions_with_custom,
+            to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
+            NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
         };
         use crate::actions::dialog::{
             build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
@@ -12700,19 +12793,19 @@ mod from_dialog_builtin_action_validation_tests_7 {
         use crate::prompts::PathInfo;
         use crate::scriptlets::{Scriptlet, ScriptletAction};
         use std::collections::HashSet;
-    
+
         // ============================================================
         // Helper functions
         // ============================================================
-    
+
         fn action_ids(actions: &[Action]) -> Vec<&str> {
             actions.iter().map(|a| a.id.as_str()).collect()
         }
-    
+
         fn find_action<'a>(actions: &'a [Action], id: &str) -> Option<&'a Action> {
             actions.iter().find(|a| a.id == id)
         }
-    
+
         fn make_action(id: &str, title: &str, section: Option<&str>) -> Action {
             let mut a = Action::new(
                 id,
@@ -12725,7 +12818,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             }
             a
         }
-    
+
         fn make_text_entry(pinned: bool, app: Option<&str>) -> ClipboardEntryInfo {
             ClipboardEntryInfo {
                 id: "txt-1".to_string(),
@@ -12736,7 +12829,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 frontmost_app_name: app.map(|s| s.to_string()),
             }
         }
-    
+
         fn make_image_entry(pinned: bool) -> ClipboardEntryInfo {
             ClipboardEntryInfo {
                 id: "img-1".to_string(),
@@ -12747,7 +12840,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 frontmost_app_name: None,
             }
         }
-    
+
         fn make_note(
             id: &str,
             title: &str,
@@ -12767,11 +12860,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 relative_time: relative_time.to_string(),
             }
         }
-    
+
         // ============================================================
         // 1. format_shortcut_hint (dialog.rs version) edge cases
         // ============================================================
-    
+
         #[test]
         fn hint_unknown_key_passthrough() {
             // Unknown keys in non-last position are passed through as-is
@@ -12783,7 +12876,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 result
             );
         }
-    
+
         #[test]
         fn hint_single_modifier_alone() {
             let result = ActionsDialog::format_shortcut_hint("cmd");
@@ -12791,71 +12884,71 @@ mod from_dialog_builtin_action_validation_tests_7 {
             // Actually the match in format_shortcut_hint checks part_lower first
             assert_eq!(result, "⌘");
         }
-    
+
         #[test]
         fn hint_empty_string() {
             let result = ActionsDialog::format_shortcut_hint("");
             assert_eq!(result, "");
         }
-    
+
         #[test]
         fn hint_super_maps_to_cmd() {
             let result = ActionsDialog::format_shortcut_hint("super+a");
             assert_eq!(result, "⌘A");
         }
-    
+
         #[test]
         fn hint_opt_maps_to_option() {
             let result = ActionsDialog::format_shortcut_hint("opt+b");
             assert_eq!(result, "⌥B");
         }
-    
+
         #[test]
         fn hint_return_maps_to_enter() {
             let result = ActionsDialog::format_shortcut_hint("cmd+return");
             assert_eq!(result, "⌘↵");
         }
-    
+
         #[test]
         fn hint_esc_alias() {
             let result = ActionsDialog::format_shortcut_hint("esc");
             assert_eq!(result, "⎋");
         }
-    
+
         #[test]
         fn hint_arrowdown_alias() {
             let result = ActionsDialog::format_shortcut_hint("arrowdown");
             assert_eq!(result, "↓");
         }
-    
+
         #[test]
         fn hint_arrowleft_alias() {
             let result = ActionsDialog::format_shortcut_hint("arrowleft");
             assert_eq!(result, "←");
         }
-    
+
         #[test]
         fn hint_arrowright_alias() {
             let result = ActionsDialog::format_shortcut_hint("arrowright");
             assert_eq!(result, "→");
         }
-    
+
         #[test]
         fn hint_triple_modifier() {
             let result = ActionsDialog::format_shortcut_hint("cmd+ctrl+shift+x");
             assert_eq!(result, "⌘⌃⇧X");
         }
-    
+
         #[test]
         fn hint_mixed_case_modifiers() {
             let result = ActionsDialog::format_shortcut_hint("Cmd+Shift+Z");
             assert_eq!(result, "⌘⇧Z");
         }
-    
+
         // ============================================================
         // 2. score_action with Unicode
         // ============================================================
-    
+
         #[test]
         fn score_unicode_title_prefix() {
             let action = Action::new(
@@ -12871,7 +12964,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 score
             );
         }
-    
+
         #[test]
         fn score_unicode_contains() {
             let action = Action::new(
@@ -12887,7 +12980,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 score
             );
         }
-    
+
         #[test]
         fn score_empty_query_returns_zero() {
             let action = Action::new("test", "Test", None, ActionCategory::ScriptContext);
@@ -12895,14 +12988,14 @@ mod from_dialog_builtin_action_validation_tests_7 {
             // Empty query: starts_with("") == true for any string
             assert!(score >= 100, "Empty query matches prefix, got {}", score);
         }
-    
+
         #[test]
         fn score_no_match_returns_zero() {
             let action = Action::new("test", "Test Action", None, ActionCategory::ScriptContext);
             let score = ActionsDialog::score_action(&action, "zzzzz");
             assert_eq!(score, 0, "No match should return 0");
         }
-    
+
         #[test]
         fn score_description_only_match() {
             let action = Action::new(
@@ -12918,7 +13011,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 score
             );
         }
-    
+
         #[test]
         fn score_shortcut_only_match() {
             let action =
@@ -12926,7 +13019,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let score = ActionsDialog::score_action(&action, "⌘z");
             assert_eq!(score, 10, "Shortcut-only match should be 10, got {}", score);
         }
-    
+
         #[test]
         fn score_title_plus_description_stacks() {
             let action = Action::new(
@@ -12942,7 +13035,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 score
             );
         }
-    
+
         #[test]
         fn score_all_three_match_stack() {
             let action = Action::new(
@@ -12959,11 +13052,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 score
             );
         }
-    
+
         // ============================================================
         // 3. Note switcher description rendering boundary
         // ============================================================
-    
+
         #[test]
         fn note_desc_exactly_60_chars_not_truncated() {
             let preview = "a".repeat(60);
@@ -12973,7 +13066,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(!desc.contains('…'), "60 chars should not be truncated");
             assert_eq!(desc.len(), 60);
         }
-    
+
         #[test]
         fn note_desc_61_chars_is_truncated() {
             let preview = "a".repeat(61);
@@ -12982,7 +13075,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let desc = actions[0].description.as_ref().unwrap();
             assert!(desc.contains('…'), "61 chars should be truncated with …");
         }
-    
+
         #[test]
         fn note_desc_59_chars_not_truncated() {
             let preview = "b".repeat(59);
@@ -12991,7 +13084,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let desc = actions[0].description.as_ref().unwrap();
             assert!(!desc.contains('…'), "59 chars should not be truncated");
         }
-    
+
         #[test]
         fn note_desc_empty_preview_empty_time_uses_char_count() {
             let note = make_note("n1", "Title", 42, false, false, "", "");
@@ -12999,7 +13092,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "42 chars");
         }
-    
+
         #[test]
         fn note_desc_empty_preview_with_time() {
             let note = make_note("n1", "Title", 42, false, false, "", "5m ago");
@@ -13007,7 +13100,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "5m ago");
         }
-    
+
         #[test]
         fn note_desc_preview_with_time_separator() {
             let note = make_note("n1", "Title", 42, false, false, "Hello world", "3d ago");
@@ -13017,7 +13110,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(desc.starts_with("Hello world"), "Should start with preview");
             assert!(desc.ends_with("3d ago"), "Should end with time");
         }
-    
+
         #[test]
         fn note_desc_singular_char_count() {
             let note = make_note("n1", "Title", 1, false, false, "", "");
@@ -13025,7 +13118,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "1 char", "Singular should not have 's'");
         }
-    
+
         #[test]
         fn note_desc_zero_char_count() {
             let note = make_note("n1", "Title", 0, false, false, "", "");
@@ -13033,11 +13126,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "0 chars", "Zero should be plural");
         }
-    
+
         // ============================================================
         // 4. Clipboard combined flag matrix
         // ============================================================
-    
+
         #[test]
         fn clipboard_text_unpinned_has_pin() {
             let entry = make_text_entry(false, None);
@@ -13045,9 +13138,12 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let ids = action_ids(&actions);
             assert!(ids.contains(&"clip:clipboard_pin"));
             assert!(!ids.contains(&"clip:clipboard_unpin"));
-            assert!(!ids.contains(&"clip:clipboard_ocr"), "Text should not have OCR");
+            assert!(
+                !ids.contains(&"clip:clipboard_ocr"),
+                "Text should not have OCR"
+            );
         }
-    
+
         #[test]
         fn clipboard_text_pinned_has_unpin() {
             let entry = make_text_entry(true, None);
@@ -13056,7 +13152,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(ids.contains(&"clip:clipboard_unpin"));
             assert!(!ids.contains(&"clip:clipboard_pin"));
         }
-    
+
         #[test]
         fn clipboard_image_unpinned_has_ocr_and_pin() {
             let entry = make_image_entry(false);
@@ -13066,7 +13162,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(ids.contains(&"clip:clipboard_pin"));
             assert!(!ids.contains(&"clip:clipboard_unpin"));
         }
-    
+
         #[test]
         fn clipboard_image_pinned_has_ocr_and_unpin() {
             let entry = make_image_entry(true);
@@ -13076,7 +13172,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(ids.contains(&"clip:clipboard_unpin"));
             assert!(!ids.contains(&"clip:clipboard_pin"));
         }
-    
+
         #[test]
         fn clipboard_image_has_more_actions_than_text() {
             let text = make_text_entry(false, None);
@@ -13090,11 +13186,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 text_actions.len()
             );
         }
-    
+
         // ============================================================
         // 5. Chat context model ID generation format consistency
         // ============================================================
-    
+
         #[test]
         fn chat_model_id_format() {
             let info = ChatPromptInfo {
@@ -13119,8 +13215,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(picker.iter().any(|a| a.id == "chat:select_model_gpt-4"));
             assert!(picker.iter().any(|a| a.id == "chat:select_model_claude-3"));
         }
-    
-    
+
         // --- merged from tests_part_02.rs ---
         #[test]
         fn chat_current_model_gets_checkmark() {
@@ -13150,7 +13245,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Non-current model should not have ✓"
             );
         }
-    
+
         #[test]
         fn chat_continue_always_present() {
             let info = ChatPromptInfo {
@@ -13165,7 +13260,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "continue_in_chat should always be present"
             );
         }
-    
+
         #[test]
         fn chat_copy_response_requires_has_response() {
             let without = ChatPromptInfo {
@@ -13185,7 +13280,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let with_actions = get_chat_context_actions(&with);
             assert!(action_ids(&with_actions).contains(&"chat:copy_response"));
         }
-    
+
         #[test]
         fn chat_clear_requires_has_messages() {
             let without = ChatPromptInfo {
@@ -13205,11 +13300,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let with_actions = get_chat_context_actions(&with);
             assert!(action_ids(&with_actions).contains(&"chat:clear_conversation"));
         }
-    
+
         // ============================================================
         // 6. Notes command bar icon presence
         // ============================================================
-    
+
         #[test]
         fn notes_all_actions_have_icons() {
             let info = NotesInfo {
@@ -13226,7 +13321,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn notes_all_actions_have_sections() {
             let info = NotesInfo {
@@ -13243,11 +13338,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         // ============================================================
         // 7. New chat action ordering within each section
         // ============================================================
-    
+
         #[test]
         fn new_chat_sections_appear_in_order() {
             let last_used = vec![NewChatModelInfo {
@@ -13268,7 +13363,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 provider_display_name: "Anthropic".to_string(),
             }];
             let actions = get_new_chat_actions(&last_used, &presets, &models);
-    
+
             // Find first index of each section
             let first_last_used = actions
                 .iter()
@@ -13279,11 +13374,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let first_model = actions
                 .iter()
                 .position(|a| a.section.as_deref() == Some("Models"));
-    
+
             assert!(first_last_used.unwrap() < first_preset.unwrap());
             assert!(first_preset.unwrap() < first_model.unwrap());
         }
-    
+
         #[test]
         fn new_chat_last_used_has_bolt_icon() {
             let last_used = vec![NewChatModelInfo {
@@ -13295,7 +13390,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let actions = get_new_chat_actions(&last_used, &[], &[]);
             assert_eq!(actions[0].icon, Some(IconName::BoltFilled));
         }
-    
+
         #[test]
         fn new_chat_preset_uses_custom_icon() {
             let presets = vec![NewChatPresetInfo {
@@ -13306,7 +13401,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let actions = get_new_chat_actions(&[], &presets, &[]);
             assert_eq!(actions[0].icon, Some(IconName::Code));
         }
-    
+
         #[test]
         fn new_chat_model_uses_settings_icon() {
             let models = vec![NewChatModelInfo {
@@ -13318,13 +13413,13 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let actions = get_new_chat_actions(&[], &[], &models);
             assert_eq!(actions[0].icon, Some(IconName::Settings));
         }
-    
+
         #[test]
         fn new_chat_empty_inputs_empty_output() {
             let actions = get_new_chat_actions(&[], &[], &[]);
             assert!(actions.is_empty());
         }
-    
+
         #[test]
         fn new_chat_id_format_indexed() {
             let lu = vec![
@@ -13345,7 +13440,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert_eq!(actions[0].id, "last_used_p::a");
             assert_eq!(actions[1].id, "last_used_p::b");
         }
-    
+
         #[test]
         fn new_chat_preset_id_format() {
             let presets = vec![NewChatPresetInfo {
@@ -13356,7 +13451,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let actions = get_new_chat_actions(&[], &presets, &[]);
             assert_eq!(actions[0].id, "preset_writer");
         }
-    
+
         #[test]
         fn new_chat_model_id_format_indexed() {
             let models = vec![
@@ -13377,7 +13472,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert_eq!(actions[0].id, "model_p::x");
             assert_eq!(actions[1].id, "model_p::y");
         }
-    
+
         #[test]
         fn new_chat_last_used_has_provider_description() {
             let lu = vec![NewChatModelInfo {
@@ -13387,9 +13482,12 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 provider_display_name: "ProviderName".to_string(),
             }];
             let actions = get_new_chat_actions(&lu, &[], &[]);
-            assert_eq!(actions[0].description, Some("Uses ProviderName".to_string()));
+            assert_eq!(
+                actions[0].description,
+                Some("Uses ProviderName".to_string())
+            );
         }
-    
+
         #[test]
         fn new_chat_preset_has_no_description() {
             let presets = vec![NewChatPresetInfo {
@@ -13401,11 +13499,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let desc = actions[0].description.as_deref().unwrap_or_default();
             assert!(desc.contains("preset"));
         }
-    
+
         // ============================================================
         // 8. Agent actions exclude view_logs
         // ============================================================
-    
+
         #[test]
         fn agent_has_edit_agent_title() {
             let mut agent = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -13415,7 +13513,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let edit = find_action(&actions, "edit_script").unwrap();
             assert_eq!(edit.title, "Edit Agent");
         }
-    
+
         #[test]
         fn agent_lacks_view_logs() {
             let mut agent = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -13427,7 +13525,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Agent should not have view_logs"
             );
         }
-    
+
         #[test]
         fn agent_has_reveal_and_copy() {
             let mut agent = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -13439,11 +13537,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(ids.contains(&"copy_path"));
             assert!(ids.contains(&"copy_content"));
         }
-    
+
         // ============================================================
         // 9. Script vs scriptlet action set symmetric difference
         // ============================================================
-    
+
         #[test]
         fn script_has_actions_scriptlet_lacks() {
             let script = ScriptInfo::new("s", "/path/s.ts");
@@ -13458,7 +13556,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(!sl_ids.contains("edit_script"));
             assert!(!sl_ids.contains("view_logs"));
         }
-    
+
         #[test]
         fn scriptlet_has_actions_script_lacks() {
             let script = ScriptInfo::new("s", "/path/s.ts");
@@ -13475,7 +13573,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(!s_ids.contains("reveal_scriptlet_in_finder"));
             assert!(!s_ids.contains("copy_scriptlet_path"));
         }
-    
+
         #[test]
         fn script_and_scriptlet_share_common_ids() {
             let script = ScriptInfo::new("s", "/path/s.ts");
@@ -13497,29 +13595,35 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 assert!(sl_ids.contains(id), "Scriptlet should have {}", id);
             }
         }
-    
+
         // ============================================================
         // 10. Deeplink URL in description format
         // ============================================================
-    
+
         #[test]
         fn deeplink_description_contains_url() {
             let script = ScriptInfo::new("My Cool Script", "/path/script.ts");
             let actions = get_script_context_actions(&script);
             let dl = find_action(&actions, "copy_deeplink").unwrap();
-            let desc = dl.description.as_ref().unwrap();
-            assert!(desc.contains("scriptkit://run/my-cool-script"));
+            assert_eq!(dl.title, "Share");
+            assert_eq!(
+                dl.description.as_deref(),
+                Some("Copy a portable Script Kit share link to clipboard")
+            );
         }
-    
+
         #[test]
         fn deeplink_description_special_chars() {
             let script = ScriptInfo::new("Test!@#$Script", "/path/script.ts");
             let actions = get_script_context_actions(&script);
             let dl = find_action(&actions, "copy_deeplink").unwrap();
-            let desc = dl.description.as_ref().unwrap();
-            assert!(desc.contains("scriptkit://run/test-script"));
+            assert_eq!(dl.title, "Share");
+            assert_eq!(
+                dl.description.as_deref(),
+                Some("Copy a portable Script Kit share link to clipboard")
+            );
         }
-    
+
         #[test]
         fn deeplink_scriptlet_context() {
             let script = ScriptInfo::scriptlet("Open GitHub", "/path.md", None, None);
@@ -13528,11 +13632,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let desc = dl.description.as_ref().unwrap();
             assert!(desc.contains("scriptkit://run/open-github"));
         }
-    
+
         // ============================================================
         // 11. AI command bar shortcut uniqueness
         // ============================================================
-    
+
         #[test]
         fn ai_command_bar_shortcuts_unique() {
             let actions = get_ai_command_bar_actions();
@@ -13548,13 +13652,13 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 shortcuts
             );
         }
-    
+
         #[test]
         fn ai_command_bar_exactly_12_actions() {
             let actions = get_ai_command_bar_actions();
             assert_eq!(actions.len(), 35);
         }
-    
+
         #[test]
         fn ai_command_bar_all_have_icons() {
             let actions = get_ai_command_bar_actions();
@@ -13566,8 +13670,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
-    
+
         // --- merged from tests_part_03.rs ---
         #[test]
         fn ai_command_bar_all_have_sections() {
@@ -13580,7 +13683,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn ai_command_bar_section_order() {
             let actions = get_ai_command_bar_actions();
@@ -13597,11 +13700,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(first_actions < first_attachments);
             assert!(first_attachments < first_settings);
         }
-    
+
         // ============================================================
         // 12. Notes command bar shortcut uniqueness
         // ============================================================
-    
+
         #[test]
         fn notes_command_bar_shortcuts_unique() {
             let info = NotesInfo {
@@ -13622,11 +13725,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 shortcuts
             );
         }
-    
+
         // ============================================================
         // 13. Path context action ordering
         // ============================================================
-    
+
         #[test]
         fn path_dir_primary_first() {
             let path = PathInfo {
@@ -13637,7 +13740,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let actions = get_path_context_actions(&path);
             assert_eq!(actions[0].id, "file:open_directory");
         }
-    
+
         #[test]
         fn path_file_primary_first() {
             let path = PathInfo {
@@ -13648,7 +13751,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let actions = get_path_context_actions(&path);
             assert_eq!(actions[0].id, "file:select_file");
         }
-    
+
         #[test]
         fn path_trash_last() {
             let path = PathInfo {
@@ -13663,7 +13766,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Trash should be last action"
             );
         }
-    
+
         #[test]
         fn path_dir_trash_says_folder() {
             let path = PathInfo {
@@ -13678,7 +13781,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Dir trash should say 'folder'"
             );
         }
-    
+
         #[test]
         fn path_file_trash_says_file() {
             let path = PathInfo {
@@ -13693,11 +13796,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "File trash should say 'file'"
             );
         }
-    
+
         // ============================================================
         // 14. Clipboard action shortcut format
         // ============================================================
-    
+
         #[test]
         fn clipboard_all_shortcuts_use_symbols() {
             let entry = make_text_entry(false, None);
@@ -13718,11 +13821,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 }
             }
         }
-    
+
         // ============================================================
         // 15. score_action with whitespace-only query
         // ============================================================
-    
+
         #[test]
         fn score_whitespace_query() {
             let action = Action::new(
@@ -13735,11 +13838,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             // " " is a contains match on the title " " appears after words
             assert!(score > 0, "Space should match title containing spaces");
         }
-    
+
         // ============================================================
         // 16. fuzzy_match with repeated characters
         // ============================================================
-    
+
         #[test]
         fn fuzzy_repeated_chars_in_needle() {
             assert!(
@@ -13747,7 +13850,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Should match subsequence with repeated chars in haystack"
             );
         }
-    
+
         #[test]
         fn fuzzy_repeated_chars_in_both() {
             assert!(
@@ -13755,7 +13858,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Should match when both have repeated chars"
             );
         }
-    
+
         #[test]
         fn fuzzy_needle_longer_than_haystack() {
             assert!(
@@ -13763,7 +13866,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Needle longer than haystack should not match"
             );
         }
-    
+
         #[test]
         fn fuzzy_exact_match() {
             assert!(
@@ -13771,7 +13874,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Exact match is a valid subsequence"
             );
         }
-    
+
         #[test]
         fn fuzzy_empty_needle_always_matches() {
             assert!(
@@ -13779,7 +13882,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Empty needle should match everything"
             );
         }
-    
+
         #[test]
         fn fuzzy_empty_haystack_empty_needle() {
             assert!(
@@ -13787,7 +13890,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Both empty should match"
             );
         }
-    
+
         #[test]
         fn fuzzy_empty_haystack_nonempty_needle() {
             assert!(
@@ -13795,11 +13898,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Non-empty needle with empty haystack should not match"
             );
         }
-    
+
         // ============================================================
         // 17. build_grouped_items_static edge cases
         // ============================================================
-    
+
         #[test]
         fn grouped_single_item_no_section_headers_style() {
             let actions = vec![make_action("a1", "Action 1", Some("Sec"))];
@@ -13810,7 +13913,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(matches!(&grouped[0], GroupedActionItem::SectionHeader(s) if s == "Sec"));
             assert!(matches!(&grouped[1], GroupedActionItem::Item(0)));
         }
-    
+
         #[test]
         fn grouped_empty_filtered() {
             let actions = vec![make_action("a1", "Action 1", None)];
@@ -13818,7 +13921,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
             assert!(grouped.is_empty());
         }
-    
+
         #[test]
         fn grouped_none_style_no_headers() {
             let actions = vec![
@@ -13836,7 +13939,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn grouped_separators_style_no_headers() {
             let actions = vec![
@@ -13853,7 +13956,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn grouped_same_section_no_duplicate_header() {
             let actions = vec![
@@ -13869,7 +13972,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 .count();
             assert_eq!(header_count, 1, "Same section should produce only 1 header");
         }
-    
+
         #[test]
         fn grouped_alternating_sections_produce_headers() {
             let actions = vec![
@@ -13889,16 +13992,16 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Alternating sections should produce 3 headers"
             );
         }
-    
+
         // ============================================================
         // 18. coerce_action_selection edge cases
         // ============================================================
-    
+
         #[test]
         fn coerce_empty_returns_none() {
             assert_eq!(coerce_action_selection(&[], 0), None);
         }
-    
+
         #[test]
         fn coerce_all_headers_returns_none() {
             let rows = vec![
@@ -13907,7 +14010,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             ];
             assert_eq!(coerce_action_selection(&rows, 0), None);
         }
-    
+
         #[test]
         fn coerce_on_item_returns_same() {
             let rows = vec![
@@ -13916,7 +14019,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             ];
             assert_eq!(coerce_action_selection(&rows, 1), Some(1));
         }
-    
+
         #[test]
         fn coerce_header_searches_down() {
             let rows = vec![
@@ -13925,7 +14028,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             ];
             assert_eq!(coerce_action_selection(&rows, 0), Some(1));
         }
-    
+
         #[test]
         fn coerce_trailing_header_searches_up() {
             let rows = vec![
@@ -13934,7 +14037,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             ];
             assert_eq!(coerce_action_selection(&rows, 1), Some(0));
         }
-    
+
         #[test]
         fn coerce_alternating_header_item() {
             let rows = vec![
@@ -13952,58 +14055,58 @@ mod from_dialog_builtin_action_validation_tests_7 {
             // On header at 4 -> should find Item at 5
             assert_eq!(coerce_action_selection(&rows, 4), Some(5));
         }
-    
+
         #[test]
         fn coerce_out_of_bounds_clamped() {
             let rows = vec![GroupedActionItem::Item(0), GroupedActionItem::Item(1)];
             // Index 99 should clamp to len-1 = 1
             assert_eq!(coerce_action_selection(&rows, 99), Some(1));
         }
-    
+
         // ============================================================
         // 19. parse_shortcut_keycaps edge cases
         // ============================================================
-    
+
         #[test]
         fn keycaps_empty_string() {
             let result = ActionsDialog::parse_shortcut_keycaps("");
             assert!(result.is_empty());
         }
-    
+
         #[test]
         fn keycaps_single_modifier() {
             let result = ActionsDialog::parse_shortcut_keycaps("⌘");
             assert_eq!(result, vec!["⌘"]);
         }
-    
+
         #[test]
         fn keycaps_modifier_plus_letter() {
             let result = ActionsDialog::parse_shortcut_keycaps("⌘C");
             assert_eq!(result, vec!["⌘", "C"]);
         }
-    
+
         #[test]
         fn keycaps_all_modifiers() {
             let result = ActionsDialog::parse_shortcut_keycaps("⌘⌃⌥⇧");
             assert_eq!(result, vec!["⌘", "⌃", "⌥", "⇧"]);
         }
-    
+
         #[test]
         fn keycaps_special_keys() {
             let result = ActionsDialog::parse_shortcut_keycaps("↵⎋⇥⌫␣↑↓←→");
             assert_eq!(result, vec!["↵", "⎋", "⇥", "⌫", "␣", "↑", "↓", "←", "→"]);
         }
-    
+
         #[test]
         fn keycaps_lowercase_uppercased() {
             let result = ActionsDialog::parse_shortcut_keycaps("⌘a");
             assert_eq!(result, vec!["⌘", "A"]);
         }
-    
+
         // ============================================================
         // 20. CommandBarConfig close flags independence
         // ============================================================
-    
+
         #[test]
         fn command_bar_default_all_close_true() {
             let config = CommandBarConfig::default();
@@ -14011,8 +14114,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(config.close_on_click_outside);
             assert!(config.close_on_escape);
         }
-    
-    
+
         // --- merged from tests_part_04.rs ---
         #[test]
         fn command_bar_ai_style_close_flags_default() {
@@ -14021,7 +14123,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(config.close_on_click_outside);
             assert!(config.close_on_escape);
         }
-    
+
         #[test]
         fn command_bar_main_menu_search_bottom() {
             let config = CommandBarConfig::main_menu_style();
@@ -14030,7 +14132,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 crate::actions::types::SearchPosition::Bottom
             );
         }
-    
+
         #[test]
         fn command_bar_ai_style_search_top() {
             let config = CommandBarConfig::ai_style();
@@ -14039,7 +14141,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 crate::actions::types::SearchPosition::Top
             );
         }
-    
+
         #[test]
         fn command_bar_no_search_hidden() {
             let config = CommandBarConfig::no_search();
@@ -14048,7 +14150,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 crate::actions::types::SearchPosition::Hidden
             );
         }
-    
+
         #[test]
         fn command_bar_notes_style_search_top_icons() {
             let config = CommandBarConfig::notes_style();
@@ -14057,13 +14159,13 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 crate::actions::types::SearchPosition::Top
             );
             assert!(config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
-    
+
         // ============================================================
         // 21. Action constructor with empty strings
         // ============================================================
-    
+
         #[test]
         fn action_empty_id_and_title() {
             let action = Action::new("", "", None, ActionCategory::ScriptContext);
@@ -14073,14 +14175,14 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(action.description.is_none());
             assert!(action.description_lower.is_none());
         }
-    
+
         #[test]
         fn action_with_shortcut_sets_lower() {
             let action =
                 Action::new("x", "X", None, ActionCategory::ScriptContext).with_shortcut("⌘⇧C");
             assert_eq!(action.shortcut_lower, Some("⌘⇧c".to_string()));
         }
-    
+
         #[test]
         fn action_with_shortcut_opt_none_no_lower() {
             let action =
@@ -14088,7 +14190,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(action.shortcut.is_none());
             assert!(action.shortcut_lower.is_none());
         }
-    
+
         #[test]
         fn action_with_shortcut_opt_some_sets_lower() {
             let action = Action::new("x", "X", None, ActionCategory::ScriptContext)
@@ -14096,11 +14198,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert_eq!(action.shortcut, Some("⌘Z".to_string()));
             assert_eq!(action.shortcut_lower, Some("⌘z".to_string()));
         }
-    
+
         // ============================================================
         // 22. ScriptInfo flag exclusivity
         // ============================================================
-    
+
         #[test]
         fn script_info_scriptlet_is_not_script() {
             let scriptlet = ScriptInfo::scriptlet("X", "/p.md", None, None);
@@ -14108,7 +14210,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(!scriptlet.is_script);
             assert!(!scriptlet.is_agent);
         }
-    
+
         #[test]
         fn script_info_agent_is_not_scriptlet() {
             let mut agent = ScriptInfo::new("A", "/a.md");
@@ -14118,7 +14220,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(!agent.is_scriptlet);
             assert!(!agent.is_script);
         }
-    
+
         #[test]
         fn script_info_builtin_is_none_of_the_above() {
             let builtin = ScriptInfo::builtin("Clipboard");
@@ -14126,11 +14228,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(!builtin.is_scriptlet);
             assert!(!builtin.is_agent);
         }
-    
+
         // ============================================================
         // 23. Notes command bar action count bounds per flag state
         // ============================================================
-    
+
         #[test]
         fn notes_minimal_count() {
             // No selection, no auto-sizing disabled → only new_note + browse_notes + enable_auto_sizing
@@ -14148,7 +14250,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 action_ids(&actions)
             );
         }
-    
+
         #[test]
         fn notes_minimal_auto_sizing_enabled() {
             // No selection, auto-sizing already enabled
@@ -14166,7 +14268,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 action_ids(&actions)
             );
         }
-    
+
         #[test]
         fn notes_full_feature_count() {
             let info = NotesInfo {
@@ -14184,7 +14286,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 action_ids(&actions)
             );
         }
-    
+
         #[test]
         fn notes_trash_hides_editing() {
             let info = NotesInfo {
@@ -14200,11 +14302,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(!ids.contains(&"copy_note_as"));
             assert!(!ids.contains(&"export"));
         }
-    
+
         // ============================================================
         // 24. Chat model display_name in title
         // ============================================================
-    
+
         #[test]
         fn chat_model_display_name_in_title() {
             let info = ChatPromptInfo {
@@ -14221,7 +14323,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let model_action = find_action(&picker, "chat:select_model_model-x").unwrap();
             assert_eq!(model_action.title, "Model X Ultra");
         }
-    
+
         #[test]
         fn chat_model_provider_in_description() {
             let info = ChatPromptInfo {
@@ -14238,11 +14340,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let model_action = find_action(&picker, "chat:select_model_m").unwrap();
             assert_eq!(model_action.description, Some("Uses Acme Corp".to_string()));
         }
-    
+
         // ============================================================
         // 25. New chat model_id in action ID
         // ============================================================
-    
+
         #[test]
         fn new_chat_model_section_name() {
             let models = vec![NewChatModelInfo {
@@ -14254,11 +14356,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let actions = get_new_chat_actions(&[], &[], &models);
             assert_eq!(actions[0].section.as_deref(), Some("Models"));
         }
-    
+
         // ============================================================
         // 26. Clipboard delete_all description mentions "pinned"
         // ============================================================
-    
+
         #[test]
         fn clipboard_delete_all_mentions_pinned() {
             let entry = make_text_entry(false, None);
@@ -14275,11 +14377,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 delete_all.description
             );
         }
-    
+
         // ============================================================
         // 27. File context all actions have ScriptContext category
         // ============================================================
-    
+
         #[test]
         fn file_all_script_context_category() {
             let file_info = FileInfo {
@@ -14298,7 +14400,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn file_dir_all_script_context_category() {
             let file_info = FileInfo {
@@ -14317,11 +14419,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         // ============================================================
         // 28. Path context copy_path and copy_filename always present
         // ============================================================
-    
+
         #[test]
         fn path_always_has_copy_path_and_filename() {
             for is_dir in [true, false] {
@@ -14344,7 +14446,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn path_always_has_open_in_finder_editor_terminal() {
             for is_dir in [true, false] {
@@ -14357,14 +14459,14 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 let ids = action_ids(&actions);
                 assert!(ids.contains(&"file:open_in_finder"));
                 assert!(ids.contains(&"file:open_in_editor"));
-                assert!(ids.contains(&"file:open_in_terminal"));
+                assert!(ids.contains(&"file:open_in_quick_terminal"));
             }
         }
-    
+
         // ============================================================
         // 29. Cross-context ID namespace separation
         // ============================================================
-    
+
         #[test]
         fn clipboard_ids_not_in_script_context() {
             let clip = make_text_entry(false, None);
@@ -14380,7 +14482,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 overlap
             );
         }
-    
+
         #[test]
         fn file_ids_not_in_clipboard_context() {
             let file = FileInfo {
@@ -14401,7 +14503,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 overlap
             );
         }
-    
+
         #[test]
         fn ai_ids_not_in_notes_context() {
             let ai_actions = get_ai_command_bar_actions();
@@ -14424,11 +14526,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 overlap
             );
         }
-    
+
         // ============================================================
         // 30. Action title_lower invariant across all builder functions
         // ============================================================
-    
+
         #[test]
         fn title_lower_matches_title_for_script() {
             let script = ScriptInfo::new("My Script", "/path/s.ts");
@@ -14441,7 +14543,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn title_lower_matches_title_for_clipboard() {
             let entry = make_text_entry(false, Some("VS Code"));
@@ -14454,8 +14556,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
-    
+
         // --- merged from tests_part_05.rs ---
         #[test]
         fn title_lower_matches_title_for_ai() {
@@ -14468,7 +14569,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn title_lower_matches_title_for_notes() {
             let info = NotesInfo {
@@ -14485,7 +14586,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn title_lower_matches_title_for_new_chat() {
             let lu = vec![NewChatModelInfo {
@@ -14503,7 +14604,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn title_lower_matches_title_for_note_switcher() {
             let notes = vec![make_note("n1", "My Note", 50, false, false, "", "")];
@@ -14516,7 +14617,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn title_lower_matches_title_for_path() {
             let path = PathInfo {
@@ -14533,7 +14634,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn title_lower_matches_title_for_file() {
             let file = FileInfo {
@@ -14551,7 +14652,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn description_lower_matches_description_for_script() {
             let script = ScriptInfo::new("My Script", "/path/s.ts");
@@ -14573,11 +14674,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 }
             }
         }
-    
+
         // ============================================================
         // Additional: Scriptlet with custom actions
         // ============================================================
-    
+
         #[test]
         fn scriptlet_custom_actions_have_has_action_true() {
             let script = ScriptInfo::scriptlet("Test", "/test.md", None, None);
@@ -14625,7 +14726,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn scriptlet_custom_actions_appear_after_run_before_edit() {
             let script = ScriptInfo::scriptlet("Test", "/test.md", None, None);
@@ -14656,7 +14757,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert!(run_pos < custom_pos, "Run before custom");
             assert!(custom_pos < edit_pos, "Custom before edit");
         }
-    
+
         #[test]
         fn scriptlet_custom_action_shortcut_formatted() {
             let script = ScriptInfo::scriptlet("Test", "/test.md", None, None);
@@ -14679,11 +14780,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             // The shortcut should be formatted using builders.rs format_shortcut_hint
             assert_eq!(custom.shortcut, Some("⌘C".to_string()));
         }
-    
+
         // ============================================================
         // Additional: to_deeplink_name edge cases
         // ============================================================
-    
+
         #[test]
         fn deeplink_unicode_chars_stripped() {
             // Non-alphanumeric chars (including accented) should be replaced with hyphens
@@ -14692,35 +14793,35 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let result = to_deeplink_name("café");
             assert_eq!(result, "caf%C3%A9");
         }
-    
+
         #[test]
         fn deeplink_numbers_preserved() {
             let result = to_deeplink_name("Script 123");
             assert_eq!(result, "script-123");
         }
-    
+
         #[test]
         fn deeplink_all_special_returns_empty() {
             let result = to_deeplink_name("!@#$%");
             assert_eq!(result, "_unnamed");
         }
-    
+
         #[test]
         fn deeplink_already_hyphenated_passthrough() {
             let result = to_deeplink_name("my-script");
             assert_eq!(result, "my-script");
         }
-    
+
         #[test]
         fn deeplink_leading_trailing_special() {
             let result = to_deeplink_name(" !hello! ");
             assert_eq!(result, "hello");
         }
-    
+
         // ============================================================
         // Additional: Ordering determinism
         // ============================================================
-    
+
         #[test]
         fn ordering_determinism_script() {
             let script = ScriptInfo::new("Test", "/test.ts");
@@ -14730,7 +14831,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let ids2 = action_ids(&actions_2);
             assert_eq!(ids1, ids2, "Script actions should be deterministic");
         }
-    
+
         #[test]
         fn ordering_determinism_clipboard() {
             let entry = make_text_entry(false, None);
@@ -14740,7 +14841,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let ids2 = action_ids(&actions_2);
             assert_eq!(ids1, ids2, "Clipboard actions should be deterministic");
         }
-    
+
         #[test]
         fn ordering_determinism_ai() {
             let actions_1 = get_ai_command_bar_actions();
@@ -14749,7 +14850,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let ids2 = action_ids(&actions_2);
             assert_eq!(ids1, ids2, "AI actions should be deterministic");
         }
-    
+
         #[test]
         fn ordering_determinism_notes() {
             let info = NotesInfo {
@@ -14763,7 +14864,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let ids2 = action_ids(&actions_2);
             assert_eq!(ids1, ids2, "Notes actions should be deterministic");
         }
-    
+
         #[test]
         fn ordering_determinism_path() {
             let path = PathInfo {
@@ -14777,11 +14878,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let ids2 = action_ids(&actions_2);
             assert_eq!(ids1, ids2, "Path actions should be deterministic");
         }
-    
+
         // ============================================================
         // Additional: ID uniqueness per context
         // ============================================================
-    
+
         #[test]
         fn id_uniqueness_script() {
             let script = ScriptInfo::new("s", "/s.ts");
@@ -14793,7 +14894,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Script action IDs should be unique"
             );
         }
-    
+
         #[test]
         fn id_uniqueness_clipboard() {
             let entry = make_text_entry(false, None);
@@ -14805,14 +14906,14 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Clipboard action IDs should be unique"
             );
         }
-    
+
         #[test]
         fn id_uniqueness_ai() {
             let actions = get_ai_command_bar_actions();
             let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
             assert_eq!(ids.len(), actions.len(), "AI action IDs should be unique");
         }
-    
+
         #[test]
         fn id_uniqueness_path() {
             let path = PathInfo {
@@ -14824,7 +14925,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
             assert_eq!(ids.len(), actions.len(), "Path action IDs should be unique");
         }
-    
+
         #[test]
         fn id_uniqueness_file() {
             let file = FileInfo {
@@ -14837,7 +14938,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             let ids: HashSet<&str> = action_ids(&actions).into_iter().collect();
             assert_eq!(ids.len(), actions.len(), "File action IDs should be unique");
         }
-    
+
         #[test]
         fn id_uniqueness_notes() {
             let info = NotesInfo {
@@ -14853,11 +14954,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Notes action IDs should be unique"
             );
         }
-    
+
         // ============================================================
         // Additional: has_action=false invariant for all built-in actions
         // ============================================================
-    
+
         #[test]
         fn has_action_false_for_script() {
             let script = ScriptInfo::new("s", "/s.ts");
@@ -14869,7 +14970,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn has_action_false_for_clipboard() {
             let entry = make_text_entry(false, None);
@@ -14881,7 +14982,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn has_action_false_for_ai() {
             for action in &get_ai_command_bar_actions() {
@@ -14892,8 +14993,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
-    
+
         // --- merged from tests_part_06.rs ---
         #[test]
         fn has_action_false_for_path() {
@@ -14910,7 +15010,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn has_action_false_for_file() {
             let file = FileInfo {
@@ -14927,7 +15027,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn has_action_false_for_notes() {
             let info = NotesInfo {
@@ -14943,7 +15043,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn has_action_false_for_chat() {
             let info = ChatPromptInfo {
@@ -14964,11 +15064,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         // ============================================================
         // Additional: Non-empty title and ID for all contexts
         // ============================================================
-    
+
         #[test]
         fn nonempty_title_id_script() {
             let script = ScriptInfo::new("s", "/s.ts");
@@ -14981,7 +15081,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 );
             }
         }
-    
+
         #[test]
         fn nonempty_title_id_clipboard() {
             let entry = make_text_entry(false, None);
@@ -14990,7 +15090,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 assert!(!action.title.is_empty());
             }
         }
-    
+
         #[test]
         fn nonempty_title_id_ai() {
             for action in &get_ai_command_bar_actions() {
@@ -14998,7 +15098,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 assert!(!action.title.is_empty());
             }
         }
-    
+
         #[test]
         fn nonempty_title_id_notes() {
             let info = NotesInfo {
@@ -15011,7 +15111,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 assert!(!action.title.is_empty());
             }
         }
-    
+
         #[test]
         fn nonempty_title_id_path() {
             let path = PathInfo {
@@ -15024,7 +15124,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 assert!(!action.title.is_empty());
             }
         }
-    
+
         #[test]
         fn nonempty_title_id_file() {
             let file = FileInfo {
@@ -15038,11 +15138,11 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 assert!(!action.title.is_empty());
             }
         }
-    
+
         // ============================================================
         // Additional: Note switcher icons and sections
         // ============================================================
-    
+
         #[test]
         fn note_switcher_pinned_star_icon() {
             let note = make_note("n1", "Note", 10, false, true, "", "");
@@ -15050,7 +15150,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert_eq!(actions[0].icon, Some(IconName::StarFilled));
             assert_eq!(actions[0].section.as_deref(), Some("Pinned"));
         }
-    
+
         #[test]
         fn note_switcher_current_check_icon() {
             let note = make_note("n1", "Note", 10, true, false, "", "");
@@ -15058,7 +15158,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert_eq!(actions[0].icon, Some(IconName::Check));
             assert_eq!(actions[0].section.as_deref(), Some("Recent"));
         }
-    
+
         #[test]
         fn note_switcher_default_file_icon() {
             let note = make_note("n1", "Note", 10, false, false, "", "");
@@ -15066,7 +15166,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert_eq!(actions[0].icon, Some(IconName::File));
             assert_eq!(actions[0].section.as_deref(), Some("Recent"));
         }
-    
+
         #[test]
         fn note_switcher_current_gets_bullet_prefix() {
             let note = make_note("n1", "My Note", 10, true, false, "", "");
@@ -15076,7 +15176,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Current note should have bullet prefix"
             );
         }
-    
+
         #[test]
         fn note_switcher_not_current_no_bullet() {
             let note = make_note("n1", "My Note", 10, false, false, "", "");
@@ -15086,14 +15186,14 @@ mod from_dialog_builtin_action_validation_tests_7 {
                 "Non-current note should not have bullet"
             );
         }
-    
+
         #[test]
         fn note_switcher_id_format() {
             let note = make_note("abc-123", "Note", 10, false, false, "", "");
             let actions = get_note_switcher_actions(&[note]);
             assert_eq!(actions[0].id, "note_abc-123");
         }
-    
+
         #[test]
         fn note_switcher_empty_shows_placeholder() {
             let actions = get_note_switcher_actions(&[]);
@@ -15101,7 +15201,7 @@ mod from_dialog_builtin_action_validation_tests_7 {
             assert_eq!(actions[0].id, "no_notes");
             assert!(actions[0].title.contains("No notes"));
         }
-    
+
         #[test]
         fn note_switcher_pinned_takes_priority_over_current() {
             let note = make_note("n1", "Note", 10, true, true, "", "");
@@ -15113,7 +15213,6 @@ mod from_dialog_builtin_action_validation_tests_7 {
             // And still gets bullet prefix because is_current
             assert!(actions[0].title.starts_with("• "));
         }
-    
     }
 }
 
@@ -15153,7 +15252,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
     //! 28. Action with_section/with_icon chaining order independence
     //! 29. Clipboard delete_multiple description content
     //! 30. Deeplink name consecutive special characters
-    
+
     #[cfg(test)]
     mod tests {
         // --- merged from tests_part_01.rs ---
@@ -15161,9 +15260,9 @@ mod from_dialog_builtin_action_validation_tests_8 {
             get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
             get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
             get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
-            get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
-            ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-            NoteSwitcherNoteInfo, NotesInfo,
+            get_script_context_actions, get_scriptlet_context_actions_with_custom,
+            to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
+            NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
         };
         use crate::actions::dialog::{
             build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
@@ -15176,19 +15275,19 @@ mod from_dialog_builtin_action_validation_tests_8 {
         use crate::prompts::PathInfo;
         use crate::scriptlets::{Scriptlet, ScriptletAction};
         use std::collections::HashSet;
-    
+
         // ============================================================
         // Helper functions
         // ============================================================
-    
+
         fn action_ids(actions: &[Action]) -> Vec<&str> {
             actions.iter().map(|a| a.id.as_str()).collect()
         }
-    
+
         fn find_action<'a>(actions: &'a [Action], id: &str) -> Option<&'a Action> {
             actions.iter().find(|a| a.id == id)
         }
-    
+
         fn make_action(id: &str, title: &str, section: Option<&str>) -> Action {
             let mut a = Action::new(
                 id,
@@ -15201,7 +15300,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             }
             a
         }
-    
+
         fn make_note(
             id: &str,
             title: &str,
@@ -15221,7 +15320,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 relative_time: relative_time.to_string(),
             }
         }
-    
+
         fn make_clipboard_entry(
             content_type: ContentType,
             pinned: bool,
@@ -15250,11 +15349,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 frontmost_app_name: app_name.map(|s| s.to_string()),
             }
         }
-    
+
         // ============================================================
         // 1. Action verb in primary title format
         // ============================================================
-    
+
         #[test]
         fn verb_run_in_primary_title() {
             let script = ScriptInfo::new("My Script", "/path/to/script.ts");
@@ -15263,7 +15362,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(primary.title, "Run");
             assert_eq!(primary.id, "run_script");
         }
-    
+
         #[test]
         fn verb_launch_in_primary_title() {
             let script =
@@ -15271,22 +15370,27 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let actions = get_script_context_actions(&script);
             assert_eq!(actions[0].title, "Launch");
         }
-    
+
         #[test]
         fn verb_switch_to_in_primary_title() {
-            let script = ScriptInfo::with_action_verb("My Document", "window:123", false, "Switch to");
+            let script =
+                ScriptInfo::with_action_verb("My Document", "window:123", false, "Switch to");
             let actions = get_script_context_actions(&script);
             assert_eq!(actions[0].title, "Switch To");
         }
-    
+
         #[test]
         fn verb_open_in_primary_title() {
-            let script =
-                ScriptInfo::with_action_verb("Clipboard History", "builtin:clipboard", false, "Open");
+            let script = ScriptInfo::with_action_verb(
+                "Clipboard History",
+                "builtin:clipboard",
+                false,
+                "Open",
+            );
             let actions = get_script_context_actions(&script);
             assert_eq!(actions[0].title, "Open");
         }
-    
+
         #[test]
         fn verb_execute_in_primary_title() {
             let script =
@@ -15294,7 +15398,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let actions = get_script_context_actions(&script);
             assert_eq!(actions[0].title, "Execute");
         }
-    
+
         #[test]
         fn primary_description_includes_verb() {
             let verbs = ["Run", "Launch", "Switch to", "Open", "Execute"];
@@ -15310,7 +15414,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn scriptlet_primary_verb_matches_script_info() {
             let script = ScriptInfo::scriptlet("Open GitHub", "/path/to/url.md", None, None);
@@ -15318,11 +15422,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
             // Scriptlets default to "Run" verb
             assert_eq!(actions[0].title, "Run \"Open GitHub\"");
         }
-    
+
         // ============================================================
         // 2. Clipboard pin × contentType × app combined matrix
         // ============================================================
-    
+
         #[test]
         fn clipboard_text_unpinned_no_app() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -15333,7 +15437,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
             assert_eq!(paste.title, "Paste to Active App");
         }
-    
+
         #[test]
         fn clipboard_text_pinned_with_app() {
             let entry = make_clipboard_entry(ContentType::Text, true, Some("VSCode"));
@@ -15343,7 +15447,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
             assert_eq!(paste.title, "Paste to VSCode");
         }
-    
+
         #[test]
         fn clipboard_image_unpinned_with_app() {
             let entry = make_clipboard_entry(ContentType::Image, false, Some("Figma"));
@@ -15353,7 +15457,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
             assert_eq!(paste.title, "Paste to Figma");
         }
-    
+
         #[test]
         fn clipboard_image_pinned_no_app() {
             let entry = make_clipboard_entry(ContentType::Image, true, None);
@@ -15363,7 +15467,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
             assert_eq!(paste.title, "Paste to Active App");
         }
-    
+
         #[test]
         fn clipboard_image_has_more_actions_than_text() {
             let text_entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -15377,16 +15481,16 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 text_actions.len()
             );
         }
-    
+
         // ============================================================
         // 3. Scriptlet context with custom actions + frecency
         // ============================================================
-    
+
         #[test]
         fn scriptlet_with_custom_actions_and_frecency() {
             let script = ScriptInfo::scriptlet("Test", "/path/to/test.md", None, None)
                 .with_frecency(true, Some("scriptlet:Test".to_string()));
-    
+
             let mut scriptlet = Scriptlet::new(
                 "Test".to_string(),
                 "bash".to_string(),
@@ -15401,9 +15505,9 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 shortcut: Some("cmd+c".to_string()),
                 description: Some("Copy the output".to_string()),
             }];
-    
+
             let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
-    
+
             // Should have custom action
             assert!(actions
                 .iter()
@@ -15423,7 +15527,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(run_idx < custom_idx);
             assert!(custom_idx < edit_idx);
         }
-    
+
         #[test]
         fn scriptlet_custom_action_has_action_true() {
             let script = ScriptInfo::scriptlet("Test", "/path/to/test.md", None, None);
@@ -15441,7 +15545,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 shortcut: None,
                 description: None,
             }];
-    
+
             let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
             let custom = find_action(&actions, "scriptlet_action:do-thing").unwrap();
             assert!(
@@ -15450,7 +15554,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             );
             assert_eq!(custom.value, Some("do-thing".to_string()));
         }
-    
+
         #[test]
         fn scriptlet_builtin_actions_have_has_action_false() {
             let script = ScriptInfo::scriptlet("Test", "/path/to/test.md", None, None);
@@ -15465,11 +15569,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 }
             }
         }
-    
+
         // ============================================================
         // 4. Path context special characters in names
         // ============================================================
-    
+
         #[test]
         fn path_dir_with_spaces_in_name() {
             let info = PathInfo::new("My Documents", "/Users/test/My Documents", true);
@@ -15478,7 +15582,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(primary.title, "Open \"My Documents\"");
             assert_eq!(primary.id, "file:open_directory");
         }
-    
+
         #[test]
         fn path_file_with_dots_in_name() {
             let info = PathInfo::new("archive.tar.gz", "/tmp/archive.tar.gz", false);
@@ -15487,18 +15591,18 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(primary.title, "Select \"archive.tar.gz\"");
             assert_eq!(primary.id, "file:select_file");
         }
-    
+
         #[test]
         fn path_trash_description_dir_vs_file() {
             let dir_info = PathInfo::new("folder", "/tmp/folder", true);
             let file_info = PathInfo::new("file.txt", "/tmp/file.txt", false);
-    
+
             let dir_actions = get_path_context_actions(&dir_info);
             let file_actions = get_path_context_actions(&file_info);
-    
+
             let dir_trash = find_action(&dir_actions, "file:move_to_trash").unwrap();
             let file_trash = find_action(&file_actions, "file:move_to_trash").unwrap();
-    
+
             assert!(
                 dir_trash.description.as_ref().unwrap().contains("folder"),
                 "Dir trash should say 'folder'"
@@ -15508,7 +15612,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "File trash should say 'file'"
             );
         }
-    
+
         #[test]
         fn path_dir_and_file_have_same_action_count() {
             let dir_info = PathInfo::new("dir", "/tmp/dir", true);
@@ -15523,11 +15627,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 file_actions.len()
             );
         }
-    
+
         // ============================================================
         // 5. Note switcher Unicode/emoji titles
         // ============================================================
-    
+
         #[test]
         fn note_switcher_unicode_title() {
             let notes = vec![make_note(
@@ -15543,7 +15647,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(actions.len(), 1);
             assert_eq!(actions[0].title, "Café Notes");
         }
-    
+
         #[test]
         fn note_switcher_current_with_bullet() {
             let notes = vec![make_note(
@@ -15563,7 +15667,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             );
             assert_eq!(actions[0].title, "• Current Note");
         }
-    
+
         #[test]
         fn note_switcher_pinned_has_star_icon() {
             let notes = vec![make_note(
@@ -15579,7 +15683,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(actions[0].icon, Some(IconName::StarFilled));
             assert_eq!(actions[0].section, Some("Pinned".to_string()));
         }
-    
+
         #[test]
         fn note_switcher_current_has_check_icon() {
             let notes = vec![make_note(
@@ -15595,8 +15699,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(actions[0].icon, Some(IconName::Check));
             assert_eq!(actions[0].section, Some("Recent".to_string()));
         }
-    
-    
+
         // --- merged from tests_part_02.rs ---
         #[test]
         fn note_switcher_regular_has_file_icon() {
@@ -15613,7 +15716,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(actions[0].icon, Some(IconName::File));
             assert_eq!(actions[0].section, Some("Recent".to_string()));
         }
-    
+
         #[test]
         fn note_switcher_pinned_overrides_current_icon() {
             // When both pinned and current, pinned wins for icon
@@ -15634,7 +15737,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             );
             assert_eq!(actions[0].section, Some("Pinned".to_string()));
         }
-    
+
         #[test]
         fn note_switcher_empty_returns_placeholder() {
             let actions = get_note_switcher_actions(&[]);
@@ -15642,18 +15745,18 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(actions[0].id, "no_notes");
             assert_eq!(actions[0].title, "No notes yet");
         }
-    
+
         #[test]
         fn note_switcher_id_format() {
             let notes = vec![make_note("abc-123-def", "Test", 10, false, false, "", "")];
             let actions = get_note_switcher_actions(&notes);
             assert_eq!(actions[0].id, "note_abc-123-def");
         }
-    
+
         // ============================================================
         // 6. Chat context partial state combinations
         // ============================================================
-    
+
         #[test]
         fn chat_no_models_no_messages_no_response() {
             let info = ChatPromptInfo {
@@ -15669,7 +15772,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
             assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
         }
-    
+
         #[test]
         fn chat_has_response_but_no_messages() {
             let info = ChatPromptInfo {
@@ -15682,7 +15785,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(actions.iter().any(|a| a.id == "chat:copy_response"));
             assert!(!actions.iter().any(|a| a.id == "chat:clear_conversation"));
         }
-    
+
         #[test]
         fn chat_has_messages_but_no_response() {
             let info = ChatPromptInfo {
@@ -15695,7 +15798,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(!actions.iter().any(|a| a.id == "chat:copy_response"));
             assert!(actions.iter().any(|a| a.id == "chat:clear_conversation"));
         }
-    
+
         #[test]
         fn chat_all_flags_true() {
             let info = ChatPromptInfo {
@@ -15720,7 +15823,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .unwrap();
             assert!(model_action.title.contains('✓'));
         }
-    
+
         #[test]
         fn chat_checkmark_only_on_exact_display_name_match() {
             let info = ChatPromptInfo {
@@ -15743,7 +15846,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let picker = get_chat_model_picker_actions(&info);
             let claude3 = find_action(&picker, "chat:select_model_claude-3").unwrap();
             let claude35 = find_action(&picker, "chat:select_model_claude-35").unwrap();
-    
+
             assert!(
                 !claude3.title.contains('✓'),
                 "Claude 3 should NOT have checkmark when current is Claude 3.5"
@@ -15753,7 +15856,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "Claude 3.5 should have checkmark"
             );
         }
-    
+
         #[test]
         fn chat_model_description_includes_provider() {
             let info = ChatPromptInfo {
@@ -15773,11 +15876,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "Model description should contain provider"
             );
         }
-    
+
         // ============================================================
         // 7. AI command bar description keyword validation
         // ============================================================
-    
+
         #[test]
         fn ai_command_bar_copy_response_desc() {
             let actions = get_ai_command_bar_actions();
@@ -15789,7 +15892,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .to_lowercase()
                 .contains("response"));
         }
-    
+
         #[test]
         fn ai_command_bar_copy_chat_desc() {
             let actions = get_ai_command_bar_actions();
@@ -15801,7 +15904,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .to_lowercase()
                 .contains("conversation"));
         }
-    
+
         #[test]
         fn ai_command_bar_copy_last_code_desc() {
             let actions = get_ai_command_bar_actions();
@@ -15813,7 +15916,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .to_lowercase()
                 .contains("code"));
         }
-    
+
         #[test]
         fn ai_command_bar_new_chat_desc() {
             let actions = get_ai_command_bar_actions();
@@ -15825,7 +15928,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .to_lowercase()
                 .contains("new"));
         }
-    
+
         #[test]
         fn ai_command_bar_change_model_desc() {
             let actions = get_ai_command_bar_actions();
@@ -15837,7 +15940,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .to_lowercase()
                 .contains("model"));
         }
-    
+
         #[test]
         fn ai_command_bar_delete_chat_desc() {
             let actions = get_ai_command_bar_actions();
@@ -15849,7 +15952,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .to_lowercase()
                 .contains("delete"));
         }
-    
+
         #[test]
         fn ai_command_bar_submit_desc() {
             let actions = get_ai_command_bar_actions();
@@ -15861,11 +15964,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .to_lowercase()
                 .contains("send"));
         }
-    
+
         // ============================================================
         // 8. Notes command bar section label transitions
         // ============================================================
-    
+
         #[test]
         fn notes_full_feature_sections() {
             let info = NotesInfo {
@@ -15882,7 +15985,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(sections.contains(&&"Export".to_string()));
             assert!(sections.contains(&&"Settings".to_string()));
         }
-    
+
         #[test]
         fn notes_minimal_sections() {
             let info = NotesInfo {
@@ -15905,7 +16008,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 sections
             );
         }
-    
+
         #[test]
         fn notes_trash_view_hides_edit_actions() {
             let info = NotesInfo {
@@ -15922,7 +16025,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(!ids.contains(&"copy_note_as"));
             assert!(!ids.contains(&"export"));
         }
-    
+
         #[test]
         fn notes_all_actions_have_icons() {
             let info = NotesInfo {
@@ -15939,7 +16042,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn notes_all_actions_have_sections() {
             let info = NotesInfo {
@@ -15956,11 +16059,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         // ============================================================
         // 9. New chat duplicate providers
         // ============================================================
-    
+
         #[test]
         fn new_chat_multiple_models_same_provider() {
             let models = vec![
@@ -15991,13 +16094,13 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn new_chat_empty_inputs_return_empty() {
             let actions = get_new_chat_actions(&[], &[], &[]);
             assert!(actions.is_empty());
         }
-    
+
         #[test]
         fn new_chat_section_ordering() {
             let last_used = vec![NewChatModelInfo {
@@ -16017,7 +16120,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 provider: "p".to_string(),
                 provider_display_name: "Provider".to_string(),
             }];
-    
+
             let actions = get_new_chat_actions(&last_used, &presets, &models);
             let lu_idx = actions
                 .iter()
@@ -16034,7 +16137,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(lu_idx < preset_idx, "Last Used before Presets");
             assert!(preset_idx < model_idx, "Presets before Models");
         }
-    
+
         #[test]
         fn new_chat_preset_has_no_description() {
             let presets = vec![NewChatPresetInfo {
@@ -16049,8 +16152,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "Preset actions include a preset usage description"
             );
         }
-    
-    
+
         // --- merged from tests_part_03.rs ---
         #[test]
         fn new_chat_last_used_has_bolt_icon() {
@@ -16063,7 +16165,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let actions = get_new_chat_actions(&last_used, &[], &[]);
             assert_eq!(actions[0].icon, Some(IconName::BoltFilled));
         }
-    
+
         #[test]
         fn new_chat_model_has_settings_icon() {
             let models = vec![NewChatModelInfo {
@@ -16075,11 +16177,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let actions = get_new_chat_actions(&[], &[], &models);
             assert_eq!(actions[0].icon, Some(IconName::Settings));
         }
-    
+
         // ============================================================
         // 10. Deeplink description URL format
         // ============================================================
-    
+
         #[test]
         fn deeplink_description_contains_url() {
             let script = ScriptInfo::new("My Script", "/path/to/script.ts");
@@ -16089,58 +16191,58 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .description
                 .as_ref()
                 .unwrap()
-                .contains("scriptkit://run/my-script"));
+                .eq("Copy a portable Script Kit share link to clipboard"));
         }
-    
+
         #[test]
         fn deeplink_description_special_chars_stripped() {
             let script = ScriptInfo::new("Hello!@#World", "/path/to/script.ts");
             let actions = get_script_context_actions(&script);
             let dl = find_action(&actions, "copy_deeplink").unwrap();
-            assert!(dl
-                .description
-                .as_ref()
-                .unwrap()
-                .contains("scriptkit://run/hello-world"));
+            assert_eq!(dl.title, "Share");
+            assert_eq!(
+                dl.description.as_deref(),
+                Some("Copy a portable Script Kit share link to clipboard")
+            );
         }
-    
+
         #[test]
         fn deeplink_name_consecutive_specials() {
             assert_eq!(to_deeplink_name("a!!!b"), "a-b");
             assert_eq!(to_deeplink_name("---hello---"), "hello");
             assert_eq!(to_deeplink_name("  spaces  between  "), "spaces-between");
         }
-    
+
         #[test]
         fn deeplink_name_unicode_preserved() {
             assert_eq!(to_deeplink_name("café"), "caf%C3%A9");
             assert_eq!(to_deeplink_name("naïve"), "na%C3%AFve");
         }
-    
+
         #[test]
         fn deeplink_name_empty_after_stripping() {
             let result = to_deeplink_name("!@#$%");
             assert_eq!(result, "_unnamed");
         }
-    
+
         // ============================================================
         // 11. Score_action boundary thresholds
         // ============================================================
-    
+
         #[test]
         fn score_prefix_match_is_100() {
             let action = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
             let score = ActionsDialog::score_action(&action, "edit");
             assert_eq!(score, 100, "Prefix match should score exactly 100");
         }
-    
+
         #[test]
         fn score_contains_match_is_50() {
             let action = Action::new("id", "The Editor", None, ActionCategory::ScriptContext);
             let score = ActionsDialog::score_action(&action, "editor");
             assert_eq!(score, 50, "Contains match should score exactly 50");
         }
-    
+
         #[test]
         fn score_fuzzy_match_is_25() {
             // "esr" is a subsequence of "edit script" (e...s...r? no)
@@ -16150,7 +16252,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let score = ActionsDialog::score_action(&action, "eit");
             assert_eq!(score, 25, "Fuzzy subsequence match should score exactly 25");
         }
-    
+
         #[test]
         fn score_description_bonus_is_15() {
             let action = Action::new(
@@ -16174,16 +16276,16 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "Description-only match should score 15"
             );
         }
-    
+
         #[test]
         fn score_shortcut_bonus_is_10() {
-            let action =
-                Action::new("id", "Open File", None, ActionCategory::ScriptContext).with_shortcut("⌘E");
+            let action = Action::new("id", "Open File", None, ActionCategory::ScriptContext)
+                .with_shortcut("⌘E");
             // "⌘e" matches shortcut_lower
             let score = ActionsDialog::score_action(&action, "⌘e");
             assert_eq!(score, 10, "Shortcut-only match should score 10");
         }
-    
+
         #[test]
         fn score_prefix_plus_desc_stacking() {
             let action = Action::new(
@@ -16195,14 +16297,14 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let score = ActionsDialog::score_action(&action, "copy");
             assert_eq!(score, 100, "Current scoring keeps prefix-only score here");
         }
-    
+
         #[test]
         fn score_no_match_is_zero() {
             let action = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
             let score = ActionsDialog::score_action(&action, "zzz");
             assert_eq!(score, 0, "No match should score 0");
         }
-    
+
         #[test]
         fn score_empty_query_scores_zero() {
             let action = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
@@ -16210,11 +16312,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
             // Empty string is prefix of everything
             assert_eq!(score, 100, "Empty query matches everything as prefix");
         }
-    
+
         // ============================================================
         // 12. build_grouped_items interleaved section/no-section
         // ============================================================
-    
+
         #[test]
         fn grouped_items_mixed_section_and_no_section() {
             let actions = vec![
@@ -16236,7 +16338,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(header_count, 2, "Should have 2 section headers");
             assert_eq!(item_count, 3, "Should have 3 items");
         }
-    
+
         #[test]
         fn grouped_items_none_style_no_headers() {
             let actions = vec![
@@ -16254,7 +16356,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             }
             assert_eq!(items.len(), 2);
         }
-    
+
         #[test]
         fn grouped_items_separators_style_no_headers() {
             let actions = vec![
@@ -16270,7 +16372,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn grouped_items_empty_filtered() {
             let actions = vec![make_action("a1", "Action 1", Some("Section A"))];
@@ -16278,7 +16380,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let items = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
             assert!(items.is_empty());
         }
-    
+
         #[test]
         fn grouped_items_same_section_no_duplicate_header() {
             let actions = vec![
@@ -16294,17 +16396,17 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 .count();
             assert_eq!(header_count, 1, "Same section should produce only 1 header");
         }
-    
+
         // ============================================================
         // 13. coerce_action_selection complex patterns
         // ============================================================
-    
+
         #[test]
         fn coerce_empty_returns_none() {
             let result = coerce_action_selection(&[], 0);
             assert_eq!(result, None);
         }
-    
+
         #[test]
         fn coerce_all_headers_returns_none() {
             let rows = vec![
@@ -16314,14 +16416,14 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let result = coerce_action_selection(&rows, 0);
             assert_eq!(result, None);
         }
-    
+
         #[test]
         fn coerce_on_item_returns_same() {
             let rows = vec![GroupedActionItem::Item(0), GroupedActionItem::Item(1)];
             let result = coerce_action_selection(&rows, 0);
             assert_eq!(result, Some(0));
         }
-    
+
         #[test]
         fn coerce_header_at_start_goes_down() {
             let rows = vec![
@@ -16331,7 +16433,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let result = coerce_action_selection(&rows, 0);
             assert_eq!(result, Some(1));
         }
-    
+
         #[test]
         fn coerce_header_at_end_goes_up() {
             let rows = vec![
@@ -16341,7 +16443,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let result = coerce_action_selection(&rows, 1);
             assert_eq!(result, Some(0));
         }
-    
+
         #[test]
         fn coerce_alternating_header_item() {
             let rows = vec![
@@ -16354,70 +16456,70 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let result = coerce_action_selection(&rows, 2);
             assert_eq!(result, Some(3));
         }
-    
+
         #[test]
         fn coerce_out_of_bounds_clamped() {
             let rows = vec![GroupedActionItem::Item(0), GroupedActionItem::Item(1)];
             let result = coerce_action_selection(&rows, 999);
             assert_eq!(result, Some(1));
         }
-    
+
         // ============================================================
         // 14. parse_shortcut_keycaps compound symbol sequences
         // ============================================================
-    
+
         #[test]
         fn parse_keycaps_cmd_c() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘C");
             assert_eq!(keycaps, vec!["⌘", "C"]);
         }
-    
+
         #[test]
         fn parse_keycaps_all_modifiers() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌃⌥⇧⌘A");
             assert_eq!(keycaps, vec!["⌃", "⌥", "⇧", "⌘", "A"]);
         }
-    
+
         #[test]
         fn parse_keycaps_enter() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("↵");
             assert_eq!(keycaps, vec!["↵"]);
         }
-    
+
         #[test]
         fn parse_keycaps_arrows() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("↑↓←→");
             assert_eq!(keycaps, vec!["↑", "↓", "←", "→"]);
         }
-    
+
         #[test]
         fn parse_keycaps_escape() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⎋");
             assert_eq!(keycaps, vec!["⎋"]);
         }
-    
+
         #[test]
         fn parse_keycaps_empty() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("");
             assert!(keycaps.is_empty());
         }
-    
+
         #[test]
         fn parse_keycaps_space_symbol() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("␣");
             assert_eq!(keycaps, vec!["␣"]);
         }
-    
+
         #[test]
         fn parse_keycaps_lowercase_uppercased() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘c");
             assert_eq!(keycaps, vec!["⌘", "C"]);
         }
-    
+
         // ============================================================
         // 15. CommandBarConfig detailed fields
         // ============================================================
-    
+
         #[test]
         fn command_bar_default_config() {
             let config = CommandBarConfig::default();
@@ -16429,7 +16531,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 crate::actions::types::SearchPosition::Bottom
             );
         }
-    
+
         #[test]
         fn command_bar_ai_style() {
             let config = CommandBarConfig::ai_style();
@@ -16439,9 +16541,9 @@ mod from_dialog_builtin_action_validation_tests_8 {
             );
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
-    
+
         #[test]
         fn command_bar_main_menu_style() {
             let config = CommandBarConfig::main_menu_style();
@@ -16451,9 +16553,9 @@ mod from_dialog_builtin_action_validation_tests_8 {
             );
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(!config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
-    
+
         #[test]
         fn command_bar_no_search() {
             let config = CommandBarConfig::no_search();
@@ -16462,11 +16564,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 crate::actions::types::SearchPosition::Hidden
             );
         }
-    
+
         // ============================================================
         // 16. Cross-builder action count comparisons
         // ============================================================
-    
+
         #[test]
         fn script_has_more_actions_than_builtin() {
             let script = ScriptInfo::new("test", "/path/to/test.ts");
@@ -16480,7 +16582,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 builtin_actions.len()
             );
         }
-    
+
         #[test]
         fn scriptlet_via_script_context_vs_scriptlet_context_same_count() {
             let script = ScriptInfo::scriptlet("Test", "/path/to/test.md", None, None);
@@ -16494,8 +16596,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 via_scriptlet.len()
             );
         }
-    
-    
+
         // --- merged from tests_part_04.rs ---
         #[test]
         fn script_with_frecency_has_one_more_action() {
@@ -16510,11 +16611,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "Frecency adds exactly 1 action (reset_ranking)"
             );
         }
-    
+
         // ============================================================
         // 17. Action builder chaining order independence
         // ============================================================
-    
+
         #[test]
         fn with_icon_then_section_same_as_reverse() {
             let a1 = Action::new("id", "Title", None, ActionCategory::ScriptContext)
@@ -16528,7 +16629,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(a1.id, a2.id);
             assert_eq!(a1.title, a2.title);
         }
-    
+
         #[test]
         fn with_shortcut_then_icon_then_section() {
             let a = Action::new("id", "Title", None, ActionCategory::ScriptContext)
@@ -16539,7 +16640,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(a.icon, Some(IconName::Copy));
             assert_eq!(a.section, Some("Section".to_string()));
         }
-    
+
         #[test]
         fn with_shortcut_opt_none_preserves_fields() {
             let a = Action::new(
@@ -16554,18 +16655,18 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(a.shortcut.is_none());
             assert_eq!(a.description, Some("Desc".to_string()));
         }
-    
+
         #[test]
         fn with_shortcut_sets_lowercase_cache() {
-            let a =
-                Action::new("id", "Title", None, ActionCategory::ScriptContext).with_shortcut("⌘⇧C");
+            let a = Action::new("id", "Title", None, ActionCategory::ScriptContext)
+                .with_shortcut("⌘⇧C");
             assert_eq!(a.shortcut_lower, Some("⌘⇧c".to_string()));
         }
-    
+
         // ============================================================
         // 18. Clipboard destructive action ordering stability
         // ============================================================
-    
+
         #[test]
         fn clipboard_destructive_actions_always_last_three() {
             let entries = vec![
@@ -16597,7 +16698,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn clipboard_paste_always_first() {
             let entries = vec![
@@ -16612,7 +16713,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn clipboard_copy_always_second() {
             let entries = vec![
@@ -16627,11 +16728,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         // ============================================================
         // 19. File context title includes exact filename
         // ============================================================
-    
+
         #[test]
         fn file_context_title_includes_filename() {
             let file_info = FileInfo {
@@ -16648,7 +16749,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 primary.title
             );
         }
-    
+
         #[test]
         fn file_context_dir_title_includes_dirname() {
             let file_info = FileInfo {
@@ -16665,7 +16766,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 primary.title
             );
         }
-    
+
         #[test]
         fn file_context_all_have_descriptions() {
             let file_info = FileInfo {
@@ -16683,11 +16784,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         // ============================================================
         // 20. Notes info all-true/all-false edge cases
         // ============================================================
-    
+
         #[test]
         fn notes_all_true_max_actions() {
             let info = NotesInfo {
@@ -16703,7 +16804,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 actions.len()
             );
         }
-    
+
         #[test]
         fn notes_all_false_min_actions() {
             let info = NotesInfo {
@@ -16720,7 +16821,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 actions.len()
             );
         }
-    
+
         #[test]
         fn notes_auto_sizing_disabled_adds_one() {
             let with_auto = NotesInfo {
@@ -16741,11 +16842,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "Disabled auto-sizing adds exactly 1 action"
             );
         }
-    
+
         // ============================================================
         // 21. ScriptInfo agent flag interactions with frecency chaining
         // ============================================================
-    
+
         #[test]
         fn agent_with_frecency_has_reset_ranking() {
             let mut agent = ScriptInfo::new("Agent", "/path/to/agent");
@@ -16755,7 +16856,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let actions = get_script_context_actions(&agent);
             assert!(actions.iter().any(|a| a.id == "reset_ranking"));
         }
-    
+
         #[test]
         fn agent_frecency_preserves_agent_flag() {
             let mut agent = ScriptInfo::new("Agent", "/path/to/agent");
@@ -16766,11 +16867,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(!agent.is_script);
             assert!(agent.is_suggested);
         }
-    
+
         // ============================================================
         // 22. Agent actions: no view_logs, has copy_content
         // ============================================================
-    
+
         #[test]
         fn agent_has_no_view_logs() {
             let mut agent = ScriptInfo::new("Agent", "/path/to/agent");
@@ -16779,7 +16880,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let actions = get_script_context_actions(&agent);
             assert!(!actions.iter().any(|a| a.id == "view_logs"));
         }
-    
+
         #[test]
         fn agent_has_copy_content() {
             let mut agent = ScriptInfo::new("Agent", "/path/to/agent");
@@ -16788,7 +16889,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let actions = get_script_context_actions(&agent);
             assert!(actions.iter().any(|a| a.id == "copy_content"));
         }
-    
+
         #[test]
         fn agent_edit_title_says_agent() {
             let mut agent = ScriptInfo::new("Agent", "/path/to/agent");
@@ -16798,7 +16899,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let edit = find_action(&actions, "edit_script").unwrap();
             assert_eq!(edit.title, "Edit Agent");
         }
-    
+
         #[test]
         fn agent_has_reveal_and_copy_path() {
             let mut agent = ScriptInfo::new("Agent", "/path/to/agent");
@@ -16808,11 +16909,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(actions.iter().any(|a| a.id == "reveal_in_finder"));
             assert!(actions.iter().any(|a| a.id == "copy_path"));
         }
-    
+
         // ============================================================
         // 23. Builtin with full optional fields
         // ============================================================
-    
+
         #[test]
         fn builtin_with_shortcut_and_alias_and_frecency() {
             let builtin = ScriptInfo::with_all(
@@ -16824,33 +16925,37 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 Some("ch".to_string()),
             )
             .with_frecency(true, Some("builtin:clipboard".to_string()));
-    
+
             let actions = get_script_context_actions(&builtin);
-    
+
             // Should have update/remove instead of add
             assert!(actions.iter().any(|a| a.id == "update_shortcut"));
             assert!(actions.iter().any(|a| a.id == "remove_shortcut"));
             assert!(actions.iter().any(|a| a.id == "update_alias"));
             assert!(actions.iter().any(|a| a.id == "remove_alias"));
             assert!(actions.iter().any(|a| a.id == "reset_ranking"));
-    
+
             // Should NOT have script-specific actions
             assert!(!actions.iter().any(|a| a.id == "edit_script"));
             assert!(!actions.iter().any(|a| a.id == "view_logs"));
         }
-    
+
         #[test]
         fn builtin_primary_uses_custom_verb() {
-            let builtin =
-                ScriptInfo::with_action_verb("Clipboard History", "builtin:clipboard", false, "Open");
+            let builtin = ScriptInfo::with_action_verb(
+                "Clipboard History",
+                "builtin:clipboard",
+                false,
+                "Open",
+            );
             let actions = get_script_context_actions(&builtin);
             assert_eq!(actions[0].title, "Open");
         }
-    
+
         // ============================================================
         // 24. Path context dir vs file action count equality
         // ============================================================
-    
+
         #[test]
         fn path_dir_file_action_count_equal() {
             let dir = PathInfo::new("dir", "/tmp/dir", true);
@@ -16859,7 +16964,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let file_actions = get_path_context_actions(&file);
             assert_eq!(dir_actions.len(), file_actions.len());
         }
-    
+
         #[test]
         fn path_always_has_copy_path_and_copy_filename() {
             let dir = PathInfo::new("dir", "/tmp/dir", true);
@@ -16872,11 +16977,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 assert!(actions.iter().any(|a| a.id == "file:copy_filename"));
             }
         }
-    
+
         // ============================================================
         // 25. Multiple scriptlet custom actions ordering
         // ============================================================
-    
+
         #[test]
         fn scriptlet_multiple_custom_actions_maintain_order() {
             let script = ScriptInfo::scriptlet("Test", "/path/to/test.md", None, None);
@@ -16914,7 +17019,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                     description: None,
                 },
             ];
-    
+
             let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
             let first_idx = actions
                 .iter()
@@ -16931,8 +17036,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(first_idx < second_idx, "First before second");
             assert!(second_idx < third_idx, "Second before third");
         }
-    
-    
+
         // --- merged from tests_part_05.rs ---
         #[test]
         fn scriptlet_custom_actions_after_run_before_shortcut() {
@@ -16951,7 +17055,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 shortcut: None,
                 description: None,
             }];
-    
+
             let actions = get_scriptlet_context_actions_with_custom(&script, Some(&scriptlet));
             let run_idx = actions.iter().position(|a| a.id == "run_script").unwrap();
             let custom_idx = actions
@@ -16965,11 +17069,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "Custom before shortcut management"
             );
         }
-    
+
         // ============================================================
         // 26. Chat model checkmark exact match only
         // ============================================================
-    
+
         #[test]
         fn chat_no_checkmark_on_partial_match() {
             let info = ChatPromptInfo {
@@ -16998,11 +17102,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
             );
             assert!(gpt4.title.contains('✓'), "GPT-4 should have checkmark");
         }
-    
+
         // ============================================================
         // 27. Note switcher empty/placeholder title
         // ============================================================
-    
+
         #[test]
         fn note_switcher_description_falls_back_to_char_count() {
             let notes = vec![make_note("id1", "Note", 42, false, false, "", "")];
@@ -17010,7 +17114,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "42 chars");
         }
-    
+
         #[test]
         fn note_switcher_singular_char_count() {
             let notes = vec![make_note("id1", "Note", 1, false, false, "", "")];
@@ -17018,7 +17122,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "1 char");
         }
-    
+
         #[test]
         fn note_switcher_zero_chars() {
             let notes = vec![make_note("id1", "Note", 0, false, false, "", "")];
@@ -17026,7 +17130,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "0 chars");
         }
-    
+
         #[test]
         fn note_switcher_preview_with_time() {
             let notes = vec![make_note(
@@ -17042,7 +17146,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let desc = actions[0].description.as_ref().unwrap();
             assert_eq!(desc, "Hello world · 5m ago");
         }
-    
+
         #[test]
         fn note_switcher_preview_truncation_at_61() {
             let long_preview = "a".repeat(61);
@@ -17061,7 +17165,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             // 60 chars + ellipsis
             assert_eq!(desc.chars().count(), 61);
         }
-    
+
         #[test]
         fn note_switcher_preview_not_truncated_at_60() {
             let exact_preview = "a".repeat(60);
@@ -17079,11 +17183,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert!(!desc.ends_with('…'), "60 chars should NOT be truncated");
             assert_eq!(desc.chars().count(), 60);
         }
-    
+
         // ============================================================
         // 28. Action with_section/with_icon chaining order independence
         // ============================================================
-    
+
         #[test]
         fn action_chaining_shortcut_preserves_title_lower() {
             let a = Action::new("id", "Hello World", None, ActionCategory::ScriptContext)
@@ -17091,7 +17195,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             assert_eq!(a.title_lower, "hello world");
             assert_eq!(a.shortcut_lower, Some("⌘h".to_string()));
         }
-    
+
         #[test]
         fn action_description_lower_computed() {
             let a = Action::new(
@@ -17102,17 +17206,17 @@ mod from_dialog_builtin_action_validation_tests_8 {
             );
             assert_eq!(a.description_lower, Some("mixed case desc".to_string()));
         }
-    
+
         #[test]
         fn action_no_description_lower_is_none() {
             let a = Action::new("id", "Title", None, ActionCategory::ScriptContext);
             assert!(a.description_lower.is_none());
         }
-    
+
         // ============================================================
         // 29. Clipboard delete_multiple description
         // ============================================================
-    
+
         #[test]
         fn clipboard_delete_multiple_desc_mentions_filter() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -17133,7 +17237,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "delete_multiple desc should mention filtering/matching"
             );
         }
-    
+
         #[test]
         fn clipboard_delete_all_desc_mentions_pinned() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -17148,40 +17252,40 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "delete_all desc should mention pinned"
             );
         }
-    
+
         // ============================================================
         // 30. Deeplink name edge cases
         // ============================================================
-    
+
         #[test]
         fn deeplink_name_basic() {
             assert_eq!(to_deeplink_name("My Script"), "my-script");
         }
-    
+
         #[test]
         fn deeplink_name_already_lowercase_hyphenated() {
             assert_eq!(to_deeplink_name("my-script"), "my-script");
         }
-    
+
         #[test]
         fn deeplink_name_underscores() {
             assert_eq!(to_deeplink_name("hello_world"), "hello-world");
         }
-    
+
         #[test]
         fn deeplink_name_numbers_preserved() {
             assert_eq!(to_deeplink_name("script123"), "script123");
         }
-    
+
         #[test]
         fn deeplink_name_leading_trailing_stripped() {
             assert_eq!(to_deeplink_name("  hello  "), "hello");
         }
-    
+
         // ============================================================
         // Cross-cutting: ID uniqueness across contexts
         // ============================================================
-    
+
         #[test]
         fn script_action_ids_unique() {
             let script = ScriptInfo::new("test", "/path/to/test.ts");
@@ -17193,7 +17297,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "Script action IDs should be unique"
             );
         }
-    
+
         #[test]
         fn clipboard_action_ids_unique() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -17205,7 +17309,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "Clipboard action IDs should be unique"
             );
         }
-    
+
         #[test]
         fn ai_command_bar_ids_unique() {
             let actions = get_ai_command_bar_actions();
@@ -17216,7 +17320,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 "AI command bar IDs should be unique"
             );
         }
-    
+
         #[test]
         fn path_action_ids_unique() {
             let info = PathInfo::new("test", "/tmp/test", false);
@@ -17224,7 +17328,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let ids: HashSet<_> = actions.iter().map(|a| &a.id).collect();
             assert_eq!(ids.len(), actions.len(), "Path action IDs should be unique");
         }
-    
+
         #[test]
         fn file_action_ids_unique() {
             let info = FileInfo {
@@ -17237,11 +17341,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let ids: HashSet<_> = actions.iter().map(|a| &a.id).collect();
             assert_eq!(ids.len(), actions.len(), "File action IDs should be unique");
         }
-    
+
         // ============================================================
         // Cross-cutting: has_action invariant
         // ============================================================
-    
+
         #[test]
         fn all_script_actions_have_has_action_false() {
             let script = ScriptInfo::new("test", "/path/to/test.ts");
@@ -17254,7 +17358,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn all_clipboard_actions_have_has_action_false() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -17267,7 +17371,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn all_ai_actions_have_has_action_false() {
             let actions = get_ai_command_bar_actions();
@@ -17279,7 +17383,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn all_path_actions_have_has_action_false() {
             let info = PathInfo::new("test", "/tmp/test", false);
@@ -17292,11 +17396,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         // ============================================================
         // Cross-cutting: title_lower invariant
         // ============================================================
-    
+
         #[test]
         fn title_lower_matches_lowercase_for_all_script_actions() {
             let script = ScriptInfo::new("test", "/path/to/test.ts");
@@ -17310,7 +17414,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn title_lower_matches_lowercase_for_ai_actions() {
             let actions = get_ai_command_bar_actions();
@@ -17323,7 +17427,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         #[test]
         fn title_lower_matches_lowercase_for_clipboard_actions() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -17337,11 +17441,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 );
             }
         }
-    
+
         // ============================================================
         // Cross-cutting: ordering determinism
         // ============================================================
-    
+
         #[test]
         fn script_actions_deterministic() {
             let script = ScriptInfo::new("test", "/path/to/test.ts");
@@ -17351,7 +17455,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let a2 = action_ids(&actions2);
             assert_eq!(a1, a2, "Script actions should be deterministic");
         }
-    
+
         #[test]
         fn clipboard_actions_deterministic() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -17361,7 +17465,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let a2 = action_ids(&actions2);
             assert_eq!(a1, a2, "Clipboard actions should be deterministic");
         }
-    
+
         #[test]
         fn ai_actions_deterministic() {
             let actions1 = get_ai_command_bar_actions();
@@ -17370,8 +17474,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let a2 = action_ids(&actions2);
             assert_eq!(a1, a2, "AI actions should be deterministic");
         }
-    
-    
+
         // --- merged from tests_part_06.rs ---
         #[test]
         fn notes_actions_deterministic() {
@@ -17386,11 +17489,11 @@ mod from_dialog_builtin_action_validation_tests_8 {
             let a2 = action_ids(&actions2);
             assert_eq!(a1, a2, "Notes actions should be deterministic");
         }
-    
+
         // ============================================================
         // Cross-cutting: non-empty titles and IDs
         // ============================================================
-    
+
         #[test]
         fn script_all_actions_have_nonempty_id_and_title() {
             let script = ScriptInfo::new("test", "/path/to/test.ts");
@@ -17399,7 +17502,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 assert!(!action.title.is_empty(), "Action title should not be empty");
             }
         }
-    
+
         #[test]
         fn clipboard_all_actions_have_nonempty_id_and_title() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -17408,7 +17511,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 assert!(!action.title.is_empty(), "Action title should not be empty");
             }
         }
-    
+
         #[test]
         fn ai_all_actions_have_nonempty_id_and_title() {
             for action in &get_ai_command_bar_actions() {
@@ -17416,50 +17519,50 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 assert!(!action.title.is_empty(), "Action title should not be empty");
             }
         }
-    
+
         // ============================================================
         // Fuzzy match edge cases
         // ============================================================
-    
+
         #[test]
         fn fuzzy_match_empty_needle_always_true() {
             assert!(ActionsDialog::fuzzy_match("anything", ""));
         }
-    
+
         #[test]
         fn fuzzy_match_empty_haystack_nonempty_needle_false() {
             assert!(!ActionsDialog::fuzzy_match("", "a"));
         }
-    
+
         #[test]
         fn fuzzy_match_both_empty_true() {
             assert!(ActionsDialog::fuzzy_match("", ""));
         }
-    
+
         #[test]
         fn fuzzy_match_exact_match_true() {
             assert!(ActionsDialog::fuzzy_match("hello", "hello"));
         }
-    
+
         #[test]
         fn fuzzy_match_subsequence_true() {
             assert!(ActionsDialog::fuzzy_match("hello world", "hlo"));
         }
-    
+
         #[test]
         fn fuzzy_match_no_subsequence_false() {
             assert!(!ActionsDialog::fuzzy_match("hello", "z"));
         }
-    
+
         #[test]
         fn fuzzy_match_needle_longer_than_haystack_false() {
             assert!(!ActionsDialog::fuzzy_match("hi", "hello"));
         }
-    
+
         // ============================================================
         // ActionCategory invariants
         // ============================================================
-    
+
         #[test]
         fn all_script_actions_are_script_context() {
             let script = ScriptInfo::new("test", "/path/to/test.ts");
@@ -17467,7 +17570,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
+
         #[test]
         fn all_clipboard_actions_are_script_context() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -17475,14 +17578,14 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
+
         #[test]
         fn all_ai_actions_are_script_context() {
             for action in &get_ai_command_bar_actions() {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
+
         #[test]
         fn all_path_actions_are_script_context() {
             let info = PathInfo::new("test", "/tmp/test", false);
@@ -17490,7 +17593,7 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
+
         #[test]
         fn all_file_actions_are_script_context() {
             let info = FileInfo {
@@ -17503,7 +17606,6 @@ mod from_dialog_builtin_action_validation_tests_8 {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
     }
 }
 
@@ -17542,7 +17644,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
     //! 28. ActionsDialogConfig default values
     //! 29. SectionStyle and SearchPosition enum values
     //! 30. Clipboard action IDs all prefixed with "clipboard_"
-    
+
     #[cfg(test)]
     mod tests {
         // --- merged from tests_part_01.rs ---
@@ -17550,16 +17652,16 @@ mod from_dialog_builtin_action_validation_tests_9 {
             get_ai_command_bar_actions, get_chat_context_actions,
             get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
             get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
-            get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
-            ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-            NotesInfo,
+            get_script_context_actions, get_scriptlet_context_actions_with_custom,
+            to_deeplink_name, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
+            NewChatPresetInfo, NotesInfo,
         };
         use crate::actions::dialog::{
             build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
         };
         use crate::actions::types::{
-            Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
-            SectionStyle,
+            Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo,
+            SearchPosition, SectionStyle,
         };
         use crate::actions::CommandBarConfig;
         use crate::clipboard_history::ContentType;
@@ -17569,19 +17671,19 @@ mod from_dialog_builtin_action_validation_tests_9 {
         #[allow(unused_imports)]
         use crate::scriptlets::{Scriptlet, ScriptletAction};
         use std::collections::HashSet;
-    
+
         // ============================================================
         // Helper functions
         // ============================================================
-    
+
         fn action_ids(actions: &[Action]) -> Vec<&str> {
             actions.iter().map(|a| a.id.as_str()).collect()
         }
-    
+
         fn find_action<'a>(actions: &'a [Action], id: &str) -> Option<&'a Action> {
             actions.iter().find(|a| a.id == id)
         }
-    
+
         fn make_action(id: &str, title: &str, section: Option<&str>) -> Action {
             let mut a = Action::new(
                 id,
@@ -17594,7 +17696,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             }
             a
         }
-    
+
         fn make_clipboard_entry(
             content_type: ContentType,
             pinned: bool,
@@ -17613,17 +17715,17 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 frontmost_app_name: app.map(|s| s.to_string()),
             }
         }
-    
+
         // ============================================================
         // 1. AI command bar expanded actions (32 actions, 7 sections)
         // ============================================================
-    
+
         #[test]
         fn ai_command_bar_has_exactly_32_actions() {
             let actions = get_ai_command_bar_actions();
             assert_eq!(actions.len(), 35, "AI command bar should have 35 actions");
         }
-    
+
         #[test]
         fn ai_command_bar_has_branch_from_last() {
             let actions = get_ai_command_bar_actions();
@@ -17636,7 +17738,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Description should mention new chat behavior"
             );
         }
-    
+
         #[test]
         fn ai_command_bar_has_export_markdown() {
             let actions = get_ai_command_bar_actions();
@@ -17646,7 +17748,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(export.section, Some("Export".to_string()));
             assert!(export.icon.is_some());
         }
-    
+
         #[test]
         fn ai_command_bar_has_toggle_shortcuts_help() {
             let actions = get_ai_command_bar_actions();
@@ -17655,7 +17757,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let help = help.unwrap();
             assert_eq!(help.section, Some("Help".to_string()));
         }
-    
+
         #[test]
         fn ai_command_bar_has_seven_sections() {
             let actions = get_ai_command_bar_actions();
@@ -17669,7 +17771,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(sections.contains(&"Help".to_string()));
             assert!(sections.contains(&"Settings".to_string()));
         }
-    
+
         #[test]
         fn ai_command_bar_response_section_has_3_items() {
             let actions = get_ai_command_bar_actions();
@@ -17679,7 +17781,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 .count();
             assert_eq!(count, 3, "Response section should have 3 items");
         }
-    
+
         #[test]
         fn ai_command_bar_actions_section_has_4_items() {
             let actions = get_ai_command_bar_actions();
@@ -17692,7 +17794,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Actions section should have 4 items (submit, new_chat, delete_chat, branch_from_last)"
             );
         }
-    
+
         #[test]
         fn ai_command_bar_all_actions_have_icons() {
             let actions = get_ai_command_bar_actions();
@@ -17704,7 +17806,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         #[test]
         fn ai_command_bar_all_actions_have_sections() {
             let actions = get_ai_command_bar_actions();
@@ -17716,7 +17818,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         #[test]
         fn ai_command_bar_id_uniqueness() {
             let actions = get_ai_command_bar_actions();
@@ -17727,11 +17829,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "All AI action IDs should be unique"
             );
         }
-    
+
         // ============================================================
         // 2. File context macOS-specific actions
         // ============================================================
-    
+
         #[cfg(target_os = "macos")]
         #[test]
         fn file_context_file_has_quick_look() {
@@ -17746,7 +17848,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(ql.is_some(), "File should have quick_look on macOS");
             assert_eq!(ql.unwrap().shortcut.as_deref(), Some("⌘Y"));
         }
-    
+
         #[cfg(target_os = "macos")]
         #[test]
         fn file_context_dir_no_quick_look() {
@@ -17762,7 +17864,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Directory should NOT have quick_look"
             );
         }
-    
+
         #[cfg(target_os = "macos")]
         #[test]
         fn file_context_has_open_in_editor() {
@@ -17777,7 +17879,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(ow.is_some(), "File should have open_in_editor on macOS");
             assert_eq!(ow.unwrap().shortcut.as_deref(), Some("⌘E"));
         }
-    
+
         #[cfg(target_os = "macos")]
         #[test]
         fn file_context_has_show_info() {
@@ -17800,11 +17902,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "show_info description should mention information"
             );
         }
-    
+
         // ============================================================
         // 3. Clipboard macOS-specific actions
         // ============================================================
-    
+
         #[cfg(target_os = "macos")]
         #[test]
         fn clipboard_image_has_open_with_on_macos() {
@@ -17815,7 +17917,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Image entry should have open_with on macOS"
             );
         }
-    
+
         #[cfg(target_os = "macos")]
         #[test]
         fn clipboard_image_has_annotate_cleanshot_on_macos() {
@@ -17828,7 +17930,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             );
             assert_eq!(annotate.unwrap().shortcut.as_deref(), Some("⇧⌘A"));
         }
-    
+
         #[cfg(target_os = "macos")]
         #[test]
         fn clipboard_image_has_upload_cleanshot_on_macos() {
@@ -17841,7 +17943,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             );
             assert_eq!(upload.unwrap().shortcut.as_deref(), Some("⇧⌘U"));
         }
-    
+
         #[cfg(target_os = "macos")]
         #[test]
         fn clipboard_text_no_open_with_on_macos() {
@@ -17852,7 +17954,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Text entry should NOT have open_with"
             );
         }
-    
+
         #[cfg(target_os = "macos")]
         #[test]
         fn clipboard_has_quick_look_on_macos() {
@@ -17862,11 +17964,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(ql.is_some(), "Clipboard should have quick_look on macOS");
             assert_eq!(ql.unwrap().shortcut.as_deref(), Some("␣"));
         }
-    
+
         // ============================================================
         // 4. CommandBarConfig struct field validation
         // ============================================================
-    
+
         #[test]
         fn command_bar_config_default_close_flags_all_true() {
             let config = CommandBarConfig::default();
@@ -17874,110 +17976,109 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(config.close_on_click_outside);
             assert!(config.close_on_escape);
         }
-    
+
         #[test]
         fn command_bar_config_ai_style_search_top() {
             let config = CommandBarConfig::ai_style();
             assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
-    
+
         #[test]
         fn command_bar_config_main_menu_search_bottom() {
             let config = CommandBarConfig::main_menu_style();
             assert_eq!(config.dialog_config.search_position, SearchPosition::Bottom);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(!config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
-    
+
         #[test]
         fn command_bar_config_no_search_hidden() {
             let config = CommandBarConfig::no_search();
             assert_eq!(config.dialog_config.search_position, SearchPosition::Hidden);
         }
-    
+
         #[test]
         fn command_bar_config_notes_style_icons_and_footer() {
             let config = CommandBarConfig::notes_style();
             assert_eq!(config.dialog_config.search_position, SearchPosition::Top);
             assert_eq!(config.dialog_config.section_style, SectionStyle::Headers);
             assert!(config.dialog_config.show_icons);
-            assert!(config.dialog_config.show_footer);
+            assert!(!config.dialog_config.show_footer);
         }
-    
+
         // ============================================================
         // 5. format_shortcut_hint alias coverage
         // ============================================================
-    
+
         #[test]
         fn format_shortcut_hint_meta_maps_to_cmd_symbol() {
             assert_eq!(ActionsDialog::format_shortcut_hint("meta+c"), "⌘C");
         }
-    
+
         #[test]
         fn format_shortcut_hint_super_maps_to_cmd_symbol() {
             assert_eq!(ActionsDialog::format_shortcut_hint("super+v"), "⌘V");
         }
-    
+
         #[test]
         fn format_shortcut_hint_opt_maps_to_alt_symbol() {
             assert_eq!(ActionsDialog::format_shortcut_hint("opt+x"), "⌥X");
         }
-    
+
         #[test]
         fn format_shortcut_hint_option_maps_to_alt_symbol() {
             assert_eq!(ActionsDialog::format_shortcut_hint("option+z"), "⌥Z");
         }
-    
+
         #[test]
         fn format_shortcut_hint_control_maps_to_ctrl_symbol() {
             assert_eq!(ActionsDialog::format_shortcut_hint("control+a"), "⌃A");
         }
-    
+
         #[test]
         fn format_shortcut_hint_return_maps_to_enter_symbol() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+return"), "⌘↵");
         }
-    
+
         #[test]
         fn format_shortcut_hint_esc_maps_to_escape_symbol() {
             assert_eq!(ActionsDialog::format_shortcut_hint("esc"), "⎋");
         }
-    
+
         #[test]
         fn format_shortcut_hint_tab_maps_to_symbol() {
             assert_eq!(ActionsDialog::format_shortcut_hint("tab"), "⇥");
         }
-    
+
         #[test]
         fn format_shortcut_hint_arrowdown_maps_to_down() {
             assert_eq!(ActionsDialog::format_shortcut_hint("arrowdown"), "↓");
         }
-    
+
         #[test]
         fn format_shortcut_hint_arrowleft_maps_to_left() {
             assert_eq!(ActionsDialog::format_shortcut_hint("arrowleft"), "←");
         }
-    
+
         #[test]
         fn format_shortcut_hint_arrowright_maps_to_right() {
             assert_eq!(ActionsDialog::format_shortcut_hint("arrowright"), "→");
         }
-    
+
         #[test]
         fn format_shortcut_hint_arrowup_maps_to_up() {
             assert_eq!(ActionsDialog::format_shortcut_hint("arrowup"), "↑");
         }
-    
+
         #[test]
         fn format_shortcut_hint_command_alias() {
             assert_eq!(ActionsDialog::format_shortcut_hint("command+k"), "⌘K");
         }
-    
-    
+
         // --- merged from tests_part_02.rs ---
         #[test]
         fn format_shortcut_hint_triple_modifier() {
@@ -17986,26 +18087,26 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "⌘⇧⌥Z"
             );
         }
-    
+
         #[test]
         fn format_shortcut_hint_space_key() {
             assert_eq!(ActionsDialog::format_shortcut_hint("space"), "␣");
         }
-    
+
         #[test]
         fn format_shortcut_hint_backspace_key() {
             assert_eq!(ActionsDialog::format_shortcut_hint("cmd+backspace"), "⌘⌫");
         }
-    
+
         #[test]
         fn format_shortcut_hint_delete_key() {
             assert_eq!(ActionsDialog::format_shortcut_hint("delete"), "⌫");
         }
-    
+
         // ============================================================
         // 6. Cross-context shortcut symbol consistency
         // ============================================================
-    
+
         #[test]
         fn all_script_context_shortcuts_use_symbols() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -18024,7 +18125,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 }
             }
         }
-    
+
         #[test]
         fn all_clipboard_context_shortcuts_use_symbols() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -18043,7 +18144,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 }
             }
         }
-    
+
         #[test]
         fn all_path_context_shortcuts_use_symbols() {
             let path = PathInfo {
@@ -18066,11 +18167,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 }
             }
         }
-    
+
         // ============================================================
         // 7. Action verb formatting with special characters in names
         // ============================================================
-    
+
         #[test]
         fn action_verb_with_quotes_in_name() {
             let script = ScriptInfo::new("My \"Best\" Script", "/path/test.ts");
@@ -18078,15 +18179,16 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let run = find_action(&actions, "run_script").unwrap();
             assert_eq!(run.title, "Run");
         }
-    
+
         #[test]
         fn action_verb_with_unicode_in_name() {
-            let script = ScriptInfo::with_action_verb("Café Finder", "/path/cafe.ts", false, "Launch");
+            let script =
+                ScriptInfo::with_action_verb("Café Finder", "/path/cafe.ts", false, "Launch");
             let actions = get_script_context_actions(&script);
             let run = find_action(&actions, "run_script").unwrap();
             assert_eq!(run.title, "Launch");
         }
-    
+
         #[test]
         fn action_verb_with_empty_name() {
             let script = ScriptInfo::new("", "/path/empty.ts");
@@ -18094,10 +18196,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(actions.is_empty());
             assert!(find_action(&actions, "run_script").is_none());
         }
-    
+
         #[test]
         fn action_verb_execute_formatting() {
-            let script = ScriptInfo::with_action_verb("Task Runner", "/path/task.ts", false, "Execute");
+            let script =
+                ScriptInfo::with_action_verb("Task Runner", "/path/task.ts", false, "Execute");
             let actions = get_script_context_actions(&script);
             let run = find_action(&actions, "run_script").unwrap();
             assert_eq!(run.title, "Execute");
@@ -18106,11 +18209,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Description should include verb"
             );
         }
-    
+
         // ============================================================
         // 8. Notes command bar conditional section groups
         // ============================================================
-    
+
         #[test]
         fn notes_command_bar_full_feature_sections() {
             let info = NotesInfo {
@@ -18126,7 +18229,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(sections.contains(&"Export".to_string()));
             assert!(sections.contains(&"Settings".to_string()));
         }
-    
+
         #[test]
         fn notes_command_bar_trash_view_no_edit_section() {
             let info = NotesInfo {
@@ -18149,7 +18252,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Trash view should not have Export section"
             );
         }
-    
+
         #[test]
         fn notes_command_bar_no_selection_minimal() {
             let info = NotesInfo {
@@ -18168,7 +18271,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 assert_eq!(action.section.as_deref(), Some("Notes"));
             }
         }
-    
+
         #[test]
         fn notes_command_bar_auto_sizing_disabled_adds_setting() {
             let info_disabled = NotesInfo {
@@ -18197,11 +18300,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Should NOT have enable_auto_sizing when enabled"
             );
         }
-    
+
         // ============================================================
         // 9. ScriptInfo mixed agent+scriptlet flag precedence
         // ============================================================
-    
+
         #[test]
         fn script_info_agent_flag_set_after_new() {
             let mut script = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -18216,7 +18319,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let edit = find_action(&actions, "edit_script").unwrap();
             assert_eq!(edit.title, "Edit Agent");
         }
-    
+
         #[test]
         fn script_info_agent_no_view_logs() {
             let mut script = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -18229,7 +18332,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Agent should NOT have view_logs"
             );
         }
-    
+
         #[test]
         fn script_info_agent_has_copy_content() {
             let mut script = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -18241,7 +18344,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Agent should have copy_content"
             );
         }
-    
+
         #[test]
         fn script_info_agent_has_reveal_and_copy_path() {
             let mut script = ScriptInfo::new("My Agent", "/path/agent.md");
@@ -18251,11 +18354,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(find_action(&actions, "reveal_in_finder").is_some());
             assert!(find_action(&actions, "copy_path").is_some());
         }
-    
+
         // ============================================================
         // 10. Clipboard save_snippet/save_file always present
         // ============================================================
-    
+
         #[test]
         fn clipboard_text_has_save_snippet_and_file() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -18263,7 +18366,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(find_action(&actions, "clip:clipboard_save_snippet").is_some());
             assert!(find_action(&actions, "clip:clipboard_save_file").is_some());
         }
-    
+
         #[test]
         fn clipboard_image_has_save_snippet_and_file() {
             let entry = make_clipboard_entry(ContentType::Image, false, None);
@@ -18271,7 +18374,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(find_action(&actions, "clip:clipboard_save_snippet").is_some());
             assert!(find_action(&actions, "clip:clipboard_save_file").is_some());
         }
-    
+
         #[test]
         fn clipboard_save_snippet_shortcut() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -18279,7 +18382,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let snippet = find_action(&actions, "clip:clipboard_save_snippet").unwrap();
             assert_eq!(snippet.shortcut.as_deref(), Some("⇧⌘S"));
         }
-    
+
         #[test]
         fn clipboard_save_file_shortcut() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -18287,11 +18390,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let save = find_action(&actions, "clip:clipboard_save_file").unwrap();
             assert_eq!(save.shortcut.as_deref(), Some("⌥⇧⌘S"));
         }
-    
+
         // ============================================================
         // 11. Clipboard share/attach_to_ai always present
         // ============================================================
-    
+
         #[test]
         fn clipboard_text_has_share_and_attach() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -18299,7 +18402,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(find_action(&actions, "clip:clipboard_share").is_some());
             assert!(find_action(&actions, "clip:clipboard_attach_to_ai").is_some());
         }
-    
+
         #[test]
         fn clipboard_image_has_share_and_attach() {
             let entry = make_clipboard_entry(ContentType::Image, true, Some("Finder"));
@@ -18307,7 +18410,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(find_action(&actions, "clip:clipboard_share").is_some());
             assert!(find_action(&actions, "clip:clipboard_attach_to_ai").is_some());
         }
-    
+
         #[test]
         fn clipboard_share_shortcut_value() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -18315,7 +18418,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let share = find_action(&actions, "clip:clipboard_share").unwrap();
             assert_eq!(share.shortcut.as_deref(), Some("⇧⌘E"));
         }
-    
+
         #[test]
         fn clipboard_attach_to_ai_shortcut_value() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -18323,11 +18426,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let attach = find_action(&actions, "clip:clipboard_attach_to_ai").unwrap();
             assert_eq!(attach.shortcut.as_deref(), Some("⌃⌘A"));
         }
-    
+
         // ============================================================
         // 12. Path context descriptions
         // ============================================================
-    
+
         #[test]
         fn path_context_open_in_finder_description() {
             let path = PathInfo {
@@ -18342,7 +18445,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "open_in_finder description should mention Finder"
             );
         }
-    
+
         #[test]
         fn path_context_open_in_editor_description() {
             let path = PathInfo {
@@ -18357,22 +18460,22 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "open_in_editor description should mention $EDITOR"
             );
         }
-    
+
         #[test]
-        fn path_context_open_in_terminal_description() {
+        fn path_context_open_in_quick_terminal_description() {
             let path = PathInfo {
                 name: "test".to_string(),
                 path: "/test".to_string(),
                 is_dir: false,
             };
             let actions = get_path_context_actions(&path);
-            let terminal = find_action(&actions, "file:open_in_terminal").unwrap();
+            let terminal = find_action(&actions, "file:open_in_quick_terminal").unwrap();
             assert!(
                 terminal.description.as_ref().unwrap().contains("terminal"),
-                "open_in_terminal description should mention terminal"
+                "open_in_quick_terminal description should mention terminal"
             );
         }
-    
+
         #[test]
         fn path_context_move_to_trash_file_says_file() {
             let path = PathInfo {
@@ -18387,7 +18490,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Trash description for file should say 'file'"
             );
         }
-    
+
         #[test]
         fn path_context_move_to_trash_dir_says_folder() {
             let path = PathInfo {
@@ -18402,11 +18505,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Trash description for dir should say 'folder'"
             );
         }
-    
+
         // ============================================================
         // 13. Note switcher empty notes placeholder
         // ============================================================
-    
+
         #[test]
         fn note_switcher_empty_shows_placeholder() {
             let actions = get_note_switcher_actions(&[]);
@@ -18420,12 +18523,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(actions[0].icon, Some(IconName::Plus));
             assert_eq!(actions[0].section.as_deref(), Some("Notes"));
         }
-    
+
         // ============================================================
         // 14. New chat action icon/section consistency
         // ============================================================
-    
-    
+
         // --- merged from tests_part_03.rs ---
         #[test]
         fn new_chat_last_used_has_bolt_icon() {
@@ -18440,7 +18542,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(action.icon, Some(IconName::BoltFilled));
             assert_eq!(action.section.as_deref(), Some("Last Used Settings"));
         }
-    
+
         #[test]
         fn new_chat_presets_use_custom_icon() {
             let presets = vec![NewChatPresetInfo {
@@ -18454,7 +18556,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(action.section.as_deref(), Some("Presets"));
             assert!(action.description.as_deref().unwrap().contains("preset"));
         }
-    
+
         #[test]
         fn new_chat_models_use_settings_icon() {
             let models = vec![NewChatModelInfo {
@@ -18473,13 +18575,13 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Model should show provider display name"
             );
         }
-    
+
         #[test]
         fn new_chat_empty_inputs_empty_output() {
             let actions = get_new_chat_actions(&[], &[], &[]);
             assert!(actions.is_empty());
         }
-    
+
         #[test]
         fn new_chat_all_sections_ordered() {
             let last_used = vec![NewChatModelInfo {
@@ -18505,11 +18607,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(actions[1].section.as_deref(), Some("Presets"));
             assert_eq!(actions[2].section.as_deref(), Some("Models"));
         }
-    
+
         // ============================================================
         // 15. Score_action with multi-word queries
         // ============================================================
-    
+
         #[test]
         fn score_action_multi_word_prefix() {
             let action = Action::new(
@@ -18525,7 +18627,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 score
             );
         }
-    
+
         #[test]
         fn score_action_multi_word_contains() {
             let action = Action::new(
@@ -18542,7 +18644,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 score
             );
         }
-    
+
         #[test]
         fn score_action_description_only_match() {
             let action = Action::new(
@@ -18558,7 +18660,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 score
             );
         }
-    
+
         #[test]
         fn score_action_no_match_returns_zero() {
             let action = Action::new(
@@ -18570,7 +18672,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let score = ActionsDialog::score_action(&action, "zzzzz");
             assert_eq!(score, 0, "No match should return 0");
         }
-    
+
         #[test]
         fn score_action_shortcut_match_bonus() {
             let action = Action::new("test", "Test Action", None, ActionCategory::ScriptContext)
@@ -18582,11 +18684,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 score
             );
         }
-    
+
         // ============================================================
         // 16. build_grouped_items_static with Headers style
         // ============================================================
-    
+
         #[test]
         fn build_grouped_items_headers_inserts_section_headers() {
             let actions = vec![
@@ -18604,7 +18706,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(matches!(&grouped[3], GroupedActionItem::SectionHeader(s) if s == "Group B"));
             assert!(matches!(&grouped[4], GroupedActionItem::Item(2)));
         }
-    
+
         #[test]
         fn build_grouped_items_separators_no_headers() {
             let actions = vec![
@@ -18618,7 +18720,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(matches!(&grouped[0], GroupedActionItem::Item(0)));
             assert!(matches!(&grouped[1], GroupedActionItem::Item(1)));
         }
-    
+
         #[test]
         fn build_grouped_items_none_no_headers() {
             let actions = vec![
@@ -18629,7 +18731,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::None);
             assert_eq!(grouped.len(), 2);
         }
-    
+
         #[test]
         fn build_grouped_items_empty_returns_empty() {
             let actions: Vec<Action> = vec![];
@@ -18637,7 +18739,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let grouped = build_grouped_items_static(&actions, &filtered, SectionStyle::Headers);
             assert!(grouped.is_empty());
         }
-    
+
         #[test]
         fn build_grouped_items_same_section_no_duplicate_header() {
             let actions = vec![
@@ -18653,23 +18755,23 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 .count();
             assert_eq!(header_count, 1, "Same section should produce only 1 header");
         }
-    
+
         // ============================================================
         // 17. coerce_action_selection edge cases
         // ============================================================
-    
+
         #[test]
         fn coerce_action_selection_single_item() {
             let rows = vec![GroupedActionItem::Item(0)];
             assert_eq!(coerce_action_selection(&rows, 0), Some(0));
         }
-    
+
         #[test]
         fn coerce_action_selection_single_header() {
             let rows = vec![GroupedActionItem::SectionHeader("Test".to_string())];
             assert_eq!(coerce_action_selection(&rows, 0), None);
         }
-    
+
         #[test]
         fn coerce_action_selection_header_then_item() {
             let rows = vec![
@@ -18679,7 +18781,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             // Landing on header should move to item
             assert_eq!(coerce_action_selection(&rows, 0), Some(1));
         }
-    
+
         #[test]
         fn coerce_action_selection_item_then_header() {
             let rows = vec![
@@ -18689,7 +18791,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             // Landing on header should search up to item
             assert_eq!(coerce_action_selection(&rows, 1), Some(0));
         }
-    
+
         #[test]
         fn coerce_action_selection_out_of_bounds_clamped() {
             let rows = vec![GroupedActionItem::Item(0), GroupedActionItem::Item(1)];
@@ -18699,47 +18801,47 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Out of bounds should clamp to last"
             );
         }
-    
+
         // ============================================================
         // 18. parse_shortcut_keycaps sequences
         // ============================================================
-    
+
         #[test]
         fn parse_keycaps_modifier_and_letter() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘E");
             assert_eq!(keycaps, vec!["⌘", "E"]);
         }
-    
+
         #[test]
         fn parse_keycaps_two_modifiers_and_letter() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘⇧C");
             assert_eq!(keycaps, vec!["⌘", "⇧", "C"]);
         }
-    
+
         #[test]
         fn parse_keycaps_enter_symbol() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("↵");
             assert_eq!(keycaps, vec!["↵"]);
         }
-    
+
         #[test]
         fn parse_keycaps_cmd_enter() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘↵");
             assert_eq!(keycaps, vec!["⌘", "↵"]);
         }
-    
+
         #[test]
         fn parse_keycaps_escape() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⎋");
             assert_eq!(keycaps, vec!["⎋"]);
         }
-    
+
         #[test]
         fn parse_keycaps_space() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("␣");
             assert_eq!(keycaps, vec!["␣"]);
         }
-    
+
         #[test]
         fn parse_keycaps_arrows() {
             assert_eq!(ActionsDialog::parse_shortcut_keycaps("↑"), vec!["↑"]);
@@ -18747,52 +18849,52 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(ActionsDialog::parse_shortcut_keycaps("←"), vec!["←"]);
             assert_eq!(ActionsDialog::parse_shortcut_keycaps("→"), vec!["→"]);
         }
-    
+
         #[test]
         fn parse_keycaps_all_four_modifiers() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘⌃⌥⇧X");
             assert_eq!(keycaps, vec!["⌘", "⌃", "⌥", "⇧", "X"]);
         }
-    
+
         #[test]
         fn parse_keycaps_lowercase_uppercased() {
             let keycaps = ActionsDialog::parse_shortcut_keycaps("⌘a");
             assert_eq!(keycaps, vec!["⌘", "A"]);
         }
-    
+
         // ============================================================
         // 19. Deeplink name edge cases
         // ============================================================
-    
+
         #[test]
         fn deeplink_name_preserves_unicode_alphanumeric() {
             assert_eq!(to_deeplink_name("café"), "caf%C3%A9");
         }
-    
+
         #[test]
         fn deeplink_name_numbers_preserved() {
             assert_eq!(to_deeplink_name("script123"), "script123");
         }
-    
+
         #[test]
         fn deeplink_name_all_special_returns_empty() {
             assert_eq!(to_deeplink_name("@#$%^&"), "_unnamed");
         }
-    
+
         #[test]
         fn deeplink_name_mixed_case_lowered() {
             assert_eq!(to_deeplink_name("Hello World"), "hello-world");
         }
-    
+
         #[test]
         fn deeplink_name_consecutive_specials_collapsed() {
             assert_eq!(to_deeplink_name("a---b"), "a-b");
         }
-    
+
         // ============================================================
         // 20. File context open title includes quoted name
         // ============================================================
-    
+
         #[test]
         fn file_context_open_title_includes_filename() {
             let file_info = FileInfo {
@@ -18813,7 +18915,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Open title should quote the filename"
             );
         }
-    
+
         #[test]
         fn file_context_dir_title_includes_dirname() {
             let file_info = FileInfo {
@@ -18830,11 +18932,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 open.title
             );
         }
-    
+
         // ============================================================
         // 21. Chat context continue_in_chat always present
         // ============================================================
-    
+
         #[test]
         fn chat_context_continue_in_chat_always_present() {
             let info = ChatPromptInfo {
@@ -18849,7 +18951,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "continue_in_chat should always be present"
             );
         }
-    
+
         #[test]
         fn chat_context_continue_in_chat_shortcut() {
             let info = ChatPromptInfo {
@@ -18862,8 +18964,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let action = find_action(&actions, "chat:continue_in_chat").unwrap();
             assert_eq!(action.shortcut.as_deref(), Some("⌘↵"));
         }
-    
-    
+
         // --- merged from tests_part_04.rs ---
         #[test]
         fn chat_context_copy_response_only_when_has_response() {
@@ -18884,7 +18985,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(find_action(&actions_no, "chat:copy_response").is_none());
             assert!(find_action(&actions_yes, "chat:copy_response").is_some());
         }
-    
+
         #[test]
         fn chat_context_clear_conversation_only_when_has_messages() {
             let no_messages = ChatPromptInfo {
@@ -18904,11 +19005,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert!(find_action(&actions_no, "chat:clear_conversation").is_none());
             assert!(find_action(&actions_yes, "chat:clear_conversation").is_some());
         }
-    
+
         // ============================================================
         // 22. Scriptlet context copy_content always present
         // ============================================================
-    
+
         #[test]
         fn scriptlet_context_has_copy_content() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -18918,7 +19019,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Scriptlet context should always have copy_content"
             );
         }
-    
+
         #[test]
         fn scriptlet_context_copy_content_shortcut() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -18926,7 +19027,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let action = find_action(&actions, "copy_content").unwrap();
             assert_eq!(action.shortcut.as_deref(), Some("⌘⌥C"));
         }
-    
+
         #[test]
         fn scriptlet_context_has_copy_deeplink() {
             let script = ScriptInfo::scriptlet("My Scriptlet", "/path/test.md", None, None);
@@ -18941,11 +19042,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Deeplink description should contain deeplink name"
             );
         }
-    
+
         // ============================================================
         // 23. Notes command bar icon name validation
         // ============================================================
-    
+
         #[test]
         fn notes_command_bar_all_actions_have_icons() {
             let info = NotesInfo {
@@ -18962,7 +19063,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         #[test]
         fn notes_command_bar_new_note_has_plus_icon() {
             let info = NotesInfo {
@@ -18974,7 +19075,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let new_note = find_action(&actions, "new_note").unwrap();
             assert_eq!(new_note.icon, Some(IconName::Plus));
         }
-    
+
         #[test]
         fn notes_command_bar_browse_notes_has_folder_icon() {
             let info = NotesInfo {
@@ -18986,11 +19087,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let browse = find_action(&actions, "browse_notes").unwrap();
             assert_eq!(browse.icon, Some(IconName::FolderOpen));
         }
-    
+
         // ============================================================
         // 24. Cross-context action count stability
         // ============================================================
-    
+
         #[test]
         fn script_context_action_count_deterministic() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -18998,7 +19099,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let count2 = get_script_context_actions(&script).len();
             assert_eq!(count1, count2, "Same input should produce same count");
         }
-    
+
         #[test]
         fn clipboard_context_action_count_deterministic() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -19006,7 +19107,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let count2 = get_clipboard_history_context_actions(&entry).len();
             assert_eq!(count1, count2);
         }
-    
+
         #[test]
         fn path_context_dir_and_file_same_count() {
             let dir = PathInfo {
@@ -19026,11 +19127,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 "Dir and file path contexts should have same action count"
             );
         }
-    
+
         // ============================================================
         // 25. Action builder chaining
         // ============================================================
-    
+
         #[test]
         fn action_with_shortcut_opt_none_preserves_fields() {
             let action = Action::new(
@@ -19046,7 +19147,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(action.section.as_deref(), Some("MySection"));
             assert!(action.shortcut.is_none());
         }
-    
+
         #[test]
         fn action_with_shortcut_opt_some_sets_shortcut() {
             let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
@@ -19054,7 +19155,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(action.shortcut.as_deref(), Some("⌘Z"));
             assert_eq!(action.shortcut_lower.as_deref(), Some("⌘z"));
         }
-    
+
         #[test]
         fn action_with_icon_and_section_order_independent() {
             let a1 = Action::new("t", "T", None, ActionCategory::ScriptContext)
@@ -19066,11 +19167,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(a1.icon, a2.icon);
             assert_eq!(a1.section, a2.section);
         }
-    
+
         // ============================================================
         // 26. ActionsDialogConfig and enum defaults
         // ============================================================
-    
+
         #[test]
         fn actions_dialog_config_default_values() {
             let config = ActionsDialogConfig::default();
@@ -19078,25 +19179,25 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(config.section_style, SectionStyle::Headers);
             assert_eq!(config.anchor, AnchorPosition::Bottom);
             assert!(!config.show_icons);
-            assert!(config.show_footer);
+            assert!(!config.show_footer);
         }
-    
+
         #[test]
         fn search_position_hidden_not_eq_top_or_bottom() {
             assert_ne!(SearchPosition::Hidden, SearchPosition::Top);
             assert_ne!(SearchPosition::Hidden, SearchPosition::Bottom);
         }
-    
+
         #[test]
         fn section_style_headers_not_eq_separators() {
             assert_ne!(SectionStyle::Headers, SectionStyle::Separators);
             assert_ne!(SectionStyle::Headers, SectionStyle::None);
         }
-    
+
         // ============================================================
         // 27. Clipboard action IDs all prefixed
         // ============================================================
-    
+
         #[test]
         fn all_clipboard_action_ids_prefixed() {
             let entry = make_clipboard_entry(ContentType::Image, true, Some("Safari"));
@@ -19109,50 +19210,50 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         // ============================================================
         // 28. Fuzzy match edge cases
         // ============================================================
-    
+
         #[test]
         fn fuzzy_match_empty_needle_matches() {
             assert!(ActionsDialog::fuzzy_match("anything", ""));
         }
-    
+
         #[test]
         fn fuzzy_match_empty_haystack_empty_needle() {
             assert!(ActionsDialog::fuzzy_match("", ""));
         }
-    
+
         #[test]
         fn fuzzy_match_empty_haystack_nonempty_needle() {
             assert!(!ActionsDialog::fuzzy_match("", "x"));
         }
-    
+
         #[test]
         fn fuzzy_match_subsequence() {
             assert!(ActionsDialog::fuzzy_match("edit script", "esi"));
         }
-    
+
         #[test]
         fn fuzzy_match_no_subsequence() {
             assert!(!ActionsDialog::fuzzy_match("abc", "abd"));
         }
-    
+
         #[test]
         fn fuzzy_match_exact() {
             assert!(ActionsDialog::fuzzy_match("test", "test"));
         }
-    
+
         #[test]
         fn fuzzy_match_needle_longer_than_haystack() {
             assert!(!ActionsDialog::fuzzy_match("ab", "abc"));
         }
-    
+
         // ============================================================
         // 29. has_action=false invariant for all builtin contexts
         // ============================================================
-    
+
         #[test]
         fn script_context_all_has_action_false() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -19164,7 +19265,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         #[test]
         fn clipboard_context_all_has_action_false() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -19176,7 +19277,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         #[test]
         fn path_context_all_has_action_false() {
             let path = PathInfo {
@@ -19192,7 +19293,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         #[test]
         fn file_context_all_has_action_false() {
             let file = FileInfo {
@@ -19209,7 +19310,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         #[test]
         fn ai_command_bar_all_has_action_false() {
             for action in &get_ai_command_bar_actions() {
@@ -19220,7 +19321,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         #[test]
         fn notes_command_bar_all_has_action_false() {
             let info = NotesInfo {
@@ -19236,11 +19337,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         // ============================================================
         // 30. ID uniqueness across contexts
         // ============================================================
-    
+
         #[test]
         fn script_context_ids_unique() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -19248,7 +19349,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let ids: HashSet<_> = actions.iter().map(|a| a.id.as_str()).collect();
             assert_eq!(ids.len(), actions.len());
         }
-    
+
         #[test]
         fn clipboard_context_ids_unique() {
             let entry = make_clipboard_entry(ContentType::Image, true, Some("App"));
@@ -19256,7 +19357,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let ids: HashSet<_> = actions.iter().map(|a| a.id.as_str()).collect();
             assert_eq!(ids.len(), actions.len());
         }
-    
+
         #[test]
         fn path_context_ids_unique() {
             let path = PathInfo {
@@ -19268,7 +19369,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let ids: HashSet<_> = actions.iter().map(|a| a.id.as_str()).collect();
             assert_eq!(ids.len(), actions.len());
         }
-    
+
         #[test]
         fn ai_command_bar_ids_no_overlap_with_notes() {
             let ai_actions = get_ai_command_bar_actions();
@@ -19289,17 +19390,17 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 overlap
             );
         }
-    
+
         // ============================================================
         // Additional: title_lower/description_lower caching
         // ============================================================
-    
+
         #[test]
         fn action_title_lower_computed_on_creation() {
             let action = Action::new("test", "Edit Script", None, ActionCategory::ScriptContext);
             assert_eq!(action.title_lower, "edit script");
         }
-    
+
         #[test]
         fn action_description_lower_computed_on_creation() {
             let action = Action::new(
@@ -19313,32 +19414,31 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 Some("open in $editor".to_string())
             );
         }
-    
-    
+
         // --- merged from tests_part_05.rs ---
         #[test]
         fn action_no_description_lower_is_none() {
             let action = Action::new("test", "Test", None, ActionCategory::ScriptContext);
             assert!(action.description_lower.is_none());
         }
-    
+
         #[test]
         fn action_shortcut_lower_set_by_with_shortcut() {
-            let action =
-                Action::new("test", "Test", None, ActionCategory::ScriptContext).with_shortcut("⌘⇧C");
+            let action = Action::new("test", "Test", None, ActionCategory::ScriptContext)
+                .with_shortcut("⌘⇧C");
             assert_eq!(action.shortcut_lower, Some("⌘⇧c".to_string()));
         }
-    
+
         #[test]
         fn action_shortcut_lower_none_without_shortcut() {
             let action = Action::new("test", "Test", None, ActionCategory::ScriptContext);
             assert!(action.shortcut_lower.is_none());
         }
-    
+
         // ============================================================
         // Additional: non-empty title/ID for all contexts
         // ============================================================
-    
+
         #[test]
         fn all_script_actions_have_nonempty_title_and_id() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -19347,7 +19447,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 assert!(!action.title.is_empty(), "Action title should not be empty");
             }
         }
-    
+
         #[test]
         fn all_clipboard_actions_have_nonempty_title_and_id() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -19356,7 +19456,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 assert!(!action.title.is_empty());
             }
         }
-    
+
         #[test]
         fn all_ai_actions_have_nonempty_title_and_id() {
             for action in &get_ai_command_bar_actions() {
@@ -19364,11 +19464,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 assert!(!action.title.is_empty());
             }
         }
-    
+
         // ============================================================
         // Additional: ordering determinism
         // ============================================================
-    
+
         #[test]
         fn script_actions_ordering_deterministic() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -19378,7 +19478,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let ids2 = action_ids(&actions2);
             assert_eq!(ids1, ids2);
         }
-    
+
         #[test]
         fn clipboard_actions_ordering_deterministic() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -19388,7 +19488,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let ids2 = action_ids(&actions2);
             assert_eq!(ids1, ids2);
         }
-    
+
         #[test]
         fn ai_actions_ordering_deterministic() {
             let actions1 = get_ai_command_bar_actions();
@@ -19397,11 +19497,11 @@ mod from_dialog_builtin_action_validation_tests_9 {
             let ids2 = action_ids(&actions2);
             assert_eq!(ids1, ids2);
         }
-    
+
         // ============================================================
         // Additional: Clipboard destructive ordering
         // ============================================================
-    
+
         #[test]
         fn clipboard_destructive_always_last_three() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -19412,25 +19512,25 @@ mod from_dialog_builtin_action_validation_tests_9 {
             assert_eq!(actions[len - 2].id, "clip:clipboard_delete_multiple");
             assert_eq!(actions[len - 1].id, "clip:clipboard_delete_all");
         }
-    
+
         #[test]
         fn clipboard_paste_always_first() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
             let actions = get_clipboard_history_context_actions(&entry);
             assert_eq!(actions[0].id, "clip:clipboard_paste");
         }
-    
+
         #[test]
         fn clipboard_copy_always_second() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
             let actions = get_clipboard_history_context_actions(&entry);
             assert_eq!(actions[1].id, "clip:clipboard_copy");
         }
-    
+
         // ============================================================
         // Additional: ActionCategory enum
         // ============================================================
-    
+
         #[test]
         fn all_script_context_actions_are_script_context_category() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -19443,7 +19543,7 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 );
             }
         }
-    
+
         #[test]
         fn all_clipboard_actions_are_script_context_category() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -19451,14 +19551,14 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
+
         #[test]
         fn all_ai_actions_are_script_context_category() {
             for action in &get_ai_command_bar_actions() {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
+
         #[test]
         fn all_path_actions_are_script_context_category() {
             let path = PathInfo {
@@ -19470,7 +19570,6 @@ mod from_dialog_builtin_action_validation_tests_9 {
                 assert_eq!(action.category, ActionCategory::ScriptContext);
             }
         }
-    
     }
 }
 
@@ -19494,7 +19593,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
     //! - ActionCategory PartialEq
     //! - Agent description content keywords
     //! - Cross-context frecency reset consistency
-    
+
     #[cfg(test)]
     mod tests {
         // --- merged from tests_part_01.rs ---
@@ -19502,16 +19601,16 @@ mod from_dialog_builtin_action_validation_tests_10 {
             get_ai_command_bar_actions, get_chat_context_actions, get_chat_model_picker_actions,
             get_clipboard_history_context_actions, get_file_context_actions, get_new_chat_actions,
             get_note_switcher_actions, get_notes_command_bar_actions, get_path_context_actions,
-            get_script_context_actions, get_scriptlet_context_actions_with_custom, to_deeplink_name,
-            ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo, NewChatPresetInfo,
-            NoteSwitcherNoteInfo, NotesInfo,
+            get_script_context_actions, get_scriptlet_context_actions_with_custom,
+            to_deeplink_name, ChatModelInfo, ChatPromptInfo, ClipboardEntryInfo, NewChatModelInfo,
+            NewChatPresetInfo, NoteSwitcherNoteInfo, NotesInfo,
         };
         use crate::actions::dialog::{
             build_grouped_items_static, coerce_action_selection, ActionsDialog, GroupedActionItem,
         };
         use crate::actions::types::{
-            Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo, SearchPosition,
-            SectionStyle,
+            Action, ActionCategory, ActionsDialogConfig, AnchorPosition, ScriptInfo,
+            SearchPosition, SectionStyle,
         };
         use crate::actions::CommandBarConfig;
         use crate::clipboard_history::ContentType;
@@ -19520,19 +19619,19 @@ mod from_dialog_builtin_action_validation_tests_10 {
         use crate::prompts::PathInfo;
         use crate::scriptlets::{Scriptlet, ScriptletAction};
         use std::collections::HashSet;
-    
+
         // ========================================
         // Helpers
         // ========================================
-    
+
         fn action_ids(actions: &[Action]) -> Vec<&str> {
             actions.iter().map(|a| a.id.as_str()).collect()
         }
-    
+
         fn find_action<'a>(actions: &'a [Action], id: &str) -> Option<&'a Action> {
             actions.iter().find(|a| a.id == id)
         }
-    
+
         fn make_action(id: &str, title: &str, section: Option<&str>) -> Action {
             let mut a = Action::new(id, title, None, ActionCategory::ScriptContext);
             if let Some(s) = section {
@@ -19540,7 +19639,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             }
             a
         }
-    
+
         fn make_note(
             id: &str,
             title: &str,
@@ -19560,7 +19659,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 relative_time: relative_time.to_string(),
             }
         }
-    
+
         fn make_clipboard_entry(
             content_type: ContentType,
             pinned: bool,
@@ -19579,11 +19678,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 frontmost_app_name: app.map(|s| s.to_string()),
             }
         }
-    
+
         // ========================================
         // 1. Clipboard frontmost_app_name propagation (6 tests)
         // ========================================
-    
+
         #[test]
         fn clipboard_paste_title_no_app() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -19591,7 +19690,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
             assert_eq!(paste.title, "Paste to Active App");
         }
-    
+
         #[test]
         fn clipboard_paste_title_with_safari() {
             let entry = make_clipboard_entry(ContentType::Text, false, Some("Safari"));
@@ -19599,7 +19698,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
             assert_eq!(paste.title, "Paste to Safari");
         }
-    
+
         #[test]
         fn clipboard_paste_title_with_unicode_app() {
             let entry = make_clipboard_entry(ContentType::Text, false, Some("日本語App"));
@@ -19607,7 +19706,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
             assert_eq!(paste.title, "Paste to 日本語App");
         }
-    
+
         #[test]
         fn clipboard_paste_title_with_empty_string_app() {
             let entry = make_clipboard_entry(ContentType::Text, false, Some(""));
@@ -19615,7 +19714,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
             assert_eq!(paste.title, "Paste to ");
         }
-    
+
         #[test]
         fn clipboard_app_name_only_affects_paste() {
             let entry_with = make_clipboard_entry(ContentType::Text, false, Some("VS Code"));
@@ -19633,7 +19732,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 assert_eq!(action_with.shortcut, action_without.shortcut);
             }
         }
-    
+
         #[test]
         fn clipboard_app_name_image_paste_title() {
             let entry = make_clipboard_entry(ContentType::Image, false, Some("Preview"));
@@ -19641,11 +19740,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let paste = find_action(&actions, "clip:clipboard_paste").unwrap();
             assert_eq!(paste.title, "Paste to Preview");
         }
-    
+
         // ========================================
         // 2. Script action exact counts per flag combo (7 tests)
         // ========================================
-    
+
         #[test]
         fn script_no_shortcut_no_alias_action_count() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -19656,7 +19755,8 @@ mod from_dialog_builtin_action_validation_tests_10 {
 
         #[test]
         fn script_with_shortcut_action_count() {
-            let script = ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".to_string()));
+            let script =
+                ScriptInfo::with_shortcut("test", "/path/test.ts", Some("cmd+t".to_string()));
             let actions = get_script_context_actions(&script);
             // run, toggle_info, update_shortcut, remove_shortcut, add_alias, toggle_favorite, edit, view_logs, reveal, copy_path, copy_content, copy_deeplink, delete_script = 13
             assert_eq!(actions.len(), 13);
@@ -19700,7 +19800,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             // run, toggle_info, add_shortcut, add_alias, toggle_favorite, edit(agent), reveal, copy_path, copy_content, copy_deeplink = 10
             assert_eq!(actions.len(), 10);
         }
-    
+
         #[test]
         fn script_with_frecency_adds_one_action() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -19710,18 +19810,18 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let frecency_count = get_script_context_actions(&with_frecency).len();
             assert_eq!(frecency_count, base_count + 1);
         }
-    
+
         // ========================================
         // 3. Scriptlet ordering guarantees (5 tests)
         // ========================================
-    
+
         #[test]
         fn scriptlet_context_run_is_first() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
             let actions = get_scriptlet_context_actions_with_custom(&script, None);
             assert_eq!(actions[0].id, "run_script");
         }
-    
+
         #[test]
         fn scriptlet_context_custom_before_edit() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -19750,7 +19850,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 .unwrap();
             assert!(custom_idx < edit_idx);
         }
-    
+
         #[test]
         fn scriptlet_context_edit_before_reveal() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -19765,7 +19865,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 .unwrap();
             assert!(edit_idx < reveal_idx);
         }
-    
+
         #[test]
         fn scriptlet_context_copy_content_before_deeplink() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None);
@@ -19777,7 +19877,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 .unwrap();
             assert!(copy_idx < deeplink_idx);
         }
-    
+
         #[test]
         fn scriptlet_context_deeplink_before_reset_ranking() {
             let script = ScriptInfo::scriptlet("Test", "/path/test.md", None, None)
@@ -19793,78 +19893,78 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 .unwrap();
             assert!(deeplink_idx < reset_idx);
         }
-    
+
         // ========================================
         // 4. AI command bar exact shortcuts (9 tests)
         // ========================================
-    
+
         #[test]
         fn ai_cmd_bar_copy_response_shortcut() {
             let actions = get_ai_command_bar_actions();
             let a = find_action(&actions, "chat:copy_response").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⇧⌘C"));
         }
-    
+
         #[test]
         fn ai_cmd_bar_copy_chat_shortcut() {
             let actions = get_ai_command_bar_actions();
             let a = find_action(&actions, "chat:copy_chat").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌥⇧⌘C"));
         }
-    
+
         #[test]
         fn ai_cmd_bar_copy_last_code_shortcut() {
             let actions = get_ai_command_bar_actions();
             let a = find_action(&actions, "chat:copy_last_code").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌥⌘C"));
         }
-    
+
         #[test]
         fn ai_cmd_bar_submit_shortcut() {
             let actions = get_ai_command_bar_actions();
             let a = find_action(&actions, "chat:submit").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("↵"));
         }
-    
+
         #[test]
         fn ai_cmd_bar_new_chat_shortcut() {
             let actions = get_ai_command_bar_actions();
             let a = find_action(&actions, "chat:new_chat").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘N"));
         }
-    
+
         #[test]
         fn ai_cmd_bar_delete_chat_shortcut() {
             let actions = get_ai_command_bar_actions();
             let a = find_action(&actions, "chat:delete_chat").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘⌫"));
         }
-    
+
         #[test]
         fn ai_cmd_bar_add_attachment_shortcut() {
             let actions = get_ai_command_bar_actions();
             let a = find_action(&actions, "chat:add_file").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⇧⌘A"));
         }
-    
+
         #[test]
         fn ai_cmd_bar_paste_image_shortcut() {
             let actions = get_ai_command_bar_actions();
             let a = find_action(&actions, "chat:paste_image").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘V"));
         }
-    
+
         #[test]
         fn ai_cmd_bar_change_model_no_shortcut() {
             let actions = get_ai_command_bar_actions();
             let a = find_action(&actions, "chat:change_model").unwrap();
             assert!(a.shortcut.is_none());
         }
-    
+
         // ========================================
         // 5. Notes command bar exact icons (8 tests)
         // ========================================
-    
+
         #[test]
         fn notes_cmd_bar_new_note_icon_plus() {
             let info = NotesInfo {
@@ -19876,7 +19976,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "new_note").unwrap();
             assert_eq!(a.icon, Some(IconName::Plus));
         }
-    
+
         #[test]
         fn notes_cmd_bar_duplicate_note_icon_copy() {
             let info = NotesInfo {
@@ -19888,7 +19988,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "duplicate_note").unwrap();
             assert_eq!(a.icon, Some(IconName::Copy));
         }
-    
+
         #[test]
         fn notes_cmd_bar_browse_notes_icon_folder_open() {
             let info = NotesInfo {
@@ -19900,7 +20000,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "browse_notes").unwrap();
             assert_eq!(a.icon, Some(IconName::FolderOpen));
         }
-    
+
         #[test]
         fn notes_cmd_bar_find_in_note_icon_magnifying_glass() {
             let info = NotesInfo {
@@ -19912,7 +20012,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "find_in_note").unwrap();
             assert_eq!(a.icon, Some(IconName::MagnifyingGlass));
         }
-    
+
         #[test]
         fn notes_cmd_bar_format_icon_code() {
             let info = NotesInfo {
@@ -19924,7 +20024,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "format").unwrap();
             assert_eq!(a.icon, Some(IconName::Code));
         }
-    
+
         #[test]
         fn notes_cmd_bar_copy_deeplink_icon_arrow_right() {
             let info = NotesInfo {
@@ -19936,8 +20036,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "copy_deeplink").unwrap();
             assert_eq!(a.icon, Some(IconName::ArrowRight));
         }
-    
-    
+
         // --- merged from tests_part_02.rs ---
         #[test]
         fn notes_cmd_bar_create_quicklink_icon_star() {
@@ -19950,7 +20049,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "create_quicklink").unwrap();
             assert_eq!(a.icon, Some(IconName::Star));
         }
-    
+
         #[test]
         fn notes_cmd_bar_enable_auto_sizing_icon_settings() {
             let info = NotesInfo {
@@ -19962,11 +20061,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "enable_auto_sizing").unwrap();
             assert_eq!(a.icon, Some(IconName::Settings));
         }
-    
+
         // ========================================
         // 6. Path context exact shortcut values (7 tests)
         // ========================================
-    
+
         #[test]
         fn path_dir_primary_shortcut_enter() {
             let info = PathInfo {
@@ -19978,7 +20077,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "file:open_directory").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("↵"));
         }
-    
+
         #[test]
         fn path_file_primary_shortcut_enter() {
             let info = PathInfo {
@@ -19990,7 +20089,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "file:select_file").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("↵"));
         }
-    
+
         #[test]
         fn path_copy_path_shortcut() {
             let info = PathInfo {
@@ -20002,7 +20101,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "file:copy_path").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘⇧C"));
         }
-    
+
         #[test]
         fn path_open_in_finder_shortcut() {
             let info = PathInfo {
@@ -20014,7 +20113,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "file:open_in_finder").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘⇧F"));
         }
-    
+
         #[test]
         fn path_open_in_editor_shortcut() {
             let info = PathInfo {
@@ -20026,19 +20125,19 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "file:open_in_editor").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘E"));
         }
-    
+
         #[test]
-        fn path_open_in_terminal_shortcut() {
+        fn path_open_in_quick_terminal_shortcut() {
             let info = PathInfo {
                 name: "f".to_string(),
                 path: "/f".to_string(),
                 is_dir: false,
             };
             let actions = get_path_context_actions(&info);
-            let a = find_action(&actions, "file:open_in_terminal").unwrap();
+            let a = find_action(&actions, "file:open_in_quick_terminal").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘T"));
         }
-    
+
         #[test]
         fn path_move_to_trash_shortcut() {
             let info = PathInfo {
@@ -20050,11 +20149,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "file:move_to_trash").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘⌫"));
         }
-    
+
         // ========================================
         // 7. File context exact description strings (6 tests)
         // ========================================
-    
+
         #[test]
         fn file_open_file_description() {
             let fi = FileInfo {
@@ -20065,12 +20164,9 @@ mod from_dialog_builtin_action_validation_tests_10 {
             };
             let actions = get_file_context_actions(&fi);
             let a = find_action(&actions, "file:open_file").unwrap();
-            assert_eq!(
-                a.description.as_deref(),
-                Some("Opens with the default app")
-            );
+            assert_eq!(a.description.as_deref(), Some("Opens with the default app"));
         }
-    
+
         #[test]
         fn file_open_directory_description() {
             let fi = FileInfo {
@@ -20083,7 +20179,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "file:open_directory").unwrap();
             assert_eq!(a.description.as_deref(), Some("Opens this folder"));
         }
-    
+
         #[test]
         fn file_reveal_in_finder_description() {
             let fi = FileInfo {
@@ -20096,7 +20192,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "file:reveal_in_finder").unwrap();
             assert_eq!(a.description.as_deref(), Some("Shows this item in Finder"));
         }
-    
+
         #[test]
         fn file_copy_path_description() {
             let fi = FileInfo {
@@ -20112,7 +20208,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 Some("Copies the full path to the clipboard")
             );
         }
-    
+
         #[test]
         fn file_copy_filename_description() {
             let fi = FileInfo {
@@ -20128,7 +20224,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 Some("Copies only the filename to the clipboard")
             );
         }
-    
+
         #[test]
         fn file_open_title_includes_name() {
             let fi = FileInfo {
@@ -20141,11 +20237,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "file:open_file").unwrap();
             assert!(a.title.contains("report.pdf"));
         }
-    
+
         // ========================================
         // 8. FileType variants have no effect on file actions (7 tests)
         // ========================================
-    
+
         #[test]
         fn filetype_document_same_actions_as_file() {
             let a = get_file_context_actions(&FileInfo {
@@ -20162,7 +20258,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             });
             assert_eq!(action_ids(&a), action_ids(&b));
         }
-    
+
         #[test]
         fn filetype_image_same_actions() {
             let a = get_file_context_actions(&FileInfo {
@@ -20179,7 +20275,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             });
             assert_eq!(action_ids(&a), action_ids(&b));
         }
-    
+
         #[test]
         fn filetype_audio_same_actions() {
             let a = get_file_context_actions(&FileInfo {
@@ -20196,7 +20292,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             });
             assert_eq!(action_ids(&a), action_ids(&b));
         }
-    
+
         #[test]
         fn filetype_video_same_actions() {
             let a = get_file_context_actions(&FileInfo {
@@ -20213,7 +20309,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             });
             assert_eq!(action_ids(&a), action_ids(&b));
         }
-    
+
         #[test]
         fn filetype_application_same_actions() {
             let a = get_file_context_actions(&FileInfo {
@@ -20230,7 +20326,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             });
             assert_eq!(action_ids(&a), action_ids(&b));
         }
-    
+
         #[test]
         fn filetype_other_same_actions() {
             let a = get_file_context_actions(&FileInfo {
@@ -20247,7 +20343,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             });
             assert_eq!(action_ids(&a), action_ids(&b));
         }
-    
+
         #[test]
         fn filetype_directory_different_from_file() {
             let a = get_file_context_actions(&FileInfo {
@@ -20265,11 +20361,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             // is_dir changes actions
             assert_ne!(action_ids(&a), action_ids(&b));
         }
-    
+
         // ========================================
         // 9. Chat model checkmark logic and ID format (6 tests)
         // ========================================
-    
+
         #[test]
         fn chat_model_id_format_select_model_prefix() {
             let info = ChatPromptInfo {
@@ -20286,7 +20382,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert!(picker[0].id.starts_with("chat:select_model_"));
             assert_eq!(picker[0].id, "chat:select_model_gpt-4");
         }
-    
+
         #[test]
         fn chat_current_model_gets_checkmark_in_title() {
             let info = ChatPromptInfo {
@@ -20306,7 +20402,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert!(picker[0].title.contains("✓"));
             assert_eq!(picker[0].title, "GPT-4 ✓");
         }
-    
+
         #[test]
         fn chat_non_current_model_no_checkmark() {
             let info = ChatPromptInfo {
@@ -20326,7 +20422,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert!(!picker[0].title.contains("✓"));
             assert_eq!(picker[0].title, "GPT-4");
         }
-    
+
         #[test]
         fn chat_model_description_shows_provider() {
             let info = ChatPromptInfo {
@@ -20345,7 +20441,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let picker = get_chat_model_picker_actions(&info);
             assert_eq!(picker[0].description.as_deref(), Some("Uses Anthropic"));
         }
-    
+
         #[test]
         fn chat_no_models_only_continue_in_chat() {
             let info = ChatPromptInfo {
@@ -20376,11 +20472,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let picker = get_chat_model_picker_actions(&info);
             assert!(!picker[0].title.contains("✓"));
         }
-    
+
         // ========================================
         // 10. New chat provider_display_name propagation (5 tests)
         // ========================================
-    
+
         #[test]
         fn new_chat_last_used_description_is_provider_display_name() {
             let actions = get_new_chat_actions(
@@ -20395,8 +20491,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             );
             assert_eq!(actions[0].description.as_deref(), Some("Uses My Provider"));
         }
-    
-    
+
         // --- merged from tests_part_03.rs ---
         #[test]
         fn new_chat_models_section_description_is_provider_display_name() {
@@ -20412,7 +20507,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             );
             assert_eq!(actions[0].description.as_deref(), Some("Uses Anthropic AI"));
         }
-    
+
         #[test]
         fn new_chat_presets_have_no_description() {
             let actions = get_new_chat_actions(
@@ -20424,9 +20519,12 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 }],
                 &[],
             );
-            assert_eq!(actions[0].description.as_deref(), Some("Uses General preset"));
+            assert_eq!(
+                actions[0].description.as_deref(),
+                Some("Uses General preset")
+            );
         }
-    
+
         #[test]
         fn new_chat_preset_uses_its_icon() {
             let actions = get_new_chat_actions(
@@ -20440,7 +20538,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             );
             assert_eq!(actions[0].icon, Some(IconName::Code));
         }
-    
+
         #[test]
         fn new_chat_mixed_sections_in_order() {
             let actions = get_new_chat_actions(
@@ -20466,11 +20564,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert_eq!(actions[1].section.as_deref(), Some("Presets"));
             assert_eq!(actions[2].section.as_deref(), Some("Models"));
         }
-    
+
         // ========================================
         // 11. Clipboard exact description strings (8 tests)
         // ========================================
-    
+
         #[test]
         fn clipboard_paste_description() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -20481,7 +20579,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 Some("Copies to clipboard and pastes to the focused app")
             );
         }
-    
+
         #[test]
         fn clipboard_copy_description() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -20492,7 +20590,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 Some("Copies the entry to clipboard without pasting")
             );
         }
-    
+
         #[test]
         fn clipboard_paste_keep_open_description() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -20500,7 +20598,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_paste_keep_open").unwrap();
             assert!(a.description.as_ref().unwrap().contains("keep"));
         }
-    
+
         #[test]
         fn clipboard_pin_description() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -20508,7 +20606,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_pin").unwrap();
             assert!(a.description.as_ref().unwrap().contains("Pin"));
         }
-    
+
         #[test]
         fn clipboard_unpin_description() {
             let entry = make_clipboard_entry(ContentType::Text, true, None);
@@ -20516,7 +20614,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_unpin").unwrap();
             assert!(a.description.as_ref().unwrap().contains("pin"));
         }
-    
+
         #[test]
         fn clipboard_delete_description() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -20524,7 +20622,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_delete").unwrap();
             assert!(a.description.as_ref().unwrap().contains("Remove"));
         }
-    
+
         #[test]
         fn clipboard_delete_multiple_description() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -20532,7 +20630,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_delete_multiple").unwrap();
             assert!(a.description.as_ref().unwrap().contains("search"));
         }
-    
+
         #[test]
         fn clipboard_delete_all_description_mentions_pinned() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -20540,11 +20638,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_delete_all").unwrap();
             assert!(a.description.as_ref().unwrap().contains("pinned"));
         }
-    
+
         // ========================================
         // 12. Script context with custom verbs (5 tests)
         // ========================================
-    
+
         #[test]
         fn custom_verb_launch_in_primary_title() {
             let script =
@@ -20553,15 +20651,16 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let run = find_action(&actions, "run_script").unwrap();
             assert_eq!(run.title, "Launch");
         }
-    
+
         #[test]
         fn custom_verb_switch_to_in_primary_title() {
-            let script = ScriptInfo::with_action_verb("My Window", "window:123", false, "Switch to");
+            let script =
+                ScriptInfo::with_action_verb("My Window", "window:123", false, "Switch to");
             let actions = get_script_context_actions(&script);
             let run = find_action(&actions, "run_script").unwrap();
             assert_eq!(run.title, "Switch To");
         }
-    
+
         #[test]
         fn custom_verb_open_in_primary_title() {
             let script =
@@ -20570,7 +20669,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let run = find_action(&actions, "run_script").unwrap();
             assert_eq!(run.title, "Open");
         }
-    
+
         #[test]
         fn custom_verb_execute_in_description() {
             let script = ScriptInfo::with_action_verb("Task", "/path/task.ts", true, "Execute");
@@ -20578,7 +20677,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let run = find_action(&actions, "run_script").unwrap();
             assert!(run.description.as_ref().unwrap().contains("Execute"));
         }
-    
+
         #[test]
         fn default_verb_is_run() {
             let script = ScriptInfo::new("test", "/path/test.ts");
@@ -20587,45 +20686,45 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let run = find_action(&actions, "run_script").unwrap();
             assert!(run.title.starts_with("Run"));
         }
-    
+
         // ========================================
         // 13. ActionsDialogConfig defaults (5 tests)
         // ========================================
-    
+
         #[test]
         fn actions_dialog_config_default_search_bottom() {
             let config = ActionsDialogConfig::default();
             assert_eq!(config.search_position, SearchPosition::Bottom);
         }
-    
+
         #[test]
         fn actions_dialog_config_default_section_separators() {
             let config = ActionsDialogConfig::default();
             assert_eq!(config.section_style, SectionStyle::Headers);
         }
-    
+
         #[test]
         fn actions_dialog_config_default_anchor_bottom() {
             let config = ActionsDialogConfig::default();
             assert_eq!(config.anchor, AnchorPosition::Bottom);
         }
-    
+
         #[test]
         fn actions_dialog_config_default_no_icons() {
             let config = ActionsDialogConfig::default();
             assert!(!config.show_icons);
         }
-    
+
         #[test]
         fn actions_dialog_config_default_no_footer() {
             let config = ActionsDialogConfig::default();
-            assert!(config.show_footer);
+            assert!(!config.show_footer);
         }
-    
+
         // ========================================
         // 14. ActionCategory PartialEq (4 tests)
         // ========================================
-    
+
         #[test]
         fn action_category_eq_same() {
             assert_eq!(ActionCategory::ScriptContext, ActionCategory::ScriptContext);
@@ -20633,28 +20732,28 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert_eq!(ActionCategory::GlobalOps, ActionCategory::GlobalOps);
             assert_eq!(ActionCategory::Terminal, ActionCategory::Terminal);
         }
-    
+
         #[test]
         fn action_category_ne_different() {
             assert_ne!(ActionCategory::ScriptContext, ActionCategory::ScriptOps);
             assert_ne!(ActionCategory::ScriptContext, ActionCategory::GlobalOps);
             assert_ne!(ActionCategory::ScriptContext, ActionCategory::Terminal);
         }
-    
+
         #[test]
         fn action_category_ne_script_ops_vs_global() {
             assert_ne!(ActionCategory::ScriptOps, ActionCategory::GlobalOps);
         }
-    
+
         #[test]
         fn action_category_ne_terminal_vs_global() {
             assert_ne!(ActionCategory::Terminal, ActionCategory::GlobalOps);
         }
-    
+
         // ========================================
         // 15. Agent description content keywords (5 tests)
         // ========================================
-    
+
         #[test]
         fn agent_edit_description_mentions_agent_file() {
             let mut agent = ScriptInfo::new("MyAgent", "/path/agent.md");
@@ -20664,7 +20763,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "edit_script").unwrap();
             assert!(a.description.as_ref().unwrap().contains("agent"));
         }
-    
+
         #[test]
         fn agent_reveal_description_mentions_agent() {
             let mut agent = ScriptInfo::new("MyAgent", "/path/agent.md");
@@ -20674,7 +20773,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "reveal_in_finder").unwrap();
             assert!(a.description.as_ref().unwrap().contains("agent"));
         }
-    
+
         #[test]
         fn agent_copy_path_description_mentions_agent() {
             let mut agent = ScriptInfo::new("MyAgent", "/path/agent.md");
@@ -20684,7 +20783,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "copy_path").unwrap();
             assert!(a.description.as_ref().unwrap().contains("agent"));
         }
-    
+
         #[test]
         fn agent_copy_content_description() {
             let mut agent = ScriptInfo::new("MyAgent", "/path/agent.md");
@@ -20694,7 +20793,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "copy_content").unwrap();
             assert!(a.description.as_ref().unwrap().contains("content"));
         }
-    
+
         #[test]
         fn agent_edit_title_says_edit_agent() {
             let mut agent = ScriptInfo::new("MyAgent", "/path/agent.md");
@@ -20704,18 +20803,18 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "edit_script").unwrap();
             assert_eq!(a.title, "Edit Agent");
         }
-    
+
         // ========================================
         // 16. Cross-context frecency reset consistency (3 tests)
         // ========================================
-    
+
         #[test]
         fn frecency_reset_present_for_script() {
             let script = ScriptInfo::new("s", "/p").with_frecency(true, Some("/p".to_string()));
             let actions = get_script_context_actions(&script);
             assert!(actions.iter().any(|a| a.id == "reset_ranking"));
         }
-    
+
         #[test]
         fn frecency_reset_present_for_scriptlet() {
             let script = ScriptInfo::scriptlet("s", "/p.md", None, None)
@@ -20723,18 +20822,18 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let actions = get_script_context_actions(&script);
             assert!(actions.iter().any(|a| a.id == "reset_ranking"));
         }
-    
+
         #[test]
         fn frecency_reset_present_for_builtin() {
             let script = ScriptInfo::builtin("B").with_frecency(true, Some("b".to_string()));
             let actions = get_script_context_actions(&script);
             assert!(actions.iter().any(|a| a.id == "reset_ranking"));
         }
-    
+
         // ========================================
         // 17. Script context exact shortcut values (5 tests)
         // ========================================
-    
+
         #[test]
         fn script_edit_shortcut_cmd_e() {
             let script = ScriptInfo::new("t", "/p/t.ts");
@@ -20742,7 +20841,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "edit_script").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘E"));
         }
-    
+
         #[test]
         fn script_view_logs_shortcut_cmd_l() {
             let script = ScriptInfo::new("t", "/p/t.ts");
@@ -20750,7 +20849,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "view_logs").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘L"));
         }
-    
+
         #[test]
         fn script_reveal_shortcut_cmd_shift_f() {
             let script = ScriptInfo::new("t", "/p/t.ts");
@@ -20758,7 +20857,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "reveal_in_finder").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘⇧F"));
         }
-    
+
         #[test]
         fn script_copy_path_shortcut_cmd_shift_c() {
             let script = ScriptInfo::new("t", "/p/t.ts");
@@ -20766,7 +20865,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "copy_path").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘⇧C"));
         }
-    
+
         #[test]
         fn script_copy_content_shortcut_cmd_opt_c() {
             let script = ScriptInfo::new("t", "/p/t.ts");
@@ -20774,11 +20873,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "copy_content").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘⌥C"));
         }
-    
+
         // ========================================
         // 18. CommandBarConfig factory methods (5 tests)
         // ========================================
-    
+
         #[test]
         fn command_bar_ai_style_search_top_headers_icons_footer() {
             let c = CommandBarConfig::ai_style();
@@ -20787,7 +20886,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert!(c.dialog_config.show_icons);
             assert!(!c.dialog_config.show_footer);
         }
-    
+
         #[test]
         fn command_bar_main_menu_search_bottom_separators() {
             let c = CommandBarConfig::main_menu_style();
@@ -20796,13 +20895,13 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert!(!c.dialog_config.show_icons);
             assert!(!c.dialog_config.show_footer);
         }
-    
+
         #[test]
         fn command_bar_no_search_hidden() {
             let c = CommandBarConfig::no_search();
             assert_eq!(c.dialog_config.search_position, SearchPosition::Hidden);
         }
-    
+
         #[test]
         fn command_bar_notes_style_search_top_separators_icons_footer() {
             let c = CommandBarConfig::notes_style();
@@ -20811,7 +20910,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert!(c.dialog_config.show_icons);
             assert!(!c.dialog_config.show_footer);
         }
-    
+
         #[test]
         fn command_bar_default_close_flags_all_true() {
             let c = CommandBarConfig::default();
@@ -20819,11 +20918,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert!(c.close_on_click_outside);
             assert!(c.close_on_escape);
         }
-    
+
         // ========================================
         // 19. Notes command bar exact shortcuts (6 tests)
         // ========================================
-    
+
         #[test]
         fn notes_cmd_bar_new_note_shortcut() {
             let info = NotesInfo {
@@ -20835,8 +20934,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "new_note").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘N"));
         }
-    
-    
+
         // --- merged from tests_part_04.rs ---
         #[test]
         fn notes_cmd_bar_duplicate_note_shortcut() {
@@ -20849,7 +20947,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "duplicate_note").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘D"));
         }
-    
+
         #[test]
         fn notes_cmd_bar_browse_notes_shortcut() {
             let info = NotesInfo {
@@ -20861,7 +20959,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "browse_notes").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘P"));
         }
-    
+
         #[test]
         fn notes_cmd_bar_find_in_note_shortcut() {
             let info = NotesInfo {
@@ -20873,7 +20971,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "find_in_note").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌘F"));
         }
-    
+
         #[test]
         fn notes_cmd_bar_copy_note_as_shortcut() {
             let info = NotesInfo {
@@ -20885,7 +20983,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "copy_note_as").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⇧⌘C"));
         }
-    
+
         #[test]
         fn notes_cmd_bar_export_shortcut() {
             let info = NotesInfo {
@@ -20897,11 +20995,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "export").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⇧⌘E"));
         }
-    
+
         // ========================================
         // 20. Note switcher complex scenarios (5 tests)
         // ========================================
-    
+
         #[test]
         fn note_switcher_10_notes_all_have_actions() {
             let notes: Vec<_> = (0..10)
@@ -20920,21 +21018,21 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let actions = get_note_switcher_actions(&notes);
             assert_eq!(actions.len(), 10);
         }
-    
+
         #[test]
         fn note_switcher_pinned_section_label() {
             let note = make_note("1", "Pinned Note", 50, false, true, "", "");
             let actions = get_note_switcher_actions(&[note]);
             assert_eq!(actions[0].section.as_deref(), Some("Pinned"));
         }
-    
+
         #[test]
         fn note_switcher_recent_section_label() {
             let note = make_note("1", "Regular Note", 50, false, false, "", "");
             let actions = get_note_switcher_actions(&[note]);
             assert_eq!(actions[0].section.as_deref(), Some("Recent"));
         }
-    
+
         #[test]
         fn note_switcher_mixed_pinned_and_recent_sections() {
             let notes = vec![
@@ -20949,18 +21047,18 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 vec![Some("Pinned"), Some("Recent"), Some("Pinned")]
             );
         }
-    
+
         #[test]
         fn note_switcher_current_note_has_bullet_prefix() {
             let note = make_note("1", "Current Note", 50, true, false, "", "");
             let actions = get_note_switcher_actions(&[note]);
             assert!(actions[0].title.starts_with("• "));
         }
-    
+
         // ========================================
         // 21. build_grouped_items section header content (5 tests)
         // ========================================
-    
+
         #[test]
         fn grouped_items_header_text_matches_section_name() {
             let actions = vec![
@@ -20978,7 +21076,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 _ => panic!("Expected SectionHeader"),
             }
         }
-    
+
         #[test]
         fn grouped_items_headers_count_matches_unique_sections() {
             let actions = vec![
@@ -20995,7 +21093,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 .count();
             assert_eq!(header_count, 3);
         }
-    
+
         #[test]
         fn grouped_items_no_section_no_header() {
             let actions = vec![make_action("a1", "A1", None), make_action("a2", "A2", None)];
@@ -21007,7 +21105,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 .count();
             assert_eq!(header_count, 0);
         }
-    
+
         #[test]
         fn grouped_items_headers_precede_their_items() {
             let actions = vec![
@@ -21022,7 +21120,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert!(matches!(grouped[2], GroupedActionItem::SectionHeader(_)));
             assert!(matches!(grouped[3], GroupedActionItem::Item(1)));
         }
-    
+
         #[test]
         fn grouped_items_separators_style_no_headers() {
             let actions = vec![
@@ -21038,22 +21136,22 @@ mod from_dialog_builtin_action_validation_tests_10 {
             assert_eq!(header_count, 0);
             assert_eq!(grouped.len(), 2); // Just Items
         }
-    
+
         // ========================================
         // 22. coerce_action_selection edge cases (5 tests)
         // ========================================
-    
+
         #[test]
         fn coerce_empty_returns_none() {
             assert_eq!(coerce_action_selection(&[], 0), None);
         }
-    
+
         #[test]
         fn coerce_on_item_returns_same() {
             let rows = vec![GroupedActionItem::Item(0)];
             assert_eq!(coerce_action_selection(&rows, 0), Some(0));
         }
-    
+
         #[test]
         fn coerce_header_followed_by_item_goes_down() {
             let rows = vec![
@@ -21062,7 +21160,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             ];
             assert_eq!(coerce_action_selection(&rows, 0), Some(1));
         }
-    
+
         #[test]
         fn coerce_item_then_header_at_end() {
             let rows = vec![
@@ -21072,7 +21170,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             // Index 1 is header, search down finds nothing, search up finds Item at 0
             assert_eq!(coerce_action_selection(&rows, 1), Some(0));
         }
-    
+
         #[test]
         fn coerce_all_headers_returns_none() {
             let rows = vec![
@@ -21081,24 +21179,24 @@ mod from_dialog_builtin_action_validation_tests_10 {
             ];
             assert_eq!(coerce_action_selection(&rows, 0), None);
         }
-    
+
         // ========================================
         // 23. Score_action with cached lowercase (5 tests)
         // ========================================
-    
+
         #[test]
         fn score_prefix_match_100() {
             let a = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
             assert!(ActionsDialog::score_action(&a, "edit") >= 100);
         }
-    
+
         #[test]
         fn score_contains_match_50() {
             let a = Action::new("id", "Quick Edit", None, ActionCategory::ScriptContext);
             let s = ActionsDialog::score_action(&a, "edit");
             assert!((50..100).contains(&s));
         }
-    
+
         #[test]
         fn score_fuzzy_match_25() {
             // "et" subsequence in "edit" => e...t
@@ -21107,7 +21205,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             // 'e','i','t' are subsequence of "edit script"
             assert!(s >= 25);
         }
-    
+
         #[test]
         fn score_description_bonus_15() {
             let a = Action::new(
@@ -21119,104 +21217,104 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let s = ActionsDialog::score_action(&a, "editor");
             assert!(s >= 15);
         }
-    
+
         #[test]
         fn score_no_match_zero() {
             let a = Action::new("id", "Edit Script", None, ActionCategory::ScriptContext);
             assert_eq!(ActionsDialog::score_action(&a, "zzzzz"), 0);
         }
-    
+
         // ========================================
         // 24. fuzzy_match edge cases (5 tests)
         // ========================================
-    
+
         #[test]
         fn fuzzy_empty_needle_always_matches() {
             assert!(ActionsDialog::fuzzy_match("anything", ""));
         }
-    
+
         #[test]
         fn fuzzy_empty_haystack_nonempty_needle_fails() {
             assert!(!ActionsDialog::fuzzy_match("", "a"));
         }
-    
+
         #[test]
         fn fuzzy_exact_match() {
             assert!(ActionsDialog::fuzzy_match("hello", "hello"));
         }
-    
+
         #[test]
         fn fuzzy_subsequence_match() {
             assert!(ActionsDialog::fuzzy_match("abcdef", "ace"));
         }
-    
+
         #[test]
         fn fuzzy_no_match() {
             assert!(!ActionsDialog::fuzzy_match("abc", "z"));
         }
-    
+
         // ========================================
         // 25. parse_shortcut_keycaps (6 tests)
         // ========================================
-    
+
         #[test]
         fn keycaps_cmd_c() {
             let caps = ActionsDialog::parse_shortcut_keycaps("⌘C");
             assert_eq!(caps, vec!["⌘", "C"]);
         }
-    
+
         #[test]
         fn keycaps_cmd_shift_enter() {
             let caps = ActionsDialog::parse_shortcut_keycaps("⌘⇧↵");
             assert_eq!(caps, vec!["⌘", "⇧", "↵"]);
         }
-    
+
         #[test]
         fn keycaps_ctrl_x() {
             let caps = ActionsDialog::parse_shortcut_keycaps("⌃X");
             assert_eq!(caps, vec!["⌃", "X"]);
         }
-    
+
         #[test]
         fn keycaps_space() {
             let caps = ActionsDialog::parse_shortcut_keycaps("␣");
             assert_eq!(caps, vec!["␣"]);
         }
-    
+
         #[test]
         fn keycaps_arrows() {
             let caps = ActionsDialog::parse_shortcut_keycaps("↑↓←→");
             assert_eq!(caps, vec!["↑", "↓", "←", "→"]);
         }
-    
+
         #[test]
         fn keycaps_lowercase_uppercased() {
             let caps = ActionsDialog::parse_shortcut_keycaps("⌘c");
             assert_eq!(caps, vec!["⌘", "C"]);
         }
-    
+
         // ========================================
         // 26. to_deeplink_name additional edge cases (4 tests)
         // ========================================
-    
+
         #[test]
         fn deeplink_cjk_characters_preserved() {
             let result = to_deeplink_name("测试脚本");
             assert_eq!(result, "%E6%B5%8B%E8%AF%95%E8%84%9A%E6%9C%AC");
         }
-    
+
         #[test]
         fn deeplink_mixed_ascii_unicode() {
             let result = to_deeplink_name("My 脚本 Script");
             assert_eq!(result, "my-%E8%84%9A%E6%9C%AC-script");
         }
-    
+
         #[test]
         fn deeplink_accented_preserved() {
             let result = to_deeplink_name("café résumé");
             assert_eq!(result, "caf%C3%A9-r%C3%A9sum%C3%A9");
         }
-    
+
         #[test]
         fn deeplink_emoji_stripped() {
             // Emoji are not alphanumeric, so they become hyphens
@@ -21224,11 +21322,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             // 🚀 becomes -, collapses with surrounding hyphens
             assert_eq!(result, "test-script");
         }
-    
+
         // ========================================
         // 27. Clipboard exact shortcut values (6 tests)
         // ========================================
-    
+
         #[test]
         fn clipboard_share_shortcut() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -21236,7 +21334,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_share").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⇧⌘E"));
         }
-    
+
         #[test]
         fn clipboard_attach_to_ai_shortcut() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -21244,7 +21342,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_attach_to_ai").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌃⌘A"));
         }
-    
+
         #[test]
         fn clipboard_pin_shortcut() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -21252,7 +21350,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_pin").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⇧⌘P"));
         }
-    
+
         #[test]
         fn clipboard_unpin_shortcut_same_as_pin() {
             let entry = make_clipboard_entry(ContentType::Text, true, None);
@@ -21260,7 +21358,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_unpin").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⇧⌘P"));
         }
-    
+
         #[test]
         fn clipboard_save_snippet_shortcut() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -21268,7 +21366,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_save_snippet").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⇧⌘S"));
         }
-    
+
         #[test]
         fn clipboard_save_file_shortcut() {
             let entry = make_clipboard_entry(ContentType::Text, false, None);
@@ -21276,12 +21374,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "clip:clipboard_save_file").unwrap();
             assert_eq!(a.shortcut.as_deref(), Some("⌥⇧⌘S"));
         }
-    
+
         // ========================================
         // 28. Notes command bar section labels (4 tests)
         // ========================================
-    
-    
+
         // --- merged from tests_part_05.rs ---
         #[test]
         fn notes_cmd_bar_new_note_section_notes() {
@@ -21294,7 +21391,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "new_note").unwrap();
             assert_eq!(a.section.as_deref(), Some("Notes"));
         }
-    
+
         #[test]
         fn notes_cmd_bar_find_in_note_section_edit() {
             let info = NotesInfo {
@@ -21306,7 +21403,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "find_in_note").unwrap();
             assert_eq!(a.section.as_deref(), Some("Edit"));
         }
-    
+
         #[test]
         fn notes_cmd_bar_copy_note_as_section_copy() {
             let info = NotesInfo {
@@ -21318,7 +21415,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "copy_note_as").unwrap();
             assert_eq!(a.section.as_deref(), Some("Copy"));
         }
-    
+
         #[test]
         fn notes_cmd_bar_export_section_export() {
             let info = NotesInfo {
@@ -21330,11 +21427,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let a = find_action(&actions, "export").unwrap();
             assert_eq!(a.section.as_deref(), Some("Export"));
         }
-    
+
         // ========================================
         // 29. ID uniqueness and non-empty invariants (6 tests)
         // ========================================
-    
+
         #[test]
         fn notes_cmd_bar_ids_unique() {
             let info = NotesInfo {
@@ -21346,7 +21443,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let ids: HashSet<_> = actions.iter().map(|a| a.id.as_str()).collect();
             assert_eq!(ids.len(), actions.len());
         }
-    
+
         #[test]
         fn chat_context_ids_unique() {
             let info = ChatPromptInfo {
@@ -21370,7 +21467,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let ids: HashSet<_> = actions.iter().map(|a| a.id.as_str()).collect();
             assert_eq!(ids.len(), actions.len());
         }
-    
+
         #[test]
         fn new_chat_ids_unique() {
             let actions = get_new_chat_actions(
@@ -21395,7 +21492,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let ids: HashSet<_> = actions.iter().map(|a| a.id.as_str()).collect();
             assert_eq!(ids.len(), actions.len());
         }
-    
+
         #[test]
         fn note_switcher_ids_unique() {
             let notes = vec![
@@ -21407,7 +21504,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let ids: HashSet<_> = actions.iter().map(|a| a.id.as_str()).collect();
             assert_eq!(ids.len(), actions.len());
         }
-    
+
         #[test]
         fn all_note_switcher_actions_nonempty_title() {
             let notes = vec![
@@ -21420,7 +21517,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 assert!(!a.id.is_empty(), "Action has empty id");
             }
         }
-    
+
         #[test]
         fn all_path_actions_nonempty_title_and_id() {
             let info = PathInfo {
@@ -21434,11 +21531,11 @@ mod from_dialog_builtin_action_validation_tests_10 {
                 assert!(!a.id.is_empty());
             }
         }
-    
+
         // ========================================
         // 30. Ordering determinism (4 tests)
         // ========================================
-    
+
         #[test]
         fn notes_cmd_bar_ordering_deterministic() {
             let info = NotesInfo {
@@ -21450,7 +21547,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let b = get_notes_command_bar_actions(&info);
             assert_eq!(action_ids(&a), action_ids(&b));
         }
-    
+
         #[test]
         fn chat_context_ordering_deterministic() {
             let info = ChatPromptInfo {
@@ -21474,7 +21571,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let b = get_chat_context_actions(&info);
             assert_eq!(action_ids(&a), action_ids(&b));
         }
-    
+
         #[test]
         fn new_chat_ordering_deterministic() {
             let last = vec![NewChatModelInfo {
@@ -21498,7 +21595,7 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let b = get_new_chat_actions(&last, &presets, &models);
             assert_eq!(action_ids(&a), action_ids(&b));
         }
-    
+
         #[test]
         fn path_context_ordering_deterministic() {
             let info = PathInfo {
@@ -21510,6 +21607,5 @@ mod from_dialog_builtin_action_validation_tests_10 {
             let b = get_path_context_actions(&info);
             assert_eq!(action_ids(&a), action_ids(&b));
         }
-    
     }
 }

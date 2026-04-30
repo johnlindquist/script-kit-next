@@ -10,7 +10,6 @@ use crate::logging;
 use crate::ui_foundation::HexColorExt;
 use gpui::*;
 use gpui_component::tooltip::Tooltip;
-use std::collections::HashSet;
 use std::sync::Arc;
 /// Icon type for list items - supports emoji strings, SVG icons, and pre-decoded images
 #[derive(Clone)]
@@ -69,6 +68,77 @@ pub const LIST_ITEM_HEIGHT: f32 = 40.0;
 /// - Use `list()` when you need variable heights (e.g., headers + items); it uses a SumTree
 ///   and scroll math is O(log n).
 pub const SECTION_HEADER_HEIGHT: f32 = 32.0;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ListItemMetricsOverride {
+    pub item_height: f32,
+    pub section_header_height: f32,
+    pub section_padding_top: f32,
+    pub icon_container_size: f32,
+    pub icon_svg_size: f32,
+    pub icon_text_gap: f32,
+    pub name_font_size: f32,
+    pub name_line_height: f32,
+    pub desc_font_size: f32,
+    pub desc_line_height: f32,
+    pub section_header_font_size: f32,
+    pub section_gap: f32,
+    pub name_weight: FontWeight,
+    pub selected_name_weight: FontWeight,
+    pub desc_weight: FontWeight,
+    pub section_weight: FontWeight,
+    pub desc_quiet_alpha: u32,
+}
+
+impl ListItemMetricsOverride {
+    pub const fn default_main_menu() -> Self {
+        Self {
+            item_height: LIST_ITEM_HEIGHT,
+            section_header_height: SECTION_HEADER_HEIGHT,
+            section_padding_top: SECTION_PADDING_TOP,
+            icon_container_size: ICON_CONTAINER_SIZE,
+            icon_svg_size: ICON_SVG_SIZE,
+            icon_text_gap: ITEM_ICON_TEXT_GAP,
+            name_font_size: NAME_FONT_SIZE,
+            name_line_height: NAME_LINE_HEIGHT,
+            desc_font_size: DESC_FONT_SIZE,
+            desc_line_height: DESC_LINE_HEIGHT,
+            section_header_font_size: SECTION_HEADER_FONT_SIZE,
+            section_gap: SECTION_GAP,
+            name_weight: FontWeight::NORMAL,
+            selected_name_weight: FontWeight::MEDIUM,
+            desc_weight: FontWeight::NORMAL,
+            section_weight: FontWeight::NORMAL,
+            desc_quiet_alpha: ALPHA_DESC_QUIET,
+        }
+    }
+}
+
+#[inline]
+fn resolved_list_item_metrics() -> ListItemMetricsOverride {
+    #[cfg(feature = "storybook")]
+    if let Some(metrics) = crate::storybook::adopted_main_menu_list_study_metrics() {
+        return metrics;
+    }
+
+    ListItemMetricsOverride::default_main_menu()
+}
+
+#[inline]
+pub fn effective_list_item_height() -> f32 {
+    resolved_list_item_metrics().item_height
+}
+
+#[inline]
+pub fn effective_section_header_height() -> f32 {
+    resolved_list_item_metrics().section_header_height
+}
+
+#[inline]
+pub fn effective_average_item_height_for_scroll() -> f32 {
+    let metrics = resolved_list_item_metrics();
+    ((metrics.item_height * 3.0) + metrics.section_header_height) / 4.0
+}
 // =============================================================================
 // Layout & Spacing Constants (8px grid with 4px micro-steps)
 // =============================================================================
@@ -159,11 +229,10 @@ const SECTION_GAP: f32 = 6.0;
 
 /// 85% opacity — used for selected description text
 const ALPHA_STRONG: u32 = 0xD9;
-/// 70% opacity — selected description remains secondary to the item title
-pub(crate) const ALPHA_DESC_SELECTED: u32 = 0xB3;
-/// 72% opacity — used for non-selected item names
-/// Softer than ALPHA_STRONG to let non-selected items recede (Raycast/Spotlight pattern)
-pub(crate) const ALPHA_NAME_QUIET: u32 = 0xB8;
+/// 65% opacity — focused description: readable but secondary to name
+pub(crate) const ALPHA_DESC_SELECTED: u32 = 0xA6;
+/// 100% opacity — names are always pure white (Raycast pattern)
+pub(crate) const ALPHA_NAME_QUIET: u32 = 0xFF;
 /// 50% opacity — used for non-selected item icons
 /// Low enough that icons don't compete for attention; selected items restore full color
 const ALPHA_ICON_QUIET: u32 = 0x80;
@@ -172,9 +241,8 @@ pub(crate) const ALPHA_READABLE: u32 = 0xCC;
 /// 75% opacity — used for header icon, tool badge text
 /// (Bumped from 70% for better legibility on vibrancy backgrounds)
 const ALPHA_MUTED: u32 = 0xBF;
-/// 35% opacity — used for non-selected description text
-/// Makes descriptions visible on hover/focus but clearly recedes in the list
-const ALPHA_DESC_QUIET: u32 = 0x59;
+/// 45% opacity — hovered description: visible but clearly lighter than focused
+const ALPHA_DESC_QUIET: u32 = 0x73;
 /// 70% opacity — used for source hint text
 /// (Bumped from 65% for WCAG-friendlier contrast on vibrancy)
 const ALPHA_HINT: u32 = 0xB3;
@@ -252,8 +320,8 @@ pub(crate) const TAB_BADGE_PADDING_X: f32 = 6.0;
 pub(crate) const TAB_BADGE_PADDING_Y: f32 = 2.0;
 /// Tab badge corner radius
 pub(crate) const TAB_BADGE_RADIUS: f32 = 4.0;
-/// 15% opacity — hover accent background on interactive buttons
-pub(crate) const ALPHA_HOVER_ACCENT: u32 = 0x26;
+/// 18% opacity — hover accent background on interactive buttons
+pub(crate) const ALPHA_HOVER_ACCENT: u32 = 0x2e;
 /// 30% opacity — Tab badge background tint
 pub(crate) const ALPHA_TAB_BADGE_BG: u32 = 0x4D;
 /// 80% opacity — library size count hint (boosted for vibrancy readability)
@@ -475,6 +543,59 @@ pub struct ListItemColors {
     pub warning_bg: u32,
     /// Text color for content displayed on accent/warning backgrounds
     pub text_on_accent: u32,
+    // ── Text grading alphas (u32, 0x00–0xFF) ────────────────────────────
+    // All applied to text_primary. Sourced from theme.opacity text tiers.
+    /// Name text alpha (idle items).
+    pub alpha_name: u32,
+    /// Badge / shortcut / section header alpha.
+    pub alpha_strong: u32,
+    /// Focused description / source hint alpha.
+    pub alpha_muted: u32,
+    /// Hovered description / type label alpha.
+    pub alpha_hint: u32,
+    /// Placeholder / idle caption alpha.
+    pub alpha_placeholder: u32,
+    /// Idle icon alpha.
+    pub alpha_icon: u32,
+}
+
+#[inline]
+pub fn row_selected_background_rgba(colors: &ListItemColors) -> u32 {
+    let selected_alpha = (colors.selected_opacity * 255.0) as u8;
+    (colors.text_primary << 8) | selected_alpha as u32
+}
+
+#[inline]
+pub fn row_hover_background_rgba(colors: &ListItemColors) -> u32 {
+    let hover_alpha = (colors.hover_opacity * 255.0) as u8;
+    (colors.text_primary << 8) | hover_alpha as u32
+}
+
+#[inline]
+pub fn row_name_text_rgba(colors: &ListItemColors, selected: bool) -> u32 {
+    if selected {
+        (colors.text_primary << 8) | 0xFF
+    } else {
+        (colors.text_primary << 8) | colors.alpha_name
+    }
+}
+
+#[inline]
+pub fn row_description_text_rgba(colors: &ListItemColors, selected: bool) -> u32 {
+    if selected {
+        (colors.text_primary << 8) | colors.alpha_muted
+    } else {
+        (colors.text_primary << 8) | colors.alpha_hint
+    }
+}
+
+#[inline]
+pub fn row_icon_text_rgba(colors: &ListItemColors, selected: bool) -> u32 {
+    if selected {
+        (colors.text_primary << 8) | 0xFF
+    } else {
+        (colors.text_primary << 8) | colors.alpha_icon
+    }
 }
 
 #[cfg(test)]
@@ -517,6 +638,20 @@ mod list_item_colors_tests {
 
         assert_eq!(colors.text_on_accent, theme.colors.text.on_accent);
         assert_ne!(colors.text_on_accent, theme.colors.text.primary);
+    }
+
+    #[test]
+    fn test_from_design_with_dark_mode_uses_theme_row_opacity_ladders() {
+        let design = crate::designs::DesignColors::default();
+        let dark = ListItemColors::from_design_with_dark_mode(&design, true);
+        let light = ListItemColors::from_design_with_dark_mode(&design, false);
+        let dark_opacity = crate::theme::types::BackgroundOpacity::dark_default();
+        let light_opacity = crate::theme::types::BackgroundOpacity::light_default();
+
+        assert_eq!(dark.selected_opacity, dark_opacity.selected);
+        assert_eq!(dark.hover_opacity, dark_opacity.hover);
+        assert_eq!(light.selected_opacity, light_opacity.selected);
+        assert_eq!(light.hover_opacity, light_opacity.hover);
     }
 
     #[test]
@@ -579,8 +714,14 @@ impl ListItemColors {
             selected_opacity: opacity.selected,
             hover_opacity: opacity.hover,
             warning_bg: theme.colors.ui.warning,
-            // White text provides good contrast on warning/accent backgrounds in dark themes
             text_on_accent: theme.colors.text.on_accent,
+            // Text grading alphas from theme
+            alpha_name: crate::theme::types::opacity_to_alpha(opacity.text_name),
+            alpha_strong: crate::theme::types::opacity_to_alpha(opacity.text_strong),
+            alpha_muted: crate::theme::types::opacity_to_alpha(opacity.text_muted_alpha),
+            alpha_hint: crate::theme::types::opacity_to_alpha(opacity.text_hint),
+            alpha_placeholder: crate::theme::types::opacity_to_alpha(opacity.text_placeholder),
+            alpha_icon: crate::theme::types::opacity_to_alpha(opacity.text_icon),
         }
     }
 
@@ -596,9 +737,8 @@ impl ListItemColors {
 
     /// Create from design colors with explicit dark/light mode
     ///
-    /// Light mode needs higher opacity values because low opacity on light backgrounds
-    /// (e.g., white at 7-12%) is too subtle to be visible. Dark mode uses lower opacity
-    /// because white overlays are more visible on dark backgrounds.
+    /// Row-state opacity comes from the same appearance-aware defaults used by
+    /// normal themes, keeping design previews aligned with the app shell.
     ///
     /// # Arguments
     /// * `colors` - Design colors to use
@@ -607,13 +747,10 @@ impl ListItemColors {
         colors: &crate::designs::DesignColors,
         is_dark: bool,
     ) -> Self {
-        // Dark mode: low opacity works well (white at 7-12% visible on dark bg)
-        // Light mode: needs higher opacity for visibility (black overlay on light bg)
-        // Values aligned with Material Design elevation overlay model (~4-6dp)
-        let (selected_opacity, hover_opacity) = if is_dark {
-            (0.14, 0.08) // Dark mode: improved selection/hover visibility
+        let opacity = if is_dark {
+            crate::theme::types::BackgroundOpacity::dark_default()
         } else {
-            (0.20, 0.12) // Light mode: stronger overlay for visibility on vibrancy
+            crate::theme::types::BackgroundOpacity::light_default()
         };
 
         Self {
@@ -625,10 +762,17 @@ impl ListItemColors {
             accent_selected_subtle: colors.background_selected,
             background: colors.background,
             background_selected: colors.background_selected,
-            selected_opacity,
-            hover_opacity,
+            selected_opacity: opacity.selected,
+            hover_opacity: opacity.hover,
             warning_bg: colors.warning,
             text_on_accent: colors.text_on_accent,
+            // Use defaults for design colors (no theme opacity override available)
+            alpha_name: crate::theme::types::opacity_to_alpha(1.0),
+            alpha_strong: crate::theme::types::opacity_to_alpha(0.80),
+            alpha_muted: crate::theme::types::opacity_to_alpha(0.65),
+            alpha_hint: crate::theme::types::opacity_to_alpha(0.45),
+            alpha_placeholder: crate::theme::types::opacity_to_alpha(0.40),
+            alpha_icon: crate::theme::types::opacity_to_alpha(0.50),
         }
     }
 }
@@ -1043,6 +1187,7 @@ impl ListItem {
 }
 impl RenderOnce for ListItem {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
+        let metrics = resolved_list_item_metrics();
         let colors = self.colors;
         let index = self.index;
         let item_index = index.unwrap_or(0);
@@ -1053,13 +1198,12 @@ impl RenderOnce for ListItem {
         // This replaces per-view InputMode::Mouse gating — GPUI tracks modality natively.
         let hover_visible = self.hovered && !window.last_input_was_keyboard();
 
-        // Selection colors with alpha from theme opacity settings
-        // This allows vibrancy blur to show through selected/hovered items
-        // Use rgba8() helper (same pattern as footer) to ensure consistent Hsla conversion
+        // Both hover and selected use text_primary (white on dark, black on light)
+        // at different opacities for a clear luminance ladder
         let selected_alpha = (colors.selected_opacity * 255.0) as u8;
         let hover_alpha = (colors.hover_opacity * 255.0) as u8;
-        let selected_bg = colors.accent_selected_subtle.rgba8(selected_alpha);
-        let hover_bg = colors.accent_selected_subtle.rgba8(hover_alpha);
+        let selected_bg = colors.text_primary.rgba8(selected_alpha);
+        let hover_bg = colors.text_primary.rgba8(hover_alpha);
 
         // Icon element (if present) - displayed on the left
         // Supports both emoji strings and PNG image data
@@ -1067,10 +1211,10 @@ impl RenderOnce for ListItem {
         let icon_text_color = if self.selected {
             rgb(colors.text_primary)
         } else {
-            rgba((colors.text_primary << 8) | ALPHA_ICON_QUIET) // Quiet icons let names lead
+            rgba((colors.text_primary << 8) | colors.alpha_icon) // Quiet icons let names lead
         };
-        let icon_size = px(ICON_CONTAINER_SIZE);
-        let svg_size = px(ICON_SVG_SIZE);
+        let icon_size = px(metrics.icon_container_size);
+        let svg_size = px(metrics.icon_svg_size);
         let icon_element = match &self.icon {
             Some(IconKind::Emoji(emoji)) => div()
                 .w(icon_size)
@@ -1158,17 +1302,16 @@ impl RenderOnce for ListItem {
         // When highlight_indices are present, use StyledText to highlight matched characters
         // Otherwise, render as plain text
         let name_weight = if self.selected {
-            FontWeight::MEDIUM // Subtle emphasis — launchers rely on background, not weight
+            metrics.selected_name_weight
         } else {
-            FontWeight::NORMAL // Lighter weight reduces visual density
+            metrics.name_weight
         };
         let name_element = if let Some(ref indices) = self.highlight_indices {
             // Build StyledText with highlighted matched characters
-            let index_set: HashSet<usize> = indices.iter().copied().collect();
             let highlight_color = if self.selected {
                 rgb(colors.text_primary)
             } else {
-                rgba((colors.text_primary << 8) | ALPHA_MATCH_HIGHLIGHT)
+                rgba((colors.text_primary << 8) | colors.alpha_name)
             };
             let highlight_style = HighlightStyle {
                 color: Some(highlight_color.into()),
@@ -1178,23 +1321,23 @@ impl RenderOnce for ListItem {
             // Convert character indices to byte ranges for StyledText
             let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
             for (char_idx, (byte_offset, ch)) in self.name.char_indices().enumerate() {
-                if index_set.contains(&char_idx) {
+                if indices.contains(&char_idx) {
                     highlights.push((byte_offset..byte_offset + ch.len_utf8(), highlight_style));
                 }
             }
 
             // Base text color is more muted when highlighting to create contrast
             let base_color = if self.selected {
-                rgba((colors.text_secondary << 8) | ALPHA_HINT)
+                rgba((colors.text_primary << 8) | colors.alpha_muted)
             } else {
-                rgba((colors.text_muted << 8) | ALPHA_NAME_QUIET)
+                rgba((colors.text_primary << 8) | colors.alpha_hint)
             };
 
-            let full_name = self.name.to_string();
+            let full_name = self.name.clone();
             let styled = StyledText::new(full_name.clone()).with_highlights(highlights);
 
             div()
-                .text_size(px(NAME_FONT_SIZE))
+                .text_size(px(metrics.name_font_size))
                 .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
@@ -1204,7 +1347,7 @@ impl RenderOnce for ListItem {
                 ))
                 .tooltip(move |window, cx| Tooltip::new(full_name.clone()).build(window, cx))
                 .whitespace_nowrap()
-                .line_height(px(NAME_LINE_HEIGHT))
+                .line_height(px(metrics.name_line_height))
                 .text_color(base_color)
                 .child(styled)
         } else {
@@ -1214,11 +1357,11 @@ impl RenderOnce for ListItem {
             let name_color = if self.selected {
                 rgb(colors.text_primary)
             } else {
-                rgba((colors.text_primary << 8) | ALPHA_NAME_QUIET)
+                rgba((colors.text_primary << 8) | colors.alpha_name)
             };
-            let full_name = self.name.to_string();
+            let full_name = self.name.clone();
             div()
-                .text_size(px(NAME_FONT_SIZE))
+                .text_size(px(metrics.name_font_size))
                 .font_weight(name_weight)
                 .overflow_hidden()
                 .text_ellipsis()
@@ -1228,7 +1371,7 @@ impl RenderOnce for ListItem {
                 ))
                 .tooltip(move |window, cx| Tooltip::new(full_name.clone()).build(window, cx))
                 .whitespace_nowrap()
-                .line_height(px(NAME_LINE_HEIGHT))
+                .line_height(px(metrics.name_line_height))
                 .text_color(name_color)
                 .child(self.name)
         };
@@ -1249,20 +1392,20 @@ impl RenderOnce for ListItem {
             if show_description {
                 // Selected: use primary text (readable against selection bg)
                 // Unselected: use secondary text (recedes in the list)
+                // All descriptions use text_primary — opacity alone controls brightness
                 let desc_color = if self.selected {
-                    rgba((colors.text_primary << 8) | ALPHA_DESC_SELECTED)
+                    rgba((colors.text_primary << 8) | colors.alpha_muted)
                 } else {
-                    rgba((colors.text_secondary << 8) | ALPHA_DESC_QUIET)
+                    rgba((colors.text_primary << 8) | colors.alpha_hint)
                 };
                 let desc_element = if let Some(ref desc_indices) =
                     self.description_highlight_indices
                 {
                     // Build StyledText with highlighted matched characters in description
-                    let index_set: HashSet<usize> = desc_indices.iter().copied().collect();
                     let highlight_color = if self.selected {
-                        rgba((colors.text_primary << 8) | ALPHA_MATCH_HIGHLIGHT)
+                        rgba((colors.text_primary << 8) | colors.alpha_strong)
                     } else {
-                        rgba((colors.text_secondary << 8) | ALPHA_HINT)
+                        rgba((colors.text_primary << 8) | colors.alpha_muted)
                     };
                     let highlight_style = HighlightStyle {
                         color: Some(highlight_color.into()),
@@ -1272,7 +1415,7 @@ impl RenderOnce for ListItem {
                     // Convert character indices to byte ranges for StyledText
                     let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
                     for (char_idx, (byte_offset, ch)) in desc.char_indices().enumerate() {
-                        if index_set.contains(&char_idx) {
+                        if desc_indices.contains(&char_idx) {
                             highlights
                                 .push((byte_offset..byte_offset + ch.len_utf8(), highlight_style));
                         }
@@ -1281,15 +1424,16 @@ impl RenderOnce for ListItem {
                     let base_alpha = if self.selected {
                         ALPHA_DESC_SELECTED
                     } else {
-                        ALPHA_DESC_QUIET
+                        metrics.desc_quiet_alpha
                     };
                     let base_color = rgba((colors.text_secondary << 8) | base_alpha);
                     let full_desc = desc.clone();
                     let styled = StyledText::new(full_desc.clone()).with_highlights(highlights);
 
                     div()
-                        .text_size(px(DESC_FONT_SIZE))
-                        .line_height(px(DESC_LINE_HEIGHT))
+                        .text_size(px(metrics.desc_font_size))
+                        .line_height(px(metrics.desc_line_height))
+                        .font_weight(metrics.desc_weight)
                         .text_color(base_color)
                         .overflow_hidden()
                         .text_ellipsis()
@@ -1305,8 +1449,9 @@ impl RenderOnce for ListItem {
                 } else {
                     let full_desc = desc.clone();
                     div()
-                        .text_size(px(DESC_FONT_SIZE))
-                        .line_height(px(DESC_LINE_HEIGHT))
+                        .text_size(px(metrics.desc_font_size))
+                        .line_height(px(metrics.desc_line_height))
+                        .font_weight(metrics.desc_weight)
                         .text_color(desc_color)
                         .overflow_hidden()
                         .text_ellipsis()
@@ -1328,8 +1473,7 @@ impl RenderOnce for ListItem {
         let resolved_shortcut_tokens = list_item_shortcut_tokens_for_render(
             self.shortcut.as_deref(),
             self.shortcut_tokens.as_deref(),
-        )
-        .map(|cow| cow.into_owned());
+        );
         let shortcut_element: AnyElement =
             if let Some(shortcut_tokens) = resolved_shortcut_tokens.as_ref() {
                 let show_shortcut =
@@ -1364,9 +1508,9 @@ impl RenderOnce for ListItem {
         // Priority: selected (full focus styling) > hovered (subtle feedback) > transparent
         // Note: For non-selected items, we ALSO apply GPUI's .hover() modifier for instant feedback
         let bg_color: Hsla = if self.selected {
-            selected_bg // 15% opacity - subtle selection with vibrancy
+            selected_bg // Theme-defined focused row highlight
         } else if hover_visible {
-            hover_bg // 10% opacity - subtle hover feedback (state-based)
+            hover_bg // Theme-defined hover feedback (state-based)
         } else {
             Hsla::transparent_black() // fully transparent
         };
@@ -1393,7 +1537,7 @@ impl RenderOnce for ListItem {
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(ITEM_ICON_TEXT_GAP))
+            .gap(px(metrics.icon_text_gap))
             .child(icon_element);
 
         // Leading accessory slot (e.g., color swatch strip) — between icon and text
@@ -1421,12 +1565,12 @@ impl RenderOnce for ListItem {
             // Tool/language badge for scriptlets (e.g., "ts", "bash")
             if show_accessories && !is_filtering {
                 if let Some(ref badge) = self.tool_badge {
-                    let badge_bg = (colors.text_dimmed << 8) | ALPHA_TINT_MEDIUM;
+                    let badge_bg = (colors.text_primary << 8) | ALPHA_TINT_MEDIUM;
                     accessories = accessories.child(
                         div()
                             .text_size(px(TOOL_BADGE_FONT_SIZE))
                             .font_family(FONT_MONO)
-                            .text_color(rgba((colors.text_dimmed << 8) | ALPHA_READABLE))
+                            .text_color(rgba((colors.text_primary << 8) | colors.alpha_hint))
                             .px(px(TOOL_BADGE_PADDING_X))
                             .py(px(TOOL_BADGE_PADDING_Y))
                             .rounded(px(TOOL_BADGE_RADIUS))
@@ -1436,13 +1580,13 @@ impl RenderOnce for ListItem {
                 }
             }
 
-            // Source/kit hint (e.g., "main", "cleanshot") - very subtle
+            // Source/kit hint (e.g., "main", "cleanshot")
             if show_accessories && !is_filtering {
                 if let Some(ref hint) = self.source_hint {
                     accessories = accessories.child(
                         div()
                             .text_size(px(SOURCE_HINT_FONT_SIZE))
-                            .text_color(rgba((colors.text_dimmed << 8) | ALPHA_HINT))
+                            .text_color(rgba((colors.text_primary << 8) | colors.alpha_hint))
                             .child(hint.clone()),
                     );
                 }
@@ -1507,7 +1651,7 @@ impl RenderOnce for ListItem {
         // Use left border for accent indicator - always reserve space, toggle color
         let mut container = div()
             .w_full()
-            .h(px(LIST_ITEM_HEIGHT))
+            .h(px(metrics.item_height))
             .overflow_hidden()
             .pr(px(ITEM_CONTAINER_PADDING_R))
             .flex()
@@ -1634,7 +1778,7 @@ pub fn icon_from_png(png_data: &[u8]) -> Option<IconKind> {
 /// Section headers render at 32px, regular items at 40px.
 ///
 /// # Arguments
-/// * `label` - The section label (displayed uppercase per whisper-chrome spec)
+/// * `label` - The section label, rendered in its provided casing with quiet chrome styling
 /// * `icon` - Optional icon name (lucide icon, e.g., "settings")
 /// * `colors` - ListItemColors for theme-aware styling
 /// * `_is_first` - Reserved for existing call sites; unused because headers no longer draw separators
@@ -1645,6 +1789,7 @@ pub fn render_section_header(
     colors: ListItemColors,
     _is_first: bool,
 ) -> impl IntoElement {
+    let metrics = resolved_list_item_metrics();
     // Section header at 32px (8px grid aligned, SECTION_HEADER_HEIGHT)
     // Used with GPUI's list() component which supports variable-height items.
     //
@@ -1662,14 +1807,14 @@ pub fn render_section_header(
 
     // Build the inner content row: icon (optional) → section name → count (optional)
     // Headers should whisper — subtle orientation labels, not attention-grabbers
-    let header_text_color = rgba((colors.text_secondary << 8) | ALPHA_ICON_QUIET);
+    let header_text_color = rgba((colors.text_primary << 8) | colors.alpha_muted);
     let mut content = div()
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(SECTION_GAP))
-        .text_size(px(SECTION_HEADER_FONT_SIZE))
-        .font_weight(FontWeight::NORMAL) // Lightest weight — headers recede behind items
+        .gap(px(metrics.section_gap))
+        .text_size(px(metrics.section_header_font_size))
+        .font_weight(FontWeight::SEMIBOLD)
         .text_color(header_text_color);
 
     // Add icon before section name if provided — very quiet to avoid visual noise
@@ -1679,20 +1824,20 @@ pub fn render_section_header(
                 svg()
                     .external_path(icon_name.external_path())
                     .size(px(SECTION_HEADER_ICON_SIZE))
-                    .text_color(rgba((colors.text_secondary << 8) | ALPHA_DESC_QUIET)),
+                    .text_color(rgba((colors.text_primary << 8) | colors.alpha_muted)),
             );
         }
     }
 
-    content = content.child(section_name.to_uppercase());
+    content = content.child(section_name.to_string());
 
-    // Add count badge if present - rendered as a very subtle separate element
+    // Add count badge if present
     if let Some(count) = count_text {
         content = content.child(
             div()
                 .text_xs()
-                .font_weight(FontWeight::NORMAL)
-                .text_color(rgba((colors.text_secondary << 8) | ALPHA_DESC_QUIET))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(rgba((colors.text_primary << 8) | colors.alpha_muted))
                 .child(count.to_string()),
         );
     }
@@ -1700,9 +1845,9 @@ pub fn render_section_header(
     // Clean section headers — no background tint for a calmer list appearance
     let header = div()
         .w_full()
-        .h(px(SECTION_HEADER_HEIGHT))
+        .h(px(metrics.section_header_height))
         .px(px(SECTION_PADDING_X))
-        .pt(px(SECTION_PADDING_TOP))
+        .pt(px(metrics.section_padding_top))
         .pb(px(SECTION_PADDING_BOTTOM))
         .flex()
         .flex_col()
@@ -1732,11 +1877,24 @@ mod render_section_header_source_tests {
     }
 
     #[test]
-    fn section_headers_uppercase_labels() {
+    fn section_headers_preserve_label_casing() {
         let body = render_section_header_source();
         assert!(
-            body.contains("section_name.to_uppercase()"),
-            "section headers should uppercase labels per .impeccable.md"
+            body.contains("section_name.to_string()"),
+            "section headers should preserve the provided label casing"
+        );
+    }
+
+    #[test]
+    fn section_headers_use_semibold_quiet_text() {
+        let body = render_section_header_source();
+        assert!(
+            body.contains("font_weight(FontWeight::SEMIBOLD)"),
+            "section headers should use semibold weight for quiet but readable emphasis"
+        );
+        assert!(
+            body.contains("colors.alpha_muted"),
+            "section headers should use muted text alpha instead of stronger header emphasis"
         );
     }
 

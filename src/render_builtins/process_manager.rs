@@ -29,6 +29,78 @@ impl ScriptListApp {
         self.execute_builtin(&entry, cx);
     }
 
+    fn process_manager_filter_matches(
+        process: &crate::process_manager::ProcessInfo,
+        filter_lower: &str,
+    ) -> bool {
+        process.script_path.to_lowercase().contains(filter_lower)
+            || process.pid.to_string().contains(filter_lower)
+    }
+
+    fn process_manager_filtered_entries<'a>(
+        processes: &'a [crate::process_manager::ProcessInfo],
+        filter: &str,
+    ) -> Vec<(usize, &'a crate::process_manager::ProcessInfo)> {
+        if filter.is_empty() {
+            processes.iter().enumerate().collect()
+        } else {
+            let filter_lower = filter.to_lowercase();
+            processes
+                .iter()
+                .enumerate()
+                .filter(|(_, process)| Self::process_manager_filter_matches(process, &filter_lower))
+                .collect()
+        }
+    }
+
+    fn process_manager_visible_row_names(&self, filter: &str) -> Vec<String> {
+        Self::process_manager_filtered_entries(&self.cached_processes, filter)
+            .into_iter()
+            .map(|(_, process)| process.script_path.clone())
+            .collect()
+    }
+
+    fn process_manager_dataset_and_visible_counts(&self, filter: &str) -> (usize, usize) {
+        (
+            self.cached_processes.len(),
+            Self::process_manager_filtered_entries(&self.cached_processes, filter).len(),
+        )
+    }
+
+    fn process_manager_selected_visible_entry(
+        &self,
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<(usize, &crate::process_manager::ProcessInfo)> {
+        Self::process_manager_filtered_entries(&self.cached_processes, filter)
+            .get(selected_index)
+            .copied()
+    }
+
+    fn process_manager_selected_visible_row_name(
+        &self,
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<String> {
+        self.process_manager_selected_visible_entry(filter, selected_index)
+            .map(|(_, process)| process.script_path.clone())
+    }
+
+    fn process_manager_visible_target_rows(
+        &self,
+        filter: &str,
+        limit: usize,
+    ) -> Vec<(usize, usize, &crate::process_manager::ProcessInfo)> {
+        Self::process_manager_filtered_entries(&self.cached_processes, filter)
+            .into_iter()
+            .take(limit)
+            .enumerate()
+            .map(|(display_index, (source_index, process))| {
+                (display_index, source_index, process)
+            })
+            .collect()
+    }
+
     /// Start the periodic refresh task for the ProcessManagerView.
     ///
     /// Spawns a background timer that polls the process manager every 2 seconds
@@ -140,19 +212,8 @@ impl ScriptListApp {
         let text_dimmed = self.theme.colors.text.dimmed;
 
         // Filter processes from cached data
-        let filtered_processes: Vec<_> = if filter.is_empty() {
-            self.cached_processes.iter().enumerate().collect()
-        } else {
-            let filter_lower = filter.to_lowercase();
-            self.cached_processes
-                .iter()
-                .enumerate()
-                .filter(|(_, p)| {
-                    p.script_path.to_lowercase().contains(&filter_lower)
-                        || p.pid.to_string().contains(&filter_lower)
-                })
-                .collect()
-        };
+        let filtered_processes =
+            Self::process_manager_filtered_entries(&self.cached_processes, &filter);
         let filtered_len = filtered_processes.len();
 
         // Key handler
@@ -208,19 +269,8 @@ impl ScriptListApp {
                 };
 
                 // Compute filtered list from cached data
-                let filtered: Vec<_> = if current_filter.is_empty() {
-                    this.cached_processes.iter().enumerate().collect()
-                } else {
-                    let filter_lower = current_filter.to_lowercase();
-                    this.cached_processes
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, p)| {
-                            p.script_path.to_lowercase().contains(&filter_lower)
-                                || p.pid.to_string().contains(&filter_lower)
-                        })
-                        .collect()
-                };
+                let filtered =
+                    Self::process_manager_filtered_entries(&this.cached_processes, &current_filter);
                 let current_filtered_len = filtered.len();
 
                 if is_key_up(key) {

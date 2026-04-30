@@ -23,6 +23,33 @@ fn filter_input_change_routes_tilde_into_mini_file_search() {
 }
 
 #[test]
+fn tilde_mini_file_search_seeds_directory_rows_before_first_paint() {
+    let source = fs::read_to_string("src/app_impl/filter_input_core.rs")
+        .expect("Failed to read src/app_impl/filter_input_core.rs");
+
+    assert!(
+        source.contains("seed_file_search_directory_results_for_first_paint"),
+        "fresh mini file-search entry must seed directory rows before switching surfaces"
+    );
+    assert!(
+        source.contains("list_directory_with_options"),
+        "first-paint seeding must use the real directory listing path"
+    );
+    assert!(
+        source.contains("let seeded_initial_results"),
+        "open_file_search_view must track whether first-paint rows were seeded"
+    );
+    assert!(
+        source.contains("preserve_current_results_until_first_batch || seeded_initial_results"),
+        "seeded rows must be preserved until the async directory stream replaces them"
+    );
+    assert!(
+        source.contains("self.file_search_display_indices.len()"),
+        "mini file-search sizing should use seeded display rows instead of a zero-row flash"
+    );
+}
+
+#[test]
 fn filter_input_change_routes_script_list_special_entries() {
     let source = fs::read_to_string("src/app_impl/filter_input_change.rs")
         .expect("Failed to read src/app_impl/filter_input_change.rs");

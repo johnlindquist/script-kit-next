@@ -89,6 +89,11 @@ impl Message {
         selected_value: Option<String>,
         is_focused: bool,
         window_visible: bool,
+        menu_syntax_main_hint: Option<crate::menu_syntax::MenuSyntaxMainHintSnapshot>,
+        capture_history_picker: Option<
+            crate::menu_syntax::capture_history_picker::HistoryPickerSnapshot,
+        >,
+        screenshot_identity: Option<String>,
     ) -> Self {
         Message::StateResult {
             request_id,
@@ -102,6 +107,9 @@ impl Message {
             selected_value,
             is_focused,
             window_visible,
+            menu_syntax_main_hint,
+            capture_history_picker,
+            screenshot_identity,
         }
     }
 

@@ -27,6 +27,14 @@ fn plugin_section_type_order(result: &SearchResult) -> u8 {
     }
 }
 
+fn fallback_plugin_label(key: &str) -> String {
+    if key == "main" {
+        "Main".to_string()
+    } else {
+        key.to_string()
+    }
+}
+
 /// Returns `(grouping_key, display_label)` for plugin-owned result types.
 /// Uses plugin_title for display when available; falls back to the grouping key.
 fn plugin_group_identity(result: &SearchResult) -> Option<(String, String)> {
@@ -45,7 +53,7 @@ fn plugin_group_identity(result: &SearchResult) -> Option<(String, String)> {
                 .plugin_title
                 .clone()
                 .filter(|title| !title.is_empty())
-                .unwrap_or_else(|| key.clone());
+                .unwrap_or_else(|| fallback_plugin_label(&key));
             Some((key, label))
         }
         SearchResult::Scriptlet(sm) => {
@@ -62,13 +70,13 @@ fn plugin_group_identity(result: &SearchResult) -> Option<(String, String)> {
                 .plugin_title
                 .clone()
                 .filter(|title| !title.is_empty())
-                .unwrap_or_else(|| key.clone());
+                .unwrap_or_else(|| fallback_plugin_label(&key));
             Some((key, label))
         }
         SearchResult::Skill(sm) => {
             let key = sm.skill.plugin_id.clone();
             let label = if sm.skill.plugin_title.is_empty() {
-                key.clone()
+                fallback_plugin_label(&key)
             } else {
                 sm.skill.plugin_title.clone()
             };
@@ -124,6 +132,8 @@ pub(super) fn build_grouped_view_results(
             SearchResult::Agent(_) => None,
             // Fallbacks don't have paths - they're only shown in search mode, not grouped view
             SearchResult::Fallback(_) => None,
+            // Script issues row is pinned synthetically, not through frecency/grouping
+            SearchResult::ScriptIssue(_) => None,
         }
     };
 
@@ -183,6 +193,8 @@ pub(super) fn build_grouped_view_results(
                     }
                     // Fallbacks should never appear in grouped view - they're search-mode only
                     SearchResult::Fallback(_) => {}
+                    // Script issues row is pinned synthetically, not by grouping logic
+                    SearchResult::ScriptIssue(_) => {}
                 }
             }
         } else {
@@ -206,6 +218,8 @@ pub(super) fn build_grouped_view_results(
                 SearchResult::Agent(_) => {}
                 // Fallbacks should never appear in grouped view - they're search-mode only
                 SearchResult::Fallback(_) => {}
+                // Script issues row is pinned synthetically, not by grouping logic
+                SearchResult::ScriptIssue(_) => {}
             }
         }
     }
@@ -287,14 +301,14 @@ pub(super) fn build_grouped_view_results(
         .collect();
     other_plugin_keys.sort_by_cached_key(|k| plugin_groups[*k].label.to_lowercase());
 
-    // Build grouped list in order: SUGGESTED, MAIN, COMMANDS, other kits, APPS
-    // Each section header includes an item count suffix (e.g., "SUGGESTED · 5")
-    // 1. SUGGESTED (frecency-based, or default items for new users)
+    // Build grouped list in order: Suggested, Main, Commands, other kits, Apps
+    // Each section header includes an item count suffix (e.g., "Suggested · 5")
+    // 1. Suggested (frecency-based, or default items for new users)
     if suggested_config.enabled {
         if !suggested_indices.is_empty() {
             // User has frecency data - show their frequently used items
             grouped.push(GroupedListItem::SectionHeader(
-                format!("SUGGESTED · {}", suggested_indices.len()),
+                "Suggested".to_string(),
                 Some("StarFilled".to_string()),
             ));
             for (idx, _score) in &suggested_indices {
@@ -303,7 +317,7 @@ pub(super) fn build_grouped_view_results(
         } else if !default_suggested_indices.is_empty() {
             // New user with no frecency - show default suggestions
             grouped.push(GroupedListItem::SectionHeader(
-                format!("SUGGESTED · {}", default_suggested_indices.len()),
+                "Suggested".to_string(),
                 Some("StarFilled".to_string()),
             ));
             for idx in &default_suggested_indices {
@@ -312,7 +326,7 @@ pub(super) fn build_grouped_view_results(
         }
     }
 
-    // 2. MAIN plugin section (if it has items)
+    // 2. Main plugin section (if it has items)
     if let Some(main_section) = plugin_groups.get("main") {
         if !main_section.indices.is_empty() {
             tracing::info!(
@@ -322,11 +336,7 @@ pub(super) fn build_grouped_view_results(
                 "main_menu_plugin_section_built"
             );
             grouped.push(GroupedListItem::SectionHeader(
-                format!(
-                    "{} · {}",
-                    main_section.label.to_uppercase(),
-                    main_section.indices.len()
-                ),
+                main_section.label.clone(),
                 Some("Code".to_string()),
             ));
             for idx in &main_section.indices {
@@ -335,10 +345,10 @@ pub(super) fn build_grouped_view_results(
         }
     }
 
-    // 3. COMMANDS (built-ins and window controls)
+    // 3. Commands (built-ins and window controls)
     if !commands_indices.is_empty() {
         grouped.push(GroupedListItem::SectionHeader(
-            format!("COMMANDS · {}", commands_indices.len()),
+            "Commands".to_string(),
             Some("Terminal".to_string()),
         ));
         for idx in &commands_indices {
@@ -357,11 +367,7 @@ pub(super) fn build_grouped_view_results(
                     "main_menu_plugin_section_built"
                 );
                 grouped.push(GroupedListItem::SectionHeader(
-                    format!(
-                        "{} · {}",
-                        section.label.to_uppercase(),
-                        section.indices.len()
-                    ),
+                    section.label.clone(),
                     Some("BoltFilled".to_string()),
                 ));
                 for idx in &section.indices {
@@ -371,10 +377,10 @@ pub(super) fn build_grouped_view_results(
         }
     }
 
-    // 5. APPS (installed applications)
+    // 5. Apps (installed applications)
     if !apps_indices.is_empty() {
         grouped.push(GroupedListItem::SectionHeader(
-            format!("APPS · {}", apps_indices.len()),
+            "Apps".to_string(),
             Some("Folder".to_string()),
         ));
         for idx in &apps_indices {

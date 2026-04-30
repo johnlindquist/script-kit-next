@@ -17,7 +17,12 @@ const action = await arg("What to do with it?", [
 switch (action) {
   case "copy-path":
     await copy(file);
-    await notify(`Path copied: ${file}`);
+    await arg("Copied path", [
+      { name: "Open", description: file, value: "open" },
+      { name: "Done", description: "Path is on the clipboard", value: "done" },
+    ]).then(async (next) => {
+      if (next === "open") await open(file);
+    });
     break;
 
   case "read": {

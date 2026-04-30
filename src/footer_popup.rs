@@ -34,9 +34,17 @@ const FOOTER_HINT_BUTTON_ID_PREFIX: &str = "script-kit-footer-button-";
 #[cfg(target_os = "macos")]
 const FOOTER_LEFT_INFO_ID: &str = "script-kit-footer-left-info";
 #[cfg(target_os = "macos")]
+const FOOTER_STATUS_DOT_ID: &str = "script-kit-footer-status-dot";
+#[cfg(target_os = "macos")]
+const FOOTER_MODEL_LABEL_ID: &str = "script-kit-footer-model-label";
+#[cfg(target_os = "macos")]
 const FOOTER_STREAMING_DOT_SIZE: f64 = 6.0;
 #[cfg(target_os = "macos")]
 const FOOTER_LEFT_DOT_LABEL_GAP: f64 = 6.0;
+#[cfg(target_os = "macos")]
+const FOOTER_ACTIVE_DOT_MIN_OPACITY: f32 = 0.22;
+#[cfg(target_os = "macos")]
+const FOOTER_ACTIVE_DOT_HALF_CYCLE_SECONDS: f64 = 1.1;
 #[cfg(target_os = "macos")]
 const FOOTER_RUN_SLOT_MIN_WIDTH: f64 = 96.0;
 #[cfg(target_os = "macos")]
@@ -121,6 +129,9 @@ pub(crate) struct FooterLeftInfo {
     pub dot_status: FooterDotStatus,
     /// Model display name (e.g. "Claude Sonnet 4"). Empty = hide label.
     pub model_name: String,
+    /// When true, active ACP states should use the accent token instead of the
+    /// generic high-contrast fallback so the footer clearly reads as AI-active.
+    pub prefer_accent_for_active_states: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -140,10 +151,15 @@ impl MainWindowFooterConfig {
     }
 }
 
-fn footer_active_dot_hex(theme: &crate::theme::Theme) -> u32 {
+fn footer_active_dot_hex(theme: &crate::theme::Theme, prefer_accent: bool) -> u32 {
     let colors = &theme.colors;
-    let background = colors.background.main;
     let accent = colors.accent.selected;
+
+    if prefer_accent {
+        return accent;
+    }
+
+    let background = colors.background.main;
     let primary_text = colors.text.primary;
 
     if crate::theme::contrast_ratio(accent, background)
@@ -155,11 +171,15 @@ fn footer_active_dot_hex(theme: &crate::theme::Theme) -> u32 {
     }
 }
 
-fn footer_dot_hex(status: FooterDotStatus, theme: &crate::theme::Theme) -> u32 {
+fn footer_dot_hex(
+    status: FooterDotStatus,
+    theme: &crate::theme::Theme,
+    prefer_accent_for_active_states: bool,
+) -> u32 {
     let colors = &theme.colors;
     match status {
         FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission => {
-            footer_active_dot_hex(theme)
+            footer_active_dot_hex(theme, prefer_accent_for_active_states)
         }
         FooterDotStatus::Idle => colors.text.secondary,
         FooterDotStatus::Error => colors.ui.error,
@@ -601,27 +621,13 @@ unsafe fn layout_footer_left_info(
     text_color: id,
 ) {
     use cocoa::foundation::{NSPoint, NSRect, NSSize};
-    use objc::{class, msg_send, sel, sel_impl};
+    use objc::{msg_send, sel, sel_impl};
 
-    // SAFETY: `left_info_view` is a live NSView managed by the footer host on
-    // the AppKit main thread. We remove and recreate subviews to match state.
-
-    // Remove all existing subviews (rebuild each refresh, like hints do).
-    let subviews: id = msg_send![left_info_view, subviews];
-    if subviews != nil {
-        let count: usize = msg_send![subviews, count];
-        for i in (0..count).rev() {
-            let child: id = msg_send![subviews, objectAtIndex: i];
-            if child != nil {
-                let _: () = msg_send![child, removeFromSuperview];
-            }
-        }
-    }
-
-    let Some(info) = left_info else { return };
-    if info.model_name.is_empty() {
+    let Some(info) = left_info else {
+        remove_identified_subview(left_info_view, FOOTER_STATUS_DOT_ID);
+        remove_identified_subview(left_info_view, FOOTER_MODEL_LABEL_ID);
         return;
-    }
+    };
 
     let bounds: NSRect = msg_send![left_info_view, bounds];
     let mut x = 0.0_f64;
@@ -629,115 +635,258 @@ unsafe fn layout_footer_left_info(
     // ── Status dot (color + animation depends on thread status) ──
     let show_dot = !matches!(info.dot_status, FooterDotStatus::Hidden);
     if show_dot {
-        let theme = crate::theme::get_cached_theme();
-        let dot_hex = footer_dot_hex(info.dot_status, &theme);
-        let should_pulse = matches!(
-            info.dot_status,
-            FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission
-        );
-
         let dot_y = ((bounds.size.height - FOOTER_STREAMING_DOT_SIZE) / 2.0).round();
-        let dot_view: id = msg_send![class!(NSView), alloc];
-        let dot_view: id = msg_send![
-            dot_view,
-            initWithFrame: NSRect::new(
-                NSPoint::new(x, dot_y),
-                NSSize::new(FOOTER_STREAMING_DOT_SIZE, FOOTER_STREAMING_DOT_SIZE),
-            )
-        ];
+        let dot_view = ensure_footer_status_dot_view(left_info_view);
         if dot_view != nil {
-            let _: () = msg_send![dot_view, setWantsLayer: YES];
+            let _: () = msg_send![
+                dot_view,
+                setFrame: NSRect::new(
+                    NSPoint::new(x, dot_y),
+                    NSSize::new(FOOTER_STREAMING_DOT_SIZE, FOOTER_STREAMING_DOT_SIZE),
+                )
+            ];
             let dot_layer: id = msg_send![dot_view, layer];
             if dot_layer != nil {
-                let _: () = msg_send![dot_layer, setCornerRadius: FOOTER_STREAMING_DOT_SIZE / 2.0];
-
-                let dot_ns = ns_color_from_hex_with_alpha(dot_hex, 1.0);
-                if dot_ns != nil {
-                    // SAFETY: `dot_ns` is a valid NSColor.
-                    let cg: id = msg_send![dot_ns, CGColor];
-                    if cg != nil {
-                        let _: () = msg_send![dot_layer, setBackgroundColor: cg];
-                    }
-                }
-
-                if should_pulse {
-                    add_pulsing_opacity_animation(dot_layer);
-                }
+                update_footer_dot_layer(dot_layer, info);
             }
-            let _: () = msg_send![left_info_view, addSubview: dot_view];
             x += FOOTER_STREAMING_DOT_SIZE + FOOTER_LEFT_DOT_LABEL_GAP;
         }
+    } else {
+        remove_identified_subview(left_info_view, FOOTER_STATUS_DOT_ID);
     }
 
     // ── Model name label ──
+    if info.model_name.is_empty() {
+        remove_identified_subview(left_info_view, FOOTER_MODEL_LABEL_ID);
+    } else {
+        let label = ensure_footer_model_label(left_info_view, &info.model_name, text_color);
+        if label != nil {
+            let label_size: NSSize = msg_send![label, fittingSize];
+            let label_y = ((bounds.size.height - label_size.height) / 2.0).round();
+            let _: () = msg_send![
+                label,
+                setFrame: NSRect::new(
+                    NSPoint::new(x, label_y),
+                    NSSize::new(label_size.width, label_size.height),
+                )
+            ];
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn remove_identified_subview(parent: id, identifier: &str) {
+    use objc::{msg_send, sel, sel_impl};
+
+    let view = find_subview_by_identifier(parent, identifier);
+    if view == nil {
+        return;
+    }
+    let layer: id = msg_send![view, layer];
+    if layer != nil {
+        remove_active_dot_pulse_animation(layer);
+    }
+    let _: () = msg_send![view, removeFromSuperview];
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn ensure_footer_status_dot_view(left_info_view: id) -> id {
+    use cocoa::foundation::{NSPoint, NSRect, NSSize};
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let existing = find_subview_by_identifier(left_info_view, FOOTER_STATUS_DOT_ID);
+    if existing != nil {
+        return existing;
+    }
+
+    let dot_view: id = msg_send![class!(NSView), alloc];
+    let dot_view: id = msg_send![
+        dot_view,
+        initWithFrame: NSRect::new(
+            NSPoint::new(0.0, 0.0),
+            NSSize::new(FOOTER_STREAMING_DOT_SIZE, FOOTER_STREAMING_DOT_SIZE),
+        )
+    ];
+    if dot_view == nil {
+        return nil;
+    }
+
+    let identifier = ns_string(FOOTER_STATUS_DOT_ID);
+    if identifier != nil {
+        let _: () = msg_send![dot_view, setIdentifier: identifier];
+    }
+
+    let layer: id = msg_send![class!(CALayer), layer];
+    if layer != nil {
+        let _: () = msg_send![layer, setMasksToBounds: NO];
+        let _: () = msg_send![layer, setCornerRadius: FOOTER_STREAMING_DOT_SIZE / 2.0_f64];
+        let _: () = msg_send![dot_view, setLayer: layer];
+    }
+    let _: () = msg_send![dot_view, setWantsLayer: YES];
+    let _: () = msg_send![left_info_view, addSubview: dot_view];
+    dot_view
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn ensure_footer_model_label(left_info_view: id, text: &str, text_color: id) -> id {
+    use objc::{class, msg_send, sel, sel_impl};
+
     let font: id = msg_send![
         class!(NSFont),
         systemFontOfSize: FOOTER_HINT_FONT_SIZE
         weight: FOOTER_HINT_FONT_WEIGHT_LIGHT
     ];
-    let label = make_footer_hint_text_field(
-        &info.model_name,
-        font,
-        text_color,
-        FOOTER_HINT_TEXT_ALIGN_LEFT,
-    );
+    let label = find_subview_by_identifier(left_info_view, FOOTER_MODEL_LABEL_ID);
     if label != nil {
-        let label_size: NSSize = msg_send![label, fittingSize];
-        let label_y = ((bounds.size.height - label_size.height) / 2.0).round();
-        let _: () = msg_send![
-            label,
-            setFrame: NSRect::new(
-                NSPoint::new(x, label_y),
-                NSSize::new(label_size.width, label_size.height),
-            )
-        ];
+        let string_value = ns_string(text);
+        if string_value != nil {
+            let _: () = msg_send![label, setStringValue: string_value];
+        }
+        if font != nil {
+            let _: () = msg_send![label, setFont: font];
+        }
+        if text_color != nil {
+            let _: () = msg_send![label, setTextColor: text_color];
+        }
+        let _: () = msg_send![label, setAlignment: FOOTER_HINT_TEXT_ALIGN_LEFT];
+        let _: () = msg_send![label, sizeToFit];
+        return label;
+    }
+
+    let label = make_footer_hint_text_field(text, font, text_color, FOOTER_HINT_TEXT_ALIGN_LEFT);
+    if label != nil {
+        let identifier = ns_string(FOOTER_MODEL_LABEL_ID);
+        if identifier != nil {
+            let _: () = msg_send![label, setIdentifier: identifier];
+        }
         let _: () = msg_send![left_info_view, addSubview: label];
     }
+    label
 }
 
-/// Attach a repeating CABasicAnimation that pulses a layer's opacity between
-/// 0.5 and 1.0 over a 1.2 s cycle (0.6 s each way, autoreverses).
 #[cfg(target_os = "macos")]
-unsafe fn add_pulsing_opacity_animation(layer: id) {
-    use objc::{class, msg_send, sel, sel_impl};
+unsafe fn update_footer_dot_layer(layer: id, info: &FooterLeftInfo) {
+    use objc::{msg_send, sel, sel_impl};
 
-    // SAFETY: `layer` is a live CALayer. We create a CABasicAnimation on
-    // the "opacity" keypath with autoreversal for a sine-like pulse.
-    let key_path = ns_string("opacity");
-    if key_path == nil {
-        return;
-    }
+    let theme = crate::theme::get_cached_theme();
+    let dot_hex = footer_dot_hex(
+        info.dot_status,
+        &theme,
+        info.prefer_accent_for_active_states,
+    );
+    let _: () = msg_send![layer, setCornerRadius: FOOTER_STREAMING_DOT_SIZE / 2.0_f64];
 
-    let anim: id = msg_send![class!(CABasicAnimation), animationWithKeyPath: key_path];
-    if anim == nil {
-        return;
-    }
-
-    let from_value: id = msg_send![class!(NSNumber), numberWithFloat: 0.5_f32];
-    let to_value: id = msg_send![class!(NSNumber), numberWithFloat: 1.0_f32];
-
-    let _: () = msg_send![anim, setFromValue: from_value];
-    let _: () = msg_send![anim, setToValue: to_value];
-    let _: () = msg_send![anim, setDuration: 0.6_f64]; // half-cycle; autoreverses
-    let _: () = msg_send![anim, setAutoreverses: YES];
-    let _: () = msg_send![anim, setRepeatCount: f32::INFINITY];
-
-    // Use ease-in-ease-out for a smooth sine-like curve.
-    let timing_name = ns_string("easeInEaseOut");
-    if timing_name != nil {
-        // SAFETY: Standard CoreAnimation timing function lookup.
-        let timing: id = msg_send![
-            class!(CAMediaTimingFunction),
-            functionWithName: timing_name
-        ];
-        if timing != nil {
-            let _: () = msg_send![anim, setTimingFunction: timing];
+    let dot_ns = ns_color_from_hex_with_alpha(dot_hex, 1.0);
+    if dot_ns != nil {
+        let cg: id = msg_send![dot_ns, CGColor];
+        if cg != nil {
+            let _: () = msg_send![layer, setBackgroundColor: cg];
         }
     }
 
-    let anim_key = ns_string("pulseOpacity");
-    if anim_key != nil {
-        let _: () = msg_send![layer, addAnimation: anim forKey: anim_key];
+    let should_pulse = matches!(
+        info.dot_status,
+        FooterDotStatus::Streaming | FooterDotStatus::WaitingForPermission
+    );
+    if should_pulse {
+        ensure_active_dot_pulse_animation(layer);
+    } else {
+        remove_active_dot_pulse_animation(layer);
+        let _: () = msg_send![layer, setOpacity: 1.0_f32];
+    }
+}
+
+/// Attach a repeating CoreAnimation color/opacity pulse for active work.
+#[cfg(target_os = "macos")]
+unsafe fn add_active_dot_pulse_animation(layer: id) {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    // Use ease-in-ease-out for a smooth sine-like curve.
+    let timing_name = ns_string("easeInEaseOut");
+    let timing: id = if timing_name != nil {
+        msg_send![
+            class!(CAMediaTimingFunction),
+            functionWithName: timing_name
+        ]
+    } else {
+        nil
+    };
+
+    let duration: f64 = FOOTER_ACTIVE_DOT_HALF_CYCLE_SECONDS;
+
+    // SAFETY: `layer` is a live CALayer. Keep the pulse visual-only; do not
+    // scale the dot because size motion is distracting in the compact footer.
+    let opacity_key_path = ns_string("opacity");
+    if opacity_key_path != nil {
+        let opacity_anim: id =
+            msg_send![class!(CABasicAnimation), animationWithKeyPath: opacity_key_path];
+        if opacity_anim != nil {
+            let from_value: id =
+                msg_send![class!(NSNumber), numberWithFloat: FOOTER_ACTIVE_DOT_MIN_OPACITY];
+            let to_value: id = msg_send![class!(NSNumber), numberWithFloat: 1.0_f32];
+
+            let _: () = msg_send![opacity_anim, setFromValue: from_value];
+            let _: () = msg_send![opacity_anim, setToValue: to_value];
+            let _: () = msg_send![opacity_anim, setDuration: duration];
+            let _: () = msg_send![opacity_anim, setAutoreverses: YES];
+            let _: () = msg_send![opacity_anim, setRepeatCount: f32::INFINITY];
+            let _: () = msg_send![opacity_anim, setRemovedOnCompletion: NO];
+            if timing != nil {
+                let _: () = msg_send![opacity_anim, setTimingFunction: timing];
+            }
+
+            let anim_key = ns_string("pulseOpacity");
+            if anim_key != nil {
+                let _: () = msg_send![layer, addAnimation: opacity_anim forKey: anim_key];
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn layer_has_animation(layer: id, key: &str) -> bool {
+    use objc::{msg_send, sel, sel_impl};
+
+    let key = ns_string(key);
+    if key == nil {
+        return false;
+    }
+    let animation: id = msg_send![layer, animationForKey: key];
+    animation != nil
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn ensure_active_dot_pulse_animation(layer: id) {
+    if layer == nil {
+        return;
+    }
+    let has_opacity = layer_has_animation(layer, "pulseOpacity");
+    if has_opacity {
+        remove_active_dot_scale_animation(layer);
+        return;
+    }
+    remove_active_dot_pulse_animation(layer);
+    add_active_dot_pulse_animation(layer);
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn remove_active_dot_pulse_animation(layer: id) {
+    use objc::{msg_send, sel, sel_impl};
+
+    let opacity_key = ns_string("pulseOpacity");
+    if opacity_key != nil {
+        let _: () = msg_send![layer, removeAnimationForKey: opacity_key];
+    }
+    remove_active_dot_scale_animation(layer);
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn remove_active_dot_scale_animation(layer: id) {
+    use objc::{msg_send, sel, sel_impl};
+
+    let scale_key = ns_string("pulseScale");
+    if scale_key != nil {
+        let _: () = msg_send![layer, removeAnimationForKey: scale_key];
     }
 }
 
@@ -1035,16 +1184,16 @@ mod footer_layout_tests {
 
     #[test]
     fn footer_hint_slot_widths_are_stable_per_action() {
-        assert_eq!(footer_hint_slot_width(FooterAction::Run), 160.0);
-        assert_eq!(footer_hint_slot_width(FooterAction::Actions), 104.0);
-        assert_eq!(footer_hint_slot_width(FooterAction::Ai), 64.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::Run), 96.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::Actions), 96.0);
+        assert_eq!(footer_hint_slot_width(FooterAction::Ai), 56.0);
     }
 
     #[test]
-    fn run_slot_is_wider_than_trailing_slots() {
+    fn run_slot_remains_at_least_as_wide_as_actions_and_wider_than_ai() {
         assert!(
             footer_hint_slot_width(FooterAction::Run)
-                > footer_hint_slot_width(FooterAction::Actions)
+                >= footer_hint_slot_width(FooterAction::Actions)
         );
         assert!(
             footer_hint_slot_width(FooterAction::Run) > footer_hint_slot_width(FooterAction::Ai)
@@ -1084,10 +1233,30 @@ mod footer_layout_tests {
         theme.colors.accent.selected = 0x3a4250;
         theme.colors.text.primary = 0xf5f7fa;
 
-        assert_eq!(footer_active_dot_hex(&theme), theme.colors.text.primary);
+        assert_eq!(
+            footer_active_dot_hex(&theme, false),
+            theme.colors.text.primary
+        );
 
         theme.colors.accent.selected = 0xffc600;
-        assert_eq!(footer_active_dot_hex(&theme), theme.colors.accent.selected);
+        theme.colors.text.primary = 0x8892a0;
+        assert_eq!(
+            footer_active_dot_hex(&theme, false),
+            theme.colors.accent.selected
+        );
+    }
+
+    #[test]
+    fn active_dot_can_force_accent_for_acp_states() {
+        let mut theme = crate::theme::Theme::dark_default();
+        theme.colors.background.main = 0x101114;
+        theme.colors.accent.selected = 0x3a4250;
+        theme.colors.text.primary = 0xf5f7fa;
+
+        assert_eq!(
+            footer_active_dot_hex(&theme, true),
+            theme.colors.accent.selected
+        );
     }
 
     #[test]
@@ -1097,11 +1266,11 @@ mod footer_layout_tests {
         theme.colors.ui.error = 0xaa3344;
 
         assert_eq!(
-            footer_dot_hex(FooterDotStatus::Idle, &theme),
+            footer_dot_hex(FooterDotStatus::Idle, &theme, false),
             theme.colors.text.secondary
         );
         assert_eq!(
-            footer_dot_hex(FooterDotStatus::Error, &theme),
+            footer_dot_hex(FooterDotStatus::Error, &theme, false),
             theme.colors.ui.error
         );
     }

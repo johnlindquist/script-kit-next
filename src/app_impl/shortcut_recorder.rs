@@ -1,5 +1,266 @@
 use super::*;
 
+use std::sync::{Mutex, OnceLock};
+
+use gpui::{
+    div, AnyWindowHandle, Bounds, DisplayId, Entity, FocusHandle, Pixels, Point, Render, Size,
+    WeakEntity, WindowBackgroundAppearance, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+};
+
+const SHORTCUT_RECORDER_POPUP_WIDTH: f32 = 360.0;
+const SHORTCUT_RECORDER_POPUP_HEIGHT: f32 = 196.0;
+#[cfg(target_os = "macos")]
+const NS_WINDOW_ABOVE: i64 = 1;
+
+static SHORTCUT_RECORDER_WINDOW: OnceLock<
+    Mutex<Option<WindowHandle<ShortcutRecorderPopupWindow>>>,
+> = OnceLock::new();
+
+struct ShortcutRecorderPopupWindow {
+    recorder: Entity<crate::components::shortcut_recorder::ShortcutRecorder>,
+    app: WeakEntity<ScriptListApp>,
+    focus_handle: FocusHandle,
+}
+
+impl ShortcutRecorderPopupWindow {
+    fn new(
+        command_id: String,
+        command_name: String,
+        theme: std::sync::Arc<theme::Theme>,
+        app: WeakEntity<ScriptListApp>,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let recorder_theme = std::sync::Arc::clone(&theme);
+        let recorder = cx.new(move |cx| {
+            crate::components::shortcut_recorder::ShortcutRecorder::new(cx, recorder_theme)
+                .with_detached_window(true)
+                .with_command_name(command_name)
+                .with_command_description(format!("ID: {}", command_id))
+        });
+
+        Self {
+            recorder,
+            app,
+            focus_handle: cx.focus_handle(),
+        }
+    }
+}
+
+impl Render for ShortcutRecorderPopupWindow {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let recorder_fh = self.recorder.read(cx).focus_handle.clone();
+        if !recorder_fh.is_focused(window) {
+            window.focus(&recorder_fh, cx);
+        }
+
+        let pending_action = self
+            .recorder
+            .update(cx, |recorder, _cx| recorder.take_pending_action());
+
+        if let Some(action) = pending_action {
+            let app = self.app.clone();
+            cx.spawn(async move |_this, cx| {
+                cx.update(|cx| {
+                    if let Some(app) = app.upgrade() {
+                        app.update(cx, |app, cx| match action {
+                            crate::components::shortcut_recorder::RecorderAction::Save(
+                                recorded,
+                            ) => {
+                                app.handle_shortcut_save(&recorded, cx);
+                            }
+                            crate::components::shortcut_recorder::RecorderAction::Cancel => {
+                                app.close_shortcut_recorder(cx);
+                            }
+                        });
+                    } else {
+                        close_shortcut_recorder_window(cx);
+                    }
+                });
+            })
+            .detach();
+        }
+
+        div()
+            .id("shortcut-recorder-window")
+            .relative()
+            .w_full()
+            .h_full()
+            .track_focus(&self.focus_handle)
+            .child(self.recorder.clone())
+    }
+}
+
+fn shortcut_recorder_window_bounds(parent_bounds: Bounds<Pixels>) -> Bounds<Pixels> {
+    let width = px(SHORTCUT_RECORDER_POPUP_WIDTH).min(parent_bounds.size.width);
+    let height = px(SHORTCUT_RECORDER_POPUP_HEIGHT).min(parent_bounds.size.height);
+    let x = parent_bounds.origin.x + ((parent_bounds.size.width - width) / 2.0);
+    let y = parent_bounds.origin.y + ((parent_bounds.size.height - height) / 2.0);
+
+    Bounds {
+        origin: Point { x, y },
+        size: Size { width, height },
+    }
+}
+
+fn close_shortcut_recorder_window(cx: &mut App) {
+    crate::windows::remove_automation_window("shortcut-recorder-popup");
+
+    if let Some(storage) = SHORTCUT_RECORDER_WINDOW.get() {
+        if let Ok(mut guard) = storage.lock() {
+            if let Some(handle) = guard.take() {
+                let _ = handle.update(cx, |_popup, window, _cx| {
+                    window.remove_window();
+                });
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn shortcut_recorder_ns_window(window: &mut Window) -> Option<cocoa::base::id> {
+    if let Ok(window_handle) = raw_window_handle::HasWindowHandle::window_handle(window) {
+        if let raw_window_handle::RawWindowHandle::AppKit(appkit) = window_handle.as_raw() {
+            use cocoa::base::nil;
+            use objc::{msg_send, sel, sel_impl};
+
+            let ns_view = appkit.ns_view.as_ptr() as cocoa::base::id;
+            unsafe {
+                let ns_window: cocoa::base::id = msg_send![ns_view, window];
+                if ns_window != nil {
+                    return Some(ns_window);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+#[cfg(target_os = "macos")]
+fn attach_shortcut_recorder_to_parent_window(
+    cx: &mut App,
+    parent_window_handle: AnyWindowHandle,
+    child_ns_window: cocoa::base::id,
+) {
+    let _ = cx.update_window(parent_window_handle, move |_, parent_window, _cx| {
+        let Some(parent_ns_window) = shortcut_recorder_ns_window(parent_window) else {
+            return;
+        };
+
+        unsafe {
+            use cocoa::base::nil;
+            use objc::{msg_send, sel, sel_impl};
+
+            if parent_ns_window == nil
+                || child_ns_window == nil
+                || parent_ns_window == child_ns_window
+            {
+                return;
+            }
+
+            let _: () =
+                msg_send![parent_ns_window, addChildWindow:child_ns_window ordered:NS_WINDOW_ABOVE];
+            let _: () = msg_send![child_ns_window, orderFrontRegardless];
+            let _: () = msg_send![child_ns_window, makeKeyWindow];
+        }
+    });
+}
+
+fn open_shortcut_recorder_window(
+    cx: &mut App,
+    app: WeakEntity<ScriptListApp>,
+    command_id: String,
+    command_name: String,
+    theme: std::sync::Arc<theme::Theme>,
+    parent_window_handle: AnyWindowHandle,
+    parent_bounds: Bounds<Pixels>,
+    display_id: Option<DisplayId>,
+) -> anyhow::Result<WindowHandle<ShortcutRecorderPopupWindow>> {
+    close_shortcut_recorder_window(cx);
+
+    let window_background = if theme.is_vibrancy_enabled() {
+        WindowBackgroundAppearance::Blurred
+    } else {
+        WindowBackgroundAppearance::Opaque
+    };
+    let is_dark_vibrancy = theme.should_use_dark_vibrancy();
+    let bounds = shortcut_recorder_window_bounds(parent_bounds);
+
+    let window_theme = std::sync::Arc::clone(&theme);
+    let handle = cx.open_window(
+        WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            titlebar: None,
+            window_background,
+            focus: true,
+            show: true,
+            kind: WindowKind::PopUp,
+            is_movable: false,
+            is_resizable: false,
+            is_minimizable: false,
+            display_id,
+            ..Default::default()
+        },
+        move |_window, cx| {
+            cx.new(|cx| {
+                ShortcutRecorderPopupWindow::new(command_id, command_name, window_theme, app, cx)
+            })
+        },
+    )?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = handle.update(cx, move |_popup, window, cx| {
+            window.defer(cx, move |window, cx| {
+                if let Some(ns_window) = shortcut_recorder_ns_window(window) {
+                    unsafe {
+                        crate::platform::configure_actions_popup_window(
+                            ns_window,
+                            is_dark_vibrancy,
+                        );
+                    }
+                    attach_shortcut_recorder_to_parent_window(cx, parent_window_handle, ns_window);
+                }
+            });
+        });
+    }
+
+    let storage = SHORTCUT_RECORDER_WINDOW.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = storage.lock() {
+        *guard = Some(handle);
+    }
+
+    if let Some(parent_automation_id) = crate::windows::focused_automation_window_id() {
+        let popup_bounds = crate::protocol::AutomationWindowBounds {
+            x: f32::from(bounds.origin.x) as f64,
+            y: f32::from(bounds.origin.y) as f64,
+            width: f32::from(bounds.size.width) as f64,
+            height: f32::from(bounds.size.height) as f64,
+        };
+        if let Err(error) = crate::windows::register_attached_popup(
+            "shortcut-recorder-popup".to_string(),
+            crate::protocol::AutomationWindowKind::PromptPopup,
+            Some("Shortcut Recorder".to_string()),
+            Some("shortcutRecorder".to_string()),
+            Some(popup_bounds),
+            Some(parent_automation_id.as_str()),
+        ) {
+            tracing::warn!(
+                target: "script_kit::shortcut",
+                error = %error,
+                "Failed to register shortcut recorder popup"
+            );
+        }
+    }
+
+    logging::log(
+        "SHORTCUT",
+        "Shortcut recorder popup window opened with vibrancy",
+    );
+
+    Ok(handle)
+}
+
 impl ScriptListApp {
     pub(crate) fn edit_script(&mut self, path: &std::path::Path) {
         let editor = self.config.get_editor();
@@ -28,7 +289,7 @@ impl ScriptListApp {
     /// which provides an inline modal UI for recording shortcuts.
     #[allow(dead_code)]
     pub(crate) fn open_config_for_shortcut(&mut self, command_id: &str) {
-        let config_path = shellexpand::tilde("~/.scriptkit/kit/config.ts").to_string();
+        let config_path = shellexpand::tilde("~/.scriptkit/config.ts").to_string();
         let editor = self.config.get_editor();
 
         logging::log(
@@ -172,6 +433,7 @@ export default {
         &mut self,
         command_id: String,
         command_name: String,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         logging::log(
@@ -182,19 +444,53 @@ export default {
             ),
         );
 
-        // Store state - the entity will be created in render_shortcut_recorder_overlay
-        // when we have window access
+        // Store state so parent key handlers treat the recorder as modal while
+        // the native popup owns actual input.
         self.shortcut_recorder_state = Some(ShortcutRecorderState {
-            command_id,
-            command_name,
+            command_id: command_id.clone(),
+            command_name: command_name.clone(),
         });
-
-        // Clear any existing entity so a new one is created with correct focus
         self.shortcut_recorder_entity = None;
 
         // Close actions popup if open
         self.show_actions_popup = false;
         self.actions_dialog = None;
+
+        let app = cx.entity().downgrade();
+        let theme = std::sync::Arc::clone(&self.theme);
+        let parent_window_handle = window.window_handle();
+        let parent_bounds = window.bounds();
+        let display_id = window.display(cx).map(|display| display.id());
+
+        cx.spawn(async move |this, cx| {
+            cx.update(|cx| {
+                if let Err(error) = open_shortcut_recorder_window(
+                    cx,
+                    app,
+                    command_id,
+                    command_name,
+                    theme,
+                    parent_window_handle,
+                    parent_bounds,
+                    display_id,
+                ) {
+                    tracing::error!(
+                        target: "script_kit::shortcut",
+                        error = %error,
+                        "Failed to open shortcut recorder popup"
+                    );
+                    let _ = this.update(cx, |app, cx| {
+                        app.shortcut_recorder_state = None;
+                        app.shortcut_recorder_entity = None;
+                        app.show_error_toast(
+                            format!("Failed to open shortcut recorder: {}", error),
+                            cx,
+                        );
+                    });
+                }
+            });
+        })
+        .detach();
 
         cx.notify();
     }
@@ -209,6 +505,12 @@ export default {
             );
             self.shortcut_recorder_state = None;
             self.shortcut_recorder_entity = None;
+            cx.spawn(async move |_this, cx| {
+                cx.update(|cx| {
+                    close_shortcut_recorder_window(cx);
+                });
+            })
+            .detach();
             // Return focus to the main filter input
             self.pending_focus = Some(FocusTarget::MainFilter);
             cx.notify();
@@ -226,6 +528,10 @@ export default {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<gpui::AnyElement> {
+        if self.shortcut_recorder_state.is_some() {
+            return None;
+        }
+
         use crate::components::shortcut_recorder::ShortcutRecorder;
 
         // Check if we have state but no entity yet - need to create the recorder

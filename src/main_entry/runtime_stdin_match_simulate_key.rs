@@ -9,14 +9,95 @@
 
                                 // Handle key based on current view
                                 let key_lower = key.to_lowercase();
+                                // Mirror live GPUI Keystroke.key_char: Some(&str) only for
+                                // single-character keys (printable input like "a", "!", "A"),
+                                // None for named keys ("Escape", "Up", "Enter"). This lets
+                                // route_key_to_actions_dialog's printable_char branch fire on
+                                // stdin-driven simulateKey — without it, alphanumeric keystrokes
+                                // silently fail to reach the ActionsDialog filter.
+                                let key_char: Option<&str> = if key.chars().count() == 1 {
+                                    Some(key.as_str())
+                                } else {
+                                    None
+                                };
 
+                                // Actions-popup pre-dispatch: mirror app_run_setup.rs and live
+                                // GPUI handler. When an actions popup is open on the current
+                                // view, route the key through the shared actions dispatcher
+                                // before falling through to per-view arms.
+                                let mut actions_popup_consumed_key = false;
+                                if view.show_actions_popup {
+                                    if let Some(host) = view.current_actions_host() {
+                                        let gpui_modifiers = gpui::Modifiers {
+                                            platform: has_cmd,
+                                            shift: has_shift,
+                                            control: _has_ctrl,
+                                            alt: _has_alt,
+                                            function: false,
+                                        };
+                                        match view.route_key_to_actions_dialog(
+                                            &key_lower,
+                                            key_char,
+                                            &gpui_modifiers,
+                                            host,
+                                            window,
+                                            ctx,
+                                        ) {
+                                            crate::ActionsRoute::NotHandled => {}
+                                            crate::ActionsRoute::Handled => {
+                                                logging::log(
+                                                    "STDIN",
+                                                    &format!(
+                                                        "SimulateKey: actions popup handled '{}' for host {:?}",
+                                                        key_lower, host
+                                                    ),
+                                                );
+                                                actions_popup_consumed_key = true;
+                                            }
+                                            crate::ActionsRoute::Execute { action_id } => {
+                                                logging::log(
+                                                    "STDIN",
+                                                    &format!(
+                                                        "SimulateKey: actions popup execute action_id='{}' for host {:?}",
+                                                        action_id, host
+                                                    ),
+                                                );
+                                                view.execute_action_for_actions_host(
+                                                    host, action_id, window, ctx,
+                                                );
+                                                actions_popup_consumed_key = true;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if !actions_popup_consumed_key {
                                 match &view.current_view {
                                     AppView::ScriptList => {
                                         // Main script list key handling
                                         if has_cmd && key_lower == "k" {
                                             logging::log("STDIN", "SimulateKey: Cmd+K - toggle actions");
                                             view.toggle_actions(ctx, window);
-                                        } else if view.fallback_mode && !view.cached_fallbacks.is_empty() {
+                                        } else if has_cmd
+                                            && key_lower == "enter"
+                                            && !has_shift
+                                            && !_has_alt
+                                            && !_has_ctrl
+                                        {
+                                            // Mirrors the live GPUI handler at
+                                            // src/render_script_list/mod.rs:881-890: Cmd+Enter
+                                            // (no shift/alt/ctrl) routes the current ScriptList
+                                            // selection into ACP as an explicit
+                                            // FocusedTarget context part rather than the plain
+                                            // frontmost-app context. Without this arm, automation
+                                            // callers of SimulateKey fell through to the plain
+                                            // `enter` case and executed the selected item.
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: Cmd+Enter - route to ACP context capture",
+                                            );
+                                            view.try_route_global_cmd_enter_to_acp_context_capture(ctx);
+                                        } else if view.main_menu_fallback_state.is_active() {
                                             // Handle keys in fallback mode
                                             match key_lower.as_str() {
                                                 "tab" => {
@@ -26,14 +107,12 @@
                                                         );
                                                 }
                                                 "up" | "arrowup" => {
-                                                    if view.fallback_selected_index > 0 {
-                                                        view.fallback_selected_index -= 1;
+                                                    if view.main_menu_fallback_state.move_up() {
                                                         ctx.notify();
                                                     }
                                                 }
                                                 "down" | "arrowdown" => {
-                                                    if view.fallback_selected_index < view.cached_fallbacks.len().saturating_sub(1) {
-                                                        view.fallback_selected_index += 1;
+                                                    if view.main_menu_fallback_state.move_down() {
                                                         ctx.notify();
                                                     }
                                                 }
@@ -88,6 +167,133 @@
                                                 }
                                                 _ => {
                                                     logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in ScriptList", key_lower));
+                                                }
+                                            }
+                                        }
+                                    }
+                                    AppView::FileSearchView { .. } => {
+                                        // File-search key handling. Mirrors the GPUI live
+                                        // handler arms at src/render_builtins/file_search.rs
+                                        // (Cmd+K / Enter) and the arrow interceptor at
+                                        // src/app_impl/startup_new_arrow.rs (Up/Down).
+                                        logging::log(
+                                            "STDIN",
+                                            &format!(
+                                                "SimulateKey: Dispatching '{}' to FileSearchView",
+                                                key_lower
+                                            ),
+                                        );
+
+                                        if has_cmd && key_lower == "k" {
+                                            let selected = view
+                                                .selected_file_search_result_owned()
+                                                .map(|(_, f)| f);
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: Cmd+K - toggle file search actions",
+                                            );
+                                            view.toggle_file_search_actions(
+                                                selected.as_ref(),
+                                                window,
+                                                ctx,
+                                            );
+                                        } else {
+                                            match key_lower.as_str() {
+                                                "up" | "arrowup" | "down" | "arrowdown" => {
+                                                    let is_up = matches!(
+                                                        key_lower.as_str(),
+                                                        "up" | "arrowup"
+                                                    );
+                                                    let filtered_len =
+                                                        view.file_search_display_len();
+                                                    let mut moved_selection = false;
+                                                    let mut new_index = 0usize;
+                                                    if let AppView::FileSearchView {
+                                                        selected_index, ..
+                                                    } = &mut view.current_view
+                                                    {
+                                                        if filtered_len == 0 {
+                                                            *selected_index = 0;
+                                                            new_index = 0;
+                                                        } else {
+                                                            if *selected_index >= filtered_len {
+                                                                *selected_index = filtered_len - 1;
+                                                            }
+                                                            if is_up && *selected_index > 0 {
+                                                                *selected_index -= 1;
+                                                                moved_selection = true;
+                                                            } else if !is_up
+                                                                && *selected_index + 1
+                                                                    < filtered_len
+                                                            {
+                                                                *selected_index += 1;
+                                                                moved_selection = true;
+                                                            }
+                                                            new_index = *selected_index;
+                                                        }
+                                                    }
+                                                    if moved_selection {
+                                                        view.lock_file_search_selection_to_user_choice();
+                                                    }
+                                                    if filtered_len > 0 {
+                                                        view.file_search_scroll_handle
+                                                            .scroll_to_item(
+                                                                new_index,
+                                                                ScrollStrategy::Nearest,
+                                                            );
+                                                    }
+                                                    ctx.notify();
+                                                }
+                                                "enter" => {
+                                                    if let Some((_, file)) =
+                                                        view.selected_file_search_result_owned()
+                                                    {
+                                                        logging::log(
+                                                            "STDIN",
+                                                            &format!(
+                                                                "SimulateKey: Enter - open file {}",
+                                                                &file.path
+                                                            ),
+                                                        );
+                                                        let _ = crate::file_search::open_file(
+                                                            &file.path,
+                                                        );
+                                                        view.close_and_reset_window(ctx);
+                                                    } else {
+                                                        logging::log(
+                                                            "STDIN",
+                                                            "SimulateKey: Enter in FileSearchView - no selection",
+                                                        );
+                                                    }
+                                                }
+                                                "tab" if !has_shift => {
+                                                    if view.navigate_file_search_into_selected_directory(ctx) {
+                                                        logging::log(
+                                                            "STDIN",
+                                                            "SimulateKey: Tab - navigate into selected directory",
+                                                        );
+                                                    } else {
+                                                        logging::log(
+                                                            "STDIN",
+                                                            "SimulateKey: Tab in FileSearchView - no selected directory",
+                                                        );
+                                                    }
+                                                }
+                                                "escape" => {
+                                                    logging::log(
+                                                        "STDIN",
+                                                        "SimulateKey: Escape - close FileSearchView",
+                                                    );
+                                                    view.close_and_reset_window(ctx);
+                                                }
+                                                _ => {
+                                                    logging::log(
+                                                        "STDIN",
+                                                        &format!(
+                                                            "SimulateKey: Unhandled key '{}' in FileSearchView",
+                                                            key_lower
+                                                        ),
+                                                    );
                                                 }
                                             }
                                         }
@@ -337,6 +543,23 @@
                                             });
                                         }
                                     }
+                                    AppView::EmojiPickerView { .. } if has_cmd && key_lower == "k" => {
+                                        // Mirrors the live GPUI handler at
+                                        // src/render_builtins/emoji_picker.rs:140-158 which
+                                        // routes every key through route_key_to_actions_dialog
+                                        // (host=EmojiPicker) first; the canonical open path
+                                        // lives in view.toggle_actions (resolves host via
+                                        // actions_dialog_host_for_current_view). Without this
+                                        // arm, the automation simulateKey path fell through
+                                        // to the per-view match below and emitted
+                                        //   SimulateKey: Unhandled key 'k' in EmojiPicker
+                                        // so the actions-cmdk-builtin-emoji-picker story could
+                                        // not be verified via stdin — actions dialog never
+                                        // opened. Same tool-gap class as ClipboardHistoryView
+                                        // (Run 7 Pass #17).
+                                        logging::log("STDIN", "SimulateKey: Cmd+K - toggle emoji actions");
+                                        view.toggle_actions(ctx, window);
+                                    }
                                     AppView::EmojiPickerView { ref mut selected_index, ref filter, ref selected_category } => {
                                         let ordered = crate::emoji::filtered_ordered_emojis(filter, *selected_category);
                                         let filtered_len = ordered.len();
@@ -392,8 +615,113 @@
                                         view.hovered_index = None;
                                         ctx.notify();
                                     }
+                                    AppView::WindowSwitcherView { .. } => {
+                                        // Run 14 Pass 23: mirrors the live GPUI handler at
+                                        // `src/render_builtins/window_switcher.rs:80-85`
+                                        // (escape clears the filter first, then closes
+                                        // the window). Without this arm, simulateKey
+                                        // escape against an empty-choices windowSwitcher
+                                        // dropped to the dispatcher's
+                                        // `simulateKey_unhandled_view` warn — the
+                                        // launcher stayed visible with promptType
+                                        // windowSwitcher choiceCount:0 (Pass 20
+                                        // `[?] tool-windowswitcher-empty-state-not-dismissable-by-escape`).
+                                        if has_cmd && key_lower == "k" {
+                                            logging::log("STDIN", "SimulateKey: Cmd+K - toggle window-switcher actions");
+                                            view.toggle_actions(ctx, window);
+                                            return;
+                                        }
+                                        match key_lower.as_str() {
+                                            "escape" => {
+                                                logging::log("STDIN", "SimulateKey: Escape - clear filter or close WindowSwitcher");
+                                                if !view.clear_builtin_view_filter(ctx) {
+                                                    view.go_back_or_close(window, ctx);
+                                                }
+                                            }
+                                            _ => {
+                                                logging::log("STDIN", &format!("SimulateKey: Unhandled key '{}' in WindowSwitcher", key_lower));
+                                            }
+                                        }
+                                    }
+                                    AppView::ClipboardHistoryView { .. } => {
+                                        // Mirrors the live GPUI handler at
+                                        // src/render_builtins/clipboard.rs:183 (Cmd+K opens
+                                        // clipboard actions). Without this arm, the automation
+                                        // simulateKey path fell through to "unhandled_view" and
+                                        // the actions-cmdk-builtin-clipboard-history story could
+                                        // not be verified via stdin — actions dialog never opened.
+                                        if has_cmd && key_lower == "k" {
+                                            if let Some(entry) = view.selected_clipboard_entry() {
+                                                logging::log(
+                                                    "STDIN",
+                                                    "SimulateKey: Cmd+K - toggle clipboard actions",
+                                                );
+                                                view.toggle_clipboard_actions(entry, window, ctx);
+                                            } else {
+                                                logging::log(
+                                                    "STDIN",
+                                                    "SimulateKey: Cmd+K ignored - no selected clipboard entry",
+                                                );
+                                            }
+                                        } else {
+                                            logging::log(
+                                                "STDIN",
+                                                &format!(
+                                                    "SimulateKey: Unhandled key '{}' in ClipboardHistoryView",
+                                                    key_lower
+                                                ),
+                                            );
+                                        }
+                                    }
                                     _ => {
-                                        logging::log("STDIN", &format!("SimulateKey: View {:?} not supported for key simulation", std::mem::discriminant(&view.current_view)));
+                                        // Generic fallback: any view whose current_actions_host()
+                                        // resolves (i.e. participates in the shared ActionsDialog)
+                                        // should honor Cmd+K even if there is no per-view arm.
+                                        // Closes the recurring tool-gap class where new views
+                                        // silently dropped Cmd+K because the dispatcher table
+                                        // was maintained per-view (Run 7 Pass #17 clipboard,
+                                        // Run 8 Pass #2 emoji). Distinguishing log line makes
+                                        // per-view-arm vs fallback traceable in audit receipts.
+                                        if view.simulate_key_requests_generic_actions_toggle(
+                                            &key_lower,
+                                            has_cmd,
+                                            has_shift,
+                                            _has_alt,
+                                            _has_ctrl,
+                                        ) {
+                                            let view_name = view.app_view_name();
+                                            logging::log(
+                                                "STDIN",
+                                                &format!(
+                                                    "SimulateKey: Cmd+K - generic actions toggle (fallback for view={})",
+                                                    view_name
+                                                ),
+                                            );
+                                            view.toggle_actions(ctx, window);
+                                        } else {
+                                            // Loud-fail when a view has no simulateKey arm.
+                                            // Agentic-testing callers expect a structured receipt
+                                            // so CI / audit tools can assert "no view was silently
+                                            // dropped". See stories.md `tool-table-driven-simulatekey`.
+                                            let view_name = view.app_view_name();
+                                            tracing::warn!(
+                                                target: "script_kit::stdin",
+                                                event = "simulateKey_unhandled_view",
+                                                code = "unhandled_view",
+                                                view = %view_name,
+                                                key = %key_lower,
+                                                modifiers = ?modifiers,
+                                                "simulateKey has no dispatcher arm for the current view; keystroke dropped"
+                                            );
+                                            logging::log(
+                                                "STDIN",
+                                                &format!(
+                                                    "SimulateKey: UNHANDLED_VIEW view={} key='{}' modifiers={:?} code=unhandled_view — no arm in dispatcher",
+                                                    view_name, key_lower, modifiers
+                                                ),
+                                            );
+                                        }
                                     }
                                 }
+                                } // end if !actions_popup_consumed_key
                             }

@@ -43,6 +43,24 @@ pub(crate) fn mini_main_window_list_budget_height() -> f32 {
         - MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT
 }
 
+/// Content height for Quick Terminal inside the mini main window shell.
+///
+/// This is the *terminal-grid-only* height (panel minus footer hint strip).
+/// Use it for the initial PTY resize hint via `TermPrompt::with_height`.
+pub fn quick_terminal_content_height() -> Pixels {
+    px(MINI_MAIN_WINDOW_MAX_HEIGHT - layout::FOOTER_HEIGHT)
+}
+
+/// Full panel height for Quick Terminal inside the mini main window shell.
+///
+/// This matches the NSPanel size and must be used as `.h()` on the render
+/// wrapper that holds *both* the terminal entity AND the footer hint strip.
+/// Using the smaller content height here leaves a visible gap of
+/// `FOOTER_HEIGHT` pixels below the footer.
+pub fn quick_terminal_panel_height() -> Pixels {
+    px(MINI_MAIN_WINDOW_MAX_HEIGHT)
+}
+
 /// Maximum number of selectable rows that can fit without clipping, given
 /// `visible_section_headers` section headers that each consume
 /// `MINI_MAIN_WINDOW_SECTION_HEADER_HEIGHT` pixels of the list budget.

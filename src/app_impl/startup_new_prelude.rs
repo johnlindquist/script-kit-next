@@ -10,7 +10,7 @@
 
                 let scriptlets_handle = scope.spawn(|| {
                     let start = std::time::Instant::now();
-                    // Use load_scriptlets() to load from ALL kits (kit/*/scriptlets/*.md)
+                    // Use load_scriptlets() to load from all plugins (plugins/*/scriptlets/*.md)
                     // This includes built-in extensions like CleanShot and user extensions
                     let loaded = scripts::load_scriptlets();
                     (loaded, start.elapsed())
@@ -52,8 +52,12 @@
         let mut frecency_store = FrecencyStore::with_config(&suggested_config);
         frecency_store.load().ok(); // Ignore errors - starts fresh if file doesn't exist
 
-        // Load built-in entries based on config
-        let builtin_entries = builtins::get_builtin_entries(&config.get_builtins());
+        // Load built-in entries based on config, filtering out commands hidden via
+        // `hiddenCommands` or per-command `commands.*.hidden` overrides.
+        let builtin_entries: Vec<_> = builtins::get_builtin_entries(&config.get_builtins())
+            .into_iter()
+            .filter(|entry| !config.is_command_hidden(&entry.id))
+            .collect();
 
         // Apps are loaded in the background to avoid blocking startup
         // Start with empty list, will be populated asynchronously
@@ -71,14 +75,14 @@
         logging::log(
             "APP",
             &format!(
-                "Loaded {} scripts from ~/.scriptkit/kit/*/scripts",
+                "Loaded {} scripts from ~/.scriptkit/plugins/*/scripts",
                 scripts.len()
             ),
         );
         logging::log(
             "APP",
             &format!(
-                "Loaded {} scriptlets from ~/.scriptkit/kit/*/scriptlets",
+                "Loaded {} scriptlets from ~/.scriptkit/plugins/*/scriptlets",
                 scriptlets.len()
             ),
         );
@@ -131,8 +135,7 @@
                     this.update(cx, |app, cx| {
                         app.apps = apps;
                         // Invalidate caches since apps changed
-                        app.filter_cache_key = String::from("\0_APPS_LOADED_\0");
-                        app.grouped_cache_key = String::from("\0_APPS_LOADED_\0");
+                        app.main_menu_result_caches.mark_apps_loaded();
                         logging::log(
                             "APP",
                             &format!(
@@ -251,14 +254,15 @@
                             input_received_at
                         ),
                     );
-                    this.filter_perf_start = Some(input_received_at);
+                    this.main_menu_render_diagnostics.filter_perf_start =
+                        Some(input_received_at);
                     this.handle_filter_input_change(window, cx);
                 }
                 InputEvent::PressEnter { .. } => {
                     if matches!(this.current_view, AppView::ScriptList) && !this.show_actions_popup
                     {
                         // Check if we're in fallback mode first
-                        if this.fallback_mode && !this.cached_fallbacks.is_empty() {
+                        if this.main_menu_fallback_state.is_active() {
                             this.execute_selected_fallback(cx);
                         } else {
                             this.execute_selected(cx);

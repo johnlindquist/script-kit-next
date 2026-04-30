@@ -210,7 +210,7 @@ fn path_context_all_common_actions_present() {
         "file:copy_path",
         "file:open_in_finder",
         "file:open_in_editor",
-        "file:open_in_terminal",
+        "file:open_in_quick_terminal",
         "file:copy_filename",
         "file:move_to_trash",
     ];
@@ -918,12 +918,15 @@ fn action_has_action_defaults_to_false() {
 // ============================================================
 
 #[test]
-fn global_actions_are_empty() {
+fn global_actions_are_seeded() {
     let actions = get_global_actions();
+    let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
     assert!(
-        actions.is_empty(),
-        "Global actions should be empty (Settings/Quit are in main menu)"
+        ids.contains(&"reload_scripts"),
+        "missing reload_scripts: {ids:?}"
     );
+    assert!(ids.contains(&"settings"), "missing settings: {ids:?}");
+    assert!(ids.contains(&"view_logs"), "missing view_logs: {ids:?}");
 }
 
 // ============================================================

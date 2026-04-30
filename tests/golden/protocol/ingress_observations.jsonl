@@ -1,0 +1,18 @@
+# Oracle-Session `protocol-builtin-boundary-engineering-plan` — ingress
+# observation golden transcripts. One case per line. Each case is
+# `{name, line, expect}` where `line` is the raw JSONL sent through
+# `observe_ingress` and `expect` is either:
+#   - { "ok": { "kind": "..."|null, "version": 1|2,
+#               "warningsFor": ["field", ...],
+#               "hasDeprecationError": bool } }
+#   - { "error": "InvalidJson" | "NotObject" | "Version" }
+# `warningsFor` lists the deprecated field names the observer should
+# have flagged (order-independent — the test uses a BTreeSet).
+{ "name": "v2 triggerBuiltin with canonical builtinId has no warnings", "line": "{\"type\":\"triggerBuiltin\",\"builtinId\":\"builtin/clipboard-history\",\"protocolVersion\":2}", "expect": { "ok": { "kind": "triggerBuiltin", "version": 2, "warningsFor": [], "hasDeprecationError": false } } }
+{ "name": "v2 triggerBuiltin with legacy name warns on `name`", "line": "{\"type\":\"triggerBuiltin\",\"name\":\"clipboardHistory\",\"protocolVersion\":2}", "expect": { "ok": { "kind": "triggerBuiltin", "version": 2, "warningsFor": ["name"], "hasDeprecationError": false } } }
+{ "name": "legacy v1 triggerBuiltin (no envelope) still warns on `name`", "line": "{\"type\":\"triggerBuiltin\",\"name\":\"clipboardHistory\"}", "expect": { "ok": { "kind": "triggerBuiltin", "version": 1, "warningsFor": ["name"], "hasDeprecationError": false } } }
+{ "name": "v2 arg message does not trip deprecation table", "line": "{\"type\":\"arg\",\"name\":\"whatever\",\"protocolVersion\":2}", "expect": { "ok": { "kind": "arg", "version": 2, "warningsFor": [], "hasDeprecationError": false } } }
+{ "name": "missing type yields null kind and no warnings", "line": "{\"protocolVersion\":2}", "expect": { "ok": { "kind": null, "version": 2, "warningsFor": [], "hasDeprecationError": false } } }
+{ "name": "malformed JSON -> InvalidJson", "line": "{not json", "expect": { "error": "InvalidJson" } }
+{ "name": "bare string root -> NotObject", "line": "\"bare string\"", "expect": { "error": "NotObject" } }
+{ "name": "unsupported version -> Version error", "line": "{\"type\":\"arg\",\"protocolVersion\":999}", "expect": { "error": "Version" } }

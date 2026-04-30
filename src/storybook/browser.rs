@@ -27,6 +27,12 @@ enum PreviewMode {
     Compare,
 }
 
+fn storybook_measurement_grid_enabled() -> bool {
+    std::env::var("SCRIPT_KIT_STORYBOOK_GRID")
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "on"))
+        .unwrap_or(false)
+}
+
 /// Main browser view for the storybook
 pub struct StoryBrowser {
     stories: Vec<&'static StoryEntry>,
@@ -41,6 +47,9 @@ pub struct StoryBrowser {
     focus_handle: FocusHandle,
     screenshot_dir: PathBuf,
     compare_scroll: ScrollHandle,
+    live_preview: Option<AnyView>,
+    live_preview_story_id: Option<String>,
+    live_preview_variant_id: Option<String>,
 }
 
 impl StoryBrowser {
@@ -100,6 +109,9 @@ impl StoryBrowser {
             focus_handle: cx.focus_handle(),
             screenshot_dir,
             compare_scroll: ScrollHandle::new(),
+            live_preview: None,
+            live_preview_story_id: None,
+            live_preview_variant_id: None,
         };
 
         browser.reset_variant_selection();
@@ -288,6 +300,43 @@ impl StoryBrowser {
         );
     }
 
+    pub fn prepare_live_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.refresh_live_preview(window, cx);
+    }
+
+    fn refresh_live_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(story) = self.current_story() else {
+            self.live_preview = None;
+            self.live_preview_story_id = None;
+            self.live_preview_variant_id = None;
+            return;
+        };
+
+        let variants = self.current_story_variants();
+        let Some(variant) = variants
+            .get(self.selected_variant_index)
+            .or_else(|| variants.first())
+        else {
+            self.live_preview = None;
+            self.live_preview_story_id = Some(story.story.id().to_string());
+            self.live_preview_variant_id = None;
+            return;
+        };
+
+        let variant_id = variant.stable_id();
+        self.live_preview = story.story.render_live_variant(variant, window, cx);
+        self.live_preview_story_id = Some(story.story.id().to_string());
+        self.live_preview_variant_id = Some(variant_id.clone());
+
+        tracing::debug!(
+            event = "storybook_live_preview_refreshed",
+            story_id = %story.story.id(),
+            variant_id = %variant_id,
+            has_live_preview = self.live_preview.is_some(),
+            "Refreshed cached Storybook live preview"
+        );
+    }
+
     fn toggle_compare_mode(&mut self, cx: &mut Context<Self>) {
         if self.current_story_variants().len() <= 1 {
             self.preview_mode = PreviewMode::Single;
@@ -306,7 +355,7 @@ impl StoryBrowser {
         cx.notify();
     }
 
-    fn move_variant_left(&mut self, cx: &mut Context<Self>) {
+    fn move_variant_left(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let count = self.current_story_variants().len();
         if count <= 1 {
             return;
@@ -318,12 +367,13 @@ impl StoryBrowser {
             self.selected_variant_index - 1
         };
         self.trace_state("variant_focus_changed", "arrow_left");
+        self.refresh_live_preview(window, cx);
         self.compare_scroll
             .scroll_to_item(self.selected_variant_index);
         cx.notify();
     }
 
-    fn move_variant_right(&mut self, cx: &mut Context<Self>) {
+    fn move_variant_right(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let count = self.current_story_variants().len();
         if count <= 1 {
             return;
@@ -331,12 +381,18 @@ impl StoryBrowser {
 
         self.selected_variant_index = (self.selected_variant_index + 1) % count;
         self.trace_state("variant_focus_changed", "arrow_right");
+        self.refresh_live_preview(window, cx);
         self.compare_scroll
             .scroll_to_item(self.selected_variant_index);
         cx.notify();
     }
 
-    fn select_variant_by_shortcut(&mut self, key: &str, cx: &mut Context<Self>) {
+    fn select_variant_by_shortcut(
+        &mut self,
+        key: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(digit) = key.chars().next() else {
             return;
         };
@@ -359,6 +415,7 @@ impl StoryBrowser {
         };
 
         self.selected_variant_index = index;
+        self.refresh_live_preview(window, cx);
         self.compare_scroll.scroll_to_item(index);
 
         if let Some(story) = self.current_story() {
@@ -562,12 +619,13 @@ impl StoryBrowser {
                             .text_sm()
                             .rounded_sm()
                             .child(story.story.name())
-                            .on_click(cx.listener(move |this, _event, _window, cx| {
+                            .on_click(cx.listener(move |this, _event, window, cx| {
                                 if let Some(pos) =
                                     this.stories.iter().position(|s| s.story.id() == story_id)
                                 {
                                     this.selected_index = pos;
                                     this.reset_variant_selection();
+                                    this.refresh_live_preview(window, cx);
                                     cx.notify();
                                 }
                             }));
@@ -698,6 +756,14 @@ impl StoryBrowser {
         let variants = self.current_story_variants();
 
         if let Some(variant) = variants.get(self.selected_variant_index) {
+            let variant_id = variant.stable_id();
+            if self.live_preview_story_id.as_deref() == Some(story.story.id())
+                && self.live_preview_variant_id.as_deref() == Some(variant_id.as_str())
+            {
+                if let Some(view) = self.live_preview.clone() {
+                    return view.into_any_element();
+                }
+            }
             return story.story.render_variant(variant);
         }
 
@@ -706,9 +772,6 @@ impl StoryBrowser {
 
     fn render_compare_preview(&self, story: &'static StoryEntry) -> AnyElement {
         let theme = crate::theme::get_cached_theme();
-        let card_bg = theme.colors.background.title_bar;
-        let preview_bg = theme.colors.background.main;
-        let border = theme.colors.ui.border;
         let accent = theme.colors.accent.selected;
         let text_primary = theme.colors.text.primary;
         let text_muted = theme.colors.text.dimmed;
@@ -720,12 +783,6 @@ impl StoryBrowser {
 
         let variants = self.current_story_variants();
 
-        const CARD_WIDTH: f32 = 360.;
-        const CARD_GAP: f32 = 16.; // gap_4
-
-        let row_width = variants.len().max(1) as f32 * CARD_WIDTH
-            + variants.len().saturating_sub(1) as f32 * CARD_GAP;
-
         div()
             .id("compare-scroll")
             .track_scroll(&self.compare_scroll)
@@ -733,14 +790,15 @@ impl StoryBrowser {
             .min_w(px(0.))
             .min_h(px(0.))
             .p_4()
-            .overflow_x_scroll()
+            .overflow_y_scroll()
             .child(
                 div()
-                    .w(px(row_width))
-                    .h_full()
+                    .w_full()
                     .flex()
                     .flex_row()
-                    .gap_4()
+                    .flex_wrap()
+                    .items_start()
+                    .gap(px(24.0))
                     .children(variants.into_iter().enumerate().map(|(index, variant)| {
                         let variant_id = variant.stable_id();
                         let description = variant.description.clone().unwrap_or_default();
@@ -748,82 +806,186 @@ impl StoryBrowser {
                         let is_adopted = adopted_variant.as_deref() == Some(variant_id.as_str());
                         let preview_content = story.story.render_compare_variant(&variant);
 
-                        let mut card = div()
-                            .w(px(CARD_WIDTH))
-                            .h_full()
-                            .min_h(px(0.))
+                        div()
                             .flex_shrink_0()
                             .flex()
                             .flex_col()
-                            .gap_3()
-                            .p_3()
-                            .rounded(px(12.))
-                            .border_1()
-                            .border_color(rgb(border))
-                            .bg(rgb(card_bg));
-
-                        if is_selected {
-                            card = card.border_color(rgb(accent));
-                        }
-
-                        card.child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .justify_between()
-                                .items_center()
-                                .gap_3()
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .child(
-                                            div()
-                                                .text_sm()
-                                                .font_weight(FontWeight::SEMIBOLD)
-                                                .text_color(rgb(text_primary))
-                                                .child(format!("[{}] {}", index + 1, variant.name)),
-                                        )
-                                        .child(
-                                            div()
-                                                .text_xs()
-                                                .text_color(rgb(text_muted))
-                                                .child(description),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(if is_adopted {
-                                            rgb(accent)
-                                        } else {
-                                            rgb(text_muted)
-                                        })
-                                        .child(if is_adopted { "Adopted" } else { "" }),
-                                ),
-                        )
-                        .child({
-                            let mut preview = div()
-                                .id(gpui::ElementId::Name(
-                                    format!("variant-preview-{index}").into(),
-                                ))
-                                .flex_1()
-                                .min_h(px(0.))
-                                .min_w(px(0.))
-                                .rounded(px(8.))
-                                .border_1()
-                                .border_color(rgb(border))
-                                .bg(rgb(preview_bg));
-
-                            if is_selected {
-                                preview = preview.overflow_y_scroll();
-                            } else {
-                                preview = preview.overflow_hidden();
-                            }
-
-                            preview.child(div().w_full().child(preview_content))
-                        })
+                            .gap_2()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .justify_between()
+                                    .items_center()
+                                    .gap_3()
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .child(
+                                                div()
+                                                    .text_sm()
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(if is_selected {
+                                                        rgb(accent)
+                                                    } else {
+                                                        rgb(text_primary)
+                                                    })
+                                                    .child(format!(
+                                                        "[{}] {}",
+                                                        index + 1,
+                                                        variant.name
+                                                    )),
+                                            )
+                                            .child(
+                                                div()
+                                                    .text_xs()
+                                                    .text_color(rgb(text_muted))
+                                                    .child(description),
+                                            ),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(if is_adopted {
+                                                rgb(accent)
+                                            } else {
+                                                rgb(text_muted)
+                                            })
+                                            .child(if is_adopted { "Adopted" } else { "" }),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .id(gpui::ElementId::Name(
+                                        format!("variant-preview-{index}").into(),
+                                    ))
+                                    .min_h(px(0.))
+                                    .min_w(px(0.))
+                                    .child(preview_content),
+                            )
+                            .into_any_element()
                     })),
             )
+            .into_any_element()
+    }
+
+    fn render_measurement_grid(&self) -> AnyElement {
+        let theme = crate::theme::get_cached_theme();
+        const GRID_CANVAS: f32 = 8192.0;
+        const MINOR_STEP: usize = 16;
+        const MAJOR_EVERY: usize = 5;
+
+        let minor_line = rgba((theme.colors.ui.success << 8) | 0x14);
+        let major_line = rgba((theme.colors.ui.success << 8) | 0x32);
+        let ruler_text = rgba((theme.colors.ui.success << 8) | 0xB8);
+        let ruler_surface = rgba((theme.colors.background.main << 8) | 0xD8);
+
+        let mut grid_elements = Vec::new();
+        let tick_count = GRID_CANVAS as usize / MINOR_STEP;
+
+        for index in 0..=tick_count {
+            let offset = (index * MINOR_STEP) as f32;
+            let is_major = index % MAJOR_EVERY == 0;
+            let line_color = if is_major { major_line } else { minor_line };
+
+            grid_elements.push(
+                div()
+                    .absolute()
+                    .left(px(offset))
+                    .top(px(0.))
+                    .w(px(1.))
+                    .h(px(GRID_CANVAS))
+                    .bg(line_color)
+                    .into_any_element(),
+            );
+
+            grid_elements.push(
+                div()
+                    .absolute()
+                    .left(px(0.))
+                    .top(px(offset))
+                    .w(px(GRID_CANVAS))
+                    .h(px(1.))
+                    .bg(line_color)
+                    .into_any_element(),
+            );
+
+            if is_major {
+                let label = format!("{offset:.0}");
+
+                grid_elements.push(
+                    div()
+                        .absolute()
+                        .left(px(offset + 4.))
+                        .top(px(4.))
+                        .px_1()
+                        .text_size(px(9.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(ruler_text)
+                        .bg(ruler_surface)
+                        .child(label.clone())
+                        .into_any_element(),
+                );
+
+                grid_elements.push(
+                    div()
+                        .absolute()
+                        .left(px(4.))
+                        .top(px(offset + 4.))
+                        .px_1()
+                        .text_size(px(9.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(ruler_text)
+                        .bg(ruler_surface)
+                        .child(label)
+                        .into_any_element(),
+                );
+            }
+        }
+
+        div()
+            .absolute()
+            .left(px(0.))
+            .top(px(0.))
+            .w(px(GRID_CANVAS))
+            .h(px(GRID_CANVAS))
+            .child(
+                div()
+                    .absolute()
+                    .left(px(0.))
+                    .top(px(0.))
+                    .w(px(48.))
+                    .h(px(GRID_CANVAS))
+                    .bg(rgba((theme.colors.background.main << 8) | 0x60)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(0.))
+                    .top(px(0.))
+                    .w(px(GRID_CANVAS))
+                    .h(px(28.))
+                    .bg(rgba((theme.colors.background.main << 8) | 0x60)),
+            )
+            .children(grid_elements)
+            .into_any_element()
+    }
+
+    fn render_preview_host(&self, preview: AnyElement) -> AnyElement {
+        let theme = crate::theme::get_cached_theme();
+
+        let mut host = div()
+            .id("story-preview-scroll")
+            .relative()
+            .flex_1()
+            .overflow_y_scroll()
+            .bg(rgb(theme.colors.background.main));
+
+        if storybook_measurement_grid_enabled() {
+            host = host.child(self.render_measurement_grid());
+        }
+
+        host.child(div().relative().child(preview))
             .into_any_element()
     }
 
@@ -871,7 +1033,7 @@ impl StoryBrowser {
             .child(self.status_line.clone().unwrap_or(default_text))
     }
 
-    fn move_selection_up(&mut self, cx: &mut Context<Self>) {
+    fn move_selection_up(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let filtered = self.filtered_stories();
         if filtered.is_empty() {
             return;
@@ -893,6 +1055,7 @@ impl StoryBrowser {
                     {
                         self.selected_index = main_pos;
                         self.reset_variant_selection();
+                        self.refresh_live_preview(window, cx);
                         cx.notify();
                     }
                 }
@@ -900,7 +1063,7 @@ impl StoryBrowser {
         }
     }
 
-    fn move_selection_down(&mut self, cx: &mut Context<Self>) {
+    fn move_selection_down(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let filtered = self.filtered_stories();
         if filtered.is_empty() {
             return;
@@ -922,6 +1085,7 @@ impl StoryBrowser {
                     {
                         self.selected_index = main_pos;
                         self.reset_variant_selection();
+                        self.refresh_live_preview(window, cx);
                         cx.notify();
                     }
                 }
@@ -951,17 +1115,17 @@ impl StoryBrowser {
                 cx.stop_propagation();
             }
             "left" | "arrowleft" if self.preview_mode == PreviewMode::Compare => {
-                self.move_variant_left(cx);
+                self.move_variant_left(window, cx);
                 cx.stop_propagation();
             }
             "right" | "arrowright" if self.preview_mode == PreviewMode::Compare => {
-                self.move_variant_right(cx);
+                self.move_variant_right(window, cx);
                 cx.stop_propagation();
             }
             "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
                 if self.preview_mode == PreviewMode::Compare =>
             {
-                self.select_variant_by_shortcut(key, cx);
+                self.select_variant_by_shortcut(key, window, cx);
                 cx.stop_propagation();
             }
             "enter" | "Enter" | "return" | "Return"
@@ -977,11 +1141,11 @@ impl StoryBrowser {
                 cx.stop_propagation();
             }
             "up" | "arrowup" => {
-                self.move_selection_up(cx);
+                self.move_selection_up(window, cx);
                 cx.stop_propagation();
             }
             "down" | "arrowdown" => {
-                self.move_selection_down(cx);
+                self.move_selection_down(window, cx);
                 cx.stop_propagation();
             }
             _ => cx.propagate(),
@@ -1080,7 +1244,8 @@ impl Render for StoryBrowser {
         let theme = crate::theme::get_cached_theme();
         let filtered = self.filtered_stories();
 
-        // Render the story preview - stories are stateless so no App context needed
+        // Render the story preview. Single-preview mode may use a cached live view
+        // prepared outside render; compare mode remains stateless.
         let preview = self.render_preview();
 
         div()
@@ -1138,13 +1303,7 @@ impl Render for StoryBrowser {
                     .overflow_hidden()
                     .child(self.render_toolbar(cx))
                     // Scrollable preview area
-                    .child(
-                        div()
-                            .id("story-preview-scroll")
-                            .flex_1()
-                            .overflow_y_scroll()
-                            .child(preview),
-                    )
+                    .child(self.render_preview_host(preview))
                     .child(self.render_status_bar()),
             )
     }

@@ -261,6 +261,12 @@ pub fn render_design_item(
                         Some(IconKind::Svg(icon_name.to_string())),
                     )
                 }
+                SearchResult::ScriptIssue(issue) => (
+                    issue.title.clone(),
+                    issue.description.clone(),
+                    None,
+                    Some(IconKind::Svg("ExclamationTriangle".to_string())),
+                ),
             };
 
             // During search mode, keep only quiet type labels.

@@ -48,7 +48,7 @@ fn smoke_skill_discovery_through_search_pipeline() {
         );
 
         // Phase 2: Build plugin index from seeded structure
-        let kit_dir = kit_root.join("kit");
+        let kit_dir = kit_root.join("plugins");
         let index = script_kit_gpui::plugins::discover_plugins_in(&kit_dir)
             .expect("plugin discovery should succeed");
 
@@ -62,18 +62,18 @@ fn smoke_skill_discovery_through_search_pipeline() {
 
         assert!(
             !skills.is_empty(),
-            "At least one skill must be discovered from seeded authoring plugin"
+            "At least one skill must be discovered from seeded Script Kit plugin"
         );
 
-        // Verify the authoring plugin's skills are present
-        let authoring_skills: Vec<&PluginSkill> = skills
+        // Verify the Script Kit plugin's skills are present
+        let scriptkit_skills: Vec<&PluginSkill> = skills
             .iter()
-            .filter(|s| s.plugin_id == "authoring")
+            .filter(|s| s.plugin_id == "scriptkit")
             .collect();
         assert!(
-            authoring_skills.len() >= 3,
-            "authoring plugin should have at least 3 skills (script-authoring, scriptlets, agents), got {}",
-            authoring_skills.len()
+            scriptkit_skills.len() >= 3,
+            "Script Kit plugin should have at least 3 skills (new-script, new-scriptlet, new-agent), got {}",
+            scriptkit_skills.len()
         );
 
         // Phase 4: Feed skills into search pipeline
@@ -206,7 +206,7 @@ fn smoke_duplicate_skill_slugs_remain_distinct() {
 fn smoke_skills_appear_in_empty_query_results() {
     with_temp_sk_path(|kit_root| {
         let _ = ensure_kit_setup();
-        let kit_dir = kit_root.join("kit");
+        let kit_dir = kit_root.join("plugins");
 
         let index =
             script_kit_gpui::plugins::discover_plugins_in(&kit_dir).expect("discover plugins");
@@ -234,7 +234,7 @@ fn smoke_skills_appear_in_empty_query_results() {
 fn smoke_skill_frecency_keys_are_plugin_qualified() {
     with_temp_sk_path(|kit_root| {
         let _ = ensure_kit_setup();
-        let kit_dir = kit_root.join("kit");
+        let kit_dir = kit_root.join("plugins");
 
         let index =
             script_kit_gpui::plugins::discover_plugins_in(&kit_dir).expect("discover plugins");
@@ -270,7 +270,7 @@ fn smoke_skill_frecency_keys_are_plugin_qualified() {
 fn smoke_agents_never_appear_in_skill_search() {
     with_temp_sk_path(|kit_root| {
         let _ = ensure_kit_setup();
-        let kit_dir = kit_root.join("kit");
+        let kit_dir = kit_root.join("plugins");
 
         let index =
             script_kit_gpui::plugins::discover_plugins_in(&kit_dir).expect("discover plugins");
@@ -300,18 +300,18 @@ fn smoke_agents_never_appear_in_skill_search() {
 fn smoke_acp_staging_contract_structure() {
     with_temp_sk_path(|kit_root| {
         let _ = ensure_kit_setup();
-        let kit_dir = kit_root.join("kit");
+        let kit_dir = kit_root.join("plugins");
 
         let index =
             script_kit_gpui::plugins::discover_plugins_in(&kit_dir).expect("discover plugins");
 
         let skills = discover_plugin_skills(&index).expect("discover skills");
 
-        // Find the scriptlets skill from authoring plugin
+        // Find the new-scriptlet skill from Script Kit plugin
         let scriptlets_skill = skills
             .iter()
-            .find(|s| s.plugin_id == "authoring" && s.skill_id == "scriptlets")
-            .expect("authoring/scriptlets skill must exist");
+            .find(|s| s.plugin_id == "scriptkit" && s.skill_id == "new-scriptlet")
+            .expect("scriptkit/new-scriptlet skill must exist");
 
         let initial_input = format!("/{} ", scriptlets_skill.skill_id);
         let part = script_kit_gpui::ai::AiContextPart::SkillFile {
@@ -322,7 +322,7 @@ fn smoke_acp_staging_contract_structure() {
             slash_name: scriptlets_skill.skill_id.clone(),
         };
 
-        assert_eq!(initial_input, "/scriptlets ");
+        assert_eq!(initial_input, "/new-scriptlet ");
         match part {
             script_kit_gpui::ai::AiContextPart::SkillFile {
                 path,
@@ -332,7 +332,7 @@ fn smoke_acp_staging_contract_structure() {
                 slash_name,
             } => {
                 assert_eq!(path, scriptlets_skill.path.to_string_lossy().to_string());
-                assert_eq!(label, "/scriptlets");
+                assert_eq!(label, "/new-scriptlet");
                 assert_eq!(skill_name, scriptlets_skill.title);
                 assert_eq!(owner_label, scriptlets_skill.plugin_title);
                 assert_eq!(slash_name, scriptlets_skill.skill_id);

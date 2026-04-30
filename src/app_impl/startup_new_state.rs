@@ -18,6 +18,7 @@
                 .unwrap_or_default();
             skills.into_iter().map(std::sync::Arc::new).collect()
         };
+        crate::dictation::hydrate_dictation_resource_from_history();
 
         let mut app = ScriptListApp {
             scripts,
@@ -30,9 +31,13 @@
             paste_sequential_state: None,
             focused_clipboard_entry_id: None,
             cached_windows: Vec::new(),
+            cached_browser_tabs: Vec::new(),
+            cached_browser_history: Vec::new(),
             cached_file_results: Vec::new(),
             cached_processes: Vec::new(),
             process_manager_refresh_task: None,
+            cached_current_app_entries: Vec::new(),
+            current_app_commands_session: None,
             selected_index: 0,
             filter_text: String::new(),
             gpui_input_state,
@@ -69,10 +74,14 @@
             arg_list_scroll_handle: UniformListScrollHandle::new(),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),
             emoji_scroll_handle: UniformListScrollHandle::new(),
+            emoji_frequent_snapshot: Vec::new(),
             window_list_scroll_handle: UniformListScrollHandle::new(),
+            browser_tabs_scroll_handle: UniformListScrollHandle::new(),
             process_list_scroll_handle: UniformListScrollHandle::new(),
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             acp_history_scroll_handle: ScrollHandle::new(),
+            browser_history_scroll_handle: ScrollHandle::new(),
+            dictation_history_scroll_handle: ScrollHandle::new(),
             notes_browse_scroll_handle: ScrollHandle::new(),
             design_gallery_scroll_handle: UniformListScrollHandle::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
@@ -80,6 +89,7 @@
             file_search_loading: false,
             file_search_debounce_task: None,
             file_search_current_dir: None,
+            file_search_current_dir_show_hidden: false,
             file_search_frozen_filter: None,
             file_search_actions_path: None,
             file_search_sort_mode: crate::actions::FileSearchSortMode::default(),
@@ -92,18 +102,11 @@
             cursor_visible: true,
             focused_input: FocusedInput::MainFilter,
             current_script_pid: None,
-            // P1: Initialize filter cache
-            cached_filtered_results: Vec::new(),
-            filter_cache_key: String::from("\0_UNINITIALIZED_\0"), // Sentinel value to force initial compute
-            // P1: Initialize grouped results cache (Arc for cheap clone)
-            cached_grouped_items: Arc::from([]),
-            cached_grouped_flat_results: Arc::from([]),
-            cached_grouped_first_selectable_index: None,
-            cached_grouped_last_selectable_index: None,
-            grouped_cache_key: String::from("\0_UNINITIALIZED_\0"), // Sentinel value to force initial compute
+            main_menu_result_caches: MainMenuResultCacheState::default(),
             // P3: Two-stage filter coalescing
             computed_filter_text: String::new(),
             filter_coalescer: FilterCoalescer::new(),
+            menu_syntax_mode: crate::menu_syntax::MenuSyntaxMode::default(),
             // Scroll stabilization: start with no last scrolled index
             last_scrolled_index: None,
             // Preview cache: start empty, will populate on first render
@@ -125,18 +128,9 @@
             hovered_index: None,
             // Input mode: starts as Mouse (default), switches to Keyboard on arrow keys
             input_mode: InputMode::Mouse,
-            // Fallback mode state - starts as false (showing scripts, not fallbacks)
-            fallback_mode: false,
-            fallback_selected_index: 0,
-            cached_fallbacks: Vec::new(),
+            main_menu_fallback_state: MainMenuFallbackState::default(),
             theme_before_chooser: None,
-            // Render log deduplication: track last logged state to skip cursor-blink spam
-            last_render_log_filter: String::new(),
-            last_render_log_selection: usize::MAX, // Use MAX to ensure first render logs
-            last_render_log_item_count: usize::MAX,
-            log_this_render: true, // Default to true for first render
-            // Filter performance tracking - None until first filter change
-            filter_perf_start: None,
+            main_menu_render_diagnostics: MainMenuRenderDiagnosticsState::default(),
             // Pending path action - starts as None (Arc<Mutex<>> for callback access)
             pending_path_action: Arc::new(Mutex::new(None)),
             // Signal to close path actions dialog

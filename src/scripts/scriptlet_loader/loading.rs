@@ -24,10 +24,8 @@ fn is_actions_file(path: &Path) -> bool {
 }
 
 pub fn read_scriptlets() -> Vec<Arc<Scriptlet>> {
-    let kit_path = get_kit_path();
-
-    // Default to main kit (under kit/ subdirectory)
-    let scriptlets_dir = kit_path.join("kit").join("main").join("scriptlets");
+    // Default to the main plugin.
+    let scriptlets_dir = crate::plugins::plugin_scriptlets_dir("main");
 
     // Check if directory exists
     if !scriptlets_dir.exists() {
@@ -247,22 +245,19 @@ pub fn load_scriptlets() -> Vec<Arc<Scriptlet>> {
 }
 
 /// Extract kit name from a kit path
-/// e.g., ~/.scriptkit/kit/my-kit/scriptlets/file.md -> Some("my-kit")
+/// e.g., ~/.scriptkit/plugins/my-kit/scriptlets/file.md -> Some("my-kit")
 pub(crate) fn extract_kit_from_path(path: &Path, kit_root: &Path) -> Option<String> {
-    let kit_prefix = format!("{}/", kit_root.to_string_lossy());
+    let plugins_root = kit_root.join("plugins");
+    let kit_prefix = format!("{}/", plugins_root.to_string_lossy());
     let path_str = path.to_string_lossy().to_string();
 
     if path_str.starts_with(&kit_prefix) {
         // Extract the kit name from the path
-        // Path structure is: kit/<kit-name>/scriptlets/...
+        // Path structure is: plugins/<kit-name>/scriptlets/...
         let relative = &path_str[kit_prefix.len()..];
         let parts: Vec<&str> = relative.split('/').collect();
 
-        // Skip "kit" directory and get the actual kit name
-        if parts.len() >= 2 && parts[0] == "kit" {
-            return Some(parts[1].to_string());
-        } else if !parts.is_empty() {
-            // Fallback for old structure
+        if !parts.is_empty() {
             return Some(parts[0].to_string());
         }
     }
@@ -322,7 +317,7 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
     let parsed = scriptlet_parser::parse_markdown_as_scriptlets(&content, Some(&path_str));
 
     // Resolve plugin identity from the file path.
-    // Path structure: <kit_path>/kit/<plugin_id>/scriptlets/<file>.md
+    // Path structure: <kit_path>/plugins/<plugin_id>/scriptlets/<file>.md
     let (plugin_id, plugin_title) = resolve_plugin_from_path(path, &kit_path);
 
     // Convert parsed scriptlets to our Arc-wrapped Scriptlet format
@@ -367,10 +362,10 @@ pub fn read_scriptlets_from_file(path: &Path) -> Vec<Arc<Scriptlet>> {
 
 /// Resolve plugin identity from a file path under the plugins container.
 ///
-/// Path structure: `<kit_path>/kit/<plugin_id>/scriptlets/<file>.md`
+/// Path structure: `<kit_path>/plugins/<plugin_id>/scriptlets/<file>.md`
 /// Returns `(plugin_id, plugin_title)` — reads the manifest if possible.
 fn resolve_plugin_from_path(path: &Path, kit_path: &Path) -> (String, Option<String>) {
-    let container = kit_path.join("kit");
+    let container = kit_path.join("plugins");
     let container_str = format!("{}/", container.display());
     let path_str = path.to_string_lossy();
 

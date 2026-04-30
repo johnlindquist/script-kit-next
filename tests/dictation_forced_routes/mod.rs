@@ -13,15 +13,19 @@ fn production_source(source: &str) -> &str {
 #[test]
 fn dictation_forced_route_variants_remain_internal() {
     let builtins_source = production_source(BUILTINS_SOURCE);
+    let top_level_entries = builtins_source
+        .split("fn hidden_builtin_entry")
+        .next()
+        .unwrap_or(builtins_source);
 
     assert!(builtins_source.contains("BuiltInFeature::DictationToFrontmostApp"));
     assert!(builtins_source.contains("BuiltInFeature::DictationToNotes"));
     assert!(
-        !builtins_source.contains("builtin/dictation-to-app"),
+        !top_level_entries.contains("builtin/dictation-to-app"),
         "forced app dictation should no longer be advertised as a top-level launcher entry"
     );
     assert!(
-        !builtins_source.contains("builtin/dictation-to-notes"),
+        !top_level_entries.contains("builtin/dictation-to-notes"),
         "forced notes dictation should no longer be advertised as a top-level launcher entry"
     );
 }
@@ -43,9 +47,10 @@ fn overlay_state_carries_target() {
 #[test]
 fn dictation_target_exposes_overlay_labels() {
     assert!(TYPES_SOURCE.contains("pub fn overlay_label(self) -> &'static str"));
+    assert!(TYPES_SOURCE.contains(r#""Script Kit""#));
     assert!(TYPES_SOURCE.contains(r#""Prompt""#));
     assert!(TYPES_SOURCE.contains(r#""Notes""#));
-    assert!(TYPES_SOURCE.contains(r#""Tab AI""#));
+    assert!(TYPES_SOURCE.contains(r#""Agent""#));
     assert!(TYPES_SOURCE.contains(r#""App""#));
 }
 
@@ -56,18 +61,18 @@ fn overlay_renders_target_badge() {
 }
 
 #[test]
-fn dictation_to_app_handler_forces_external_app_target() {
-    let handler_start = BUILTIN_EXECUTION_SOURCE
-        .find("BuiltInFeature::DictationToFrontmostApp")
-        .expect("DictationToFrontmostApp match arm must exist");
-    let handler_body = &BUILTIN_EXECUTION_SOURCE[handler_start..];
-    let next_arm = handler_body[1..]
-        .find("builtins::BuiltInFeature::")
-        .unwrap_or(handler_body.len());
-    let handler_body = &handler_body[..next_arm];
-    assert!(handler_body.contains("DictationTarget::ExternalApp"));
-    assert!(handler_body.contains("dictation_to_frontmost_app_toggle"));
-    assert!(handler_body.contains("Starting forced-route dictation"));
+fn hidden_dictation_to_app_route_uses_acp_quick_submit() {
+    let hidden_start = BUILTINS_SOURCE
+        .find(r#""builtin/dictation-to-app""#)
+        .expect("hidden dictation-to-app route must exist");
+    let hidden_body = &BUILTINS_SOURCE[hidden_start..];
+    let next_entry = hidden_body[1..]
+        .find(r#""builtin/dictation-to-notes""#)
+        .unwrap_or(hidden_body.len() - 1);
+    let hidden_body = &hidden_body[..next_entry + 1];
+
+    assert!(hidden_body.contains("Start Dictation to Agent Chat"));
+    assert!(hidden_body.contains("BuiltInFeature::DictationToAiHarness"));
 }
 
 #[test]

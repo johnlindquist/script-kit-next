@@ -1,8 +1,8 @@
 //! Scripts module - Script and scriptlet management
 //!
 //! This module provides functionality for:
-//! - Loading scripts from ~/.scriptkit/*/scripts/
-//! - Loading scriptlets from ~/.scriptkit/kit/*/scriptlets/
+//! - Loading scripts from ~/.scriptkit/plugins/*/scripts/
+//! - Loading scriptlets from ~/.scriptkit/plugins/*/scriptlets/
 //! - Fuzzy search across scripts, scriptlets, built-ins, apps, and windows
 //! - Grouping results by frecency and type
 //! - Registering scheduled scripts
@@ -27,9 +27,24 @@ mod scheduling;
 mod scriptlet_loader;
 pub(crate) mod search;
 mod types;
+mod validation;
 
+#[allow(unused_imports)]
+pub(crate) use self::grouping::build_capture_mode_results;
+#[allow(unused_imports)]
+pub(crate) use self::grouping::build_menu_syntax_hint_results;
+#[allow(unused_imports)]
 pub use self::grouping::get_grouped_results;
-pub use self::loader::read_scripts;
+#[allow(unused_imports)]
+pub(crate) use self::grouping::get_grouped_results_with_input_history;
+#[allow(unused_imports)]
+pub(crate) use self::grouping::get_grouped_results_with_input_history_and_query;
+#[allow(unused_imports)]
+pub(crate) use self::grouping::get_grouped_results_with_validation;
+#[allow(unused_imports)]
+pub(crate) use self::grouping::get_grouped_results_with_validation_and_query;
+#[allow(unused_imports)]
+pub use self::loader::{read_scripts, read_scripts_report};
 pub use self::scheduling::register_scheduled_scripts;
 pub use self::scriptlet_loader::{load_scriptlets, read_scriptlets_from_file};
 #[allow(unused_imports)]
@@ -41,8 +56,14 @@ pub use self::search::{
 #[allow(unused_imports)]
 pub use self::types::{
     preview_cache_is_valid, preview_match_signature, AgentMatch, AppMatch, BuiltInMatch,
-    FallbackConfig, FallbackMatch, MatchIndices, Script, ScriptContentMatch, ScriptMatch,
-    ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult, SkillMatch, WindowMatch,
+    FallbackConfig, FallbackMatch, MatchIndices, Script, ScriptContentMatch, ScriptIssueMatch,
+    ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult, SkillMatch, WindowMatch,
+};
+#[allow(unused_imports)]
+pub use self::validation::{
+    detect_binding_collisions, validate_script_catalog, BindingKind, FailedScript, MetadataField,
+    RelatedScript, ScriptCatalogReport, ScriptValidationIssue, ScriptValidationKind,
+    ValidationReport, ValidationSeverity, VALIDATION_SCHEMA_VERSION,
 };
 
 #[cfg(test)]

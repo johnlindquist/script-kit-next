@@ -179,7 +179,7 @@ where
     GenericWatcher::new(tx, spec, to_generic_watcher_settings(settings))
 }
 
-/// Watches ~/.scriptkit/kit/config.ts for changes and emits reload events.
+/// Watches ~/.scriptkit/config.ts for changes and emits reload events.
 pub struct ConfigWatcher {
     tx: Option<Sender<ConfigReloadEvent>>,
     watcher: Option<ConfigGenericWatcher>,
@@ -228,7 +228,7 @@ impl ConfigWatcher {
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
         log_watcher_settings_start("config", settings_source, settings);
-        let target_path = crate::setup::get_kit_path().join("kit").join("config.ts");
+        let target_path = crate::setup::config_ts_path();
 
         let mut watcher = build_single_file_reload_watcher(
             tx,
@@ -243,7 +243,7 @@ impl ConfigWatcher {
     }
 }
 
-/// Watches ~/.scriptkit/kit/theme.json for changes and emits reload events.
+/// Watches ~/.scriptkit/theme.json for changes and emits reload events.
 pub struct ThemeWatcher {
     tx: Option<Sender<ThemeReloadEvent>>,
     watcher: Option<ThemeGenericWatcher>,
@@ -289,7 +289,7 @@ impl ThemeWatcher {
             .take()
             .ok_or_else(|| std::io::Error::other("watcher already started"))?;
         log_watcher_settings_start("theme", settings_source, settings);
-        let target_path = crate::setup::get_kit_path().join("kit").join("theme.json");
+        let target_path = crate::setup::theme_json_path();
 
         let mut watcher = build_single_file_reload_watcher(
             tx,
@@ -376,25 +376,25 @@ fn flush_expired(
         let _ = out_tx.send(ev);
     }
 }
-/// Discovered kit paths for watching
+/// Discovered plugin paths for watching
 #[derive(Clone)]
 struct KitWatchPaths {
-    kit_path: PathBuf,
+    plugins_path: PathBuf,
     scripts_paths: Vec<PathBuf>,
     scriptlets_paths: Vec<PathBuf>,
     agents_paths: Vec<PathBuf>,
     skills_paths: Vec<PathBuf>,
 }
-/// Discovers all kit subdirectories under ~/.scriptkit/kit/
+/// Discovers all plugin subdirectories under ~/.scriptkit/plugins/
 /// Returns paths to all scripts/, scriptlets/, agents/, and skills/ directories that should be watched
 fn discover_kit_watch_paths() -> KitWatchPaths {
-    let kit_path = crate::setup::get_kit_path().join("kit");
+    let plugins_path = crate::plugins::plugins_container_dir();
     let mut scripts_paths = Vec::new();
     let mut scriptlets_paths = Vec::new();
     let mut agents_paths = Vec::new();
     let mut skills_paths = Vec::new();
 
-    if let Ok(entries) = std::fs::read_dir(&kit_path) {
+    if let Ok(entries) = std::fs::read_dir(&plugins_path) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
@@ -430,16 +430,16 @@ fn discover_kit_watch_paths() -> KitWatchPaths {
     }
 
     info!(
-        kit_path = %kit_path.display(),
+        plugins_path = %plugins_path.display(),
         scripts_count = scripts_paths.len(),
         scriptlets_count = scriptlets_paths.len(),
         agents_count = agents_paths.len(),
         skills_count = skills_paths.len(),
-        "Discovered kit directories to watch"
+        "Discovered plugin directories to watch"
     );
 
     KitWatchPaths {
-        kit_path,
+        plugins_path,
         scripts_paths,
         scriptlets_paths,
         agents_paths,

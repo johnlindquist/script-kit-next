@@ -23,5 +23,5 @@ mod prompt;
 mod render;
 mod validation;
 
-pub use prompt::{NamingPrompt, NamingPromptConfig};
+pub use prompt::{NamingPrompt, NamingPromptConfig, TemplateSelection};
 pub use validation::{NamingSubmitResult, NamingTarget, NamingValidationError};

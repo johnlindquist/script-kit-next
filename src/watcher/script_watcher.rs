@@ -17,8 +17,8 @@ type ScriptGenericWatcher =
     GenericWatcher<ScriptReloadEvent, Sender<ScriptReloadEvent>, ScriptWatcherSpec>;
 type DiscoverKitWatchPaths = Arc<dyn Fn() -> super::KitWatchPaths + Send + Sync>;
 
-/// Watches ~/.scriptkit/kit/*/scripts, ~/.scriptkit/kit/*/scriptlets,
-/// ~/.scriptkit/kit/*/agents, and ~/.scriptkit/kit/*/skills directories for changes.
+/// Watches ~/.scriptkit/plugins/*/scripts, ~/.scriptkit/plugins/*/scriptlets,
+/// ~/.scriptkit/plugins/*/agents, and ~/.scriptkit/plugins/*/skills directories for changes.
 ///
 /// Uses per-file trailing-edge debounce with storm coalescing.
 /// Includes supervisor restart with exponential backoff on transient errors.
@@ -62,7 +62,7 @@ pub(crate) struct ScriptWatcherSpec {
     storm_threshold: usize,
     pending: HashMap<PathBuf, (ScriptReloadEvent, Instant)>,
     full_reload_at: Option<Instant>,
-    kit_path: PathBuf,
+    plugins_path: PathBuf,
     tracked_scripts_paths: HashSet<PathBuf>,
     tracked_scriptlets_paths: HashSet<PathBuf>,
     tracked_agents_paths: HashSet<PathBuf>,
@@ -88,7 +88,7 @@ impl ScriptWatcherSpec {
             storm_threshold: settings.storm_threshold,
             pending: HashMap::new(),
             full_reload_at: None,
-            kit_path: crate::setup::get_kit_path().join("kit"),
+            plugins_path: crate::plugins::plugins_container_dir(),
             tracked_scripts_paths: HashSet::new(),
             tracked_scriptlets_paths: HashSet::new(),
             tracked_agents_paths: HashSet::new(),
@@ -226,7 +226,7 @@ impl ScriptWatcherSpec {
 
             let is_new_kit_dir = path
                 .parent()
-                .is_some_and(|parent| parent == self.kit_path.as_path())
+                .is_some_and(|parent| parent == self.plugins_path.as_path())
                 && path.is_dir();
 
             if !is_new_kit_dir {
@@ -237,8 +237,8 @@ impl ScriptWatcherSpec {
             self.watch_pending_tracked_dirs(watcher);
             info!(
                 watcher = "scripts",
-                kit_dir = %path.display(),
-                "Detected new kit directory and registered nested watches"
+                plugin_dir = %path.display(),
+                "Detected new plugin directory and registered nested watches"
             );
         }
     }
@@ -374,7 +374,7 @@ impl WatcherSpec<ScriptReloadEvent> for ScriptWatcherSpec {
         self.watching_skills.clear();
 
         let paths = (self.discover_paths)();
-        self.kit_path = paths.kit_path.clone();
+        self.plugins_path = paths.plugins_path.clone();
 
         for scripts_path in paths.scripts_paths {
             self.tracked_scripts_paths.insert(scripts_path);
@@ -398,19 +398,19 @@ impl WatcherSpec<ScriptReloadEvent> for ScriptWatcherSpec {
             }
         }
 
-        if self.kit_path.exists() {
-            if let Err(error) = watcher.watch(&self.kit_path, RecursiveMode::NonRecursive) {
+        if self.plugins_path.exists() {
+            if let Err(error) = watcher.watch(&self.plugins_path, RecursiveMode::NonRecursive) {
                 warn!(
                     watcher = "scripts",
-                    path = %self.kit_path.display(),
+                    path = %self.plugins_path.display(),
                     error = %error,
-                    "Failed to watch kit directory for new kit creation"
+                    "Failed to watch plugins directory for new plugin creation"
                 );
             } else {
                 debug!(
                     watcher = "scripts",
-                    path = %self.kit_path.display(),
-                    "Watching kit directory for new kits"
+                    path = %self.plugins_path.display(),
+                    "Watching plugins directory for new plugin roots"
                 );
             }
         }
@@ -503,8 +503,8 @@ mod tests {
     }
 
     fn mk_paths(temp: &TempDir, kits: &[&str]) -> KitWatchPaths {
-        let kit_path = temp.path().join("kit");
-        fs::create_dir_all(&kit_path).expect("kit root should be created for test");
+        let plugins_path = temp.path().join("plugins");
+        fs::create_dir_all(&plugins_path).expect("plugins root should be created for test");
 
         let mut scripts_paths = Vec::new();
         let mut scriptlets_paths = Vec::new();
@@ -512,7 +512,7 @@ mod tests {
         let mut skills_paths = Vec::new();
 
         for kit_name in kits {
-            let kit_dir = kit_path.join(kit_name);
+            let kit_dir = plugins_path.join(kit_name);
             let scripts_dir = kit_dir.join("scripts");
             let scriptlets_dir = kit_dir.join("scriptlets");
             let agents_dir = kit_dir.join("agents");
@@ -527,7 +527,7 @@ mod tests {
         }
 
         KitWatchPaths {
-            kit_path,
+            plugins_path,
             scripts_paths,
             scriptlets_paths,
             agents_paths,
@@ -540,9 +540,9 @@ mod tests {
         let temp = TempDir::new().expect("tempdir should be created");
         let first = mk_paths(&temp, &["alpha"]);
         let second = mk_paths(&temp, &["alpha", "beta"]);
-        let second_beta_scriptlets = second.kit_path.join("beta").join("scriptlets");
-        let second_beta_agents = second.kit_path.join("beta").join("agents");
-        let second_beta_skills = second.kit_path.join("beta").join("skills");
+        let second_beta_scriptlets = second.plugins_path.join("beta").join("scriptlets");
+        let second_beta_agents = second.plugins_path.join("beta").join("agents");
+        let second_beta_skills = second.plugins_path.join("beta").join("skills");
 
         let discover_calls = Arc::new(AtomicUsize::new(0));
         let queue = Arc::new(Mutex::new(VecDeque::from(vec![first, second])));
@@ -578,13 +578,13 @@ mod tests {
     #[test]
     fn test_on_notify_with_watcher_registers_new_kit_directories() {
         let temp = TempDir::new().expect("tempdir should be created");
-        let kit_root = temp.path().join("kit");
-        fs::create_dir_all(&kit_root).expect("kit root should be created");
+        let plugins_root = temp.path().join("plugins");
+        fs::create_dir_all(&plugins_root).expect("plugins root should be created");
 
         let discover = {
-            let kit_root = kit_root.clone();
+            let plugins_root = plugins_root.clone();
             Arc::new(move || KitWatchPaths {
-                kit_path: kit_root.clone(),
+                plugins_path: plugins_root.clone(),
                 scripts_paths: Vec::new(),
                 scriptlets_paths: Vec::new(),
                 agents_paths: Vec::new(),
@@ -595,9 +595,9 @@ mod tests {
         let mut spec = ScriptWatcherSpec::with_discover_paths(WatcherSettings::default(), discover);
         let mut watcher = RecordingWatcher::default();
         spec.setup(&mut watcher)
-            .expect("setup should watch the kit root");
+            .expect("setup should watch the plugins root");
 
-        let new_kit_dir = kit_root.join("fresh-kit");
+        let new_kit_dir = plugins_root.join("fresh-kit");
         let new_scripts_dir = new_kit_dir.join("scripts");
         let new_scriptlets_dir = new_kit_dir.join("scriptlets");
         let new_agents_dir = new_kit_dir.join("agents");

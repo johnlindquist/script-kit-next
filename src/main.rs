@@ -36,6 +36,7 @@ use platform::{
 #[macro_use]
 extern crate objc;
 
+mod about;
 #[allow(dead_code)] // The bin only uses trigger_sdk_action; the rest is shared with lib/tests.
 mod action_helpers;
 mod actions;
@@ -44,6 +45,7 @@ mod actions_button_visibility_tests;
 mod agents;
 mod ai;
 mod aliases;
+mod branding;
 pub mod calculator;
 mod camera;
 mod components;
@@ -72,14 +74,19 @@ mod list_item_tests;
 mod list_state_init_tests;
 mod logging;
 mod login_item;
+mod menu_syntax;
 mod navigation;
 mod panel;
+mod pasted_image;
+mod pasted_text;
 mod perf;
 mod platform;
 mod plugins;
 mod prompts;
 mod protocol;
+mod protocol_stats;
 mod scripts;
+mod scrolling;
 #[cfg(target_os = "macos")]
 mod selected_text;
 mod setup;
@@ -89,6 +96,7 @@ mod stdin_commands;
 mod stories;
 #[cfg(feature = "storybook")]
 mod storybook;
+mod sync;
 mod syntax;
 mod term_prompt;
 mod terminal;
@@ -99,6 +107,7 @@ mod transitions;
 mod tray;
 mod ui;
 mod ui_foundation;
+mod updates;
 mod utils;
 mod warning_banner;
 mod watcher;
@@ -136,6 +145,8 @@ mod permissions_wizard;
 
 // Built-in features registry
 mod app_launcher;
+mod browser_history;
+mod browser_tabs;
 mod builtins;
 mod fallbacks;
 mod favorites;
@@ -185,6 +196,7 @@ mod keyword_manager;
 
 // Script scheduling with cron expressions and natural language
 mod scheduler;
+mod script_sharing;
 
 // Startup profile for dev-fast mode and deferred service bootstrap
 mod startup_profile;
@@ -227,20 +239,15 @@ use ui_foundation::get_vibrancy_background;
 use warning_banner::{WarningBanner, WarningBannerColors};
 use window_resize::{initial_window_height, reset_resize_debounce, resize_to_view_sync, ViewType};
 
-use components::{
-    FormFieldColors, PromptFooter, PromptFooterColors, PromptFooterConfig, Scrollbar,
-    ScrollbarColors,
-};
+use components::{FormFieldColors, PromptFooter, PromptFooterColors, PromptFooterConfig};
 use designs::{get_tokens, render_design_item, DesignVariant};
 use frecency::FrecencyStore;
 use list_item::{
     render_section_header, GroupedListItem, ListItem, ListItemColors, ALPHA_EMPTY_HINT,
-    ALPHA_EMPTY_ICON, ALPHA_EMPTY_MESSAGE, ALPHA_EMPTY_TIPS, AVERAGE_ITEM_HEIGHT_FOR_SCROLL,
-    DIVIDER_BORDER_WIDTH_DEFAULT, DIVIDER_MARGIN_DEFAULT, EMPTY_STATE_GAP, EMPTY_STATE_ICON_SIZE,
-    EMPTY_STATE_MESSAGE_FONT_SIZE, EMPTY_STATE_TIPS_MARGIN_TOP, ESTIMATED_LIST_CONTAINER_HEIGHT,
-    FONT_MONO, LIST_ITEM_HEIGHT, LOG_PANEL_MAX_HEIGHT, SECTION_HEADER_HEIGHT,
+    ALPHA_EMPTY_ICON, ALPHA_EMPTY_MESSAGE, ALPHA_EMPTY_TIPS, DIVIDER_BORDER_WIDTH_DEFAULT,
+    DIVIDER_MARGIN_DEFAULT, EMPTY_STATE_GAP, EMPTY_STATE_ICON_SIZE, EMPTY_STATE_MESSAGE_FONT_SIZE,
+    EMPTY_STATE_TIPS_MARGIN_TOP, FONT_MONO, LIST_ITEM_HEIGHT, LOG_PANEL_MAX_HEIGHT,
 };
-use scripts::get_grouped_results;
 // strip_html_tags removed - DivPrompt now renders HTML properly
 
 use actions::{
@@ -271,10 +278,15 @@ use utils::render_path_with_highlights;
 static NEEDS_RESET: AtomicBool = AtomicBool::new(false); // Track if window needs reset to script list on next show
 
 pub use script_kit_gpui::{
-    emoji, get_main_window_handle, is_main_window_visible, set_main_window_handle,
+    emoji, emoji_usage, get_main_window_handle, is_main_window_visible, set_main_window_handle,
     set_main_window_visible,
 };
-static PANEL_CONFIGURED: AtomicBool = AtomicBool::new(false); // Track if floating panel has been configured (one-time setup on first show)
+// Oracle-Session `window-activation-invariants-guard` PR1 — the
+// `PANEL_CONFIGURED` one-shot lives at each crate root so
+// `platform::ensure_main_panel_configured()` can reach it from both the bin
+// and lib compilations of the include!-merged platform module. The lib-side
+// mirror is at `script_kit_gpui::PANEL_CONFIGURED` (see `src/lib.rs`).
+static PANEL_CONFIGURED: AtomicBool = AtomicBool::new(false);
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false); // Track if shutdown signal received (prevents new script spawns)
 
 include!("main_sections/deeplink.rs");

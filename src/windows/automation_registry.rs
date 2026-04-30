@@ -189,6 +189,44 @@ pub fn register_attached_popup(
     Ok(())
 }
 
+/// Sync the embedded AI surface entry to match the active view.
+///
+/// The embedded ACP chat is a subview of the main panel (not a separate
+/// OS window), so automation previously could only observe it via
+/// `listAutomationWindows.windows[0].semanticSurface == "acpChat"` on
+/// main. This helper adds a parallel `kind: Ai` entry with a stable
+/// `id = "ai"` whenever the embedded AI surface is active, so automation
+/// can enumerate and target it as a first-class logical window.
+///
+/// When `active` is true, upserts an entry with `id = "ai"`, kind
+/// [`AutomationWindowKind::Ai`], parent `"main"`, and semantic surface
+/// `"acpChat"`. When `active` is false, removes the entry. Call this
+/// from every view transition that flips into or out of the embedded
+/// ACP chat surface.
+pub fn ensure_embedded_ai_window(active: bool) {
+    if active {
+        // Deliberately `focused: false` — the embedded AI surface is a
+        // subview of the main panel, not a separate OS window. OS focus
+        // stays with the host. Setting focused=true here would also
+        // de-focus every other registered window (see `upsert_automation_window`
+        // above) and break any concurrent caller that expects main to
+        // stay focused.
+        upsert_automation_window(AutomationWindowInfo {
+            id: "ai".to_string(),
+            kind: AutomationWindowKind::Ai,
+            title: Some("Script Kit AI".to_string()),
+            focused: false,
+            visible: true,
+            semantic_surface: Some("acpChat".to_string()),
+            bounds: None,
+            parent_window_id: Some("main".to_string()),
+            parent_kind: Some(AutomationWindowKind::Main),
+        });
+    } else {
+        let _ = remove_automation_window("ai");
+    }
+}
+
 /// Remove an automation window entry by its stable ID.
 ///
 /// Returns the removed entry if it existed.
@@ -257,6 +295,34 @@ pub fn set_automation_focus(new_focused_id: &str) -> bool {
     true
 }
 
+/// Update the `semantic_surface` tag for a single window in place.
+///
+/// Leaves every other field untouched — this is the hot path for
+/// re-keying the main window as its active subview transitions
+/// (e.g., `ScriptList` → `FileSearchView`) without having to
+/// re-upsert the whole entry from callers that don't know the
+/// window's bounds / focus / title.
+///
+/// Returns `true` if the window was found and (if the value
+/// changed) an info-level trace was emitted. Returns `false` if no
+/// entry with `id` is registered.
+pub fn update_automation_semantic_surface(id: &str, surface: Option<String>) -> bool {
+    let mut state = AUTOMATION_WINDOWS.lock();
+    let Some(info) = state.windows.get_mut(id) else {
+        return false;
+    };
+    if info.semantic_surface != surface {
+        tracing::info!(
+            target: "script_kit::automation",
+            id = %id,
+            semantic_surface = ?surface,
+            "automation_window_semantic_surface_changed"
+        );
+        info.semantic_surface = surface;
+    }
+    true
+}
+
 /// Update the visibility flag for a single window.
 pub fn set_automation_visibility(id: &str, visible: bool) {
     let mut state = AUTOMATION_WINDOWS.lock();
@@ -271,6 +337,34 @@ pub fn set_automation_visibility(id: &str, visible: bool) {
             );
         }
     }
+}
+
+// @lat: [[lat.md/automation#Automation#Window metadata]]
+/// Update the `bounds` field for a single window in place.
+///
+/// Used by live-resized attached popups (e.g., the actions-dialog
+/// shrinks/grows as `visibleChoiceCount` changes) so that agentic
+/// callers reading `listAutomationWindows` or `inspectAutomationWindow`
+/// observe the current frame rather than the stale open-time frame.
+/// Leaves every other field untouched. Returns `true` if the window was
+/// found; `false` if no entry with `id` is registered (caller should
+/// typically silently ignore — the window may have been closed
+/// concurrently).
+pub fn set_automation_bounds(id: &str, bounds: Option<AutomationWindowBounds>) -> bool {
+    let mut state = AUTOMATION_WINDOWS.lock();
+    let Some(info) = state.windows.get_mut(id) else {
+        return false;
+    };
+    if info.bounds != bounds {
+        tracing::debug!(
+            target: "script_kit::automation",
+            id = %id,
+            bounds = ?bounds,
+            "automation_window_bounds_changed"
+        );
+        info.bounds = bounds;
+    }
+    true
 }
 
 /// Resolve an [`AutomationWindowTarget`] to a single
@@ -610,11 +704,11 @@ mod tests {
         let p = test_prefix();
 
         let mut info = make_info(&p, "acp", AutomationWindowKind::AcpDetached);
-        info.title = Some(format!("{p} Script Kit ACP Chat"));
+        info.title = Some(format!("{p} Script Kit Agent Chat"));
         upsert_automation_window(info);
 
         let target = AutomationWindowTarget::TitleContains {
-            text: format!("{p} Script Kit ACP"),
+            text: format!("{p} Script Kit Agent"),
         };
         let resolved =
             resolve_automation_window(Some(&target)).expect("should match title substring");
@@ -1090,5 +1184,79 @@ mod tests {
 
         remove_automation_window(&format!("{p}:popup-with-parent"));
         remove_automation_window(&format!("{p}:main"));
+    }
+
+    // -- Embedded AI surface -----------------------------------------------
+
+    // `ensure_embedded_ai_window` writes a fixed id `"ai"` so two test
+    // invocations would race on the global registry. Serialize with a
+    // dedicated mutex and always clean up to leave the registry untouched
+    // for other suites.
+    static EMBEDDED_AI_TEST_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn ensure_embedded_ai_window_upserts_and_removes_ai_entry() {
+        let _guard = EMBEDDED_AI_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        // Baseline: no `ai` entry.
+        let before: Vec<AutomationWindowInfo> = list_automation_windows()
+            .into_iter()
+            .filter(|w| w.id == "ai")
+            .collect();
+        assert!(
+            before.is_empty(),
+            "precondition: no `ai` entry should be registered, got {before:?}"
+        );
+
+        // Activate: entry appears with expected shape.
+        ensure_embedded_ai_window(true);
+        let after_activate: AutomationWindowInfo = list_automation_windows()
+            .into_iter()
+            .find(|w| w.id == "ai")
+            .expect("ensure_embedded_ai_window(true) should upsert an `ai` entry");
+        assert_eq!(after_activate.kind, AutomationWindowKind::Ai);
+        assert_eq!(after_activate.semantic_surface.as_deref(), Some("acpChat"));
+        assert_eq!(after_activate.parent_window_id.as_deref(), Some("main"));
+        assert_eq!(after_activate.parent_kind, Some(AutomationWindowKind::Main));
+        assert!(after_activate.visible);
+        assert!(
+            !after_activate.focused,
+            "`ai` entry must not be OS-focused — the subview does not own key focus, main does"
+        );
+
+        // Deactivate: entry is gone.
+        ensure_embedded_ai_window(false);
+        let after_deactivate: Vec<AutomationWindowInfo> = list_automation_windows()
+            .into_iter()
+            .filter(|w| w.id == "ai")
+            .collect();
+        assert!(
+            after_deactivate.is_empty(),
+            "ensure_embedded_ai_window(false) should remove the `ai` entry, still present: {after_deactivate:?}"
+        );
+    }
+
+    #[test]
+    fn ensure_embedded_ai_window_idempotent_activations_keep_one_entry() {
+        let _guard = EMBEDDED_AI_TEST_MUTEX
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+
+        ensure_embedded_ai_window(true);
+        ensure_embedded_ai_window(true);
+        ensure_embedded_ai_window(true);
+        let count = list_automation_windows()
+            .into_iter()
+            .filter(|w| w.id == "ai")
+            .count();
+        assert_eq!(
+            count, 1,
+            "repeated activations should upsert a single `ai` entry, got {count}"
+        );
+
+        // Cleanup so we don't leak state into other suites.
+        ensure_embedded_ai_window(false);
     }
 }

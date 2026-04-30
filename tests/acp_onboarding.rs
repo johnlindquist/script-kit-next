@@ -3,13 +3,14 @@
 //! These are source-level contract tests that verify the launch path and setup
 //! surfaces no longer rely on Claude-specific copy or loaders.
 
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const SETUP_RENDER_SOURCE: &str = include_str!("../src/ai/window/render_setup.rs");
 const SETUP_SOURCE: &str = include_str!("../src/ai/window/setup.rs");
 const CLIENT_SOURCE: &str = include_str!("../src/ai/acp/client.rs");
 const ACP_CONFIG_SOURCE: &str = include_str!("../src/ai/acp/config.rs");
 const CONFIG_TYPES_SOURCE: &str = include_str!("../src/config/types.rs");
+const SETUP_MOD_SOURCE: &str = include_str!("../src/setup/mod.rs");
 
 // ── Launch path uses catalog, not Claude-only loader ───────────────────
 
@@ -44,12 +45,12 @@ fn acp_view_supports_setup_constructor() {
 #[test]
 fn ai_setup_surface_no_longer_mentions_claude_only_copy() {
     assert!(
-        SETUP_RENDER_SOURCE.contains("ACP Agent Required"),
-        "setup card title must say ACP Agent Required"
+        SETUP_RENDER_SOURCE.contains("Agent Required"),
+        "setup card title must say Agent Required"
     );
     assert!(
-        SETUP_RENDER_SOURCE.contains("Add ACP Agent"),
-        "setup card must offer Add ACP Agent"
+        SETUP_RENDER_SOURCE.contains("Open Agent Catalog"),
+        "setup card must offer Open Agent Catalog"
     );
     assert!(
         !SETUP_RENDER_SOURCE.contains("Connect to Claude Code"),
@@ -60,7 +61,7 @@ fn ai_setup_surface_no_longer_mentions_claude_only_copy() {
 #[test]
 fn setup_button_id_is_generic_not_claude_specific() {
     assert!(
-        SETUP_RENDER_SOURCE.contains("open-acp-catalog-btn"),
+        SETUP_RENDER_SOURCE.contains("open-agent-catalog-btn"),
         "catalog button ID must be generic"
     );
     assert!(
@@ -199,6 +200,36 @@ fn classify_agent_source_distinguishes_legacy_from_builtin() {
             r#""opencode" | "gemini-cli" | "codex-acp" => super::catalog::AcpAgentSource::BuiltIn"#
         ),
         "opencode, gemini-cli, and codex-acp must be classified as BuiltIn"
+    );
+}
+
+// ── Codex ACP appears in the selectable catalog ───────────────────────
+
+#[test]
+fn catalog_loader_merges_codex_starter_for_agent_selector() {
+    assert!(
+        ACP_CONFIG_SOURCE.contains("merge_catalog_with_starter_agents(&mut file)"),
+        "catalog loading must merge starter ACP agents so Codex appears in the selector"
+    );
+    assert!(
+        ACP_CONFIG_SOURCE.contains("codex_acp_agent_config()"),
+        "starter ACP agents must include the Codex ACP adapter config"
+    );
+}
+
+#[test]
+fn first_run_acp_catalog_seed_includes_codex_adapter() {
+    assert!(
+        SETUP_MOD_SOURCE.contains(r#""id": "codex-acp""#),
+        "fresh installs must seed codex-acp into acp/agents.json"
+    );
+    assert!(
+        SETUP_MOD_SOURCE.contains(r#""command": "npx""#),
+        "fresh installs must run the Codex ACP adapter through npx"
+    );
+    assert!(
+        SETUP_MOD_SOURCE.contains(r#""args": ["@zed-industries/codex-acp"]"#),
+        "fresh installs must pass the Codex ACP adapter package to npx"
     );
 }
 

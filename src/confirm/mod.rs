@@ -19,7 +19,7 @@
 //! });
 //! ```
 
-mod parent_dialog;
+pub(crate) mod parent_dialog;
 mod window;
 
 // Used by include!() code in app_actions/handle_action/scripts.rs — clippy

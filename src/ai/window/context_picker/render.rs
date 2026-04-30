@@ -1,6 +1,6 @@
 use super::super::*;
-use super::types::ContextPickerItemKind;
-use crate::ai::context_picker_row::{render_dense_monoline_picker_row, GHOST, HINT};
+use super::types::{ContextPickerItemKind, ContextPickerTrigger};
+use crate::ai::context_picker_row::{render_soft_compact_picker_row, GHOST, HINT};
 use crate::components::inline_dropdown::{
     InlineDropdown, InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis,
 };
@@ -22,12 +22,13 @@ impl AiApp {
 
         let theme = crate::theme::get_cached_theme();
         let colors = InlineDropdownColors::popup_from_theme(&theme);
-        let fg = cx.theme().foreground;
-        let muted_fg = cx.theme().muted_foreground;
+        let fg = colors.foreground;
+        let muted_fg = colors.muted_foreground;
 
         let items = state.items.clone();
         let selected_index = state.selected_index;
         let selected_item = items.get(selected_index).cloned();
+        let trigger = state.trigger;
         let entity = cx.entity().clone();
 
         let empty_state = state.items.is_empty().then(|| {
@@ -98,26 +99,55 @@ impl AiApp {
 
                 let entity_click = entity.clone();
 
-                render_dense_monoline_picker_row(
-                    SharedString::from(format!("ctx-picker-{}", ix)),
-                    label,
-                    meta,
-                    &item.label_highlight_indices,
-                    &item.meta_highlight_indices,
-                    is_selected,
-                    fg,
-                    muted_fg,
-                )
-                .cursor_pointer()
-                .on_click(move |_, window, cx| {
-                    entity_click.update(cx, |this, cx| {
-                        if let Some(picker) = this.context_picker.as_mut() {
-                            picker.selected_index = ix;
-                        }
-                        this.accept_context_picker_selection(window, cx);
-                    });
-                })
-                .into_any_element()
+                let row = if trigger == ContextPickerTrigger::Slash {
+                    if let ContextPickerItemKind::SlashCommand(payload) = &item.kind {
+                        let shifted_label_hits = item
+                            .label_highlight_indices
+                            .iter()
+                            .map(|ix| ix + 1)
+                            .collect::<Vec<_>>();
+                        render_soft_compact_picker_row(
+                            SharedString::from(format!("ctx-picker-{}", ix)),
+                            SharedString::from(format!("/{}", payload.slash_name())),
+                            Some(SharedString::from(payload.owner_label())),
+                            &shifted_label_hits,
+                            &[],
+                            is_selected,
+                            colors,
+                        )
+                    } else {
+                        render_soft_compact_picker_row(
+                            SharedString::from(format!("ctx-picker-{}", ix)),
+                            label,
+                            None,
+                            &item.label_highlight_indices,
+                            &[],
+                            is_selected,
+                            colors,
+                        )
+                    }
+                } else {
+                    render_soft_compact_picker_row(
+                        SharedString::from(format!("ctx-picker-{}", ix)),
+                        label,
+                        Some(meta),
+                        &item.label_highlight_indices,
+                        &item.meta_highlight_indices,
+                        is_selected,
+                        colors,
+                    )
+                };
+
+                row.cursor_pointer()
+                    .on_click(move |_, window, cx| {
+                        entity_click.update(cx, |this, cx| {
+                            if let Some(picker) = this.context_picker.as_mut() {
+                                picker.selected_index = ix;
+                            }
+                            this.accept_context_picker_selection(window, cx);
+                        });
+                    })
+                    .into_any_element()
             },
         )
         .with_sizing_behavior(ListSizingBehavior::Infer)

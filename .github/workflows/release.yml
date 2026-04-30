@@ -25,6 +25,7 @@ jobs:
       RUST_TEST_THREADS: "1"
     steps:
       - uses: actions/checkout@v4
+      # rust-toolchain.toml at repo root pins the actual channel; this action installs whatever it asks for.
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -37,7 +38,9 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.x
+          bun-version: 1.2.21
+      - name: Verify tag matches Cargo.toml version
+        run: bash scripts/verify-release-version.sh
       - name: Install JS dependencies
         run: bun install
       - name: Validate release gates
@@ -53,6 +56,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # rust-toolchain.toml at repo root pins the actual channel; this action installs whatever it asks for.
       - uses: dtolnay/rust-toolchain@stable
 
       - uses: mozilla-actions/sccache-action@v0.0.9
@@ -68,11 +72,11 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cargo-bundle
-          key: cargo-bundle-zed-deploy-v1-${{ runner.os }}
+          key: cargo-bundle-zed-deploy-v2-${{ runner.os }}
 
       - name: Install cargo-bundle
         if: steps.cache-cargo-bundle.outputs.cache-hit != 'true'
-        run: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy
+        run: cargo install cargo-bundle --git https://github.com/zed-industries/cargo-bundle.git --branch zed-deploy --locked
 
       - name: Verify cargo-bundle is available
         run: cargo bundle --help >/dev/null
@@ -115,14 +119,16 @@ jobs:
       - name: Sign with Developer ID
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
         run: |
           APP_PATH="target/release/bundle/osx/Script Kit.app"
 
           # Find the Developer ID Application identity
-          IDENTITY="Developer ID Application: John Lindquist ($APPLE_TEAM_ID)"
+          IDENTITY="${APPLE_CODESIGN_IDENTITY:-Developer ID Application: John Lindquist ($APPLE_TEAM_ID)}"
 
           # Sign all nested components first (frameworks, helpers, etc.)
-          find "$APP_PATH" -type f \( -name "*.dylib" -o -name "*.framework" \) -exec codesign --force --options runtime --sign "$IDENTITY" {} \;
+          find "$APP_PATH" -type d -name "*.framework" -print0 | xargs -0 -I{} codesign --force --options runtime --sign "$IDENTITY" "{}"
+          find "$APP_PATH" \( -name "*.dylib" -o -name "*.so" \) -type f -print0 | xargs -0 codesign --force --options runtime --sign "$IDENTITY"
 
           # Sign the main executable
           codesign --force --options runtime --entitlements entitlements.plist --sign "$IDENTITY" "$APP_PATH/Contents/MacOS/script-kit-gpui"
@@ -132,7 +138,6 @@ jobs:
 
           # Verify signature
           codesign --verify --verbose=4 "$APP_PATH"
-          spctl --assess --verbose=4 --type execute "$APP_PATH" || echo "Note: spctl may fail until notarized"
 
       - name: Create zip for notarization
         run: |
@@ -161,11 +166,37 @@ jobs:
           # Verify stapling
           xcrun stapler validate "target/release/bundle/osx/Script Kit.app"
 
+      - name: Verify post-staple Gatekeeper acceptance
+        run: spctl --assess --verbose=4 --type execute "target/release/bundle/osx/Script Kit.app"
+
       - name: Create final release zip
         run: |
           cd target/release/bundle/osx
           rm -f Script-Kit-macos.zip
           /usr/bin/ditto -c -k --keepParent "Script Kit.app" "Script-Kit-macos.zip"
+
+      - name: Generate release manifest
+        run: |
+          cd target/release/bundle/osx
+          ZIP="Script-Kit-macos.zip"
+          SHA="$(shasum -a 256 "$ZIP" | awk '{print $1}')"
+          SIZE="$(stat -f %z "$ZIP")"
+          VERSION="$(grep -E '^version[[:space:]]*=' "$GITHUB_WORKSPACE/Cargo.toml" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+          cat > release-manifest.json <<MANIFEST
+          {
+            "version": "$VERSION",
+            "tag": "$GITHUB_REF_NAME",
+            "artifacts": [
+              {
+                "name": "$ZIP",
+                "platform": "macos",
+                "sha256": "$SHA",
+                "size_bytes": $SIZE
+              }
+            ]
+          }
+          MANIFEST
+          cat release-manifest.json
 
       - name: Cleanup keychain
         if: always()
@@ -178,7 +209,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
-          path: target/release/bundle/osx/Script-Kit-macos.zip
+          path: |
+            target/release/bundle/osx/Script-Kit-macos.zip
+            target/release/bundle/osx/release-manifest.json
 
   release:
     name: Create Release
@@ -196,7 +229,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/Script-Kit-macos.zip
+          files: |
+            artifacts/Script-Kit-macos.zip
+            artifacts/release-manifest.json
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref, '-') }}

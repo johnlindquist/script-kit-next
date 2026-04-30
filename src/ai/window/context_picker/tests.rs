@@ -10,11 +10,7 @@ use crate::ai::context_contract::{context_attachment_specs, ContextAttachmentKin
 
 #[test]
 fn context_picker_empty_query_returns_all_non_provider_builtins() {
-    // Clear provider data so provider-backed items are hidden
-    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
-    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
-    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
-    crate::mcp_resources::clear_provider_json_slots();
+    let _env = ProviderTestEnv::new();
 
     let items = build_picker_items(ContextPickerTrigger::Mention, "");
     let builtin_count = items
@@ -69,16 +65,13 @@ fn context_picker_ranking_is_deterministic() {
 
 #[test]
 fn context_picker_builtins_seeded_from_specs() {
+    let _env = ProviderTestEnv::new();
     // Provider-backed kinds are only shown when real data exists
     let provider_gated = [
         ContextAttachmentKind::Dictation,
         ContextAttachmentKind::Calendar,
         ContextAttachmentKind::Notifications,
     ];
-    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
-    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
-    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
-    crate::mcp_resources::clear_provider_json_slots();
 
     let items = build_picker_items(ContextPickerTrigger::Mention, "");
 
@@ -193,6 +186,7 @@ fn context_picker_empty_query_includes_all_portals() {
 
     for expected in [
         "@file",
+        "@browser-history",
         "@clipboard",
         "@script",
         "@scriptlet",
@@ -205,6 +199,18 @@ fn context_picker_empty_query_includes_all_portals() {
             "expected portal label {expected:?} in empty-query picker results"
         );
     }
+}
+
+#[test]
+fn context_picker_browser_history_query_matches_portal() {
+    let items = build_picker_items(ContextPickerTrigger::Mention, "chrome");
+    let has_browser_history_portal = items
+        .iter()
+        .any(|item| item.label.as_ref() == "@browser-history");
+    assert!(
+        has_browser_history_portal,
+        "browser-history portal should match browser-focused queries"
+    );
 }
 
 #[test]
@@ -268,12 +274,8 @@ fn context_picker_diagnostics_matches_diag_query() {
 
 #[test]
 fn context_picker_catalog_has_at_least_12_entries() {
+    let _env = ProviderTestEnv::new();
     // Provider-gated items may be hidden, so the minimum is lower
-    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
-    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
-    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
-    crate::mcp_resources::clear_provider_json_slots();
-
     let items = build_picker_items(ContextPickerTrigger::Mention, "");
     let builtin_count = items
         .iter()
@@ -1035,11 +1037,7 @@ fn fuzzy_nonexistent_query_still_filters() {
 
 #[test]
 fn provider_backed_items_are_hidden_when_unavailable() {
-    // Ensure no provider data exists
-    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
-    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
-    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
-    crate::mcp_resources::clear_provider_json_slots();
+    let _env = ProviderTestEnv::new();
 
     let items = build_picker_items(ContextPickerTrigger::Mention, "");
     assert!(
@@ -1059,15 +1057,14 @@ fn provider_backed_items_are_hidden_when_unavailable() {
 }
 
 #[test]
+// @lat: [[tests/tests#Context picker provider hints]]
 fn provider_backed_items_appear_when_slot_data_exists() {
-    // Clear first
-    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
-    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
-    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
-    crate::mcp_resources::clear_provider_json_slots();
+    let _env = ProviderTestEnv::new();
 
     // Publish dictation data
-    crate::mcp_resources::publish_dictation_json(r#"{"items":["test"]}"#);
+    crate::mcp_resources::publish_dictation_json(
+        r#"{"schemaVersion":1,"type":"dictation","ok":true,"available":true,"source":"slot","items":[{"text":"test"}]}"#,
+    );
 
     let items = build_picker_items(ContextPickerTrigger::Mention, "di");
     let has_dictation = items.iter().any(|item| item.label.as_ref() == "Dictation");
@@ -1084,15 +1081,11 @@ fn provider_backed_items_appear_when_slot_data_exists() {
             .all(|item| item.label.as_ref() != "Calendar"),
         "Calendar should still be hidden without provider data"
     );
-
-    // Clean up
-    crate::mcp_resources::clear_provider_json_slots();
 }
 
 #[test]
 fn provider_backed_items_hidden_in_targeted_query() {
-    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
-    crate::mcp_resources::clear_provider_json_slots();
+    let _env = ProviderTestEnv::new();
 
     let items = build_picker_items(ContextPickerTrigger::Mention, "di");
     assert!(
@@ -1126,36 +1119,79 @@ fn restore_env(key: &str, value: Option<std::ffi::OsString>) {
     }
 }
 
+struct ProviderTestEnv {
+    _guard: std::sync::MutexGuard<'static, ()>,
+    prev_calendar: Option<std::ffi::OsString>,
+    prev_dictation: Option<std::ffi::OsString>,
+    prev_notifications: Option<std::ffi::OsString>,
+}
+
+impl ProviderTestEnv {
+    fn new() -> Self {
+        let guard = crate::test_utils::lock_provider_json_test();
+        let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+        let prev_dictation = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
+        let prev_notifications = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
+        std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+        std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+        std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+        crate::mcp_resources::clear_provider_json_slots();
+        Self {
+            _guard: guard,
+            prev_calendar,
+            prev_dictation,
+            prev_notifications,
+        }
+    }
+}
+
+impl Drop for ProviderTestEnv {
+    fn drop(&mut self) {
+        crate::mcp_resources::clear_provider_json_slots();
+        restore_env("SCRIPT_KIT_DICTATION_JSON", self.prev_dictation.take());
+        restore_env("SCRIPT_KIT_CALENDAR_JSON", self.prev_calendar.take());
+        restore_env(
+            "SCRIPT_KIT_NOTIFICATIONS_JSON",
+            self.prev_notifications.take(),
+        );
+    }
+}
+
 #[test]
 fn mention_empty_state_hints_hide_unavailable_provider_entries() {
-    let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
-    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
-    crate::mcp_resources::clear_provider_json_slots();
+    let _env = ProviderTestEnv::new();
 
     let hints = super::empty_state_hints(ContextPickerTrigger::Mention);
+    assert!(
+        !hints.iter().any(|hint| hint.display == "@dictation"),
+        "@dictation hint must be hidden when provider data is unavailable"
+    );
     assert!(
         !hints.iter().any(|hint| hint.display == "@calendar"),
         "@calendar hint must be hidden when provider data is unavailable"
     );
-
-    restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
 }
 
 #[test]
 fn mention_empty_state_hints_show_available_provider_entries() {
-    let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    let _env = ProviderTestEnv::new();
     std::env::set_var(
         "SCRIPT_KIT_CALENDAR_JSON",
         r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":true,"source":"env","items":[{"title":"Demo"}]}"#,
     );
+    crate::mcp_resources::publish_dictation_json(
+        r#"{"schemaVersion":1,"type":"dictation","ok":true,"available":true,"source":"slot","items":[{"text":"hello"}]}"#,
+    );
 
     let hints = super::empty_state_hints(ContextPickerTrigger::Mention);
+    assert!(
+        hints.iter().any(|hint| hint.display == "@dictation"),
+        "@dictation hint must be shown when provider data is real"
+    );
     assert!(
         hints.iter().any(|hint| hint.display == "@calendar"),
         "@calendar hint must be shown when provider data is real"
     );
-
-    restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
 }
 
 #[test]
@@ -1169,7 +1205,8 @@ fn context_picker_selection_clamps_via_shared_dropdown_contract() {
 fn context_picker_visible_range_uses_shared_dropdown_contract() {
     use crate::components::inline_dropdown::inline_dropdown_visible_range;
     assert_eq!(inline_dropdown_visible_range(0, 4, 8), 0..4);
-    assert_eq!(inline_dropdown_visible_range(6, 20, 8), 2..10);
+    assert_eq!(inline_dropdown_visible_range(7, 20, 8), 0..8);
+    assert_eq!(inline_dropdown_visible_range(8, 20, 8), 1..9);
 }
 
 // ── Source-aware slash identity tests ─────────────────────────────────

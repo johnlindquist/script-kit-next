@@ -62,6 +62,13 @@ pub(crate) enum AcpEvent {
         context_size: u64,
         cost_usd: Option<f64>,
     },
+    /// The agent advertised its available models (and optional current model)
+    /// on `session/new`. Emitted once per session so the UI can replace the
+    /// hardcoded fallback model list with the agent's live list.
+    ModelsAvailable {
+        current_model_id: Option<String>,
+        models: Vec<super::config::AcpModelEntry>,
+    },
     /// The turn completed normally.
     TurnFinished { stop_reason: String },
     /// Agent requires setup (authentication, install, etc.).
@@ -80,6 +87,17 @@ pub(crate) enum AcpCommand {
         request: AcpPromptTurnRequest,
         event_tx: AcpEventTx,
     },
+    /// Eagerly create (or reuse) the ACP session for `ui_thread_id` without
+    /// sending a prompt. Emits `ModelsAvailable` (or `SetupRequired`) through
+    /// `event_tx` and then drops the sender so the listener exits.
+    ///
+    /// Used by `AcpThread::new` so the model picker can replace the hardcoded
+    /// fallback with the agent's live list before the user submits anything.
+    PrepareSession {
+        ui_thread_id: String,
+        cwd: PathBuf,
+        event_tx: AcpEventTx,
+    },
     /// Legacy: stream prompt with a callback (used by AiProvider path).
     StreamPrompt {
         ui_session_id: String,
@@ -88,6 +106,13 @@ pub(crate) enum AcpCommand {
         on_chunk: crate::ai::providers::StreamCallback,
         reply_tx: async_channel::Sender<anyhow::Result<()>>,
     },
+}
+
+/// Out-of-band commands that must reach an active prompt turn while the main
+/// ACP command loop is awaiting `session/prompt`.
+pub(crate) enum AcpCancelCommand {
+    /// Cancel the active prompt turn for the given Script Kit UI thread.
+    CancelTurn { ui_thread_id: String },
 }
 
 #[cfg(test)]

@@ -5,7 +5,7 @@ author: Script Kit
 icon: link
 ---
 <!--
-Quick Links authoring notes:
+Quick Links creation notes:
 - YAML frontmatter fields:
   - `name`: Script Kit title for this bundle.
   - `description`: Summary shown in Script Kit.

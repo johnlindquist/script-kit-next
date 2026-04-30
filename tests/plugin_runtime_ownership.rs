@@ -27,20 +27,6 @@ fn write_manifest(root: &std::path::Path, id: &str, title: &str) {
     .expect("write plugin.json");
 }
 
-/// Helper: create a minimal .ts script file with a Name metadata comment.
-fn write_script(scripts_dir: &std::path::Path, filename: &str, name: &str) {
-    fs::create_dir_all(scripts_dir).expect("create scripts dir");
-    let content = format!("// Name: {name}\nconsole.log('hello');\n");
-    fs::write(scripts_dir.join(filename), content).expect("write script");
-}
-
-/// Helper: create a minimal .md scriptlet bundle with one scriptlet.
-fn write_extension(extensions_dir: &std::path::Path, filename: &str, group: &str, cmd_name: &str) {
-    fs::create_dir_all(extensions_dir).expect("create extensions dir");
-    let content = format!("# {group}\n\n## {cmd_name}\n\n```bash\necho hello\n```\n");
-    fs::write(extensions_dir.join(filename), content).expect("write extension");
-}
-
 // ── Script plugin_id population ────────────────────────────────────
 
 #[test]
@@ -286,7 +272,7 @@ fn duplicate_group_names_across_plugins_keep_distinct_plugin_ids() {
 #[test]
 fn discover_plugins_populates_manifest_on_roots() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let container = tmp.path().join("kit");
+    let container = tmp.path().join("plugins");
 
     // Create two plugin roots with manifests
     let alpha = container.join("alpha");
@@ -377,7 +363,7 @@ fn acp_view_uses_discover_plugin_skills_for_slash_commands() {
 
 #[test]
 fn acp_view_does_not_manually_scan_kit_container_for_skills() {
-    // The old pattern manually scanned kit/*/skills/ — this is now
+    // The old pattern manually scanned plugins/*/skills/ — this is now
     // replaced by discover_plugin_skills() which routes through the
     // canonical plugin index.
     assert!(

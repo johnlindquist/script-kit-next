@@ -1,5 +1,7 @@
 use super::*;
 
+const ATTACHMENT_PORTAL_WIDTH_RESTORE_EPSILON: f32 = 1.0;
+
 impl ScriptListApp {
     fn open_script_list_attachment_portal(
         &mut self,
@@ -24,11 +26,95 @@ impl ScriptListApp {
         self.focused_input = FocusedInput::MainFilter;
     }
 
+    fn current_main_window_width() -> Option<f32> {
+        crate::platform::get_main_window_bounds()
+            .map(|(_, _, width, _)| width as f32)
+            .filter(|width| width.is_finite() && *width > 0.0)
+    }
+
+    fn capture_attachment_portal_host_snapshot(&self) -> AttachmentPortalHostSnapshot {
+        let snapshot = AttachmentPortalHostSnapshot {
+            filter_text: self.filter_text.clone(),
+            computed_filter_text: self.computed_filter_text.clone(),
+            pending_filter_sync: self.pending_filter_sync,
+            pending_placeholder: self.pending_placeholder.clone(),
+            hovered_index: self.hovered_index,
+            selected_index: self.selected_index,
+            opened_from_main_menu: self.opened_from_main_menu,
+            focused_input: self.focused_input,
+            pending_focus: self.pending_focus,
+            width_before_portal: self.attachment_portal_return_width,
+            width_after_portal_open: None,
+        };
+
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "attachment_portal_host_snapshot_captured",
+        );
+
+        snapshot
+    }
+
+    fn record_attachment_portal_open_width(&mut self) {
+        let open_width = Self::current_main_window_width();
+        if let Some(snapshot) = self.attachment_portal_host_snapshot.as_mut() {
+            snapshot.width_after_portal_open = open_width;
+        }
+    }
+
+    fn restore_attachment_portal_host_snapshot(
+        &mut self,
+        snapshot: AttachmentPortalHostSnapshot,
+    ) -> (Option<f32>, Option<f32>) {
+        let AttachmentPortalHostSnapshot {
+            filter_text,
+            computed_filter_text,
+            pending_filter_sync,
+            pending_placeholder,
+            hovered_index,
+            selected_index,
+            opened_from_main_menu,
+            focused_input,
+            pending_focus,
+            width_before_portal,
+            width_after_portal_open,
+        } = snapshot;
+
+        let filter_text_changed = self.filter_text != filter_text;
+
+        self.filter_text = filter_text;
+        self.computed_filter_text = computed_filter_text;
+        self.pending_filter_sync = pending_filter_sync || filter_text_changed;
+        self.pending_placeholder = pending_placeholder;
+        self.hovered_index = hovered_index;
+        self.selected_index = selected_index;
+        self.opened_from_main_menu = opened_from_main_menu;
+        self.focused_input = focused_input;
+        self.pending_focus = pending_focus;
+        self.invalidate_grouped_cache();
+        self.sync_list_state();
+
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "attachment_portal_host_snapshot_restored",
+        );
+
+        (width_before_portal, width_after_portal_open)
+    }
+
     fn restore_attachment_portal_return_view(
         &mut self,
         return_view: AppView,
         return_focus_target: FocusTarget,
     ) {
+        let return_width = self.attachment_portal_return_width.take();
+        let current_width = Self::current_main_window_width();
+        let (width_before_portal, width_after_portal_open) = self
+            .attachment_portal_host_snapshot
+            .take()
+            .map(|snapshot| self.restore_attachment_portal_host_snapshot(snapshot))
+            .unwrap_or((return_width, None));
+
         self.active_attachment_portal_kind = None;
         self.current_view = return_view;
         self.pending_focus = Some(return_focus_target);
@@ -39,14 +125,46 @@ impl ScriptListApp {
         };
 
         // Portal views can temporarily expand the window; restore the
-        // originating surface sizing before control returns to the user.
-        self.update_window_size();
+        // originating surface sizing before control returns to the user unless
+        // the user manually resized after the portal opened.
+        match (width_before_portal, current_width) {
+            (Some(return_width), Some(current_width))
+                if width_after_portal_open.is_some_and(|open_width| {
+                    (current_width - open_width).abs() > ATTACHMENT_PORTAL_WIDTH_RESTORE_EPSILON
+                }) =>
+            {
+                tracing::info!(
+                    target: "script_kit::acp",
+                    event = "attachment_portal_width_restore_skipped_user_resize",
+                    width_before_portal = return_width,
+                    width_after_portal_open = ?width_after_portal_open,
+                    current_width,
+                );
+                self.resize_current_view_to_width(current_width);
+            }
+            (Some(return_width), _) => {
+                self.resize_current_view_to_width(return_width);
+            }
+            (None, Some(current_width)) => {
+                self.resize_current_view_to_width(current_width);
+            }
+            (None, None) => {
+                self.update_window_size();
+            }
+        }
     }
 
     /// Whether the app is currently in an attachment portal (file search or
     /// clipboard history opened from the ACP chat context picker).
+    ///
+    /// Reads from the app-owned `acp_surface_state` machine rather
+    /// than probing `attachment_portal_return_view.is_some()`. The
+    /// launcher-entry guards (`try_route_plain_tab_to_acp_context_capture`
+    /// and `try_route_global_cmd_enter_to_acp_context_capture`) call
+    /// this, so a single source of truth prevents the two guards from
+    /// drifting against the portal snapshot fields.
     pub(crate) fn is_in_attachment_portal(&self) -> bool {
-        self.attachment_portal_return_view.is_some()
+        self.acp_surface_state.is_attachment_portal()
     }
 
     pub(crate) fn active_attachment_portal_kind(
@@ -124,27 +242,76 @@ impl ScriptListApp {
         // The portal is always opened from AcpChatView, so ChatPrompt is correct.
         self.attachment_portal_return_view = Some(self.current_view.clone());
         self.attachment_portal_return_focus_target = Some(FocusTarget::ChatPrompt);
+        self.attachment_portal_return_width = crate::platform::get_main_window_bounds()
+            .map(|(_, _, width, _)| width as f32)
+            .filter(|width| width.is_finite() && *width > 0.0);
+        self.attachment_portal_host_snapshot = Some(self.capture_attachment_portal_host_snapshot());
         self.active_attachment_portal_kind = Some(kind);
+        self.transition_acp_surface(
+            crate::ai::acp::surface_state::AcpSurfaceEvent::PortalOpened { kind },
+        );
 
         tracing::info!(
             target: "script_kit::acp",
             event = "attachment_portal_opened",
             kind = ?kind,
+            return_width = ?self.attachment_portal_return_width,
         );
 
         let portal_query = if let Some(AppView::AcpChatView { entity }) =
             self.attachment_portal_return_view.as_ref()
         {
             entity.update(cx, |view, _cx| {
-                view.take_pending_portal_query(kind).unwrap_or_default()
+                view.portal_query_for(kind).unwrap_or_default()
             })
         } else {
             String::new()
         };
 
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "attachment_portal_query_seeded_from_contract",
+            kind = ?kind,
+            query = %portal_query,
+        );
+
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "attachment_portal_picker_query_resolved",
+            kind = ?kind,
+            query = %portal_query,
+        );
+
+        if let Some(AppView::AcpChatView { entity }) = self.attachment_portal_return_view.as_ref() {
+            let entity = entity.clone();
+            entity.update(cx, |view, cx| {
+                view.prepare_for_attachment_portal_open(cx);
+            });
+        }
+
         match kind {
             PortalKind::FileSearch => {
                 self.open_file_search(portal_query, cx);
+            }
+            PortalKind::BrowserHistory => {
+                self.cached_browser_history = crate::browser_history::list_recent_history(500)
+                    .unwrap_or_else(|error| {
+                        tracing::warn!(
+                            event = "browser_history_portal_load_failed",
+                            error = %error,
+                        );
+                        Vec::new()
+                    });
+                self.open_builtin_filterable_view_with_filter(
+                    AppView::BrowserHistoryView {
+                        filter: portal_query.clone(),
+                        selected_index: 0,
+                    },
+                    &portal_query,
+                    "Search browser history...",
+                    true,
+                    cx,
+                );
             }
             PortalKind::ClipboardHistory => {
                 self.cached_clipboard_entries = crate::clipboard_history::get_cached_entries(100);
@@ -155,6 +322,19 @@ impl ScriptListApp {
                     },
                     &portal_query,
                     "Search clipboard history...",
+                    true,
+                    cx,
+                );
+            }
+            PortalKind::DictationHistory => {
+                self.open_builtin_filterable_view_with_filter(
+                    AppView::DictationHistoryView {
+                        filter: portal_query.clone(),
+                        selected_index: 0,
+                    },
+                    &portal_query,
+                    "Search dictation history...",
+                    true,
                     cx,
                 );
             }
@@ -190,6 +370,7 @@ impl ScriptListApp {
                     },
                     &portal_query,
                     "Search notes...",
+                    true,
                     cx,
                 );
             }
@@ -201,11 +382,13 @@ impl ScriptListApp {
                     },
                     &portal_query,
                     "Search conversation history...",
+                    true,
                     cx,
                 );
             }
         }
 
+        self.record_attachment_portal_open_width();
         cx.notify();
     }
 
@@ -231,6 +414,19 @@ impl ScriptListApp {
         );
 
         self.restore_attachment_portal_return_view(return_view.clone(), return_focus_target);
+        // Drive the placement machine back to Embedded when the portal
+        // is returning to the chat view, otherwise Hidden — the portal
+        // can only have been opened from an embedded ACP host, so
+        // EmbeddedOpened from a non-chat return means host state has
+        // drifted; downgrade to Hidden rather than a silent no-op.
+        self.transition_acp_surface(
+            crate::ai::acp::surface_state::AcpSurfaceEvent::PortalClosed,
+        );
+        if !matches!(return_view, AppView::AcpChatView { .. }) {
+            self.transition_acp_surface(
+                crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed,
+            );
+        }
 
         // Stage the context part with an inline @mention token.
         // Uses the canonical token format so the mention sync system can track
@@ -238,6 +434,7 @@ impl ScriptListApp {
         if let AppView::AcpChatView { entity } = &return_view {
             let entity = entity.clone();
             entity.update(cx, |view, cx| {
+                view.resume_after_attachment_portal_close(cx);
                 view.attach_portal_part(part.clone(), cx);
                 cx.notify();
             });
@@ -248,6 +445,7 @@ impl ScriptListApp {
 
     /// Close the attachment portal without attaching anything (Escape).
     pub(crate) fn close_attachment_portal_cancel(&mut self, cx: &mut Context<Self>) {
+        let portal_kind = self.active_attachment_portal_kind;
         let return_view = self
             .attachment_portal_return_view
             .take()
@@ -260,10 +458,30 @@ impl ScriptListApp {
         tracing::info!(
             target: "script_kit::acp",
             event = "attachment_portal_cancelled",
+            kind = ?portal_kind,
             focus_target = ?return_focus_target,
         );
 
-        self.restore_attachment_portal_return_view(return_view, return_focus_target);
+        self.restore_attachment_portal_return_view(return_view.clone(), return_focus_target);
+        // Same split as the accept path: PortalClosed first (the
+        // default return lands back in Embedded), then EmbeddedClosed
+        // if the restored view is not the ACP chat.
+        self.transition_acp_surface(
+            crate::ai::acp::surface_state::AcpSurfaceEvent::PortalClosed,
+        );
+        if !matches!(return_view, AppView::AcpChatView { .. }) {
+            self.transition_acp_surface(
+                crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed,
+            );
+        }
+
+        if let (Some(kind), AppView::AcpChatView { entity }) = (portal_kind, &return_view) {
+            let entity = entity.clone();
+            entity.update(cx, |view, cx| {
+                view.resume_after_attachment_portal_close(cx);
+                view.cancel_pending_portal_session(kind, cx);
+            });
+        }
 
         cx.notify();
     }
@@ -287,7 +505,8 @@ mod tests {
         let helper_body = &source[helper_start..];
 
         assert!(
-            helper_body.contains("self.update_window_size();"),
+            helper_body.contains("self.resize_current_view_to_width(return_width);")
+                || helper_body.contains("self.update_window_size();"),
             "restore helper must reapply the originating surface window size"
         );
     }
@@ -302,6 +521,64 @@ mod tests {
         assert!(
             helper_calls >= 2,
             "attach + cancel portal exits must share the same restore helper"
+        );
+    }
+
+    #[test]
+    fn attachment_portal_open_captures_return_width() {
+        let source = attachment_portal_source();
+
+        assert!(
+            source.contains(
+                "self.attachment_portal_return_width = crate::platform::get_main_window_bounds()"
+            ),
+            "portal open should capture the pre-portal main-window width"
+        );
+    }
+
+    #[test]
+    fn attachment_portal_cancel_clears_acp_portal_session() {
+        let source = attachment_portal_source();
+
+        assert!(
+            source.contains("view.cancel_pending_portal_session(kind, cx);"),
+            "cancel should clear any staged ACP portal session after restoring the host view"
+        );
+    }
+
+    #[test]
+    fn attachment_portal_open_captures_host_snapshot() {
+        let source = attachment_portal_source();
+
+        assert!(
+            source.contains(
+                "self.attachment_portal_host_snapshot = Some(self.capture_attachment_portal_host_snapshot());"
+            ),
+            "portal open should capture shared launcher host state before mutating it"
+        );
+    }
+
+    #[test]
+    fn attachment_portal_restore_respects_user_resized_width() {
+        let source = attachment_portal_source();
+
+        assert!(
+            source.contains("attachment_portal_width_restore_skipped_user_resize"),
+            "restore should log when it preserves a manual resize instead of snapping back"
+        );
+    }
+
+    #[test]
+    fn attachment_portal_calls_acp_prepare_and_resume_hooks() {
+        let source = attachment_portal_source();
+
+        assert!(
+            source.contains("view.prepare_for_attachment_portal_open(cx);"),
+            "portal open should let ACP dismiss popup/setup surfaces before the host switch"
+        );
+        assert!(
+            source.contains("view.resume_after_attachment_portal_close(cx);"),
+            "portal close should notify ACP after the host view is restored"
         );
     }
 }

@@ -166,6 +166,14 @@ impl<R: Read> JsonlReader<R> {
                         continue;
                     }
 
+                    // Oracle-Session `protocol-builtin-boundary-refactor-plan` PR8b:
+                    // Pre-flight envelope check. Bumps the zero-tolerance
+                    // `stdin_unsupported_protocol_version_total` counter and
+                    // emits one rate-limited warn when a peer sends a
+                    // `protocolVersion` outside [MIN, CURRENT]. Fire-and-forget
+                    // — never alters ParseResult shape or drops the message.
+                    crate::protocol::ingress::record_unsupported_version(trimmed);
+
                     // Get preview for logging (security: truncate large payloads)
                     let (preview, raw_len) = log_preview(trimmed);
 

@@ -1,4 +1,56 @@
 impl ScriptListApp {
+    fn app_launcher_filtered_entries<'a>(
+        apps: &'a [app_launcher::AppInfo],
+        filter: &str,
+    ) -> Vec<(usize, &'a app_launcher::AppInfo)> {
+        if filter.is_empty() {
+            apps.iter().enumerate().collect()
+        } else {
+            let filter_lower = filter.to_lowercase();
+            apps.iter()
+                .enumerate()
+                .filter(|(_, app)| app.name.to_lowercase().contains(&filter_lower))
+                .collect()
+        }
+    }
+
+    fn app_launcher_visible_row_names(&self, filter: &str) -> Vec<String> {
+        Self::app_launcher_filtered_entries(&self.apps, filter)
+            .into_iter()
+            .map(|(_, app)| app.name.clone())
+            .collect()
+    }
+
+    fn app_launcher_dataset_and_visible_counts(&self, filter: &str) -> (usize, usize) {
+        (
+            self.apps.len(),
+            Self::app_launcher_filtered_entries(&self.apps, filter).len(),
+        )
+    }
+
+    fn app_launcher_selected_visible_entry(
+        &self,
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<(usize, &app_launcher::AppInfo)> {
+        Self::app_launcher_filtered_entries(&self.apps, filter)
+            .get(selected_index)
+            .copied()
+    }
+
+    fn app_launcher_visible_target_rows(
+        &self,
+        filter: &str,
+        limit: usize,
+    ) -> Vec<(usize, usize, &app_launcher::AppInfo)> {
+        Self::app_launcher_filtered_entries(&self.apps, filter)
+            .into_iter()
+            .take(limit)
+            .enumerate()
+            .map(|(display_index, (source_index, app))| (display_index, source_index, app))
+            .collect()
+    }
+
     /// Render app launcher view
     /// P0 FIX: Data comes from self.apps, view passes only state
     fn render_app_launcher(
@@ -20,18 +72,29 @@ impl ScriptListApp {
         // Removed: box_shadows - shadows on transparent elements block vibrancy
         let _box_shadows = self.create_box_shadows();
 
-        // P0 FIX: Filter apps from self.apps instead of taking ownership
-        let filtered_apps: Vec<_> = if filter.is_empty() {
-            self.apps.iter().enumerate().collect()
-        } else {
-            let filter_lower = filter.to_lowercase();
-            self.apps
-                .iter()
-                .enumerate()
-                .filter(|(_, a)| a.name.to_lowercase().contains(&filter_lower))
-                .collect()
-        };
+        let filtered_apps = Self::app_launcher_filtered_entries(&self.apps, &filter);
         let filtered_len = filtered_apps.len();
+        let selected_index = if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
+            selected_index,
+            &self.list_scroll_handle,
+            filtered_len,
+            8,
+        ) {
+            tracing::info!(
+                target: "script_kit::scroll",
+                event = "builtin_selection_resynced_from_scrollbar",
+                view = "app_launcher",
+                reason = "render",
+                selected_before = selected_index,
+                selected_after = reanchored,
+            );
+            if let AppView::AppLauncherView { selected_index, .. } = &mut self.current_view {
+                *selected_index = reanchored;
+            }
+            reanchored
+        } else {
+            selected_index
+        };
 
         // Key handler for app launcher
         let handle_key = cx.listener(
@@ -74,18 +137,8 @@ impl ScriptListApp {
                     selected_index,
                 } = &mut this.current_view
                 {
-                    // Apply filter to get current filtered list
-                    // P0 FIX: Reference apps from self
-                    let filtered_apps: Vec<_> = if filter.is_empty() {
-                        this.apps.iter().enumerate().collect()
-                    } else {
-                        let filter_lower = filter.to_lowercase();
-                        this.apps
-                            .iter()
-                            .enumerate()
-                            .filter(|(_, a)| a.name.to_lowercase().contains(&filter_lower))
-                            .collect()
-                    };
+                    let filtered_apps =
+                        Self::app_launcher_filtered_entries(&this.apps, filter);
                     let filtered_len = filtered_apps.len();
 
                     match key {
@@ -359,6 +412,128 @@ impl ScriptListApp {
                     .relative()
                     .w_full()
                     .h_full()
+                    .on_scroll_wheel(cx.listener(
+                        move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                            let view_state = if let AppView::AppLauncherView {
+                                filter,
+                                selected_index,
+                            } = &this.current_view
+                            {
+                                Some((filter.clone(), *selected_index))
+                            } else {
+                                None
+                            };
+
+                            let Some((current_filter, current_selected)) = view_state else {
+                                return;
+                            };
+
+                            let (_, filtered_len) =
+                                this.app_launcher_dataset_and_visible_counts(&current_filter);
+                            let scroll_top_before =
+                                Self::builtin_uniform_list_scrollbar_metrics(
+                                    &this.list_scroll_handle,
+                                    filtered_len,
+                                    8,
+                                )
+                                .map(|(first_visible, _, _)| first_visible)
+                                .unwrap_or(0);
+                            let wheel_accum_before = this.wheel_accum;
+                            let delta_lines: f32 = match event.delta {
+                                gpui::ScrollDelta::Lines(point) => point.y,
+                                gpui::ScrollDelta::Pixels(point) => {
+                                    let pixels: f32 = point.y.into();
+                                    pixels
+                                        / crate::list_item::effective_average_item_height_for_scroll()
+                                }
+                            };
+
+                            let Some(new_selected) = this.builtin_scroll_target_from_wheel(
+                                event,
+                                current_selected,
+                                filtered_len,
+                            ) else {
+                                if filtered_len > 0 {
+                                    cx.stop_propagation();
+                                }
+                                return;
+                            };
+
+                            if let AppView::AppLauncherView { selected_index, .. } =
+                                &mut this.current_view
+                            {
+                                *selected_index = new_selected;
+                            }
+
+                            this.list_scroll_handle
+                                .scroll_to_item(new_selected, ScrollStrategy::Nearest);
+
+                            let final_selected = if let Some(reanchored) =
+                                Self::builtin_reanchor_selection_from_scroll(
+                                    new_selected,
+                                    &this.list_scroll_handle,
+                                    filtered_len,
+                                    8,
+                                )
+                            {
+                                if let AppView::AppLauncherView { selected_index, .. } =
+                                    &mut this.current_view
+                                {
+                                    *selected_index = reanchored;
+                                }
+                                tracing::info!(
+                                    target: "script_kit::scroll",
+                                    event = "builtin_selection_resynced_from_scrollbar",
+                                    view = "app_launcher",
+                                    reason = "wheel",
+                                    selected_before = new_selected,
+                                    selected_after = reanchored,
+                                );
+                                reanchored
+                            } else {
+                                new_selected
+                            };
+
+                            let scroll_top_after =
+                                Self::builtin_uniform_list_scrollbar_metrics(
+                                    &this.list_scroll_handle,
+                                    filtered_len,
+                                    8,
+                                )
+                                .map(|(first_visible, _, _)| first_visible)
+                                .unwrap_or(scroll_top_before);
+                            let steps = (wheel_accum_before + -delta_lines).trunc() as i32;
+
+                            Self::log_builtin_scroll_event(
+                                "app_launcher",
+                                "scroll_to_item",
+                                "wheel",
+                                filtered_len,
+                                Some(final_selected),
+                                Some(new_selected),
+                                Some(&current_filter),
+                                "mouse",
+                            );
+                            tracing::debug!(
+                                target: "SCROLL_STATE",
+                                view = "app_launcher",
+                                delta_lines,
+                                steps,
+                                total_items = filtered_len,
+                                selected_before = current_selected,
+                                selected_after = final_selected,
+                                scroll_top_before,
+                                scroll_top_after,
+                                wheel_accum_before,
+                                wheel_accum_after = this.wheel_accum,
+                                propagation_stopped = true,
+                                "app launcher wheel handled"
+                            );
+
+                            cx.notify();
+                            cx.stop_propagation();
+                        },
+                    ))
                     .child(list_element)
                     .child(list_scrollbar),
             );
@@ -489,6 +664,27 @@ mod app_launcher_chrome_tests {
         assert!(
             !source.contains("route_key_to_actions_dialog("),
             "app launcher should not have dead actions routing code"
+        );
+    }
+
+    #[test]
+    fn app_launcher_owns_wheel_scroll_and_reanchors_selection() {
+        let source = read_source();
+        assert!(
+            source.contains(".on_scroll_wheel(cx.listener("),
+            "app launcher should intercept wheel events on the list pane"
+        );
+        assert!(
+            source.contains("builtin_scroll_target_from_wheel("),
+            "app launcher should convert wheel deltas into selection targets"
+        );
+        assert!(
+            source.contains("builtin_reanchor_selection_from_scroll("),
+            "app launcher should reanchor selection after handle movement"
+        );
+        assert!(
+            source.contains("target: \"SCROLL_STATE\""),
+            "app launcher wheel path should emit SCROLL_STATE logs"
         );
     }
 }

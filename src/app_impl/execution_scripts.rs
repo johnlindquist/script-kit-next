@@ -137,12 +137,59 @@ fn quote_terminal_arg(arg: &str) -> String {
 }
 
 fn build_terminal_command(program: &str, script_path: &Path) -> Result<String, String> {
+    build_terminal_command_with_args(program, script_path, &[])
+}
+
+fn build_terminal_command_with_args(
+    program: &str,
+    script_path: &Path,
+    argv: &[String],
+) -> Result<String, String> {
+    build_terminal_command_with_env_and_args(program, script_path, &[], argv)
+}
+
+fn build_terminal_command_with_env_and_args(
+    program: &str,
+    script_path: &Path,
+    extra_env: &[(String, String)],
+    argv: &[String],
+) -> Result<String, String> {
     validate_terminal_program(program)?;
     let path_str = script_path.to_str().ok_or_else(|| {
         "terminal_command_build_failed: attempted=convert_path_to_utf8 reason=invalid_utf8"
             .to_string()
     })?;
-    Ok(format!("{} {}", program, quote_terminal_arg(path_str)))
+    let mut command = String::new();
+    for (key, value) in extra_env {
+        validate_terminal_env_key(key)?;
+        command.push_str(key);
+        command.push('=');
+        command.push_str(&quote_terminal_arg(value));
+        command.push(' ');
+    }
+    command.push_str(program);
+    command.push(' ');
+    command.push_str(&quote_terminal_arg(path_str));
+    for arg in argv {
+        command.push(' ');
+        command.push_str(&quote_terminal_arg(arg));
+    }
+    Ok(command)
+}
+
+fn validate_terminal_env_key(key: &str) -> Result<(), String> {
+    let is_safe_key = !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_');
+    if is_safe_key {
+        Ok(())
+    } else {
+        Err(format!(
+            "terminal_env_key_validation_failed: attempted=build_terminal_command key={} reason=contains_unsafe_characters",
+            key
+        ))
+    }
 }
 
 fn scriptlet_plugin_source(scriptlet: &scripts::Scriptlet) -> String {
@@ -165,12 +212,31 @@ impl ScriptListApp {
         scriptlet: &scripts::Scriptlet,
         cx: &mut Context<Self>,
     ) {
+        self.execute_scriptlet_with_env_and_args(scriptlet, Vec::new(), Vec::new(), cx);
+    }
+
+    pub(crate) fn execute_scriptlet_with_args(
+        &mut self,
+        scriptlet: &scripts::Scriptlet,
+        argv: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.execute_scriptlet_with_env_and_args(scriptlet, Vec::new(), argv, cx);
+    }
+
+    pub(crate) fn execute_scriptlet_with_env_and_args(
+        &mut self,
+        scriptlet: &scripts::Scriptlet,
+        extra_env: Vec<(String, String)>,
+        argv: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
         let plugin_source = scriptlet_plugin_source(scriptlet);
         logging::log(
             "EXEC",
             &format!(
-                "Executing scriptlet: {} (tool: {}, plugin: {})",
-                scriptlet.name, scriptlet.tool, plugin_source
+                "Executing scriptlet: {} (tool: {}, plugin: {}, argv: {:?})",
+                scriptlet.name, scriptlet.tool, plugin_source, argv
             ),
         );
 
@@ -238,7 +304,7 @@ impl ScriptListApp {
                 "interactive_scriptlet_launch"
             );
 
-            self.execute_interactive(&script, cx);
+            self.execute_interactive_with_env_and_args(&script, extra_env, argv, cx);
             return;
         }
 
@@ -285,7 +351,7 @@ impl ScriptListApp {
                 }
             };
 
-            match build_terminal_command(&tool, &temp_file) {
+            match build_terminal_command_with_env_and_args(&tool, &temp_file, &extra_env, &argv) {
                 Ok(shell_command) => self.open_terminal_with_command(shell_command, cx),
                 Err(e) => {
                     logging::log("ERROR", &format!("Failed to build terminal command: {}", e));
@@ -331,7 +397,11 @@ impl ScriptListApp {
         };
 
         // Execute with default options (no inputs for now)
-        let options = executor::ScriptletExecOptions::default();
+        let options = executor::ScriptletExecOptions {
+            positional_args: argv,
+            extra_env,
+            ..Default::default()
+        };
 
         match executor::run_scriptlet(&exec_scriptlet, options) {
             Ok(result) => {
@@ -498,7 +568,7 @@ impl ScriptListApp {
     ///
     /// Returns `true` if the main window should be shown immediately, `false` if not.
     /// Interactive scripts start headless and prompt messages reopen the window on demand.
-    /// Apps and certain builtins (ACP Chat, Notes) open their own windows
+    /// Apps and certain builtins (Agent Chat, Notes) open their own windows
     /// and don't need the main window.
     pub fn execute_by_command_id_or_path(
         &mut self,
@@ -567,12 +637,9 @@ impl ScriptListApp {
                 crate::config::CommandCategory::Builtin => {
                     let canonical_id = crate::config::canonical_builtin_command_id(identifier);
                     let config = crate::config::BuiltInConfig::default();
-                    if let Some(entry) = builtins::get_builtin_entries(&config)
-                        .iter()
-                        .find(|e| e.id == canonical_id)
-                    {
+                    if let Some(entry) = builtins::resolve_builtin_entry(&canonical_id, &config) {
                         tracing::info!(command_id = %canonical_id, "builtin_command_resolved");
-                        self.execute_builtin(entry, cx);
+                        self.execute_builtin(&entry, cx);
                         return builtin_needs_main_window_for_command_id(&canonical_id);
                     }
                     tracing::warn!(command_id = %canonical_id, "builtin_command_not_found");
@@ -622,16 +689,13 @@ impl ScriptListApp {
         let canonical_id = crate::config::canonical_builtin_command_id(command_id);
         if canonical_id != command_id {
             let config = crate::config::BuiltInConfig::default();
-            if let Some(entry) = builtins::get_builtin_entries(&config)
-                .iter()
-                .find(|e| e.id == canonical_id)
-            {
+            if let Some(entry) = builtins::resolve_builtin_entry(&canonical_id, &config) {
                 tracing::info!(
                     raw_command_id = %command_id,
                     command_id = %canonical_id,
                     "legacy_builtin_command_resolved"
                 );
-                self.execute_builtin(entry, cx);
+                self.execute_builtin(&entry, cx);
                 return builtin_needs_main_window_for_command_id(&canonical_id);
             }
         }
@@ -646,8 +710,9 @@ impl ScriptListApp {
 #[cfg(test)]
 mod builtin_command_window_visibility_tests {
     use super::{
-        InteractiveTempFileMode, build_terminal_command, builtin_needs_main_window_for_command_id,
-        create_interactive_temp_script, interactive_script_needs_main_window,
+        InteractiveTempFileMode, build_terminal_command, build_terminal_command_with_env_and_args,
+        builtin_needs_main_window_for_command_id, create_interactive_temp_script,
+        interactive_script_needs_main_window,
     };
     use std::path::Path;
 
@@ -690,6 +755,27 @@ mod builtin_command_window_visibility_tests {
             "expected validation error, got: {}",
             err
         );
+    }
+
+    #[test]
+    fn test_build_terminal_command_prefixes_extra_env_and_args() {
+        #[cfg(unix)]
+        {
+            let command = build_terminal_command_with_env_and_args(
+                "bash",
+                Path::new("/tmp/script.sh"),
+                &[(
+                    "KIT_MENU_SYNTAX_COMMAND_TAGS".to_string(),
+                    r#"["release"]"#.to_string(),
+                )],
+                &["--dry-run".to_string()],
+            )
+            .expect("valid terminal command");
+            assert_eq!(
+                command,
+                "KIT_MENU_SYNTAX_COMMAND_TAGS='[\"release\"]' bash '/tmp/script.sh' '--dry-run'"
+            );
+        }
     }
 
     #[cfg(unix)]

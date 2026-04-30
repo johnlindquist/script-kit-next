@@ -6,6 +6,7 @@
 
 use anyhow::{Context, Result};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 /// Maximum number of screenshot files to retain in the temp directory.
 pub const TAB_AI_SCREENSHOT_MAX_KEEP: usize = 10;
@@ -16,6 +17,34 @@ const TAB_AI_SCREENSHOT_PREFIX: &str = "tab-ai-screenshot-";
 /// Monotonic sequence counter to prevent filename collisions when two
 /// captures happen within the same second in the same process.
 static TAB_AI_SCREENSHOT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+/// Most recent Tab AI screenshot identity (bare filename, no directory).
+/// Populated by both capture paths after a successful write so automation
+/// can read `getState.screenshotIdentity` to verify the identity-threading
+/// chain without grepping the filesystem.
+static TAB_AI_SCREENSHOT_LAST_IDENTITY: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+
+fn last_identity_slot() -> &'static Mutex<Option<String>> {
+    TAB_AI_SCREENSHOT_LAST_IDENTITY.get_or_init(|| Mutex::new(None))
+}
+
+/// Record the identity of the most recent Tab AI screenshot (bare filename).
+/// Called by the capture paths; exposed for tests.
+pub fn record_last_screenshot_identity(identity: String) {
+    if let Ok(mut slot) = last_identity_slot().lock() {
+        *slot = Some(identity);
+    }
+}
+
+/// Read the most recent Tab AI screenshot identity, if any.
+/// `None` means no screenshot has been captured in this process lifetime.
+/// Used by the `stateResult.screenshotIdentity` automation field.
+pub fn current_screenshot_identity() -> Option<String> {
+    last_identity_slot()
+        .lock()
+        .ok()
+        .and_then(|slot| slot.clone())
+}
 
 /// Build a collision-safe screenshot filename with millisecond precision
 /// and a monotonic sequence number.
@@ -96,6 +125,8 @@ pub fn capture_tab_ai_focused_window_screenshot_file() -> Result<Option<TabAiScr
         bytes = capture.png_data.len(),
     );
 
+    record_last_screenshot_identity(filename.clone());
+
     // Best-effort cleanup — don't fail the capture if cleanup errors
     if let Err(e) = cleanup_old_tab_ai_screenshot_files(TAB_AI_SCREENSHOT_MAX_KEEP) {
         tracing::warn!(
@@ -157,6 +188,8 @@ pub fn capture_tab_ai_screen_screenshot_file() -> Result<Option<TabAiScreenshotF
         height,
         bytes = png_data.len(),
     );
+
+    record_last_screenshot_identity(filename.clone());
 
     if let Err(e) = cleanup_old_tab_ai_screenshot_files(TAB_AI_SCREENSHOT_MAX_KEEP) {
         tracing::warn!(

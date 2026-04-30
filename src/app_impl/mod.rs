@@ -14,10 +14,24 @@ mod filter_input_core;
 mod filter_input_change;
 #[path = "filter_input_updates.rs"]
 mod filter_input_updates;
+#[path = "menu_syntax_trigger_popup.rs"]
+mod menu_syntax_trigger_popup;
+#[path = "menu_syntax_trigger_popup_window.rs"]
+mod menu_syntax_trigger_popup_window;
+#[path = "menu_syntax_main_hint.rs"]
+mod menu_syntax_main_hint;
+#[path = "menu_syntax_actions.rs"]
+pub(crate) mod menu_syntax_actions;
+#[path = "menu_syntax_ai.rs"]
+pub(crate) mod menu_syntax_ai;
+#[path = "menu_syntax_ai_apply.rs"]
+pub(crate) mod menu_syntax_ai_apply;
 #[path = "ui_window.rs"]
 mod ui_window;
 #[path = "actions_toggle.rs"]
 mod actions_toggle;
+#[path = "about_route.rs"]
+mod about_route;
 #[path = "chat_actions.rs"]
 mod chat_actions;
 #[path = "webcam_actions.rs"]
@@ -28,8 +42,14 @@ mod actions_dialog;
 mod shortcut_recorder;
 #[path = "alias_input.rs"]
 mod alias_input;
+#[path = "quick_terminal_warm.rs"]
+mod quick_terminal_warm;
 #[path = "execution_paths.rs"]
 mod execution_paths;
+#[path = "path_action.rs"]
+pub(crate) mod path_action;
+#[path = "routes.rs"]
+pub(crate) mod routes;
 #[path = "execution_scripts.rs"]
 mod execution_scripts;
 #[path = "lifecycle_reset.rs"]
@@ -42,10 +62,13 @@ mod registries_state;
 mod prompt_ai;
 #[path = "naming_dialog.rs"]
 mod naming_dialog;
-#[path = "tab_ai_mode.rs"]
 mod tab_ai_mode;
 #[path = "attachment_portal.rs"]
 mod attachment_portal;
+#[path = "trigger_builtin_dispatch.rs"]
+mod trigger_builtin_dispatch;
+#[path = "acp_surface_transitions.rs"]
+mod acp_surface_transitions;
 #[allow(dead_code)]
 #[path = "window_orchestrator_bridge.rs"]
 mod window_orchestrator_bridge;

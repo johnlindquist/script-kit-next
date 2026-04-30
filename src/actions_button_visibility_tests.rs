@@ -93,12 +93,12 @@ mod tests {
 
     #[test]
     fn test_ask_ai_hint_is_non_clickable_visual_hint() {
-        let content = fs::read_to_string("src/render_script_list/mod.rs")
-            .expect("Failed to read src/render_script_list/mod.rs");
+        let content = fs::read_to_string("src/components/launcher_ask_ai_hint.rs")
+            .expect("Failed to read src/components/launcher_ask_ai_hint.rs");
 
         let ask_ai_pos = content
             .find(".id(\"ask-ai-button\")")
-            .expect("Ask AI hint container not found in src/render_script_list/mod.rs");
+            .expect("Ask AI hint container not found in src/components/launcher_ask_ai_hint.rs");
         let ask_ai_section = &content[ask_ai_pos..content.len().min(ask_ai_pos + 1200)];
 
         assert!(
@@ -114,7 +114,7 @@ mod tests {
     }
 
     #[test]
-    fn test_mini_mode_branch_hides_ask_ai_and_skips_preview_footer() {
+    fn test_mini_mode_branch_keeps_shared_ask_ai_hint_and_skips_preview_footer() {
         let content = fs::read_to_string("src/render_script_list/mod.rs")
             .expect("Failed to read src/render_script_list/mod.rs");
         let render_impl = fs::read_to_string("src/main_sections/render_impl.rs")
@@ -127,8 +127,8 @@ mod tests {
             "mini mode flag should be computed from main_window_mode"
         );
         assert!(
-            content.contains(".when(!is_mini, |d| {"),
-            "Ask AI header hint should be hidden in mini mode"
+            content.contains(".child(crate::components::render_launcher_ask_ai_hint(chrome))"),
+            "Script list should route the Ask AI hint through the shared launcher component"
         );
         assert!(
             content.contains("if is_mini {")
@@ -209,7 +209,11 @@ mod tests {
         assert!(
             dispatcher_section.contains("FooterAction::Run")
                 && dispatcher_section.contains("execute_selected"),
-            "FooterAction::Run must dispatch to execute_selected()"
+            "FooterAction::Run must fall back to execute_selected() for non-ACP views"
+        );
+        assert!(
+            dispatcher_section.contains("try_run_ready_acp_script"),
+            "FooterAction::Run must check for a ready ACP script before falling back to execute_selected()"
         );
         assert!(
             dispatcher_section.contains("FooterAction::Actions")
@@ -241,7 +245,7 @@ mod tests {
             .find("FooterButtonConfig::new(FooterAction::Ai, \"⌘↵\", \"AI\")")
             .expect("native footer AI button must exist");
         let run_pos = content
-            .find("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Run\")")
+            .find("FooterButtonConfig::new(FooterAction::Run, \"↵\", run_label)")
             .expect("native footer Run button must exist");
         assert!(
             run_pos < ai_pos,
@@ -370,6 +374,43 @@ mod tests {
         );
     }
 
+    /// Fails if the startup interceptor reintroduces host-specific Cmd+K
+    /// dispatch instead of delegating through the named actions key intent
+    /// after popup-owned key routing.
+    #[test]
+    fn test_startup_cmd_k_uses_shared_dispatcher_after_popup_router() {
+        let content = fs::read_to_string("src/app_impl/startup.rs")
+            .expect("Failed to read src/app_impl/startup.rs");
+
+        let route_pos = content
+            .find("match this.route_key_to_actions_dialog(")
+            .expect("startup.rs must route popup-owned keys through route_key_to_actions_dialog()");
+        let intent_pos = content[route_pos..]
+            .find("main_window_actions_key_intent(&this.current_view, event)")
+            .map(|offset| route_pos + offset)
+            .expect("startup.rs must classify local actions key intent after popup routing");
+        let intent_section = &content[intent_pos..content.len().min(intent_pos + 500)];
+
+        assert!(
+            intent_section.contains("handle_main_window_actions_key_intent(intent, window, cx)"),
+            "startup actions key intent must route through the named intent handler. Found:\n{}",
+            intent_section
+        );
+        assert!(
+            content.contains("self.handle_cmd_k_actions_toggle(window, cx)"),
+            "ToggleActions must still route through handle_cmd_k_actions_toggle()"
+        );
+        assert!(
+            !intent_section.contains("toggle_actions_for_host("),
+            "startup actions key intent must not bypass the shared dispatcher with toggle_actions_for_host(). Found:\n{}",
+            intent_section
+        );
+        assert!(
+            route_pos < intent_pos,
+            "startup must check route_key_to_actions_dialog() before local actions key intent dispatch"
+        );
+    }
+
     /// Fails if the native footer buttons stop using the ScriptKitFooterButton
     /// subclass that accepts first mouse, which would break single-click
     /// behavior when the main window is inactive.
@@ -417,8 +458,8 @@ mod tests {
         let strip_section = &content[strip_pos..content.len().min(strip_pos + 2000)];
 
         assert!(
-            strip_section.contains("execute_selected"),
-            "Full footer Run callback must dispatch to execute_selected()"
+            strip_section.contains("dispatch_main_window_footer_action"),
+            "Full footer Run callback must route through dispatch_main_window_footer_action()"
         );
         assert!(
             strip_section.contains("toggle_actions"),

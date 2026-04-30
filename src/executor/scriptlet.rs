@@ -37,6 +37,13 @@ fn apply_scriptlet_environment_allowlist(cmd: &mut Command) {
     }
 }
 
+fn apply_scriptlet_environment(cmd: &mut Command, options: &ScriptletExecOptions) {
+    apply_scriptlet_environment_allowlist(cmd);
+    for (key, value) in &options.extra_env {
+        cmd.env(key, value);
+    }
+}
+
 fn format_template_content(
     content: &str,
     inputs: &HashMap<String, String>,
@@ -80,6 +87,8 @@ pub struct ScriptletExecOptions {
     pub inputs: HashMap<String, String>,
     /// Positional arguments for variable substitution
     pub positional_args: Vec<String>,
+    /// Extra environment pairs to expose after the safe allowlist is restored.
+    pub extra_env: Vec<(String, String)>,
     /// Flags for conditional processing
     pub flags: HashMap<String, bool>,
 }
@@ -422,7 +431,10 @@ mod secure_tempfile_tests {
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
 mod scriptlet_environment_allowlist_tests {
-    use super::{apply_scriptlet_environment_allowlist, SAFE_SCRIPTLET_ENV_VARS};
+    use super::{
+        apply_scriptlet_environment, apply_scriptlet_environment_allowlist, ScriptletExecOptions,
+        SAFE_SCRIPTLET_ENV_VARS,
+    };
     use std::process::Command;
 
     #[test]
@@ -466,6 +478,25 @@ mod scriptlet_environment_allowlist_tests {
             .any(|(key, value)| value.is_some() && key.eq_ignore_ascii_case("PATH"));
         assert!(has_path, "PATH should remain available when present");
     }
+
+    #[test]
+    fn test_apply_scriptlet_environment_adds_explicit_extra_env() {
+        let mut cmd = Command::new("sh");
+        let options = ScriptletExecOptions {
+            extra_env: vec![(
+                "KIT_MENU_SYNTAX_COMMAND_FIELDS".to_string(),
+                r#"[["env","prod"]]"#.to_string(),
+            )],
+            ..Default::default()
+        };
+        apply_scriptlet_environment(&mut cmd, &options);
+
+        let has_extra = cmd.get_envs().any(|(key, value)| {
+            key.eq_ignore_ascii_case("KIT_MENU_SYNTAX_COMMAND_FIELDS")
+                && value.map(|v| v == r#"[["env","prod"]]"#).unwrap_or(false)
+        });
+        assert!(has_extra, "explicit command env should be re-added");
+    }
 }
 
 /// Execute a shell scriptlet (bash, zsh, sh, fish, etc.)
@@ -494,7 +525,7 @@ pub fn execute_shell_scriptlet(
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
     }
-    apply_scriptlet_environment_allowlist(&mut cmd);
+    apply_scriptlet_environment(&mut cmd, options);
 
     let output = cmd.output().map_err(|e| {
         // Provide helpful error message with installation suggestions
@@ -608,7 +639,7 @@ pub fn execute_with_interpreter(
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
     }
-    apply_scriptlet_environment_allowlist(&mut cmd);
+    apply_scriptlet_environment(&mut cmd, options);
 
     let output = cmd
         .output()
@@ -635,7 +666,7 @@ pub fn execute_applescript(
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
     }
-    apply_scriptlet_environment_allowlist(&mut cmd);
+    apply_scriptlet_environment(&mut cmd, options);
 
     let output = cmd
         .output()
@@ -682,7 +713,7 @@ pub fn execute_typescript(
     if let Some(ref cwd) = options.cwd {
         cmd.current_dir(cwd);
     }
-    apply_scriptlet_environment_allowlist(&mut cmd);
+    apply_scriptlet_environment(&mut cmd, options);
 
     let output = cmd
         .output()
@@ -787,7 +818,7 @@ fn build_open_command(target: &str) -> Command {
 /// Execute open command (open URL or file)
 pub fn execute_open(
     content: &str,
-    _options: &ScriptletExecOptions,
+    options: &ScriptletExecOptions,
 ) -> Result<ScriptletResult, String> {
     info!(
         category = "EXEC",
@@ -797,7 +828,7 @@ pub fn execute_open(
 
     let target = content.trim();
     let mut cmd = build_open_command(target);
-    apply_scriptlet_environment_allowlist(&mut cmd);
+    apply_scriptlet_environment(&mut cmd, options);
 
     let output = cmd
         .output()
@@ -844,7 +875,7 @@ mod open_command_tests {
 /// Execute edit command (open file in editor)
 pub fn execute_edit(
     content: &str,
-    _options: &ScriptletExecOptions,
+    options: &ScriptletExecOptions,
 ) -> Result<ScriptletResult, String> {
     info!(
         category = "EXEC",
@@ -866,7 +897,7 @@ pub fn execute_edit(
 
     let mut cmd = Command::new(&editor_path);
     cmd.arg(file_path);
-    apply_scriptlet_environment_allowlist(&mut cmd);
+    apply_scriptlet_environment(&mut cmd, options);
 
     let output = cmd
         .output()

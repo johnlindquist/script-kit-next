@@ -1,4 +1,97 @@
 impl ScriptListApp {
+    fn favorite_filter_matches(&self, id: &str, filter: &str) -> bool {
+        if filter.is_empty() {
+            return true;
+        }
+
+        let filter_lower = filter.to_lowercase();
+        let display_name = self
+            .scripts
+            .iter()
+            .find(|s| s.name == id)
+            .map(|s| s.name.as_str())
+            .or_else(|| {
+                self.scriptlets
+                    .iter()
+                    .find(|sl| sl.name == id)
+                    .map(|sl| sl.name.as_str())
+            })
+            .unwrap_or(id);
+        let description = self
+            .scripts
+            .iter()
+            .find(|s| s.name == id)
+            .and_then(|s| s.description.as_deref())
+            .or_else(|| {
+                self.scriptlets
+                    .iter()
+                    .find(|sl| sl.name == id)
+                    .and_then(|sl| sl.description.as_deref())
+            })
+            .unwrap_or("");
+
+        display_name.to_lowercase().contains(&filter_lower)
+            || description.to_lowercase().contains(&filter_lower)
+    }
+
+    fn filtered_favorite_ids_for_filter(&self, filter: &str) -> Vec<String> {
+        script_kit_gpui::favorites::load_favorites()
+            .unwrap_or_default()
+            .script_ids
+            .into_iter()
+            .filter(|id| self.favorite_filter_matches(id, filter))
+            .collect()
+    }
+
+    pub(crate) fn selected_favorite_id(&self) -> Option<String> {
+        let AppView::FavoritesBrowseView {
+            filter,
+            selected_index,
+        } = &self.current_view
+        else {
+            return None;
+        };
+
+        self.filtered_favorite_ids_for_filter(filter)
+            .get(*selected_index)
+            .cloned()
+    }
+
+    pub(crate) fn selected_favorite_source_path(&self) -> Option<(String, std::path::PathBuf)> {
+        let id = self.selected_favorite_id()?;
+        if let Some(script) = self.scripts.iter().find(|s| s.name == id) {
+            return Some((id, script.path.clone()));
+        }
+
+        let scriptlet = self.scriptlets.iter().find(|sl| sl.name == id)?;
+        let file_path = scriptlet.file_path.as_ref()?;
+        let path_str = file_path.split('#').next().unwrap_or(file_path);
+        Some((id, std::path::PathBuf::from(path_str)))
+    }
+
+    fn clamp_favorites_selection(&mut self) {
+        let (filter, selected_index) = match &self.current_view {
+            AppView::FavoritesBrowseView {
+                filter,
+                selected_index,
+            } => (filter.clone(), *selected_index),
+            _ => return,
+        };
+        let filtered_len = self.filtered_favorite_ids_for_filter(&filter).len();
+
+        if let AppView::FavoritesBrowseView {
+            selected_index: index,
+            ..
+        } = &mut self.current_view
+        {
+            *index = if filtered_len == 0 {
+                0
+            } else {
+                selected_index.min(filtered_len - 1)
+            };
+        }
+    }
+
     /// Render the favorites browse list with search/filter.
     fn render_favorites_browse(
         &mut self,
@@ -185,7 +278,7 @@ impl ScriptListApp {
                     .text_size(px(design_typography.font_size_xs))
                     .text_color(rgb(text_muted))
                     .child(
-                        "Enter: run \u{00b7} U: move up \u{00b7} J: move down \u{00b7} D: remove \u{00b7} Esc: back",
+                        "\u{21b5} Run \u{00b7} U Move Up \u{00b7} J Move Down \u{00b7} D Remove from Favorites \u{00b7} Esc Back",
                     )
                     .into_any_element()
             })
@@ -227,125 +320,148 @@ impl ScriptListApp {
         self.show_error_toast(format!("Script '{}' not found", id), cx);
     }
 
+    pub(crate) fn run_selected_favorite(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Result<String, String> {
+        let id = self
+            .selected_favorite_id()
+            .ok_or_else(|| "Select a favorite to run.".to_string())?;
+        self.run_favorite(&id, window, cx);
+        Ok(format!("Running '{}'", id))
+    }
+
+    pub(crate) fn remove_selected_favorite(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Result<String, String> {
+        let id = self
+            .selected_favorite_id()
+            .ok_or_else(|| "Select a favorite to remove.".to_string())?;
+
+        tracing::info!(
+            favorite_id = %id,
+            action = "favorite_remove",
+            "Removing favorite"
+        );
+        match script_kit_gpui::favorites::remove_favorite(&id) {
+            Ok(_) => {
+                self.clamp_favorites_selection();
+                self.show_hud(format!("Removed '{}'", id), Some(HUD_SHORT_MS), cx);
+                cx.notify();
+                Ok(format!("Removed '{}'", id))
+            }
+            Err(e) => {
+                tracing::error!(
+                    error = %e,
+                    action = "favorite_remove_failed",
+                    "Failed to remove favorite"
+                );
+                Err(format!("Failed to remove favorite: {}", e))
+            }
+        }
+    }
+
+    pub(crate) fn move_selected_favorite_up(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Result<String, String> {
+        let id = self
+            .selected_favorite_id()
+            .ok_or_else(|| "Select a favorite to move.".to_string())?;
+        let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
+        let Some(original_index) = favorites.script_ids.iter().position(|item| item == &id) else {
+            return Err(format!("Favorite '{}' was not found.", id));
+        };
+        if original_index == 0 {
+            return Ok(format!("'{}' is already first", id));
+        }
+
+        tracing::info!(
+            favorite_id = %id,
+            action = "favorite_move_up",
+            "Moving favorite up"
+        );
+        script_kit_gpui::favorites::move_favorite_up(&id)
+            .map_err(|e| format!("Failed to move favorite up: {}", e))?;
+        if let AppView::FavoritesBrowseView { selected_index, .. } = &mut self.current_view {
+            *selected_index = selected_index.saturating_sub(1);
+        }
+        cx.notify();
+        Ok(format!("Moved '{}' up", id))
+    }
+
+    pub(crate) fn move_selected_favorite_down(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> Result<String, String> {
+        let id = self
+            .selected_favorite_id()
+            .ok_or_else(|| "Select a favorite to move.".to_string())?;
+        let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
+        let Some(original_index) = favorites.script_ids.iter().position(|item| item == &id) else {
+            return Err(format!("Favorite '{}' was not found.", id));
+        };
+        if original_index + 1 >= favorites.script_ids.len() {
+            return Ok(format!("'{}' is already last", id));
+        }
+
+        tracing::info!(
+            favorite_id = %id,
+            action = "favorite_move_down",
+            "Moving favorite down"
+        );
+        script_kit_gpui::favorites::move_favorite_down(&id)
+            .map_err(|e| format!("Failed to move favorite down: {}", e))?;
+        if let AppView::FavoritesBrowseView { selected_index, .. } = &mut self.current_view {
+            *selected_index += 1;
+        }
+        self.clamp_favorites_selection();
+        cx.notify();
+        Ok(format!("Moved '{}' down", id))
+    }
+
     /// Handle keyboard input for the favorites browse view.
     #[allow(dead_code)] // Called from startup_new_actions.rs interceptor
     pub(crate) fn handle_favorites_browse_key(
         &mut self,
         key: &str,
+        has_cmd: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let AppView::FavoritesBrowseView {
-            ref filter,
-            ref mut selected_index,
-        } = self.current_view
-        {
-            if crate::ui_foundation::is_key_enter(key) {
-                let favorites = script_kit_gpui::favorites::load_favorites()
-                    .unwrap_or_default();
-                let filter_lower = filter.to_lowercase();
-                let filtered: Vec<&String> = if filter.is_empty() {
-                    favorites.script_ids.iter().collect()
-                } else {
-                    favorites
-                        .script_ids
-                        .iter()
-                        .filter(|id| id.to_lowercase().contains(&filter_lower))
-                        .collect()
-                };
-                if let Some(id) = filtered.get(*selected_index) {
-                    let id = (*id).clone();
-                    self.run_favorite(&id, window, cx);
-                }
-            } else if crate::ui_foundation::is_key_escape(key) {
-                self.go_back_or_close(window, cx);
-            } else if key.eq_ignore_ascii_case("d") && self.filter_text.is_empty() {
-                // Remove selected favorite
-                let favorites = script_kit_gpui::favorites::load_favorites()
-                    .unwrap_or_default();
-                let filtered: Vec<&String> = favorites.script_ids.iter().collect();
-                if let Some(id) = filtered.get(*selected_index) {
-                    let id_owned = (*id).clone();
-                    tracing::info!(
-                        favorite_id = %id_owned,
-                        action = "favorite_remove",
-                        "Removing favorite"
-                    );
-                    match script_kit_gpui::favorites::remove_favorite(&id_owned) {
-                        Ok(updated) => {
-                            if *selected_index >= updated.script_ids.len()
-                                && !updated.script_ids.is_empty()
-                            {
-                                *selected_index = updated.script_ids.len() - 1;
-                            }
-                            self.show_hud(
-                                format!("Removed '{}'", id_owned),
-                                Some(HUD_SHORT_MS),
-                                cx,
-                            );
-                        }
-                        Err(e) => {
-                            tracing::error!(
-                                error = %e,
-                                action = "favorite_remove_failed",
-                                "Failed to remove favorite"
-                            );
-                            self.show_error_toast(
-                                format!("Failed to remove favorite: {}", e),
-                                cx,
-                            );
-                        }
-                    }
-                    cx.notify();
-                }
-            } else if key.eq_ignore_ascii_case("u") && self.filter_text.is_empty() {
-                // Move selected favorite up
-                let favorites = script_kit_gpui::favorites::load_favorites()
-                    .unwrap_or_default();
-                if let Some(id) = favorites.script_ids.get(*selected_index) {
-                    let id_owned = id.clone();
-                    if *selected_index > 0 {
-                        tracing::info!(
-                            favorite_id = %id_owned,
-                            action = "favorite_move_up",
-                            "Moving favorite up"
-                        );
-                        if let Err(e) = script_kit_gpui::favorites::move_favorite_up(&id_owned) {
-                            tracing::error!(
-                                error = %e,
-                                action = "favorite_move_up_failed",
-                                "Failed to move favorite up"
-                            );
-                        } else {
-                            *selected_index -= 1;
-                        }
-                        cx.notify();
-                    }
-                }
-            } else if key.eq_ignore_ascii_case("j") && self.filter_text.is_empty() {
-                // Move selected favorite down
-                let favorites = script_kit_gpui::favorites::load_favorites()
-                    .unwrap_or_default();
-                if let Some(id) = favorites.script_ids.get(*selected_index) {
-                    let id_owned = id.clone();
-                    if *selected_index + 1 < favorites.script_ids.len() {
-                        tracing::info!(
-                            favorite_id = %id_owned,
-                            action = "favorite_move_down",
-                            "Moving favorite down"
-                        );
-                        if let Err(e) = script_kit_gpui::favorites::move_favorite_down(&id_owned) {
-                            tracing::error!(
-                                error = %e,
-                                action = "favorite_move_down_failed",
-                                "Failed to move favorite down"
-                            );
-                        } else {
-                            *selected_index += 1;
-                        }
-                        cx.notify();
-                    }
-                }
+        if !matches!(self.current_view, AppView::FavoritesBrowseView { .. }) {
+            return;
+        }
+
+        if has_cmd && key.eq_ignore_ascii_case("k") {
+            if self.selected_favorite_id().is_some()
+                || self.show_actions_popup
+                || crate::actions::is_actions_window_open()
+            {
+                self.toggle_favorites_actions(window, cx);
+            }
+            return;
+        }
+
+        if crate::ui_foundation::is_key_enter(key) {
+            if let Err(message) = self.run_selected_favorite(window, cx) {
+                self.show_error_toast(message, cx);
+            }
+        } else if crate::ui_foundation::is_key_escape(key) {
+            self.go_back_or_close(window, cx);
+        } else if key.eq_ignore_ascii_case("d") && self.filter_text.is_empty() {
+            if let Err(message) = self.remove_selected_favorite(cx) {
+                self.show_error_toast(message, cx);
+            }
+        } else if key.eq_ignore_ascii_case("u") && self.filter_text.is_empty() {
+            if let Err(message) = self.move_selected_favorite_up(cx) {
+                self.show_error_toast(message, cx);
+            }
+        } else if key.eq_ignore_ascii_case("j") && self.filter_text.is_empty() {
+            if let Err(message) = self.move_selected_favorite_down(cx) {
+                self.show_error_toast(message, cx);
             }
         }
     }

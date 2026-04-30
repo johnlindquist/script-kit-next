@@ -4,20 +4,82 @@
         let actions_interceptor = cx.intercept_keystrokes({
             let app_entity = app_entity_for_actions;
             move |event, window, cx| {
+                let is_notes = crate::notes::is_notes_window(window);
+                let is_ai = crate::ai::is_ai_window(window);
+                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
+                let is_actions = crate::actions::is_actions_window(window);
+
+                let key = event.keystroke.key.as_str();
+                let has_cmd = event.keystroke.modifiers.platform;
+                let has_shift = event.keystroke.modifiers.shift;
+                let key_char = event.keystroke.key_char.as_deref();
+                let is_actions_close_key = crate::ui_foundation::is_key_escape(key)
+                    || (has_cmd && key.eq_ignore_ascii_case("k") && !has_shift);
+
+                // ACP can open the shared actions dialog from its own focused
+                // composer even when the launcher visibility flag is false.
+                // Close keys still need to reach the shared dialog before the
+                // hidden-window guard below has a chance to skip them.
+                if is_actions_close_key {
+                    let mut close_key_routed = false;
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if !is_actions
+                                && !this.show_actions_popup
+                                && !crate::actions::is_actions_window_open()
+                            {
+                                return;
+                            }
+                            if let crate::app_impl::actions_dialog::ActionsSupport::SharedDialog(
+                                host,
+                            ) = this.actions_support_for_view()
+                            {
+                                match this.route_key_to_actions_dialog(
+                                    key,
+                                    key_char,
+                                    &event.keystroke.modifiers,
+                                    host,
+                                    window,
+                                    cx,
+                                ) {
+                                    ActionsRoute::NotHandled => {}
+                                    ActionsRoute::Handled | ActionsRoute::Execute { .. } => {
+                                        tracing::info!(
+                                            target: "script_kit::actions",
+                                            event = if is_actions {
+                                                "actions_interceptor_routed_from_actions_window"
+                                            } else {
+                                                "actions_interceptor_routed_close_before_visibility_guard"
+                                            },
+                                            host = ?host,
+                                            key = %key,
+                                        );
+                                        cx.stop_propagation();
+                                        close_key_routed = true;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    if close_key_routed {
+                        return;
+                    }
+                }
+
                 // When the main window is hidden (e.g. Notes/AI open), main-menu
                 // key interceptors must not consume keystrokes from secondary windows.
                 if !script_kit_gpui::is_main_window_visible() {
                     return;
                 }
 
+                if is_actions {
+                    return;
+                }
+
                 // Skip keystrokes from secondary windows — interceptors are
                 // GLOBAL and fire for ALL windows.  Secondary windows own
                 // their own Cmd+K/Escape/Enter handling.
-                let is_notes = crate::notes::is_notes_window(window);
-                let is_ai = crate::ai::is_ai_window(window);
-                let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
-                let is_actions = crate::actions::is_actions_window(window);
-                if is_notes || is_ai || is_detached_acp || is_actions {
+                if is_notes || is_ai || is_detached_acp {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_skipped_secondary_window",
@@ -28,11 +90,6 @@
                     );
                     return;
                 }
-
-                let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
-                let has_shift = event.keystroke.modifiers.shift;
-                let key_char = event.keystroke.key_char.as_deref();
 
                 if confirm::consume_main_window_key_while_confirm_open(
                     key,
@@ -72,9 +129,35 @@
                         if has_cmd && key.eq_ignore_ascii_case("w") && !has_shift
                             && matches!(this.current_view, AppView::AcpChatView { .. })
                         {
-                            logging::log("KEY", "Interceptor: Cmd+W -> close window from ACP chat");
+                            tracing::info!(
+                                target: "script_kit::keyboard",
+                                event = "embedded_acp_cmd_w_close_window",
+                            );
+                            logging::log("KEY", "Interceptor: Cmd+W -> close window from Agent Chat");
                             this.close_tab_ai_harness_terminal_with_window(window, cx);
                             this.close_and_reset_window(cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+
+                        let acp_escape_cancelled_streaming = if crate::ui_foundation::is_key_escape(key)
+                            && !has_cmd
+                            && !has_shift
+                        {
+                            match &this.current_view {
+                                AppView::AcpChatView { entity, .. } => entity.update(cx, |chat, cx| {
+                                    chat.cancel_streaming_from_escape(cx)
+                                }),
+                                _ => false,
+                            }
+                        } else {
+                            false
+                        };
+                        if acp_escape_cancelled_streaming {
+                            logging::log(
+                                "KEY",
+                                "Interceptor: Escape -> cancel Agent Chat streaming",
+                            );
                             cx.stop_propagation();
                             return;
                         }
@@ -92,8 +175,12 @@
                             && !acp_escape_popup_open
                             && matches!(this.current_view, AppView::AcpChatView { .. })
                         {
+                            tracing::info!(
+                                target: "script_kit::keyboard",
+                                event = "embedded_acp_escape_return_to_origin",
+                            );
                             this.close_tab_ai_harness_terminal_with_window(window, cx);
-                            logging::log("KEY", "Interceptor: Escape -> return to main menu from ACP chat");
+                            logging::log("KEY", "Interceptor: Escape -> return to main menu from Agent Chat");
                             cx.stop_propagation();
                             return;
                         }
@@ -261,9 +348,11 @@
 
                         // Handle keys for Favorites view
                         if matches!(this.current_view, AppView::FavoritesBrowseView { .. }) {
-                            this.handle_favorites_browse_key(key, window, cx);
+                            let has_cmd = event.keystroke.modifiers.platform;
+                            this.handle_favorites_browse_key(key, has_cmd, window, cx);
                             if crate::ui_foundation::is_key_enter(key)
                                 || crate::ui_foundation::is_key_escape(key)
+                                || (has_cmd && key.eq_ignore_ascii_case("k"))
                                 || (key.len() == 1
                                     && this.filter_text.is_empty()
                                     && matches!(

@@ -7,7 +7,94 @@ pub(super) fn calculate_fallback_error_message(expression: &str) -> String {
     )
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MainWindowGlobalKeyIntent {
+    OpenAcpWithCurrentContext,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MainWindowActionsKeyIntent {
+    ToggleActions,
+    CloseEmbeddedAcpWindow,
+}
+
+fn main_window_global_key_intent(
+    event: &gpui::KeystrokeEvent,
+) -> Option<MainWindowGlobalKeyIntent> {
+    let key = event.keystroke.key.as_str();
+    let has_shift = event.keystroke.modifiers.shift;
+
+    if crate::ui_foundation::is_key_enter(key)
+        && event.keystroke.modifiers.platform
+        && !has_shift
+        && !event.keystroke.modifiers.alt
+        && !event.keystroke.modifiers.control
+    {
+        return Some(MainWindowGlobalKeyIntent::OpenAcpWithCurrentContext);
+    }
+
+    None
+}
+
+fn main_window_actions_key_intent(
+    current_view: &AppView,
+    event: &gpui::KeystrokeEvent,
+) -> Option<MainWindowActionsKeyIntent> {
+    let key = event.keystroke.key.as_str();
+    let has_cmd = event.keystroke.modifiers.platform;
+    let has_shift = event.keystroke.modifiers.shift;
+
+    if has_cmd && key.eq_ignore_ascii_case("k") && !has_shift {
+        return Some(MainWindowActionsKeyIntent::ToggleActions);
+    }
+
+    if has_cmd
+        && key.eq_ignore_ascii_case("w")
+        && !has_shift
+        && matches!(current_view, AppView::AcpChatView { .. })
+    {
+        return Some(MainWindowActionsKeyIntent::CloseEmbeddedAcpWindow);
+    }
+
+    None
+}
+
 impl ScriptListApp {
+    fn handle_main_window_global_key_intent(
+        &mut self,
+        intent: MainWindowGlobalKeyIntent,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match intent {
+            MainWindowGlobalKeyIntent::OpenAcpWithCurrentContext => {
+                self.try_route_global_cmd_enter_to_acp_context_capture(cx)
+            }
+        }
+    }
+
+    fn handle_main_window_actions_key_intent(
+        &mut self,
+        intent: MainWindowActionsKeyIntent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match intent {
+            MainWindowActionsKeyIntent::ToggleActions => {
+                self.handle_cmd_k_actions_toggle(window, cx)
+            }
+            MainWindowActionsKeyIntent::CloseEmbeddedAcpWindow => {
+                tracing::info!(
+                    target: "script_kit::keyboard",
+                    event = "embedded_acp_cmd_w_close_window",
+                );
+                logging::log("KEY", "Interceptor: Cmd+W -> close window from Agent Chat");
+                self.close_tab_ai_harness_terminal_with_window(window, cx);
+                self.close_and_reset_window(cx);
+                true
+            }
+        }
+    }
+
     pub(crate) fn new(
         config: config::Config,
         bun_available: bool,
@@ -16,31 +103,31 @@ impl ScriptListApp {
     ) -> Self {
         // PERF: Parallelize script + scriptlet loading to reduce startup wall time.
         let load_start = std::time::Instant::now();
-        let (scripts, scriptlets, scripts_elapsed, scriptlets_elapsed) = std::thread::scope(
+        let (script_report, scriptlets, scripts_elapsed, scriptlets_elapsed) = std::thread::scope(
             |scope| {
                 let scripts_handle = scope.spawn(|| {
                     let start = std::time::Instant::now();
-                    let loaded = scripts::read_scripts();
+                    let loaded = scripts::read_scripts_report();
                     (loaded, start.elapsed())
                 });
 
                 let scriptlets_handle = scope.spawn(|| {
                     let start = std::time::Instant::now();
-                    // Use load_scriptlets() to load from ALL kits (kit/*/scriptlets/*.md)
+                    // Use load_scriptlets() to load from all plugins (plugins/*/scriptlets/*.md)
                     // This includes built-in extensions like CleanShot and user extensions
                     let loaded = scripts::load_scriptlets();
                     (loaded, start.elapsed())
                 });
 
-                let (scripts, scripts_elapsed) = match scripts_handle.join() {
+                let (script_report, scripts_elapsed) = match scripts_handle.join() {
                     Ok(result) => result,
                     Err(_) => {
                         logging::log(
                             "PERF",
-                            "Script loading thread panicked; retrying read_scripts synchronously",
+                            "Script loading thread panicked; retrying read_scripts_report synchronously",
                         );
                         let retry_start = std::time::Instant::now();
-                        (scripts::read_scripts(), retry_start.elapsed())
+                        (scripts::read_scripts_report(), retry_start.elapsed())
                     }
                 };
 
@@ -56,9 +143,18 @@ impl ScriptListApp {
                     }
                 };
 
-                (scripts, scriptlets, scripts_elapsed, scriptlets_elapsed)
+                (
+                    script_report,
+                    scriptlets,
+                    scripts_elapsed,
+                    scriptlets_elapsed,
+                )
             },
         );
+
+        let scripts: Vec<std::sync::Arc<scripts::Script>> =
+            script_report.scripts.iter().cloned().collect();
+        let script_validation_report = Some(script_report.validation.clone());
 
         // Theme cache was initialized earlier in app startup before window creation.
         // Reuse it here so ScriptListApp construction does not re-read theme files
@@ -79,33 +175,40 @@ impl ScriptListApp {
         let mut frecency_store = FrecencyStore::with_config(&suggested_config);
         frecency_store.load().ok(); // Ignore errors - starts fresh if file doesn't exist
 
-        // Load built-in entries based on config
-        let builtin_entries = builtins::get_builtin_entries(&config.get_builtins());
+        // Load built-in entries based on config, filtering out commands hidden via
+        // `hiddenCommands` or per-command `commands.*.hidden` overrides.
+        let builtin_entries: Vec<_> = builtins::get_builtin_entries(&config.get_builtins())
+            .into_iter()
+            .filter(|entry| !config.is_command_hidden(&entry.id))
+            .collect();
 
         // Apps are loaded in the background to avoid blocking startup
         // Start with empty list, will be populated asynchronously
         let apps = Vec::new();
 
         let total_elapsed = load_start.elapsed();
-        logging::log("PERF", &format!(
-            "Startup loading: {:.2}ms total ({} scripts in {:.2}ms, {} scriptlets in {:.2}ms, apps loading in background)",
-            total_elapsed.as_secs_f64() * 1000.0,
-            scripts.len(),
-            scripts_elapsed.as_secs_f64() * 1000.0,
-            scriptlets.len(),
-            scriptlets_elapsed.as_secs_f64() * 1000.0
-        ));
+        logging::log(
+            "PERF",
+            &format!(
+                "Startup loading: {:.2}ms total ({} scripts in {:.2}ms, {} scriptlets in {:.2}ms, apps loading in background)",
+                total_elapsed.as_secs_f64() * 1000.0,
+                scripts.len(),
+                scripts_elapsed.as_secs_f64() * 1000.0,
+                scriptlets.len(),
+                scriptlets_elapsed.as_secs_f64() * 1000.0
+            ),
+        );
         logging::log(
             "APP",
             &format!(
-                "Loaded {} scripts from ~/.scriptkit/kit/*/scripts",
+                "Loaded {} scripts from ~/.scriptkit/plugins/*/scripts",
                 scripts.len()
             ),
         );
         logging::log(
             "APP",
             &format!(
-                "Loaded {} scriptlets from ~/.scriptkit/kit/*/scriptlets",
+                "Loaded {} scriptlets from ~/.scriptkit/plugins/*/scriptlets",
                 scriptlets.len()
             ),
         );
@@ -158,8 +261,7 @@ impl ScriptListApp {
                     this.update(cx, |app, cx| {
                         app.apps = apps;
                         // Invalidate caches since apps changed
-                        app.filter_cache_key = String::from("\0_APPS_LOADED_\0");
-                        app.grouped_cache_key = String::from("\0_APPS_LOADED_\0");
+                        app.main_menu_result_caches.mark_apps_loaded();
                         logging::log(
                             "APP",
                             &format!(
@@ -185,6 +287,85 @@ impl ScriptListApp {
                         cx.notify();
                     })
                 });
+            })
+            .detach();
+        }
+
+        #[cfg(not(test))]
+        {
+            let share_rx = crate::script_sharing::spawn_clipboard_share_watcher();
+            cx.spawn(async move |this, cx| {
+                while let Ok(import) = share_rx.recv().await {
+                    tracing::info!(
+                        share_uri = %import.uri,
+                        title = %import.bundle.title,
+                        kind = ?import.bundle.kind,
+                        "clipboard_share_bundle_detected"
+                    );
+                    script_kit_gpui::request_show_main_window();
+                    cx.background_executor()
+                        .timer(std::time::Duration::from_millis(180))
+                        .await;
+
+                    let options = crate::confirm::ParentConfirmOptions {
+                        title: import.bundle.prompt_title().into(),
+                        body: import.bundle.prompt_body().into(),
+                        confirm_text: "Install".into(),
+                        cancel_text: "Ignore".into(),
+                        ..Default::default()
+                    };
+                    let trace_id = format!(
+                        "share-import-{}-{}",
+                        import.bundle.kind.display_name().to_lowercase(),
+                        import.bundle.title.to_lowercase().replace(' ', "-")
+                    );
+
+                    let confirmed =
+                        match crate::confirm::confirm_with_parent_dialog(cx, options, &trace_id)
+                            .await
+                        {
+                            Ok(confirmed) => confirmed,
+                            Err(error) => {
+                                tracing::error!(
+                                    ?error,
+                                    title = %import.bundle.title,
+                                    "clipboard_share_confirm_failed"
+                                );
+                                continue;
+                            }
+                        };
+                    if !confirmed {
+                        continue;
+                    }
+
+                    let install_result =
+                        crate::script_sharing::install_share_bundle(&import.bundle);
+                    let title = import.bundle.title.clone();
+                    let kind = import.bundle.kind.display_name().to_lowercase();
+                    let _ = cx.update(|cx| {
+                        this.update(cx, |app, cx| match install_result {
+                            Ok(outcome) => {
+                                app.refresh_scripts(cx);
+                                app.refresh_skills(cx);
+                                app.current_view = AppView::ScriptList;
+                                app.show_hud(
+                                    format!("Installed shared {} into {}", kind, outcome.plugin_id),
+                                    Some(2000),
+                                    cx,
+                                );
+                            }
+                            Err(error) => {
+                                app.show_error_toast(
+                                    format!(
+                                        "Failed to install shared {} '{}': {}",
+                                        kind, title, error
+                                    ),
+                                    cx,
+                                );
+                            }
+                        })
+                    });
+                }
             })
             .detach();
         }
@@ -303,7 +484,8 @@ impl ScriptListApp {
                                 input_received_at
                             ),
                         );
-                        this.filter_perf_start = Some(input_received_at);
+                        this.main_menu_render_diagnostics.filter_perf_start =
+                            Some(input_received_at);
                         this.handle_filter_input_change(window, cx);
                     }
                 }
@@ -336,7 +518,7 @@ impl ScriptListApp {
                             script_kit_gpui::is_within_focus_grace_period(),
                             std::mem::discriminant(&this.current_view),
                             this.show_actions_popup,
-                            this.fallback_mode,
+                            this.main_menu_fallback_state.is_active(),
                             this.selected_index,
                             this.filter_text.len()
                         ),
@@ -355,7 +537,7 @@ impl ScriptListApp {
                     if matches!(this.current_view, AppView::ScriptList) && !this.show_actions_popup
                     {
                         // Check if we're in fallback mode first
-                        if this.fallback_mode && !this.cached_fallbacks.is_empty() {
+                        if this.main_menu_fallback_state.is_active() {
                             this.execute_selected_fallback(cx);
                         } else {
                             this.execute_selected(cx);
@@ -384,11 +566,13 @@ impl ScriptListApp {
                 .unwrap_or_default();
             skills.into_iter().map(std::sync::Arc::new).collect()
         };
+        crate::dictation::hydrate_dictation_resource_from_history();
 
         let mut app = ScriptListApp {
             scripts,
             scriptlets,
             skills: plugin_skills,
+            script_validation_report,
             builtin_entries,
             apps,
             // P0 FIX: Cached data for builtin views (avoids cloning per frame)
@@ -396,10 +580,13 @@ impl ScriptListApp {
             paste_sequential_state: None,
             focused_clipboard_entry_id: None,
             cached_windows: Vec::new(),
+            cached_browser_tabs: Vec::new(),
+            cached_browser_history: Vec::new(),
             cached_file_results: Vec::new(),
             cached_processes: Vec::new(),
             process_manager_refresh_task: None,
             cached_current_app_entries: Vec::new(),
+            current_app_commands_session: None,
             selected_index: 0,
             filter_text: String::new(),
             inline_calculator: None,
@@ -415,6 +602,9 @@ impl ScriptListApp {
             focus_handle: cx.focus_handle(),
             show_logs: false,
             show_info_panel: false,
+            quick_terminal_warm_pty: None,
+            quick_terminal_warm_inflight: false,
+            quick_terminal_warm_created_at: None,
             theme,
             config,
             // Scroll activity tracking: start with scrollbar hidden
@@ -437,10 +627,14 @@ impl ScriptListApp {
             arg_list_scroll_handle: UniformListScrollHandle::new(),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),
             emoji_scroll_handle: UniformListScrollHandle::new(),
+            emoji_frequent_snapshot: Vec::new(),
             window_list_scroll_handle: UniformListScrollHandle::new(),
+            browser_tabs_scroll_handle: UniformListScrollHandle::new(),
             process_list_scroll_handle: UniformListScrollHandle::new(),
             current_app_commands_scroll_handle: UniformListScrollHandle::new(),
             acp_history_scroll_handle: ScrollHandle::new(),
+            browser_history_scroll_handle: ScrollHandle::new(),
+            dictation_history_scroll_handle: ScrollHandle::new(),
             notes_browse_scroll_handle: ScrollHandle::new(),
             design_gallery_scroll_handle: UniformListScrollHandle::new(),
             file_search_scroll_handle: UniformListScrollHandle::new(),
@@ -448,6 +642,7 @@ impl ScriptListApp {
             file_search_loading: false,
             file_search_debounce_task: None,
             file_search_current_dir: None,
+            file_search_current_dir_show_hidden: false,
             file_search_frozen_filter: None,
             file_search_actions_path: None,
             file_search_sort_mode: crate::actions::FileSearchSortMode::default(),
@@ -462,18 +657,15 @@ impl ScriptListApp {
             cursor_visible: true,
             focused_input: FocusedInput::MainFilter,
             current_script_pid: None,
-            // P1: Initialize filter cache
-            cached_filtered_results: Vec::new(),
-            filter_cache_key: String::from("\0_UNINITIALIZED_\0"), // Sentinel value to force initial compute
-            // P1: Initialize grouped results cache (Arc for cheap clone)
-            cached_grouped_items: Arc::from([]),
-            cached_grouped_flat_results: Arc::from([]),
-            cached_grouped_first_selectable_index: None,
-            cached_grouped_last_selectable_index: None,
-            grouped_cache_key: String::from("\0_UNINITIALIZED_\0"), // Sentinel value to force initial compute
+            main_menu_result_caches: MainMenuResultCacheState::default(),
             // P3: Two-stage filter coalescing
             computed_filter_text: String::new(),
             filter_coalescer: FilterCoalescer::new(),
+            menu_syntax_mode: crate::menu_syntax::MenuSyntaxMode::default(),
+            menu_syntax_trigger_popup_state:
+                crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState::default(),
+            pending_menu_syntax_ai_proposal: None,
+            menu_syntax_trigger_popup_suppressed_filter: None,
             // Scroll stabilization: start with no last scrolled index
             last_scrolled_index: None,
             // Preview cache: start empty, will populate on first render
@@ -495,18 +687,9 @@ impl ScriptListApp {
             hovered_index: None,
             // Input mode: starts as Mouse (default), switches to Keyboard on arrow keys
             input_mode: InputMode::Mouse,
-            // Fallback mode state - starts as false (showing scripts, not fallbacks)
-            fallback_mode: false,
-            fallback_selected_index: 0,
-            cached_fallbacks: Vec::new(),
+            main_menu_fallback_state: MainMenuFallbackState::default(),
             theme_before_chooser: None,
-            // Render log deduplication: track last logged state to skip cursor-blink spam
-            last_render_log_filter: String::new(),
-            last_render_log_selection: usize::MAX, // Use MAX to ensure first render logs
-            last_render_log_item_count: usize::MAX,
-            log_this_render: true, // Default to true for first render
-            // Filter performance tracking - None until first filter change
-            filter_perf_start: None,
+            main_menu_render_diagnostics: MainMenuRenderDiagnosticsState::default(),
             // Pending path action - starts as None (Arc<Mutex<>> for callback access)
             pending_path_action: Arc::new(Mutex::new(None)),
             // Signal to close path actions dialog
@@ -573,9 +756,16 @@ impl ScriptListApp {
             tab_ai_harness_script_list_trigger: None,
             tab_ai_harness_apply_back_route: None,
             embedded_acp_chat: None,
+            prewarmed_acp_chat: None,
+            acp_ready_script_path: None,
+            acp_footer_dot_status: None,
+            acp_footer_model_display: None,
+            attachment_portal_host_snapshot: None,
             attachment_portal_return_view: None,
             attachment_portal_return_focus_target: None,
+            attachment_portal_return_width: None,
             active_attachment_portal_kind: None,
+            acp_surface_state: crate::ai::acp::surface_state::AcpSurfaceState::Hidden,
             // Input history for shell-like up/down navigation
             input_history: {
                 let mut history = input_history::InputHistory::new();
@@ -707,11 +897,12 @@ impl ScriptListApp {
                 let key = event.keystroke.key.as_str();
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;
-                let is_global_ai_chord = crate::ui_foundation::is_key_enter(key)
-                    && event.keystroke.modifiers.platform
+                let is_plain_enter = crate::ui_foundation::is_key_enter(key)
+                    && !event.keystroke.modifiers.platform
                     && !has_shift
                     && !event.keystroke.modifiers.alt
                     && !event.keystroke.modifiers.control;
+
                 if confirm::consume_main_window_key_while_confirm_open(
                     key,
                     &event.keystroke.modifiers,
@@ -720,10 +911,11 @@ impl ScriptListApp {
                     cx.stop_propagation();
                     return;
                 }
-                if is_global_ai_chord {
+                let global_key_intent = main_window_global_key_intent(event);
+                if let Some(intent) = global_key_intent {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {
-                            if this.try_route_global_cmd_enter_to_acp_context_capture(cx) {
+                            if this.handle_main_window_global_key_intent(intent, cx) {
                                 cx.stop_propagation();
                             }
                         });
@@ -755,16 +947,15 @@ impl ScriptListApp {
                                 save_offer_open = this.tab_ai_save_offer_state.is_some(),
                             );
 
-                            // File search keeps Shift+Tab for parent-directory
-                            // navigation and leaves plain Tab local.
+                            // File search owns Tab locally: plain Tab browses
+                            // into the selected directory and Shift+Tab goes up.
                             if matches!(this.current_view, AppView::FileSearchView { .. }) {
+                                cx.stop_propagation();
                                 if this.show_actions_popup {
-                                    cx.stop_propagation();
                                     return;
                                 }
 
                                 if has_shift {
-                                    cx.stop_propagation();
                                     let current_query = match &this.current_view {
                                         AppView::FileSearchView { query, .. } => query.clone(),
                                         _ => String::new(),
@@ -807,6 +998,11 @@ impl ScriptListApp {
                                             ),
                                         );
                                     }
+                                } else if !this.navigate_file_search_into_selected_directory(cx) {
+                                    crate::logging::log(
+                                        "KEY",
+                                        "Tab: no selected directory to navigate into",
+                                    );
                                 }
                                 return;
                             }
@@ -827,6 +1023,29 @@ impl ScriptListApp {
                                 }
                             }
 
+                            // Menu-syntax trigger popup owns Tab when it is
+                            // visible — Tab applies the selected row (keep-open
+                            // for open-value qualifiers like `source:`,
+                            // close-after-apply for bare qualifiers or capture
+                            // targets). Runs BEFORE the ACP plain-Tab routing
+                            // branch so menu-syntax keyboard stays consistent
+                            // with the ACP slash / @ pickers.
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
+                            {
+                                let intent = if has_shift {
+                                    crate::menu_syntax::InlinePickerKeyIntent::MoveUp
+                                } else {
+                                    crate::menu_syntax::InlinePickerKeyIntent::Apply
+                                };
+                                if this.apply_menu_syntax_trigger_popup_intent(
+                                    intent, window, cx,
+                                ) {
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                            }
+
                             if matches!(this.current_view, AppView::ScriptList)
                                 && !has_shift
                                 && this.try_route_plain_tab_to_acp_context_capture(cx)
@@ -835,7 +1054,7 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            // Consume Tab/Shift+Tab while the ACP chat is
+                            // Consume Tab/Shift+Tab while the Agent Chat is
                             // open so the surface keeps local tab ownership.
                             if let AppView::AcpChatView { entity, .. } = &this.current_view {
                                 let handled = entity
@@ -894,12 +1113,47 @@ impl ScriptListApp {
                         });
                     }
                 }
+
+                // Keep plain Enter routed to ACP mention acceptance in the
+                // embedded main-window host when the picker is open.
+                if is_plain_enter {
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            // Menu-syntax trigger popup owns Enter when it is
+                            // visible on ScriptList — Accept the selected row
+                            // the same way the ACP / and @ pickers do.
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
+                            {
+                                if this.apply_menu_syntax_trigger_popup_intent(
+                                    crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                                    window,
+                                    cx,
+                                ) {
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                            }
+                            if let AppView::AcpChatView { entity, .. } = &this.current_view {
+                                let handled =
+                                    entity.update(cx, |chat, cx| chat.handle_enter_key(cx));
+                                if handled {
+                                    cx.stop_propagation();
+                                }
+                            }
+                        });
+                    }
+                }
             }
         });
         app.gpui_input_subscriptions.push(tab_interceptor);
 
-        // Prewarm the Tab AI harness asynchronously so the first AI-entry
-        // shortcut reuses a live PTY instead of paying spawn cost. Runs once, silently.
+        // Prewarm ACP config and the hidden Agent Chat connection so the first
+        // compatible ACP submit can reuse an initialized runtime/session.
+        crate::ai::acp::prewarm_agent_config();
+
+        // Prewarm Agent Chat and the Tab AI harness asynchronously so AI-entry
+        // shortcuts do not pay subprocess/session startup cost on submit.
         let app_entity_for_tab_ai_warm = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
             cx.background_executor()
@@ -910,7 +1164,9 @@ impl ScriptListApp {
                     return;
                 };
                 app.update(cx, |this, cx| {
+                    this.warm_acp_chat_on_startup(cx);
                     this.warm_tab_ai_harness_on_startup(cx);
+                    this.warm_quick_terminal_pty(cx);
                 });
             });
         })
@@ -944,6 +1200,7 @@ impl ScriptListApp {
                 let is_down = crate::ui_foundation::is_key_down(key);
                 let is_left = crate::ui_foundation::is_key_left(key);
                 let is_right = crate::ui_foundation::is_key_right(key);
+
                 if confirm::consume_main_window_key_while_confirm_open(
                     key,
                     &event.keystroke.modifiers,
@@ -967,17 +1224,19 @@ impl ScriptListApp {
                                 return;
                             }
 
+                            let frequent_snapshot = this.emoji_frequent_snapshot.clone();
                             if let AppView::EmojiPickerView {
                                 selected_index,
                                 filter,
                                 selected_category,
                             } = &mut this.current_view
                             {
-                                let ordered = crate::emoji::filtered_ordered_emojis(
+                                let display = crate::emoji::display_ordered_emojis(
                                     filter,
                                     *selected_category,
+                                    &frequent_snapshot,
                                 );
-                                let filtered_len = ordered.len();
+                                let filtered_len = display.emojis.len();
                                 if filtered_len == 0 {
                                     *selected_index = 0;
                                     this.hovered_index = None;
@@ -997,8 +1256,10 @@ impl ScriptListApp {
                                     (old_idx + 1).min(filtered_len.saturating_sub(1))
                                 };
 
-                                let row =
-                                    crate::emoji::compute_scroll_row(*selected_index, &ordered);
+                                let row = crate::emoji::compute_display_scroll_row(
+                                    *selected_index,
+                                    &display,
+                                );
                                 this.emoji_scroll_handle
                                     .scroll_to_item(row, ScrollStrategy::Nearest);
 
@@ -1030,6 +1291,7 @@ impl ScriptListApp {
                                 return;
                             }
 
+                            let emoji_frequent_snapshot = this.emoji_frequent_snapshot.clone();
                             // Only intercept in views that use Input + list navigation
                             match &mut this.current_view {
                                 AppView::FileSearchView {
@@ -1293,6 +1555,48 @@ impl ScriptListApp {
                                     }
                                     cx.stop_propagation();
                                 }
+                                AppView::BrowserHistoryView {
+                                    selected_index,
+                                    filter,
+                                } => {
+                                    let filtered_len =
+                                        crate::browser_history::fuzzy_search_browser_history(
+                                            &this.cached_browser_history,
+                                            filter,
+                                        )
+                                        .len();
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.browser_history_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.browser_history_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
+                                AppView::DictationHistoryView {
+                                    selected_index,
+                                    filter,
+                                } => {
+                                    let filtered_len =
+                                        crate::dictation::search_history(filter, 100).len();
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.dictation_history_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.dictation_history_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
                                 AppView::SearchAiPresetsView {
                                     selected_index,
                                     filter: _,
@@ -1306,7 +1610,70 @@ impl ScriptListApp {
                                     }
                                     cx.stop_propagation();
                                 }
+                                AppView::EmojiPickerView {
+                                    filter,
+                                    selected_index,
+                                    selected_category,
+                                } => {
+                                    let display = crate::emoji::display_ordered_emojis(
+                                        filter,
+                                        *selected_category,
+                                        &emoji_frequent_snapshot,
+                                    );
+                                    let filtered_len = display.emojis.len();
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        this.hovered_index = None;
+                                        cx.notify();
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
+                                    let layout = crate::emoji::build_display_grid_layout(
+                                        &display,
+                                        crate::emoji::GRID_COLS,
+                                    );
+                                    let direction = if is_up {
+                                        crate::emoji::EmojiNavDirection::Up
+                                    } else {
+                                        crate::emoji::EmojiNavDirection::Down
+                                    };
+                                    *selected_index = layout.move_index(*selected_index, direction);
+                                    let row = layout.scroll_row_for_index(*selected_index);
+                                    this.emoji_scroll_handle
+                                        .scroll_to_item(row, ScrollStrategy::Nearest);
+
+                                    this.input_mode = InputMode::Keyboard;
+                                    this.hovered_index = None;
+                                    cx.notify();
+                                    cx.stop_propagation();
+                                }
                                 AppView::ScriptList => {
+                                    // Menu-syntax trigger popup owns Up/Down when it is
+                                    // visible — route there BEFORE actions-popup and the
+                                    // main-list navigation so the popup's selection
+                                    // highlight tracks the arrow keys instead of the
+                                    // launcher list underneath.
+                                    if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
+                                        && (is_up || is_down)
+                                    {
+                                        let intent = if is_up {
+                                            crate::menu_syntax::InlinePickerKeyIntent::MoveUp
+                                        } else {
+                                            crate::menu_syntax::InlinePickerKeyIntent::MoveDown
+                                        };
+                                        if this.apply_menu_syntax_trigger_popup_intent(
+                                            intent, window, cx,
+                                        ) {
+                                            cx.stop_propagation();
+                                            return;
+                                        }
+                                    }
+
                                     // CRITICAL: If actions popup is open, route to actions dialog instead
                                     if this.show_actions_popup {
                                         if let Some(ref dialog) = this.actions_dialog {
@@ -1345,23 +1712,7 @@ impl ScriptListApp {
                                                     HISTORY,
                                                     &format!("Recalled: {}", text),
                                                 );
-                                                this.filter_text = text.clone();
-                                                let text_len = text.len();
-                                                this.gpui_input_state.update(
-                                                    cx,
-                                                    |state, input_cx| {
-                                                        state.set_value(
-                                                            text.clone(),
-                                                            window,
-                                                            input_cx,
-                                                        );
-                                                        state.set_selection(
-                                                            text_len, text_len, window, input_cx,
-                                                        );
-                                                    },
-                                                );
-                                                this.queue_filter_compute(text, cx);
-                                                cx.notify();
+                                                this.set_filter_text_immediate(text, window, cx);
                                             }
                                             cx.stop_propagation();
                                             return;
@@ -1375,39 +1726,10 @@ impl ScriptListApp {
                                                     HISTORY,
                                                     &format!("Recalled: {}", text),
                                                 );
-                                                this.filter_text = text.clone();
-                                                let text_len = text.len();
-                                                this.gpui_input_state.update(
-                                                    cx,
-                                                    |state, input_cx| {
-                                                        state.set_value(
-                                                            text.clone(),
-                                                            window,
-                                                            input_cx,
-                                                        );
-                                                        state.set_selection(
-                                                            text_len, text_len, window, input_cx,
-                                                        );
-                                                    },
-                                                );
-                                                this.queue_filter_compute(text, cx);
-                                                cx.notify();
+                                                this.set_filter_text_immediate(text, window, cx);
                                             } else {
                                                 this.input_history.reset_navigation();
-                                                this.filter_text.clear();
-                                                this.gpui_input_state.update(
-                                                    cx,
-                                                    |state, input_cx| {
-                                                        state.set_value(
-                                                            String::new(),
-                                                            window,
-                                                            input_cx,
-                                                        );
-                                                        state.set_selection(0, 0, window, input_cx);
-                                                    },
-                                                );
-                                                this.queue_filter_compute(String::new(), cx);
-                                                cx.notify();
+                                                this.clear_filter(window, cx);
                                             }
                                             cx.stop_propagation();
                                             return;
@@ -1450,6 +1772,7 @@ impl ScriptListApp {
 
                 let key = event.keystroke.key.as_str();
                 let has_platform_mod = event.keystroke.modifiers.platform; // Cmd on macOS
+
                 if confirm::consume_main_window_key_while_confirm_open(
                     key,
                     &event.keystroke.modifiers,
@@ -1513,6 +1836,61 @@ impl ScriptListApp {
                 let is_detached_acp = crate::ai::acp::chat_window::is_chat_window(window);
                 let is_actions = crate::actions::is_actions_window(window);
 
+                let key = event.keystroke.key.as_str();
+                let has_cmd = event.keystroke.modifiers.platform;
+                let has_shift = event.keystroke.modifiers.shift;
+                let key_char = event.keystroke.key_char.as_deref();
+                let is_actions_close_key = crate::ui_foundation::is_key_escape(key)
+                    || (has_cmd && key.eq_ignore_ascii_case("k") && !has_shift);
+
+                // ACP can open the shared actions dialog from its own focused
+                // composer even when the launcher visibility flag is false.
+                // Close keys still need to reach the shared dialog before the
+                // hidden-window guard below has a chance to skip them.
+                if is_actions_close_key {
+                    let mut close_key_routed = false;
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if !is_actions
+                                && !this.show_actions_popup
+                                && !crate::actions::is_actions_window_open()
+                            {
+                                return;
+                            }
+                            let Some(host) = this.current_actions_host() else {
+                                return;
+                            };
+                            match this.route_key_to_actions_dialog(
+                                key,
+                                key_char,
+                                &event.keystroke.modifiers,
+                                host,
+                                window,
+                                cx,
+                            ) {
+                                ActionsRoute::NotHandled => {}
+                                ActionsRoute::Handled | ActionsRoute::Execute { .. } => {
+                                    tracing::info!(
+                                        target: "script_kit::actions",
+                                        event = if is_actions {
+                                            "actions_interceptor_routed_from_actions_window"
+                                        } else {
+                                            "actions_interceptor_routed_close_before_visibility_guard"
+                                        },
+                                        host = ?host,
+                                        key = %key,
+                                    );
+                                    cx.stop_propagation();
+                                    close_key_routed = true;
+                                }
+                            }
+                        });
+                    }
+                    if close_key_routed {
+                        return;
+                    }
+                }
+
                 // When the main window is hidden (e.g. Notes/AI open), main-menu
                 // key interceptors must not consume keystrokes from secondary windows.
                 if !script_kit_gpui::is_main_window_visible() {
@@ -1527,10 +1905,14 @@ impl ScriptListApp {
                     return;
                 }
 
+                if is_actions {
+                    return;
+                }
+
                 // CRITICAL: Skip processing if this keystroke is from a secondary window.
                 // intercept_keystrokes is GLOBAL and fires for ALL windows in the app.
                 // We only want to handle keystrokes for the main window.
-                if is_notes || is_ai || is_detached_acp || is_actions {
+                if is_notes || is_ai || is_detached_acp {
                     tracing::debug!(
                         target: "script_kit::keyboard",
                         event = "actions_interceptor_skipped_secondary_window",
@@ -1542,10 +1924,6 @@ impl ScriptListApp {
                     return; // Let the secondary window handle its own keystrokes
                 }
 
-                let key = event.keystroke.key.as_str();
-                let has_cmd = event.keystroke.modifiers.platform;
-                let has_shift = event.keystroke.modifiers.shift;
-                let key_char = event.keystroke.key_char.as_deref();
                 if confirm::consume_main_window_key_while_confirm_open(
                     key,
                     &event.keystroke.modifiers,
@@ -1557,134 +1935,83 @@ impl ScriptListApp {
 
                 if let Some(app) = app_entity.upgrade() {
                     app.update(cx, |this, cx| {
-                        // Handle Cmd+K to toggle actions popup (works in ScriptList, FileSearchView, ArgPrompt)
-                        // This MUST be intercepted here because the Input component has focus and
-                        // normal on_key_down handlers won't receive the event
-                        if has_cmd && key.eq_ignore_ascii_case("k") && !has_shift {
-                            let owner = match &this.current_view {
-                                AppView::ScriptList => "script_list",
-                                AppView::AcpChatView { .. } => "embedded_acp",
-                                AppView::QuickTerminalView { .. } => "quick_terminal",
-                                AppView::FileSearchView { .. } => "file_search",
-                                AppView::ArgPrompt { .. } => "arg_prompt",
-                                AppView::ChatPrompt { .. } => "chat_prompt",
-                                AppView::WebcamView { .. } => "webcam",
-                                AppView::ClipboardHistoryView { .. } => "clipboard_history",
-                                _ => "main_window_other",
-                            };
-                            tracing::debug!(
-                                target: "script_kit::keyboard",
-                                event = "actions_interceptor_owner_path",
-                                owner,
-                                show_actions_popup = this.show_actions_popup,
-                            );
-                            match &mut this.current_view {
-                                AppView::ScriptList => {
-                                    // Toggle actions for the main script list
-                                    if this.has_actions() {
-                                        logging::log(
-                                            "KEY",
-                                            "Interceptor: Cmd+K -> toggle_actions (ScriptList)",
-                                        );
-                                        this.toggle_actions(cx, window);
-                                    }
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                AppView::FileSearchView {
-                                    selected_index,
-                                    query,
-                                    ..
-                                } => {
-                                    // Get the filter pattern for directory path parsing
-                                    let filter_pattern = if let Some(parsed) =
-                                        crate::file_search::parse_directory_path(query)
-                                    {
-                                        parsed.filter
-                                    } else if !query.is_empty() {
-                                        Some(query.clone())
-                                    } else {
-                                        None
-                                    };
+                        // Route shared actions-dialog keys first; local actions
+                        // key intents run only after the dialog declines the key.
+                        let host = this.current_actions_host();
 
-                                    let filtered_results: Vec<_> =
-                                        if let Some(ref pattern) = filter_pattern {
-                                            crate::file_search::filter_results_nucleo_simple(
-                                                &this.cached_file_results,
-                                                pattern,
-                                            )
-                                        } else {
-                                            this.cached_file_results.iter().enumerate().collect()
-                                        };
+                        // Arrow keys are handled by arrow_interceptor to avoid double-processing
+                        // (which can skip 2 items per keypress when both interceptors handle arrows).
+                        if this.show_actions_popup
+                            && (crate::ui_foundation::is_key_up(key)
+                                || crate::ui_foundation::is_key_down(key))
+                        {
+                            return;
+                        }
 
-                                    // Defensive bounds check: clamp selected_index if out of bounds
-                                    let filtered_len = filtered_results.len();
-                                    if filtered_len > 0 && *selected_index >= filtered_len {
-                                        *selected_index = filtered_len - 1;
-                                    }
-
-                                    let selected_file = filtered_results
-                                        .get(*selected_index)
-                                        .map(|(_, file)| (*file).clone());
-                                    this.toggle_file_search_actions(
-                                        selected_file.as_ref(),
-                                        window,
-                                        cx,
+                        if let Some(host) = host {
+                            match this.route_key_to_actions_dialog(
+                                key,
+                                key_char,
+                                &event.keystroke.modifiers,
+                                host,
+                                window,
+                                cx,
+                            ) {
+                                ActionsRoute::NotHandled => {}
+                                ActionsRoute::Handled => {
+                                    tracing::debug!(
+                                        target: "script_kit::actions",
+                                        event = "actions_interceptor_routed",
+                                        host = ?host,
+                                        key = %key,
                                     );
                                     cx.stop_propagation();
                                     return;
                                 }
-                                AppView::ArgPrompt { .. } => {
-                                    // Toggle actions for arg prompts (SDK setActions)
-                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_arg_actions (ArgPrompt)");
-                                    this.toggle_arg_actions(cx, window);
+                                ActionsRoute::Execute { action_id } => {
+                                    this.execute_action_for_actions_host(
+                                        host, action_id, window, cx,
+                                    );
                                     cx.stop_propagation();
                                     return;
-                                }
-                                AppView::ChatPrompt { .. } => {
-                                    // Toggle actions for chat prompts
-                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_chat_actions (ChatPrompt)");
-                                    this.toggle_chat_actions(cx, window);
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                AppView::WebcamView { .. } => {
-                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_webcam_actions (WebcamView)");
-                                    this.toggle_webcam_actions(cx, window);
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                AppView::ClipboardHistoryView { .. } => {
-                                    // Toggle actions for selected clipboard entry
-                                    if let Some(entry) = this.selected_clipboard_entry() {
-                                        logging::log(
-                                            "KEY",
-                                            "Interceptor: Cmd+K -> toggle_clipboard_actions (ClipboardHistoryView)",
-                                        );
-                                        this.toggle_clipboard_actions(entry, window, cx);
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-                                }
-                                AppView::AcpChatView { .. } => {
-                                    logging::log("KEY", "Interceptor: Cmd+K -> toggle_actions (AcpChatView)");
-                                    this.toggle_actions(cx, window);
-                                    cx.stop_propagation();
-                                    return;
-                                }
-                                _ => {
-                                    // Other views don't support Cmd+K actions
                                 }
                             }
                         }
 
-                        // Handle Cmd+W for AcpChatView (close the window entirely)
-                        if has_cmd && key.eq_ignore_ascii_case("w") && !has_shift
-                            && matches!(this.current_view, AppView::AcpChatView { .. })
+                        if let Some(intent) =
+                            main_window_actions_key_intent(&this.current_view, event)
                         {
-                            logging::log("KEY", "Interceptor: Cmd+W -> close window from ACP chat");
-                            this.close_tab_ai_harness_terminal_with_window(window, cx);
-                            this.close_and_reset_window(cx);
+                            if this.handle_main_window_actions_key_intent(intent, window, cx) {
+                                if matches!(intent, MainWindowActionsKeyIntent::ToggleActions) {
+                                    tracing::info!(
+                                        target: "script_kit::actions",
+                                        event = "actions_interceptor_toggled",
+                                        host = ?host,
+                                    );
+                                }
+                                cx.stop_propagation();
+                                return;
+                            }
+                        }
+
+                        let acp_escape_cancelled_streaming = if crate::ui_foundation::is_key_escape(key)
+                            && !has_cmd
+                            && !has_shift
+                        {
+                            match &this.current_view {
+                                AppView::AcpChatView { entity, .. } => entity.update(cx, |chat, cx| {
+                                    chat.cancel_streaming_from_escape(cx)
+                                }),
+                                _ => false,
+                            }
+                        } else {
+                            false
+                        };
+                        if acp_escape_cancelled_streaming {
+                            logging::log(
+                                "KEY",
+                                "Interceptor: Escape -> cancel Agent Chat streaming",
+                            );
                             cx.stop_propagation();
                             return;
                         }
@@ -1697,22 +2024,36 @@ impl ScriptListApp {
                         };
 
                         // Handle Escape for AcpChatView (return to main menu)
-                        if crate::ui_foundation::is_key_escape(key) && !has_cmd && !has_shift
+                        if crate::ui_foundation::is_key_escape(key)
+                            && !has_cmd
+                            && !has_shift
                             && !this.show_actions_popup
                             && !acp_escape_popup_open
                             && matches!(this.current_view, AppView::AcpChatView { .. })
                         {
+                            tracing::info!(
+                                target: "script_kit::keyboard",
+                                event = "embedded_acp_escape_return_to_origin",
+                            );
                             this.close_tab_ai_harness_terminal_with_window(window, cx);
-                            logging::log("KEY", "Interceptor: Escape -> return to main menu from ACP chat");
+                            logging::log(
+                                "KEY",
+                                "Interceptor: Escape -> return to main menu from Agent Chat",
+                            );
                             cx.stop_propagation();
                             return;
                         }
 
                         // Handle Cmd+Shift+K for add_shortcut in ScriptList
-                        if has_cmd && key.eq_ignore_ascii_case("k") && has_shift
+                        if has_cmd
+                            && key.eq_ignore_ascii_case("k")
+                            && has_shift
                             && matches!(this.current_view, AppView::ScriptList)
                         {
-                            logging::log("KEY", "Interceptor: Cmd+Shift+K -> add_shortcut (ScriptList)");
+                            logging::log(
+                                "KEY",
+                                "Interceptor: Cmd+Shift+K -> add_shortcut (ScriptList)",
+                            );
                             this.handle_action("add_shortcut".to_string(), window, cx);
                             cx.stop_propagation();
                             return;
@@ -1729,7 +2070,13 @@ impl ScriptListApp {
                                 && !has_shift
                                 && (key == "-" || key.eq_ignore_ascii_case("minus"))
                             {
-                                logging::log("KEY", &format!("Interceptor: Cmd+- (key={}) -> decrease light opacity", key));
+                                logging::log(
+                                    "KEY",
+                                    &format!(
+                                        "Interceptor: Cmd+- (key={}) -> decrease light opacity",
+                                        key
+                                    ),
+                                );
                                 this.adjust_light_opacity(-0.05, cx);
                                 cx.stop_propagation();
                                 return;
@@ -1741,7 +2088,13 @@ impl ScriptListApp {
                                     || key.eq_ignore_ascii_case("equal")
                                     || key.eq_ignore_ascii_case("plus"))
                             {
-                                logging::log("KEY", &format!("Interceptor: Cmd+= (key={}) -> increase light opacity", key));
+                                logging::log(
+                                    "KEY",
+                                    &format!(
+                                        "Interceptor: Cmd+= (key={}) -> increase light opacity",
+                                        key
+                                    ),
+                                );
                                 this.adjust_light_opacity(0.05, cx);
                                 cx.stop_propagation();
                                 return;
@@ -1749,14 +2102,14 @@ impl ScriptListApp {
 
                             // Handle Cmd+M to cycle vibrancy material (blur effect)
                             if has_cmd && !has_shift && key.eq_ignore_ascii_case("m") {
-                                logging::log("KEY", "Interceptor: Cmd+M -> cycle vibrancy material");
+                                logging::log(
+                                    "KEY",
+                                    "Interceptor: Cmd+M -> cycle vibrancy material",
+                                );
                                 let description = platform::cycle_vibrancy_material();
                                 this.toast_manager.push(
-                                    components::toast::Toast::info(
-                                        description,
-                                        &this.theme,
-                                    )
-                                    .duration_ms(Some(TOAST_INFO_MS)),
+                                    components::toast::Toast::info(description, &this.theme)
+                                        .duration_ms(Some(TOAST_INFO_MS)),
                                 );
                                 cx.notify();
                                 cx.stop_propagation();
@@ -1765,14 +2118,14 @@ impl ScriptListApp {
 
                             // Handle Cmd+Shift+A to cycle vibrancy appearance (VibrantLight, VibrantDark, etc.)
                             if has_cmd && has_shift && key.eq_ignore_ascii_case("a") {
-                                logging::log("KEY", "Interceptor: Cmd+Shift+A -> cycle vibrancy appearance");
+                                logging::log(
+                                    "KEY",
+                                    "Interceptor: Cmd+Shift+A -> cycle vibrancy appearance",
+                                );
                                 let description = platform::cycle_appearance();
                                 this.toast_manager.push(
-                                    components::toast::Toast::info(
-                                        description,
-                                        &this.theme,
-                                    )
-                                    .duration_ms(Some(TOAST_INFO_MS)),
+                                    components::toast::Toast::info(description, &this.theme)
+                                        .duration_ms(Some(TOAST_INFO_MS)),
                                 );
                                 cx.notify();
                                 cx.stop_propagation();
@@ -1782,140 +2135,7 @@ impl ScriptListApp {
 
                         // Only handle remaining keys if in FileSearchView with actions popup open
                         if !matches!(this.current_view, AppView::FileSearchView { .. }) {
-                            // Arrow keys are handled by arrow_interceptor to avoid double-processing
-                            // (which can skip 2 items per keypress when both interceptors handle arrows).
-                            if crate::ui_foundation::is_key_up(key)
-                                || crate::ui_foundation::is_key_down(key)
-                            {
-                                return;
-                            }
-
-                            // Route modal actions keys for all views that support actions dialogs.
-                            // This ensures enter, escape, backspace, and character keys are
-                            // routed to the actions dialog when it's open, regardless of view type.
-                            let host = match &this.current_view {
-                                AppView::ScriptList => Some(ActionsDialogHost::MainList),
-                                AppView::ClipboardHistoryView { .. } => Some(ActionsDialogHost::ClipboardHistory),
-                                AppView::EmojiPickerView { .. } => Some(ActionsDialogHost::EmojiPicker),
-                                AppView::ChatPrompt { .. } => Some(ActionsDialogHost::ChatPrompt),
-                                AppView::ArgPrompt { .. } => Some(ActionsDialogHost::ArgPrompt),
-                                AppView::DivPrompt { .. } => Some(ActionsDialogHost::DivPrompt),
-                                AppView::EditorPrompt { .. } => Some(ActionsDialogHost::EditorPrompt),
-                                AppView::TermPrompt { .. } => Some(ActionsDialogHost::TermPrompt),
-                                AppView::FormPrompt { .. } => Some(ActionsDialogHost::FormPrompt),
-                                AppView::WebcamView { .. } => Some(ActionsDialogHost::WebcamPrompt),
-                                AppView::AcpChatView { .. } => Some(ActionsDialogHost::AcpChat),
-                                _ => None,
-                            };
-
-                            if let Some(host) = host {
-                                match this.route_key_to_actions_dialog(
-                                    key,
-                                    key_char,
-                                    &event.keystroke.modifiers,
-                                    host,
-                                    window,
-                                    cx,
-                                ) {
-                                    ActionsRoute::NotHandled => {}
-                                    ActionsRoute::Handled => {
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-                                    ActionsRoute::Execute { action_id } => {
-                                        match host {
-                                            ActionsDialogHost::ChatPrompt => {
-                                                this.execute_chat_action(&action_id, cx);
-                                            }
-                                            ActionsDialogHost::ArgPrompt => {
-                                                this.trigger_action_by_name(&action_id, cx);
-                                            }
-                                            ActionsDialogHost::WebcamPrompt => {
-                                                let start = std::time::Instant::now();
-                                                let dctx = crate::action_helpers::DispatchContext::for_builtin("builtin/webcam");
-                                                let outcome = this.execute_webcam_action(&action_id, &dctx, cx);
-                                                Self::log_builtin_outcome("builtin/webcam", &dctx, "webcam_action", &outcome, &start);
-                                            }
-                                            _ => {
-                                                this.handle_action(action_id, window, cx);
-                                            }
-                                        }
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-                                }
-                            }
                             return;
-                        }
-
-                        // Only handle remaining keys if actions popup is open (FileSearchView)
-                        if !this.show_actions_popup {
-                            return;
-                        }
-
-                        // Handle Escape to close actions popup
-                        if crate::ui_foundation::is_key_escape(key) {
-                            this.close_actions_popup(ActionsDialogHost::FileSearch, window, cx);
-                            cx.stop_propagation();
-                            return;
-                        }
-
-                        // Handle Enter to submit selected action
-                        if crate::ui_foundation::is_key_enter(key) {
-                            if let Some(ref dialog) = this.actions_dialog {
-                                let action_id = dialog.read(cx).get_selected_action_id();
-                                let should_close = dialog.read(cx).selected_action_should_close();
-
-                                if let Some(action_id) = action_id {
-                                    crate::logging::log(
-                                        "ACTIONS",
-                                        &format!(
-                                            "FileSearch actions executing action: {} (close={})",
-                                            action_id, should_close
-                                        ),
-                                    );
-
-                                    if should_close {
-                                        this.close_actions_popup(
-                                            ActionsDialogHost::FileSearch,
-                                            window,
-                                            cx,
-                                        );
-                                    }
-
-                                    // Use handle_action instead of trigger_action_by_name
-                                    // handle_action supports both built-in actions (open_file, quick_look, etc.)
-                                    // and SDK actions
-                                    this.handle_action(action_id, window, cx);
-                                }
-                            }
-                            cx.stop_propagation();
-                            return;
-                        }
-
-                        // Handle Backspace for actions search
-                        if key.eq_ignore_ascii_case("backspace") {
-                            if let Some(ref dialog) = this.actions_dialog {
-                                dialog.update(cx, |d, cx| d.handle_backspace(cx));
-                                crate::actions::notify_actions_window(cx);
-                                crate::actions::resize_actions_window(cx, dialog);
-                            }
-                            cx.stop_propagation();
-                            return;
-                        }
-
-                        // Handle printable character input for actions search
-                        if let Some(chars) = key_char {
-                            if let Some(ch) = chars.chars().next() {
-                                if ch.is_ascii_graphic() || ch == ' ' {
-                                    if let Some(ref dialog) = this.actions_dialog {
-                                        dialog.update(cx, |d, cx| d.handle_char(ch, cx));
-                                        crate::actions::notify_actions_window(cx);
-                                        crate::actions::resize_actions_window(cx, dialog);
-                                    }
-                                    cx.stop_propagation();
-                                }
-                            }
                         }
                     });
                 }

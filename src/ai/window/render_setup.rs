@@ -23,8 +23,7 @@ impl AiApp {
         // Theme-aware accent color for the button (Raycast style)
         let button_bg = cx.theme().accent;
         let button_text = cx.theme().primary_foreground;
-        let configure_button_focused = self.setup_button_focus_index == 0;
-        let claude_button_focused = self.setup_button_focus_index == 1;
+        let catalog_button_focused = self.setup_button_focus_index == 0;
         let focus_color = cx.theme().ring;
 
         div()
@@ -60,7 +59,7 @@ impl AiApp {
                     .text_xl()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
                     .text_color(cx.theme().foreground)
-                    .child("ACP Agent Required"),
+                    .child("Agent Required"),
             )
             // Description
             .child(
@@ -69,12 +68,12 @@ impl AiApp {
                     .text_color(cx.theme().muted_foreground)
                     .text_center()
                     .max_w(SETUP_DESCRIPTION_MAX_W)
-                    .child("Add, install, or authenticate an ACP-compatible agent to continue."),
+                    .child("Add, install, or authenticate an agent in the catalog or config.ts."),
             )
-            // Configure Vercel AI Gateway button
+            // Open agent catalog button
             .child(
                 div()
-                    .id("configure-vercel-btn")
+                    .id("open-agent-catalog-btn")
                     .flex()
                     .items_center()
                     .justify_center()
@@ -86,17 +85,16 @@ impl AiApp {
                     .cursor_pointer()
                     .border_1()
                     .border_color(button_bg.opacity(OPACITY_PROMINENT))
-                    .when(configure_button_focused, |s| {
+                    .when(catalog_button_focused, |s| {
                         s.border_2().border_color(focus_color)
                     })
                     .hover(|s| s.bg(button_bg.opacity(OPACITY_ACTIVE)))
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        info!("Vercel button clicked in AI window");
-                        this.show_api_key_input(window, cx);
+                    .on_click(cx.listener(|this, _event, window, cx| {
+                        this.open_acp_agents_catalog(window, cx);
                     }))
                     .child(
                         svg()
-                            .external_path(LocalIconName::Settings.external_path())
+                            .external_path(LocalIconName::Terminal.external_path())
                             .size(ICON_MD)
                             .text_color(button_text),
                     )
@@ -105,50 +103,7 @@ impl AiApp {
                             .text_sm()
                             .font_weight(gpui::FontWeight::MEDIUM)
                             .text_color(button_text)
-                            .child("Configure Vercel AI Gateway"),
-                    ),
-            )
-            // "or" separator
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_ACCENT_MEDIUM))
-                    .child("or"),
-            )
-            // Add ACP agent button
-            .child(
-                div()
-                    .id("open-acp-catalog-btn")
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .gap(S2)
-                    .px(S5)
-                    .py(S2)
-                    .rounded(R_LG)
-                    .bg(cx.theme().muted.opacity(OPACITY_HOVER))
-                    .cursor_pointer()
-                    .border_1()
-                    .border_color(cx.theme().border)
-                    .when(claude_button_focused, |s| {
-                        s.border_2().border_color(focus_color)
-                    })
-                    .hover(|s| s.bg(cx.theme().muted.opacity(OPACITY_SELECTED)))
-                    .on_click(cx.listener(|this, _event, window, cx| {
-                        this.open_acp_agents_catalog(window, cx);
-                    }))
-                    .child(
-                        svg()
-                            .external_path(LocalIconName::Terminal.external_path())
-                            .size(ICON_MD)
-                            .text_color(cx.theme().muted_foreground),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(cx.theme().muted_foreground)
-                            .child("Add ACP Agent"),
+                            .child("Open Agent Catalog"),
                     ),
             )
             // ACP setup feedback (shown when setup state changes)
@@ -187,7 +142,7 @@ impl AiApp {
                         div()
                             .text_xs()
                             .text_color(cx.theme().muted_foreground.opacity(OPACITY_STRONG))
-                            .child("Supports any ACP-compatible agent"),
+                            .child("Supports compatible command-line agents"),
                     )
                     .child(
                         div()
@@ -274,7 +229,7 @@ impl AiApp {
                             .text_lg()
                             .font_weight(gpui::FontWeight::MEDIUM)
                             .text_color(cx.theme().foreground)
-                            .child("Enter Vercel API Key"),
+                            .child("Enter API Key"),
                     ),
             )
             // Description
@@ -284,7 +239,7 @@ impl AiApp {
                     .text_color(cx.theme().muted_foreground)
                     .text_center()
                     .max_w(SETUP_API_KEY_MAX_W)
-                    .child("Get your API key from Vercel AI Gateway and paste it below."),
+                    .child("Paste your provider API key below."),
             )
             // Input field
             .child(

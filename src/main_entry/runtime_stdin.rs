@@ -97,19 +97,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
                                 window_ops::queue_move(bounds, window, ctx);
 
-                                if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
-                                    platform::configure_as_floating_panel();
-                                    platform::swizzle_gpui_blurred_view();
-                                    // Configure vibrancy based on actual theme colors
-                                    let theme = theme::get_cached_theme();
-                                    let is_dark = theme.should_use_dark_vibrancy();
-                                    let material = theme.get_vibrancy().material;
-                                    platform::configure_window_vibrancy_material_for_appearance(
-                                        is_dark,
-                                        material,
-                                    );
-                                    PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
-                                }
+                                // Oracle-Session `window-activation-invariants-guard` PR1.
+                                platform::ensure_main_panel_configured("runtime_stdin::run");
 
                                 // Show window WITHOUT activating (floating panel behavior)
                                 platform::show_main_window_without_activation();
@@ -180,19 +169,8 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 };
                                 window_ops::queue_move(bounds, window, ctx);
 
-                                if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
-                                    platform::configure_as_floating_panel();
-                                    platform::swizzle_gpui_blurred_view();
-                                    // Configure vibrancy based on actual theme colors
-                                    let theme = theme::get_cached_theme();
-                                    let is_dark = theme.should_use_dark_vibrancy();
-                                    let material = theme.get_vibrancy().material;
-                                    platform::configure_window_vibrancy_material_for_appearance(
-                                        is_dark,
-                                        material,
-                                    );
-                                    PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
-                                }
+                                // Oracle-Session `window-activation-invariants-guard` PR1.
+                                platform::ensure_main_panel_configured("runtime_stdin::show");
 
                                 // Show window WITHOUT activating (floating panel behavior)
                                 platform::show_main_window_without_activation();
@@ -234,6 +212,50 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 script_kit_gpui::set_main_window_visible(false);
                                 sync_main_automation_window(current_main_automation_bounds(), false, false);
 
+                                // Reset the view back to the script list and re-key the
+                                // automation `semanticSurface` to `"scriptList"` so the
+                                // next list snapshot reports the truth. Without this, a
+                                // hide issued while in e.g. `FileSearchView` would leak
+                                // the `"fileSearch"` surface tag across its next show
+                                // and leave the automation introspection channel
+                                // diverged from `getState.promptType` (Pass #19 side
+                                // finding; covered by `tool-hide-rpc-surface-reset`).
+                                view.reset_to_script_list(ctx);
+                                crate::windows::update_automation_semantic_surface(
+                                    "main",
+                                    Some("scriptList".to_string()),
+                                );
+                                // Sibling teardown for the embedded AI (`kind: Ai`,
+                                // `id: "ai"`) registry entry. See the matching
+                                // `ensure_embedded_ai_window(false)` in
+                                // `src/app_impl/tab_ai_mode/mod.rs::close_acp_chat_to_script_list`
+                                // and the three-site lock-step across the Hide dispatchers
+                                // (this file, runtime_stdin_match_core.rs, app_run_setup.rs,
+                                // + window_visibility.rs::hide_main_window_helper).
+                                // Idempotent no-op when the entry isn't present. Closes
+                                // Run 9 Pass #20 `attacker-hide-path-embedded-ai-registry-stale`.
+                                crate::windows::ensure_embedded_ai_window(false);
+                                // Full teardown for actions-dialog
+                                // (`id: "actions-dialog"`). Pass #29 fix
+                                // (`cmd-k-on-unfocused-clipboard-pops-overlay-not-actions`):
+                                // upgraded from bare `remove_automation_window` to full
+                                // `close_actions_window`. Pass #23's bare registry op
+                                // left the `ACTIONS_WINDOW` static holding a stale handle;
+                                // a later `simulateKey cmd+k` on an unfocused window read
+                                // `is_actions_window_open()=true` and took the CLOSE branch,
+                                // popping whichever overlay was on top instead of opening
+                                // the actions dialog. `close_actions_window` clears the
+                                // static AND the registry; idempotent.
+                                crate::actions::close_actions_window(ctx);
+                                // Sibling teardown for confirm-popup
+                                // (`id: "confirm-popup"`, PromptPopup kind).
+                                // Pass #25 fix: close_confirm_window at
+                                // src/confirm/window.rs:385 is the only
+                                // production removal path; no hide dispatcher
+                                // calls it (`attacker-hide-path-confirm-popup-registry-stale`).
+                                // Pure registry op; idempotent.
+                                crate::windows::remove_automation_window("confirm-popup");
+
                                 // Check if Notes or AI windows are open
                                 let notes_open = notes::is_notes_window_open();
                                 let ai_open = ai::is_ai_window_open();
@@ -253,64 +275,16 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 view.set_filter_text_immediate(text.clone(), window, ctx);
                                 let _ = view.get_filtered_results_cached(); // Update cache
                             }
-                            ExternalCommand::TriggerBuiltin { ref name } => {
-                                logging::log("STDIN", &format!("Triggering built-in: '{}'", name));
-                                // Opened via protocol command - ESC should close window (not return to main menu)
-                                view.opened_from_main_menu = false;
-                                // Match built-in name and trigger the corresponding feature
-                                match name.to_lowercase().as_str() {
-                                    "design-gallery" | "designgallery" | "design gallery" => {
-                                        view.current_view = AppView::DesignGalleryView {
-                                            filter: String::new(),
-                                            selected_index: 0,
-                                        };
-                                        view.update_window_size_deferred(window, ctx);
-                                    }
-                                    // P0 FIX: Store data in self, view holds only state
-                                    "clipboard" | "clipboard-history" | "clipboardhistory" => {
-                                        view.cached_clipboard_entries =
-                                            clipboard_history::get_cached_entries(100);
-                                        view.focused_clipboard_entry_id = view
-                                            .cached_clipboard_entries
-                                            .first()
-                                            .map(|entry| entry.id.clone());
-                                        view.current_view = AppView::ClipboardHistoryView {
-                                            filter: String::new(),
-                                            selected_index: 0,
-                                        };
-                                        view.update_window_size_deferred(window, ctx);
-                                    }
-                                    // P0 FIX: Use existing self.apps, view holds only state
-                                    "apps" | "app-launcher" | "applauncher" => {
-                                        view.current_view = AppView::AppLauncherView {
-                                            filter: String::new(),
-                                            selected_index: 0,
-                                        };
-                                        view.update_window_size_deferred(window, ctx);
-                                    }
-                                    "file-search" | "filesearch" | "files" | "searchfiles" => {
-                                        view.open_file_search(String::new(), ctx);
-                                    }
-                                    "emoji" | "emoji-picker" | "emojipicker" => {
-                                        view.filter_text = String::new();
-                                        view.pending_filter_sync = true;
-                                        view.pending_placeholder = Some("Search Emoji & Symbols...".to_string());
-                                        view.current_view = AppView::EmojiPickerView {
-                                            filter: String::new(),
-                                            selected_index: 0,
-                                            selected_category: None,
-                                        };
-                                        view.hovered_index = None;
-                                        view.pending_focus = Some(FocusTarget::MainFilter);
-                                        view.update_window_size_deferred(window, ctx);
-                                    }
-                                    "tab-ai" | "tabai" => {
-                                        view.open_tab_ai_acp_with_entry_intent(None, ctx);
-                                    }
-                                    _ => {
-                                        logging::log("ERROR", &format!("Unknown built-in: '{}'", name));
-                                    }
-                                }
+                            ref cmd @ ExternalCommand::TriggerBuiltin { .. } => {
+                                // Canonical dispatch lives in the shared helper — see
+                                // src/app_impl/trigger_builtin_dispatch.rs. This
+                                // file is only consumed by the source-audit tests
+                                // in src/app_impl/tests.rs, so keep it in lock-step
+                                // with app_run_setup.rs.
+                                logging::log("STDIN", "Triggering built-in (see structured logs)");
+                                let _ = view.dispatch_trigger_builtin(cmd, window, ctx);
+                                let _ = view
+                                    .rekey_main_automation_surface_after_trigger_builtin_dispatch();
                             }
 
                             ExternalCommand::SimulateKey { ref key, ref modifiers } => {
@@ -331,7 +305,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         if has_cmd && key_lower == "k" {
                                             logging::log("STDIN", "SimulateKey: Cmd+K - toggle actions");
                                             view.toggle_actions(ctx, window);
-                                        } else if view.fallback_mode && !view.cached_fallbacks.is_empty() {
+                                        } else if view.main_menu_fallback_state.is_active() {
                                             // Handle keys in fallback mode
                                             match key_lower.as_str() {
                                                 "tab" => {
@@ -341,14 +315,12 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                         );
                                                 }
                                                 "up" | "arrowup" => {
-                                                    if view.fallback_selected_index > 0 {
-                                                        view.fallback_selected_index -= 1;
+                                                    if view.main_menu_fallback_state.move_up() {
                                                         ctx.notify();
                                                     }
                                                 }
                                                 "down" | "arrowdown" => {
-                                                    if view.fallback_selected_index < view.cached_fallbacks.len().saturating_sub(1) {
-                                                        view.fallback_selected_index += 1;
+                                                    if view.main_menu_fallback_state.move_down() {
                                                         ctx.notify();
                                                     }
                                                 }
@@ -657,10 +629,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         logging::log("STDIN", &format!("SimulateKey: Dispatching '{}' to AcpChatView", key_lower));
                                         let entity_clone = entity.clone();
                                         if has_cmd && key_lower == "k" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+K - open actions in ACP chat");
+                                            logging::log("STDIN", "SimulateKey: Cmd+K - open actions in Agent Chat");
                                             view.toggle_actions(ctx, window);
                                         } else if has_cmd && key_lower == "f" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+F - toggle search in ACP chat");
+                                            logging::log("STDIN", "SimulateKey: Cmd+F - toggle search in Agent Chat");
                                             entity_clone.update(ctx, |chat, cx| {
                                                 if chat.search_state.is_some() {
                                                     chat.search_state = None;
@@ -670,10 +642,10 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 cx.notify();
                                             });
                                         } else if has_cmd && key_lower == "p" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+P - open history command from ACP chat");
+                                            logging::log("STDIN", "SimulateKey: Cmd+P - open history command from Agent Chat");
                                             view.handle_action("acp_show_history".into(), window, ctx);
                                         } else if has_cmd && key_lower == "n" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+N - new conversation in ACP chat");
+                                            logging::log("STDIN", "SimulateKey: Cmd+N - new conversation in Agent Chat");
                                             entity_clone.update(ctx, |chat, cx| {
                                                 if let Some(t) = chat.thread() {
                                                     t.update(cx, |thread, cx| {
@@ -684,13 +656,20 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                                 cx.notify();
                                             });
                                         } else if view.show_actions_popup && key_lower == "escape" {
-                                            logging::log("STDIN", "SimulateKey: Escape - close ACP actions dialog");
+                                            logging::log("STDIN", "SimulateKey: Escape - close Agent Chat actions dialog");
                                             view.close_actions_popup(ActionsDialogHost::AcpChat, window, ctx);
                                         } else if key_lower == "escape" {
-                                            logging::log("STDIN", "SimulateKey: Escape - return to main menu from ACP chat");
-                                            view.close_tab_ai_harness_terminal_with_window(window, ctx);
+                                            let cancelled_streaming = entity_clone.update(ctx, |chat, cx| {
+                                                chat.cancel_streaming_from_escape(cx)
+                                            });
+                                            if cancelled_streaming {
+                                                logging::log("STDIN", "SimulateKey: Escape - cancel Agent Chat streaming");
+                                            } else {
+                                                logging::log("STDIN", "SimulateKey: Escape - return to main menu from Agent Chat");
+                                                view.close_tab_ai_harness_terminal_with_window(window, ctx);
+                                            }
                                         } else if has_cmd && key_lower == "w" {
-                                            logging::log("STDIN", "SimulateKey: Cmd+W - close window from ACP chat");
+                                            logging::log("STDIN", "SimulateKey: Cmd+W - close window from Agent Chat");
                                             view.close_tab_ai_harness_terminal_with_window(window, ctx);
                                             view.close_and_reset_window(ctx);
                                         } else if key_lower == "enter" && !has_shift {
@@ -735,24 +714,24 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                 }
                             }
                             ExternalCommand::OpenAi => {
-                                logging::log("STDIN", "Opening ACP Chat via openAi compatibility alias");
+                                logging::log("STDIN", "Opening Agent Chat via openAi compatibility alias");
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenMiniAi => {
-                                logging::log("STDIN", "Opening ACP Chat via openMiniAi compatibility alias");
+                                logging::log("STDIN", "Opening Agent Chat via openMiniAi compatibility alias");
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenAiWithMockData => {
                                 logging::log(
                                     "STDIN",
-                                    "Ignoring deprecated mock-data AI alias and opening ACP Chat",
+                                    "Ignoring deprecated mock-data AI alias and opening Agent Chat",
                                 );
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
                             ExternalCommand::OpenMiniAiWithMockData => {
                                 logging::log(
                                     "STDIN",
-                                    "Ignoring deprecated mini mock-data AI alias and opening ACP Chat",
+                                    "Ignoring deprecated mini mock-data AI alias and opening Agent Chat",
                                 );
                                 view.open_tab_ai_acp_with_entry_intent(None, ctx);
                             }
@@ -937,7 +916,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                         });
                                         Ok(())
                                     }
-                                    _ => Err("ACP chat view is not active".to_string()),
+                                    _ => Err("Agent Chat view is not active".to_string()),
                                 };
                                 match result {
                                     Ok(()) => {
@@ -965,6 +944,95 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                             status = "error",
                                             error = %error,
                                             "STDIN ACP command finished"
+                                        );
+                                    }
+                                }
+                            }
+                            ExternalCommand::PasteClipboardIntoAcp { ref request_id } => {
+                                let request_id = request_id.as_ref().map(|id| id.as_str());
+                                tracing::info!(
+                                    category = "STDIN",
+                                    event = "stdin_acp_command_received",
+                                    command = "pasteClipboardIntoAcp",
+                                    request_id = ?request_id,
+                                    "STDIN ACP command received"
+                                );
+                                let result = match &view.current_view {
+                                    AppView::AcpChatView { entity } => {
+                                        let entity = entity.clone();
+                                        let pasted = entity
+                                            .update(ctx, |chat, cx| chat.paste_text_from_clipboard(cx));
+                                        if pasted {
+                                            Ok(())
+                                        } else {
+                                            Err("clipboard is empty or text fetch failed"
+                                                .to_string())
+                                        }
+                                    }
+                                    _ => Err("Agent Chat view is not active".to_string()),
+                                };
+                                match result {
+                                    Ok(()) => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "stdin_acp_command_finished",
+                                            command = "pasteClipboardIntoAcp",
+                                            request_id = ?request_id,
+                                            status = "success",
+                                            "STDIN ACP command finished"
+                                        );
+                                    }
+                                    Err(error) => {
+                                        logging::log(
+                                            "STDIN",
+                                            &format!("Failed to paste clipboard into ACP: {}", error),
+                                        );
+                                        tracing::error!(
+                                            category = "STDIN",
+                                            event = "stdin_acp_command_finished",
+                                            command = "pasteClipboardIntoAcp",
+                                            request_id = ?request_id,
+                                            status = "error",
+                                            error = %error,
+                                            "STDIN ACP command finished"
+                                        );
+                                    }
+                                }
+                            }
+                            ExternalCommand::PushDictationResult {
+                                ref transcript,
+                                ref target,
+                                ref request_id,
+                            } => {
+                                let rid = request_id.as_ref().map(|id| id.as_str());
+                                let target_label = target.as_deref().unwrap_or("unspecified");
+                                match view.deliver_stdin_dictation_result(
+                                    transcript.clone(),
+                                    target.as_deref(),
+                                    ctx,
+                                ) {
+                                    Ok(delivery_target) => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "push_dictation_result_delivered",
+                                            command = "pushDictationResult",
+                                            request_id = ?rid,
+                                            transcript_len = transcript.len(),
+                                            requested_target = target_label,
+                                            delivery_target = ?delivery_target,
+                                            "pushDictationResult RPC delivered through dictation pipeline"
+                                        );
+                                    }
+                                    Err(error) => {
+                                        tracing::error!(
+                                            category = "STDIN",
+                                            event = "push_dictation_result_failed",
+                                            command = "pushDictationResult",
+                                            request_id = ?rid,
+                                            transcript_len = transcript.len(),
+                                            requested_target = target_label,
+                                            error = %error,
+                                            "pushDictationResult RPC failed"
                                         );
                                     }
                                 }
@@ -997,6 +1065,34 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     }
                                 }
                             }
+                            ExternalCommand::GetConfigFingerprint { ref request_id } => {
+                                let rid = request_id.as_ref().map(|id| id.as_str());
+                                match crate::config::current_config_fingerprint_receipt() {
+                                    Some(receipt) => {
+                                        let json = serde_json::to_string(&receipt).unwrap_or_default();
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "config_fingerprint_result",
+                                            command = "getConfigFingerprint",
+                                            request_id = ?rid,
+                                            ok = true,
+                                            state = %json,
+                                            "config.ts fingerprint snapshot"
+                                        );
+                                    }
+                                    None => {
+                                        tracing::info!(
+                                            category = "STDIN",
+                                            event = "config_fingerprint_result",
+                                            command = "getConfigFingerprint",
+                                            request_id = ?rid,
+                                            ok = false,
+                                            error_code = "config_file_missing",
+                                            "config.ts not found or metadata unreadable"
+                                        );
+                                    }
+                                }
+                            }
                             ExternalCommand::ShowGrid { grid_size, show_bounds, show_box_model, show_alignment_guides, show_dimensions, ref depth } => {
                                 logging::log("STDIN", &format!(
                                     "ShowGrid: size={}, bounds={}, box_model={}, guides={}, dimensions={}, depth={:?}",
@@ -1023,7 +1119,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             }
                             ExternalCommand::ShowShortcutRecorder { ref command_id, ref command_name } => {
                                 logging::log("STDIN", &format!("ShowShortcutRecorder: command_id='{}', command_name='{}'", command_id, command_name));
-                                view.show_shortcut_recorder(command_id.clone(), command_name.clone(), ctx);
+                                view.show_shortcut_recorder(command_id.clone(), command_name.clone(), window, ctx);
                             }
                         },
                         StdinCommand::Protocol(message) => {

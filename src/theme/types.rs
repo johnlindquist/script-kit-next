@@ -99,10 +99,10 @@ pub struct BackgroundOpacity {
     pub search_box: f32,
     /// Log panel opacity (default: 0.75)
     pub log_panel: f32,
-    /// Selected list item background opacity (default: 0.33)
+    /// Selected list item background opacity.
     #[serde(default = "default_selected_opacity")]
     pub selected: f32,
-    /// Hovered list item background opacity (default: 0.22)
+    /// Hovered list item background opacity.
     #[serde(default = "default_hover_opacity")]
     pub hover: f32,
     /// Preview panel background opacity (default: 0.0)
@@ -134,14 +134,42 @@ pub struct BackgroundOpacity {
     /// Default: 0.85 for dark, 0.92 for light
     #[serde(default)]
     pub vibrancy_background: Option<f32>,
+
+    // ── Text grading tiers (Raycast-style) ──────────────────────────────
+    // All text elements use text_primary (white on dark) as the base color.
+    // Brightness is controlled purely via these opacity tiers (0.0–1.0).
+    // Use `opacity_to_alpha(value)` to convert to u32 for rgba bit-packing.
+    /// Names / primary labels — always full brightness.
+    #[serde(default = "default_text_name")]
+    pub text_name: f32,
+    /// Badges, shortcuts, section headers — clearly readable chrome.
+    #[serde(default = "default_text_strong")]
+    pub text_strong: f32,
+    /// Focused descriptions, source hints — readable but secondary.
+    #[serde(default = "default_text_muted")]
+    pub text_muted_alpha: f32,
+    /// Hovered descriptions, type labels — visible hint tier.
+    #[serde(default = "default_text_hint")]
+    pub text_hint: f32,
+    /// Placeholder text, idle captions — quiet but not invisible.
+    #[serde(default = "default_text_placeholder")]
+    pub text_placeholder: f32,
+    /// Idle icons — recedes behind name text.
+    #[serde(default = "default_text_icon")]
+    pub text_icon: f32,
 }
 
+pub const DARK_ROW_SELECTED_OPACITY: f32 = 0.23;
+pub const DARK_ROW_HOVER_OPACITY: f32 = 0.06;
+pub const LIGHT_ROW_SELECTED_OPACITY: f32 = 0.08;
+pub const LIGHT_ROW_HOVER_OPACITY: f32 = 0.04;
+
 fn default_selected_opacity() -> f32 {
-    0.18 // Selection — whisper-subtle highlight over vibrancy
+    DARK_ROW_SELECTED_OPACITY
 }
 
 fn default_hover_opacity() -> f32 {
-    0.18 // Hover — stronger dark-theme affordance without matching selection weight
+    DARK_ROW_HOVER_OPACITY
 }
 
 fn default_preview_opacity() -> f32 {
@@ -176,6 +204,32 @@ fn default_border_active_opacity() -> f32 {
     0.25 // 0x40 / 255 ≈ 0.25
 }
 
+// ── Text grading defaults (Raycast-style) ────────────────────────────
+// All applied to text_primary. No double-dimming from secondary/muted colors.
+fn default_text_name() -> f32 {
+    1.0 // Names: always pure white (0xFF)
+}
+fn default_text_strong() -> f32 {
+    0.80 // Badges, shortcuts, section headers (0xCC)
+}
+fn default_text_muted() -> f32 {
+    0.65 // Focused descriptions, source hints (0xA6)
+}
+fn default_text_hint() -> f32 {
+    0.45 // Hovered descriptions, type labels (0x73)
+}
+fn default_text_placeholder() -> f32 {
+    0.40 // Placeholders, idle captions (0x66)
+}
+fn default_text_icon() -> f32 {
+    0.50 // Idle icons (0x80)
+}
+
+/// Convert 0.0–1.0 opacity to u32 alpha (0x00–0xFF) for rgba bit-packing.
+pub fn opacity_to_alpha(opacity: f32) -> u32 {
+    (opacity.clamp(0.0, 1.0) * 255.0) as u32
+}
+
 impl Default for BackgroundOpacity {
     fn default() -> Self {
         Self::dark_default()
@@ -190,21 +244,28 @@ impl BackgroundOpacity {
     /// old split 30% shell + 75% vibrancy background state.
     pub fn dark_default() -> Self {
         BackgroundOpacity {
-            main: 0.75,                      // 75% base
-            title_bar: 0.75,                 // Match main for consistency
-            search_box: 0.81,                // +0.06
-            log_panel: 0.75,                 // Match main
-            selected: 0.18, // Selected list item — whisper-subtle highlight over vibrancy
-            hover: 0.18,    // Hovered list item — stronger dark-theme affordance
-            preview: 0.0,   // Preview panel (0 = fully transparent)
-            dialog: 0.75,   // Dialogs match main
-            input: 0.79,    // +0.04
-            panel: 0.75,    // Panels/containers
-            input_inactive: 0.77, // +0.02
-            input_active: 0.83, // +0.08
-            border_inactive: 0.125, // Borders when inactive
-            border_active: 0.25, // Borders when active
+            main: 0.75,                          // 75% base
+            title_bar: 0.75,                     // Match main for consistency
+            search_box: 0.81,                    // +0.06
+            log_panel: 0.75,                     // Match main
+            selected: DARK_ROW_SELECTED_OPACITY, // Focused list item, strongest visible row highlight
+            hover: DARK_ROW_HOVER_OPACITY, // Hovered list item, ghost-tier tint below focused state
+            preview: 0.0,                  // Preview panel (0 = fully transparent)
+            dialog: 0.75,                  // Dialogs match main
+            input: 0.79,                   // +0.04
+            panel: 0.75,                   // Panels/containers
+            input_inactive: 0.77,          // +0.02
+            input_active: 0.83,            // +0.08
+            border_inactive: 0.125,        // Borders when inactive
+            border_active: 0.25,           // Borders when active
             vibrancy_background: Some(0.75), // Main window vibrancy background
+            // Text grading (all applied to text_primary)
+            text_name: default_text_name(),
+            text_strong: default_text_strong(),
+            text_muted_alpha: default_text_muted(),
+            text_hint: default_text_hint(),
+            text_placeholder: default_text_placeholder(),
+            text_icon: default_text_icon(),
         }
     }
 
@@ -217,21 +278,28 @@ impl BackgroundOpacity {
     /// search_box +0.06, input +0.04, input_inactive +0.02, input_active +0.08
     pub fn light_default() -> Self {
         BackgroundOpacity {
-            main: 0.75,                      // 75% base
-            title_bar: 0.75,                 // Match main for consistency
-            search_box: 0.81,                // +0.06
-            log_panel: 0.75,                 // Match main
-            selected: 0.20,                  // Light mode selection — whisper-subtle darkening
-            hover: 0.14,                     // Light mode hover — barely visible state affordance
-            preview: 0.0,                    // Preview panel (0 = fully transparent)
-            dialog: 0.75,                    // Dialogs match main
-            input: 0.79,                     // +0.04
-            panel: 0.75,                     // Panels match main
-            input_inactive: 0.77,            // +0.02
-            input_active: 0.83,              // +0.08
-            border_inactive: 0.30,           // Borders when inactive
-            border_active: 0.45,             // Borders when active
-            vibrancy_background: Some(0.75), // Match main
+            main: 0.75,                           // 75% base
+            title_bar: 0.75,                      // Match main for consistency
+            search_box: 0.81,                     // +0.06
+            log_panel: 0.75,                      // Match main
+            selected: LIGHT_ROW_SELECTED_OPACITY, // Light mode focus, down to the old hover strength
+            hover: LIGHT_ROW_HOVER_OPACITY,       // Light mode hover, about half the focus strength
+            preview: 0.0,                         // Preview panel (0 = fully transparent)
+            dialog: 0.75,                         // Dialogs match main
+            input: 0.79,                          // +0.04
+            panel: 0.75,                          // Panels match main
+            input_inactive: 0.77,                 // +0.02
+            input_active: 0.83,                   // +0.08
+            border_inactive: 0.30,                // Borders when inactive
+            border_active: 0.45,                  // Borders when active
+            vibrancy_background: Some(0.75),      // Match main
+            // Text grading (same defaults for light mode)
+            text_name: default_text_name(),
+            text_strong: default_text_strong(),
+            text_muted_alpha: default_text_muted(),
+            text_hint: default_text_hint(),
+            text_placeholder: default_text_placeholder(),
+            text_icon: default_text_icon(),
         }
     }
 
@@ -252,6 +320,13 @@ impl BackgroundOpacity {
         self.border_inactive = self.border_inactive.clamp(0.0, 1.0);
         self.border_active = self.border_active.clamp(0.0, 1.0);
         self.vibrancy_background = self.vibrancy_background.map(|value| value.clamp(0.0, 1.0));
+        // Text grading tiers
+        self.text_name = self.text_name.clamp(0.0, 1.0);
+        self.text_strong = self.text_strong.clamp(0.0, 1.0);
+        self.text_muted_alpha = self.text_muted_alpha.clamp(0.0, 1.0);
+        self.text_hint = self.text_hint.clamp(0.0, 1.0);
+        self.text_placeholder = self.text_placeholder.clamp(0.0, 1.0);
+        self.text_icon = self.text_icon.clamp(0.0, 1.0);
         self
     }
 }
@@ -1124,6 +1199,13 @@ impl Theme {
             border_inactive: base.border_inactive,
             border_active: base.border_active,
             vibrancy_background: base.vibrancy_background,
+            // Text grading: keep unchanged on opacity offset
+            text_name: base.text_name,
+            text_strong: base.text_strong,
+            text_muted_alpha: base.text_muted_alpha,
+            text_hint: base.text_hint,
+            text_placeholder: base.text_placeholder,
+            text_icon: base.text_icon,
         });
         theme
     }
@@ -1519,7 +1601,7 @@ fn log_theme_load_result(correlation_id: &str, source: &str, theme: &Theme) {
     );
 }
 
-/// Load theme from `<SK_PATH>/kit/theme.json` (or `~/.scriptkit/kit/theme.json`)
+/// Load theme from `<SK_PATH>/theme.json` (or `~/.scriptkit/theme.json`)
 ///
 /// Colors should be specified as decimal integers in the JSON file.
 /// For example, 0x1e1e1e (hex) = 1980410 (decimal).
@@ -1564,7 +1646,7 @@ pub fn load_theme() -> Theme {
         return theme;
     }
 
-    let theme_path = crate::setup::get_kit_path().join("kit").join("theme.json");
+    let theme_path = crate::setup::theme_json_path();
 
     // Check if theme file exists
     if !theme_path.exists() {
@@ -2103,16 +2185,41 @@ mod tests {
     fn test_get_opacity_uses_appearance_aware_defaults_when_opacity_missing() {
         let mut light_theme = Theme::light_default();
         light_theme.opacity = None;
-        assert_eq!(
-            light_theme.get_opacity().main,
-            BackgroundOpacity::light_default().main
+        let light_opacity = light_theme.get_opacity();
+        assert_eq!(light_opacity.main, BackgroundOpacity::light_default().main);
+        assert!(
+            light_opacity.hover < light_opacity.selected,
+            "light theme hover should remain quieter than focused selection"
         );
 
         let mut dark_theme = Theme::dark_default();
         dark_theme.opacity = None;
-        assert_eq!(
-            dark_theme.get_opacity().main,
-            BackgroundOpacity::dark_default().main
+        let dark_opacity = dark_theme.get_opacity();
+        assert_eq!(dark_opacity.main, BackgroundOpacity::dark_default().main);
+        assert!(
+            dark_opacity.hover < dark_opacity.selected,
+            "dark theme hover should remain quieter than focused selection"
+        );
+    }
+
+    #[test]
+    fn test_light_default_row_state_opacity_uses_reduced_light_ladder() {
+        let light_opacity = BackgroundOpacity::light_default();
+        let dark_opacity = BackgroundOpacity::dark_default();
+
+        assert_eq!(light_opacity.selected, LIGHT_ROW_SELECTED_OPACITY);
+        assert_eq!(light_opacity.hover, LIGHT_ROW_HOVER_OPACITY);
+        assert!(
+            light_opacity.hover < light_opacity.selected,
+            "light theme hover should stay below focused selection"
+        );
+        assert!(
+            light_opacity.selected < dark_opacity.selected,
+            "light theme focus should be quieter than dark focus"
+        );
+        assert!(
+            light_opacity.hover < dark_opacity.hover,
+            "light theme hover should be quieter than dark hover"
         );
     }
 
@@ -2134,6 +2241,7 @@ mod tests {
             border_inactive: 0.3,
             border_active: 1.9,
             vibrancy_background: Some(-0.3),
+            ..BackgroundOpacity::dark_default()
         }
         .clamped();
 
@@ -2173,6 +2281,7 @@ mod tests {
             border_inactive: -0.1,
             border_active: 3.0,
             vibrancy_background: Some(1.4),
+            ..BackgroundOpacity::dark_default()
         });
 
         let opacity = theme.get_opacity();

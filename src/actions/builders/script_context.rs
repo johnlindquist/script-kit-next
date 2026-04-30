@@ -1,8 +1,10 @@
 use super::shared::to_deeplink_name;
 use super::types::{Action, ActionCategory, ScriptInfo};
+use crate::actions::builders::file_path::open_in_quick_terminal_action;
 use crate::designs::icon_variations::IconName;
 use itertools::Itertools;
 use std::collections::HashSet;
+use std::path::Path;
 
 fn has_invalid_script_context_input(script: &ScriptInfo) -> bool {
     script.name.trim().is_empty() || script.action_verb.trim().is_empty()
@@ -193,6 +195,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             .with_section("Finder"),
         );
 
+        actions.push(open_in_quick_terminal_action(Path::new(&script.path)));
+
         actions.push(
             Action::new(
                 "show_info_in_finder",
@@ -327,6 +331,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             .with_section("Share"),
         );
 
+        actions.push(open_in_quick_terminal_action(Path::new(&script.path)));
+
         actions.push(
             Action::new(
                 "copy_path",
@@ -388,6 +394,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             .with_section("Share"),
         );
 
+        actions.push(open_in_quick_terminal_action(Path::new(&script.path)));
+
         actions.push(
             Action::new(
                 "copy_scriptlet_path",
@@ -438,6 +446,8 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
             .with_section("Share"),
         );
 
+        actions.push(open_in_quick_terminal_action(Path::new(&script.path)));
+
         actions.push(
             Action::new(
                 "copy_path",
@@ -464,14 +474,23 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
     }
 
     let deeplink_name = to_deeplink_name(&script.name);
+    let supports_clipboard_share = script.is_script
+        || script.is_scriptlet
+        || script.is_agent
+        || script.path.starts_with("skill:");
     actions.push(
         Action::new(
             "copy_deeplink",
-            "Copy Deep Link",
-            Some(format!(
-                "Copy scriptkit://run/{} URL to clipboard",
-                deeplink_name
-            )),
+            if supports_clipboard_share {
+                "Share"
+            } else {
+                "Copy Deep Link"
+            },
+            Some(if supports_clipboard_share {
+                "Copy a portable Script Kit share link to clipboard".to_string()
+            } else {
+                format!("Copy scriptkit://run/{} URL to clipboard", deeplink_name)
+            }),
             ActionCategory::ScriptContext,
         )
         .with_shortcut("⌘⇧D")
@@ -527,10 +546,29 @@ pub fn get_script_context_actions(script: &ScriptInfo) -> Vec<Action> {
     deduped_actions
 }
 
-/// Predefined global actions.
-/// Note: Settings and Quit are available from the main menu, not shown in actions dialog.
+/// Predefined global actions surfaced in the Cmd+K dialog when the focused
+/// row offers no script-context entries (e.g. on the main script list).
 pub fn get_global_actions() -> Vec<Action> {
-    vec![]
+    vec![
+        Action::new(
+            "reload_scripts",
+            "Reload Scripts",
+            Some("Re-scan ~/.scriptkit and rebuild the script index".into()),
+            ActionCategory::GlobalOps,
+        ),
+        Action::new(
+            "settings",
+            "Open Settings",
+            Some("Open ~/.scriptkit/config.ts in your editor".into()),
+            ActionCategory::GlobalOps,
+        ),
+        Action::new(
+            "view_logs",
+            "Show Logs",
+            Some("Toggle the in-launcher log panel".into()),
+            ActionCategory::GlobalOps,
+        ),
+    ]
 }
 
 #[allow(dead_code)] // Used by the binary ACP actions surface.
@@ -572,9 +610,9 @@ fn acp_agent_switch_description(
     let state = acp_agent_state_label(entry);
 
     if is_selected {
-        format!("Currently selected ACP agent. {source} · {state}")
+        format!("Currently selected agent. {source} · {state}")
     } else {
-        format!("Reconnect ACP chat using this agent. {source} · {state}")
+        format!("Reconnect Agent Chat using this agent. {source} · {state}")
     }
 }
 
@@ -598,10 +636,40 @@ pub(crate) fn acp_switch_model_id_from_action(action_id: &str) -> Option<&str> {
     action_id.strip_prefix(ACP_SWITCH_MODEL_ACTION_PREFIX)
 }
 
+const ACP_SWITCH_PROFILE_ACTION_PREFIX: &str = "acp_switch_profile:";
+
+fn acp_switch_profile_action_id(profile_name: &str) -> String {
+    format!("{ACP_SWITCH_PROFILE_ACTION_PREFIX}{profile_name}")
+}
+
+#[allow(dead_code)] // Used by ACP chat action dispatch in the binary target.
+pub(crate) fn acp_switch_profile_name_from_action(action_id: &str) -> Option<&str> {
+    action_id.strip_prefix(ACP_SWITCH_PROFILE_ACTION_PREFIX)
+}
+
+fn acp_profile_actions(ai_preferences: &crate::config::AiPreferences) -> Vec<Action> {
+    ai_preferences
+        .profiles
+        .iter()
+        .filter(|profile| !profile.name.trim().is_empty())
+        .map(|profile| {
+            Action::new(
+                acp_switch_profile_action_id(&profile.name),
+                format!("Switch profile: {}", profile.name),
+                Some("Apply this agent profile".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_icon(IconName::Settings)
+            .with_section("Profile")
+        })
+        .collect()
+}
+
 /// Actions available in the ACP chat view (Cmd+K menu).
 #[allow(dead_code)]
 pub fn get_acp_chat_actions() -> Vec<Action> {
-    vec![
+    let ai_preferences = crate::config::load_user_preferences().ai;
+    let mut actions = vec![
         // ── Response ─────────────────────────────────────────
         Action::new(
             "acp_copy_last_response",
@@ -750,30 +818,33 @@ pub fn get_acp_chat_actions() -> Vec<Action> {
         // ── Window ───────────────────────────────────────────
         Action::new(
             "acp_detach_window",
-            "Detach to Window",
-            Some("Open in a separate floating window".to_string()),
+            "Keep Open in Window",
+            Some("Keep this chat open in a separate window".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowUp)
         .with_section("Window"),
         Action::new(
             "acp_reattach_panel",
-            "Re-attach to Panel",
-            Some("Move back to the main panel".to_string()),
+            "Return to Panel",
+            Some("Move this chat back to the main panel".to_string()),
             ActionCategory::ScriptContext,
         )
         .with_icon(IconName::ArrowDown)
         .with_section("Window"),
         Action::new(
             "acp_close",
-            "Close ACP Chat",
+            "Close Agent Chat",
             None,
             ActionCategory::ScriptContext,
         )
         .with_shortcut("\u{2318}W")
         .with_icon(IconName::Close)
         .with_section("Window"),
-    ]
+    ];
+
+    actions.extend(acp_profile_actions(&ai_preferences));
+    actions
 }
 
 #[allow(dead_code)] // Used by the binary ACP actions surface.
@@ -818,9 +889,9 @@ pub const ACP_CHANGE_MODEL_ACTION_ID: &str = "acp:change_model";
 
 /// Stable root labels and descriptions for ACP Actions Menu parity across hosts.
 const ACP_CHANGE_AGENT_LABEL: &str = "Change Agent";
-const ACP_CHANGE_AGENT_DESCRIPTION: &str = "Pick the ACP agent for this chat";
+const ACP_CHANGE_AGENT_DESCRIPTION: &str = "Pick the agent for this chat";
 const ACP_CHANGE_MODEL_LABEL: &str = "Change Model";
-const ACP_CHANGE_MODEL_DESCRIPTION: &str = "Pick the ACP model for this chat";
+const ACP_CHANGE_MODEL_DESCRIPTION: &str = "Pick the model for this chat";
 /// Route ID for the ACP root actions menu.
 pub const ACP_ROOT_ROUTE_ID: &str = "acp:root";
 /// Route ID for the agent picker sub-route.
@@ -841,9 +912,9 @@ fn acp_model_switch_description(
 ) -> String {
     let display_name = acp_model_display_name(entry);
     if is_selected {
-        format!("Currently selected ACP model: {display_name}")
+        format!("Currently selected model: {display_name}")
     } else {
-        format!("Switch ACP chat to {display_name}")
+        format!("Switch Agent Chat to {display_name}")
     }
 }
 
@@ -1064,7 +1135,7 @@ pub(crate) fn get_acp_chat_root_route_for_host(
     let context_title = selected_agent_id
         .and_then(|id| catalog_entries.iter().find(|e| e.id.as_ref() == id))
         .map(|e| e.display_name.to_string())
-        .or_else(|| Some("ACP Chat".to_string()));
+        .or_else(|| Some("Agent Chat".to_string()));
 
     let actions = filter_acp_actions_for_host(
         host,
@@ -1091,7 +1162,7 @@ pub(crate) fn get_acp_chat_root_route_for_host(
         id: ACP_ROOT_ROUTE_ID.to_string(),
         actions,
         context_title,
-        search_placeholder: Some("Search ACP actions...".to_string()),
+        search_placeholder: Some("Search Agent Chat actions...".to_string()),
         initial_selected_action_id: Some(ACP_CHANGE_AGENT_ACTION_ID.to_string()),
     }
 }
@@ -1288,10 +1359,7 @@ mod tests {
             find_action_title(&actions, "reveal_in_finder"),
             "Open in Finder"
         );
-        assert_eq!(
-            find_action_title(&actions, "copy_deeplink"),
-            "Copy Deep Link"
-        );
+        assert_eq!(find_action_title(&actions, "copy_deeplink"), "Share");
         assert_eq!(
             find_action_title(&actions, "reset_ranking"),
             "Delete Ranking Entry"
@@ -1580,7 +1648,7 @@ mod tests {
             current
                 .description
                 .as_deref()
-                .is_some_and(|description| description.contains("Currently selected ACP agent")),
+                .is_some_and(|description| description.contains("Currently selected agent")),
             "current agent description should explain selection state"
         );
 

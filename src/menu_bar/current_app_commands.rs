@@ -10,6 +10,8 @@ use crate::menu_bar::MenuBarItem;
 /// A point-in-time capture of the frontmost application's menu bar.
 #[derive(Debug, Clone)]
 pub struct FrontmostMenuSnapshot {
+    /// Process identifier of the captured frontmost app.
+    pub pid: i32,
     /// Localised display name (e.g. "Safari").
     pub app_name: String,
     /// Bundle identifier (e.g. "com.apple.Safari").
@@ -17,6 +19,15 @@ pub struct FrontmostMenuSnapshot {
     /// Top-level menu bar items with full hierarchy.
     pub items: Vec<MenuBarItem>,
 }
+
+/// Live identity for the app currently tracked as frontmost.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CurrentAppCommandsLiveIdentity {
+    pub pid: i32,
+    pub bundle_id: String,
+}
+
+const MAX_FRONTMOST_MENU_SNAPSHOT_CAPTURE_ATTEMPTS: usize = 3;
 
 /// A machine-readable receipt for a frontmost-menu snapshot capture.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -27,6 +38,55 @@ pub struct FrontmostMenuSnapshotReceipt {
     pub leaf_entry_count: usize,
     pub placeholder: String,
     pub source: &'static str,
+}
+
+/// A session-owned capture of the current-app commands view.
+#[derive(Debug, Clone)]
+pub struct CurrentAppCommandsSession {
+    pub pid: i32,
+    pub app_name: String,
+    pub bundle_id: String,
+    pub placeholder: String,
+    pub top_level_menu_count: usize,
+    pub leaf_entry_count: usize,
+    pub source: &'static str,
+    pub entries: Vec<BuiltInEntry>,
+}
+
+impl CurrentAppCommandsSession {
+    pub fn from_snapshot(snapshot: FrontmostMenuSnapshot) -> Self {
+        let pid = snapshot.pid;
+        let (entries, receipt) = snapshot.into_entries_with_receipt();
+        Self::from_entries_and_receipt(entries, receipt, pid)
+    }
+
+    pub fn from_entries_and_receipt(
+        entries: Vec<BuiltInEntry>,
+        receipt: FrontmostMenuSnapshotReceipt,
+        pid: i32,
+    ) -> Self {
+        Self {
+            pid,
+            app_name: receipt.app_name,
+            bundle_id: receipt.bundle_id,
+            placeholder: receipt.placeholder,
+            top_level_menu_count: receipt.top_level_menu_count,
+            leaf_entry_count: receipt.leaf_entry_count,
+            source: receipt.source,
+            entries,
+        }
+    }
+
+    pub fn receipt(&self) -> FrontmostMenuSnapshotReceipt {
+        FrontmostMenuSnapshotReceipt {
+            app_name: self.app_name.clone(),
+            bundle_id: self.bundle_id.clone(),
+            top_level_menu_count: self.top_level_menu_count,
+            leaf_entry_count: self.leaf_entry_count,
+            placeholder: self.placeholder.clone(),
+            source: self.source,
+        }
+    }
 }
 
 impl FrontmostMenuSnapshot {
@@ -62,6 +122,45 @@ impl FrontmostMenuSnapshot {
     pub fn placeholder(&self) -> String {
         format!("Search {} commands\u{2026}", self.app_name)
     }
+}
+
+pub fn capture_current_app_commands_session() -> anyhow::Result<CurrentAppCommandsSession> {
+    let snapshot = load_frontmost_menu_snapshot()?;
+    let session = CurrentAppCommandsSession::from_snapshot(snapshot);
+    tracing::info!(
+        pid = session.pid,
+        app_name = %session.app_name,
+        bundle_id = %session.bundle_id,
+        leaf_entry_count = session.leaf_entry_count,
+        source = session.source,
+        "current_app_commands.session_captured"
+    );
+    Ok(session)
+}
+
+pub fn load_live_current_app_commands_identity() -> Option<CurrentAppCommandsLiveIdentity> {
+    crate::frontmost_app_tracker::get_last_real_app().map(|app| CurrentAppCommandsLiveIdentity {
+        pid: app.pid,
+        bundle_id: app.bundle_id,
+    })
+}
+
+pub(crate) fn current_app_commands_identity_matches_live(
+    pid: i32,
+    bundle_id: &str,
+    live: Option<&CurrentAppCommandsLiveIdentity>,
+) -> bool {
+    match live {
+        Some(live) => live.pid == pid && live.bundle_id == bundle_id,
+        None => false,
+    }
+}
+
+pub fn current_app_commands_session_identity_changed(
+    session: &CurrentAppCommandsSession,
+    live: Option<&CurrentAppCommandsLiveIdentity>,
+) -> bool {
+    !current_app_commands_identity_matches_live(session.pid, &session.bundle_id, live)
 }
 
 // ---------------------------------------------------------------------------
@@ -719,38 +818,21 @@ pub fn build_current_app_command_recipe(
 // ---------------------------------------------------------------------------
 
 /// Builds a generation prompt from a pre-built recipe, embedding the recipe as
-/// a base64-encoded header so the generated script can be round-tripped back to
-/// recipe tooling (verify, replay) later.
+/// a plain output contract so the generated script remains ordinary shareable
+/// code with captured values expressed inline.
 pub fn build_generated_script_prompt_from_recipe(recipe: &CurrentAppCommandRecipe) -> String {
-    use base64::Engine as _;
-
-    let recipe_json = match serde_json::to_string_pretty(recipe) {
-        Ok(json) => json,
-        Err(error) => {
-            tracing::warn!(
-                error = %error,
-                "current_app_recipe.embed_serialize_failed"
-            );
-            "{}".to_string()
-        }
-    };
-
-    let recipe_base64 = base64::engine::general_purpose::STANDARD.encode(recipe_json.as_bytes());
-
     format!(
         "{prompt}\n\n\
          OUTPUT CONTRACT:\n\
          - Return only runnable Script Kit TypeScript.\n\
          - Bias toward direct menu-command automation before brittle click/coordinate automation.\n\
          - Keep the script as small as possible.\n\
-         - Put these exact header lines at the top of the generated file:\n\
-         \x20 // Current-App-Recipe-Base64: {recipe_base64}\n\
-         \x20 // Current-App-Recipe-Name: {script_name}\n\
+         - Write the captured app names, menu labels, URLs, and other values directly in the code where they are used.\n\
+         - Do not add machine-readable recipe headers or encoded metadata blocks to the script.\n\
          - If Accessibility is required, say so in a comment near the top.\n\
          - If the task needs AI, isolate that in one function instead of spreading it across the file.\n\
          - Do not include prose outside the code.",
         prompt = recipe.prompt,
-        script_name = recipe.suggested_script_name,
     )
 }
 
@@ -1126,47 +1208,100 @@ pub fn build_replay_current_app_recipe_hud_message(
 
 /// Load a [`FrontmostMenuSnapshot`] from the current frontmost application.
 ///
-/// On macOS this reads the pre-cached menu items from the frontmost-app tracker.
+/// On macOS this prefers the pre-fetched menu cache published by the
+/// frontmost-app tracker (populated asynchronously on activation), and falls
+/// back to a live PID-bound capture with bounded retry + identity validation
+/// when the cache is cold or stale. The cache fast path avoids blocking the
+/// main UI thread on [`get_menu_bar_for_pid`], which can take multiple seconds
+/// for apps with large menu trees (Chrome, Figma, Photoshop).
+///
 /// On other platforms it returns a deterministic "unsupported" error.
 #[cfg(target_os = "macos")]
 pub fn load_frontmost_menu_snapshot() -> anyhow::Result<FrontmostMenuSnapshot> {
-    use anyhow::Context;
+    use anyhow::{anyhow, Context};
 
     let tracked_app = crate::frontmost_app_tracker::get_last_real_app()
         .context("No frontmost application tracked — is the app tracker running?")?;
 
-    let mut items = crate::frontmost_app_tracker::get_cached_menu_items();
-
-    if items.is_empty() {
+    let cached = crate::frontmost_app_tracker::get_cached_menu_items();
+    if !cached.is_empty() {
         tracing::info!(
+            capture_source = "cache",
+            pid = tracked_app.pid,
+            app_name = %tracked_app.name,
+            bundle_id = %tracked_app.bundle_id,
+            item_count = cached.len(),
+            "frontmost_menu_snapshot.loaded"
+        );
+        return Ok(FrontmostMenuSnapshot {
+            pid: tracked_app.pid,
+            app_name: tracked_app.name,
+            bundle_id: tracked_app.bundle_id,
+            items: cached,
+        });
+    }
+
+    for attempt in 0..MAX_FRONTMOST_MENU_SNAPSHOT_CAPTURE_ATTEMPTS {
+        let tracked_app = crate::frontmost_app_tracker::get_last_real_app()
+            .context("No frontmost application tracked — is the app tracker running?")?;
+
+        tracing::info!(
+            attempt,
             app_name = %tracked_app.name,
             bundle_id = %tracked_app.bundle_id,
             pid = tracked_app.pid,
-            "frontmost_menu_snapshot.cache_empty_refresh_live"
+            "frontmost_menu_snapshot.refresh_live"
         );
 
-        items = crate::menu_bar::get_menu_bar_for_pid(tracked_app.pid)
+        let items = crate::menu_bar::get_menu_bar_for_pid(tracked_app.pid)
             .with_context(|| format!("Failed to refresh menu bar for {}", tracked_app.name))?;
+
+        let live_identity = load_live_current_app_commands_identity();
+        if !current_app_commands_identity_matches_live(
+            tracked_app.pid,
+            &tracked_app.bundle_id,
+            live_identity.as_ref(),
+        ) {
+            tracing::warn!(
+                attempt,
+                capture_source = "live_refresh",
+                captured_pid = tracked_app.pid,
+                captured_bundle_id = %tracked_app.bundle_id,
+                live_pid = ?live_identity.as_ref().map(|live| live.pid),
+                live_bundle_id = ?live_identity.as_ref().map(|live| live.bundle_id.as_str()),
+                "frontmost_menu_snapshot.discard_stale_capture"
+            );
+            if attempt + 1 == MAX_FRONTMOST_MENU_SNAPSHOT_CAPTURE_ATTEMPTS {
+                return Err(anyhow!("Frontmost application changed during menu capture"));
+            }
+            continue;
+        }
 
         crate::frontmost_app_tracker::replace_cached_menu_items(
             tracked_app.pid,
             &tracked_app.bundle_id,
             items.clone(),
         );
+
+        tracing::info!(
+            attempt,
+            capture_source = "live_refresh",
+            pid = tracked_app.pid,
+            app_name = %tracked_app.name,
+            bundle_id = %tracked_app.bundle_id,
+            item_count = items.len(),
+            "frontmost_menu_snapshot.loaded"
+        );
+
+        return Ok(FrontmostMenuSnapshot {
+            pid: tracked_app.pid,
+            app_name: tracked_app.name,
+            bundle_id: tracked_app.bundle_id,
+            items,
+        });
     }
 
-    tracing::info!(
-        app_name = %tracked_app.name,
-        bundle_id = %tracked_app.bundle_id,
-        item_count = items.len(),
-        "frontmost_menu_snapshot.loaded"
-    );
-
-    Ok(FrontmostMenuSnapshot {
-        app_name: tracked_app.name,
-        bundle_id: tracked_app.bundle_id,
-        items,
-    })
+    unreachable!("bounded frontmost menu snapshot loop should always return or continue")
 }
 
 /// Stub for non-macOS platforms — always returns an error.
@@ -1227,6 +1362,7 @@ mod tests {
     #[test]
     fn into_entries_skips_apple_menu() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "TestApp".into(),
             bundle_id: "com.test.app".into(),
             items: vec![
@@ -1243,6 +1379,7 @@ mod tests {
     #[test]
     fn into_entries_empty_menu_returns_empty() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Empty".into(),
             bundle_id: "com.test.empty".into(),
             items: vec![],
@@ -1253,6 +1390,7 @@ mod tests {
     #[test]
     fn placeholder_includes_app_name() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![],
@@ -1263,6 +1401,7 @@ mod tests {
     #[test]
     fn into_entries_with_receipt_reports_counts() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "TestApp".into(),
             bundle_id: "com.test.app".into(),
             items: vec![
@@ -1280,6 +1419,101 @@ mod tests {
         assert_eq!(receipt.leaf_entry_count, 1);
         assert_eq!(receipt.placeholder, "Search TestApp commands\u{2026}");
         assert_eq!(receipt.source, "frontmost_app_tracker");
+    }
+
+    #[test]
+    fn current_app_commands_session_preserves_snapshot_receipt() {
+        let snap = FrontmostMenuSnapshot {
+            pid: 42,
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            items: vec![
+                apple_menu(),
+                menu("File", vec![leaf("New Tab", vec![1, 0])], vec![1]),
+            ],
+        };
+
+        let session = CurrentAppCommandsSession::from_snapshot(snap);
+        let receipt = session.receipt();
+
+        assert_eq!(session.app_name, "Safari");
+        assert_eq!(session.pid, 42);
+        assert_eq!(session.bundle_id, "com.apple.Safari");
+        assert_eq!(session.entries.len(), 1);
+        assert_eq!(receipt.placeholder, "Search Safari commands…");
+        assert_eq!(receipt.leaf_entry_count, 1);
+    }
+
+    #[test]
+    fn current_app_commands_session_identity_changed_only_when_live_identity_differs() {
+        let session = CurrentAppCommandsSession {
+            pid: 100,
+            app_name: "Safari".into(),
+            bundle_id: "com.apple.Safari".into(),
+            placeholder: "Search Safari commands…".into(),
+            top_level_menu_count: 1,
+            leaf_entry_count: 1,
+            source: "frontmost_app_tracker",
+            entries: vec![],
+        };
+
+        let same_identity = CurrentAppCommandsLiveIdentity {
+            pid: 100,
+            bundle_id: "com.apple.Safari".into(),
+        };
+        let different_bundle = CurrentAppCommandsLiveIdentity {
+            pid: 100,
+            bundle_id: "com.apple.finder".into(),
+        };
+        let different_pid = CurrentAppCommandsLiveIdentity {
+            pid: 200,
+            bundle_id: "com.apple.Safari".into(),
+        };
+
+        assert!(!current_app_commands_session_identity_changed(
+            &session,
+            Some(&same_identity)
+        ));
+        assert!(current_app_commands_session_identity_changed(
+            &session,
+            Some(&different_bundle)
+        ));
+        assert!(current_app_commands_session_identity_changed(
+            &session,
+            Some(&different_pid)
+        ));
+        assert!(current_app_commands_session_identity_changed(
+            &session, None
+        ));
+    }
+
+    #[test]
+    fn current_app_commands_identity_matches_live_requires_same_pid_and_bundle() {
+        let live = CurrentAppCommandsLiveIdentity {
+            pid: 100,
+            bundle_id: "com.apple.Safari".into(),
+        };
+
+        assert!(current_app_commands_identity_matches_live(
+            100,
+            "com.apple.Safari",
+            Some(&live)
+        ));
+        assert!(!current_app_commands_identity_matches_live(
+            200,
+            "com.apple.Safari",
+            Some(&live)
+        ));
+        assert!(!current_app_commands_identity_matches_live(
+            100,
+            "com.apple.finder",
+            Some(&live)
+        ));
+        assert!(!current_app_commands_identity_matches_live(
+            100,
+            "com.apple.Safari",
+            None
+        ));
     }
 
     #[cfg(target_os = "macos")]
@@ -1304,6 +1538,7 @@ mod tests {
     #[test]
     fn placeholder_copy_mentions_app_commands() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Finder".into(),
             bundle_id: "com.apple.finder".into(),
             items: vec![],
@@ -1320,6 +1555,7 @@ mod tests {
     #[test]
     fn generate_script_prompt_includes_user_request_and_optional_context() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1357,6 +1593,7 @@ mod tests {
     #[test]
     fn generate_script_prompt_omits_empty_optional_inputs() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Finder".into(),
             bundle_id: "com.apple.finder".into(),
             items: vec![],
@@ -1377,6 +1614,7 @@ mod tests {
     fn generate_script_prompt_truncates_selected_text() {
         let long_text: String = "x".repeat(2_000);
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "TextEdit".into(),
             bundle_id: "com.apple.TextEdit".into(),
             items: vec![],
@@ -1400,6 +1638,7 @@ mod tests {
             .collect();
 
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "BigApp".into(),
             bundle_id: "com.example.BigApp".into(),
             items: vec![apple_menu(), menu("File", children, vec![1])],
@@ -1415,6 +1654,7 @@ mod tests {
     #[test]
     fn generate_script_prompt_includes_shortcut_suffix() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1579,6 +1819,7 @@ mod tests {
     #[test]
     fn resolve_do_in_current_app_intent_unique_leaf_match_executes_entry() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1606,6 +1847,7 @@ mod tests {
     #[test]
     fn resolve_do_in_current_app_intent_ambiguous_query_opens_palette() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1629,6 +1871,7 @@ mod tests {
     #[test]
     fn resolve_do_in_current_app_intent_no_matches_generates_script() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1650,6 +1893,7 @@ mod tests {
     #[test]
     fn resolve_do_in_current_app_intent_empty_query_opens_palette() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1673,6 +1917,7 @@ mod tests {
     #[test]
     fn resolve_do_in_current_app_intent_exact_shortcut_keyword_executes_entry() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1697,6 +1942,7 @@ mod tests {
     #[test]
     fn resolve_do_in_current_app_intent_normalizes_path_punctuation_and_case() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1717,6 +1963,7 @@ mod tests {
     #[test]
     fn generate_script_prompt_omits_builtin_label_request() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![apple_menu()],
@@ -1776,6 +2023,7 @@ mod tests {
     #[test]
     fn build_current_app_command_recipe_contains_trace_and_prompt() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1822,6 +2070,7 @@ mod tests {
     #[test]
     fn current_app_command_recipe_serializes_with_camel_case_fields() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1856,6 +2105,7 @@ mod tests {
     #[test]
     fn replay_current_app_recipe_receipt_executes_entry_on_exact_match() {
         let snapshot = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1893,6 +2143,7 @@ mod tests {
     #[test]
     fn replay_current_app_recipe_receipt_opens_palette_for_ambiguous_recipe() {
         let snapshot = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1921,6 +2172,7 @@ mod tests {
     #[test]
     fn replay_current_app_recipe_receipt_generates_script_when_no_direct_match_exists() {
         let snapshot = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1949,6 +2201,7 @@ mod tests {
     #[test]
     fn replay_current_app_recipe_receipt_blocks_when_drift_detected() {
         let stored_snapshot = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -1958,6 +2211,7 @@ mod tests {
         };
 
         let live_snapshot = FrontmostMenuSnapshot {
+            pid: 84,
             app_name: "Finder".into(),
             bundle_id: "com.apple.finder".into(),
             items: vec![
@@ -1990,6 +2244,7 @@ mod tests {
     #[test]
     fn build_current_app_command_recipe_marks_context_flags() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -2021,6 +2276,7 @@ mod tests {
     #[test]
     fn generated_script_prompt_from_recipe_embeds_contract_and_recipe_header() {
         let snap = FrontmostMenuSnapshot {
+            pid: 42,
             app_name: "Safari".into(),
             bundle_id: "com.apple.Safari".into(),
             items: vec![
@@ -2047,12 +2303,16 @@ mod tests {
             "prompt must require runnable Script Kit TypeScript"
         );
         assert!(
-            prompt.contains("Current-App-Recipe-Base64:"),
-            "prompt must embed base64-encoded recipe header"
+            prompt.contains("Write the captured app names, menu labels, URLs, and other values directly in the code where they are used."),
+            "prompt must require inline captured values"
         );
         assert!(
             prompt.contains("Bias toward direct menu-command automation"),
             "prompt must bias toward menu-command automation"
+        );
+        assert!(
+            prompt.contains("Do not add machine-readable recipe headers"),
+            "prompt must forbid recipe headers"
         );
     }
 }

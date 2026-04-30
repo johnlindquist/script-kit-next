@@ -10,14 +10,19 @@
 //!
 
 pub mod acp_chat_raycast_weight_studies;
+pub mod acp_chat_states;
 pub mod actions_dialog_presenter;
+pub mod actions_dialog_states;
 pub mod actions_dialog_variations;
 pub mod adoption;
 pub mod audit_report;
 mod browser;
+pub mod built_in_browser_states;
+pub mod component_primitives_states;
 pub mod confirm_popup_playground;
 pub mod context_picker_popup_playground;
 mod diagnostics;
+pub mod dictation_states;
 pub mod dictation_ui_variations;
 pub mod footer_variations;
 pub mod input_variations;
@@ -26,21 +31,28 @@ mod layout;
 pub mod main_menu_raycast_weight_studies;
 pub mod main_menu_variations;
 pub mod mini_ai_chat_presenter;
+pub mod mini_ai_chat_states;
 pub mod mini_ai_chat_variations;
+pub mod notes_window_states;
 pub mod notes_window_variations;
 pub(crate) mod playground_overlay_metrics;
 mod registry;
-pub mod runtime_fixture;
 mod selection;
+pub mod shortcut_recorder_states;
 mod story;
+pub mod utility_builtin_states;
 
-pub use acp_chat_raycast_weight_studies::{
-    acp_chat_raycast_weight_story_variants, render_acp_chat_raycast_weight_compare_thumbnail,
-    render_acp_chat_raycast_weight_gallery, render_acp_chat_raycast_weight_story_preview,
+pub use acp_chat_states::{
+    acp_chat_state_story_variants, render_acp_chat_state_compare_thumbnail,
+    render_acp_chat_state_preview, AcpChatStateId,
 };
 pub use actions_dialog_presenter::{
     render_actions_dialog_presentation, ActionsDialogPresentationAction,
     ActionsDialogPresentationItem, ActionsDialogPresentationModel,
+};
+pub use actions_dialog_states::{
+    actions_dialog_state_story_variants, render_actions_dialog_state_compare_thumbnail,
+    render_actions_dialog_state_preview, ActionsDialogStateId,
 };
 pub use actions_dialog_variations::{
     actions_dialog_story_variants, adopted_actions_dialog_style, resolve_actions_dialog_style,
@@ -53,8 +65,8 @@ pub use adoption::{
 };
 pub use browser::StoryBrowser;
 pub use confirm_popup_playground::{
-    confirm_popup_playground_story_variants, render_confirm_popup_playground_story_preview,
-    ConfirmPopupPlaygroundId,
+    confirm_popup_playground_story_variants, render_confirm_popup_playground_compare_thumbnail,
+    render_confirm_popup_playground_story_preview, ConfirmPopupPlaygroundId,
 };
 pub use context_picker_popup_playground::{
     context_picker_popup_playground_story_variants,
@@ -67,9 +79,9 @@ pub use diagnostics::{
     AdoptedSurfaceResolutionEntry, AdoptedSurfaceResolutionSnapshot, StoryCatalogEntry,
     StoryCatalogSnapshot, StorySurfaceSummary, StoryVariantSummary,
 };
-pub use dictation_ui_variations::{
-    dictation_ui_story_variants, render_dictation_ui_compare_thumbnail,
-    render_dictation_ui_gallery, render_dictation_ui_story_preview,
+pub use dictation_states::{
+    dictation_state_story_variants, render_dictation_state_compare_thumbnail,
+    render_dictation_state_gallery, render_dictation_state_story_preview,
 };
 pub use footer_variations::{
     config_from_footer_variation_spec, config_from_storybook_footer_selection,
@@ -87,10 +99,7 @@ pub use integrated_surface_shell::{
     IntegratedSurfaceShellConfig,
 };
 pub use layout::{code_block, story_container, story_divider, story_item, story_section};
-pub use main_menu_raycast_weight_studies::{
-    main_menu_raycast_weight_story_variants, render_main_menu_raycast_weight_compare_thumbnail,
-    render_main_menu_raycast_weight_gallery, render_main_menu_raycast_weight_story_preview,
-};
+pub use main_menu_raycast_weight_studies::adopted_main_menu_list_study_metrics;
 pub use main_menu_variations::{
     adopted_main_menu_live_spec, adopted_main_menu_variant, main_menu_story_variants,
     render_main_menu_compare_thumbnail, render_main_menu_story_preview, resolve_main_menu_variant,
@@ -101,32 +110,39 @@ pub use mini_ai_chat_presenter::{
     render_mini_ai_chat_presentation, MiniAiChatPresentationMessage, MiniAiChatPresentationModel,
     MiniAiChatRole, MiniAiChatSuggestion,
 };
+pub use mini_ai_chat_states::{
+    mini_ai_chat_state_story_variants, render_mini_ai_chat_state_compare_thumbnail,
+    render_mini_ai_chat_state_preview, MiniAiChatStateId,
+};
 pub use mini_ai_chat_variations::{
     adopted_mini_ai_chat_style, mini_ai_chat_story_variants, render_mini_ai_chat_compare_thumbnail,
     render_mini_ai_chat_story_preview, resolve_mini_ai_chat_style, MiniAiChatStyle,
     MiniAiChatSurface, MiniAiChatVariationId, MiniAiChatVariationSpec,
     SPECS as MINI_AI_CHAT_VARIATION_SPECS,
 };
+pub use notes_window_states::{
+    notes_window_state_story_variants, render_notes_window_state_compare_thumbnail,
+    render_notes_window_state_preview, NotesWindowStateId,
+};
 pub use notes_window_variations::{
-    adopted_notes_window_style, notes_window_story_variants, render_notes_window_compare_thumbnail,
-    render_notes_window_story_preview, resolve_notes_window_style, NotesWindowSurface,
+    adopted_notes_window_style, resolve_notes_window_style, NotesWindowSurface,
     NotesWindowVariationId, NotesWindowVariationSpec, SPECS as NOTES_WINDOW_VARIATION_SPECS,
 };
 pub use registry::{
     all_categories, all_stories, first_story_with_multiple_variants, stories_by_category,
     stories_by_surface, StoryEntry,
 };
-pub use runtime_fixture::{
-    describe_runtime_fixture, load_runtime_fixture_manifest, render_runtime_fixture,
-    runtime_fixture_image_path, runtime_fixture_manifest_path, RuntimeFixtureManifest,
-    RuntimeFixturePresence,
-};
 pub(crate) use selection::selection_store_path;
 pub use selection::{
     load_selected_story_variant, load_story_selections, save_selected_story_variant,
     save_story_selections, StorySelectionStore, StorySelectionWriteResult,
 };
-pub use story::{Story, StorySurface, StoryVariant};
+pub use shortcut_recorder_states::{
+    render_shortcut_recorder_state_compare_thumbnail, render_shortcut_recorder_state_preview,
+    shortcut_recorder_state_spec, shortcut_recorder_state_specs, ShortcutRecorderStateId,
+    ShortcutRecorderStateSpec,
+};
+pub use story::{Story, StoryCatalogRole, StorySurface, StoryVariant};
 
 pub use audit_report::{
     build_command_bar_consistency_report, build_prompt_chrome_consistency_report,
@@ -135,6 +151,18 @@ pub use audit_report::{
     write_command_bar_consistency_report, write_prompt_chrome_consistency_report,
     write_standard_audit_reports, write_workflow_affordance_consistency_report, AuditFinding,
     AuditReport, AuditSeverity, AuditSurfaceResult,
+};
+pub use built_in_browser_states::{
+    built_in_browser_state_story_variants, render_built_in_browser_state_compare_thumbnail,
+    render_built_in_browser_state_preview, BuiltInBrowserStateId,
+};
+pub use component_primitives_states::{
+    component_primitive_state_story_variants, render_component_primitive_state_compare_thumbnail,
+    render_component_primitive_state_preview, ComponentPrimitiveStateId,
+};
+pub use utility_builtin_states::{
+    render_utility_builtin_state_compare_thumbnail, render_utility_builtin_state_preview,
+    utility_builtin_state_story_variants, UtilityBuiltinStateId,
 };
 
 /// Machine-readable error payload for `--catalog-json` failures.

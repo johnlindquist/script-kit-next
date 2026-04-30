@@ -14,12 +14,14 @@ pub(super) fn build_search_mode_results(
     scripts: &[Arc<Script>],
     frecency_store: &FrecencyStore,
     filter_text: &str,
+    preferred_result_key: Option<&str>,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     // Apply frecency boost: recently/frequently used items get a score bonus.
     // This is how modern launchers (Raycast, Alfred, Spotlight) work.
     // The bonus is capped so a good fuzzy match still beats a poor match with high frecency.
     {
         let max_frecency_bonus = 50i32;
+        let preferred_match_bonus = 100_000i32;
 
         // Helper to get the frecency path for a result (mirrors grouped-view logic).
         // Skills and scriptlets use plugin-qualified keys.
@@ -42,6 +44,8 @@ pub(super) fn build_search_mode_results(
                 // Suppressed: agents don't participate in search-mode frecency
                 SearchResult::Agent(_) => None,
                 SearchResult::Fallback(_) => None,
+                // Script issues row is pinned synthetically; no frecency
+                SearchResult::ScriptIssue(_) => None,
             }
         };
 
@@ -63,7 +67,14 @@ pub(super) fn build_search_mode_results(
                 } else {
                     0
                 };
-                result.score() + frecency_bonus
+                let exact_query_bonus = preferred_result_key
+                    .and_then(|preferred| result.history_result_key().map(|key| key == preferred))
+                    .map(|is_match| if is_match { preferred_match_bonus } else { 0 })
+                    .unwrap_or(0);
+                result
+                    .score()
+                    .saturating_add(frecency_bonus)
+                    .saturating_add(exact_query_bonus)
             })
             .collect();
 

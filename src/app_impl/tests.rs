@@ -125,8 +125,7 @@ fn test_generate_script_from_current_app_routes_to_harness() {
         .expect("Failed to read src/app_execute/builtin_execution.rs");
 
     assert!(
-        builtin_execution
-            .contains("AiCommandType::GenerateScriptFromCurrentApp"),
+        builtin_execution.contains("AiCommandType::GenerateScriptFromCurrentApp"),
         "GenerateScriptFromCurrentApp must be handled in builtin_execution.rs"
     );
 
@@ -163,6 +162,52 @@ fn test_emoji_picker_arrow_interceptor_consumes_left_right_keys_before_input() {
             && horizontal_interceptor.contains("cx.stop_propagation();"),
         "EmojiPickerView left/right handling must navigate and stop propagation to Input"
     );
+}
+
+#[test]
+fn test_browser_tabs_builtin_is_available_to_stdin_trigger_routes() {
+    // Registry contract: the canonical name + every legacy alias must
+    // resolve to TriggerBuiltin::BrowserTabs. If this fails, no amount
+    // of dispatcher wiring will route browser-tabs correctly.
+    use crate::builtins::trigger_registry::{registry, TriggerBuiltin};
+    for alias in ["browser-tabs", "browsertabs", "tabs", "builtin/browser-tabs"] {
+        assert_eq!(
+            registry().resolve(alias),
+            Some(TriggerBuiltin::BrowserTabs),
+            "alias '{alias}' should resolve to TriggerBuiltin::BrowserTabs"
+        );
+    }
+
+    // Dispatcher parity: the three stdin ingress sites (the real one +
+    // the two orphan audit mirrors) MUST all delegate to the shared
+    // helper so the match arms can never drift apart again. They must
+    // pass the whole `ExternalCommand` through the wrapper (not the raw
+    // `name`), so the canonical-vs-deprecated `builtin_id` / `name`
+    // normalization in `ExternalCommand::trigger_builtin_ref` runs in
+    // exactly one place.
+    for path in [
+        "src/main_entry/runtime_stdin_match_core.rs",
+        "src/main_entry/runtime_stdin.rs",
+        "src/main_entry/app_run_setup.rs",
+    ] {
+        let source = fs::read_to_string(path).unwrap_or_else(|_| panic!("Failed to read {path}"));
+        assert!(
+            source.contains("view.dispatch_trigger_builtin(cmd, window, ctx)"),
+            "{path} must delegate triggerBuiltin to the shared dispatcher helper \
+             via the `cmd @ ExternalCommand::TriggerBuiltin {{ .. }}` rebinding \
+             (see src/app_impl/trigger_builtin_dispatch.rs)"
+        );
+        assert!(
+            !source.contains("dispatch_trigger_builtin_name(name, window, ctx)"),
+            "{path} must not call the raw-name helper directly — route through \
+             `dispatch_trigger_builtin` so deprecated-name counters fire"
+        );
+        assert!(
+            !source.contains("\"browser-tabs\" | \"browsertabs\" | \"tabs\""),
+            "{path} must not contain inline browser-tabs match arms — dispatch \
+             lives in the shared helper"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -213,15 +258,16 @@ fn plain_tab_in_script_list_routes_to_acp_in_standard_startup() {
 
 #[test]
 fn plain_tab_routes_raw_launcher_text_and_submits_to_detached_acp() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode.rs");
+    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
         source.contains("self.filter_text.trim()"),
         "Plain Tab ACP helper must derive the entry intent from raw ScriptList filter text"
     );
     assert!(
-        source.contains("self.open_tab_ai_acp_with_options(entry_intent, true, cx);"),
+        source.contains("self.open_tab_ai_acp_with_entry_intent_preserving_return_and_options(")
+            && source.contains("entry_intent,\n            true,\n            cx,"),
         "Plain Tab ACP helper must suppress focused-choice staging on non-detached ACP launches"
     );
     assert!(
@@ -233,8 +279,8 @@ fn plain_tab_routes_raw_launcher_text_and_submits_to_detached_acp() {
 
 #[test]
 fn plain_tab_suppresses_focused_part_staging_but_cmd_enter_does_not() {
-    let source = fs::read_to_string("src/app_impl/tab_ai_mode.rs")
-        .expect("Failed to read src/app_impl/tab_ai_mode.rs");
+    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
 
     assert!(
         source.contains("suppress_focused_part: bool"),
@@ -246,9 +292,22 @@ fn plain_tab_suppresses_focused_part_staging_but_cmd_enter_does_not() {
         "Focused-part routing must honor the suppression flag during ACP launch"
     );
     assert!(
-        source.contains("self.open_tab_ai_acp_with_options(entry_intent, true, cx);")
+        source.contains("self.open_tab_ai_acp_with_entry_intent_preserving_return_and_options(")
+            && source.contains("entry_intent,\n            true,\n            cx,")
             && source.contains("self.open_tab_ai_acp_with_options(entry_intent, false, cx);"),
         "Plain Tab should suppress focused-choice staging while the shared ACP entry path should not"
+    );
+}
+
+#[test]
+fn direct_prompt_acp_handoff_can_suppress_focused_part_staging() {
+    let source = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+
+    assert!(
+        source.contains("open_tab_ai_acp_with_entry_intent_suppressing_focused_part")
+            && source.contains("self.open_tab_ai_acp_with_options(entry_intent, true, cx);"),
+        "Direct prompt ACP handoffs such as dictation must be able to submit raw input without inheriting the selected launcher row"
     );
 }
 
@@ -264,6 +323,42 @@ fn legacy_simulate_key_tab_uses_plain_tab_acp_helper() {
             && app_run_setup.contains("try_route_plain_tab_to_acp_context_capture"),
         "Legacy stdin simulateKey Tab path must reuse the plain Tab ACP helper in both include sources"
     );
+}
+
+/// Contract test for `tool-table-driven-simulatekey` (AFK Run 2 Pass #4).
+///
+/// Both simulateKey dispatchers must emit a structured `unhandled_view` code
+/// when the current view has no arm, instead of a silent debug log. This
+/// guards against a regression where a refactor drops the loud receipt and
+/// unhandled views become undetectable from outside the dispatcher.
+#[test]
+fn simulate_key_dispatchers_emit_unhandled_view_receipt() {
+    let runtime_match = fs::read_to_string("src/main_entry/runtime_stdin_match_simulate_key.rs")
+        .expect("Failed to read src/main_entry/runtime_stdin_match_simulate_key.rs");
+    let app_run_setup = fs::read_to_string("src/main_entry/app_run_setup.rs")
+        .expect("Failed to read src/main_entry/app_run_setup.rs");
+
+    for (label, source) in [
+        ("runtime_stdin_match_simulate_key.rs", runtime_match.as_str()),
+        ("app_run_setup.rs", app_run_setup.as_str()),
+    ] {
+        assert!(
+            source.contains("simulateKey_unhandled_view"),
+            "{label} must emit a `simulateKey_unhandled_view` tracing event from its catch-all arm"
+        );
+        assert!(
+            source.contains("code = \"unhandled_view\""),
+            "{label} must label the unhandled-view event with `code = \"unhandled_view\"` so receipts are machine-parseable"
+        );
+        assert!(
+            source.contains("SimulateKey: UNHANDLED_VIEW"),
+            "{label} must also write a plain-text `SimulateKey: UNHANDLED_VIEW` line via logging::log for operator logs"
+        );
+        assert!(
+            source.contains("view.app_view_name()"),
+            "{label} must name the unhandled view via `app_view_name()` instead of emitting an opaque discriminant"
+        );
+    }
 }
 
 #[test]
@@ -291,6 +386,48 @@ fn confirm_popup_guards_global_launcher_interceptors() {
 }
 
 #[test]
+fn actions_window_escape_routes_before_secondary_window_skip() {
+    let startup = fs::read_to_string("src/app_impl/startup.rs")
+        .expect("Failed to read src/app_impl/startup.rs");
+    let startup_new_actions = fs::read_to_string("src/app_impl/startup_new_actions.rs")
+        .expect("Failed to read src/app_impl/startup_new_actions.rs");
+
+    for (label, source) in [
+        ("startup.rs", startup.as_str()),
+        ("startup_new_actions.rs", startup_new_actions.as_str()),
+    ] {
+        let actions_window_pos = source
+            .find("if is_actions")
+            .unwrap_or_else(|| panic!("{label} must special-case actions window keys"));
+        let secondary_skip_pos = source
+            .find("if is_notes || is_ai || is_detached_acp")
+            .unwrap_or_else(|| panic!("{label} must keep the secondary-window skip"));
+        assert!(
+            actions_window_pos < secondary_skip_pos,
+            "{label} must route actions-window Escape before skipping secondary windows"
+        );
+        let close_key_pos = source
+            .find("let is_actions_close_key")
+            .unwrap_or_else(|| panic!("{label} must compute actions close keys"));
+        let hidden_guard_pos = source
+            .find("if !script_kit_gpui::is_main_window_visible()")
+            .unwrap_or_else(|| panic!("{label} must keep the main-window visibility guard"));
+        assert!(
+            close_key_pos < hidden_guard_pos,
+            "{label} must route actions close keys before the visibility guard so embedded ACP can close its actions dialog"
+        );
+        assert!(
+            source.contains("actions_interceptor_routed_from_actions_window")
+                && source.contains("actions_interceptor_routed_close_before_visibility_guard")
+                && source.contains("crate::ui_foundation::is_key_escape(key)")
+                && source.contains("key.eq_ignore_ascii_case(\"k\")")
+                && source.contains("this.route_key_to_actions_dialog("),
+            "{label} must route Escape/Cmd+K from the actions window through the shared dialog"
+        );
+    }
+}
+
+#[test]
 fn render_impl_routes_modifier_aware_keys_into_confirm_popup_guard() {
     let source = fs::read_to_string("src/main_sections/render_impl.rs")
         .expect("Failed to read src/main_sections/render_impl.rs");
@@ -302,5 +439,78 @@ fn render_impl_routes_modifier_aware_keys_into_confirm_popup_guard() {
     assert!(
         source.contains("&event.keystroke.modifiers"),
         "render_impl.rs must pass real modifiers so Shift+Tab stays inside the confirm popup"
+    );
+}
+
+#[test]
+fn script_list_cmd_v_routes_large_pastes_into_acp() {
+    let render_script_list = fs::read_to_string("src/render_script_list/mod.rs")
+        .expect("Failed to read src/render_script_list/mod.rs");
+    let tab_ai_mode = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+
+    assert!(
+        render_script_list.contains("\"v\" if this.route_large_script_list_paste_to_acp(cx)"),
+        "Cmd+V in ScriptList should first try the large-paste ACP handoff"
+    );
+    assert!(
+        tab_ai_mode.contains("script_list_large_paste_routed_to_acp")
+            && tab_ai_mode.contains("clipboard://pasted-text/")
+            && tab_ai_mode.contains("open_tab_ai_acp_with_context_part(part, \"script_list_large_paste\", cx);"),
+        "Large ScriptList pastes should become ACP text-block context instead of staying in the launcher filter"
+    );
+}
+
+#[test]
+fn script_list_cmd_v_routes_clipboard_images_into_acp() {
+    let tab_ai_mode = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+
+    assert!(
+        tab_ai_mode.contains("clipboard.get_image()")
+            && tab_ai_mode.contains("script_list_clipboard_image_routed_to_acp")
+            && tab_ai_mode.contains(
+                "open_tab_ai_acp_with_context_part(part, \"script_list_clipboard_image\", cx);"
+            ),
+        "ScriptList Cmd+V should route clipboard images straight into ACP as file attachments"
+    );
+}
+
+#[test]
+fn acp_launch_staging_preserves_pasted_text_pills_for_clipboard_text_blocks() {
+    let acp_view =
+        fs::read_to_string("src/ai/acp/view.rs").expect("Failed to read src/ai/acp/view.rs");
+    let tab_ai_mode = fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+        .expect("Failed to read src/app_impl/tab_ai_mode/mod.rs");
+
+    assert!(
+        acp_view.contains("source.starts_with(\"clipboard://pasted-text/\")")
+            && acp_view.contains("self.pasted_text_tokens")
+            && acp_view.contains("register_inline_owned_context_part"),
+        "ACP should recognize staged clipboard text blocks as pasted-text pills"
+    );
+    assert!(
+        tab_ai_mode.contains("view.register_inline_owned_context_part(token, part);"),
+        "ACP launch staging should register routed clipboard text with the pasted-text pill registry"
+    );
+}
+
+#[test]
+fn acp_clipboard_image_parts_stage_as_pasted_image_pills() {
+    let acp_view =
+        fs::read_to_string("src/ai/acp/view.rs").expect("Failed to read src/ai/acp/view.rs");
+    let context_mentions = fs::read_to_string("src/ai/context_mentions/mod.rs")
+        .expect("Failed to read src/ai/context_mentions/mod.rs");
+
+    assert!(
+        acp_view.contains("pasted_image_tokens")
+            && acp_view.contains("paste_image_from_clipboard")
+            && acp_view.contains("crate::pasted_image::remove_pasted_image_token_at_cursor")
+            && acp_view.contains("pasted_image_pill_ranges"),
+        "ACP should give pasted clipboard images their own pill registry, paste handler, and atomic delete path"
+    );
+    assert!(
+        context_mentions.contains("crate::pasted_image::token_for_label(label)"),
+        "Clipboard-image file parts should map back to their stable @img:pasteN inline token"
     );
 }

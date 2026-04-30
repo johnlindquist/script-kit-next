@@ -221,7 +221,7 @@ fn test_fuzzy_search_by_path() {
     let scripts = wrap_scripts(vec![
         Script {
             name: "foo".to_string(),
-            path: PathBuf::from("/home/user/.scriptkit/main/scripts/open.ts"),
+            path: PathBuf::from("/home/user/.scriptplugins/main/scripts/open.ts"),
             extension: "ts".to_string(),
             icon: None,
             description: None,

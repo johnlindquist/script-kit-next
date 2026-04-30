@@ -749,7 +749,7 @@ impl ScriptListApp {
                         error = %error,
                         "Deferred AI text capture failed"
                     );
-                    let message = format!("Failed to capture content for ACP Chat: {}", error);
+                    let message = format!("Failed to capture content for Agent Chat: {}", error);
                     this.toast_manager.push(
                         components::toast::Toast::error(message, &this.theme)
                             .duration_ms(Some(TOAST_CRITICAL_MS)),
@@ -1003,6 +1003,199 @@ impl ScriptListApp {
             });
         })
         .detach();
+    }
+
+    /// Schedule the DoInCurrentApp→GenerateScript flow, capturing selected
+    /// text and the focused browser URL off the UI thread.
+    ///
+    /// Both `get_selected_text()` (AX-first, clipboard fallback) and
+    /// `get_focused_browser_tab_url()` (single `osascript` call gated by the
+    /// in-process frontmost-app tracker) can block for hundreds of
+    /// milliseconds. Running them on `cx.background_executor()` keeps the
+    /// launcher responsive while macOS answers; the memory lookup, recipe
+    /// build, and dispatch run back on the main thread once capture completes.
+    fn spawn_generate_script_from_current_app_with_capture(
+        &mut self,
+        trace_id: String,
+        raw_query_owned: String,
+        snapshot_for_recipe: crate::menu_bar::FrontmostMenuSnapshot,
+        entries: Vec<crate::builtins::BuiltInEntry>,
+        snapshot_receipt: crate::menu_bar::FrontmostMenuSnapshotReceipt,
+        snapshot_pid: i32,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            trace_id = %trace_id,
+            raw_query = %raw_query_owned,
+            "do_in_current_app.spawn_context_capture"
+        );
+
+        cx.spawn(async move |this, cx| {
+            let capture_started_at = std::time::Instant::now();
+            let (selected_text, browser_url) = cx
+                .background_executor()
+                .spawn(async {
+                    let selected_text = crate::selected_text::get_selected_text()
+                        .ok()
+                        .filter(|text| !text.trim().is_empty());
+                    let browser_url = crate::platform::get_focused_browser_tab_url()
+                        .ok()
+                        .filter(|url| !url.trim().is_empty());
+                    (selected_text, browser_url)
+                })
+                .await;
+
+            tracing::info!(
+                trace_id = %trace_id,
+                capture_ms = capture_started_at.elapsed().as_millis() as u64,
+                has_selected_text = selected_text.is_some(),
+                has_browser_url = browser_url.is_some(),
+                "do_in_current_app.context_capture_complete"
+            );
+
+            let _ = this.update(cx, |this, cx| {
+                this.continue_generate_script_from_current_app_after_capture(
+                    trace_id,
+                    raw_query_owned,
+                    snapshot_for_recipe,
+                    entries,
+                    snapshot_receipt,
+                    snapshot_pid,
+                    selected_text,
+                    browser_url,
+                    cx,
+                );
+            });
+        })
+        .detach();
+    }
+
+    /// Continuation of `spawn_generate_script_from_current_app_with_capture`,
+    /// invoked back on the main thread once the blocking capture finishes.
+    fn continue_generate_script_from_current_app_after_capture(
+        &mut self,
+        trace_id: String,
+        raw_query_owned: String,
+        snapshot_for_recipe: crate::menu_bar::FrontmostMenuSnapshot,
+        entries: Vec<crate::builtins::BuiltInEntry>,
+        snapshot_receipt: crate::menu_bar::FrontmostMenuSnapshotReceipt,
+        snapshot_pid: i32,
+        selected_text: Option<String>,
+        browser_url: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let memory_decision = crate::ai::resolve_current_app_automation_from_memory(
+            &raw_query_owned,
+            &snapshot_for_recipe,
+            &entries,
+            selected_text.as_deref(),
+            browser_url.as_deref(),
+        );
+
+        if let Ok(ref decision) = memory_decision {
+            if let Some(ref replay) = decision.replay {
+                tracing::info!(
+                    category = "CURRENT_APP_AUTOMATION_MEMORY",
+                    trace_id = %trace_id,
+                    action = %decision.action,
+                    best_score = decision.best_score,
+                    matched_slug = decision
+                        .matched
+                        .as_ref()
+                        .map(|entry| entry.slug.as_str())
+                        .unwrap_or(""),
+                    reason = %decision.reason,
+                    "do_in_current_app.memory_resolved"
+                );
+
+                match decision.action.as_str() {
+                    "replay_recipe" => match replay.action.as_str() {
+                        "execute_entry" => {
+                            if let Some(entry_index) = replay.selected_entry_index {
+                                if entry_index < entries.len() {
+                                    let entry = entries[entry_index].clone();
+                                    let dctx = crate::action_helpers::DispatchContext {
+                                        trace_id: trace_id.clone(),
+                                        surface: crate::action_helpers::DispatchSurface::Builtin,
+                                        action_id: entry.id.clone(),
+                                    };
+                                    let _ = self.execute_builtin_inner(
+                                        &entry,
+                                        Some(&raw_query_owned),
+                                        &dctx,
+                                        cx,
+                                    );
+                                    return;
+                                }
+                            }
+                        }
+                        "open_command_palette" => {
+                            let filter = replay.verification.live_recipe.effective_query.clone();
+                            self.present_current_app_commands_entries(
+                                entries.clone(),
+                                &snapshot_receipt,
+                                snapshot_pid,
+                                &filter,
+                                cx,
+                            );
+                            return;
+                        }
+                        "generate_script" => {
+                            self.spawn_generate_script_from_recipe_after_hide(
+                                trace_id.clone(),
+                                replay.verification.live_recipe.clone(),
+                                cx,
+                            );
+                            return;
+                        }
+                        _ => {}
+                    },
+                    "repair_recipe" => {
+                        self.spawn_generate_script_from_recipe_after_hide(
+                            trace_id.clone(),
+                            replay.verification.live_recipe.clone(),
+                            cx,
+                        );
+                        return;
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let recipe = crate::menu_bar::current_app_commands::build_current_app_command_recipe(
+            snapshot_for_recipe,
+            Some(&raw_query_owned),
+            selected_text.as_deref(),
+            browser_url.as_deref(),
+        );
+
+        match serde_json::to_string_pretty(&recipe) {
+            Ok(json) => {
+                tracing::info!(
+                    category = "CURRENT_APP_RECIPE",
+                    trace_id = %trace_id,
+                    app_name = %recipe.prompt_receipt.app_name,
+                    bundle_id = %recipe.prompt_receipt.bundle_id,
+                    effective_query = %recipe.effective_query,
+                    route = %recipe.trace.action,
+                    suggested_script_name = %recipe.suggested_script_name,
+                    included_selected_text = recipe.prompt_receipt.included_selected_text,
+                    included_browser_url = recipe.prompt_receipt.included_browser_url,
+                    json_bytes = json.len(),
+                    "do_in_current_app.recipe_prepared"
+                );
+            }
+            Err(error) => {
+                tracing::warn!(
+                    trace_id = %trace_id,
+                    error = %error,
+                    "do_in_current_app.recipe_serialize_failed"
+                );
+            }
+        }
+
+        self.spawn_generate_script_from_recipe_after_hide(trace_id, recipe, cx);
     }
 
     fn system_action_feedback_message(
@@ -1318,6 +1511,13 @@ impl ScriptListApp {
                 "Clear suggested items and reset their ranking data?",
                 "Clear Suggested",
             ),
+            "builtin/sync-to-github" => crate::confirm::ParentConfirmOptions {
+                title: "Sync to GitHub".into(),
+                body: "Write safe .gitignore exclusions, commit Script Kit changes, and sync this workspace to GitHub?".into(),
+                confirm_text: "Sync".into(),
+                cancel_text: "Cancel".into(),
+                ..Default::default()
+            },
             "builtin/test-confirmation" => crate::confirm::ParentConfirmOptions {
                 title: "Test Confirmation".into(),
                 body: "Open the confirmation test action?".into(),
@@ -1361,7 +1561,11 @@ impl ScriptListApp {
         self.show_actions_popup = false;
         self.actions_dialog = None;
 
-        // Check if this command requires confirmation - open modal if so
+        // Check if this command requires confirmation - open modal if so.
+        // Quit Script Kit goes through this same path (see builtin_confirmation_options
+        // and DEFAULT_CONFIRMATION_COMMANDS) — the parent confirm popup is a separate
+        // native window with its own focus, so Tab/Esc work without competing with the
+        // launcher or any other view's key handlers.
         if self.config.requires_confirmation(&entry.id) {
             let confirmation_start = std::time::Instant::now();
             let entry_id = entry.id.clone();
@@ -1458,10 +1662,16 @@ impl ScriptListApp {
     /// Every filterable builtin should go through this helper so that focus,
     /// placeholder, filter reset, hover clearing, resize, and opened-from-menu
     /// state are always set the same way.
+    ///
+    /// `expanded` picks the window sizing contract: `false` matches the main
+    /// menu's compact 480×440 (Mini) window for light-weight pickers like
+    /// emoji / apps / browser tabs / window switcher; `true` uses the wide
+    /// 750×500 (Full) window for info-heavy views like clipboard history.
     fn open_builtin_filterable_view(
         &mut self,
         view: AppView,
         placeholder: &str,
+        expanded: bool,
         cx: &mut Context<Self>,
     ) {
         self.filter_text.clear();
@@ -1470,7 +1680,13 @@ impl ScriptListApp {
         self.current_view = view;
         self.hovered_index = None;
         self.opened_from_main_menu = true;
-        resize_to_view_sync(ViewType::ScriptList, 0);
+        if expanded {
+            self.main_window_mode = MainWindowMode::Full;
+            resize_to_view_sync(ViewType::ScriptList, 0);
+        } else {
+            self.main_window_mode = MainWindowMode::Mini;
+            resize_to_view_sync(ViewType::MiniMainWindow, 0);
+        }
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
         cx.notify();
@@ -1486,6 +1702,7 @@ impl ScriptListApp {
                 selected_index: start_index,
             },
             "Search themes or paste #hex...",
+            true,
             cx,
         );
 
@@ -1522,7 +1739,7 @@ impl ScriptListApp {
             item_count = item_count,
             selected_index = self.selected_index,
             first_selectable = first_selectable,
-            grouped_cache_key = %self.grouped_cache_key,
+            grouped_cache_key = %self.main_menu_result_caches.grouped_cache_key(),
             computed_filter = %self.computed_filter_text,
             filter_text = %self.filter_text,
             pending_filter_sync = self.pending_filter_sync,
@@ -1541,17 +1758,21 @@ impl ScriptListApp {
     /// Same UX contract as [`open_builtin_filterable_view`] but pre-fills the
     /// filter input instead of clearing it. Used by `DoInCurrentApp` to open
     /// the command palette with the user's query already typed.
+    ///
+    /// See `open_builtin_filterable_view` for the meaning of `expanded`.
     fn open_builtin_filterable_view_with_filter(
         &mut self,
         view: AppView,
         filter: &str,
         placeholder: &str,
+        expanded: bool,
         cx: &mut Context<Self>,
     ) {
         tracing::info!(
             view = ?view,
             filter = %filter,
             placeholder = %placeholder,
+            expanded,
             "open_builtin_filterable_view_with_filter — setting current_view and filter"
         );
         self.filter_text = filter.to_string();
@@ -1560,7 +1781,13 @@ impl ScriptListApp {
         self.current_view = view;
         self.hovered_index = None;
         self.opened_from_main_menu = true;
-        resize_to_view_sync(ViewType::ScriptList, 0);
+        if expanded {
+            self.main_window_mode = MainWindowMode::Full;
+            resize_to_view_sync(ViewType::ScriptList, 0);
+        } else {
+            self.main_window_mode = MainWindowMode::Mini;
+            resize_to_view_sync(ViewType::MiniMainWindow, 0);
+        }
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
         cx.notify();
@@ -1570,35 +1797,54 @@ impl ScriptListApp {
         &mut self,
         entries: Vec<crate::builtins::BuiltInEntry>,
         receipt: &crate::menu_bar::FrontmostMenuSnapshotReceipt,
+        pid: i32,
+        filter: &str,
+        cx: &mut Context<Self>,
+    ) {
+        let session = crate::menu_bar::CurrentAppCommandsSession::from_entries_and_receipt(
+            entries,
+            receipt.clone(),
+            pid,
+        );
+        self.present_current_app_commands_session(session, filter, cx);
+    }
+
+    pub(crate) fn present_current_app_commands_session(
+        &mut self,
+        session: crate::menu_bar::CurrentAppCommandsSession,
         filter: &str,
         cx: &mut Context<Self>,
     ) {
         tracing::info!(
-            app_name = %receipt.app_name,
-            bundle_id = %receipt.bundle_id,
-            top_level_menu_count = receipt.top_level_menu_count,
-            leaf_entry_count = receipt.leaf_entry_count,
-            placeholder = %receipt.placeholder,
-            source = receipt.source,
+            pid = session.pid,
+            app_name = %session.app_name,
+            bundle_id = %session.bundle_id,
+            top_level_menu_count = session.top_level_menu_count,
+            leaf_entry_count = session.leaf_entry_count,
+            placeholder = %session.placeholder,
+            source = session.source,
             filter = %filter,
-            "current_app_commands.present"
+            "current_app_commands.present_session"
         );
 
-        self.cached_current_app_entries = entries;
+        self.current_app_commands_session = Some(session.clone());
+        self.cached_current_app_entries = session.entries.clone();
         self.open_builtin_filterable_view_with_filter(
             AppView::CurrentAppCommandsView {
                 filter: filter.to_string(),
                 selected_index: 0,
             },
             filter,
-            &receipt.placeholder,
+            &session.placeholder,
+            false,
             cx,
         );
 
         if self.cached_current_app_entries.is_empty() {
             tracing::info!(
-                app_name = %receipt.app_name,
-                bundle_id = %receipt.bundle_id,
+                pid = session.pid,
+                app_name = %session.app_name,
+                bundle_id = %session.bundle_id,
                 "current_app_commands.present_empty_state"
             );
         }
@@ -1608,11 +1854,142 @@ impl ScriptListApp {
         &mut self,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
-        let snapshot = crate::menu_bar::load_frontmost_menu_snapshot()
+        let session = crate::menu_bar::capture_current_app_commands_session()
             .map_err(|e| anyhow::anyhow!("Failed to load frontmost app menu bar: {e}"))?;
-        let (entries, receipt) = snapshot.into_entries_with_receipt();
-        self.present_current_app_commands_entries(entries, &receipt, "", cx);
+        self.present_current_app_commands_session(session, "", cx);
         Ok(())
+    }
+
+    pub(crate) fn refresh_current_app_commands_session_if_needed(
+        &mut self,
+        filter: &str,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<bool> {
+        let Some(existing) = self.current_app_commands_session.clone() else {
+            return Ok(false);
+        };
+
+        let live_identity = crate::menu_bar::load_live_current_app_commands_identity();
+        if !crate::menu_bar::current_app_commands_session_identity_changed(
+            &existing,
+            live_identity.as_ref(),
+        ) {
+            return Ok(false);
+        }
+
+        let refreshed = match crate::menu_bar::capture_current_app_commands_session() {
+            Ok(session) => session,
+            Err(error) => {
+                self.invalidate_current_app_commands_session(filter, cx);
+                return Err(error);
+            }
+        };
+        let previous_app_name = existing.app_name.clone();
+        let refreshed_app_name = refreshed.app_name.clone();
+        tracing::info!(
+            previous_pid = existing.pid,
+            new_pid = refreshed.pid,
+            previous_bundle_id = %existing.bundle_id,
+            new_bundle_id = %refreshed.bundle_id,
+            previous_app_name = %previous_app_name,
+            new_app_name = %refreshed_app_name,
+            filter = %filter,
+            "current_app_commands.session_switched"
+        );
+        self.present_current_app_commands_session(refreshed, filter, cx);
+        self.show_hud(
+            format!("Current app changed: {previous_app_name} -> {refreshed_app_name}"),
+            Some(HUD_SHORT_MS),
+            cx,
+        );
+        tracing::info!(
+            previous_app_name = %previous_app_name,
+            new_app_name = %refreshed_app_name,
+            filter = %filter,
+            "current_app_commands.session_switch_hud_shown"
+        );
+        Ok(true)
+    }
+
+    pub(crate) fn invalidate_current_app_commands_session(
+        &mut self,
+        filter: &str,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(existing) = &self.current_app_commands_session {
+            tracing::warn!(
+                previous_pid = existing.pid,
+                previous_bundle_id = %existing.bundle_id,
+                previous_app_name = %existing.app_name,
+                filter = %filter,
+                "current_app_commands.session_invalidated"
+            );
+        }
+
+        self.current_app_commands_session = None;
+        self.cached_current_app_entries.clear();
+        self.filter_text = filter.to_string();
+        self.pending_placeholder = Some("Search current app commands…".to_string());
+
+        if let AppView::CurrentAppCommandsView {
+            filter: current_filter,
+            selected_index,
+        } = &mut self.current_view
+        {
+            *current_filter = filter.to_string();
+            *selected_index = 0;
+        }
+
+        cx.notify();
+    }
+
+    pub(crate) fn execute_selected_current_app_command(
+        &mut self,
+        original_entry_index: usize,
+        cx: &mut Context<Self>,
+    ) {
+        let filter = match &self.current_view {
+            AppView::CurrentAppCommandsView { filter, .. } => filter.clone(),
+            _ => String::new(),
+        };
+
+        match self.refresh_current_app_commands_session_if_needed(&filter, cx) {
+            Ok(true) => return,
+            Ok(false) => {}
+            Err(error) => {
+                tracing::warn!(
+                    error = %error,
+                    entry_index = original_entry_index,
+                    "current_app_commands.refresh_failed_before_execute"
+                );
+                self.show_error_toast(
+                    format!("Failed to refresh current app commands: {error}"),
+                    cx,
+                );
+                return;
+            }
+        }
+
+        let Some(entry) = self
+            .cached_current_app_entries
+            .get(original_entry_index)
+            .cloned()
+        else {
+            tracing::warn!(
+                entry_index = original_entry_index,
+                cached_entry_count = self.cached_current_app_entries.len(),
+                "current_app_commands.execute_selected_missing_index"
+            );
+            return;
+        };
+
+        tracing::info!(
+            entry_id = %entry.id,
+            entry_name = %entry.name,
+            entry_index = original_entry_index,
+            "current_app_commands.execute_selected_resolved"
+        );
+        self.execute_builtin(&entry, cx);
     }
 
     /// Inner builtin executor — runs the actual action logic.
@@ -1653,6 +2030,7 @@ impl ScriptListApp {
                         selected_index: 0,
                     },
                     "Search clipboard history...",
+                    true,
                     cx,
                 );
 
@@ -1743,6 +2121,7 @@ impl ScriptListApp {
                         selected_index: 0,
                     },
                     "Search favorites...",
+                    false,
                     cx,
                 );
 
@@ -1771,6 +2150,7 @@ impl ScriptListApp {
                         selected_index: 0,
                     },
                     "Search applications...",
+                    false,
                     cx,
                 );
 
@@ -1831,6 +2211,7 @@ impl ScriptListApp {
                                 selected_index: 0,
                             },
                             "Search windows...",
+                            false,
                             cx,
                         );
 
@@ -1849,6 +2230,69 @@ impl ScriptListApp {
                     }
                 }
             }
+            builtins::BuiltInFeature::BrowserTabs => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Browser Tabs"
+                );
+                match crate::browser_tabs::list_open_tabs() {
+                    Ok(tabs) => {
+                        tracing::info!(
+                            category = "BUILTIN",
+                            trace_id = %dctx.trace_id,
+                            count = tabs.len(),
+                            "Loaded browser tabs"
+                        );
+                        self.cached_browser_tabs = tabs;
+
+                        // Kick off background favicon fetches for all tab domains.
+                        // Favicons are fetched on a background thread; when done,
+                        // we notify the entity so the list re-renders with icons.
+                        {
+                            let domains = crate::browser_tabs::domains_needing_favicons(
+                                &self.cached_browser_tabs,
+                            );
+                            if !domains.is_empty() {
+                                let task = cx.spawn(async move |this, cx| {
+                                    cx.background_executor()
+                                        .spawn(async move {
+                                            crate::browser_tabs::fetch_favicons_blocking(&domains);
+                                        })
+                                        .await;
+                                    let _ = cx.update(|cx| {
+                                        let _ = this.update(cx, |_, cx| cx.notify());
+                                    });
+                                });
+                                task.detach();
+                            }
+                        }
+
+                        self.open_builtin_filterable_view(
+                            AppView::BrowserTabsView {
+                                filter: String::new(),
+                                selected_index: 0,
+                            },
+                            "Search open browser tabs...",
+                            false,
+                            cx,
+                        );
+
+                        Self::builtin_success(dctx, "open_browser_tabs")
+                    }
+                    Err(error) => {
+                        let message = format!("Failed to list browser tabs: {}", error);
+                        self.show_error_toast(message.clone(), cx);
+                        cx.notify();
+                        Self::builtin_error(
+                            dctx,
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            message,
+                            "open_browser_tabs_failed",
+                        )
+                    }
+                }
+            }
             builtins::BuiltInFeature::DesignGallery => {
                 tracing::info!(
                     category = "BUILTIN",
@@ -1862,6 +2306,7 @@ impl ScriptListApp {
                         selected_index: 0,
                     },
                     "Search designs...",
+                    false,
                     cx,
                 );
 
@@ -1901,7 +2346,7 @@ impl ScriptListApp {
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
-                    "Opening ACP Chat"
+                    "Opening Agent Chat"
                 );
                 self.open_tab_ai_acp_with_entry_intent(None, cx);
 
@@ -1955,6 +2400,13 @@ impl ScriptListApp {
                     trace_id = %dctx.trace_id,
                     "Opening Emoji Picker"
                 );
+                // Freeze the Frequently Used snapshot at view-open time so
+                // selection indices stay stable while the view is open, even
+                // if the user commits an emoji and reopens the picker in the
+                // same session. The new order appears on the NEXT open.
+                self.emoji_frequent_snapshot = crate::emoji_usage::load_frequent_snapshot(
+                    crate::emoji_usage::EMOJI_FREQUENT_LIMIT,
+                );
                 // EmojiPicker has an extra selected_category field, so use the
                 // shared helper for the common state and then set the view.
                 self.open_builtin_filterable_view(
@@ -1964,10 +2416,59 @@ impl ScriptListApp {
                         selected_category: None,
                     },
                     "Search Emoji & Symbols...",
+                    false,
                     cx,
                 );
 
                 Self::builtin_success(dctx, "open_emoji_picker")
+            }
+            builtins::BuiltInFeature::SyncToGithub => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Sync to GitHub requested"
+                );
+                self.show_hud(
+                    "Syncing Script Kit to GitHub...".to_string(),
+                    Some(HUD_SHORT_MS),
+                    cx,
+                );
+
+                let dctx_owned = dctx.clone();
+                cx.spawn(async move |this, cx| {
+                    let sync_result = cx
+                        .background_executor()
+                        .spawn(async { crate::sync::github::sync_to_github_workspace() })
+                        .await;
+
+                    let _ = this.update(cx, |this, cx| match sync_result {
+                        Ok(report) => {
+                            tracing::info!(
+                                category = "BUILTIN",
+                                trace_id = %dctx_owned.trace_id,
+                                workspace = %report.workspace.display(),
+                                dry_run = report.dry_run,
+                                step_count = report.steps.len(),
+                                "Sync to GitHub completed"
+                            );
+                            this.show_hud(report.summary_message(), Some(HUD_MEDIUM_MS), cx);
+                            this.close_and_reset_window(cx);
+                        }
+                        Err(error) => {
+                            tracing::error!(
+                                category = "BUILTIN",
+                                trace_id = %dctx_owned.trace_id,
+                                error = %error,
+                                "Sync to GitHub failed"
+                            );
+                            this.show_error_toast(format!("GitHub sync failed: {error}"), cx);
+                            cx.notify();
+                        }
+                    });
+                })
+                .detach();
+
+                Self::builtin_success(dctx, "sync_to_github_dispatched")
             }
             builtins::BuiltInFeature::MenuBarAction(action) => {
                 tracing::info!(
@@ -2596,33 +3097,6 @@ impl ScriptListApp {
                         self.close_and_reset_window(cx);
                         Self::builtin_success(dctx, "reset_window_positions")
                     }
-                    SettingsCommandType::ConfigureVercelApiKey => {
-                        self.show_api_key_prompt(
-                            "SCRIPT_KIT_VERCEL_API_KEY",
-                            "Enter your Vercel AI Gateway API key",
-                            "Vercel AI Gateway",
-                            cx,
-                        );
-                        Self::builtin_success(dctx, "configure_vercel_api_key")
-                    }
-                    SettingsCommandType::ConfigureOpenAiApiKey => {
-                        self.show_api_key_prompt(
-                            "SCRIPT_KIT_OPENAI_API_KEY",
-                            "Enter your OpenAI API key",
-                            "OpenAI",
-                            cx,
-                        );
-                        Self::builtin_success(dctx, "configure_openai_api_key")
-                    }
-                    SettingsCommandType::ConfigureAnthropicApiKey => {
-                        self.show_api_key_prompt(
-                            "SCRIPT_KIT_ANTHROPIC_API_KEY",
-                            "Enter your Anthropic API key",
-                            "Anthropic",
-                            cx,
-                        );
-                        Self::builtin_success(dctx, "configure_anthropic_api_key")
-                    }
                     SettingsCommandType::ChooseTheme => {
                         self.open_theme_chooser_view(cx);
 
@@ -2636,9 +3110,7 @@ impl ScriptListApp {
                             SettingsCommandType::DisableWindowSnapping => {
                                 window_control::SnapMode::Off
                             }
-                            SettingsCommandType::SnapModeSimple => {
-                                window_control::SnapMode::Simple
-                            }
+                            SettingsCommandType::SnapModeSimple => window_control::SnapMode::Simple,
                             SettingsCommandType::SnapModeExpanded => {
                                 window_control::SnapMode::Expanded
                             }
@@ -2703,15 +3175,9 @@ impl ScriptListApp {
                         );
 
                         let hud_text = match mode {
-                            window_control::SnapMode::Off => {
-                                "Window snapping disabled".to_string()
-                            }
-                            window_control::SnapMode::Simple => {
-                                "Snap mode: Simple".to_string()
-                            }
-                            window_control::SnapMode::Expanded => {
-                                "Snap mode: Expanded".to_string()
-                            }
+                            window_control::SnapMode::Off => "Window snapping disabled".to_string(),
+                            window_control::SnapMode::Simple => "Snap mode: Simple".to_string(),
+                            window_control::SnapMode::Expanded => "Snap mode: Expanded".to_string(),
                             window_control::SnapMode::Precision => {
                                 "Snap mode: Precision".to_string()
                             }
@@ -2850,7 +3316,7 @@ impl ScriptListApp {
                     }
                     UtilityCommandType::QuickTerminal => {
                         self.opened_from_main_menu = true;
-                        self.open_quick_terminal(cx);
+                        self.open_quick_terminal(None, cx);
                         Self::builtin_success(dctx, "open_quick_terminal")
                     }
                     UtilityCommandType::ClaudeCode => {
@@ -2875,6 +3341,7 @@ impl ScriptListApp {
                                 selected_index: 0,
                             },
                             "Search running scripts...",
+                            false,
                             cx,
                         );
 
@@ -3197,6 +3664,7 @@ impl ScriptListApp {
                         match crate::menu_bar::current_app_commands::load_frontmost_menu_snapshot()
                         {
                             Ok(snapshot) => {
+                                let snapshot_pid = snapshot.pid;
                                 let (entries, snapshot_receipt) =
                                     snapshot.clone().into_entries_with_receipt();
 
@@ -3308,6 +3776,7 @@ impl ScriptListApp {
                                         self.present_current_app_commands_entries(
                                             entries,
                                             &snapshot_receipt,
+                                            snapshot_pid,
                                             &filter,
                                             cx,
                                         );
@@ -3511,6 +3980,7 @@ impl ScriptListApp {
                         match crate::menu_bar::load_frontmost_menu_snapshot() {
                             Ok(snapshot) => {
                                 let snapshot_for_recipe = snapshot.clone();
+                                let snapshot_pid = snapshot.pid;
                                 let (entries, snapshot_receipt) =
                                     snapshot.into_entries_with_receipt();
 
@@ -3557,6 +4027,7 @@ impl ScriptListApp {
                                             self.present_current_app_commands_entries(
                                                 entries,
                                                 &snapshot_receipt,
+                                                snapshot_pid,
                                                 &trimmed_query,
                                                 cx,
                                             );
@@ -3576,141 +4047,20 @@ impl ScriptListApp {
                                             tracing::info!(
                                                 trace_id = %dctx.trace_id,
                                                 trimmed_query = %trimmed_query,
-                                                "do_in_current_app.action → GenerateScript — routing through recipe flow"
+                                                "do_in_current_app.action → GenerateScript — scheduling async context capture before recipe flow"
                                             );
 
-                                            let selected_text = crate::selected_text::get_selected_text()
-                                                .ok()
-                                                .filter(|text| !text.trim().is_empty());
-
-                                            let browser_url = crate::platform::get_focused_browser_tab_url()
-                                                .ok()
-                                                .filter(|url| !url.trim().is_empty());
-
-                                            // --- Automation memory lookup: replay/repair/generate ---
-                                            let memory_decision = crate::ai::resolve_current_app_automation_from_memory(
-                                                &raw_query_owned,
-                                                &snapshot_for_recipe,
-                                                &entries,
-                                                selected_text.as_deref(),
-                                                browser_url.as_deref(),
-                                            );
-
-                                            if let Ok(ref decision) = memory_decision {
-                                                if let Some(ref replay) = decision.replay {
-                                                    tracing::info!(
-                                                        category = "CURRENT_APP_AUTOMATION_MEMORY",
-                                                        trace_id = %dctx.trace_id,
-                                                        action = %decision.action,
-                                                        best_score = decision.best_score,
-                                                        matched_slug = decision
-                                                            .matched
-                                                            .as_ref()
-                                                            .map(|entry| entry.slug.as_str())
-                                                            .unwrap_or(""),
-                                                        reason = %decision.reason,
-                                                        "do_in_current_app.memory_resolved"
-                                                    );
-
-                                                    match decision.action.as_str() {
-                                                        "replay_recipe" => {
-                                                            match replay.action.as_str() {
-                                                                "execute_entry" => {
-                                                                    if let Some(entry_index) = replay.selected_entry_index {
-                                                                        if entry_index < entries.len() {
-                                                                            let entry = entries[entry_index].clone();
-                                                                            return self.execute_builtin_inner(
-                                                                                &entry,
-                                                                                Some(&raw_query_owned),
-                                                                                dctx,
-                                                                                cx,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                }
-                                                                "open_command_palette" => {
-                                                                    let filter = replay.verification.live_recipe.effective_query.clone();
-                                                                    self.present_current_app_commands_entries(
-                                                                        entries.clone(),
-                                                                        &snapshot_receipt,
-                                                                        &filter,
-                                                                        cx,
-                                                                    );
-                                                                    return Self::builtin_success(
-                                                                        dctx,
-                                                                        "do_in_current_app_replay_memory_open_palette",
-                                                                    );
-                                                                }
-                                                                "generate_script" => {
-                                                                    self.spawn_generate_script_from_recipe_after_hide(
-                                                                        dctx.trace_id.to_string(),
-                                                                        replay.verification.live_recipe.clone(),
-                                                                        cx,
-                                                                    );
-                                                                    return Self::builtin_success(
-                                                                        dctx,
-                                                                        "do_in_current_app_replay_memory_generate_script",
-                                                                    );
-                                                                }
-                                                                _ => {}
-                                                            }
-                                                        }
-                                                        "repair_recipe" => {
-                                                            self.spawn_generate_script_from_recipe_after_hide(
-                                                                dctx.trace_id.to_string(),
-                                                                replay.verification.live_recipe.clone(),
-                                                                cx,
-                                                            );
-                                                            return Self::builtin_success(
-                                                                dctx,
-                                                                "do_in_current_app_repair_memory_recipe",
-                                                            );
-                                                        }
-                                                        _ => {}
-                                                    }
-                                                }
-                                            }
-                                            // --- End automation memory lookup ---
-
-                                            let recipe =
-                                                crate::menu_bar::current_app_commands::build_current_app_command_recipe(
-                                                    snapshot_for_recipe,
-                                                    Some(&raw_query_owned),
-                                                    selected_text.as_deref(),
-                                                    browser_url.as_deref(),
-                                                );
-
-                                            match serde_json::to_string_pretty(&recipe) {
-                                                Ok(json) => {
-                                                    tracing::info!(
-                                                        category = "CURRENT_APP_RECIPE",
-                                                        trace_id = %dctx.trace_id,
-                                                        app_name = %recipe.prompt_receipt.app_name,
-                                                        bundle_id = %recipe.prompt_receipt.bundle_id,
-                                                        effective_query = %recipe.effective_query,
-                                                        route = %recipe.trace.action,
-                                                        suggested_script_name = %recipe.suggested_script_name,
-                                                        included_selected_text = recipe.prompt_receipt.included_selected_text,
-                                                        included_browser_url = recipe.prompt_receipt.included_browser_url,
-                                                        json_bytes = json.len(),
-                                                        "do_in_current_app.recipe_prepared"
-                                                    );
-                                                }
-                                                Err(error) => {
-                                                    tracing::warn!(
-                                                        trace_id = %dctx.trace_id,
-                                                        error = %error,
-                                                        "do_in_current_app.recipe_serialize_failed"
-                                                    );
-                                                }
-                                            }
-
-                                            self.spawn_generate_script_from_recipe_after_hide(
+                                            self.spawn_generate_script_from_current_app_with_capture(
                                                 dctx.trace_id.to_string(),
-                                                recipe,
+                                                raw_query_owned.clone(),
+                                                snapshot_for_recipe,
+                                                entries,
+                                                snapshot_receipt.clone(),
+                                                snapshot_pid,
                                                 cx,
                                             );
-                                            Self::builtin_success(dctx, "do_in_current_app_generate_script_from_recipe")
+
+                                            Self::builtin_success(dctx, "do_in_current_app_generate_script_scheduled")
                                         }
                                     }
                                 }
@@ -3735,10 +4085,12 @@ impl ScriptListApp {
                         );
                         match crate::menu_bar::load_frontmost_menu_snapshot() {
                             Ok(snapshot) => {
+                                let pid = snapshot.pid;
                                 let (entries, receipt) = snapshot.into_entries_with_receipt();
 
                                 tracing::info!(
                                     trace_id = %dctx.trace_id,
+                                    pid,
                                     app_name = %receipt.app_name,
                                     bundle_id = %receipt.bundle_id,
                                     top_level_menu_count = receipt.top_level_menu_count,
@@ -3748,7 +4100,9 @@ impl ScriptListApp {
                                     "current_app_commands.snapshot_ready"
                                 );
 
-                                self.present_current_app_commands_entries(entries, &receipt, "", cx);
+                                self.present_current_app_commands_entries(
+                                    entries, &receipt, pid, "", cx,
+                                );
                                 Self::builtin_success(dctx, "open_current_app_commands")
                             }
                             Err(e) => {
@@ -4361,6 +4715,7 @@ impl ScriptListApp {
                         selected_index: 0,
                     },
                     "Search settings...",
+                    false,
                     cx,
                 );
                 Self::builtin_success(dctx, "open_settings")
@@ -4372,7 +4727,7 @@ impl ScriptListApp {
                 tracing::info!(
                     category = "BUILTIN",
                     trace_id = %dctx.trace_id,
-                    "Opening ACP History"
+                    "Opening Agent Chat History"
                 );
 
                 self.open_builtin_filterable_view(
@@ -4381,10 +4736,85 @@ impl ScriptListApp {
                         selected_index: 0,
                     },
                     "Search conversation history...",
+                    true,
                     cx,
                 );
 
                 Self::builtin_success(dctx, "open_acp_history")
+            }
+            builtins::BuiltInFeature::DictationHistory => {
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    "Opening Dictation History"
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::DictationHistoryView {
+                        filter: String::new(),
+                        selected_index: 0,
+                    },
+                    "Search dictation history...",
+                    true,
+                    cx,
+                );
+
+                Self::builtin_success(dctx, "open_dictation_history")
+            }
+            // =========================================================================
+            // SDK Reference — browse kit://sdk-reference functions while authoring
+            // =========================================================================
+            builtins::BuiltInFeature::SdkReference => {
+                let entries = crate::mcp_resources::sdk_reference_entries_for_ui();
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    entry_count = entries.len(),
+                    "Opening SDK Reference"
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::SdkReferenceView {
+                        filter: String::new(),
+                        selected_index: 0,
+                        entries,
+                    },
+                    "Search SDK functions…",
+                    true,
+                    cx,
+                );
+
+                Self::builtin_success(dctx, "open_sdk_reference")
+            }
+            // =========================================================================
+            // New Script from Template — browse kit://script-templates catalog, pick
+            // a starter, then hand off to the naming prompt with template metadata
+            // threaded through so handle_naming_dialog_completion can overwrite the
+            // freshly-created file with render_script_template_file before the
+            // editor opens. See `src/render_builtins/script_templates.rs` and
+            // `src/app_impl/naming_dialog.rs`.
+            // =========================================================================
+            builtins::BuiltInFeature::NewScriptFromTemplate => {
+                let templates = crate::mcp_resources::script_template_entries_for_ui();
+                tracing::info!(
+                    category = "BUILTIN",
+                    trace_id = %dctx.trace_id,
+                    template_count = templates.len(),
+                    "Opening Script Template Catalog"
+                );
+
+                self.open_builtin_filterable_view(
+                    AppView::ScriptTemplateCatalogView {
+                        filter: String::new(),
+                        selected_index: 0,
+                        templates,
+                    },
+                    "Search starter templates…",
+                    true,
+                    cx,
+                );
+
+                Self::builtin_success(dctx, "open_script_template_catalog")
             }
         }
     }
@@ -4500,6 +4930,14 @@ impl ScriptListApp {
     ) {
         match result {
             Ok(Some(transcript)) => {
+                let history_entry =
+                    crate::dictation::record_dictation_history(&transcript, audio_duration, target);
+                tracing::info!(
+                    category = "DICTATION",
+                    event = "dictation_history_recorded_before_delivery",
+                    entry_id = %history_entry.id,
+                    target = %history_entry.target,
+                );
                 // Route delivery based on the target that was captured at
                 // session start, not the current UI state.
                 let delivered_internally = match target {
@@ -4539,14 +4977,22 @@ impl ScriptListApp {
                         }
                     }
                     crate::dictation::DictationTarget::TabAiHarness => {
-                        self.submit_to_current_or_new_tab_ai_harness_from_text(
-                            transcript.clone(),
-                            crate::ai::TabAiQuickSubmitSource::Dictation,
+                        self.seed_acp_dictation_return_origin();
+                        if crate::ai::acp::chat_window::is_chat_window_open() {
+                            tracing::info!(
+                                category = "DICTATION",
+                                event = "dictation_acp_detached_closed_for_embedded_reveal",
+                                "Closing detached ACP before ACP-targeted dictation reveal"
+                            );
+                            crate::ai::acp::chat_window::close_chat_window(&mut **cx);
+                        }
+                        self.open_tab_ai_acp_with_entry_intent_suppressing_focused_part(
+                            Some(transcript.clone()),
                             cx,
                         );
-                        // Let the orchestrator handle main window reveal and
-                        // focus restore. The FinishDictation event emits
-                        // RevealMain based on the state captured at start time.
+                        // Let the orchestrator reveal the main window as ACP
+                        // chat and focus the composer after the view is
+                        // seeded with the dictated prompt.
                         self.dispatch_window_event(
                             crate::window_orchestrator::WindowEvent::FinishDictation,
                             cx,
@@ -4590,6 +5036,9 @@ impl ScriptListApp {
                         && !script_kit_gpui::is_main_window_visible()
                     {
                         script_kit_gpui::set_main_window_visible(true);
+                        crate::platform::ensure_main_panel_configured(
+                            "builtin_execution::dictation_main_filter_delivery",
+                        );
                         crate::platform::show_main_window_without_activation();
                     }
                     self.schedule_dictation_transcriber_cleanup(
@@ -4768,14 +5217,22 @@ impl ScriptListApp {
                 }
             }
             Ok(None) => {
-                // No speech detected — close overlay quietly.
+                // No speech detected — close overlay quietly and treat the
+                // session as an abort. For ACP dictation, a successful finish
+                // means "reveal ACP with a transcript"; without transcript
+                // there is nothing to seed or submit.
+                tracing::info!(
+                    category = "DICTATION",
+                    ?target,
+                    "No dictation transcript recognized; aborting delivery"
+                );
                 self.schedule_dictation_overlay_close(cx, std::time::Duration::from_millis(150));
                 self.schedule_dictation_transcriber_cleanup(
                     cx,
                     std::time::Duration::from_secs(300),
                 );
                 self.dispatch_window_event(
-                    crate::window_orchestrator::WindowEvent::FinishDictation,
+                    crate::window_orchestrator::WindowEvent::AbortDictation,
                     cx,
                 );
             }
@@ -4826,6 +5283,61 @@ impl ScriptListApp {
                     cx,
                 );
             }
+        }
+    }
+
+    pub(crate) fn deliver_stdin_dictation_result(
+        &mut self,
+        transcript: String,
+        target_label: Option<&str>,
+        cx: &mut Context<Self>,
+    ) -> Result<crate::dictation::DictationTarget, String> {
+        let target = Self::dictation_target_from_stdin_label(target_label)
+            .or_else(crate::dictation::get_dictation_target)
+            .unwrap_or_else(|| self.resolve_dictation_target());
+
+        if crate::dictation::is_dictation_recording() {
+            crate::dictation::abort_dictation()
+                .map_err(|error| format!("failed to stop active dictation capture: {error}"))?;
+        }
+
+        let result = if transcript.trim().is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(transcript))
+        };
+        self.handle_dictation_transcript(result, std::time::Duration::ZERO, target, cx);
+        Ok(target)
+    }
+
+    fn dictation_target_from_stdin_label(
+        target_label: Option<&str>,
+    ) -> Option<crate::dictation::DictationTarget> {
+        let normalized = target_label?
+            .trim()
+            .chars()
+            .filter(|ch| ch.is_ascii_alphanumeric())
+            .flat_map(|ch| ch.to_lowercase())
+            .collect::<String>();
+
+        match normalized.as_str() {
+            "mainwindowfilter" | "scriptkit" | "launcher" | "filter" => {
+                Some(crate::dictation::DictationTarget::MainWindowFilter)
+            }
+            "mainwindowprompt" | "prompt" => {
+                Some(crate::dictation::DictationTarget::MainWindowPrompt)
+            }
+            "noteseditor" | "notes" => Some(crate::dictation::DictationTarget::NotesEditor),
+            "aichatcomposer" | "aichat" | "legacyai" => {
+                Some(crate::dictation::DictationTarget::AiChatComposer)
+            }
+            "tabaiharness" | "acp" | "acpchat" | "ai" => {
+                Some(crate::dictation::DictationTarget::TabAiHarness)
+            }
+            "externalapp" | "frontmostapp" | "frontmost" | "app" => {
+                Some(crate::dictation::DictationTarget::ExternalApp)
+            }
+            _ => None,
         }
     }
 
@@ -5255,6 +5767,7 @@ impl ScriptListApp {
                 choices,
             },
             &title,
+            false,
             cx,
         );
     }
@@ -5398,8 +5911,8 @@ impl ScriptListApp {
 
     /// Build the small per-session destination cycle exposed by the overlay
     /// badge. Keep it intentionally tight: the primary target plus an
-    /// external-app fallback, except external-app sessions which expose the
-    /// main launcher filter as the alternate target.
+    /// ACP chat-submit fallback, except external-app sessions which expose
+    /// the main launcher filter as the alternate target.
     fn dictation_target_cycle_for(
         &self,
         target: crate::dictation::DictationTarget,
@@ -5411,11 +5924,11 @@ impl ScriptListApp {
             ],
             crate::dictation::DictationTarget::MainWindowFilter => vec![
                 crate::dictation::DictationTarget::MainWindowFilter,
-                crate::dictation::DictationTarget::ExternalApp,
+                crate::dictation::DictationTarget::TabAiHarness,
             ],
             crate::dictation::DictationTarget::MainWindowPrompt => vec![
                 crate::dictation::DictationTarget::MainWindowPrompt,
-                crate::dictation::DictationTarget::ExternalApp,
+                crate::dictation::DictationTarget::TabAiHarness,
             ],
             crate::dictation::DictationTarget::NotesEditor => vec![
                 crate::dictation::DictationTarget::NotesEditor,

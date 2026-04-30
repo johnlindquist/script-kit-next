@@ -7,6 +7,19 @@ impl ChatPrompt {
         let cursor_visible = self.cursor_visible && is_focused;
         let input_text_color = rgb(theme_colors.text.primary);
         let placeholder_text_color = rgb(theme_colors.text.muted);
+        let pasted_text_pills = crate::pasted_text::token_ranges(text, &self.pasted_text_tokens);
+        let rendered_pasted_text_pills: Vec<crate::components::text_input::TextInlinePillRange> =
+            pasted_text_pills
+                .iter()
+                .map(|pill| crate::components::text_input::TextInlinePillRange {
+                    start: pill.range.start,
+                    end: pill.range.end,
+                    label: pill.label.clone(),
+                    text_color: theme_colors.text.primary,
+                    background_color: theme_colors.accent.selected_subtle,
+                    border_color: theme_colors.ui.border,
+                })
+                .collect();
         // Mini mode: match mini main window's visual input size.
         // The mini main window uses font_size_xl (20.0) on gpui-component Input, which renders
         // smaller than 20px on a raw div().text_size(). font_size_lg (16.0) is the visual match.
@@ -30,6 +43,7 @@ impl ChatPrompt {
                     selection_color: theme_colors.accent.selected,
                     selection_text_color: theme_colors.text.primary,
                     transform: Some(Self::input_display_text),
+                    pill_ranges: &rendered_pasted_text_pills,
                     ..crate::components::text_input::TextInputRenderConfig::default_for_prompt(text)
                 },
             ),

@@ -9,6 +9,7 @@
 - Do not hardcode RGB/hex values for UI colors when a theme token exists.
 - Do not branch on focus with ad-hoc constants; use theme-provided focused/unfocused colors.
 - Do not bypass `Theme::get_colors(is_focused)` for focus-aware color selection.
+- Do not keep separate light-mode hover alpha constants when the surface should follow `theme.get_opacity().hover`; the shared hover floor is `0.18`, not a barely visible `0.14`.
 
 ## Canonical files
 - `src/theme/types/part_04.rs:19` is the canonical `Theme::get_colors(is_focused)` implementation (focus-aware + fallback behavior).

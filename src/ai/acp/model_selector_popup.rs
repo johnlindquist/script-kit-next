@@ -8,7 +8,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
 };
 
-use crate::ai::context_picker_row::{render_dense_monoline_picker_row_with_accessory, GOLD};
+use crate::ai::context_picker_row::render_dense_monoline_picker_row_with_accessory;
 use crate::components::inline_dropdown::{InlineDropdown, InlineDropdownColors};
 use gpui_component::{IconName, IconNamed};
 
@@ -262,8 +262,9 @@ impl Render for AcpModelSelectorPopupWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
         let colors = InlineDropdownColors::from_theme(&theme);
-        let fg: gpui::Hsla = gpui::rgb(theme.colors.text.primary).into();
-        let muted_fg: gpui::Hsla = gpui::rgb(theme.colors.text.muted).into();
+        let fg = colors.foreground;
+        let muted_fg = colors.muted_foreground;
+        let accent = colors.accent;
         let visible = self.visible_range();
 
         let body = div()
@@ -283,7 +284,7 @@ impl Render for AcpModelSelectorPopupWindow {
                             svg()
                                 .path(IconName::Check.path())
                                 .size(px(12.0))
-                                .text_color(GOLD)
+                                .text_color(accent)
                                 .into_any_element()
                         });
                         render_dense_monoline_picker_row_with_accessory(
@@ -295,6 +296,7 @@ impl Render for AcpModelSelectorPopupWindow {
                             idx == self.snapshot.selected_index,
                             fg,
                             muted_fg,
+                            accent,
                             accessory,
                         )
                         .cursor_pointer()

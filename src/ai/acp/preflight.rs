@@ -129,6 +129,30 @@ impl AcpLaunchResolution {
     }
 }
 
+fn blocker_for_selected_agent(
+    selected_agent: &AcpAgentCatalogEntry,
+    requirements: AcpLaunchRequirements,
+) -> Option<AcpLaunchBlocker> {
+    match (
+        selected_agent.install_state,
+        selected_agent.auth_state,
+        selected_agent.config_state,
+    ) {
+        (AcpAgentInstallState::Unsupported, _, _) => Some(AcpLaunchBlocker::UnsupportedAgent),
+        (AcpAgentInstallState::NeedsInstall, _, _) => Some(AcpLaunchBlocker::AgentNotInstalled),
+        (_, AcpAgentAuthState::NeedsAuthentication, _) => {
+            Some(AcpLaunchBlocker::AuthenticationRequired)
+        }
+        (_, _, AcpAgentConfigState::Missing | AcpAgentConfigState::Invalid) => {
+            Some(AcpLaunchBlocker::AgentMisconfigured)
+        }
+        _ if !selected_agent.satisfies_requirements(requirements) => {
+            Some(AcpLaunchBlocker::CapabilityMismatch)
+        }
+        _ => None,
+    }
+}
+
 /// Resolve which agent to launch and whether anything blocks it.
 ///
 /// Selection priority:
@@ -218,24 +242,7 @@ pub(crate) fn resolve_acp_launch_with_requirements(
         };
     };
 
-    let blocker = match (
-        selected_agent.install_state,
-        selected_agent.auth_state,
-        selected_agent.config_state,
-    ) {
-        (AcpAgentInstallState::Unsupported, _, _) => Some(AcpLaunchBlocker::UnsupportedAgent),
-        (AcpAgentInstallState::NeedsInstall, _, _) => Some(AcpLaunchBlocker::AgentNotInstalled),
-        (_, AcpAgentAuthState::NeedsAuthentication, _) => {
-            Some(AcpLaunchBlocker::AuthenticationRequired)
-        }
-        (_, _, AcpAgentConfigState::Missing | AcpAgentConfigState::Invalid) => {
-            Some(AcpLaunchBlocker::AgentMisconfigured)
-        }
-        _ if !selected_agent.satisfies_requirements(requirements) => {
-            Some(AcpLaunchBlocker::CapabilityMismatch)
-        }
-        _ => None,
-    };
+    let blocker = blocker_for_selected_agent(&selected_agent, requirements);
 
     tracing::info!(
         target: "script_kit::tab_ai",
@@ -256,18 +263,56 @@ pub(crate) fn resolve_acp_launch_with_requirements(
     }
 }
 
+/// Resolve an explicit user-selected agent without silently falling back.
+///
+/// Agent switches and setup retries are direct user choices. If the selected
+/// agent is not installed, authenticated, configured, or capable enough, the
+/// caller should render that setup blocker instead of launching a different
+/// ready agent and making the selector appear to reset.
+pub(crate) fn resolve_explicit_acp_launch_with_requirements(
+    agents: &[AcpAgentCatalogEntry],
+    preferred_agent_id: Option<&str>,
+    requirements: AcpLaunchRequirements,
+) -> AcpLaunchResolution {
+    let selected = preferred_agent_id
+        .and_then(|preferred| agents.iter().find(|entry| entry.id.as_ref() == preferred))
+        .cloned();
+
+    let Some(selected_agent) = selected else {
+        return resolve_acp_launch_with_requirements(agents, preferred_agent_id, requirements);
+    };
+
+    let blocker = blocker_for_selected_agent(&selected_agent, requirements);
+
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "acp_explicit_resolution",
+        preferred_agent_id = ?preferred_agent_id,
+        needs_embedded_context = requirements.needs_embedded_context,
+        needs_image = requirements.needs_image,
+        selected_agent_id = selected_agent.id.as_ref(),
+        supports_embedded_context = ?selected_agent.supports_embedded_context,
+        supports_image = ?selected_agent.supports_image,
+        blocker = ?blocker,
+    );
+
+    AcpLaunchResolution {
+        selected_agent: Some(selected_agent),
+        blocker,
+        catalog_entries: agents.to_vec(),
+    }
+}
+
 /// Human-readable title for the resolution state.
 pub(crate) fn setup_title_for_resolution(resolution: &AcpLaunchResolution) -> SharedString {
     match resolution.blocker {
-        Some(AcpLaunchBlocker::NoAgentsAvailable) => "No ACP agents available".into(),
-        Some(AcpLaunchBlocker::AgentNotInstalled) => "ACP agent install required".into(),
-        Some(AcpLaunchBlocker::AuthenticationRequired) => {
-            "ACP agent authentication required".into()
-        }
-        Some(AcpLaunchBlocker::AgentMisconfigured) => "ACP agent configuration required".into(),
-        Some(AcpLaunchBlocker::UnsupportedAgent) => "ACP agent unsupported".into(),
-        Some(AcpLaunchBlocker::CapabilityMismatch) => "ACP capability mismatch".into(),
-        None => "ACP ready".into(),
+        Some(AcpLaunchBlocker::NoAgentsAvailable) => "No agents available".into(),
+        Some(AcpLaunchBlocker::AgentNotInstalled) => "Agent install required".into(),
+        Some(AcpLaunchBlocker::AuthenticationRequired) => "Agent authentication required".into(),
+        Some(AcpLaunchBlocker::AgentMisconfigured) => "Agent configuration required".into(),
+        Some(AcpLaunchBlocker::UnsupportedAgent) => "Agent unsupported".into(),
+        Some(AcpLaunchBlocker::CapabilityMismatch) => "Agent capability mismatch".into(),
+        None => "Agent ready".into(),
     }
 }
 
@@ -692,6 +737,69 @@ mod tests {
             Some(AcpLaunchBlocker::AgentNotInstalled),
             "install blocker should take precedence over capability"
         );
+    }
+
+    #[test]
+    fn explicit_resolution_keeps_uninstalled_preferred_agent() {
+        let agents = vec![
+            make_entry_with_capabilities(
+                "opencode",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Unknown,
+                AcpAgentConfigState::Valid,
+                Some(true),
+                Some(true),
+            ),
+            make_entry_with_capabilities(
+                "codex-acp",
+                AcpAgentInstallState::NeedsInstall,
+                AcpAgentAuthState::Unknown,
+                AcpAgentConfigState::Valid,
+                Some(true),
+                Some(true),
+            ),
+        ];
+        let result = resolve_explicit_acp_launch_with_requirements(
+            &agents,
+            Some("codex-acp"),
+            AcpLaunchRequirements::default(),
+        );
+        assert_eq!(result.selected_agent_id(), Some("codex-acp"));
+        assert_eq!(result.blocker, Some(AcpLaunchBlocker::AgentNotInstalled));
+        assert!(!result.is_ready());
+    }
+
+    #[test]
+    fn explicit_resolution_keeps_capability_mismatched_preferred_agent() {
+        let agents = vec![
+            make_entry_with_capabilities(
+                "opencode",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Unknown,
+                AcpAgentConfigState::Valid,
+                Some(true),
+                Some(true),
+            ),
+            make_entry_with_capabilities(
+                "codex-acp",
+                AcpAgentInstallState::Ready,
+                AcpAgentAuthState::Unknown,
+                AcpAgentConfigState::Valid,
+                Some(false),
+                Some(false),
+            ),
+        ];
+        let result = resolve_explicit_acp_launch_with_requirements(
+            &agents,
+            Some("codex-acp"),
+            AcpLaunchRequirements {
+                needs_embedded_context: true,
+                needs_image: false,
+            },
+        );
+        assert_eq!(result.selected_agent_id(), Some("codex-acp"));
+        assert_eq!(result.blocker, Some(AcpLaunchBlocker::CapabilityMismatch));
+        assert!(!result.is_ready());
     }
 
     #[test]

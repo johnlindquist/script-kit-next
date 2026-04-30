@@ -198,6 +198,24 @@ mod tests {
     }
 
     #[test]
+    fn test_startup_actions_interceptor_skips_arrow_keys_before_popup_router() {
+        let content = fs::read_to_string("src/app_impl/startup.rs")
+            .expect("Failed to read src/app_impl/startup.rs");
+
+        let route_pos = content
+            .find("match this.route_key_to_actions_dialog(")
+            .expect("startup actions interceptor must route popup keys through the shared router");
+        let skip_pos = content
+            .find("Arrow keys are handled by arrow_interceptor to avoid double-processing")
+            .expect("startup actions interceptor must document the arrow skip guard");
+
+        assert!(
+            skip_pos < route_pos,
+            "startup actions interceptor must skip Up/Down before route_key_to_actions_dialog() to avoid double-processing with arrow_interceptor"
+        );
+    }
+
+    #[test]
     fn test_tab_interceptor_skips_when_main_window_hidden() {
         let content =
             fs::read_to_string("src/app_impl/startup_new_tab.rs").expect("Failed to read");

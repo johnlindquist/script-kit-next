@@ -5,15 +5,21 @@
 //! light/dark mode adaptation.
 
 // --- merged from part_000.rs ---
-use crate::login_item;
+use crate::updates::UpdateState;
 use anyhow::{bail, Context, Result};
+use std::sync::{Arc, RwLock};
 use tray_icon::{
     menu::{
-        CheckMenuItem, ContextMenu, IconMenuItem, MenuEvent, MenuEventReceiver, MenuItem,
-        NativeIcon, PredefinedMenuItem, Submenu,
+        accelerator::{Accelerator, Code, Modifiers},
+        ContextMenu, IconMenuItem, MenuEvent, MenuEventReceiver, MenuItem, NativeIcon,
+        PredefinedMenuItem, Submenu,
     },
     Icon, TrayIcon, TrayIconBuilder,
 };
+
+/// URLs the tray menu opens. Centralised so callers and tests stay in sync.
+pub use crate::branding::{LOGO_SVG, URL_DISCORD, URL_FOLLOW_US, URL_GITHUB};
+pub const URL_FEEDBACK: &str = "https://github.com/johnlindquist/script-kit-next/issues/new";
 /// Renders an SVG string to RGBA pixel data with validation.
 ///
 /// # Arguments
@@ -64,18 +70,117 @@ fn render_svg_to_rgba(svg: &str, width: u32, height: u32) -> Result<Vec<u8>> {
 
     Ok(rgba)
 }
-/// SVG logo for Script Kit (32x32, monochrome)
-/// This will be rendered as a template image on macOS for light/dark mode adaptation
-const LOGO_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 32 32">
-  <path fill="currentColor" d="M14 25a2 2 0 0 1 2-2h14a2 2 0 1 1 0 4H16a2 2 0 0 1-2-2ZM0 7.381c0-1.796 1.983-2.884 3.498-1.92l13.728 8.736c1.406.895 1.406 2.946 0 3.84L3.498 26.775C1.983 27.738 0 26.649 0 24.854V7.38Z"/>
-</svg>"#;
+/// Brand glyphs for the social-section rows. They live in `assets/icons/` and
+/// are inlined at compile time so the running binary has no filesystem
+/// dependency on its bundle layout.
+const ICON_X_SVG: &str = include_str!("../../assets/icons/x_twitter.svg");
+const ICON_GITHUB_SVG: &str = include_str!("../../assets/icons/github.svg");
+const ICON_DISCORD_SVG: &str = include_str!("../../assets/icons/discord.svg");
+const ICON_NOTES_SVG: &str = include_str!("../../assets/icons/notes.svg");
+const ICON_AGENT_CHAT_SVG: &str = include_str!("../../assets/icons/agent_chat.svg");
+
+/// Walk a muda `ContextMenu`'s underlying `NSMenu` and mark every menu-item
+/// image as a template, so AppKit auto-tints it for light/dark/highlighted/
+/// disabled states. Without this the brand glyphs (X, GitHub, Discord, the
+/// Script Kit logo) render as raw white pixels — fine in dark menus, invisible
+/// in light menus.
+///
+/// Implementation per Oracle session `tray-template-tint-refactor`: copies the
+/// `NSImage` before mutating to avoid templating any shared/native images, and
+/// recurses into submenus. Returns the number of items whose images were
+/// touched so the caller can log a graceful-degrade warning if AppKit is
+/// returning nil for every row (indicates a muda upgrade swapped in custom
+/// views or otherwise hid the image API).
+///
+/// Re-run this whenever `tray_icon.set_menu(...)` swaps a freshly-built menu.
+#[cfg(target_os = "macos")]
+fn template_menu_items(menu: &dyn ContextMenu) -> usize {
+    use cocoa::base::id;
+    use objc::{class, msg_send, sel, sel_impl};
+    unsafe {
+        let is_main_thread: bool = msg_send![class!(NSThread), isMainThread];
+        if !is_main_thread {
+            tracing::warn!("tray.template_menu_items_not_main_thread");
+            return 0;
+        }
+        template_ns_menu(menu.ns_menu() as id)
+    }
+}
+
+#[cfg(target_os = "macos")]
+unsafe fn template_ns_menu(ns_menu: cocoa::base::id) -> usize {
+    use cocoa::base::{id, nil, YES};
+    use objc::{msg_send, sel, sel_impl};
+    if ns_menu == nil {
+        return 0;
+    }
+    let items: id = msg_send![ns_menu, itemArray];
+    if items == nil {
+        return 0;
+    }
+    let count: usize = msg_send![items, count];
+    let mut templated = 0usize;
+    for index in 0..count {
+        let item: id = msg_send![items, objectAtIndex: index];
+        if item == nil {
+            continue;
+        }
+        let image: id = msg_send![item, image];
+        if image != nil {
+            let already_template: bool = msg_send![image, isTemplate];
+            if !already_template {
+                // Copy first: shared/native NSImages must not be mutated globally.
+                let image_copy: id = msg_send![image, copy];
+                if image_copy != nil {
+                    let _: () = msg_send![image_copy, setTemplate: YES];
+                    let _: () = msg_send![item, setImage: image_copy];
+                    let _: () = msg_send![image_copy, release];
+                }
+            }
+            templated += 1;
+        }
+        let submenu: id = msg_send![item, submenu];
+        if submenu != nil {
+            templated += template_ns_menu(submenu);
+        }
+    }
+    templated
+}
+
+/// Render an SVG glyph at menu-row resolution and turn it into a `muda::Icon`
+/// suitable for `IconMenuItem::with_id`. We render at 2x (32px) so it stays
+/// crisp on Retina menu bars.
+///
+/// `currentColor` in the source SVG is rewritten to **white** before render
+/// so the rendered bitmap has full alpha where the glyph lives. Once
+/// `template_menu_items()` flips the `NSImage` to a template, AppKit ignores
+/// colour and uses the alpha mask — so any opaque fill works, white is just
+/// the simplest currentColor → solid swap. If templating ever fails (logged
+/// as `tray.menu_item_template_noop`), the white pixels are the
+/// graceful-degrade fallback.
+fn menu_icon_from_svg(svg: &str) -> Result<tray_icon::menu::Icon> {
+    const SIZE: u32 = 32;
+    let recolored = svg.replace("currentColor", "white");
+    let rgba = render_svg_to_rgba(&recolored, SIZE, SIZE).context("render menu icon svg")?;
+    tray_icon::menu::Icon::from_rgba(rgba, SIZE, SIZE)
+        .context("create muda Icon from menu glyph rgba")
+}
 /// Menu item identifiers for matching events
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TrayMenuAction {
     OpenScriptKit,
     OpenCurrentAppCommands,
+    OpenNotes,
+    OpenAgentChat,
     Settings,
-    LaunchAtLogin,
+    ReloadScripts,
+    CheckForUpdates,
+    OpenReleasePage,
+    SendFeedback,
+    FollowUs,
+    OpenGitHub,
+    JoinDiscord,
+    OpenAbout,
     Quit,
 }
 impl TrayMenuAction {
@@ -85,8 +190,17 @@ impl TrayMenuAction {
         match self {
             Self::OpenScriptKit => "tray.open_script_kit",
             Self::OpenCurrentAppCommands => "tray.open_current_app_commands",
+            Self::OpenNotes => "tray.open_notes",
+            Self::OpenAgentChat => "tray.open_agent_chat",
             Self::Settings => "tray.settings",
-            Self::LaunchAtLogin => "tray.launch_at_login",
+            Self::ReloadScripts => "tray.reload_scripts",
+            Self::CheckForUpdates => "tray.check_for_updates",
+            Self::OpenReleasePage => "tray.open_release_page",
+            Self::SendFeedback => "tray.send_feedback",
+            Self::FollowUs => "tray.follow_us",
+            Self::OpenGitHub => "tray.open_github",
+            Self::JoinDiscord => "tray.join_discord",
+            Self::OpenAbout => "tray.open_about",
             Self::Quit => "tray.quit",
         }
     }
@@ -97,8 +211,17 @@ impl TrayMenuAction {
         match id {
             "tray.open_script_kit" => Some(Self::OpenScriptKit),
             "tray.open_current_app_commands" => Some(Self::OpenCurrentAppCommands),
+            "tray.open_notes" => Some(Self::OpenNotes),
+            "tray.open_agent_chat" => Some(Self::OpenAgentChat),
             "tray.settings" => Some(Self::Settings),
-            "tray.launch_at_login" => Some(Self::LaunchAtLogin),
+            "tray.reload_scripts" => Some(Self::ReloadScripts),
+            "tray.check_for_updates" => Some(Self::CheckForUpdates),
+            "tray.open_release_page" => Some(Self::OpenReleasePage),
+            "tray.send_feedback" => Some(Self::SendFeedback),
+            "tray.follow_us" => Some(Self::FollowUs),
+            "tray.open_github" => Some(Self::OpenGitHub),
+            "tray.join_discord" => Some(Self::JoinDiscord),
+            "tray.open_about" => Some(Self::OpenAbout),
             "tray.quit" => Some(Self::Quit),
             _ => None,
         }
@@ -110,8 +233,17 @@ impl TrayMenuAction {
         &[
             Self::OpenScriptKit,
             Self::OpenCurrentAppCommands,
+            Self::OpenNotes,
+            Self::OpenAgentChat,
             Self::Settings,
-            Self::LaunchAtLogin,
+            Self::ReloadScripts,
+            Self::CheckForUpdates,
+            Self::OpenReleasePage,
+            Self::SendFeedback,
+            Self::FollowUs,
+            Self::OpenGitHub,
+            Self::JoinDiscord,
+            Self::OpenAbout,
             Self::Quit,
         ]
     }
@@ -120,8 +252,14 @@ impl TrayMenuAction {
 pub struct TrayManager {
     #[allow(dead_code)]
     tray_icon: TrayIcon,
-    /// The "Launch at Login" checkbox, stored for updating its checked state
-    launch_at_login_item: CheckMenuItem,
+    /// The current-app commands row. Its label follows the last tracked
+    /// frontmost real app, refreshed from the tray dispatcher.
+    current_app_commands_item: IconMenuItem,
+    /// The "Version X.Y.Z" / "Update Available: ..." row — text + enabled state
+    /// flip when `update_state` transitions.
+    version_item: MenuItem,
+    /// Shared update-checker state. Tray reads it whenever the menu refreshes.
+    update_state: Arc<RwLock<UpdateState>>,
 }
 impl TrayManager {
     /// Creates a new TrayManager with the Script Kit logo and menu.
@@ -131,9 +269,28 @@ impl TrayManager {
     /// - SVG parsing fails
     /// - PNG rendering fails
     /// - Tray icon creation fails
-    pub fn new() -> Result<Self> {
+    pub fn new(
+        update_state: Arc<RwLock<UpdateState>>,
+        main_shortcut: Option<Accelerator>,
+    ) -> Result<Self> {
         let icon = Self::create_icon_from_svg()?;
-        let (menu, launch_at_login_item) = Self::create_menu()?;
+        let (menu, current_app_commands_item, version_item) =
+            Self::create_menu(&update_state, main_shortcut)?;
+
+        // Mark every menu-item image as an NSImage template BEFORE handing
+        // the menu off to muda. AppKit then auto-tints the icons for
+        // light/dark/highlighted/disabled. Without this, brand glyphs (X,
+        // GitHub, Discord, SK logo) render as raw white pixels and disappear
+        // in light-mode menus.
+        #[cfg(target_os = "macos")]
+        {
+            let templated = template_menu_items(menu.as_ref());
+            if templated == 0 {
+                tracing::warn!("tray.menu_item_template_noop");
+            } else {
+                tracing::info!(templated, "tray.menu_item_icons_templated");
+            }
+        }
 
         let mut builder = TrayIconBuilder::new()
             .with_icon(icon)
@@ -150,7 +307,9 @@ impl TrayManager {
 
         Ok(Self {
             tray_icon,
-            launch_at_login_item,
+            current_app_commands_item,
+            version_item,
+            update_state,
         })
     }
 
@@ -175,92 +334,238 @@ impl TrayManager {
 
     /// Creates the tray menu with standard items.
     ///
-    /// Uses `Submenu` as the root context menu for cross-platform compatibility.
-    /// On macOS, `Menu::append` only allows `Submenu`, but `Submenu::append`
-    /// allows any menu item type.
-    ///
-    /// Menu structure:
-    /// 1. Open Script Kit
-    /// 2. Current App Commands…
-    /// 3. ---
-    /// 4. Settings
-    /// 5. Launch at Login (checkmark)
-    /// 6. Version X.Y.Z (disabled)
-    /// 7. ---
-    /// 8. Quit Script Kit
-    fn create_menu() -> Result<(Box<dyn ContextMenu>, CheckMenuItem)> {
-        // Use Submenu as context menu root - works cross-platform
-        // (Menu::append only allows Submenu on macOS, but Submenu::append allows any item)
+    /// Sections (Raycast-style):
+    ///   • Open Script Kit (configured launcher hotkey) / Current App Commands… / Open Notes / Open Agent Chat
+    ///   • Manual / Send Feedback…
+    ///   • Follow Us / GitHub / Discord
+    ///   • Settings ⌘, / Reload Scripts / Check for Updates… / Version (or Update Available) / About
+    ///   • Quit Script Kit
+    fn create_menu(
+        update_state: &Arc<RwLock<UpdateState>>,
+        main_shortcut: Option<Accelerator>,
+    ) -> Result<(Box<dyn ContextMenu>, IconMenuItem, MenuItem)> {
         let menu = Submenu::with_id("tray.root", "Script Kit", true);
 
-        // Use native macOS template icons so AppKit can tint them correctly
-        // for normal, highlighted, and selected menu states.
-        let open_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::OpenScriptKit.id(),
-            "Open Script Kit",
-            true,
-            Some(NativeIcon::Home),
-            None,
-        );
+        // Use the embedded Script Kit logo for the headline row. Falls back
+        // to NativeIcon::Home if SVG rendering ever fails.
+        let open_item = match menu_icon_from_svg(LOGO_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::OpenScriptKit.id(),
+                "Open Script Kit",
+                true,
+                Some(icon),
+                main_shortcut.clone(),
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.open_icon_fallback");
+                IconMenuItem::with_id_and_native_icon(
+                    TrayMenuAction::OpenScriptKit.id(),
+                    "Open Script Kit",
+                    true,
+                    Some(NativeIcon::Home),
+                    main_shortcut.clone(),
+                )
+            }
+        };
         let open_current_app_commands_item = IconMenuItem::with_id_and_native_icon(
             TrayMenuAction::OpenCurrentAppCommands.id(),
-            "Current App Commands…",
+            current_app_commands_label(),
             true,
             Some(NativeIcon::Bookmarks),
             None,
         );
+        // Open Notes — lucide notepad-text glyph, white-on-template via menu_icon_from_svg.
+        let open_notes_item = match menu_icon_from_svg(ICON_NOTES_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::OpenNotes.id(),
+                "Open Notes",
+                true,
+                Some(icon),
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.notes_icon_fallback");
+                IconMenuItem::with_id_and_native_icon(
+                    TrayMenuAction::OpenNotes.id(),
+                    "Open Notes",
+                    true,
+                    Some(NativeIcon::Bookmarks),
+                    None,
+                )
+            }
+        };
+        // Open Agent Chat — lucide bot-message-square glyph.
+        let open_agent_chat_item = match menu_icon_from_svg(ICON_AGENT_CHAT_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::OpenAgentChat.id(),
+                "Open AI",
+                true,
+                Some(icon),
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.agent_chat_icon_fallback");
+                IconMenuItem::with_id_and_native_icon(
+                    TrayMenuAction::OpenAgentChat.id(),
+                    "Open AI",
+                    true,
+                    Some(NativeIcon::Bookmarks),
+                    None,
+                )
+            }
+        };
 
-        // Settings
-        let settings_item = IconMenuItem::with_id_and_native_icon(
+        // Note on icons for Settings / About: AppKit's NativeIcon variants
+        // (Info, PreferencesGeneral) are full-colour status images, not
+        // template glyphs. Ship icon-less, lining up with `Launch at Login`.
+        let feedback_item = IconMenuItem::with_id_and_native_icon(
+            TrayMenuAction::SendFeedback.id(),
+            "Send Feedback…",
+            true,
+            Some(NativeIcon::Share),
+            None,
+        );
+
+        // Brand-correct social glyphs rendered from `assets/icons/`. Falling
+        // back to `with_id_and_native_icon` keeps the row alive even if the
+        // SVG render path errors out (e.g. asset corruption).
+        let follow_us_item = match menu_icon_from_svg(ICON_X_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::FollowUs.id(),
+                "Follow Us",
+                true,
+                Some(icon),
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.follow_us_icon_fallback");
+                IconMenuItem::with_id_and_native_icon(
+                    TrayMenuAction::FollowUs.id(),
+                    "Follow Us",
+                    true,
+                    Some(NativeIcon::User),
+                    None,
+                )
+            }
+        };
+        let github_item = match menu_icon_from_svg(ICON_GITHUB_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::OpenGitHub.id(),
+                "GitHub",
+                true,
+                Some(icon),
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.github_icon_fallback");
+                IconMenuItem::with_id_and_native_icon(
+                    TrayMenuAction::OpenGitHub.id(),
+                    "GitHub",
+                    true,
+                    Some(NativeIcon::FollowLinkFreestanding),
+                    None,
+                )
+            }
+        };
+        let discord_item = match menu_icon_from_svg(ICON_DISCORD_SVG) {
+            Ok(icon) => IconMenuItem::with_id(
+                TrayMenuAction::JoinDiscord.id(),
+                "Discord",
+                true,
+                Some(icon),
+                None,
+            ),
+            Err(e) => {
+                tracing::warn!(error = %e, "tray.discord_icon_fallback");
+                IconMenuItem::with_id_and_native_icon(
+                    TrayMenuAction::JoinDiscord.id(),
+                    "Discord",
+                    true,
+                    Some(NativeIcon::UserGroup),
+                    None,
+                )
+            }
+        };
+
+        let settings_item = MenuItem::with_id(
             TrayMenuAction::Settings.id(),
             "Settings",
             true,
-            Some(NativeIcon::PreferencesGeneral),
-            None,
+            Some(Accelerator::new(Some(Modifiers::META), Code::Comma)),
         );
-
-        // Create check menu item for Launch at Login with current state
-        let launch_at_login_item = CheckMenuItem::with_id(
-            TrayMenuAction::LaunchAtLogin.id(),
-            "Launch at Login",
-            true, // enabled
-            login_item::is_login_item_enabled(),
-            None, // no accelerator
-        );
-
-        // Version display (disabled, informational only)
-        let version_item = MenuItem::new(
-            format!("Version {}", env!("CARGO_PKG_VERSION")),
-            false,
-            None,
-        );
-
-        let quit_item = IconMenuItem::with_id_and_native_icon(
-            TrayMenuAction::Quit.id(),
-            "Quit Script Kit",
+        let reload_scripts_item = IconMenuItem::with_id_and_native_icon(
+            TrayMenuAction::ReloadScripts.id(),
+            "Reload Scripts",
             true,
-            Some(NativeIcon::StopProgress),
+            Some(NativeIcon::Refresh),
+            None,
+        );
+        let check_for_updates_item = IconMenuItem::with_id_and_native_icon(
+            TrayMenuAction::CheckForUpdates.id(),
+            "Check for Updates…",
+            true,
+            Some(NativeIcon::Refresh),
             None,
         );
 
-        // Add items to menu in compact current-app-first order.
+        // Version row — id matches OpenReleasePage so AppKit dispatches a click
+        // to the release page when an update is available. Label/enabled flip
+        // via `refresh_version_label`.
+        let (version_label, version_enabled) =
+            version_label_and_enabled(&update_state.read().expect("update state poisoned"));
+        let version_item = MenuItem::with_id(
+            TrayMenuAction::OpenReleasePage.id(),
+            version_label,
+            version_enabled,
+            None,
+        );
+
+        let about_item = MenuItem::with_id(
+            TrayMenuAction::OpenAbout.id(),
+            "About Script Kit",
+            true,
+            None,
+        );
+
+        let quit_item = MenuItem::with_id(TrayMenuAction::Quit.id(), "Quit Script Kit", true, None);
+
         menu.append(&open_item).context("Failed to add Open item")?;
         menu.append(&open_current_app_commands_item)
             .context("Failed to add Current App Commands item")?;
+        menu.append(&open_notes_item)
+            .context("Failed to add Open Notes item")?;
+        menu.append(&open_agent_chat_item)
+            .context("Failed to add Open Agent Chat item")?;
+        menu.append(&PredefinedMenuItem::separator())
+            .context("Failed to add separator")?;
+        menu.append(&feedback_item)
+            .context("Failed to add Feedback item")?;
+        menu.append(&PredefinedMenuItem::separator())
+            .context("Failed to add separator")?;
+        menu.append(&follow_us_item)
+            .context("Failed to add Follow Us item")?;
+        menu.append(&github_item)
+            .context("Failed to add GitHub item")?;
+        menu.append(&discord_item)
+            .context("Failed to add Discord item")?;
         menu.append(&PredefinedMenuItem::separator())
             .context("Failed to add separator")?;
         menu.append(&settings_item)
             .context("Failed to add Settings item")?;
-        menu.append(&launch_at_login_item)
-            .context("Failed to add Launch at Login item")?;
+        menu.append(&reload_scripts_item)
+            .context("Failed to add Reload Scripts item")?;
+        menu.append(&check_for_updates_item)
+            .context("Failed to add Check for Updates item")?;
         menu.append(&version_item)
             .context("Failed to add Version item")?;
+        menu.append(&about_item)
+            .context("Failed to add About item")?;
         menu.append(&PredefinedMenuItem::separator())
             .context("Failed to add separator")?;
         menu.append(&quit_item).context("Failed to add Quit item")?;
-        tracing::info!(layout = "compact_current_app_first", "tray.menu_built");
+        tracing::info!(layout = "raycast_style_v2", "tray.menu_built");
 
-        Ok((Box::new(menu), launch_at_login_item))
+        Ok((Box::new(menu), open_current_app_commands_item, version_item))
     }
 
     /// Returns the menu event receiver for handling menu clicks.
@@ -279,32 +584,165 @@ impl TrayManager {
         TrayMenuAction::from_id(&event.id.0)
     }
 
-    /// Handles any side effects for a menu action.
-    ///
-    /// Currently only `LaunchAtLogin` has side effects (toggling the OS setting
-    /// and updating the checkbox).
+    /// Handles any side effects for a menu action. Currently no tray action
+    /// has side effects internal to `TrayManager` — Launch at Login was
+    /// removed because it duplicates macOS System Settings → Login Items.
     ///
     /// # Errors
-    /// Returns an error if the action's side effect fails (e.g., login item toggle).
-    pub fn handle_action(&self, action: TrayMenuAction) -> Result<()> {
-        if action == TrayMenuAction::LaunchAtLogin {
-            // Toggle login item then re-read state from OS (never trust "intended" state)
-            login_item::toggle_login_item().context("Failed to toggle login item")?;
-            self.refresh_launch_at_login_checkmark();
-        }
-        // Other actions have no side effects in TrayManager
+    /// Reserved for future side effects; never returns an error today.
+    pub fn handle_action(&self, _action: TrayMenuAction) -> Result<()> {
         Ok(())
     }
 
-    /// Refreshes the "Launch at Login" checkbox to match OS state.
-    ///
-    /// Call this:
-    /// - After toggling the login item
-    /// - When the tray menu is about to be shown
-    /// - On app startup
-    pub fn refresh_launch_at_login_checkmark(&self) {
-        let enabled = login_item::is_login_item_enabled();
-        self.launch_at_login_item.set_checked(enabled);
+    /// Refreshes the current-app commands row to match the frontmost-app
+    /// tracker. The tray dispatcher calls this before handling every event so
+    /// the next menu open sees the latest localized app name.
+    pub fn refresh_current_app_label(&self) {
+        self.current_app_commands_item
+            .set_text(current_app_commands_label());
+    }
+
+    /// Re-render the Version row from the current `UpdateState`. Call after
+    /// `updates::check_now` completes — flips the row to enabled "Update
+    /// Available: vX.Y.Z" when a newer release is found.
+    pub fn refresh_version_label(&self) {
+        let snapshot = self
+            .update_state
+            .read()
+            .expect("update state poisoned")
+            .clone();
+        let (label, enabled) = version_label_and_enabled(&snapshot);
+        self.version_item.set_text(&label);
+        self.version_item.set_enabled(enabled);
+    }
+
+    /// Snapshot of the shared update state. Callers use this to decide whether
+    /// clicking the Version row should open the release page.
+    pub fn update_state_snapshot(&self) -> UpdateState {
+        self.update_state
+            .read()
+            .expect("update state poisoned")
+            .clone()
+    }
+
+    /// Shared `Arc<RwLock<UpdateState>>` so the dispatcher can hand it to
+    /// `updates::check_now`.
+    pub fn update_state_handle(&self) -> Arc<RwLock<UpdateState>> {
+        Arc::clone(&self.update_state)
+    }
+}
+
+/// Convert the launcher's `HotkeyConfig` (modifiers + key) into a muda
+/// `Accelerator` so the tray's "Open Script Kit" row mirrors the user's
+/// global hotkey. Returns `None` if the config's key/modifier strings can't
+/// be recognised — caller falls back to no key equivalent.
+pub fn main_shortcut_accelerator(hk: &crate::config::HotkeyConfig) -> Option<Accelerator> {
+    let mut mods = Modifiers::empty();
+    for modifier in &hk.modifiers {
+        match modifier.as_str() {
+            "meta" | "cmd" | "command" => mods |= Modifiers::META,
+            "ctrl" | "control" => mods |= Modifiers::CONTROL,
+            "alt" | "option" => mods |= Modifiers::ALT,
+            "shift" => mods |= Modifiers::SHIFT,
+            _ => return None,
+        }
+    }
+    Some(Accelerator::new(Some(mods), hotkey_code(&hk.key)?))
+}
+
+fn hotkey_code(key: &str) -> Option<Code> {
+    Some(match key {
+        "KeyA" => Code::KeyA,
+        "KeyB" => Code::KeyB,
+        "KeyC" => Code::KeyC,
+        "KeyD" => Code::KeyD,
+        "KeyE" => Code::KeyE,
+        "KeyF" => Code::KeyF,
+        "KeyG" => Code::KeyG,
+        "KeyH" => Code::KeyH,
+        "KeyI" => Code::KeyI,
+        "KeyJ" => Code::KeyJ,
+        "KeyK" => Code::KeyK,
+        "KeyL" => Code::KeyL,
+        "KeyM" => Code::KeyM,
+        "KeyN" => Code::KeyN,
+        "KeyO" => Code::KeyO,
+        "KeyP" => Code::KeyP,
+        "KeyQ" => Code::KeyQ,
+        "KeyR" => Code::KeyR,
+        "KeyS" => Code::KeyS,
+        "KeyT" => Code::KeyT,
+        "KeyU" => Code::KeyU,
+        "KeyV" => Code::KeyV,
+        "KeyW" => Code::KeyW,
+        "KeyX" => Code::KeyX,
+        "KeyY" => Code::KeyY,
+        "KeyZ" => Code::KeyZ,
+        "Digit0" => Code::Digit0,
+        "Digit1" => Code::Digit1,
+        "Digit2" => Code::Digit2,
+        "Digit3" => Code::Digit3,
+        "Digit4" => Code::Digit4,
+        "Digit5" => Code::Digit5,
+        "Digit6" => Code::Digit6,
+        "Digit7" => Code::Digit7,
+        "Digit8" => Code::Digit8,
+        "Digit9" => Code::Digit9,
+        "Space" => Code::Space,
+        "Enter" => Code::Enter,
+        "Tab" => Code::Tab,
+        "Escape" => Code::Escape,
+        "Backspace" => Code::Backspace,
+        "Delete" => Code::Delete,
+        "ArrowUp" => Code::ArrowUp,
+        "ArrowDown" => Code::ArrowDown,
+        "ArrowLeft" => Code::ArrowLeft,
+        "ArrowRight" => Code::ArrowRight,
+        "Home" => Code::Home,
+        "End" => Code::End,
+        "PageUp" => Code::PageUp,
+        "PageDown" => Code::PageDown,
+        "Insert" => Code::Insert,
+        "Semicolon" => Code::Semicolon,
+        "Quote" => Code::Quote,
+        "Comma" => Code::Comma,
+        "Period" => Code::Period,
+        "Slash" => Code::Slash,
+        "Backslash" => Code::Backslash,
+        "BracketLeft" => Code::BracketLeft,
+        "BracketRight" => Code::BracketRight,
+        "Minus" => Code::Minus,
+        "Equal" => Code::Equal,
+        "Backquote" => Code::Backquote,
+        "F1" => Code::F1,
+        "F2" => Code::F2,
+        "F3" => Code::F3,
+        "F4" => Code::F4,
+        "F5" => Code::F5,
+        "F6" => Code::F6,
+        "F7" => Code::F7,
+        "F8" => Code::F8,
+        "F9" => Code::F9,
+        "F10" => Code::F10,
+        "F11" => Code::F11,
+        "F12" => Code::F12,
+        _ => return None,
+    })
+}
+
+fn current_app_commands_label() -> String {
+    crate::frontmost_app_tracker::get_last_real_app()
+        .map(|app| format!("{} Commands", app.name))
+        .unwrap_or_else(|| "Current App Commands…".to_string())
+}
+
+fn version_label_and_enabled(state: &UpdateState) -> (String, bool) {
+    let current = env!("CARGO_PKG_VERSION");
+    match state {
+        UpdateState::Available { version, .. } => (format!("Update Available: v{version}"), true),
+        UpdateState::Checking => (format!("Checking for updates… (v{current})"), false),
+        UpdateState::Error(_) => (format!("Version {current} (update check failed)"), false),
+        UpdateState::Idle | UpdateState::UpToDate => (format!("Version {current}"), false),
     }
 }
 
@@ -373,8 +811,8 @@ mod tests {
 
     #[test]
     fn test_tray_menu_action_all_count() {
-        // Verify all() returns all variants
-        assert_eq!(TrayMenuAction::all().len(), 5);
+        // Verify all() returns all variants — bump when adding TrayMenuAction variants.
+        assert_eq!(TrayMenuAction::all().len(), 14);
     }
 
     // ========================================================================
@@ -433,22 +871,108 @@ mod tests {
 
     #[test]
     fn test_create_menu_uses_native_menu_icons() {
+        // Only template-style NativeIcon variants are wired up. Manual,
+        // Settings, and About intentionally have NO icon because the
+        // AppKit equivalents (Info, PreferencesGeneral) render as
+        // full-colour status images that clash with a Raycast-style menu.
+        // Follow Us / GitHub / Discord ship brand-correct SVG glyphs and
+        // only fall back to NativeIcon if the SVG render fails.
         const TRAY_SOURCE: &str = include_str!("mod.rs");
+        let implementation_source = TRAY_SOURCE
+            .split("// --- merged from part_001.rs ---")
+            .next()
+            .unwrap_or(TRAY_SOURCE);
         for native_icon in [
-            "NativeIcon::Home",
-            "NativeIcon::FontPanel",
-            "NativeIcon::IChatTheater",
-            "NativeIcon::FollowLinkFreestanding",
-            "NativeIcon::Bookmarks",
-            "NativeIcon::UserGroup",
-            "NativeIcon::User",
+            "NativeIcon::Home",                   // Open Script Kit fallback
+            "NativeIcon::Bookmarks",              // Current App Commands
+            "NativeIcon::Share",                  // Send Feedback
+            "NativeIcon::User",                   // Follow Us fallback
+            "NativeIcon::FollowLinkFreestanding", // GitHub fallback
+            "NativeIcon::UserGroup",              // Discord fallback
+            "NativeIcon::Refresh",                // Check for Updates
+        ] {
+            assert!(
+                implementation_source.contains(native_icon),
+                "Tray menu should use {native_icon}"
+            );
+        }
+        // Affirm the deliberate exclusions stay excluded.
+        for forbidden in [
+            "NativeIcon::Info",
             "NativeIcon::PreferencesGeneral",
             "NativeIcon::StopProgress",
         ] {
             assert!(
-                TRAY_SOURCE.contains(native_icon),
-                "Tray menu should use {native_icon}"
+                !implementation_source.contains(forbidden),
+                "Tray menu must not use {forbidden} (renders full-colour, not template)"
             );
         }
+    }
+
+    #[test]
+    fn test_brand_icons_render() {
+        // The Script Kit logo + X / GitHub / Discord glyphs must all
+        // round-trip through SVG → RGBA → muda::Icon without falling back
+        // to NativeIcon at runtime.
+        for (label, svg) in [
+            ("logo", LOGO_SVG),
+            ("x_twitter", ICON_X_SVG),
+            ("github", ICON_GITHUB_SVG),
+            ("discord", ICON_DISCORD_SVG),
+            ("notes", ICON_NOTES_SVG),
+            ("agent_chat", ICON_AGENT_CHAT_SVG),
+        ] {
+            let icon = menu_icon_from_svg(svg);
+            assert!(
+                icon.is_ok(),
+                "{label} brand icon failed to render: {icon:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_main_shortcut_accelerator_default() {
+        use crate::config::HotkeyConfig;
+        // Default launcher hotkey is meta+Semicolon. The accelerator must
+        // parse, so the tray Open row shows the user's real shortcut.
+        let acc = main_shortcut_accelerator(&HotkeyConfig {
+            modifiers: vec!["meta".into()],
+            key: "Semicolon".into(),
+        });
+        assert!(acc.is_some(), "default meta+Semicolon must convert");
+
+        for (modifiers, key, label) in [
+            (vec!["meta"], "Semicolon", "meta+Semicolon"),
+            (vec!["meta"], "Space", "meta+Space"),
+            (vec!["meta", "shift"], "KeyK", "meta+shift+KeyK"),
+            (vec!["meta"], "Comma", "meta+Comma"),
+            (vec!["meta"], "Slash", "meta+Slash"),
+        ] {
+            let acc = main_shortcut_accelerator(&HotkeyConfig {
+                modifiers: modifiers.into_iter().map(str::to_string).collect(),
+                key: key.into(),
+            });
+            assert!(acc.is_some(), "{label} must convert");
+        }
+
+        // Unknown modifier returns None instead of silently dropping it.
+        let acc_bad = main_shortcut_accelerator(&HotkeyConfig {
+            modifiers: vec!["hyper".into()],
+            key: "Space".into(),
+        });
+        assert!(
+            acc_bad.is_none(),
+            "unknown modifier must not silently parse"
+        );
+    }
+
+    #[test]
+    fn test_tray_urls_are_https_and_pinned() {
+        for url in [URL_FOLLOW_US, URL_GITHUB, URL_DISCORD, URL_FEEDBACK] {
+            assert!(url.starts_with("https://"), "tray URL must be https: {url}");
+        }
+        assert!(URL_FOLLOW_US.contains("scriptkitapp"));
+        assert!(URL_GITHUB.contains("github.com/johnlindquist/script-kit-next"));
+        assert!(URL_FEEDBACK.contains("github.com/johnlindquist/script-kit-next/issues/new"));
     }
 }

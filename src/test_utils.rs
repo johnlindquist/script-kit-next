@@ -16,6 +16,19 @@ use std::sync::{Mutex, OnceLock};
 /// acquiring to recover from a poisoned mutex (prior test panic).
 pub static SK_PATH_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
+/// Global lock for tests that mutate shared provider JSON slots or related
+/// `SCRIPT_KIT_*_JSON` environment variables.
+pub static PROVIDER_JSON_TEST_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+/// Acquire the shared provider JSON test lock, recovering from poison when a
+/// prior test failed while holding it.
+pub fn lock_provider_json_test() -> std::sync::MutexGuard<'static, ()> {
+    PROVIDER_JSON_TEST_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+}
+
 /// Read a source file and panic with a clear message on failure.
 ///
 /// Intended for tests that scan source files for structural patterns.

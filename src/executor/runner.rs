@@ -604,9 +604,47 @@ fn run_fallback_chain<T>(
     None
 }
 
+/// Execute a script with bidirectional JSONL communication, passing `extra_env`
+/// pairs into the spawned process in addition to the normal allowlisted
+/// environment. Used by the menu-syntax capture path to inject the
+/// `KIT_MENU_SYNTAX*` env contract without changing
+/// [`SAFE_SCRIPT_ENV_VARS`].
+#[instrument(skip_all, fields(script_path = %path.display(), extra_env_keys = extra_env.len()))]
+pub fn execute_script_interactive_with_env(
+    path: &Path,
+    extra_env: Vec<(String, String)>,
+) -> Result<ScriptSession, String> {
+    execute_script_interactive_impl(path, extra_env, Vec::new())
+}
+
+#[instrument(skip_all, fields(script_path = %path.display(), argv_count = argv.len()))]
+pub fn execute_script_interactive_with_args(
+    path: &Path,
+    argv: Vec<String>,
+) -> Result<ScriptSession, String> {
+    execute_script_interactive_impl(path, Vec::new(), argv)
+}
+
+#[instrument(skip_all, fields(script_path = %path.display(), extra_env_keys = extra_env.len(), argv_count = argv.len()))]
+pub fn execute_script_interactive_with_env_and_args(
+    path: &Path,
+    extra_env: Vec<(String, String)>,
+    argv: Vec<String>,
+) -> Result<ScriptSession, String> {
+    execute_script_interactive_impl(path, extra_env, argv)
+}
+
 /// Execute a script with bidirectional JSONL communication
 #[instrument(skip_all, fields(script_path = %path.display()))]
 pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> {
+    execute_script_interactive_impl(path, Vec::new(), Vec::new())
+}
+
+fn execute_script_interactive_impl(
+    path: &Path,
+    extra_env: Vec<(String, String)>,
+    argv: Vec<String>,
+) -> Result<ScriptSession, String> {
     let start = Instant::now();
     logging::bench_log("execute_script_interactive_start");
     debug!(path = %path.display(), "Starting interactive script execution");
@@ -634,12 +672,15 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
                 name: "bun",
                 label: "bun with preload".to_string(),
                 cmd: bun_path.clone(),
-                args: vec![
-                    "run".to_string(),
-                    "--preload".to_string(),
-                    sdk_str,
-                    path_str.to_string(),
-                ],
+                args: with_script_argv(
+                    vec![
+                        "run".to_string(),
+                        "--preload".to_string(),
+                        sdk_str,
+                        path_str.to_string(),
+                    ],
+                    &argv,
+                ),
             });
         }
 
@@ -647,7 +688,7 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
             name: "bun",
             label: "bun without preload".to_string(),
             cmd: bun_path,
-            args: vec!["run".to_string(), path_str.to_string()],
+            args: with_script_argv(vec!["run".to_string(), path_str.to_string()], &argv),
         });
     }
 
@@ -656,11 +697,15 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
             name: "node",
             label: "node".to_string(),
             cmd: node_path,
-            args: vec![path_str.to_string()],
+            args: with_script_argv(vec![path_str.to_string()], &argv),
         });
     }
 
-    if let Some(session) = run_fallback_chain(&attempts, &start, spawn_script, path_str) {
+    let extra_env_for_closure = extra_env.clone();
+    let runner = move |cmd: &str, args: &[&str], script_path: &str| {
+        spawn_script_with_extra_env(cmd, args, script_path, &extra_env_for_closure)
+    };
+    if let Some(session) = run_fallback_chain(&attempts, &start, runner, path_str) {
         return Ok(session);
     }
 
@@ -681,9 +726,23 @@ pub fn execute_script_interactive(path: &Path) -> Result<ScriptSession, String> 
     Err(err)
 }
 
+fn with_script_argv(mut args: Vec<String>, argv: &[String]) -> Vec<String> {
+    args.extend(argv.iter().cloned());
+    args
+}
+
 /// Spawn a script as an interactive process with piped stdin/stdout
 #[instrument(skip_all, fields(cmd = %cmd))]
 pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<ScriptSession, String> {
+    spawn_script_with_extra_env(cmd, args, script_path, &[])
+}
+
+pub fn spawn_script_with_extra_env(
+    cmd: &str,
+    args: &[&str],
+    script_path: &str,
+    extra_env: &[(String, String)],
+) -> Result<ScriptSession, String> {
     // Try to find the executable in common locations
     let executable = find_executable(cmd)
         .map(|p| p.to_string_lossy().into_owned())
@@ -708,6 +767,9 @@ pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<Scrip
         if key.starts_with("SCRIPT_KIT") {
             command.env(key, value);
         }
+    }
+    for (key, value) in extra_env {
+        command.env(key, value);
     }
     command
         .args(args)

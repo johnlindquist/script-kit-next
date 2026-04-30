@@ -119,7 +119,7 @@ enum ActionsWindowKeyIntent {
     MovePageUp,
     MovePageDown,
     ExecuteSelected,
-    /// Cmd+Enter: hand the selected action to ACP Chat as a canonical target.
+    /// Cmd+Enter: hand the selected action to Agent Chat as a canonical target.
     SendToAcp,
     Close,
     Backspace,
@@ -506,8 +506,7 @@ impl Render for ActionsWindow {
                     this.dialog.update(cx, |d, cx| {
                         if let Some(first) = first_selectable_index(&d.grouped_items) {
                             d.selected_index = first;
-                            d.list_state.scroll_to_reveal_item(d.selected_index);
-                            cx.notify();
+                            d.reveal_selection_after_navigation(cx);
                         }
                     });
                 }
@@ -515,8 +514,7 @@ impl Render for ActionsWindow {
                     this.dialog.update(cx, |d, cx| {
                         if let Some(last) = last_selectable_index(&d.grouped_items) {
                             d.selected_index = last;
-                            d.list_state.scroll_to_reveal_item(d.selected_index);
-                            cx.notify();
+                            d.reveal_selection_after_navigation(cx);
                         }
                     });
                 }
@@ -532,8 +530,7 @@ impl Render for ActionsWindow {
                                 .or_else(|| first_selectable_index(&d.grouped_items))
                         {
                             d.selected_index = next_index;
-                            d.list_state.scroll_to_reveal_item(d.selected_index);
-                            cx.notify();
+                            d.reveal_selection_after_navigation(cx);
                         }
                     });
                 }
@@ -550,8 +547,7 @@ impl Render for ActionsWindow {
                                 .or_else(|| last_selectable_index(&d.grouped_items))
                         {
                             d.selected_index = next_index;
-                            d.list_state.scroll_to_reveal_item(d.selected_index);
-                            cx.notify();
+                            d.reveal_selection_after_navigation(cx);
                         }
                     });
                 }
@@ -1096,6 +1092,57 @@ fn resized_actions_window_origin_y(
     }
 }
 
+// @lat: [[lat.md/automation#Automation#Window metadata]]
+/// Compute the new GPUI `Bounds<Pixels>` of the actions popup after a
+/// resize. GPUI uses top-left origin, so the pinning semantics are
+/// inverted from `resized_actions_window_origin_y` which operates on
+/// AppKit's bottom-left NSRect frame:
+///
+/// - `TopRight` / `TopCenter` are pinned to the top edge → origin.y stays,
+///   height changes.
+/// - `BottomRight` is pinned to the bottom edge → origin.y shifts so
+///   `origin.y + height` is invariant.
+///
+/// Used to refresh `AutomationWindowInfo.bounds` after either resize
+/// path (keyboard TypeChar/Backspace → `resize_actions_window_direct`;
+/// batch SetInput → `resize_actions_window`) so `listAutomationWindows`
+/// reports the live frame. Without this refresh the registry would
+/// report the open-time bounds, silently lying to agentic callers.
+fn resized_actions_window_gpui_bounds(
+    current_bounds: Bounds<Pixels>,
+    new_height_px: f32,
+    position: WindowPosition,
+) -> Bounds<Pixels> {
+    let current_origin_y: f32 = current_bounds.origin.y.into();
+    let current_height: f32 = current_bounds.size.height.into();
+    let new_origin_y = match position {
+        WindowPosition::TopRight | WindowPosition::TopCenter => current_origin_y,
+        WindowPosition::BottomRight => current_origin_y + current_height - new_height_px,
+    };
+    Bounds {
+        origin: gpui::Point::new(current_bounds.origin.x, px(new_origin_y)),
+        size: Size {
+            width: current_bounds.size.width,
+            height: px(new_height_px),
+        },
+    }
+}
+
+// @lat: [[lat.md/automation#Automation#Window metadata]]
+/// Convert a GPUI popup bounds to the protocol shape and publish it
+/// into the automation registry under the stable `actions-dialog` ID.
+/// Keeps the float conversion site identical to the open-time
+/// conversion in `create_actions_popup_window`.
+fn publish_actions_popup_bounds_to_registry(bounds: Bounds<Pixels>) {
+    let registry_bounds = crate::protocol::AutomationWindowBounds {
+        x: f32::from(bounds.origin.x) as f64,
+        y: f32::from(bounds.origin.y) as f64,
+        width: f32::from(bounds.size.width) as f64,
+        height: f32::from(bounds.size.height) as f64,
+    };
+    crate::windows::set_automation_bounds("actions-dialog", Some(registry_bounds));
+}
+
 #[cfg(target_os = "macos")]
 fn resized_actions_window_frame(
     frame: cocoa::foundation::NSRect,
@@ -1257,13 +1304,29 @@ fn resolve_actions_popup_parent_automation_id(
 
     let synthesized_parent_id = "main".to_string();
     crate::windows::upsert_runtime_window_handle(&synthesized_parent_id, parent_window_handle);
+
+    // Preserve the existing main window's semantic_surface if the registry
+    // already has one (e.g. "clipboardHistory" when the clipboard-history
+    // builtin is hosted in main, or "fileSearch" for file-search, or
+    // "acpChat" for embedded ACP). Previously this `upsert_automation_window`
+    // call hardcoded `semantic_surface: "scriptList"` and so REWROTE main's
+    // surface tag mid-flight every time actions opened, which broke any
+    // automation caller that routed on surface. See
+    // `[?] actions-cmdk-clipboard-main-surface-flip` filed Run 7 Pass #17
+    // and independently reproduced Pass #20.
+    let preserved_semantic_surface = crate::windows::list_automation_windows()
+        .into_iter()
+        .find(|w| w.id == synthesized_parent_id)
+        .and_then(|w| w.semantic_surface)
+        .unwrap_or_else(|| "scriptList".to_string());
+
     crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
         id: synthesized_parent_id.clone(),
         kind: crate::protocol::AutomationWindowKind::Main,
         title: Some("Script Kit".to_string()),
         focused: true,
         visible: true,
-        semantic_surface: Some("scriptList".to_string()),
+        semantic_surface: Some(preserved_semantic_surface),
         bounds: Some(crate::protocol::AutomationWindowBounds {
             x: f32::from(parent_window_bounds.origin.x) as f64,
             y: f32::from(parent_window_bounds.origin.y) as f64,
@@ -1444,13 +1507,27 @@ pub fn open_actions_window(
 
     // Register in the automation window registry with parent identity.
     // Fail-closed: if registration fails, close the popup and propagate the error.
+    //
+    // `bounds` carries the placement-receipt's `popup_bounds` verbatim so
+    // `listAutomationWindows` / `inspectAutomationWindow` surface the popup
+    // frame without agents needing a second RPC to compute geometry. The
+    // resize paths below (`resize_actions_window` + `resize_actions_window_direct`)
+    // MUST re-publish bounds via `set_automation_bounds` after every frame
+    // change — otherwise the registry would lie about the popup's height as
+    // it shrinks on filter. See Pass #1 tool-gap note in `audits/afk/log.md`.
     let popup_automation_id = "actions-dialog".to_string();
+    let popup_bounds_for_registry = crate::protocol::AutomationWindowBounds {
+        x: f32::from(bounds.origin.x) as f64,
+        y: f32::from(bounds.origin.y) as f64,
+        width: f32::from(bounds.size.width) as f64,
+        height: f32::from(bounds.size.height) as f64,
+    };
     if let Err(e) = crate::windows::register_attached_popup(
         popup_automation_id.clone(),
         crate::protocol::AutomationWindowKind::ActionsDialog,
         Some("Actions".to_string()),
         Some("actionsDialog".to_string()),
-        None,
+        Some(popup_bounds_for_registry),
         Some(parent_automation_id.as_str()),
     ) {
         tracing::warn!(
@@ -1713,6 +1790,13 @@ pub fn resize_actions_window_direct(
         height: px(new_height_f32),
     });
 
+    // Refresh automation registry bounds so `listAutomationWindows` /
+    // `inspectAutomationWindow` report the live popup frame after resize.
+    // See Pass #1 tool-gap note in `audits/afk/log.md`.
+    let post_resize_bounds =
+        resized_actions_window_gpui_bounds(current_bounds, new_height_f32, position);
+    publish_actions_popup_bounds_to_registry(post_resize_bounds);
+
     crate::logging::log(
         "ACTIONS",
         &format!(
@@ -1854,6 +1938,14 @@ pub fn resize_actions_window(cx: &mut App, dialog_entity: &Entity<ActionsDialog>
                 width: current_bounds.size.width,
                 height: px(new_height_f32),
             });
+
+            // Refresh automation registry bounds so `listAutomationWindows` /
+            // `inspectAutomationWindow` report the live popup frame after resize.
+            // See Pass #1 tool-gap note in `audits/afk/log.md`.
+            let post_resize_bounds =
+                resized_actions_window_gpui_bounds(current_bounds, new_height_f32, position);
+            publish_actions_popup_bounds_to_registry(post_resize_bounds);
+
             cx.notify();
         });
 

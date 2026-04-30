@@ -35,7 +35,7 @@ What's changed:
 - No bundled utilities (file helpers, clipboard wrappers, etc.)
 - No `kit` global with hundreds of helpers
 - Scripts must explicitly import dependencies via Bun
-- Configuration is TypeScript-based (`~/.scriptkit/kit/config.ts`)
+- Configuration is TypeScript-based (`~/.scriptkit/config.ts`)
 
 ## Quick Start
 
@@ -59,7 +59,7 @@ What's changed:
 
 2. **Create the kit directory**
    ```bash
-   mkdir -p ~/.scriptkit/kit/main
+   mkdir -p ~/.scriptkit/plugins/main
    ```
 
 3. **Build and run**
@@ -75,7 +75,7 @@ What's changed:
 
 4. **Configure your hotkey** (optional)
    
-   Create `~/.scriptkit/kit/config.ts`:
+   Create `~/.scriptkit/config.ts`:
    ```typescript
    export default {
      hotkey: {
@@ -87,7 +87,7 @@ What's changed:
 
 ### Your First Script
 
-Create `~/.scriptkit/kit/main/scripts/hello.ts`:
+Create `~/.scriptkit/plugins/main/scripts/hello.ts`:
 
 ```typescript
 import "@scriptkit/sdk";
@@ -195,7 +195,7 @@ export const metadata = {
 
 ## Configuration
 
-### `~/.scriptkit/kit/config.ts`
+### `~/.scriptkit/config.ts`
 
 ```typescript
 export default {
@@ -233,32 +233,36 @@ export default {
 };
 ```
 
-### ACP Chat Configuration
+### Agent Chat Configuration
 
-ACP Chat agent launch settings currently live in the `claudeCode` block of `~/.scriptkit/kit/config.ts`:
+Agent Chat uses the Agent Catalog and `~/.scriptkit/config.ts`. The stable config keys intentionally keep `acp` in their names because they back the ACP protocol contract.
 
 ```typescript
-claudeCode: {
-  enabled: true,
-  path: "claude",                    // CLI binary (default: "claude" from PATH)
-  permissionMode: "plan",            // "default" | "plan" | "acceptEdits"
-  allowedTools: "Read,Edit,Bash(git:*)",
+ai: {
+  selectedAcpAgentId: "codex-acp",
+  selectedModelId: "gpt-5.4",
+  profiles: [
+    {
+      name: "Code Review",
+      agent: "codex-acp",
+      model: "gpt-5.4",
+      systemPrompt: "Review changes and call out risks first."
+    }
+  ],
+  selectedProfileName: "Code Review"
 }
 ```
 
-Each Tab press writes context to `~/.scriptkit/context/latest.md`, discovers plugin-owned skills from `~/.scriptkit/kit/*/skills/`, and spawns a fresh `claude` process with the context and user intent as CLI arguments. If the harness crashes or exits, the next Tab press spawns a new one.
+Use the Agent Chat actions menu to change agent, model, or profile. Claude Code settings may still be honored for compatibility when that adapter is selected, but they are not the primary Agent Chat setup flow.
 
-### Environment Variables (API Keys)
+### Legacy Direct-Provider API Keys
 
-Set these in your shell profile (`~/.zshrc` or `~/.bashrc`) to enable AI features:
+These keys are for legacy direct-provider AI features, not for configuring Agent Chat agents. Agent Chat setup should go through the Agent Catalog and `config.ts`.
 
 ```bash
-# AI providers (used by ACP Chat)
+# Direct providers
 export SCRIPT_KIT_OPENAI_API_KEY="sk-..."
 export SCRIPT_KIT_ANTHROPIC_API_KEY="sk-ant-..."
-
-# Vercel AI Gateway (routes to multiple providers)
-export SCRIPT_KIT_VERCEL_API_KEY="your-vercel-ai-gateway-key"
 
 # Additional providers
 export SCRIPT_KIT_GOOGLE_API_KEY="..."
@@ -306,7 +310,7 @@ script-kit-gpui/
 │   ├── prompts/           # Prompt implementations
 │   ├── terminal/          # Terminal emulator
 │   ├── notes/             # Notes window feature
-│   └── ai/                # ACP Chat runtime + context assembly
+│   └── ai/                # Agent Chat runtime + context assembly
 ├── scripts/
 │   └── kit-sdk.ts         # The SDK (preloaded into scripts)
 ├── tests/
@@ -317,7 +321,7 @@ script-kit-gpui/
         ├── main/          # Primary plugin
         │   ├── scripts/    # Executable TypeScript scripts
         │   ├── scriptlets/ # Scriptlet bundles
-        │   ├── skills/     # ACP-first reusable AI units
+        │   ├── skills/     # Agent-first reusable AI units
         │   └── agents/     # Legacy agent definitions (compatibility)
         ├── config.ts       # Configuration
         ├── theme.json      # Theme customization
@@ -360,7 +364,7 @@ bash scripts/verify-macos-bundle.sh
 - **App Launcher** - Quick launch applications
 - **Window Switcher** - Switch between open windows (enable in config)
 - **Notes Window** - Floating notes with Markdown support (`Cmd+Shift+N`)
-- **ACP Chat** - Press Tab to open ACP Chat (`AppView::AcpChatView`) with the current context staged for the active agent
+- **Agent Chat** - Press Tab to open Agent Chat (`AppView::AcpChatView`) with the current context staged for the active agent
 - **System Tray** - Menu bar icon with quick actions
 - **Global Hotkeys** - Trigger scripts from anywhere
 
@@ -385,27 +389,27 @@ bash scripts/verify-macos-bundle.sh
 
 Script Kit exposes desktop context and UI state to scripts and AI agents through protocol commands and MCP resources.
 
-### ACP Chat
+### Agent Chat
 
-ACP Chat is the primary and only AI chat surface. `Tab` and `Shift+Tab` route into ACP Chat; some internal helpers and compatibility types still use `tab_ai_*` naming, but those are implementation details rather than separate chat products.
+Agent Chat is the primary and only AI chat surface. `Tab` and `Shift+Tab` route into Agent Chat; some internal helpers and compatibility types still use `tab_ai_*` naming, but those are implementation details rather than separate chat products.
 
 **Entry path:**
-- Plain `Tab` opens ACP Chat and stages current context for the active ACP agent.
-- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens ACP Chat and submits that filter text as user intent.
-- Detached ACP Chat windows use the same conversation model and automation targeting contract as the in-panel ACP Chat view.
+- Plain `Tab` opens Agent Chat and stages current context for the active agent.
+- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens Agent Chat and submits that filter text as user intent.
+- Detached Agent Chat windows use the same conversation model and automation targeting contract as the in-panel Agent Chat view.
 
 **Close semantics:**
-- `Cmd+W` closes the detached ACP Chat window.
-- Plain `Escape` returns the in-panel ACP Chat view to the previous launcher surface when applicable.
-- The footer keeps ACP Chat aligned with the launcher chrome and action model.
+- `Cmd+W` closes the detached Agent Chat window.
+- Plain `Escape` returns the in-panel Agent Chat view to the previous launcher surface when applicable.
+- The footer keeps Agent Chat aligned with the launcher chrome and action model.
 
 **Runtime contract:**
-- ACP Chat entry is driven from `src/app_impl/tab_ai_mode.rs` and rendered through `AppView::AcpChatView`.
-- Detached ACP Chat windows are managed by `src/ai/acp/chat_window.rs`.
-- Agent configuration still lives in the `claudeCode` block in `~/.scriptkit/kit/config.ts`.
+- Agent Chat entry is driven from `src/app_impl/tab_ai_mode.rs` and rendered through `AppView::AcpChatView`.
+- Detached Agent Chat windows are managed by `src/ai/acp/chat_window.rs`.
+- Agent selection, model preferences, and profiles live under the `ai` block in `~/.scriptkit/config.ts` and are backed by the Agent Catalog.
 - Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
 - Context assembly still uses compatibility-named helpers such as `snapshot_tab_ai_ui()`, `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())`, and `build_tab_ai_context_from()`.
-- Compatibility-named types such as `TabAiContextBlob` remain the schema contract backing ACP Chat context capture.
+- Compatibility-named types such as `TabAiContextBlob` remain the schema contract backing Agent Chat context capture.
 
 ### Element Introspection (`getElements`)
 
@@ -476,7 +480,7 @@ Per-field flags: `selectedText`, `frontmostApp`, `menuBar`, `browserUrl`, `focus
 
 ### Context Parts
 
-Context parts attach structured desktop state to AI interactions. ACP Chat stages context automatically and also supports attaching context via slash commands:
+Context parts attach structured desktop state to AI interactions. Agent Chat stages context automatically and also supports attaching context via slash commands:
 
 | Command | Context Attached |
 |---------|-----------------|

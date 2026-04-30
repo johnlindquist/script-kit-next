@@ -12,6 +12,22 @@ impl ScriptListApp {
         }
     }
 
+    pub(crate) fn sync_open_terminal_theme(&mut self, cx: &mut Context<Self>) {
+        let theme = std::sync::Arc::clone(&self.theme);
+        let terminal = match &self.current_view {
+            AppView::TermPrompt { entity, .. } => Some(entity.clone()),
+            AppView::QuickTerminalView { entity, .. } => Some(entity.clone()),
+            _ => None,
+        };
+
+        if let Some(terminal) = terminal {
+            terminal.update(cx, |term, _| {
+                term.terminal.update_theme(&theme);
+            });
+            debug!(target: "APP", "Theme propagated to terminal");
+        }
+    }
+
     pub(crate) fn cycle_design(&mut self, cx: &mut Context<Self>) {
         let old_design = self.current_design;
         let new_design = old_design.next();
@@ -69,6 +85,7 @@ impl ScriptListApp {
 
         // Propagate theme to open ActionsDialog (if any) for hot-reload support
         self.sync_open_actions_dialog_theme(cx);
+        self.sync_open_terminal_theme(cx);
 
         cx.notify();
     }
@@ -106,6 +123,7 @@ impl ScriptListApp {
         // Create new theme with adjusted opacity
         let adjusted_theme = base_theme.with_opacity_offset(self.light_opacity_offset);
         self.theme = std::sync::Arc::new(adjusted_theme);
+        self.sync_open_terminal_theme(cx);
 
         let new_opacity = self.theme.get_opacity().main;
         info!(
@@ -230,6 +248,7 @@ impl ScriptListApp {
                 focus_coordinator::FocusTarget::TemplatePrompt => FocusTarget::TemplatePrompt,
                 focus_coordinator::FocusTarget::TermPrompt => FocusTarget::TermPrompt,
                 focus_coordinator::FocusTarget::ChatPrompt => FocusTarget::ChatPrompt,
+                focus_coordinator::FocusTarget::AcpChat => FocusTarget::AcpChat,
                 focus_coordinator::FocusTarget::DivPrompt => FocusTarget::AppRoot, // DivPrompt uses AppRoot
                 focus_coordinator::FocusTarget::ScratchPad => FocusTarget::EditorPrompt,
                 focus_coordinator::FocusTarget::QuickTerminal => FocusTarget::TermPrompt,
@@ -252,7 +271,6 @@ impl ScriptListApp {
         self.focus_coordinator.take_pending();
 
         debug!(target: "FOCUS", focus_target = ?target, "Applying pending focus");
-
         match target {
             FocusTarget::MainFilter => {
                 let input_state = self.gpui_input_state.clone();
@@ -349,6 +367,13 @@ impl ScriptListApp {
                     self.focused_input = FocusedInput::None;
                 }
             }
+            FocusTarget::AcpChat => {
+                if let AppView::AcpChatView { entity } = &self.current_view {
+                    let fh = entity.read(cx).focus_handle(cx);
+                    window.focus(&fh, cx);
+                    self.focused_input = FocusedInput::None;
+                }
+            }
             FocusTarget::NamingPrompt => {
                 if let AppView::NamingPrompt { entity, .. } = &self.current_view {
                     let fh = entity.read(cx).focus_handle(cx);
@@ -367,4 +392,31 @@ impl ScriptListApp {
         true
     }
 
+}
+
+#[cfg(test)]
+mod focus_restore_regression_tests {
+    use std::fs;
+
+    #[test]
+    fn apply_pending_focus_restores_launcher_acp_via_dedicated_target() {
+        let source = fs::read_to_string("src/app_impl/theme_focus.rs")
+            .expect("Failed to read src/app_impl/theme_focus.rs");
+
+        assert!(
+            source.contains("focus_coordinator::FocusTarget::AcpChat => FocusTarget::AcpChat"),
+            "coordinator sync should preserve the AcpChat target through the legacy bridge"
+        );
+        assert!(
+            source.contains("AppView::AcpChatView { entity } => Some(entity.read(cx).focus_handle(cx))")
+                && source.contains("FocusTarget::AcpChat => {")
+                && source.contains("if let AppView::AcpChatView { entity } = &self.current_view {"),
+            "launcher ACP focus should work through both the legacy ChatPrompt compatibility path and the dedicated AcpChat target"
+        );
+        assert!(
+            source.contains("FocusTarget::AcpChat => {")
+                && source.contains("if let AppView::AcpChatView { entity } = &self.current_view {"),
+            "apply_pending_focus should restore launcher ACP via the AcpChatView focus handle"
+        );
+    }
 }

@@ -174,6 +174,11 @@ impl TerminalHandle {
         self.pty.is_running()
     }
 
+    /// Checks if the terminal child process is still alive.
+    pub fn is_alive(&mut self) -> bool {
+        self.pty.is_running()
+    }
+
     /// Kill the PTY child process and signal the reader thread to stop.
     ///
     /// After this call, `is_running()` will return `false` and the

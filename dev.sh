@@ -26,6 +26,9 @@ export SCRIPT_KIT_STARTUP_READY_LOG="${SCRIPT_KIT_STARTUP_READY_LOG:-1}"
 # Agentic session name: dev.sh now launches through the reusable session contract
 # so autonomous agents can attach immediately after a rebuild.
 export SCRIPT_KIT_DEV_SESSION_NAME="${SCRIPT_KIT_DEV_SESSION_NAME:-dev-watch}"
+SESSION_DIR_RAW="${SCRIPT_KIT_SESSION_DIR:-/tmp/sk-agentic-sessions}"
+mkdir -p "$SESSION_DIR_RAW"
+export SCRIPT_KIT_SESSION_DIR="$(cd "$SESSION_DIR_RAW" && pwd -P)"
 
 # Check if cargo-watch is installed
 if ! command -v cargo-watch &> /dev/null; then

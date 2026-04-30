@@ -4,7 +4,7 @@
  * 
  * AST-based config.ts shortcut updater.
  * 
- * This script modifies ~/.scriptkit/kit/config.ts to add/update command shortcuts
+ * This script modifies ~/.scriptkit/config.ts to add/update command shortcuts
  * using TypeScript AST manipulation to preserve formatting and comments.
  * 
  * Usage:
@@ -51,7 +51,7 @@ if (alt) modifiers.push('alt');
 if (shift) modifiers.push('shift');
 
 // Config file path
-const configPath = path.join(process.env.HOME || '', '.scriptkit', 'kit', 'config.ts');
+const configPath = path.join(process.env.HOME || '', '.scriptkit', 'config.ts');
 
 /**
  * Check if config has an actual (non-commented) commands section.

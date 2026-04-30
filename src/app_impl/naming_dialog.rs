@@ -12,6 +12,38 @@ impl ScriptListApp {
         target: prompts::NamingTarget,
         cx: &mut Context<Self>,
     ) {
+        self.present_naming_dialog(target, None, cx);
+    }
+
+    /// Show the naming dialog already seeded with a selected script template.
+    ///
+    /// Called from the Script Template Catalog view's Enter handler. The
+    /// template identity is threaded through [`prompts::NamingPromptConfig`]
+    /// → [`prompts::NamingSubmitResult::template_id`] so
+    /// [`Self::handle_naming_dialog_completion`] can resolve it back via
+    /// [`crate::mcp_resources::find_script_template`] and overwrite the
+    /// freshly-created script body with
+    /// [`crate::mcp_resources::render_script_template_file`] before the editor
+    /// opens.
+    pub(crate) fn show_naming_dialog_for_script_template(
+        &mut self,
+        template: crate::mcp_resources::ScriptTemplateRef,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let selection = prompts::TemplateSelection {
+            id: template.id.clone(),
+            label: template.title.clone(),
+        };
+        self.present_naming_dialog(prompts::NamingTarget::Script, Some(selection), cx);
+    }
+
+    fn present_naming_dialog(
+        &mut self,
+        target: prompts::NamingTarget,
+        template: Option<prompts::TemplateSelection>,
+        cx: &mut Context<Self>,
+    ) {
         let (target_directory, extension) = match target {
             prompts::NamingTarget::Script => (script_creation::scripts_dir(), "ts"),
             prompts::NamingTarget::Extension => (script_creation::scriptlets_dir(), "md"),
@@ -25,9 +57,12 @@ impl ScriptListApp {
                 let _ = sender.try_send(value);
             });
 
-        let config = prompts::NamingPromptConfig::new(target, target_directory, extension)
+        let mut config = prompts::NamingPromptConfig::new(target, target_directory, extension)
             .placeholder(format!("My Cool {}", target.display_name()))
             .design_variant(self.current_design);
+        if let Some(selection) = template {
+            config = config.template(selection.id, selection.label);
+        }
 
         let theme = self.theme.clone();
         let entity = cx.new(|cx| {
@@ -117,6 +152,60 @@ impl ScriptListApp {
                     "NAMING",
                     &format!("Created new {}: {:?}", item_type, created_file_path),
                 );
+
+                // Template overwrite: if the naming payload carried a template_id,
+                // resolve it back via find_script_template and overwrite the
+                // freshly-created file before launching the editor. The editor
+                // process hasn't been spawned yet, so there is no read-vs-write
+                // race; create_new_script has already taken ownership of the
+                // path via OpenOptions::create_new(true).
+                if result.target == prompts::NamingTarget::Script {
+                    if let Some(template_id) = result.template_id.as_deref() {
+                        match crate::mcp_resources::find_script_template(template_id) {
+                            Some(template) => {
+                                let source = crate::mcp_resources::render_script_template_file(
+                                    &template,
+                                    &result.friendly_name,
+                                );
+                                if let Err(e) = std::fs::write(&path, source) {
+                                    logging::log(
+                                        "ERROR",
+                                        &format!(
+                                            "Failed to write template body to {:?}: {}",
+                                            path, e
+                                        ),
+                                    );
+                                    self.toast_manager.push(
+                                        components::toast::Toast::error(
+                                            format!(
+                                                "Created script but failed to apply template: {}",
+                                                e
+                                            ),
+                                            &self.theme,
+                                        )
+                                        .duration_ms(Some(TOAST_ERROR_MS)),
+                                    );
+                                }
+                            }
+                            None => {
+                                logging::log(
+                                    "WARN",
+                                    &format!(
+                                        "Naming payload referenced unknown template_id: {}",
+                                        template_id
+                                    ),
+                                );
+                                self.toast_manager.push(
+                                    components::toast::Toast::error(
+                                        format!("Unknown template: {}", template_id),
+                                        &self.theme,
+                                    )
+                                    .duration_ms(Some(TOAST_ERROR_MS)),
+                                );
+                            }
+                        }
+                    }
+                }
 
                 if let Err(e) = script_creation::open_in_editor(&path, &self.config) {
                     logging::log("ERROR", &format!("Failed to open in editor: {}", e));

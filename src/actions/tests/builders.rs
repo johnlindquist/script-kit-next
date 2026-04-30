@@ -209,7 +209,7 @@ fn path_context_all_common_actions_present() {
         "file:copy_path",
         "file:open_in_finder",
         "file:open_in_editor",
-        "file:open_in_terminal",
+        "file:open_in_quick_terminal",
         "file:copy_filename",
         "file:move_to_trash",
     ];

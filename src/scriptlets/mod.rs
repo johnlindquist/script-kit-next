@@ -90,9 +90,9 @@ fn has_parent_dir_component(path: &Path) -> bool {
 
 fn runtime_allowed_scriptlet_base_dirs() -> Vec<PathBuf> {
     let mut allowed_dirs = Vec::new();
-    let kit_root = crate::setup::get_kit_path().join("kit");
+    let plugins_root = crate::plugins::plugins_container_dir();
 
-    let Ok(kit_entries) = std::fs::read_dir(&kit_root) else {
+    let Ok(kit_entries) = std::fs::read_dir(&plugins_root) else {
         return allowed_dirs;
     };
 

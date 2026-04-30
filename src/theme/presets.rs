@@ -4551,7 +4551,7 @@ fn theme_coral_reef() -> Theme {
 // --- merged from part_04.rs ---
 /// Write a theme to the user's theme.json file
 pub fn write_theme_to_disk(theme: &Theme) -> Result<(), std::io::Error> {
-    let theme_path = crate::setup::get_kit_path().join("kit").join("theme.json");
+    let theme_path = crate::setup::theme_json_path();
 
     // Ensure parent directory exists
     if let Some(parent) = theme_path.parent() {
@@ -4582,9 +4582,11 @@ mod tests {
                 "Theme '{}' has zero background color",
                 preset.name
             );
+            let expected_primary =
+                super::super::helpers::hard_readable_text_hex(theme.colors.background.main);
             assert!(
-                theme.colors.text.primary != 0,
-                "Theme '{}' has zero primary text color",
+                theme.colors.text.primary == expected_primary,
+                "Theme '{}' should normalize primary text from its main background",
                 preset.name
             );
         }

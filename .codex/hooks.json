@@ -11,6 +11,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun \"$(git rev-parse --show-toplevel)/.codex/hooks/stop-continue-agentic-testing.ts\"",
+            "timeout": 30,
+            "statusMessage": "Checking scoped Stop continuation"
+          }
+        ]
+      }
     ]
   }
 }

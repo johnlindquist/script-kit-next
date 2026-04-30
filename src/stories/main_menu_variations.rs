@@ -2,7 +2,7 @@ use gpui::*;
 
 use crate::storybook::{
     main_menu_story_variants, render_main_menu_compare_thumbnail, render_main_menu_story_preview,
-    Story, StorySurface, StoryVariant,
+    Story, StoryCatalogRole, StorySurface, StoryVariant,
 };
 
 pub struct MainMenuStory;
@@ -18,6 +18,10 @@ impl Story for MainMenuStory {
 
     fn category(&self) -> &'static str {
         "Launcher"
+    }
+
+    fn catalog_role(&self) -> StoryCatalogRole {
+        StoryCatalogRole::CanonicalState
     }
 
     fn surface(&self) -> StorySurface {

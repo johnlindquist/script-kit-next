@@ -34,6 +34,7 @@ const SCORE_DESC_FUZZY_BASE: i32 = 15;
 const SCORE_DESC_FUZZY_DIV: u32 = 30;
 const SCORE_PATH_SUBSTRING: i32 = 10;
 const SCORE_CONTENT_MATCH: i32 = 5;
+const CURRENT_APP_RECIPE_HEADER_PREFIX: &str = "// Current-App-Recipe-";
 
 fn dominant_primary_text_match_kind(
     name_score: i32,
@@ -391,6 +392,10 @@ fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContent
             byte_offset += segment.len();
             continue;
         }
+        if should_skip_body_search_line(trimmed) {
+            byte_offset += segment.len();
+            continue;
+        }
 
         let Some(score) = ctx.score(trimmed) else {
             byte_offset += segment.len();
@@ -441,6 +446,10 @@ fn find_best_content_line(body: &str, query_lower: &str) -> Option<ScriptContent
         line_match_indices: c.line_match_indices,
         byte_range: c.byte_range,
     })
+}
+
+fn should_skip_body_search_line(trimmed_line: &str) -> bool {
+    trimmed_line.starts_with(CURRENT_APP_RECIPE_HEADER_PREFIX)
 }
 
 fn matched_span_byte_range(

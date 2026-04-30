@@ -59,6 +59,7 @@ pub const DEFAULT_CONFIRMATION_COMMANDS: &[&str] = &[
     "builtin/force-quit",
     "builtin/stop-all-processes",
     "builtin/clear-suggested",
+    "builtin/sync-to-github",
     "builtin/test-confirmation", // Dev test item
 ];
 

@@ -65,7 +65,15 @@ macro_rules! protocol_message_variants_query_ops {
         target: Option<AutomationWindowTarget>,
     },
 
-    /// Response with current UI state
+    /// Response with current UI state.
+    ///
+    /// `request_id` here is a bare `String` — NOT a length-bounded wrapper —
+    /// because the stdin verbatim-echo contract (anomaly slug
+    /// `attacker-stdin-requestid-unbounded`, pinned in
+    /// `tests/stdin_requestid_verbatim_contract.rs`) requires every inbound
+    /// `requestId` to round-trip byte-for-byte onto the response envelope.
+    /// The sole bound is the stdin line cap applied at ingest in
+    /// `src/stdin_commands/mod.rs`.
     #[serde(rename = "stateResult")]
     StateResult {
         #[serde(rename = "requestId")]
@@ -100,6 +108,36 @@ macro_rules! protocol_message_variants_query_ops {
         /// Whether the window is visible
         #[serde(rename = "windowVisible")]
         window_visible: bool,
+        /// Grammar-aware read-only hint shown in the main menu surface
+        /// when Power Syntax owns input or a structured query is empty.
+        #[serde(
+            rename = "menuSyntaxMainHint",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        menu_syntax_main_hint: Option<crate::menu_syntax::MenuSyntaxMainHintSnapshot>,
+        /// History-driven autocomplete popup snapshot for the capture
+        /// composer. Populated when the cursor is parked on a bare `#`
+        /// or fresh `key:` slot AND the matching per-target history
+        /// pool is non-empty. None in every other case so automation
+        /// can use presence as a "popup is offered" signal.
+        #[serde(
+            rename = "captureHistoryPicker",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        capture_history_picker:
+            Option<crate::menu_syntax::capture_history_picker::HistoryPickerSnapshot>,
+        /// Identity (bare filename) of the most recent Tab AI screenshot
+        /// captured in this process lifetime. `None` when no capture has
+        /// occurred. Lets automation verify the identity-threading chain
+        /// from capture through ACP context without grepping the filesystem.
+        #[serde(
+            rename = "screenshotIdentity",
+            default,
+            skip_serializing_if = "Option::is_none"
+        )]
+        screenshot_identity: Option<String>,
     },
 
     // ============================================================

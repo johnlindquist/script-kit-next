@@ -1,7 +1,7 @@
 //! Deprecated Legacy AI Chat Window
 //!
 //! A deprecated floating AI window retained only for compatibility flows.
-//! ACP Chat is the primary AI chat surface for Script Kit GPUI.
+//! Agent Chat is the primary AI chat surface for Script Kit GPUI.
 
 use anyhow::Result;
 use chrono::{Datelike, NaiveDate, Utc};

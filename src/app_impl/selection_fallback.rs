@@ -1,5 +1,6 @@
 use super::*;
 
+#[cfg(test)]
 fn resolve_grouped_result_index(
     grouped_items: &[GroupedListItem],
     selected_index: usize,
@@ -43,7 +44,7 @@ impl ScriptListApp {
             tracing::info!(
                 event = "main_menu_input_guard_blocked",
                 selected_index = self.selected_index,
-                fallback_mode = self.fallback_mode,
+                fallback_mode = self.main_menu_fallback_state.is_active(),
                 "Ignoring selection event during post-open main menu guard window"
             );
         }
@@ -189,26 +190,75 @@ impl ScriptListApp {
             return;
         }
 
-        // Record input to history if filter has meaningful text
-        if !self.filter_text.trim().is_empty() {
-            self.input_history.add_entry(&self.filter_text);
-            if let Err(e) = self.input_history.save() {
-                tracing::warn!("Failed to save input history: {}", e);
-            }
+        if let Some(invocation) = self.menu_syntax_mode.command_for(&self.filter_text).cloned() {
+            self.execute_menu_syntax_command_invocation(invocation, cx);
+            return;
         }
 
-        // Get grouped results to map from selected_index to actual result (cached)
-        let (grouped_items, flat_results) = self.get_grouped_results_cached();
-        // Clone to avoid borrow issues with self mutation below
-        let grouped_items = grouped_items.clone();
-        let flat_results = flat_results.clone();
+        if let Some(invocation) = self.menu_syntax_mode.capture_for(&self.filter_text).cloned() {
+            let mut handlers =
+                crate::menu_syntax::rank_scripts_handling_capture(&self.scripts, &invocation);
+            if let Some(script) = handlers.drain(..).next() {
+                self.execute_menu_syntax_capture_script(script, invocation, cx);
+            } else {
+                self.show_hud(
+                    format!("No capture handler for +{}", invocation.target),
+                    Some(HUD_MEDIUM_MS),
+                    cx,
+                );
+            }
+            return;
+        }
+
+        if self
+            .menu_syntax_mode
+            .capture_composer_owns_input_for(&self.filter_text)
+        {
+            self.show_hud("Type something to capture".to_string(), Some(HUD_MEDIUM_MS), cx);
+            return;
+        }
+
+        if self
+            .menu_syntax_mode
+            .command_owns_input_for(&self.filter_text)
+        {
+            self.show_hud(
+                "Choose a Script Kit command".to_string(),
+                Some(HUD_MEDIUM_MS),
+                cx,
+            );
+            return;
+        }
+
+        let history_query = (!self.filter_text.trim().is_empty()).then(|| self.filter_text.clone());
+
+        // Populate grouped results so the result-cache owner can resolve the
+        // selected visual row into the flat result backing store.
+        self.get_grouped_results_cached();
 
         if let Some((resolved_index, idx)) =
-            resolve_grouped_result_index(&grouped_items, self.selected_index)
+            self.main_menu_result_caches
+                .flat_result_index_for_coerced_grouped_selection(self.selected_index)
         {
             if resolved_index != self.selected_index {
                 self.selected_index = resolved_index;
                 self.rebuild_main_window_preflight_if_needed();
+            }
+
+            let selected_result = self
+                .main_menu_result_caches
+                .cloned_search_result_for_flat_index(idx);
+            if let Some(query) = history_query.as_deref() {
+                self.input_history.add_entry_with_selection(
+                    query,
+                    selected_result
+                        .as_ref()
+                        .and_then(|result| result.history_result_key()),
+                );
+                if let Err(e) = self.input_history.save() {
+                    tracing::warn!("Failed to save input history: {}", e);
+                }
+                self.invalidate_grouped_cache();
             }
 
             if let Some(formatted_value) = self
@@ -216,20 +266,25 @@ impl ScriptListApp {
                 .map(|calculator| calculator.formatted.clone())
             {
                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(formatted_value.clone()));
-                self.show_hud(format!("Copied: {}", formatted_value), Some(HUD_MEDIUM_MS), cx);
+                self.show_hud(
+                    format!("Copied: {}", formatted_value),
+                    Some(HUD_MEDIUM_MS),
+                    cx,
+                );
                 self.close_and_reset_window(cx);
                 return;
             }
 
             if self.is_in_attachment_portal() && matches!(self.current_view, AppView::ScriptList) {
-                if let Some(part) = self.build_attachment_portal_part_for_selected_script_list_result()
+                if let Some(part) =
+                    self.build_attachment_portal_part_for_selected_script_list_result()
                 {
                     self.close_attachment_portal_with_part(part, cx);
                 }
                 return;
             }
 
-            if let Some(result) = flat_results.get(idx).cloned() {
+            if let Some(result) = selected_result {
                 // Record frecency usage before executing (unless excluded).
                 // Skills and scriptlets use plugin-qualified keys.
                 let frecency_path: Option<String> = match &result {
@@ -248,18 +303,14 @@ impl ScriptListApp {
                             Some(format!("builtin:{}", bm.entry.id))
                         }
                     }
-                    scripts::SearchResult::Scriptlet(sm) => {
-                        Some(format!(
-                            "scriptlet:{}:{}",
-                            sm.scriptlet.plugin_id, sm.scriptlet.name
-                        ))
-                    }
-                    scripts::SearchResult::Skill(sm) => {
-                        Some(format!(
-                            "skill:{}:{}",
-                            sm.skill.plugin_id, sm.skill.skill_id
-                        ))
-                    }
+                    scripts::SearchResult::Scriptlet(sm) => Some(format!(
+                        "scriptlet:{}:{}",
+                        sm.scriptlet.plugin_id, sm.scriptlet.name
+                    )),
+                    scripts::SearchResult::Skill(sm) => Some(format!(
+                        "skill:{}:{}",
+                        sm.skill.plugin_id, sm.skill.skill_id
+                    )),
                     scripts::SearchResult::Window(wm) => {
                         Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                     }
@@ -267,6 +318,8 @@ impl ScriptListApp {
                     scripts::SearchResult::Agent(_) => None,
                     // Fallbacks don't track frecency - they're utility commands
                     scripts::SearchResult::Fallback(_) => None,
+                    // Script Issues is a synthetic diagnostic row — no frecency.
+                    scripts::SearchResult::ScriptIssue(_) => None,
                 };
                 if let Some(path) = frecency_path {
                     self.frecency_store.record_use(&path);
@@ -274,8 +327,8 @@ impl ScriptListApp {
                     self.invalidate_grouped_cache(); // Invalidate cache so next show reflects frecency
                 }
 
-                // Log the action being performed (matches button text from get_default_action_text())
-                let action_text = result.get_default_action_text();
+                // Log the action being performed using the same label path as the footer/preflight.
+                let action_text = self.main_window_primary_action_label();
                 logging::log(
                     "EXEC",
                     &format!(
@@ -286,8 +339,75 @@ impl ScriptListApp {
                     ),
                 );
 
+                // Menu-syntax capture rows intercept the normal Script path.
+                // `MenuSyntaxMode` is raw-guarded against the current filter
+                // text, so a stale parse can never route a non-capture
+                // selection into the capture pipeline.
+                let capture_invocation = self
+                    .menu_syntax_mode
+                    .capture_for(&self.computed_filter_text)
+                    .cloned();
+                if let (Some(invocation), scripts::SearchResult::Script(script_match)) =
+                    (capture_invocation, &result)
+                {
+                    let script = script_match.script.clone();
+                    self.execute_menu_syntax_capture_script(script, invocation, cx);
+                    return;
+                }
+
                 match result {
                     scripts::SearchResult::Script(script_match) => {
+                        // Run 13 Pass 2 (user bug report) — if the user
+                        // selected a menu-syntax CAPTURE handler script
+                        // directly from the main list (no `;target …`
+                        // composer active), running it would crash on the
+                        // missing `KIT_MENU_SYNTAX_PAYLOAD_PATH` env var.
+                        // Pivot to the power-syntax composer by writing
+                        // `;target ` into the filter so the user can
+                        // complete the capture invocation in-place.
+                        if let Some(target) =
+                            crate::menu_syntax::first_concrete_capture_target_for_script(
+                                &script_match.script,
+                            )
+                        {
+                            let new_filter = format!(";{} ", target);
+                            tracing::info!(
+                                target: "script_kit::menu_syntax",
+                                event = "script_list_pivot_to_power_syntax_composer",
+                                script = %script_match.script.name,
+                                pivot_filter = %new_filter,
+                                "Pivoting main-list capture-handler launch into ;target composer"
+                            );
+                            self.filter_text = new_filter.clone();
+                            self.computed_filter_text = new_filter.clone();
+                            self.pending_filter_sync = true;
+                            self.set_menu_syntax_mode_from_filter(&new_filter);
+                            self.invalidate_grouped_cache();
+                            cx.notify();
+                            return;
+                        }
+                        // Run 13 Pass 4 — symmetric pivot for `command.v1`
+                        // handlers: pivot into the `!head ` command composer
+                        // instead of running the script process bare.
+                        if let Some(head) =
+                            crate::menu_syntax::first_command_head_for_script(&script_match.script)
+                        {
+                            let new_filter = format!("!{} ", head);
+                            tracing::info!(
+                                target: "script_kit::menu_syntax",
+                                event = "script_list_pivot_to_command_composer",
+                                script = %script_match.script.name,
+                                pivot_filter = %new_filter,
+                                "Pivoting main-list command-handler launch into !head composer"
+                            );
+                            self.filter_text = new_filter.clone();
+                            self.computed_filter_text = new_filter.clone();
+                            self.pending_filter_sync = true;
+                            self.set_menu_syntax_mode_from_filter(&new_filter);
+                            self.invalidate_grouped_cache();
+                            cx.notify();
+                            return;
+                        }
                         self.execute_interactive(&script_match.script, cx);
                     }
                     scripts::SearchResult::Scriptlet(scriptlet_match) => {
@@ -303,7 +423,7 @@ impl ScriptListApp {
                         self.execute_window_focus(&window_match.window, cx);
                     }
                     scripts::SearchResult::Skill(skill_match) => {
-                        // Skills always open ACP Chat with the selected skill staged
+                        // Skills always open Agent Chat with the selected skill staged
                         let owner = if skill_match.skill.plugin_title.is_empty() {
                             skill_match.skill.plugin_id.as_str()
                         } else {
@@ -339,12 +459,15 @@ impl ScriptListApp {
                             event = "legacy_agent_result_suppressed",
                             agent_name = %agent_match.agent.name,
                             agent_path = %agent_match.agent.path.display(),
-                            "Agent execution suppressed in main menu — use skills or ACP Chat"
+                            "Agent execution suppressed in main menu - use skills or Agent Chat"
                         );
                     }
                     scripts::SearchResult::Fallback(fallback_match) => {
                         // Execute the fallback with the current filter text as input
                         self.execute_fallback_item(&fallback_match.fallback, cx);
+                    }
+                    scripts::SearchResult::ScriptIssue(_) => {
+                        self.open_script_issues_view(cx);
                     }
                 }
             }
@@ -395,17 +518,12 @@ impl ScriptListApp {
             return;
         }
 
-        if !self.fallback_mode || self.cached_fallbacks.is_empty() {
-            return;
-        }
-
         let input = self.filter_text.clone();
-        if let Some(fallback) = self
-            .cached_fallbacks
-            .get(self.fallback_selected_index)
-            .cloned()
-        {
-            logging::log("EXEC", &format!("Executing fallback: {}", fallback.display_name()));
+        if let Some(fallback) = self.main_menu_fallback_state.selected_item().cloned() {
+            logging::log(
+                "EXEC",
+                &format!("Executing fallback: {}", fallback.display_name()),
+            );
 
             let should_close = !fallback_keeps_window_open(&fallback);
 
@@ -470,7 +588,11 @@ impl ScriptListApp {
                     logging::log("FALLBACK", &format!("Copy: {} chars", text.len()));
                     let item = gpui::ClipboardItem::new_string(text);
                     cx.write_to_clipboard(item);
-                    crate::hud_manager::show_hud("Copied to clipboard".to_string(), Some(HUD_SHORT_MS), cx);
+                    crate::hud_manager::show_hud(
+                        "Copied to clipboard".to_string(),
+                        Some(HUD_SHORT_MS),
+                        cx,
+                    );
                 }
                 FallbackResult::OpenUrl { url } => {
                     logging::log("FALLBACK", &format!("OpenUrl: {}", url));
@@ -558,6 +680,33 @@ impl ScriptListApp {
             }
         }
     }
+
+    /// Enter action for the synthetic "Script Issues" pinned row. Snapshots the
+    /// current [`ValidationReport`] into the new [`AppView::ScriptIssuesView`]
+    /// so authors can read fatal issues and related colliders, then Escape back
+    /// to the launcher or Cmd+C to copy diagnostics to the clipboard.
+    pub(crate) fn open_script_issues_view(&mut self, cx: &mut Context<Self>) {
+        let Some(report) = self.script_validation_report.clone() else {
+            crate::hud_manager::show_hud(
+                "No script validation report available".to_string(),
+                Some(2500),
+                cx,
+            );
+            return;
+        };
+
+        tracing::info!(
+            event = "script_issues_row_activated",
+            failed_count = report.failed_scripts.len(),
+            fatal_count = report.fatal_count,
+            warning_count = report.warning_count,
+            "Script Issues row activated"
+        );
+
+        self.current_view = AppView::ScriptIssuesView { report };
+        self.request_script_list_main_filter_focus(cx);
+        cx.notify();
+    }
 }
 
 #[cfg(test)]
@@ -607,9 +756,7 @@ mod tests {
         let fallback = crate::fallbacks::FallbackItem::Builtin(
             crate::fallbacks::builtins::get_builtin_fallbacks()
                 .into_iter()
-                .find(|fallback| {
-                    fallback.id == crate::fallbacks::builtins::SEND_TO_AI_FALLBACK_ID
-                })
+                .find(|fallback| fallback.id == crate::fallbacks::builtins::SEND_TO_AI_FALLBACK_ID)
                 .expect("send-to-ai fallback should exist"),
         );
 

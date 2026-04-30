@@ -25,13 +25,8 @@ fn make_skill(
 #[test]
 fn skill_search_returns_all_on_empty_query() {
     let skills = vec![
-        make_skill(
-            "authoring",
-            "Authoring",
-            "scriptlets",
-            "Scriptlet Authoring",
-        ),
-        make_skill("authoring", "Authoring", "config", "Configuration"),
+        make_skill("scriptkit", "Script Kit", "scriptlets", "New Scriptlet"),
+        make_skill("scriptkit", "Script Kit", "config", "Configuration"),
     ];
     let results = fuzzy_search_skills(&skills, "");
     assert_eq!(results.len(), 2, "empty query returns all skills");
@@ -41,13 +36,8 @@ fn skill_search_returns_all_on_empty_query() {
 #[test]
 fn skill_search_matches_title() {
     let skills = vec![
-        make_skill(
-            "authoring",
-            "Authoring",
-            "scriptlets",
-            "Scriptlet Authoring",
-        ),
-        make_skill("authoring", "Authoring", "config", "Configuration"),
+        make_skill("scriptkit", "Script Kit", "scriptlets", "New Scriptlet"),
+        make_skill("scriptkit", "Script Kit", "config", "Configuration"),
         make_skill("tools", "Tools", "debug", "Debug Helper"),
     ];
     let results = fuzzy_search_skills(&skills, "config");
@@ -61,7 +51,7 @@ fn skill_search_matches_title() {
 #[test]
 fn skill_search_matches_plugin_title() {
     let skills = vec![
-        make_skill("authoring", "Authoring", "review", "Code Review"),
+        make_skill("scriptkit", "Script Kit", "review", "Code Review"),
         make_skill("tools", "Dev Tools", "review", "Code Review"),
     ];
     let results = fuzzy_search_skills(&skills, "dev tools");
@@ -96,7 +86,7 @@ fn duplicate_skill_slugs_across_plugins_are_distinct_results() {
 #[test]
 fn skill_frecency_key_is_plugin_qualified() {
     // Verify the frecency key format used in grouping/search_mode
-    let skill = make_skill("authoring", "Authoring", "scriptlets", "Scriptlets");
+    let skill = make_skill("scriptkit", "Script Kit", "scriptlets", "Scriptlets");
     let key = format!("skill:{}:{}", skill.plugin_id, skill.skill_id);
-    assert_eq!(key, "skill:authoring:scriptlets");
+    assert_eq!(key, "skill:scriptkit:scriptlets");
 }

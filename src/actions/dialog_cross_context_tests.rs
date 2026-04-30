@@ -325,7 +325,10 @@ fn clipboard_image_pinned_has_expected_action_set() {
     assert!(!ids.contains(&"clip:clipboard_pin")); // should NOT have pin
 
     // Paste title should include app name
-    let paste = actions.iter().find(|a| a.id == "clip:clipboard_paste").unwrap();
+    let paste = actions
+        .iter()
+        .find(|a| a.id == "clip:clipboard_paste")
+        .unwrap();
     assert_eq!(paste.title, "Paste to Preview");
 }
 
@@ -428,7 +431,10 @@ fn open_directory_title_includes_dirname() {
         is_dir: true,
     };
     let actions = get_file_context_actions(&info);
-    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
+    let open = actions
+        .iter()
+        .find(|a| a.id == "file:open_directory")
+        .unwrap();
     assert_eq!(open.title, "Open \"My Folder\"");
 }
 
@@ -444,7 +450,10 @@ fn path_context_select_file_title_includes_name() {
 fn path_context_open_dir_title_includes_name() {
     let info = PathInfo::new("Documents", "/home/user/Documents", true);
     let actions = get_path_context_actions(&info);
-    let open = actions.iter().find(|a| a.id == "file:open_directory").unwrap();
+    let open = actions
+        .iter()
+        .find(|a| a.id == "file:open_directory")
+        .unwrap();
     assert_eq!(open.title, "Open \"Documents\"");
 }
 
@@ -461,7 +470,7 @@ fn deeplink_description_format_for_script() {
     let dl = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
     assert_eq!(
         dl.description.as_deref(),
-        Some("Copy scriptkit://run/my-cool-script URL to clipboard")
+        Some("Copy a portable Script Kit share link to clipboard")
     );
 }
 
@@ -1073,7 +1082,7 @@ fn command_bar_config_notes_style_specific_fields() {
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
     // Close behaviors default to true
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
@@ -1315,7 +1324,7 @@ fn scriptlet_action_count_without_shortcut_or_alias() {
 fn path_context_file_action_count() {
     let info = PathInfo::new("file.txt", "/test/file.txt", false);
     let actions = get_path_context_actions(&info);
-    // select_file + copy_path + open_in_finder + open_in_editor + open_in_terminal + copy_filename + move_to_trash = 7
+    // select_file + copy_path + open_in_finder + open_in_editor + open_in_quick_terminal + copy_filename + move_to_trash = 7
     assert_eq!(actions.len(), 7);
 }
 
@@ -1323,7 +1332,7 @@ fn path_context_file_action_count() {
 fn path_context_dir_action_count() {
     let info = PathInfo::new("dir", "/test/dir", true);
     let actions = get_path_context_actions(&info);
-    // open_directory + copy_path + open_in_finder + open_in_editor + open_in_terminal + copy_filename + move_to_trash = 7
+    // open_directory + copy_path + open_in_finder + open_in_editor + open_in_quick_terminal + copy_filename + move_to_trash = 7
     assert_eq!(actions.len(), 7);
 }
 
@@ -1444,9 +1453,9 @@ fn file_context_image_treated_as_file() {
 // ============================================================================
 
 #[test]
-fn global_actions_is_always_empty() {
+fn global_actions_is_seeded() {
     let actions = get_global_actions();
-    assert!(actions.is_empty());
+    assert!(!actions.is_empty(), "global actions should expose at least one row");
 }
 
 // ============================================================================
@@ -1475,5 +1484,5 @@ fn actions_dialog_config_default_values() {
     assert!(matches!(config.section_style, SectionStyle::Headers));
     assert!(matches!(config.anchor, AnchorPosition::Bottom));
     assert!(!config.show_icons);
-    assert!(config.show_footer);
+    assert!(!config.show_footer);
 }

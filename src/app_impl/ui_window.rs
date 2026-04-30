@@ -10,33 +10,153 @@ fn mini_main_window_sizing_from_grouped_items(
     crate::window_resize::mini_main_window_sizing_from_grouped_items(grouped_items)
 }
 
+fn footer_frontmost_app_name() -> Option<String> {
+    crate::frontmost_app_tracker::get_last_real_app().and_then(|app| {
+        let trimmed = app.name.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+fn paste_into_frontmost_app_label(frontmost_app_name: Option<&str>) -> String {
+    match frontmost_app_name
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        Some(app_name) => format!("Paste into {app_name}"),
+        None => "Paste into Active App".to_string(),
+    }
+}
+
+fn main_window_result_action_label(
+    result: &crate::scripts::SearchResult,
+    frontmost_app_name: Option<&str>,
+) -> String {
+    match result {
+        crate::scripts::SearchResult::Scriptlet(sm)
+            if matches!(sm.scriptlet.tool.as_str(), "paste" | "snippet") =>
+        {
+            paste_into_frontmost_app_label(frontmost_app_name)
+        }
+        _ => result.get_default_action_text().to_string(),
+    }
+}
+
+fn has_selected_clipboard_entry(app: &ScriptListApp) -> bool {
+    let AppView::ClipboardHistoryView {
+        filter,
+        selected_index,
+    } = &app.current_view
+    else {
+        return false;
+    };
+
+    let filtered_entries: Vec<_> = if filter.is_empty() {
+        app.cached_clipboard_entries.iter().collect()
+    } else {
+        let filter_lower = filter.to_lowercase();
+        app.cached_clipboard_entries
+            .iter()
+            .filter(|entry| {
+                entry.text_preview.to_lowercase().contains(&filter_lower)
+                    || entry
+                        .ocr_text
+                        .as_deref()
+                        .unwrap_or("")
+                        .to_lowercase()
+                        .contains(&filter_lower)
+            })
+            .collect()
+    };
+
+    filtered_entries.get(*selected_index).is_some()
+}
+
+fn has_selected_emoji_entry(app: &ScriptListApp) -> bool {
+    let AppView::EmojiPickerView {
+        filter,
+        selected_index,
+        selected_category,
+    } = &app.current_view
+    else {
+        return false;
+    };
+
+    crate::emoji::filtered_ordered_emojis(filter, *selected_category)
+        .get(*selected_index)
+        .is_some()
+}
+
+fn has_selected_dictation_history_entry(app: &ScriptListApp) -> bool {
+    let AppView::DictationHistoryView {
+        filter,
+        selected_index,
+    } = &app.current_view
+    else {
+        return false;
+    };
+
+    crate::dictation::search_history(filter, 100)
+        .get(*selected_index)
+        .is_some()
+}
+
 impl ScriptListApp {
     pub(crate) fn main_window_primary_action_label(&self) -> String {
-        if !matches!(self.current_view, AppView::ScriptList) {
-            return "Run".to_string();
+        let frontmost_app_name = footer_frontmost_app_name();
+
+        match &self.current_view {
+            AppView::ClipboardHistoryView { .. } => {
+                return if has_selected_clipboard_entry(self) {
+                    paste_into_frontmost_app_label(frontmost_app_name.as_deref())
+                } else {
+                    "Run".to_string()
+                };
+            }
+            AppView::EmojiPickerView { .. } => {
+                return if has_selected_emoji_entry(self) {
+                    paste_into_frontmost_app_label(frontmost_app_name.as_deref())
+                } else {
+                    "Run".to_string()
+                };
+            }
+            AppView::DictationHistoryView { .. } => {
+                return if has_selected_dictation_history_entry(self) {
+                    paste_into_frontmost_app_label(frontmost_app_name.as_deref())
+                } else {
+                    "Run".to_string()
+                };
+            }
+            AppView::ScriptList => {}
+            _ => return "Run".to_string(),
         }
 
         let Some(selected_index) =
-            crate::list_item::coerce_selection(&self.cached_grouped_items, self.selected_index)
+            crate::list_item::coerce_selection(&self.main_menu_result_caches.grouped_items(), self.selected_index)
         else {
             return "Run".to_string();
         };
 
-        let Some(GroupedListItem::Item(result_idx)) = self.cached_grouped_items.get(selected_index)
+        let Some(result_idx) = self
+            .main_menu_result_caches
+            .flat_result_index_for_grouped_item(selected_index)
         else {
             return "Run".to_string();
         };
 
         if self
-            .inline_calculator_for_result_index(*result_idx)
+            .inline_calculator_for_result_index(result_idx)
             .is_some()
         {
             return "Copy".to_string();
         }
 
-        self.cached_grouped_flat_results
-            .get(*result_idx)
-            .map(|result| result.get_default_action_text().to_string())
+        self.main_menu_result_caches
+            .search_result_for_flat_index(result_idx)
+            .map(|result| main_window_result_action_label(result, frontmost_app_name.as_deref()))
             .unwrap_or_else(|| "Run".to_string())
     }
 
@@ -77,7 +197,9 @@ impl ScriptListApp {
 
         match action {
             crate::footer_popup::FooterAction::Run => {
-                self.execute_selected(cx);
+                if !self.try_run_ready_acp_script(cx) {
+                    self.execute_selected(cx);
+                }
             }
             crate::footer_popup::FooterAction::Actions => {
                 let handled = self.dispatch_actions_toggle_for_current_view(window, cx, source);
@@ -96,7 +218,14 @@ impl ScriptListApp {
                 self.open_tab_ai_acp_with_entry_intent(None, cx);
             }
             crate::footer_popup::FooterAction::Apply => {
-                if let AppView::QuickTerminalView { entity } = &self.current_view {
+                if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "confirm_prompt_footer_apply",
+                        "Confirming in-window confirm prompt from native footer"
+                    );
+                    self.resolve_confirm_prompt(true, window, cx);
+                } else if let AppView::QuickTerminalView { entity } = &self.current_view {
                     let entity = entity.clone();
                     tracing::info!(
                         target: "script_kit::footer_popup",
@@ -114,7 +243,14 @@ impl ScriptListApp {
                 }
             }
             crate::footer_popup::FooterAction::Close => {
-                if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+                if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
+                    tracing::info!(
+                        target: "script_kit::footer_popup",
+                        event = "confirm_prompt_footer_close",
+                        "Cancelling in-window confirm prompt from native footer"
+                    );
+                    self.resolve_confirm_prompt(false, window, cx);
+                } else if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
                     tracing::info!(
                         target: "script_kit::footer_popup",
                         event = "quick_terminal_footer_close",
@@ -131,6 +267,26 @@ impl ScriptListApp {
                 }
             }
         }
+    }
+
+    /// If the current view is an ACP chat with a validated `SCRIPT_READY` receipt,
+    /// execute that specific script and return `true`. Otherwise return `false`
+    /// so the caller can fall back to `execute_selected`.
+    fn try_run_ready_acp_script(&mut self, cx: &mut Context<Self>) -> bool {
+        if !matches!(self.current_view, AppView::AcpChatView { .. }) {
+            return false;
+        }
+        let Some(path) = self.acp_ready_script_path.clone() else {
+            return false;
+        };
+        let path_str = path.to_string_lossy().to_string();
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "acp_footer_run_dispatched",
+            path = %path_str,
+        );
+        self.execute_script_by_path(&path_str, cx);
+        true
     }
 
     /// Start a one-time async bridge that drains `footer_action_channel()` and
@@ -209,12 +365,16 @@ impl ScriptListApp {
             AppView::ArgPrompt { .. } => Some("arg_prompt"),
             AppView::EmojiPickerView { .. } => Some("emoji_picker"),
             AppView::AcpHistoryView { .. } => Some("acp_history"),
+            AppView::BrowserHistoryView { .. } => Some("browser_history"),
+            AppView::DictationHistoryView { .. } => Some("dictation_history"),
             AppView::AcpChatView { .. } => Some("acp_chat"),
             AppView::ChatPrompt { .. } => Some("chat_prompt"),
+            AppView::QuickTerminalView { .. } => Some("quick_terminal"),
             AppView::TermPrompt { .. } => Some("term_prompt"),
             AppView::PathPrompt { .. } => Some("path_prompt"),
             AppView::AppLauncherView { .. } => Some("app_launcher"),
             AppView::WindowSwitcherView { .. } => Some("window_switcher"),
+            AppView::BrowserTabsView { .. } => Some("browser_tabs"),
             AppView::DesignGalleryView { .. } => Some("design_gallery"),
             AppView::ScratchPadView { .. } => Some("scratch_pad"),
             AppView::ThemeChooserView { .. } => Some("theme_chooser"),
@@ -226,13 +386,117 @@ impl ScriptListApp {
             AppView::CreateAiPresetView { .. } => Some("create_ai_preset"),
             AppView::SettingsView { .. } => Some("settings"),
             AppView::FavoritesBrowseView { .. } => Some("favorites"),
+            AppView::ConfirmPrompt { .. } => Some("confirm_prompt"),
             _ => None,
         }
+    }
+
+    /// Quick Terminal footer buttons. Scoped to actions actually meaningful in
+    /// the Quick Terminal surface: always Close (⌘W), plus Apply (⌘↩) only
+    /// when a tab-AI apply-back route AND its return view are both present.
+    /// Run/AI/Actions are intentionally omitted — Quick Terminal shares the
+    /// main menu's native footer chrome but not its main-menu-specific actions.
+    fn quick_terminal_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
+        use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+        let footer_disabled = self.main_window_footer_buttons_blocked();
+        let enabled = !footer_disabled;
+        let can_apply = self.tab_ai_harness_apply_back_route.is_some()
+            && self.tab_ai_harness_return_view.is_some();
+
+        let mut buttons = Vec::with_capacity(if can_apply { 2 } else { 1 });
+        if can_apply {
+            buttons
+                .push(FooterButtonConfig::new(FooterAction::Apply, "⌘↩", "Apply").enabled(enabled));
+        }
+        buttons.push(FooterButtonConfig::new(FooterAction::Close, "⌘W", "Close").enabled(enabled));
+
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "quick_terminal_footer_buttons_resolved",
+            can_apply,
+            footer_disabled,
+            button_count = buttons.len(),
+            "Resolved quick-terminal native footer buttons"
+        );
+
+        buttons
+    }
+
+    /// Footer buttons for an in-window `ConfirmPrompt`. Reuses the native
+    /// Apply/Close slots so no AppKit ObjC selector wiring needs to change —
+    /// only the labels and `selected` flag change per options + focused button.
+    fn confirm_prompt_footer_buttons(
+        &self,
+        options: &crate::confirm::ParentConfirmOptions,
+        focused_button: ConfirmFocusedButton,
+    ) -> Vec<crate::footer_popup::FooterButtonConfig> {
+        use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+        let confirm_focused = matches!(focused_button, ConfirmFocusedButton::Confirm);
+        let cancel_focused = matches!(focused_button, ConfirmFocusedButton::Cancel);
+
+        vec![
+            FooterButtonConfig::new(FooterAction::Apply, "↵", options.confirm_text.to_string())
+                .selected(confirm_focused)
+                .enabled(true),
+            FooterButtonConfig::new(FooterAction::Close, "Esc", options.cancel_text.to_string())
+                .selected(cancel_focused)
+                .enabled(true),
+        ]
     }
 
     fn main_window_footer_buttons_for_current_view(
         &self,
     ) -> Vec<crate::footer_popup::FooterButtonConfig> {
+        // ConfirmPrompt: Apply (Confirm) + Close (Cancel) labeled per options.
+        if let AppView::ConfirmPrompt {
+            options,
+            focused_button,
+            ..
+        } = &self.current_view
+        {
+            let buttons = self.confirm_prompt_footer_buttons(options, *focused_button);
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved ConfirmPrompt footer buttons"
+            );
+            return buttons;
+        }
+
+        // Quick Terminal: scoped Close (+ optional Apply) — never Run/AI/Actions.
+        if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
+            let buttons = self.quick_terminal_footer_buttons();
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved Quick Terminal footer buttons"
+            );
+            return buttons;
+        }
+
+        // For ACP views, hide the Run button until a validated script receipt
+        // exists. This prevents running the wrong target (first main-list item)
+        // when a script is still being generated/validated.
+        if matches!(self.current_view, AppView::AcpChatView { .. }) {
+            let ready = self.acp_ready_script_path.is_some();
+            let buttons = self.acp_footer_buttons(ready);
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                acp_ready = ready,
+                "Resolved ACP footer buttons"
+            );
+            return buttons;
+        }
+
         let buttons = self.standard_main_window_footer_buttons();
         tracing::info!(
             target: "script_kit::footer_popup",
@@ -240,6 +504,27 @@ impl ScriptListApp {
             view = ?self.current_view,
             button_count = buttons.len(),
             "Resolved main-window native footer buttons"
+        );
+        buttons
+    }
+
+    /// Build footer buttons for the ACP chat surface. The `Run` button only
+    /// appears when a validated `SCRIPT_READY` receipt exists.
+    fn acp_footer_buttons(&self, ready: bool) -> Vec<crate::footer_popup::FooterButtonConfig> {
+        use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+        let footer_disabled = self.main_window_footer_buttons_blocked();
+        let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+        let enabled = !footer_disabled;
+
+        let mut buttons = Vec::new();
+        if ready {
+            buttons.push(FooterButtonConfig::new(FooterAction::Run, "↵", "Run").enabled(enabled));
+        }
+        buttons.push(
+            FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                .selected(actions_open)
+                .enabled(enabled),
         );
         buttons
     }
@@ -349,17 +634,10 @@ impl ScriptListApp {
             let view = entity.read(cx);
             if !view.is_setup_mode() {
                 let thread = view.live_thread().read(cx);
-                use crate::ai::acp::thread::AcpThreadStatus;
-                use crate::footer_popup::FooterDotStatus;
-                let dot_status = match thread.status {
-                    AcpThreadStatus::Streaming => FooterDotStatus::Streaming,
-                    AcpThreadStatus::WaitingForPermission => FooterDotStatus::WaitingForPermission,
-                    AcpThreadStatus::Error => FooterDotStatus::Error,
-                    AcpThreadStatus::Idle => FooterDotStatus::Idle,
-                };
                 config.left_info = Some(crate::footer_popup::FooterLeftInfo {
-                    dot_status,
+                    dot_status: view.footer_dot_status(cx),
                     model_name: thread.selected_model_display().to_string(),
+                    prefer_accent_for_active_states: true,
                 });
             }
         }
@@ -428,6 +706,7 @@ impl ScriptListApp {
                 };
                 Some((view_type, count))
             }
+            AppView::About { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::ArgPrompt { choices, .. } => {
                 let filtered = self.get_filtered_arg_choices(choices);
                 if filtered.is_empty() && choices.is_empty() {
@@ -551,6 +830,18 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
+            AppView::BrowserTabsView { filter, .. } => {
+                let filtered_count = if filter.is_empty() {
+                    self.cached_browser_tabs.len()
+                } else {
+                    crate::browser_tabs::fuzzy_search_browser_tabs(
+                        &self.cached_browser_tabs,
+                        filter,
+                    )
+                    .len()
+                };
+                Some((ViewType::ScriptList, filtered_count))
+            }
             AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0)),
             AppView::WebcamView { .. } => Some((ViewType::DivPrompt, 0)),
@@ -584,6 +875,23 @@ impl ScriptListApp {
                 Some((ViewType::ScriptList, filtered_count))
             }
             AppView::CreationFeedback { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
+            AppView::ScriptIssuesView { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
+            AppView::SdkReferenceView {
+                entries, filter, ..
+            } => {
+                let (_, count) =
+                    crate::mcp_resources::sdk_reference_dataset_and_visible_counts(entries, filter);
+                Some((ViewType::ScriptList, count))
+            }
+            AppView::ScriptTemplateCatalogView {
+                templates, filter, ..
+            } => {
+                let (_, count) =
+                    crate::mcp_resources::script_template_catalog_dataset_and_visible_counts(
+                        templates, filter,
+                    );
+                Some((ViewType::ScriptList, count))
+            }
             AppView::NamingPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
             AppView::BrowseKitsView { results, .. } => Some((ViewType::ScriptList, results.len())),
             AppView::InstalledKitsView { kits, .. } => Some((ViewType::ScriptList, kits.len())),
@@ -616,10 +924,24 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
+            AppView::BrowserHistoryView { filter, .. } => Some((
+                ViewType::ScriptList,
+                crate::browser_history::fuzzy_search_browser_history(
+                    &self.cached_browser_history,
+                    filter,
+                )
+                .len(),
+            )),
+            AppView::DictationHistoryView { filter, .. } => Some((
+                ViewType::ScriptList,
+                crate::dictation::search_history(filter, 100).len(),
+            )),
             AppView::NotesBrowseView { filter, .. } => Some((
                 ViewType::ScriptList,
                 if filter.is_empty() {
-                    crate::notes::get_all_notes().map(|notes| notes.len()).unwrap_or(0)
+                    crate::notes::get_all_notes()
+                        .map(|notes| notes.len())
+                        .unwrap_or(0)
                 } else {
                     crate::notes::search_notes(filter)
                         .map(|notes| notes.len())
@@ -627,6 +949,49 @@ impl ScriptListApp {
                 },
             )),
             AppView::AcpChatView { .. } => Some((ViewType::DivPrompt, 0)),
+            AppView::ConfirmPrompt { .. } => Some((ViewType::DivPrompt, 0)),
+        }
+    }
+
+    /// Returns the focused button when the active view is `ConfirmPrompt`.
+    pub(crate) fn confirm_prompt_focused_button(&self) -> Option<ConfirmFocusedButton> {
+        if let AppView::ConfirmPrompt { focused_button, .. } = &self.current_view {
+            Some(*focused_button)
+        } else {
+            None
+        }
+    }
+
+    /// Flip Tab focus between Confirm and Cancel inside an active `ConfirmPrompt`.
+    pub(crate) fn toggle_confirm_prompt_focus(&mut self, cx: &mut Context<Self>) {
+        if let AppView::ConfirmPrompt { focused_button, .. } = &mut self.current_view {
+            *focused_button = focused_button.toggled();
+            cx.notify();
+        }
+    }
+
+    /// Send the confirm/cancel result to the awaiting caller and restore the
+    /// previous launcher view. No-op if the active view is not `ConfirmPrompt`.
+    pub(crate) fn resolve_confirm_prompt(
+        &mut self,
+        confirmed: bool,
+        window: &mut gpui::Window,
+        cx: &mut Context<Self>,
+    ) {
+        let restore = if let AppView::ConfirmPrompt {
+            sender, previous, ..
+        } = &self.current_view
+        {
+            let _ = sender.try_send(confirmed);
+            Some((**previous).clone())
+        } else {
+            None
+        };
+
+        if let Some(previous) = restore {
+            self.current_view = previous;
+            self.sync_main_footer_popup(window, cx);
+            cx.notify();
         }
     }
 
@@ -689,6 +1054,36 @@ impl ScriptListApp {
 
         if let Some((view_type, item_count)) = self.calculate_window_size_params() {
             crate::window_resize::resize_to_view_sync(view_type, item_count);
+        }
+    }
+
+    /// Resize the current surface to its canonical height while restoring an
+    /// explicit width.
+    pub(crate) fn resize_current_view_to_width(&mut self, target_width: f32) {
+        if !target_width.is_finite() || target_width <= 0.0 {
+            self.update_window_size();
+            return;
+        }
+
+        // Content-aware mini mode sizing bypasses the flat (ViewType, item_count) path.
+        if matches!(self.current_view, AppView::ScriptList)
+            && self.main_window_mode == MainWindowMode::Mini
+        {
+            let (grouped_items, _) = self.get_grouped_results_cached();
+            let sizing = mini_main_window_sizing_from_grouped_items(&grouped_items);
+            let target_height = crate::window_resize::height_for_mini_main_window(sizing);
+            crate::window_resize::log_mini_window_sizing(
+                crate::window_resize::MiniResizeReason::GroupedResultsChanged,
+                sizing,
+                f32::from(target_height),
+            );
+            crate::window_resize::resize_first_window_to_size(target_height, Some(target_width));
+            return;
+        }
+
+        if let Some((view_type, item_count)) = self.calculate_window_size_params() {
+            let target_height = crate::window_resize::height_for_view(view_type, item_count);
+            crate::window_resize::resize_first_window_to_size(target_height, Some(target_width));
         }
     }
 
@@ -873,5 +1268,68 @@ impl ScriptListApp {
             crate::main_window_preflight::log_main_window_preflight_receipt(r);
         }
         self.cached_main_window_preflight = receipt;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{main_window_result_action_label, paste_into_frontmost_app_label};
+    use crate::scripts::{MatchIndices, Scriptlet, ScriptletMatch};
+    use std::sync::Arc;
+
+    fn make_scriptlet_result(tool: &str) -> crate::scripts::SearchResult {
+        crate::scripts::SearchResult::Scriptlet(ScriptletMatch {
+            scriptlet: Arc::new(Scriptlet {
+                name: "Test Scriptlet".to_string(),
+                description: None,
+                code: "echo test".to_string(),
+                tool: tool.to_string(),
+                shortcut: None,
+                keyword: None,
+                group: None,
+                plugin_id: String::new(),
+                plugin_title: None,
+                file_path: None,
+                command: None,
+                alias: None,
+            }),
+            score: 100,
+            display_file_path: None,
+            match_indices: MatchIndices::default(),
+        })
+    }
+
+    #[test]
+    fn paste_into_frontmost_app_label_uses_app_name() {
+        assert_eq!(
+            paste_into_frontmost_app_label(Some("Safari")),
+            "Paste into Safari"
+        );
+    }
+
+    #[test]
+    fn paste_into_frontmost_app_label_falls_back_to_active_app() {
+        assert_eq!(
+            paste_into_frontmost_app_label(None),
+            "Paste into Active App"
+        );
+    }
+
+    #[test]
+    fn main_window_result_action_label_uses_frontmost_app_for_paste_scriptlets() {
+        let result = make_scriptlet_result("paste");
+        assert_eq!(
+            main_window_result_action_label(&result, Some("TextEdit")),
+            "Paste into TextEdit"
+        );
+    }
+
+    #[test]
+    fn main_window_result_action_label_keeps_default_for_non_paste_scriptlets() {
+        let result = make_scriptlet_result("bash");
+        assert_eq!(
+            main_window_result_action_label(&result, Some("TextEdit")),
+            "Run Command"
+        );
     }
 }

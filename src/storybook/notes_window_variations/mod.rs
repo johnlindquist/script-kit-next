@@ -2,14 +2,13 @@
 //!
 //! This module follows the same adoption contract as `actions_dialog_variations`:
 //! typed `VariationId` → `AdoptableSurface` → `resolve_surface_live` → live style.
-//! Notes previews in Storybook are rendered via the shared runtime-fixture host.
+//! Registered visual coverage lives in `notes-window-states`, which uses a
+//! deterministic non-PNG presenter for the Notes window's canonical states.
 
 use super::adoption::{
     adopted_surface_live, resolve_surface_live, AdoptableSurface, SurfaceSelectionResolution,
     VariationId,
 };
-use super::runtime_fixture;
-use super::StoryVariant;
 use crate::notes::window::style::NotesWindowStyle;
 
 /// Stable IDs for adoptable Notes window visual styles.
@@ -122,28 +121,6 @@ impl AdoptableSurface for NotesWindowSurface {
     }
 }
 
-pub fn notes_window_story_variants() -> Vec<StoryVariant> {
-    SPECS
-        .iter()
-        .map(|spec| {
-            StoryVariant::default_named(spec.id.as_str(), spec.id.name())
-                .description(spec.id.description())
-                .with_prop("surface", "notesWindow")
-                .with_prop("representation", "runtimeFixture")
-                .with_prop("variantId", spec.id.as_str())
-                .with_prop(
-                    "titlebarHeight",
-                    format!("{:.0}", spec.style.titlebar_height),
-                )
-                .with_prop("footerHeight", format!("{:.0}", spec.style.footer_height))
-                .with_prop(
-                    "editorPaddingX",
-                    format!("{:.0}", spec.style.editor_padding_x),
-                )
-        })
-        .collect()
-}
-
 pub fn resolve_notes_window_style(
     selected: Option<&str>,
 ) -> (NotesWindowStyle, SurfaceSelectionResolution) {
@@ -152,16 +129,6 @@ pub fn resolve_notes_window_style(
 
 pub fn adopted_notes_window_style() -> NotesWindowStyle {
     adopted_surface_live::<NotesWindowSurface>()
-}
-
-/// Render a Notes window storybook preview using the runtime-fixture host.
-pub fn render_notes_window_story_preview(stable_id: &str) -> gpui::AnyElement {
-    runtime_fixture::render_runtime_fixture("notes-window", stable_id, false)
-}
-
-/// Render a Notes window compare-mode thumbnail via the runtime-fixture host.
-pub fn render_notes_window_compare_thumbnail(stable_id: &str) -> gpui::AnyElement {
-    runtime_fixture::render_runtime_fixture("notes-window", stable_id, true)
 }
 
 #[cfg(test)]
@@ -189,12 +156,9 @@ mod tests {
     }
 
     #[test]
-    fn story_variants_generated_for_all_specs() {
-        let variants = notes_window_story_variants();
-        assert_eq!(variants.len(), SPECS.len());
-        assert_eq!(variants[0].stable_id(), "current");
-        assert_eq!(variants[1].stable_id(), "compact");
-        assert_eq!(variants[2].stable_id(), "airy");
+    fn specs_preserve_expected_order() {
+        let ids: Vec<_> = SPECS.iter().map(|spec| spec.id.as_str()).collect();
+        assert_eq!(ids, vec!["current", "compact", "airy"]);
     }
 
     #[test]

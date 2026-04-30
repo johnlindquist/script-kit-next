@@ -314,6 +314,41 @@ pub struct AiPreferences {
     /// Last-selected ACP agent ID (e.g. "opencode", "claude-code").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub selected_acp_agent_id: Option<String>,
+
+    /// Pre-configured Agent Chat profiles. Each profile bundles a display name,
+    /// optional agent id + model hint, and a custom system prompt.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub profiles: Vec<AcpProfile>,
+
+    /// Name of the profile currently applied. Matches one of `profiles[].name`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_profile_name: Option<String>,
+}
+
+/// A pre-configured Agent Chat profile authored in `config.ts`.
+///
+/// Profiles bundle a display name, optional agent/model hints, and a custom
+/// system prompt that is forwarded through `--append-system-prompt` (or the
+/// agent's equivalent) when the profile is active.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AcpProfile {
+    /// Human-readable profile name used as the menu label and selection key.
+    pub name: String,
+
+    /// Optional ACP agent ID override (e.g. `"claude-code"`). Falls back to the
+    /// globally selected agent when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+
+    /// Optional model hint for the agent (e.g. `"claude-sonnet-4-6"`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+
+    /// Custom system prompt text appended to the agent's system prompt on
+    /// `session/new`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub system_prompt: Option<String>,
 }
 
 /// Window-management preferences loaded from `config.ts`.
@@ -434,6 +469,101 @@ impl Default for ClaudeCodeConfig {
             add_dirs: vec![],
         }
     }
+}
+
+// ============================================
+// MCP CONFIG
+// ============================================
+
+/// External MCP servers that Script Kit scripts and Agent Chat can use.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpConfig {
+    /// Master switch for Script Kit-managed MCP integrations.
+    #[serde(default = "default_mcp_enabled")]
+    pub enabled: bool,
+
+    /// Named MCP server definitions keyed by server id.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub servers: HashMap<String, McpServerConfig>,
+}
+
+fn default_mcp_enabled() -> bool {
+    true
+}
+
+impl Default for McpConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            servers: HashMap::new(),
+        }
+    }
+}
+
+impl McpConfig {
+    pub fn enabled_servers(&self) -> impl Iterator<Item = (&String, &McpServerConfig)> {
+        self.servers
+            .iter()
+            .filter(|(_, server)| self.enabled && server.is_enabled())
+    }
+}
+
+/// Supported MCP server transports.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "transport")]
+pub enum McpServerConfig {
+    #[serde(rename = "stdio")]
+    Stdio(McpStdioServerConfig),
+    #[serde(rename = "http")]
+    Http(McpHttpServerConfig),
+}
+
+impl McpServerConfig {
+    pub fn is_enabled(&self) -> bool {
+        match self {
+            McpServerConfig::Stdio(config) => config.enabled,
+            McpServerConfig::Http(config) => config.enabled,
+        }
+    }
+}
+
+fn default_mcp_server_enabled() -> bool {
+    true
+}
+
+/// A local stdio-backed MCP server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpStdioServerConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default = "default_mcp_server_enabled")]
+    pub enabled: bool,
+    pub command: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub env: HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+}
+
+/// A remote HTTP-backed MCP server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpHttpServerConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default = "default_mcp_server_enabled")]
+    pub enabled: bool,
+    pub endpoint: String,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub headers: HashMap<String, String>,
 }
 
 // --- merged from part_02.rs ---
@@ -638,7 +768,7 @@ pub struct Config {
         rename = "notesHotkey"
     )]
     pub notes_hotkey: Option<HotkeyConfig>,
-    /// Hotkey for opening ACP Chat window (default: Cmd+Shift+Space)
+    /// Hotkey for opening Agent Chat window (default: Cmd+Shift+Space)
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "aiHotkey")]
     pub ai_hotkey: Option<HotkeyConfig>,
     /// Whether AI hotkey is enabled (default: true)
@@ -688,7 +818,7 @@ pub struct Config {
     /// Dictation runtime preferences, including microphone selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dictation: Option<DictationPreferences>,
-    /// ACP Chat runtime preferences, including the preferred agent and model.
+    /// Agent Chat runtime preferences, including the preferred agent and model.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ai: Option<AiPreferences>,
     /// Window-management preferences such as snap mode.
@@ -709,6 +839,19 @@ pub struct Config {
         rename = "claudeCode"
     )]
     pub claude_code: Option<ClaudeCodeConfig>,
+    /// External MCP servers available to scripts and Agent Chat integrations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp: Option<McpConfig>,
+    /// Canonical command IDs to hide from the launcher main menu.
+    ///
+    /// Hidden commands remain resolvable via `triggerBuiltin`, hotkeys, and
+    /// other programmatic paths — they are only filtered from visible lists.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "hiddenCommands"
+    )]
+    pub hidden_commands: Option<Vec<String>>,
 }
 
 // --- merged from part_03.rs ---
@@ -741,6 +884,8 @@ impl Default for Config {
             window_management: None,  // Will use WindowManagementPreferences::default() via getter
             commands: None,           // No per-command overrides by default
             claude_code: None,        // Will use ClaudeCodeConfig::default() via getter
+            mcp: None,                // External MCP servers are opt-in via config.ts
+            hidden_commands: None,    // No commands hidden by default
         }
     }
 }
@@ -901,7 +1046,7 @@ impl Config {
         self.dictation.clone().unwrap_or_default()
     }
 
-    /// Returns ACP Chat preferences, or defaults.
+    /// Returns Agent Chat preferences, or defaults.
     pub fn get_ai_preferences(&self) -> AiPreferences {
         self.ai.clone().unwrap_or_default()
     }
@@ -918,10 +1063,21 @@ impl Config {
     }
 
     /// Check if a command should be hidden from the main menu.
-    #[cfg(test)]
-    fn is_command_hidden(&self, command_id: &str) -> bool {
-        self.get_command_config(command_id)
+    ///
+    /// Looks at both the per-command `commands.*.hidden` override and the
+    /// top-level `hiddenCommands` array. Hidden commands stay resolvable via
+    /// programmatic trigger (hotkeys, stdin) — this only filters visible lists.
+    pub fn is_command_hidden(&self, command_id: &str) -> bool {
+        if self
+            .get_command_config(command_id)
             .and_then(|c| c.hidden)
+            .unwrap_or(false)
+        {
+            return true;
+        }
+        self.hidden_commands
+            .as_ref()
+            .map(|hidden| hidden.iter().any(|id| id == command_id))
             .unwrap_or(false)
     }
 
@@ -960,6 +1116,11 @@ impl Config {
     /// ```
     pub fn get_claude_code(&self) -> ClaudeCodeConfig {
         self.claude_code.clone().unwrap_or_default()
+    }
+
+    /// Returns the Script Kit MCP configuration, or defaults if not configured.
+    pub fn get_mcp(&self) -> McpConfig {
+        self.mcp.clone().unwrap_or_default()
     }
 }
 
@@ -1175,5 +1336,42 @@ mod tests {
             ..Config::default()
         };
         assert_eq!(config.get_dictation_hotkey(), None);
+    }
+
+    #[test]
+    fn mcp_config_defaults_to_enabled_with_no_servers() {
+        let config = McpConfig::default();
+        assert!(config.enabled);
+        assert!(config.servers.is_empty());
+    }
+
+    #[test]
+    fn mcp_server_config_round_trips_stdio_variant() {
+        let json = r#"{
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-memory"]
+        }"#;
+
+        let config: McpServerConfig = serde_json::from_str(json).expect("stdio MCP config");
+        match config {
+            McpServerConfig::Stdio(config) => {
+                assert_eq!(config.command, "npx");
+                assert_eq!(
+                    config.args,
+                    vec!["-y", "@modelcontextprotocol/server-memory"]
+                );
+                assert!(config.enabled);
+            }
+            McpServerConfig::Http(_) => panic!("expected stdio config"),
+        }
+    }
+
+    #[test]
+    fn config_get_mcp_returns_default_when_missing() {
+        let config = Config::default();
+        let mcp = config.get_mcp();
+        assert!(mcp.enabled);
+        assert!(mcp.servers.is_empty());
     }
 }

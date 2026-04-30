@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Test Runner: Runs ACP Chat and chat-API smoke tests
+// Test Runner: Runs Agent Chat and chat-API smoke tests
 // Usage: bun run tests/smoke/run-chat-tests.ts
 
 import { spawn } from 'child_process';
@@ -123,7 +123,7 @@ async function runTest(test: TestCase): Promise<TestResult> {
 
 async function main() {
   console.log('╔════════════════════════════════════════════════════════════╗');
-  console.log('║        ACP Chat + Chat API Smoke Test Suite                ║');
+  console.log('║        Agent Chat + Chat API Smoke Test Suite                ║');
   console.log('╚════════════════════════════════════════════════════════════╝\n');
 
   const results: TestResult[] = [];

@@ -1,7 +1,7 @@
 /**
  * Script Kit Conductor Extension - Test Suite
  *
- * Run with: bun run ~/.scriptkit/kit/conductor/test.ts
+ * Run with: bun run ~/.scriptkit/plugins/conductor/test.ts
  */
 
 import {

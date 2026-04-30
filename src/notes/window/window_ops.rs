@@ -100,15 +100,21 @@ fn open_notes_window_with_close_behavior(
     if let Some(handle) = existing_handle {
         // Window exists - check if it's valid and close it (toggle OFF)
         // Lock is released, safe to call handle.update()
+        // @lat: [[notes#Notes#Host Contract]]
         if handle
-            .update(cx, |_, window, cx| {
+            .update(cx, |root, window, cx| {
                 // Save bounds before closing (fixes bounds persistence on toggle close)
                 let wb = window.window_bounds();
                 crate::window_state::save_window_from_gpui(
                     crate::window_state::WindowRole::Notes,
                     wb,
                 );
-                window.close_all_dialogs(cx);
+                // Avoid re-entrant Root lease: `window.close_all_dialogs(cx)` wraps its body
+                // in `Root::update(self, cx, ...)`, but we already hold the Root lease via
+                // `handle.update`. Calling the inner method on the leased `root` directly
+                // bypasses the second lease and prevents the entity_map.rs:142 double-lease
+                // panic that fires on rapid `openNotes` -> `hide` -> `openNotes` toggles.
+                root.close_all_dialogs(window, cx);
                 window.remove_window();
             })
             .is_ok()

@@ -677,7 +677,11 @@ mod tests {
             .get("resources")
             .and_then(|v| v.as_array())
             .context("missing resources array")?;
-        assert_eq!(resources.len(), 19, "Should have 19 resources");
+        assert_eq!(
+            resources.len(),
+            crate::mcp_resources::get_resource_definitions().len(),
+            "resources/list should mirror the MCP resource registry"
+        );
 
         // Verify expected resources are present
         let uris: Vec<&str> = resources

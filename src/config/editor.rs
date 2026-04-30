@@ -1,7 +1,7 @@
 //! TypeScript config file editor
 //!
 //! Provides robust utilities for programmatically modifying TypeScript config files
-//! like `~/.scriptkit/kit/config.ts`.
+//! like `~/.scriptkit/config.ts`.
 //!
 //! # Design
 //!

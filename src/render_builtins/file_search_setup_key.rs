@@ -18,8 +18,9 @@
         let text_dimmed = self.theme.colors.text.dimmed;
         let ui_border = self.theme.colors.ui.border;
         let _accent_color = self.theme.colors.accent.selected;
-        let list_hover = self.theme.colors.accent.selected_subtle;
-        let list_selected = self.theme.colors.accent.selected_subtle;
+        // Luminance ladder: both use text.primary at different opacities
+        let list_hover = self.theme.colors.text.primary;
+        let list_selected = self.theme.colors.text.primary;
         // Use theme opacity for vibrancy-compatible selection/hover (matches main menu)
         let opacity = self.theme.get_opacity();
         let selected_alpha = (opacity.selected * 255.0) as u32;

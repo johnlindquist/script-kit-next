@@ -12,6 +12,7 @@
  *   0 = response found
  *   1 = timeout
  *   2 = infrastructure error (missing session, bad args)
+ *   3 = parse error detected preemptively (stdin_parse_failed for this requestId)
  */
 
 import { existsSync, readFileSync, statSync } from "fs";
@@ -22,6 +23,18 @@ const SESSION_DIR =
   process.env.SCRIPT_KIT_SESSION_DIR ?? "/tmp/sk-agentic-sessions";
 const DEFAULT_TIMEOUT = 5000;
 const POLL_INTERVAL = 50; // ms between log scans
+
+// Preemptive parse-failure detection. Mirrors the shell-side post-hoc
+// scan in session.sh cmd_rpc (lines ~579-608) but runs in parallel with
+// the typed-response wait, short-circuiting before the full --timeout
+// elapses. Charset and cid format are shared with the Rust-side
+// extract_request_id_lenient (src/stdin_commands/mod.rs); charset-unsafe
+// requestIds (e.g. `a+b`, `a\b`) fall through to the shell post-hoc
+// unscoped-grep fallback. Exit code 3 signals "parse error detected
+// preemptively" so cmd_rpc callers can distinguish from generic timeout.
+const PARSE_ERROR_EXIT_CODE = 3;
+const REQUEST_ID_CHARSET = /^[A-Za-z0-9_.:/-]+$/;
+const ERROR_MSG_MAX_CHARS = 200;
 
 // --- types -----------------------------------------------------------------
 
@@ -121,6 +134,63 @@ function scanLog(
   return [null, null, newOffset];
 }
 
+/**
+ * Scan the log file for a `stdin_parse_failed` tracing line scoped to
+ * the given requestId. Returns [extracted error message, new offset] or
+ * [null, new offset]. The caller gates this on REQUEST_ID_CHARSET so
+ * charset-unsafe ids (which Rust routes to `cid=stdin:parse:<uuid>`) are
+ * handled by the shell post-hoc fallback instead of racing unscoped here.
+ *
+ * Mirrors session.sh cmd_rpc's scoped grep (line ~599): the trailing
+ * space after requestId prevents prefix matches (e.g. `p17-get` must not
+ * match `p17-get-foo`). The error= suffix is trimmed of the serde
+ * `at line N column M` tail and capped at ERROR_MSG_MAX_CHARS.
+ */
+function scanForParseFailure(
+  logPath: string,
+  requestId: string,
+  startOffset: number,
+): [string | null, number] {
+  let size: number;
+  try {
+    size = statSync(logPath).size;
+  } catch {
+    return [null, startOffset];
+  }
+
+  if (size < startOffset) {
+    startOffset = 0;
+  }
+
+  if (size <= startOffset) return [null, startOffset];
+
+  const buf = readFileSync(logPath);
+  const newBytes = buf.subarray(startOffset);
+  const lastNewline = newBytes.lastIndexOf(0x0a);
+
+  if (lastNewline < 0) {
+    return [null, startOffset];
+  }
+
+  const completeContent = newBytes.subarray(0, lastNewline + 1).toString("utf8");
+  const newOffset = startOffset + lastNewline + 1;
+
+  const cidMarker = `cid=stdin:req:${requestId} `;
+  for (const line of completeContent.split("\n")) {
+    if (!line.includes(cidMarker)) continue;
+    if (!line.includes("event_type=stdin_parse_failed")) continue;
+    const errIdx = line.indexOf(" error=");
+    if (errIdx < 0) continue;
+    let errMsg = line.substring(errIdx + " error=".length);
+    errMsg = errMsg.replace(/ at line \d+ column \d+.*$/, "");
+    if (errMsg.length > ERROR_MSG_MAX_CHARS) {
+      errMsg = errMsg.substring(0, ERROR_MSG_MAX_CHARS);
+    }
+    return [errMsg, newOffset];
+  }
+  return [null, newOffset];
+}
+
 // --- main ------------------------------------------------------------------
 
 const args = process.argv.slice(2);
@@ -173,8 +243,36 @@ if (!existsSync(sdir)) {
 // Poll for new content
 const deadline = Date.now() + timeout;
 let scanOffset = startOffset;
+let parseFailScanOffset = startOffset;
+const charsetSafeRequestId = REQUEST_ID_CHARSET.test(requestId);
 
 while (Date.now() < deadline) {
+  // Preemptive parse-failure check: if the Rust listener rejected this
+  // send at parse time, short-circuit with a parse_error envelope
+  // instead of waiting the full --timeout for a typed response that
+  // will never arrive. Gated on charset-safe requestIds because Rust
+  // routes charset-unsafe ids to `cid=stdin:parse:<uuid>` which the
+  // scoped grep cannot match — those fall through to the shell
+  // cmd_rpc post-hoc unscoped-grep fallback (session.sh lines ~600-602).
+  if (charsetSafeRequestId) {
+    const [errMsg, newFailOffset] = scanForParseFailure(
+      logPath,
+      requestId,
+      parseFailScanOffset,
+    );
+    parseFailScanOffset = newFailOffset;
+    if (errMsg) {
+      const parseErr = errorResult(
+        sessionName,
+        requestId,
+        "parse_error",
+        errMsg,
+      );
+      printResult(parseErr);
+      process.exit(PARSE_ERROR_EXIT_CODE);
+    }
+  }
+
   const [found, responseType, newOffset] = scanLog(
     logPath,
     requestId,

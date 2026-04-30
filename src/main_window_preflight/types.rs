@@ -17,6 +17,7 @@ pub(crate) enum MainWindowPreflightActionKind {
     RunFallback,
     OpenSkill,
     AskAi,
+    InspectIssues,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]

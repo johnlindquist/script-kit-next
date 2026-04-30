@@ -2,8 +2,9 @@
 // This file is included via include!() macro in main.rs
 use crate::ui_foundation::{
     is_key_down as sk_is_key_down, is_key_enter as sk_is_key_enter,
-    is_key_escape as sk_is_key_escape, is_key_up as sk_is_key_up,
+    is_key_escape as sk_is_key_escape, is_key_tab as sk_is_key_tab, is_key_up as sk_is_key_up,
 };
+use gpui_component::scroll::Scrollbar as GpuiScrollbar;
 
 // --- merged from part_000.rs ---
 fn app_shell_footer_colors(theme: &crate::theme::Theme) -> PromptFooterColors {
@@ -114,6 +115,441 @@ fn render_inline_calc_list_item(
         .into_any_element()
 }
 
+fn menu_syntax_hint_tone_color(
+    theme: &crate::theme::Theme,
+    tone: crate::menu_syntax::MenuSyntaxMainHintTone,
+) -> u32 {
+    match tone {
+        crate::menu_syntax::MenuSyntaxMainHintTone::Neutral => theme.colors.text.secondary,
+        crate::menu_syntax::MenuSyntaxMainHintTone::Accent => theme.colors.accent.selected,
+        crate::menu_syntax::MenuSyntaxMainHintTone::Info => theme.colors.ui.info,
+        crate::menu_syntax::MenuSyntaxMainHintTone::Warning => theme.colors.ui.warning,
+        crate::menu_syntax::MenuSyntaxMainHintTone::Success => theme.colors.ui.success,
+        crate::menu_syntax::MenuSyntaxMainHintTone::Muted => theme.colors.text.muted,
+    }
+}
+
+fn menu_syntax_input_span_color(
+    theme: &crate::theme::Theme,
+    role: crate::menu_syntax::MenuSyntaxFragmentRole,
+) -> u32 {
+    match role {
+        crate::menu_syntax::MenuSyntaxFragmentRole::Prefix
+        | crate::menu_syntax::MenuSyntaxFragmentRole::Kv
+        | crate::menu_syntax::MenuSyntaxFragmentRole::Tag
+        | crate::menu_syntax::MenuSyntaxFragmentRole::Url => theme.colors.accent.selected,
+        crate::menu_syntax::MenuSyntaxFragmentRole::Date
+        | crate::menu_syntax::MenuSyntaxFragmentRole::DateRange => theme.colors.ui.info,
+        crate::menu_syntax::MenuSyntaxFragmentRole::Duration
+        | crate::menu_syntax::MenuSyntaxFragmentRole::Priority => theme.colors.ui.warning,
+        crate::menu_syntax::MenuSyntaxFragmentRole::Recurrence => theme.colors.ui.success,
+        crate::menu_syntax::MenuSyntaxFragmentRole::Unresolved => theme.colors.text.muted,
+        crate::menu_syntax::MenuSyntaxFragmentRole::Subject => theme.colors.text.primary,
+    }
+}
+
+fn render_menu_syntax_hint_chip(
+    theme: &crate::theme::Theme,
+    chip: &crate::menu_syntax::MenuSyntaxMainHintChip,
+) -> AnyElement {
+    let color = menu_syntax_hint_tone_color(theme, chip.tone);
+    div()
+        .px(px(8.0))
+        .py(px(3.0))
+        .rounded(px(6.0))
+        .border_1()
+        .border_color(rgba((color << 8) | 0x66))
+        .bg(rgba((color << 8) | 0x18))
+        .text_size(px(11.0))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(rgb(color))
+        .child(chip.label.clone())
+        .into_any_element()
+}
+
+fn render_menu_syntax_hint_row(
+    theme: &crate::theme::Theme,
+    row: &crate::menu_syntax::MenuSyntaxMainHintRow,
+) -> AnyElement {
+    div()
+        .w_full()
+        .flex()
+        .items_start()
+        .gap(px(12.0))
+        .child(
+            div()
+                .w(px(76.0))
+                .flex_shrink_0()
+                .text_size(px(12.0))
+                .line_height(px(18.0))
+                .text_color(rgba((theme.colors.text.muted << 8) | 0xCC))
+                .child(row.label.clone()),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .overflow_hidden()
+                .text_ellipsis()
+                .text_size(px(13.0))
+                .line_height(px(18.0))
+                .text_color(rgba((theme.colors.text.primary << 8) | 0xE6))
+                .child(row.value.clone()),
+        )
+        .children(
+            row.chips
+                .iter()
+                .map(|chip| render_menu_syntax_hint_chip(theme, chip)),
+        )
+        .into_any_element()
+}
+
+fn render_menu_syntax_fragment_preview_row(
+    theme: &crate::theme::Theme,
+    row: &crate::menu_syntax::MenuSyntaxFragmentPreviewRow,
+) -> AnyElement {
+    let color = menu_syntax_hint_tone_color(theme, row.tone);
+    div()
+        .w_full()
+        .flex()
+        .items_start()
+        .gap(px(10.0))
+        .child(
+            div()
+                .w(px(82.0))
+                .flex_shrink_0()
+                .px(px(7.0))
+                .py(px(2.0))
+                .rounded(px(5.0))
+                .border_1()
+                .border_color(rgba((color << 8) | 0x55))
+                .bg(rgba((color << 8) | 0x14))
+                .text_size(px(10.0))
+                .line_height(px(14.0))
+                .text_color(rgb(color))
+                .child(format!("{:?}", row.role).to_ascii_lowercase()),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w(px(0.0))
+                .overflow_hidden()
+                .text_ellipsis()
+                .text_size(px(12.0))
+                .line_height(px(17.0))
+                .text_color(rgba((theme.colors.text.primary << 8) | 0xE6))
+                .child(format!("{}: {}", row.label, row.value)),
+        )
+        .children(
+            row.chips
+                .iter()
+                .map(|chip| render_menu_syntax_hint_chip(theme, chip)),
+        )
+        .into_any_element()
+}
+
+fn render_menu_syntax_main_hint(
+    hint: &crate::menu_syntax::MenuSyntaxMainHintSnapshot,
+    theme: &crate::theme::Theme,
+) -> AnyElement {
+    let accent = theme.colors.accent.selected;
+    let border = theme.colors.ui.border;
+    let body_text = rgba((theme.colors.text.secondary << 8) | 0xD9);
+    let muted_text = rgba((theme.colors.text.muted << 8) | 0xB3);
+    let examples = if hint.examples.is_empty() {
+        hint.example.iter().cloned().collect::<Vec<_>>()
+    } else {
+        hint.examples.clone()
+    };
+
+    // Edge-to-edge: the hint content fills the main-list area directly with
+    // no nested card chrome (no inner border, bg, or rounded corner). The
+    // OUTER div carries the layout pad/centering so content has breathing
+    // room, but there's no longer a visible "card within a card" — see
+    // story `hint-card-fills-main-window-no-nested-container` (Run 12).
+    let _ = border; // chrome dropped; kept binding to avoid widening unused-warning set
+    div()
+        .w_full()
+        .h_full()
+        .flex()
+        .items_start()
+        .justify_center()
+        .px(px(18.0))
+        .pt(px(12.0))
+        .pb(main_list_footer_overlay_total_padding() + px(12.0))
+        .child(
+            div()
+                .w_full()
+                .h_full()
+                .flex()
+                .flex_col()
+                .gap(px(12.0))
+                .child(
+                    div()
+                        .w_full()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(12.0))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(0.0))
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .text_size(px(19.0))
+                                .line_height(px(24.0))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(rgb(theme.colors.text.primary))
+                                .child(hint.title.clone()),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(6.0))
+                                .when_some(hint.mode_chip.as_ref(), |d, chip| {
+                                    d.child(render_menu_syntax_hint_chip(theme, chip))
+                                })
+                                // Multi-chip capture-validation row (Pass 22 added the data,
+                                // Pass 23 wires the rendering): when `status_chips` is non-empty
+                                // the snapshot has already inserted the mode chip at index 0 plus
+                                // per-missing-field chips. Skip the mode_chip rendered above to
+                                // avoid duplication, and render the rest.
+                                .when(!hint.status_chips.is_empty(), |d| {
+                                    let skip = if hint.mode_chip.is_some() { 1 } else { 0 };
+                                    d.children(
+                                        hint.status_chips
+                                            .iter()
+                                            .skip(skip)
+                                            .map(|chip| render_menu_syntax_hint_chip(theme, chip)),
+                                    )
+                                })
+                                // Single-chip status (legacy non-capture path) — only render
+                                // when the multi-chip path didn't already populate. Prevents
+                                // double-chips on capture composer surfaces.
+                                .when_some(
+                                    hint.status_chip
+                                        .as_ref()
+                                        .filter(|_| hint.status_chips.is_empty()),
+                                    |d, chip| d.child(render_menu_syntax_hint_chip(theme, chip)),
+                                ),
+                        ),
+                )
+                .when_some(hint.subtitle.as_ref(), |d, subtitle| {
+                    d.child(
+                        div()
+                            .text_size(px(13.0))
+                            .line_height(px(19.0))
+                            .text_color(body_text)
+                            .child(subtitle.clone()),
+                    )
+                })
+                .when(!hint.rows.is_empty(), |d| {
+                    d.child(
+                        div().flex().flex_col().gap(px(7.0)).children(
+                            hint.rows
+                                .iter()
+                                .map(|row| render_menu_syntax_hint_row(theme, row)),
+                        ),
+                    )
+                })
+                .when_some(hint.fragment_preview.as_ref(), |d, preview| {
+                    d.when(!preview.rows.is_empty(), |d| {
+                        d.child(
+                            div().flex().flex_col().gap(px(6.0)).children(
+                                preview
+                                    .rows
+                                    .iter()
+                                    .map(|row| render_menu_syntax_fragment_preview_row(theme, row)),
+                            ),
+                        )
+                    })
+                })
+                .when_some(hint.warning.as_ref(), |d, warning| {
+                    d.child(
+                        div()
+                            .rounded(px(6.0))
+                            .border_1()
+                            .border_color(rgba((theme.colors.ui.warning << 8) | 0x66))
+                            .bg(rgba((theme.colors.ui.warning << 8) | 0x14))
+                            .px(px(10.0))
+                            .py(px(7.0))
+                            .text_size(px(12.0))
+                            .line_height(px(17.0))
+                            .text_color(rgb(theme.colors.ui.warning))
+                            .child(warning.clone()),
+                    )
+                })
+                .child(div().h(px(1.0)).w_full().bg(rgba((border << 8) | 0x66)))
+                .when_some(hint.primary_hint.as_ref(), |d, primary| {
+                    d.child(
+                        div()
+                            .text_size(px(13.0))
+                            .line_height(px(18.0))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(rgb(accent))
+                            .child(primary.clone()),
+                    )
+                })
+                .when_some(hint.secondary_hint.as_ref(), |d, secondary| {
+                    d.child(
+                        div()
+                            .text_size(px(12.0))
+                            .line_height(px(17.0))
+                            .text_color(muted_text)
+                            .child(secondary.clone()),
+                    )
+                })
+                .when(!examples.is_empty(), |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(5.0))
+                            .child(
+                                div()
+                                    .text_size(px(11.0))
+                                    .line_height(px(14.0))
+                                    .text_color(rgba((theme.colors.text.muted << 8) | 0xB3))
+                                    .child(if examples.len() == 1 {
+                                        "Example"
+                                    } else {
+                                        "Examples"
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .rounded(px(6.0))
+                                    .border_1()
+                                    .border_color(rgba((border << 8) | 0x66))
+                                    .bg(rgba((theme.colors.background.search_box << 8) | 0x4D))
+                                    .px(px(10.0))
+                                    .py(px(7.0))
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(3.0))
+                                    .text_size(px(12.0))
+                                    .line_height(px(17.0))
+                                    .font_family("JetBrains Mono")
+                                    .text_color(rgba((theme.colors.text.secondary << 8) | 0xE6))
+                                    .children(examples.iter().map(|example| {
+                                        div()
+                                            .w_full()
+                                            .overflow_hidden()
+                                            .text_ellipsis()
+                                            .child(example.clone())
+                                    })),
+                            ),
+                    )
+                }),
+        )
+        .into_any_element()
+}
+
+fn render_script_list_empty_state(
+    filter_text_for_render: &str,
+    empty_text_color: u32,
+    empty_font_family: String,
+) -> AnyElement {
+    // Empty state rendering with icon and helpful messaging:
+    // empty filter shows creation help; non-empty filter shows search recovery.
+    use crate::designs::icon_variations::IconName;
+
+    if filter_text_for_render.is_empty() {
+        div()
+            .w_full()
+            .h_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap(px(EMPTY_STATE_GAP))
+            .font_family(empty_font_family)
+            .child(
+                svg()
+                    .external_path(IconName::Code.external_path())
+                    .size(px(EMPTY_STATE_ICON_SIZE))
+                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_ICON)),
+            )
+            .child(
+                div()
+                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_MESSAGE))
+                    .text_size(px(EMPTY_STATE_MESSAGE_FONT_SIZE))
+                    .font_weight(FontWeight::MEDIUM)
+                    .child("No scripts or snippets found"),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_HINT))
+                    .child("Press ⌘N to create a new script"),
+            )
+            .into_any_element()
+    } else {
+        // Filtering but no results (including no fallbacks) - shouldn't normally happen.
+        let filter_display = if filter_text_for_render.chars().count() > 30 {
+            format!(
+                "{}...",
+                crate::utils::truncate_str_chars(filter_text_for_render, 27)
+            )
+        } else {
+            filter_text_for_render.to_string()
+        };
+        let plain_hash_search = filter_text_for_render.starts_with('#')
+            && filter_text_for_render
+                .chars()
+                .skip(1)
+                .all(|ch| !ch.is_whitespace());
+        let recovery_hint = if plain_hash_search {
+            "Plain #tag is launcher search. Use :#tag to filter tags, or ;todo ... #tag to label a capture."
+        } else {
+            "Try a different search term or press ⌘↵ to ask AI"
+        };
+        let syntax_tips = if plain_hash_search {
+            "Examples: :#work · :tag:work · ;todo Buy milk #errands"
+        } else {
+            "Filters: :type:script · :type:scriptlet · :shortcut:cmd+k · ;todo · ;note"
+        };
+        div()
+            .w_full()
+            .h_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .justify_center()
+            .gap(px(EMPTY_STATE_GAP))
+            .font_family(empty_font_family)
+            .child(
+                svg()
+                    .external_path(IconName::MagnifyingGlass.external_path())
+                    .size(px(EMPTY_STATE_ICON_SIZE))
+                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_ICON)),
+            )
+            .child(
+                div()
+                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_MESSAGE))
+                    .text_size(px(EMPTY_STATE_MESSAGE_FONT_SIZE))
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(format!("No results for \"{}\"", filter_display)),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_HINT))
+                    .child(recovery_hint),
+            )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_TIPS))
+                    .pt(px(EMPTY_STATE_TIPS_MARGIN_TOP))
+                    .child(syntax_tips),
+            )
+            .into_any_element()
+    }
+}
+
 impl ScriptListApp {
     fn render_script_list(&mut self, cx: &mut Context<Self>) -> AnyElement {
         let render_list_start = std::time::Instant::now();
@@ -129,12 +565,13 @@ impl ScriptListApp {
 
         // Deduplicate render logs: only log when meaningful state changes (not cursor blink)
         // This reduces log spam from ~2 logs/sec (cursor blink) to only on actual changes
-        let state_changed = self.filter_text != self.last_render_log_filter
-            || self.selected_index != self.last_render_log_selection
-            || grouped_items.len() != self.last_render_log_item_count;
+        let state_changed = self.filter_text
+            != self.main_menu_render_diagnostics.last_render_log_filter
+            || self.selected_index != self.main_menu_render_diagnostics.last_render_log_selection
+            || grouped_items.len() != self.main_menu_render_diagnostics.last_render_log_item_count;
 
         // Set flag for render_preview_panel to check (called later in this render)
-        self.log_this_render = state_changed;
+        self.main_menu_render_diagnostics.log_this_render = state_changed;
         // Capture item count for deferred state update
         let item_count_for_log = grouped_items.len();
 
@@ -234,9 +671,6 @@ impl ScriptListApp {
         // - refresh_scripts() - after script reload
         // - reset_to_script_list() - on view transitions
 
-        // Get scroll offset AFTER updates for scrollbar
-        let scroll_offset = self.main_list_state.logical_scroll_top().item_ix;
-
         // ============================================================
         // IMMUTABLE BORROWS BLOCK - extract theme values for UI building
         // ============================================================
@@ -246,8 +680,6 @@ impl ScriptListApp {
         let log_panel_border = self.theme.colors.ui.border;
         let log_panel_success = self.theme.colors.ui.success;
 
-        // Pre-compute scrollbar colors (Copy type) - always use theme for consistency
-        let scrollbar_colors = ScrollbarColors::from_theme(&self.theme);
         // Pre-compute list item colors for closure (Copy type)
         let theme_colors = ListItemColors::from_theme(&self.theme);
 
@@ -257,95 +689,35 @@ impl ScriptListApp {
         // Use unified color resolver for consistent empty state styling
         let empty_text_color = color_resolver.empty_text_color();
         let empty_font_family = typography_resolver.primary_font().to_string();
+        let menu_syntax_owns_main_list = self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(&filter_text_for_render)
+            || self
+                .menu_syntax_mode
+                .command_owns_input_for(&filter_text_for_render);
+        let advanced_query_guide_hint = (!menu_syntax_owns_main_list)
+            .then(|| self.menu_syntax_main_hint_snapshot(&filter_text_for_render, false))
+            .flatten()
+            .filter(|hint| {
+                hint.kind == crate::menu_syntax::MenuSyntaxMainHintKind::AdvancedQueryGuide
+            });
 
-        let list_element: AnyElement = if item_count == 0 {
-            // Empty state rendering with icon and helpful messaging
-            // - When filter is empty: "No scripts or snippets found" with code icon
-            // - When filter has text: "No results match '...'" with search icon
-            //
-            // Note: This branch is rarely hit when filtering because grouping.rs now
-            // appends fallbacks to the results. We only get here if there are truly
-            // no results at all (including no fallbacks).
-            use crate::designs::icon_variations::IconName;
-            if filter_text_for_render.is_empty() {
-                div()
-                    .w_full()
-                    .h_full()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(EMPTY_STATE_GAP))
-                    .font_family(empty_font_family.clone())
-                    // Large muted icon
-                    .child(
-                        svg()
-                            .external_path(IconName::Code.external_path())
-                            .size(px(EMPTY_STATE_ICON_SIZE))
-                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_ICON)),
-                    )
-                    .child(
-                        div()
-                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_MESSAGE))
-                            .text_size(px(EMPTY_STATE_MESSAGE_FONT_SIZE))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child("No scripts or snippets found"),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_HINT))
-                            .child("Press ⌘N to create a new script"),
-                    )
-                    .into_any_element()
+        let list_element: AnyElement = if menu_syntax_owns_main_list {
+            self.menu_syntax_main_hint_snapshot(&filter_text_for_render, false)
+                .map(|hint| render_menu_syntax_main_hint(&hint, &self.theme))
+                .unwrap_or_else(|| div().w_full().h_full().into_any_element())
+        } else if let Some(hint) = advanced_query_guide_hint {
+            render_menu_syntax_main_hint(&hint, &self.theme)
+        } else if item_count == 0 {
+            if let Some(hint) = self.menu_syntax_main_hint_snapshot(&filter_text_for_render, true) {
+                render_menu_syntax_main_hint(&hint, &self.theme)
             } else {
-                // Filtering but no results (including no fallbacks) - shouldn't normally happen
-                let filter_display = if filter_text_for_render.chars().count() > 30 {
-                    format!(
-                        "{}...",
-                        crate::utils::truncate_str_chars(&filter_text_for_render, 27)
-                    )
-                } else {
-                    filter_text_for_render.clone()
-                };
-                div()
-                    .w_full()
-                    .h_full()
-                    .flex()
-                    .flex_col()
-                    .items_center()
-                    .justify_center()
-                    .gap(px(EMPTY_STATE_GAP))
-                    .font_family(empty_font_family)
-                    // Magnifying glass icon for search
-                    .child(
-                        svg()
-                            .external_path(IconName::MagnifyingGlass.external_path())
-                            .size(px(EMPTY_STATE_ICON_SIZE))
-                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_ICON)),
-                    )
-                    .child(
-                        div()
-                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_MESSAGE))
-                            .text_size(px(EMPTY_STATE_MESSAGE_FONT_SIZE))
-                            .font_weight(FontWeight::MEDIUM)
-                            .child(format!("No results for \"{}\"", filter_display)),
-                    )
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_HINT))
-                            .child("Try a different search term or press ⌘↵ to ask AI"),
-                    )
-                    // Search tips: help users discover advanced search features
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(rgba((empty_text_color << 8) | ALPHA_EMPTY_TIPS))
-                            .pt(px(EMPTY_STATE_TIPS_MARGIN_TOP))
-                            .child("Filters: tag:X, author:X, kit:X, is:cron/bg/watch, type:script/snippet"),
-                    )
-                    .into_any_element()
+                render_script_list_empty_state(
+                    &filter_text_for_render,
+                    empty_text_color,
+                    empty_font_family,
+                )
             }
         } else {
             // Use GPUI's list() component for variable-height items
@@ -356,44 +728,9 @@ impl ScriptListApp {
             let grouped_items_clone = grouped_items.clone();
             let flat_results_clone = flat_results.clone();
 
-            // Calculate scrollbar parameters for variable-height items
-            // Count section headers vs regular items to get true content height
-            let mut header_count = 0_usize;
-            let mut item_count_regular = 0_usize;
-            for item in grouped_items.iter() {
-                match item {
-                    GroupedListItem::SectionHeader(..) => header_count += 1,
-                    GroupedListItem::Item(_) => item_count_regular += 1,
-                }
-            }
-
-            // Calculate true content height: headers at 32px (visual height), items at 40px
-            let total_content_height = (header_count as f32 * SECTION_HEADER_HEIGHT)
-                + (item_count_regular as f32 * LIST_ITEM_HEIGHT);
-
-            // Estimated visible container height
-            // Window is 500px, header is ~60px, remaining ~440px for list area
-            // Use a slightly higher estimate to ensure scrollbar thumb reaches bottom
-            // (underestimating visible items causes thumb to not reach bottom)
-            let estimated_container_height = ESTIMATED_LIST_CONTAINER_HEIGHT;
-
-            // Calculate visible items as a ratio of container to total content
-            // This gives a more accurate thumb size for the scrollbar
-            let visible_ratio = if total_content_height > 0.0 {
-                (estimated_container_height / total_content_height).min(1.0)
-            } else {
-                1.0
-            };
-            let visible_items = ((item_count as f32) * visible_ratio).ceil() as usize;
-
-            // Note: list state updates and scroll_to_selected_if_needed already done above
-            // before the theme borrow section
-
-            // Create scrollbar using pre-computed scrollbar_colors and scroll_offset
-            let scrollbar =
-                Scrollbar::new(item_count, visible_items, scroll_offset, scrollbar_colors)
-                    .container_height(estimated_container_height)
-                    .visibility_opacity(self.scrollbar_visibility.value());
+            let effective_section_header_height =
+                crate::list_item::effective_section_header_height();
+            let effective_list_item_height = crate::list_item::effective_list_item_height();
 
             // Capture entity handle for use in the render closure
             let entity = cx.entity();
@@ -407,6 +744,7 @@ impl ScriptListApp {
 
             // Capture selected index for render (may be overridden by storybook live spec)
             let selected_for_list_closure = selected_index_for_render;
+            let footer_padding = main_list_footer_overlay_total_padding();
 
             let variable_height_list =
                 list(self.main_list_state.clone(), move |ix, _window, cx| {
@@ -426,7 +764,7 @@ impl ScriptListApp {
                                             "section-header".into(),
                                             ix as u64,
                                         ))
-                                        .h(px(SECTION_HEADER_HEIGHT))
+                                        .h(px(effective_section_header_height))
                                         .child(render_section_header(label, icon.as_deref(), theme_colors, ix == 0))
                                         .into_any_element()
                                 }
@@ -516,7 +854,7 @@ impl ScriptListApp {
                                         )
                                     } else {
                                         item_name = "<missing-result>";
-                                        div().h(px(LIST_ITEM_HEIGHT)).into_any_element()
+                                        div().h(px(effective_list_item_height)).into_any_element()
                                     };
                                     let design_elapsed = design_render_start.elapsed();
 
@@ -536,7 +874,7 @@ impl ScriptListApp {
 
                                     div()
                                         .id(ElementId::NamedInteger("script-item".into(), ix as u64))
-                                        .h(px(LIST_ITEM_HEIGHT)) // Explicit 40px height (8px grid)
+                                        .h(px(effective_list_item_height))
                                         .on_hover(hover_handler)
                                         .on_click(click_handler)
                                         .child(item_element)
@@ -545,7 +883,7 @@ impl ScriptListApp {
                             }
                         } else {
                             // Fallback for out-of-bounds index
-                            div().h(px(LIST_ITEM_HEIGHT)).into_any_element()
+                            div().h(px(effective_list_item_height)).into_any_element()
                         }
                     })
                 })
@@ -553,7 +891,8 @@ impl ScriptListApp {
                 // ListSizingBehavior::Infer sets overflow.y = Overflow::Scroll internally
                 // which is required for the list's hitbox to capture scroll wheel events
                 .with_sizing_behavior(ListSizingBehavior::Infer)
-                .h_full();
+                .h_full()
+                .pb(footer_padding);
 
             // Wrap list in a relative container with scrollbar overlay
             // CUSTOM SCROLL HANDLER: GPUI's list() component has issues measuring unmeasured items
@@ -564,10 +903,41 @@ impl ScriptListApp {
             // Average item height for delta-to-index conversion:
             // Most items are LIST_ITEM_HEIGHT (40px), headers are SECTION_HEADER_HEIGHT (32px)
             // Use 44px as a reasonable average that feels natural for scrolling
-            let avg_item_height = AVERAGE_ITEM_HEIGHT_FOR_SCROLL;
+            let avg_item_height = crate::list_item::effective_average_item_height_for_scroll();
 
             // Capture item count for scroll handler logging
             let scroll_item_count = item_count;
+            self.sync_main_list_selection_to_visible_window("render");
+
+            let scrollbar_overlay = {
+                let footer_overlay_height = main_list_footer_overlay_total_padding();
+                let viewport_height = self.main_list_state.viewport_bounds().size.height;
+                let safe_viewport_height = (viewport_height - footer_overlay_height).max(px(0.0));
+                let content_height = px(grouped_items
+                    .iter()
+                    .map(|item| match item {
+                        GroupedListItem::SectionHeader(..) => {
+                            crate::list_item::effective_section_header_height()
+                        }
+                        GroupedListItem::Item(..) => crate::list_item::effective_list_item_height(),
+                    })
+                    .sum::<f32>())
+                    + footer_overlay_height;
+
+                div()
+                    .absolute()
+                    .top_0()
+                    .right_0()
+                    .h(safe_viewport_height)
+                    .w(px(16.0))
+                    .child(
+                        GpuiScrollbar::vertical(&self.main_list_state)
+                            .id("launcher-main-scrollbar")
+                            .scroll_size(size(px(0.0), content_height))
+                            .into_any_element(),
+                    )
+                    .into_any_element()
+            };
 
             div()
                 .relative()
@@ -578,6 +948,18 @@ impl ScriptListApp {
                 .h_full()
                 .on_scroll_wheel(cx.listener(
                     move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                        if scroll_item_count == 0 {
+                            return;
+                        }
+                        // The script list owns wheel-driven scrolling. Stop propagation
+                        // before any selection math so GPUI's native list scroll path
+                        // cannot drift the viewport away from the active row.
+                        cx.stop_propagation();
+
+                        let selected_before = this.selected_index;
+                        let scroll_top_before = this.main_list_state.logical_scroll_top();
+                        let wheel_accum_before = this.wheel_accum;
+
                         // Convert scroll delta to lines/items
                         // Lines: direct item count, Pixels: convert based on average item height
                         let delta_lines: f32 = match event.delta {
@@ -603,20 +985,31 @@ impl ScriptListApp {
                             // Use the existing move_selection_by which handles section headers
                             // and properly updates scroll via scroll_to_selected_if_needed
                             this.move_selection_by(steps, cx);
-
-                            // Log for observability
-                            tracing::trace!(
-                                delta = steps,
-                                accum = this.wheel_accum,
-                                new_index = this.selected_index,
-                                total_items = scroll_item_count,
-                                "Mouse wheel scroll - accumulated"
-                            );
                         }
+
+                        let scroll_top_after = this.main_list_state.logical_scroll_top();
+                        this.sync_main_list_selection_to_visible_window("wheel");
+                        // @lat: [[design#Footer-safe list reveal]]
+                        tracing::debug!(
+                            target: "SCROLL_STATE",
+                            delta_lines,
+                            steps,
+                            total_items = scroll_item_count,
+                            selected_before,
+                            selected_after = this.selected_index,
+                            scroll_top_before = scroll_top_before.item_ix,
+                            scroll_top_after = scroll_top_after.item_ix,
+                            offset_before_px = scroll_top_before.offset_in_item.as_f32(),
+                            offset_after_px = scroll_top_after.offset_in_item.as_f32(),
+                            wheel_accum_before,
+                            wheel_accum_after = this.wheel_accum,
+                            propagation_stopped = true,
+                            "script list wheel handled"
+                        );
                     },
                 ))
                 .child(variable_height_list)
-                .child(scrollbar)
+                .child(scrollbar_overlay)
                 .into_any_element()
         };
 
@@ -722,6 +1115,11 @@ impl ScriptListApp {
                     let has_shift = event.keystroke.modifiers.shift;
 
                     match key_str {
+                        "v" if this.route_large_script_list_paste_to_acp(cx) => {
+                            logging::log("KEY", "Shortcut Cmd+V -> route_large_script_list_paste_to_acp");
+                            cx.stop_propagation();
+                            return;
+                        }
                         "l" => {
                             logging::log("KEY", "Shortcut Cmd+L -> toggle_logs");
                             this.toggle_logs(cx);
@@ -819,19 +1217,15 @@ impl ScriptListApp {
                 // Now fallbacks flow through GroupedListItem from grouping.rs, so this
                 // branch should rarely (if ever) be triggered. The normal navigation below
                 // handles fallback items in the unified list.
-                if this.fallback_mode && !this.cached_fallbacks.is_empty() {
+                if this.main_menu_fallback_state.is_active() {
                     match key_str {
                         key if sk_is_key_up(key) => {
-                            if this.fallback_selected_index > 0 {
-                                this.fallback_selected_index -= 1;
+                            if this.main_menu_fallback_state.move_up() {
                                 cx.notify();
                             }
                         }
                         key if sk_is_key_down(key) => {
-                            if this.fallback_selected_index
-                                < this.cached_fallbacks.len().saturating_sub(1)
-                            {
-                                this.fallback_selected_index += 1;
+                            if this.main_menu_fallback_state.move_down() {
                                 cx.notify();
                             }
                         }
@@ -847,6 +1241,39 @@ impl ScriptListApp {
                         _ => {}
                     }
                     return;
+                }
+
+                // Run 12 Pass 13 — `ai-proposal-accept-dismiss`. When the
+                // inline AI proposal hint card is up, Tab/Enter accepts and
+                // Esc dismisses BEFORE the legacy navigation/clear handlers
+                // run. Modifier-bearing keys (Cmd+Enter etc.) fall through
+                // so the proposal-generation chord still works.
+                if this.pending_menu_syntax_ai_proposal.is_some()
+                    && !event.keystroke.modifiers.platform
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.control
+                {
+                    if sk_is_key_tab(key_str)
+                        || (sk_is_key_enter(key_str) && !event.keystroke.modifiers.shift)
+                    {
+                        if this.try_apply_pending_menu_syntax_ai_proposal(
+                            crate::menu_syntax_ai_apply::ProposalApplyAction::Accept,
+                            window,
+                            cx,
+                        ) {
+                            cx.stop_propagation();
+                            return;
+                        }
+                    } else if sk_is_key_escape(key_str) {
+                        if this.try_apply_pending_menu_syntax_ai_proposal(
+                            crate::menu_syntax_ai_apply::ProposalApplyAction::Dismiss,
+                            window,
+                            cx,
+                        ) {
+                            cx.stop_propagation();
+                            return;
+                        }
+                    }
                 }
 
                 // Normal script list navigation
@@ -870,6 +1297,22 @@ impl ScriptListApp {
                         }
                     }
                     key if sk_is_key_escape(key) => {
+                        // Escape order on ScriptList:
+                        //   1. menu-syntax trigger popup visible → close popup
+                        //      only, leave filter text untouched. Second Escape
+                        //      then falls through to the normal clear-filter
+                        //      branch below.
+                        //   2. filter non-empty → clear filter.
+                        //   3. filter empty → hide main window.
+                        if crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open() {
+                            if this.apply_menu_syntax_trigger_popup_intent(
+                                crate::menu_syntax::InlinePickerKeyIntent::Close,
+                                window,
+                                cx,
+                            ) {
+                                return;
+                            }
+                        }
                         // Clear filter first if there's text, otherwise close window
                         if !this.filter_text.is_empty() {
                             this.clear_filter(window, cx);
@@ -891,6 +1334,24 @@ impl ScriptListApp {
         let font_family = typography_resolver.primary_font().to_string();
 
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        let capture_targets =
+            crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
+        let input_highlight_ranges = crate::menu_syntax::input_spans_for_input_with_targets(
+            &filter_text_for_render,
+            &capture_targets,
+        )
+        .into_iter()
+        .filter(|span| span.role != crate::menu_syntax::MenuSyntaxFragmentRole::Subject)
+        .map(|span| {
+            (
+                span.range,
+                rgb(menu_syntax_input_span_color(&self.theme, span.role)).into(),
+            )
+        })
+        .collect();
+        self.gpui_input_state.update(cx, |state, _cx| {
+            state.set_highlight_ranges(input_highlight_ranges);
+        });
 
         // NOTE: No .bg() here - Root provides vibrancy background for ALL content
         // This ensures main menu, AI chat, and all prompts have consistent styling
@@ -949,21 +1410,17 @@ impl ScriptListApp {
                             .flex()
                             .items_center()
                             // Search input with cursor and selection support
-                            .child(
-                                div().flex_1().flex().flex_row().items_center().child(
-                                    Input::new(&self.gpui_input_state)
-                                        .w_full()
-                                        .h(px(input_height))
-                                        .px(px(0.))
-                                        .py(px(0.))
-                                        .with_size(Size::Size(px(
-                                            typography_resolver.font_size_xl()
-                                        )))
-                                        .appearance(false)
-                                        .bordered(false)
-                                        .focus_bordered(false),
-                                ),
-                            )
+                            .child(div().flex_1().flex().flex_row().items_center().child({
+                                Input::new(&self.gpui_input_state)
+                                    .w_full()
+                                    .h(px(input_height))
+                                    .px(px(0.))
+                                    .py(px(0.))
+                                    .with_size(Size::Size(px(typography_resolver.font_size_xl())))
+                                    .appearance(false)
+                                    .bordered(false)
+                                    .focus_bordered(false)
+                            }))
                             // "Ask [⇥]" keyboard hint
                             .child(crate::components::render_launcher_ask_ai_hint(chrome)),
                     )
@@ -1052,9 +1509,9 @@ impl ScriptListApp {
                     mode = "mini",
                     "mini script list render complete"
                 );
-                self.last_render_log_filter = self.filter_text.clone();
-                self.last_render_log_selection = self.selected_index;
-                self.last_render_log_item_count = item_count_for_log;
+                self.main_menu_render_diagnostics.last_render_log_filter = self.filter_text.clone();
+                self.main_menu_render_diagnostics.last_render_log_selection = self.selected_index;
+                self.main_menu_render_diagnostics.last_render_log_item_count = item_count_for_log;
             }
 
             return main_div.into_any_element();
@@ -1135,8 +1592,13 @@ impl ScriptListApp {
             let gpui_footer =
                 crate::components::render_universal_prompt_hint_strip_clickable_with_primary_label(
                     &primary_label,
-                    cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
-                        this.execute_selected(cx);
+                    cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+                        this.dispatch_main_window_footer_action(
+                            crate::footer_popup::FooterAction::Run,
+                            window,
+                            cx,
+                            "gpui_footer_click",
+                        );
                     }),
                     cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
                         if this.has_actions()
@@ -1183,9 +1645,9 @@ impl ScriptListApp {
                 ),
             );
             // Deferred state update: update after all logging (including preview panel) is done
-            self.last_render_log_filter = self.filter_text.clone();
-            self.last_render_log_selection = self.selected_index;
-            self.last_render_log_item_count = item_count_for_log;
+            self.main_menu_render_diagnostics.last_render_log_filter = self.filter_text.clone();
+            self.main_menu_render_diagnostics.last_render_log_selection = self.selected_index;
+            self.main_menu_render_diagnostics.last_render_log_item_count = item_count_for_log;
         }
 
         main_div.into_any_element()

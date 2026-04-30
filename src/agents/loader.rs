@@ -1,7 +1,7 @@
 //! Agent file loading
 //!
 //! This module handles loading agent files from the filesystem:
-//! - Glob `~/.scriptkit/*/agents/*.md` directories
+//! - Glob `~/.scriptkit/plugins/*/agents/*.md` directories
 //! - Parse each file using the parser module
 //! - Return Arc-wrapped agents for cheap cloning
 
@@ -20,7 +20,7 @@ use crate::setup::get_kit_path;
 
 /// Load agents from all kits
 ///
-/// Globs: `~/.scriptkit/*/agents/*.md`
+/// Globs: `~/.scriptkit/plugins/*/agents/*.md`
 ///
 /// Returns Arc-wrapped agents sorted by name.
 ///
@@ -45,7 +45,7 @@ pub fn load_agents() -> Vec<Arc<Agent>> {
 pub fn load_agents_from_path(kit_path: &Path) -> Vec<Arc<Agent>> {
     let mut agents = Vec::new();
 
-    let pattern = kit_path.join("kit/*/agents/*.md");
+    let pattern = kit_path.join("plugins/*/agents/*.md");
     let pattern_str = pattern.to_string_lossy().to_string();
 
     debug!(pattern = %pattern_str, "Globbing for agent files");
@@ -98,19 +98,19 @@ pub fn load_agents_from_path(kit_path: &Path) -> Vec<Arc<Agent>> {
 
 /// Extract kit name from path
 ///
-/// Given a path like `/Users/x/.scriptkit/kit/main/agents/task.claude.md`
+/// Given a path like `/Users/x/.scriptkit/plugins/main/agents/task.claude.md`
 /// and kit root `/Users/x/.scriptkit`, returns `Some("main")`.
 fn extract_kit_from_path(path: &Path, kit_root: &Path) -> Option<String> {
     // Get the relative path from kit root
     let relative = path.strip_prefix(kit_root).ok()?;
 
-    // Path structure is: kit/<kit-name>/agents/*.md
-    // Skip first component ("kit") and get the second (kit name)
+    // Path structure is: plugins/<plugin-name>/agents/*.md
+    // Skip first component ("plugins") and get the second (plugin name)
     let mut components = relative.components();
     let first = components.next()?.as_os_str().to_str()?;
 
-    if first == "kit" {
-        // New structure: kit/<kit-name>/...
+    if first == "plugins" {
+        // New structure: plugins/<plugin-name>/...
         components
             .next()?
             .as_os_str()
@@ -163,8 +163,8 @@ mod tests {
     fn setup_test_agents(temp_dir: &TempDir) -> std::path::PathBuf {
         let kit_root = temp_dir.path().join("scriptkit");
 
-        // Create kit/main/agents directory (new structure)
-        let main_agents = kit_root.join("kit/main/agents");
+        // Create plugins/main/agents directory (new structure)
+        let main_agents = kit_root.join("plugins/main/agents");
         fs::create_dir_all(&main_agents).unwrap();
 
         // Create a Claude agent
@@ -192,8 +192,8 @@ Interactive chat session
         )
         .unwrap();
 
-        // Create kit/custom/agents directory (new structure)
-        let custom_agents = kit_root.join("kit/custom/agents");
+        // Create plugins/custom/agents directory.
+        let custom_agents = kit_root.join("plugins/custom/agents");
         fs::create_dir_all(&custom_agents).unwrap();
 
         // Create a Codex agent in custom kit
@@ -275,7 +275,7 @@ Generate code for:
         let temp_dir = TempDir::new().unwrap();
         let kit_root = setup_test_agents(&temp_dir);
 
-        let path = kit_root.join("kit/main/agents/review.claude.md");
+        let path = kit_root.join("plugins/main/agents/review.claude.md");
         let agent = load_agent_from_path(&path).unwrap();
 
         assert_eq!(agent.name, "Review PR");
@@ -288,7 +288,7 @@ Generate code for:
         let kit_root = temp_dir.path().join("scriptkit");
 
         // Create empty agents directory (new structure)
-        fs::create_dir_all(kit_root.join("kit/main/agents")).unwrap();
+        fs::create_dir_all(kit_root.join("plugins/main/agents")).unwrap();
 
         let agents = load_agents_from_path(&kit_root);
         assert!(agents.is_empty());
@@ -306,7 +306,7 @@ Generate code for:
     #[test]
     fn test_extract_kit_from_path() {
         let kit_root = Path::new("/Users/x/.scriptkit");
-        let agent_path = Path::new("/Users/x/.scriptkit/kit/main/agents/task.claude.md");
+        let agent_path = Path::new("/Users/x/.scriptkit/plugins/main/agents/task.claude.md");
 
         let kit = extract_kit_from_path(agent_path, kit_root);
         // Should extract the kit name ("main"), not the container ("kit")
@@ -316,7 +316,8 @@ Generate code for:
     #[test]
     fn test_extract_kit_from_nested_path() {
         let kit_root = Path::new("/Users/x/.scriptkit");
-        let agent_path = Path::new("/Users/x/.scriptkit/kit/my-custom-kit/agents/task.claude.md");
+        let agent_path =
+            Path::new("/Users/x/.scriptkit/plugins/my-custom-kit/agents/task.claude.md");
 
         let kit = extract_kit_from_path(agent_path, kit_root);
         // Should extract the kit name ("my-custom-kit")
@@ -327,7 +328,7 @@ Generate code for:
     fn test_hidden_files_skipped() {
         let temp_dir = TempDir::new().unwrap();
         let kit_root = temp_dir.path().join("scriptkit");
-        let main_agents = kit_root.join("kit/main/agents");
+        let main_agents = kit_root.join("plugins/main/agents");
         fs::create_dir_all(&main_agents).unwrap();
 
         // Create a hidden file (should be skipped)
@@ -349,7 +350,7 @@ Generate code for:
     fn test_non_md_files_skipped() {
         let temp_dir = TempDir::new().unwrap();
         let kit_root = temp_dir.path().join("scriptkit");
-        let main_agents = kit_root.join("kit/main/agents");
+        let main_agents = kit_root.join("plugins/main/agents");
         fs::create_dir_all(&main_agents).unwrap();
 
         // Create a .ts file (should be skipped by glob)

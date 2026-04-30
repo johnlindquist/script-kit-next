@@ -31,7 +31,7 @@ impl ScriptListApp {
             let clamped_index = self
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
-            let first_selectable = self.cached_grouped_first_selectable_index;
+            let first_selectable = self.main_menu_result_caches.first_selectable_index();
 
             if let Some(first) = first_selectable {
                 if clamped_index <= first {
@@ -80,7 +80,7 @@ impl ScriptListApp {
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
             let item_count = grouped_items.len();
-            let last_selectable = self.cached_grouped_last_selectable_index;
+            let last_selectable = self.main_menu_result_caches.last_selectable_index();
 
             if let Some(last) = last_selectable {
                 if clamped_index >= last {
@@ -129,7 +129,7 @@ impl ScriptListApp {
             let clamped_index = self
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
-            let first_selectable = self.cached_grouped_first_selectable_index;
+            let first_selectable = self.main_menu_result_caches.first_selectable_index();
 
             if let Some(first) = first_selectable {
                 (first, "jump_first")
@@ -155,7 +155,7 @@ impl ScriptListApp {
             let clamped_index = self
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
-            let first_selectable = self.cached_grouped_first_selectable_index;
+            let first_selectable = self.main_menu_result_caches.first_selectable_index();
 
             if let Some(first) = first_selectable {
                 if clamped_index <= first {
@@ -202,7 +202,7 @@ impl ScriptListApp {
             let clamped_index = self
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
-            let last_selectable = self.cached_grouped_last_selectable_index;
+            let last_selectable = self.main_menu_result_caches.last_selectable_index();
 
             if let Some(last) = last_selectable {
                 if clamped_index >= last {
@@ -242,7 +242,7 @@ impl ScriptListApp {
             let clamped_index = self
                 .selected_index
                 .min(grouped_items.len().saturating_sub(1));
-            let last_selectable = self.cached_grouped_last_selectable_index;
+            let last_selectable = self.main_menu_result_caches.last_selectable_index();
 
             if let Some(last) = last_selectable {
                 (last, "jump_last")

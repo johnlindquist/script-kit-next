@@ -13,11 +13,11 @@
 //! └── window/      - Deprecated legacy AI window UI and interactions
 //! ```
 //!
-//! # Primary ACP Chat contract
+//! # Primary Agent Chat contract
 //!
-//! - User-facing AI chat surface: ACP Chat
+//! - User-facing AI chat surface: Agent Chat
 //! - Entry points should route to `open_tab_ai_acp_with_entry_intent(...)` when they need the canonical chat UI
-//! - Compatibility-named `tab_ai_*` helpers and harness/context types still back ACP Chat plumbing
+//! - Compatibility-named `tab_ai_*` helpers and harness/context types still back Agent Chat plumbing
 //! - The legacy `window/` module remains only for deprecated compatibility flows and should not be used for new entry points
 
 // Re-exports intentionally cover the module's API surface.

@@ -73,6 +73,8 @@ struct NamingSubmitPayload<'a> {
     friendly_name: &'a str,
     filename: &'a str,
     target: NamingTarget,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    template_id: Option<&'a str>,
 }
 
 /// Deserialized naming submit payload for use in completion handlers.
@@ -81,6 +83,15 @@ pub struct NamingSubmitResult {
     pub friendly_name: String,
     pub filename: String,
     pub target: NamingTarget,
+    /// Opaque identifier for the starter template the author chose in the
+    /// Script Template Catalog view, or `None` when the naming dialog was
+    /// opened without a template selection (e.g. `New Script` fast path or
+    /// `New Scriptlet Bundle`). Resolved back to a
+    /// [`crate::mcp_resources::ScriptTemplateRef`] by
+    /// [`crate::mcp_resources::find_script_template`] inside
+    /// `handle_naming_dialog_completion`.
+    #[serde(default)]
+    pub template_id: Option<String>,
 }
 
 pub fn normalize_extension(extension: &str) -> String {
@@ -188,11 +199,13 @@ pub fn build_submit_payload(
     friendly_name: &str,
     filename: &str,
     target: NamingTarget,
+    template_id: Option<&str>,
 ) -> Result<String, serde_json::Error> {
     let payload = NamingSubmitPayload {
         friendly_name,
         filename,
         target,
+        template_id,
     };
 
     serde_json::to_string(&payload)
@@ -251,12 +264,55 @@ mod tests {
 
     #[test]
     fn test_build_submit_payload_serializes_target_filename_and_friendly_name() {
-        let payload = build_submit_payload("My Script", "my-script.ts", NamingTarget::Script)
+        let payload = build_submit_payload("My Script", "my-script.ts", NamingTarget::Script, None)
             .expect("payload should serialize");
         let json: Value = serde_json::from_str(&payload).expect("payload should parse as json");
 
         assert_eq!(json["friendly_name"], "My Script");
         assert_eq!(json["filename"], "my-script.ts");
         assert_eq!(json["target"], "script");
+    }
+
+    #[test]
+    fn build_submit_payload_omits_template_id_when_absent() {
+        let payload = build_submit_payload("My Script", "my-script.ts", NamingTarget::Script, None)
+            .expect("payload should serialize");
+        let json: Value = serde_json::from_str(&payload).expect("payload should parse as json");
+        assert!(
+            json.get("template_id").is_none(),
+            "template_id must be skipped when the author did not pick a template: {json}"
+        );
+    }
+
+    #[test]
+    fn build_submit_payload_includes_template_id_when_present() {
+        let payload = build_submit_payload(
+            "My Script",
+            "my-script.ts",
+            NamingTarget::Script,
+            Some("blank-starter"),
+        )
+        .expect("payload should serialize");
+        let json: Value = serde_json::from_str(&payload).expect("payload should parse as json");
+        assert_eq!(json["template_id"], "blank-starter");
+    }
+
+    #[test]
+    fn naming_submit_result_deserializes_without_template_id() {
+        let json = r#"{"friendly_name":"demo","filename":"demo.ts","target":"script"}"#;
+        let result: NamingSubmitResult =
+            serde_json::from_str(json).expect("payload should parse as NamingSubmitResult");
+        assert_eq!(result.friendly_name, "demo");
+        assert_eq!(result.filename, "demo.ts");
+        assert_eq!(result.target, NamingTarget::Script);
+        assert!(result.template_id.is_none());
+    }
+
+    #[test]
+    fn naming_submit_result_deserializes_with_template_id() {
+        let json = r#"{"friendly_name":"demo","filename":"demo.ts","target":"script","template_id":"blank-starter"}"#;
+        let result: NamingSubmitResult =
+            serde_json::from_str(json).expect("payload should parse as NamingSubmitResult");
+        assert_eq!(result.template_id.as_deref(), Some("blank-starter"));
     }
 }

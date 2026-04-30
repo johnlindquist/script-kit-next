@@ -22,6 +22,16 @@ pub(crate) struct TextInputRenderIndicator<'a> {
     pub color: u32,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct TextInlinePillRange {
+    pub start: usize,
+    pub end: usize,
+    pub label: String,
+    pub text_color: u32,
+    pub background_color: u32,
+    pub border_color: u32,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct TextInputRenderConfig<'a> {
     pub text: &'a str,
@@ -49,6 +59,8 @@ pub(crate) struct TextInputRenderConfig<'a> {
     /// Character ranges to render with a specific text color (e.g. gold @mentions).
     /// Ranges are in terms of character indices in the full text.
     pub highlight_ranges: &'a [TextHighlightRange],
+    /// Inline pill ranges rendered in place of the underlying token text.
+    pub pill_ranges: &'a [TextInlinePillRange],
 }
 
 impl<'a> TextInputRenderConfig<'a> {
@@ -77,6 +89,7 @@ impl<'a> TextInputRenderConfig<'a> {
             trailing_indicator: None,
             transform: None,
             highlight_ranges: &[],
+            pill_ranges: &[],
         }
     }
 }
@@ -98,6 +111,10 @@ struct ComputedTextInputSegments {
 pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'_>) -> Div {
     if config.multiline {
         return render_multiline_text_input_cursor_selection(&config);
+    }
+
+    if selection_is_empty(config.selection) && !config.pill_ranges.is_empty() {
+        return render_single_line_text_input_with_pills(&config);
     }
 
     let segments = compute_text_input_segments(&config);
@@ -178,6 +195,95 @@ pub(crate) fn render_text_input_cursor_selection(config: TextInputRenderConfig<'
         }
     }
     if segments.show_trailing_indicator {
+        if let Some(indicator) = config.trailing_indicator {
+            content = content.child(
+                div()
+                    .whitespace_nowrap()
+                    .text_color(rgb(indicator.color))
+                    .child(indicator.text.to_string()),
+            );
+        }
+    }
+
+    content
+}
+
+fn render_single_line_text_input_with_pills(config: &TextInputRenderConfig<'_>) -> Div {
+    let text_len = config.text.chars().count();
+    let (window_start, window_end) = clamped_window(config.window, text_len);
+    let cursor = config.cursor.min(text_len);
+    let mut pills: Vec<TextInlinePillRange> = config
+        .pill_ranges
+        .iter()
+        .filter(|&pill| pill.start >= window_start && pill.end <= window_end)
+        .cloned()
+        .collect();
+    pills.sort_by_key(|pill| pill.start);
+
+    let mut content = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .whitespace_nowrap()
+        .text_color(rgb(config.text_color));
+
+    if let Some(height) = config.container_height {
+        content = content.h(px(height));
+    }
+    if config.overflow_x_hidden {
+        content = content.overflow_x_hidden();
+    }
+
+    if window_start > 0 {
+        if let Some(indicator) = config.leading_indicator {
+            content = content.child(
+                div()
+                    .whitespace_nowrap()
+                    .text_color(rgb(indicator.color))
+                    .child(indicator.text.to_string()),
+            );
+        }
+    }
+
+    let mut pos = window_start;
+    while pos < window_end {
+        if pos == cursor {
+            content = content.child(render_cursor(config));
+        }
+
+        if let Some(pill) = pills.iter().find(|pill| pill.start == pos) {
+            content = content.child(render_inline_pill(pill, config));
+            pos = pill.end;
+            if cursor > pill.start && cursor < pill.end {
+                content = content.child(render_cursor(config));
+            }
+            continue;
+        }
+
+        let next_pill_start = pills
+            .iter()
+            .find(|pill| pill.start > pos)
+            .map(|pill| pill.start)
+            .unwrap_or(window_end);
+        let next_stop = next_pill_start.min(window_end);
+        let segment = slice_chars(config.text, pos, next_stop);
+        if !segment.is_empty() {
+            content = content.child(render_segment_with_highlights(
+                &segment,
+                pos,
+                config.highlight_ranges,
+                config.text_color,
+                config.transform,
+            ));
+        }
+        pos = next_stop;
+    }
+
+    if cursor == window_end {
+        content = content.child(render_cursor(config));
+    }
+
+    if window_end < text_len {
         if let Some(indicator) = config.trailing_indicator {
             content = content.child(
                 div()
@@ -282,6 +388,10 @@ fn render_multiline_line(
     selection_range: Option<(usize, usize)>,
     config: &TextInputRenderConfig<'_>,
 ) -> Div {
+    if selection_range.is_none() && !config.pill_ranges.is_empty() {
+        return render_multiline_line_with_pills(line, line_chars, line_start, cursor, config);
+    }
+
     for token in tokenize_multiline_line(line_chars, line_start) {
         if token.can_wrap_inside {
             for (offset, ch) in token.text.chars().enumerate() {
@@ -306,6 +416,63 @@ fn render_multiline_line(
             selection_range,
             config,
         ));
+    }
+
+    line
+}
+
+fn render_multiline_line_with_pills(
+    mut line: Div,
+    line_chars: &[char],
+    line_start: usize,
+    cursor: usize,
+    config: &TextInputRenderConfig<'_>,
+) -> Div {
+    let line_end = line_start + line_chars.len();
+    let mut pills: Vec<TextInlinePillRange> = config
+        .pill_ranges
+        .iter()
+        .filter(|&pill| pill.start >= line_start && pill.end <= line_end)
+        .cloned()
+        .collect();
+    pills.sort_by_key(|pill| pill.start);
+
+    let mut pos = line_start;
+    while pos < line_end {
+        if let Some(pill) = pills.iter().find(|pill| pill.start == pos) {
+            if cursor == pos {
+                line = line.child(render_cursor(config));
+            }
+            line = line.child(render_inline_pill(pill, config));
+            if cursor > pill.start && cursor < pill.end {
+                line = line.child(render_cursor(config));
+            }
+            pos = pill.end;
+            continue;
+        }
+
+        let next_pill_start = pills
+            .iter()
+            .find(|pill| pill.start > pos)
+            .map(|pill| pill.start)
+            .unwrap_or(line_end);
+        let chunk_end = next_pill_start.min(line_end);
+        let chunk_chars = &line_chars[(pos - line_start)..(chunk_end - line_start)];
+        for token in tokenize_multiline_line(chunk_chars, pos) {
+            if token.can_wrap_inside {
+                for (offset, ch) in token.text.chars().enumerate() {
+                    let char_index = token.start + offset;
+                    if char_index == cursor {
+                        line = line.child(render_cursor(config));
+                    }
+
+                    line = line.child(render_multiline_char(ch, char_index, None, config));
+                }
+            } else {
+                line = line.child(render_multiline_token_runs(&token, cursor, None, config));
+            }
+        }
+        pos = chunk_end;
     }
 
     line
@@ -438,6 +605,31 @@ fn color_for_char(highlights: &[TextHighlightRange], char_index: usize) -> Optio
         .map(|range| range.color)
 }
 
+fn selection_is_empty(selection: Option<TextSelection>) -> bool {
+    selection.is_none_or(|selection| selection.is_empty())
+}
+
+fn render_inline_pill(pill: &TextInlinePillRange, config: &TextInputRenderConfig<'_>) -> Div {
+    let mut node = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .h(px(config.cursor_height))
+        .px(px(6.0))
+        .line_height(px(config.cursor_height))
+        .rounded(px(6.0))
+        .border_1()
+        .border_color(rgb(pill.border_color))
+        .bg(rgb(pill.background_color))
+        .text_color(rgb(pill.text_color));
+
+    if config.cursor_margin_y > 0.0 {
+        node = node.my(px(config.cursor_margin_y));
+    }
+
+    node.child(pill.label.clone())
+}
+
 fn render_cursor(config: &TextInputRenderConfig<'_>) -> Div {
     let mut cursor = div().relative().w(px(0.0)).h(px(config.cursor_height));
     if config.cursor_margin_y > 0.0 {
@@ -467,6 +659,13 @@ fn format_segment(segment: &str, transform: Option<fn(&str) -> String>) -> Strin
 
 fn format_single_line_segment(segment: &str, transform: Option<fn(&str) -> String>) -> String {
     format_segment(segment, transform).replace(' ', "\u{00A0}")
+}
+
+fn slice_chars(text: &str, start: usize, end: usize) -> String {
+    text.chars()
+        .skip(start)
+        .take(end.saturating_sub(start))
+        .collect()
 }
 
 /// Render a text segment, splitting it into sub-spans where highlight ranges

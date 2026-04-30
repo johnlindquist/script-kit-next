@@ -39,6 +39,24 @@ pub enum AutomationWindowKind {
     PromptPopup,
 }
 
+impl AutomationWindowKind {
+    /// Canonical camelCase string for this kind — the exact form carried on
+    /// the wire by `serde(rename_all = "camelCase")`. Used by automation
+    /// receipts (e.g. `AcpResolvedTarget.windowKind`) so agentic callers
+    /// see the same value they would receive from `listAutomationWindows`.
+    pub fn as_camel_case(self) -> &'static str {
+        match self {
+            AutomationWindowKind::Main => "main",
+            AutomationWindowKind::Notes => "notes",
+            AutomationWindowKind::Ai => "ai",
+            AutomationWindowKind::MiniAi => "miniAi",
+            AutomationWindowKind::AcpDetached => "acpDetached",
+            AutomationWindowKind::ActionsDialog => "actionsDialog",
+            AutomationWindowKind::PromptPopup => "promptPopup",
+        }
+    }
+}
+
 /// Pixel bounds of an automation window.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]

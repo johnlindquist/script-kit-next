@@ -1,5 +1,7 @@
 use super::*;
 
+const CODE_TABLE_SOURCE: &str = include_str!("code_table.rs");
+
 #[test]
 fn unordered_list_produces_separate_items() {
     let md = "- First item\n- Second item\n- Third item\n";
@@ -95,6 +97,45 @@ fn code_block_after_list() {
             TestBlock::ListItem("\u{2022}".into(), "Item".into()),
             TestBlock::CodeBlock(Some("rust".into()), "fn main() {}\n".into()),
         ]
+    );
+}
+
+#[test]
+fn code_block_body_scrolls_horizontally_without_wrapping_lines() {
+    let body_start = CODE_TABLE_SOURCE
+        .find("let mut body = div()")
+        .expect("code block body should still be built in code_table.rs");
+    let body_end = CODE_TABLE_SOURCE[body_start..]
+        .find("for line in lines")
+        .map(|offset| body_start + offset)
+        .expect("code block body should still precede line rendering");
+    let body_block = &CODE_TABLE_SOURCE[body_start..body_end];
+
+    assert!(
+        body_block.contains(".overflow_x_scroll()") && body_block.contains(".overflow_y_hidden()"),
+        "code block body should expose horizontal scrolling without vertical nested scrolling"
+    );
+    assert!(
+        body_block.contains(".items_start()"),
+        "code block body should let each line keep its intrinsic width for horizontal overflow"
+    );
+
+    let line_start = CODE_TABLE_SOURCE
+        .find("let mut line_div = div()")
+        .expect("code line renderer should still be present");
+    let line_end = CODE_TABLE_SOURCE[line_start..]
+        .find("body = body.child(line_div);")
+        .map(|offset| line_start + offset)
+        .expect("line renderer should still be appended to the body");
+    let line_block = &CODE_TABLE_SOURCE[line_start..line_end];
+
+    assert!(
+        line_block.contains(".flex_none()") && line_block.contains(".whitespace_nowrap()"),
+        "code lines should not shrink or wrap inside the horizontal scroll body"
+    );
+    assert!(
+        line_block.contains(".flex_shrink_0()") && line_block.contains(".whitespace_nowrap()"),
+        "highlight spans should keep long code tokens as scrollable content"
     );
 }
 

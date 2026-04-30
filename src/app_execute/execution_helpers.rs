@@ -167,7 +167,7 @@ impl ScriptListApp {
         tracing::info!(message = %"Enabling Claude Code in config.ts");
 
         let config_path =
-            std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/kit/config.ts").as_ref());
+            std::path::PathBuf::from(shellexpand::tilde("~/.scriptkit/config.ts").as_ref());
         let bun_path = self.config.bun_path.as_deref();
 
         match editor::enable_claude_code_safely(&config_path, bun_path) {

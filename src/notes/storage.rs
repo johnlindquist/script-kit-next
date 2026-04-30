@@ -612,6 +612,11 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    fn notes_db_test_lock() -> &'static std::sync::Mutex<()> {
+        static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+        LOCK.get_or_init(|| std::sync::Mutex::new(()))
+    }
+
     fn unique_test_token(prefix: &str) -> String {
         let millis = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -631,6 +636,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_handles_special_characters() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
         init_notes_db().expect("notes db should initialize for special-character search");
 
         // Search with special characters should not error (even if no results)
@@ -660,6 +666,7 @@ mod tests {
 
     #[test]
     fn test_notes_au_trigger_has_when_guard_for_real_content_changes() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
         init_notes_db().expect("notes db should initialize before trigger inspection");
 
         let db = get_db().expect("notes db should be initialized");
@@ -681,6 +688,7 @@ mod tests {
 
     #[test]
     fn test_init_notes_db_recreates_triggers_for_existing_connection() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
         init_notes_db().expect("notes db should initialize before trigger recreation");
 
         let db = get_db().expect("notes db should be initialized");
@@ -723,6 +731,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_limits_fts_results_to_200() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
         init_notes_db().expect("notes db should initialize before search limit test");
         let token = unique_test_token("search_limit");
         let now = Utc::now();
@@ -759,6 +768,7 @@ mod tests {
 
     #[test]
     fn test_delete_all_deleted_notes_removes_soft_deleted_notes_in_batch() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
         init_notes_db().expect("notes db should initialize before batch delete test");
         let token = unique_test_token("batch_delete");
         let now = Utc::now();
@@ -806,6 +816,7 @@ mod tests {
 
     #[test]
     fn test_rebuild_notes_search_index_recovers_desynced_rows() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
         init_notes_db().expect("notes db should initialize before FTS rebuild test");
         let token = unique_test_token("fts_rebuild");
         let now = Utc::now();
@@ -863,6 +874,7 @@ mod tests {
 
     #[test]
     fn test_search_notes_returns_matching_note_for_special_character_content() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
         init_notes_db().expect("notes db should initialize before special-character match test");
         let token = unique_test_token("search_special_match");
         let query = format!("{token}@example.com");

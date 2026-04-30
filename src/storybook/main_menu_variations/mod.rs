@@ -181,7 +181,7 @@ pub fn render_main_menu_story_preview(stable_id: &str) -> gpui::AnyElement {
 }
 
 pub fn render_main_menu_compare_thumbnail(stable_id: &str) -> gpui::AnyElement {
-    render_main_menu_surface(stable_id, true)
+    render_main_menu_surface(stable_id, false)
 }
 
 #[derive(Clone)]
@@ -204,17 +204,21 @@ struct MainMenuPreviewRow {
 
 fn render_main_menu_surface(stable_id: &str, compact: bool) -> gpui::AnyElement {
     let (live_spec, _) = resolve_main_menu_variant(Some(stable_id));
-    let shell = super::IntegratedSurfaceShellConfig {
-        width: if compact { 320.0 } else { 480.0 },
-        height: if compact { 240.0 } else { 440.0 },
-        corner_radius: 12.0,
-        body_padding: 0.0,
-        footer_height: crate::window_resize::mini_layout::HINT_STRIP_HEIGHT,
-    };
+    let shell = main_menu_story_shell_config();
 
     super::IntegratedSurfaceShell::new(shell, render_main_menu_body(live_spec, compact))
         .footer(render_main_menu_footer(live_spec))
         .into_any_element()
+}
+
+fn main_menu_story_shell_config() -> super::IntegratedSurfaceShellConfig {
+    super::IntegratedSurfaceShellConfig {
+        width: 480.0,
+        height: 440.0,
+        corner_radius: 12.0,
+        body_padding: 0.0,
+        footer_height: crate::window_resize::mini_layout::HINT_STRIP_HEIGHT,
+    }
 }
 
 fn render_main_menu_body(live_spec: MainMenuLiveSpec, compact: bool) -> gpui::AnyElement {
@@ -756,5 +760,16 @@ mod tests {
             let live = MainMenuSurface::live_from_spec(spec);
             assert_eq!(live, spec.live, "live_from_spec mismatch for {:?}", spec.id);
         }
+    }
+
+    #[test]
+    fn shell_config_matches_live_main_menu_size() {
+        let shell = main_menu_story_shell_config();
+        assert_eq!(shell.width, 480.0);
+        assert_eq!(shell.height, 440.0);
+        assert_eq!(
+            shell.footer_height,
+            crate::window_resize::mini_layout::HINT_STRIP_HEIGHT
+        );
     }
 }

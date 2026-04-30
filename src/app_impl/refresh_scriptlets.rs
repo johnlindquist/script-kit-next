@@ -40,7 +40,7 @@ fn build_plugin_inventory_hud(
 ) -> Option<String> {
     if after.plugins == 0 && after.scripts == 0 && after.scriptlets == 0 {
         return Some(
-            "No plugin entrypoints yet — add one in kit/main or install a plugin".to_string(),
+            "No plugin entrypoints yet — add one in plugins/main or install a plugin".to_string(),
         );
     }
 
@@ -354,8 +354,16 @@ impl ScriptListApp {
         let hotkey_refresh_actions = plan_script_hotkey_refresh(&self.scripts, &loaded_scripts);
         apply_script_hotkey_refresh(&hotkey_refresh_actions);
 
+        // Re-run validation on the freshly loaded catalog so the "Script Issues"
+        // launcher row reflects current disk state. Validation is in-memory and
+        // cheap compared to file I/O.
+        let catalog_report = crate::scripts::validate_script_catalog(loaded_scripts);
+        let loaded_scripts: Vec<std::sync::Arc<scripts::Script>> =
+            catalog_report.scripts.iter().cloned().collect();
+        self.script_validation_report = Some(catalog_report.validation.clone());
+
         self.scripts = loaded_scripts;
-        // Use load_scriptlets() to load from ALL kits (kit/*/scriptlets/*.md)
+        // Use load_scriptlets() to load from all plugins (plugins/*/scriptlets/*.md)
         self.scriptlets = loaded_scriptlets;
         self.invalidate_filter_cache();
         self.invalidate_grouped_cache();

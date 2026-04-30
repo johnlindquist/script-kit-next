@@ -24,7 +24,7 @@ fn make_skill(
 
 #[test]
 fn skill_search_result_has_correct_type_label() {
-    let skill = make_skill("authoring", "Authoring", "scriptlets", "Scriptlets");
+    let skill = make_skill("scriptkit", "Script Kit", "scriptlets", "Scriptlets");
     let result = SearchResult::Skill(SkillMatch {
         skill,
         score: 100,
@@ -35,7 +35,7 @@ fn skill_search_result_has_correct_type_label() {
 
 #[test]
 fn skill_search_result_has_correct_action_text() {
-    let skill = make_skill("authoring", "Authoring", "scriptlets", "Scriptlets");
+    let skill = make_skill("scriptkit", "Script Kit", "scriptlets", "Scriptlets");
     let result = SearchResult::Skill(SkillMatch {
         skill,
         score: 100,
@@ -46,23 +46,18 @@ fn skill_search_result_has_correct_action_text() {
 
 #[test]
 fn skill_search_result_name_is_title() {
-    let skill = make_skill(
-        "authoring",
-        "Authoring",
-        "scriptlets",
-        "Scriptlet Authoring",
-    );
+    let skill = make_skill("scriptkit", "Script Kit", "scriptlets", "New Scriptlet");
     let result = SearchResult::Skill(SkillMatch {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
     });
-    assert_eq!(result.name(), "Scriptlet Authoring");
+    assert_eq!(result.name(), "New Scriptlet");
 }
 
 #[test]
 fn skill_search_result_description_from_skill() {
-    let skill = make_skill("authoring", "Authoring", "scriptlets", "Scriptlets");
+    let skill = make_skill("scriptkit", "Script Kit", "scriptlets", "Scriptlets");
     let result = SearchResult::Skill(SkillMatch {
         skill,
         score: 100,
@@ -70,24 +65,24 @@ fn skill_search_result_description_from_skill() {
     });
     assert_eq!(
         result.description(),
-        Some("Scriptlets skill from Authoring")
+        Some("Scriptlets skill from Script Kit")
     );
 }
 
 #[test]
 fn skill_search_result_source_name_is_plugin_title() {
-    let skill = make_skill("authoring", "Authoring", "scriptlets", "Scriptlets");
+    let skill = make_skill("scriptkit", "Script Kit", "scriptlets", "Scriptlets");
     let result = SearchResult::Skill(SkillMatch {
         skill,
         score: 100,
         match_indices: MatchIndices::default(),
     });
-    assert_eq!(result.source_name(), Some("Authoring"));
+    assert_eq!(result.source_name(), Some("Script Kit"));
 }
 
 #[test]
 fn skill_search_result_type_tag_uses_gold_color() {
-    let skill = make_skill("authoring", "Authoring", "scriptlets", "Scriptlets");
+    let skill = make_skill("scriptkit", "Script Kit", "scriptlets", "Scriptlets");
     let result = SearchResult::Skill(SkillMatch {
         skill,
         score: 100,
@@ -100,12 +95,7 @@ fn skill_search_result_type_tag_uses_gold_color() {
 
 #[test]
 fn skill_initial_input_prefills_slash_and_attaches_skill_part() {
-    let skill = make_skill(
-        "authoring",
-        "Authoring",
-        "scriptlets",
-        "Scriptlet Authoring",
-    );
+    let skill = make_skill("scriptkit", "Script Kit", "scriptlets", "New Scriptlet");
 
     let initial_input = format!("/{} ", skill.skill_id);
     let part = script_kit_gpui::ai::AiContextPart::SkillFile {
@@ -126,8 +116,8 @@ fn skill_initial_input_prefills_slash_and_attaches_skill_part() {
             ..
         } => {
             assert_eq!(label, "/scriptlets");
-            assert_eq!(skill_name, "Scriptlet Authoring");
-            assert_eq!(owner_label, "Authoring");
+            assert_eq!(skill_name, "New Scriptlet");
+            assert_eq!(owner_label, "Script Kit");
             assert_eq!(slash_name, "scriptlets");
         }
         other => panic!("expected SkillFile part, got {other:?}"),

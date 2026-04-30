@@ -37,7 +37,7 @@ pub struct PluginIndex {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PluginSkill {
     pub plugin_id: String,
-    /// Human-readable plugin title for display (e.g., "Authoring", "Tools")
+    /// Human-readable plugin title for display (e.g., "Script Kit", "Tools")
     pub plugin_title: String,
     pub skill_id: String,
     pub path: PathBuf,

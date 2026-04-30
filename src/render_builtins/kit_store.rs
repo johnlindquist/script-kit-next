@@ -463,6 +463,7 @@ impl ScriptListApp {
         let accent_subtle = self.theme.colors.accent.selected_subtle;
         let opacity = self.theme.get_opacity();
         let selected_alpha = (opacity.selected * 255.0) as u32;
+        let hover_alpha = (opacity.hover * 255.0) as u32;
 
         let query_owned = query.to_string();
         let input_display = if query_owned.is_empty() {
@@ -636,7 +637,9 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some(result) = results_for_list.get(ix) {
                                 let is_selected = ix == selected_row;
-                                let row_bg = rgba((accent_subtle << 8) | selected_alpha);
+                                // Luminance ladder: both text.primary at different opacities
+                                let selected_row_bg = rgba((text_primary << 8) | selected_alpha);
+                                let row_bg = rgba((text_primary << 8) | hover_alpha);
 
                                 let row_entity = click_entity.clone();
                                 let install_btn_entity = install_entity.clone();
@@ -653,7 +656,7 @@ impl ScriptListApp {
                                     .items_center()
                                     .justify_between()
                                     .gap(px(12.0))
-                                    .when(is_selected, |row| row.bg(row_bg))
+                                    .when(is_selected, |row| row.bg(selected_row_bg))
                                     .when(!is_selected, |row| row.hover(move |style| style.bg(row_bg)))
                                     .cursor_pointer()
                                     .on_click(move |_event, _window, cx| {
@@ -881,6 +884,7 @@ impl ScriptListApp {
         let accent_subtle = self.theme.colors.accent.selected_subtle;
         let opacity = self.theme.get_opacity();
         let selected_alpha = (opacity.selected * 255.0) as u32;
+        let hover_alpha = (opacity.hover * 255.0) as u32;
         let total_kits = kits.len();
 
         let handle_key = cx.listener(
@@ -974,7 +978,9 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some(kit) = kits_for_list.get(ix) {
                                 let is_selected = ix == selected_row;
-                                let row_bg = rgba((accent_subtle << 8) | selected_alpha);
+                                // Luminance ladder: both text.primary at different opacities
+                                let selected_row_bg = rgba((text_primary << 8) | selected_alpha);
+                                let row_bg = rgba((text_primary << 8) | hover_alpha);
 
                                 let row_entity = click_entity.clone();
                                 let update_btn_entity = update_entity.clone();
@@ -993,7 +999,7 @@ impl ScriptListApp {
                                     .items_center()
                                     .justify_between()
                                     .gap(px(12.0))
-                                    .when(is_selected, |row| row.bg(row_bg))
+                                    .when(is_selected, |row| row.bg(selected_row_bg))
                                     .when(!is_selected, |row| row.hover(move |style| style.bg(row_bg)))
                                     .cursor_pointer()
                                     .on_click(move |_event, _window, cx| {

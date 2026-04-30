@@ -4,7 +4,7 @@ Integrate Script Kit with [Conductor](https://conductor.build) for parallel AI c
 
 ## Installation
 
-This extension is bundled with Script Kit at `~/.scriptkit/kit/conductor`.
+This extension is bundled with Script Kit at `~/.scriptkit/plugins/conductor`.
 
 ## Quick Start
 

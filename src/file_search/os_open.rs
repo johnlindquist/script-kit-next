@@ -124,40 +124,6 @@ fn move_destination_default_directory(path: &str, is_dir: bool) -> String {
     terminal_working_directory(path, false)
 }
 
-/// Open a terminal window at the target path.
-///
-/// Returns the resolved working directory used to launch the terminal.
-pub fn open_in_terminal(path: &str, is_dir: bool) -> Result<String, String> {
-    let dir_path = terminal_working_directory(path, is_dir);
-
-    #[cfg(target_os = "macos")]
-    {
-        use std::process::Command;
-
-        let escaped_dir_path = crate::utils::escape_applescript_string(&dir_path);
-        let script = format!(
-            r#"tell application "Terminal"
-                do script "cd " & quoted form of "{}"
-                activate
-            end tell"#,
-            escaped_dir_path
-        );
-
-        Command::new("osascript")
-            .args(["-e", &script])
-            .spawn()
-            .map_err(|e| format!("Failed to open terminal: {}", e))?;
-        Ok(dir_path)
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = path;
-        let _ = is_dir;
-        Err("Open in Terminal is currently only supported on macOS".to_string())
-    }
-}
-
 /// Move a path to Trash.
 pub fn move_to_trash(path: &str) -> Result<(), String> {
     #[cfg(target_os = "macos")]
