@@ -1,1 +1,0 @@
-The background task notification is just confirming the worker already completed — I reported the results above. The gate is green: `cargo clippy --all-targets -- -D warnings` passes with zero errors. The dead cursor stubs are removed in commit `837d3abf`.
