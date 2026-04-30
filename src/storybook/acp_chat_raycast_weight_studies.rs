@@ -87,7 +87,7 @@ const TOOLING_MESSAGES: &[ChatMessage] = &[
     ChatMessage {
         role: ChatRole::User,
         label: "You",
-        body: "Implement 15 type-weight studies for the launcher and ACP chat.",
+        body: "Implement 15 type-weight studies for the launcher and Agent Chat.",
     },
     ChatMessage {
         role: ChatRole::Assistant,
@@ -672,14 +672,14 @@ pub fn render_acp_chat_raycast_weight_gallery() -> AnyElement {
             div()
                 .text_sm()
                 .text_color(theme.colors.text.tertiary.to_rgb())
-                .child("ACP Chat"),
+                .child("Agent Chat"),
         )
         .child(
             div()
                 .text_xs()
                 .text_color(theme.colors.text.muted.to_rgb())
                 .child(
-                    "Fifteen full-surface ACP Chat studies with wider variation across font size, line-height, footer strength, and message density.",
+                    "Fifteen full-surface Agent Chat studies with wider variation across font size, line-height, footer strength, and message density.",
                 ),
         ),
     );
@@ -836,7 +836,7 @@ fn render_empty_body(spec: AcpChatWeightSpec, compact: bool) -> AnyElement {
                 .text_size(px(scale(spec.empty_hint_size + 1.0, compact)))
                 .font_weight(spec.metadata_weight)
                 .text_color(theme.colors.text.primary.with_opacity(0.58))
-                .child("Ask ACP Chat"),
+                .child("Ask Agent Chat"),
         )
         .child(
             div()

@@ -246,7 +246,7 @@ fn build_tab_ai_user_prompt_mentions_clipboard_and_prior_automations() {
 // memory-hint rendering.
 
 /// The overlay source included once for all source-level assertions.
-const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 
 #[test]
@@ -357,21 +357,20 @@ fn tab_ai_save_offer_uses_ghost_opacity_divider() {
 
 // ── Mandatory script verification contract regression tests ─────────
 //
-// These tests lock the canonical launchpad and script-authoring skill
+// These tests lock the canonical launchpad and new-script skill
 // against accidental removal of the Bun verification loop.  They
 // read the source files directly so a broken contract fails the test
 // suite before any runtime behavior is affected.
 
 const LAUNCHPAD_SOURCE: &str = include_str!("../kit-init/examples/START_HERE.md");
-const SCRIPT_AUTHORING_SKILL_SOURCE: &str =
-    include_str!("../kit-init/skills/script-authoring/SKILL.md");
+const SCRIPT_AUTHORING_SKILL_SOURCE: &str = include_str!("../kit-init/skills/new-script/SKILL.md");
 const HARNESS_MOD_SOURCE: &str = include_str!("../src/ai/harness/mod.rs");
 
 #[test]
 fn launchpad_requires_reading_script_authoring_skill() {
     assert!(
-        LAUNCHPAD_SOURCE.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"),
-        "START_HERE.md must route agents to the script-authoring skill for verification guidance"
+        LAUNCHPAD_SOURCE.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"),
+        "START_HERE.md must route agents to the new-script skill for verification guidance"
     );
 }
 
@@ -379,7 +378,7 @@ fn launchpad_requires_reading_script_authoring_skill() {
 fn launchpad_includes_bun_build_verification_command() {
     assert!(
         LAUNCHPAD_SOURCE.contains(
-            "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+            "bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
         ),
         "START_HERE.md must include the exact bun build syntax-check command"
     );
@@ -388,7 +387,7 @@ fn launchpad_includes_bun_build_verification_command() {
 #[test]
 fn launchpad_includes_bun_execute_verification_command() {
     assert!(
-        LAUNCHPAD_SOURCE.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+        LAUNCHPAD_SOURCE.contains("SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts"),
         "START_HERE.md must include the exact SK_VERIFY=1 bun execute command"
     );
 }
@@ -405,7 +404,7 @@ fn launchpad_requires_both_commands_pass_before_success() {
 fn script_authoring_skill_includes_bun_build_verification_command() {
     assert!(
         SCRIPT_AUTHORING_SKILL_SOURCE.contains(
-            "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+            "bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
         ),
         "SKILL.md must include the exact bun build syntax-check command"
     );
@@ -415,7 +414,7 @@ fn script_authoring_skill_includes_bun_build_verification_command() {
 fn script_authoring_skill_includes_bun_execute_verification_command() {
     assert!(
         SCRIPT_AUTHORING_SKILL_SOURCE
-            .contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+            .contains("SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts"),
         "SKILL.md must include the exact SK_VERIFY=1 bun execute command"
     );
 }
@@ -425,6 +424,16 @@ fn script_authoring_skill_requires_never_report_success_until_pass() {
     assert!(
         SCRIPT_AUTHORING_SKILL_SOURCE.contains("Never report success until both commands pass"),
         "SKILL.md must explicitly forbid reporting success before verification passes"
+    );
+}
+
+#[test]
+fn script_authoring_skill_includes_ready_receipt_marker() {
+    assert!(
+        SCRIPT_AUTHORING_SKILL_SOURCE.contains(
+            "SCRIPT_READY path=~/.scriptkit/plugins/main/scripts/<name>.ts validated=true"
+        ),
+        "SKILL.md must include the exact SCRIPT_READY receipt marker"
     );
 }
 
@@ -480,8 +489,8 @@ fn harness_submission_builder_appends_guidance_for_script_list_submit() {
         "PTY submission builder must call the shared appendix builder"
     );
     assert!(
-        builder_body.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"),
-        "PTY submission builder must log whether guidance references the script-authoring skill"
+        builder_body.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"),
+        "PTY submission builder must log whether guidance references the new-script skill"
     );
 }
 
@@ -551,15 +560,15 @@ fn authoring_submission_includes_all_verification_markers() {
         "authoring submission must include the guidance block"
     );
     assert!(
-        submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"),
-        "authoring submission must reference the script-authoring skill"
+        submission.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"),
+        "authoring submission must reference the new-script skill"
     );
     assert!(
-        submission.contains("bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"),
+        submission.contains("bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"),
         "authoring submission must include the bun build verification command"
     );
     assert!(
-        submission.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+        submission.contains("SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts"),
         "authoring submission must include the SK_VERIFY bun execute command"
     );
     assert!(
@@ -602,7 +611,7 @@ fn non_authoring_submission_omits_all_verification_markers() {
         "non-authoring submission must not contain the SK_VERIFY execution command"
     );
     assert!(
-        !submission.contains("bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun"),
+        !submission.contains("bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun"),
         "non-authoring submission must not contain the bun build command"
     );
     assert!(

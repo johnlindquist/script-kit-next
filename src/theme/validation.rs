@@ -224,6 +224,12 @@ const KNOWN_OPACITY_KEYS: &[&str] = &[
     "border_inactive",
     "border_active",
     "vibrancy_background",
+    "text_name",
+    "text_strong",
+    "text_muted_alpha",
+    "text_hint",
+    "text_placeholder",
+    "text_icon",
 ];
 const KNOWN_VIBRANCY_KEYS: &[&str] = &["enabled", "material"];
 const KNOWN_DROP_SHADOW_KEYS: &[&str] = &[
@@ -492,6 +498,9 @@ fn validate_opacity(diags: &mut ThemeDiagnostics, path: &str, opacity: &Value) {
         for (key, value) in map {
             validate_opacity_value(diags, &format!("{}/{}", path, key), value);
         }
+        if let (Some(selected), Some(hover)) = (map.get("selected"), map.get("hover")) {
+            validate_hover_less_than_selected(diags, path, selected, hover);
+        }
     } else {
         diags.error(path, "opacity must be an object");
     }
@@ -508,6 +517,30 @@ fn validate_opacity_value(diags: &mut ThemeDiagnostics, path: &str, value: &Valu
         }
     } else {
         diags.error(path, "Opacity must be a number");
+    }
+}
+
+fn validate_hover_less_than_selected(
+    diags: &mut ThemeDiagnostics,
+    path: &str,
+    selected: &Value,
+    hover: &Value,
+) {
+    let Some(selected) = selected.as_f64() else {
+        return;
+    };
+    let Some(hover) = hover.as_f64() else {
+        return;
+    };
+
+    if hover >= selected {
+        diags.add(
+            Diagnostic::warning(
+                format!("{}/hover", path),
+                "Hover opacity should stay below selected opacity so focused rows remain stronger",
+            )
+            .with_suggestion("Lower /opacity/hover or raise /opacity/selected to keep focus more visible than hover"),
+        );
     }
 }
 
@@ -657,6 +690,56 @@ mod tests {
                 .any(|diag| diag.path == "/colors/background/main"
                     && diag.message == "Color must be a number or string"),
             "required color fields should still reject null values",
+        );
+    }
+
+    #[test]
+    fn test_validate_theme_json_accepts_text_opacity_keys() {
+        let theme = json!({
+            "opacity": {
+                "selected": 0.20,
+                "hover": 0.06,
+                "text_name": 1.0,
+                "text_strong": 0.8,
+                "text_muted_alpha": 0.65,
+                "text_hint": 0.45,
+                "text_placeholder": 0.4,
+                "text_icon": 0.5
+            }
+        });
+
+        let diagnostics = validate_theme_json(&theme);
+
+        assert!(
+            !diagnostics
+                .diagnostics
+                .iter()
+                .any(|diag| diag.path.starts_with("/opacity/text_")
+                    && diag.message.contains("Unknown key")),
+            "text opacity keys should be recognized by theme validation",
+        );
+    }
+
+    #[test]
+    fn test_validate_theme_json_warns_when_hover_matches_or_exceeds_selected() {
+        let theme = json!({
+            "opacity": {
+                "selected": 0.18,
+                "hover": 0.18
+            }
+        });
+
+        let diagnostics = validate_theme_json(&theme);
+
+        assert!(
+            diagnostics
+                .diagnostics
+                .iter()
+                .any(|diag| diag.path == "/opacity/hover"
+                    && diag
+                        .message
+                        .contains("Hover opacity should stay below selected opacity")),
+            "theme validation should flag hover values that collapse into focused styling",
         );
     }
 }

@@ -111,6 +111,27 @@ impl Render for NamingPrompt {
                             d.child(crate::components::prompt_form_help(message, error_color))
                         }),
                     )
+                    .when_some(
+                        self.template.as_ref().map(|t| t.label.clone()),
+                        |d, label| {
+                            d.child(crate::components::prompt_form_section(
+                                "Template",
+                                text_secondary,
+                                spacing.gap_sm,
+                                crate::components::prompt_surface(
+                                    preview_style.background,
+                                    preview_style.border,
+                                )
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .text_sm()
+                                        .text_color(text_primary)
+                                        .child(SharedString::from(label)),
+                                ),
+                            ))
+                        },
+                    )
                     .child(crate::components::prompt_form_section(
                         destination_label,
                         text_secondary,

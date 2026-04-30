@@ -1,5 +1,6 @@
 use crate::designs::DesignColors;
 use crate::theme::Theme;
+use crate::ui::chrome::alpha_from_opacity;
 
 /// Path prefix text is clipped/truncated beyond this width to preserve query visibility.
 pub const HEADER_PATH_PREFIX_MAX_WIDTH_PX: f32 = 320.0;
@@ -10,7 +11,7 @@ pub const HEADER_ACTIONS_MIN_WIDTH_NORMAL_PX: f32 = 200.0;
 /// Reserved action slot width for expanded action labels/shortcuts.
 pub const HEADER_ACTIONS_MIN_WIDTH_EXPANDED_PX: f32 = 236.0;
 /// Light-mode hover overlay alpha for inline header actions.
-const HEADER_HOVER_OVERLAY_ALPHA_LIGHT: u8 = 0x26;
+const HEADER_HOVER_OVERLAY_ALPHA_LIGHT: u8 = 0x2e;
 /// Dark-mode hover overlay alpha for inline header actions.
 const HEADER_HOVER_OVERLAY_ALPHA_DARK: u8 = 0x2e;
 
@@ -76,6 +77,10 @@ pub struct PromptHeaderColors {
     pub supporting_font_size: f32,
     /// Caption text size (badges and compact key hints)
     pub caption_font_size: f32,
+    /// Alpha for placeholder text (from theme text grading).
+    pub alpha_placeholder: u32,
+    /// Alpha for strong chrome elements (from theme text grading).
+    pub alpha_strong: u32,
 }
 
 impl PromptHeaderColors {
@@ -94,6 +99,7 @@ impl PromptHeaderColors {
     /// Create PromptHeaderColors from theme reference
     pub fn from_theme(theme: &Theme) -> Self {
         let ui_font_size = theme.get_fonts().ui_size;
+        let hover_overlay_alpha = alpha_from_opacity(theme.get_opacity().hover) as u8;
         Self {
             text_primary: theme.colors.text.primary,
             text_muted: theme.colors.text.muted,
@@ -105,11 +111,15 @@ impl PromptHeaderColors {
             logo_icon: theme.colors.text.on_accent,
             hover_overlay: Self::overlay_with_alpha(
                 theme.colors.accent.selected_subtle,
-                Self::hover_overlay_alpha(theme.is_dark_mode()),
+                hover_overlay_alpha,
             ),
             input_font_size: (ui_font_size + 2.0).max(12.0),
             supporting_font_size: (ui_font_size - 2.0).max(10.0),
             caption_font_size: (ui_font_size - 4.0).max(9.0),
+            alpha_placeholder: crate::theme::types::opacity_to_alpha(
+                theme.get_opacity().text_placeholder,
+            ),
+            alpha_strong: crate::theme::types::opacity_to_alpha(theme.get_opacity().text_strong),
         }
     }
 
@@ -125,10 +135,15 @@ impl PromptHeaderColors {
             search_box_bg: colors.background_secondary,
             border: colors.border,
             logo_icon: colors.text_on_accent,
-            hover_overlay: Self::overlay_with_alpha(colors.background_selected, 0x26),
+            hover_overlay: Self::overlay_with_alpha(
+                colors.background_selected,
+                Self::hover_overlay_alpha(false),
+            ),
             input_font_size: typography.font_size_lg,
             supporting_font_size: typography.font_size_sm,
             caption_font_size: typography.font_size_xs,
+            alpha_placeholder: crate::theme::types::opacity_to_alpha(0.40),
+            alpha_strong: crate::theme::types::opacity_to_alpha(0.80),
         }
     }
 }

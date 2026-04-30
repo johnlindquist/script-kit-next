@@ -183,7 +183,7 @@ pub fn modal_overlay_bg(theme: &Theme, opacity: u8) -> Rgba {
 ///
 /// # Arguments
 /// * `theme` - The theme supplying the base hover color
-/// * `opacity` - Alpha value (0-255), e.g., 0x26 for ~15%
+/// * `opacity` - Alpha value (0-255), e.g., 0x2e for ~18%
 ///
 /// # Returns
 /// A Rgba color suitable for use with `.bg()` on hover

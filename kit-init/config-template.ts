@@ -5,7 +5,7 @@ import type { Config } from "@scriptkit/sdk";
  * ========================
  *
  * This file controls Script Kit's behavior, appearance, and built-in features.
- * It's loaded on startup from ~/.scriptkit/kit/config.ts.
+ * It's loaded on startup from ~/.scriptkit/config.ts.
  *
  * HOW TO CUSTOMIZE:
  * 1. Uncomment the options you want to change
@@ -67,6 +67,16 @@ export default {
   // Useful for HiDPI displays or accessibility
   // uiScale: 1.0,
 
+  // Window appearance: vibrancy material and animation behavior. Panel
+  // level / non-activating behavior stay fixed for focus safety.
+  // Reserved for future runtime wiring; the launcher currently honors the
+  // built-in defaults.
+  //
+  // windowAppearance: {
+  //   vibrancy: "default",     // "default" | "none" | "hud" | "popover" | "sidebar"
+  //   animations: "system",    // "system" | "reduced" | "off"
+  // },
+
   // Content padding for prompts (terminal, editor, etc.)
   // All values in pixels
   // padding: {
@@ -126,7 +136,19 @@ export default {
   // Runtime preferences also live here:
   // theme: { presetId: "nord" },
   // dictation: { selectedDeviceId: "usb-mic" },
-  // ai: { selectedAcpAgentId: "codex-acp", selectedModelId: "gpt-5.4" },
+  // ai: {
+  //   // Single active model - backward-compatible default
+  //   selectedAcpAgentId: "codex-acp",
+  //   selectedModelId: "gpt-5.4",
+  //   // Named profiles for quick switching
+  //   profiles: [
+  //     { id: "writing",   label: "Long-form writing",
+  //       selectedModelId: "gpt-5.4", systemPromptSlug: "writing" },
+  //     { id: "code",      label: "Code review",
+  //       selectedModelId: "gpt-5.5", selectedAcpAgentId: "codex-acp" },
+  //   ],
+  //   activeProfileId: "writing",
+  // },
   // windowManagement: { snapMode: "expanded" },
   //
   // Behavior:
@@ -134,6 +156,52 @@ export default {
   // - Missing saved microphone falls back to the best available device
   // - The app clears stale microphone preferences automatically
   // - Use the built-in "Select Microphone" action to change it
+
+  // ===========================================================================
+  // Power Syntax
+  // ===========================================================================
+  // Power Syntax controls launcher sigils for capture (;), refine (:), and
+  // command (>) input. These knobs are reserved for future runtime wiring;
+  // for now Script Kit honors the built-in defaults shown below.
+  //
+  // powerSyntax: {
+  //   enabled: true,
+  //   captureSigil: "both",     // ";" | "+" | "both"
+  //   commandSigil: ">",        // ">" | "disabled"
+  //   cmdEnterAi: {
+  //     enabled: true,
+  //     modelId: undefined,     // fall back to active Agent Chat model
+  //     systemPrompt: undefined,
+  //   },
+  // },
+
+  // ===========================================================================
+  // Tray Menu
+  // ===========================================================================
+  // Tray menu visibility. Each row defaults to shown; set false to hide.
+  // Reserved for future runtime wiring; the menu currently honors the
+  // built-in defaults shown below.
+  //
+  // tray: {
+  //   showCurrentAppCommands: true,  // dynamic "<App> Commands" header row
+  //   showNotes: true,
+  //   showAgentChat: true,
+  //   showReloadScripts: true,
+  //   showHelp: true,                // Send Feedback...
+  //   showSocialLinks: true,         // Follow Us / GitHub / Discord
+  //   showUpdateCheck: true,         // Check for Updates... + Version row
+  // },
+
+  // ===========================================================================
+  // Updates
+  // ===========================================================================
+  // Auto-check for new releases on launch.
+  // Reserved for future runtime wiring; the checker currently runs ~5s
+  // after launch regardless of this setting.
+  //
+  // updates: {
+  //   autoCheck: true,
+  // },
 
   // ===========================================================================
   // Command Configuration
@@ -197,7 +265,7 @@ export default {
   //   // ─────────────────────────────────────────────────────────────────────
   //   // USER SCRIPTS (by filename without .ts extension)
   //   // ─────────────────────────────────────────────────────────────────────
-  //   // Scripts are in ~/.scriptkit/kit/main/scripts/
+  //   // Scripts are in ~/.scriptkit/plugins/main/scripts/
   //
   //   // Add shortcut to a frequently-used script
   //   // "script/my-workflow": {
@@ -276,17 +344,35 @@ export default {
   // ===========================================================================
   // Claude Code CLI Provider & Tab AI
   // ===========================================================================
-  // Controls both the ACP Chat provider and the Tab AI harness launch settings.
+  // Controls both Agent Chat and the Tab AI harness launch settings.
   // When Tab AI is invoked, Script Kit writes context to ~/.scriptkit/context/
   // and spawns the claude CLI with --append-system-prompt and the user intent.
 
   // claudeCode: {
   //   enabled: true,
   //   path: "/opt/homebrew/bin/claude",   // default: "claude" from PATH
-  //   permissionMode: "plan",             // "default" | "plan" | "acceptEdits"
+  //   permissionMode: "plan",             // "plan" | "dontAsk"
   //   allowedTools: "Read,Edit,Bash(git:*)",
   //   addDirs: ["/Users/you/projects"],
   // },
+
+  // ===========================================================================
+  // MCP Servers
+  // ===========================================================================
+  // Configure Model Context Protocol servers available to AI tooling.
+  // enabled: false is safe and is the default until you opt in.
+
+  mcp: {
+    enabled: false,
+    servers: {
+      // example: {
+      //   "filesystem": {
+      //     command: "npx",
+      //     args: ["-y", "@modelcontextprotocol/server-filesystem"],
+      //   },
+      // }
+    },
+  },
 
   // ===========================================================================
   // Advanced Settings

@@ -51,7 +51,7 @@ try {
     result: 'Both aiStartChat and aiFocus completed successfully'
   });
 
-  // Give a moment for user to see ACP Chat
+  // Give a moment for user to see Agent Chat
   await new Promise(r => setTimeout(r, 2000));
 
 } catch (e: any) {

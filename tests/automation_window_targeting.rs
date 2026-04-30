@@ -4,5 +4,7 @@ mod actions_dialog_targeting;
 mod detached_acp_targeting;
 #[path = "automation/notes_window_targeting.rs"]
 mod notes_window_targeting;
+#[path = "automation/surface_proof_contract.rs"]
+mod surface_proof_contract;
 #[path = "automation/window_targeting/mod.rs"]
 mod window_targeting;

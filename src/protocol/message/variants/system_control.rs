@@ -53,6 +53,22 @@ macro_rules! protocol_message_variants_system_control {
     #[serde(rename = "hide")]
     Hide {},
 
+    /// Acknowledgement that a `show` or `hide` RPC executed. Closes the
+    /// Run-14 Pass-12 finding `tool-window-mutator-rpcs-never-echo-response`:
+    /// before this message existed, the show/hide handlers fired the
+    /// action but never echoed a reply, so callers using
+    /// `session.sh rpc default '{"type":"hide","requestId":"x"}'` always
+    /// hit the 5-second timeout even though the window had already
+    /// hidden. Carries the post-action `window_visible` state so the
+    /// caller can verify intent without a follow-up `getState`.
+    #[serde(rename = "windowVisibilityAck")]
+    WindowVisibilityAck {
+        #[serde(rename = "requestId")]
+        request_id: String,
+        #[serde(rename = "windowVisible")]
+        window_visible: bool,
+    },
+
     /// Open URL in default browser
     #[serde(rename = "browse")]
     Browse { url: String },

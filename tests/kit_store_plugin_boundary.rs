@@ -1,5 +1,5 @@
 //! Integration tests verifying that kit store install, update, and removal
-//! operate on the canonical plugin root (`<kit_path>/kit/<plugin-id>/`) and
+//! operate on the canonical plugin root (`<kit_path>/plugins/<plugin-id>/`) and
 //! that freshly installed plugins are immediately discoverable.
 
 use std::fs;
@@ -192,7 +192,7 @@ fn with_temp_workspace<F: FnOnce(&std::path::Path, &std::path::Path)>(f: F) {
     fs::create_dir_all(&repos_dir).expect("create repos dir");
 
     // Create the plugin container directory.
-    fs::create_dir_all(kit_root.join("kit")).expect("create kit dir");
+    fs::create_dir_all(kit_root.join("plugins")).expect("create plugins dir");
 
     std::env::set_var(SK_PATH_ENV, kit_root.to_str().expect("path str"));
     f(&kit_root, &repos_dir);
@@ -211,7 +211,7 @@ fn install_clones_into_plugin_root() {
             git_ops::install_kit(repo_url).expect("install should succeed");
 
         assert_eq!(plugin_id, "test-plugin");
-        assert_eq!(install_path, kit_root.join("kit").join("test-plugin"));
+        assert_eq!(install_path, kit_root.join("plugins").join("test-plugin"));
         assert!(install_path.exists(), "install path should exist on disk");
     });
 }
@@ -266,10 +266,13 @@ fn install_uses_manifest_id_as_canonical_plugin_root() {
             git_ops::install_kit(repo_url).expect("install should succeed");
 
         assert_eq!(plugin_id, "manifest-plugin");
-        assert_eq!(install_path, kit_root.join("kit").join("manifest-plugin"));
+        assert_eq!(
+            install_path,
+            kit_root.join("plugins").join("manifest-plugin")
+        );
         assert!(install_path.exists(), "canonical plugin root should exist");
         assert!(
-            !kit_root.join("kit").join("repo-name").exists(),
+            !kit_root.join("plugins").join("repo-name").exists(),
             "repo basename path should not remain after canonicalization"
         );
     });
@@ -285,7 +288,7 @@ fn installed_plugin_discoverable_without_extra_step() {
 
         git_ops::install_kit(repo_url).expect("install should succeed");
 
-        let plugins_container = kit_root.join("kit");
+        let plugins_container = kit_root.join("plugins");
         let index =
             discover_plugins_in(&plugins_container).expect("discover_plugins should succeed");
 
@@ -326,7 +329,7 @@ fn registry_path_points_at_plugin_root() {
         let loaded = storage::list_installed_kits().expect("list installed");
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].name, "reg-test");
-        assert_eq!(loaded[0].path, kit_root.join("kit").join("reg-test"));
+        assert_eq!(loaded[0].path, kit_root.join("plugins").join("reg-test"));
     });
 }
 
@@ -391,7 +394,7 @@ fn removal_deletes_plugin_root_and_cleans_registry() {
         assert!(loaded.is_empty(), "registry should be empty after removal");
 
         // Plugin should no longer be discoverable.
-        let plugins_container = kit_root.join("kit");
+        let plugins_container = kit_root.join("plugins");
         let index =
             discover_plugins_in(&plugins_container).expect("discover_plugins should succeed");
         assert!(
@@ -471,7 +474,7 @@ fn full_plugin_lifecycle_install_discover_remove_undiscover() {
         assert!(install_path.exists());
 
         // Immediately discoverable
-        let plugins_container = kit_root.join("kit");
+        let plugins_container = kit_root.join("plugins");
         let index =
             discover_plugins_in(&plugins_container).expect("discover should succeed after install");
         assert!(

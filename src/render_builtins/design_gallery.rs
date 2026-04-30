@@ -1,3 +1,84 @@
+// Shared gallery-item enumeration for DesignGallery — used by both the renderer
+// (`render_design_gallery`) and the state-introspection path
+// (`collect_state::AppView::DesignGalleryView` in `src/prompt_handler/mod.rs`)
+// so `stateResult.visibleChoiceCount` reflects the same filtered count the UI
+// actually renders. Pinned by `tests/design_gallery_state_choice_count_asymmetry_contract.rs`.
+// @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+#[derive(Clone, Debug)]
+pub(crate) enum GalleryItem {
+    GroupHeaderCategory(designs::group_header_variations::GroupHeaderCategory),
+    GroupHeader(designs::group_header_variations::GroupHeaderStyle),
+    IconCategoryHeader(designs::icon_variations::IconCategory),
+    Icon(
+        designs::icon_variations::IconName,
+        designs::icon_variations::IconStyle,
+    ),
+}
+
+pub(crate) fn build_gallery_items() -> Vec<GalleryItem> {
+    use designs::group_header_variations::GroupHeaderCategory;
+    use designs::icon_variations::{IconCategory, IconStyle};
+
+    let mut items: Vec<GalleryItem> = Vec::new();
+    for category in GroupHeaderCategory::all() {
+        items.push(GalleryItem::GroupHeaderCategory(*category));
+        for style in category.styles() {
+            items.push(GalleryItem::GroupHeader(*style));
+        }
+    }
+    for category in IconCategory::all() {
+        items.push(GalleryItem::IconCategoryHeader(*category));
+        for icon in category.icons() {
+            items.push(GalleryItem::Icon(icon, IconStyle::Default));
+        }
+    }
+    items
+}
+
+pub(crate) fn gallery_item_matches(item: &GalleryItem, filter_lower: &str) -> bool {
+    match item {
+        GalleryItem::GroupHeaderCategory(cat) => cat.name().to_lowercase().contains(filter_lower),
+        GalleryItem::GroupHeader(style) => {
+            style.name().to_lowercase().contains(filter_lower)
+                || style.description().to_lowercase().contains(filter_lower)
+        }
+        GalleryItem::IconCategoryHeader(cat) => cat.name().to_lowercase().contains(filter_lower),
+        GalleryItem::Icon(icon, _) => {
+            icon.name().to_lowercase().contains(filter_lower)
+                || icon.description().to_lowercase().contains(filter_lower)
+        }
+    }
+}
+
+pub(crate) fn design_gallery_total_items() -> usize {
+    build_gallery_items().len()
+}
+
+/// Single display label per [`GalleryItem`], shared by the renderer and
+/// the `collect_visible_elements::DesignGalleryView` arm so getElements
+/// row strings match what the user sees. Uses the same `.name()` field
+/// `gallery_item_matches` filters on, so filter hits produce matching
+/// row text without drift.
+pub(crate) fn design_gallery_item_label(item: &GalleryItem) -> String {
+    match item {
+        GalleryItem::GroupHeaderCategory(cat) => cat.name().to_string(),
+        GalleryItem::GroupHeader(style) => style.name().to_string(),
+        GalleryItem::IconCategoryHeader(cat) => cat.name().to_string(),
+        GalleryItem::Icon(icon, _) => icon.name().to_string(),
+    }
+}
+
+pub(crate) fn design_gallery_filtered_len(filter: &str) -> usize {
+    if filter.is_empty() {
+        return design_gallery_total_items();
+    }
+    let filter_lower = filter.to_lowercase();
+    build_gallery_items()
+        .iter()
+        .filter(|item| gallery_item_matches(item, &filter_lower))
+        .count()
+}
+
 impl ScriptListApp {
     /// Render design gallery view with group header and icon variations
     fn render_design_gallery(
@@ -6,8 +87,6 @@ impl ScriptListApp {
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        use designs::group_header_variations::{GroupHeaderCategory, GroupHeaderStyle};
-        use designs::icon_variations::{IconCategory, IconName, IconStyle};
 
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
@@ -23,32 +102,9 @@ impl ScriptListApp {
         // Removed: box_shadows - shadows on transparent elements block vibrancy
         let _box_shadows = self.create_box_shadows();
 
-        // Build gallery items: group headers grouped by category, then icons grouped by category
-        #[derive(Clone)]
-        enum GalleryItem {
-            GroupHeaderCategory(GroupHeaderCategory),
-            GroupHeader(GroupHeaderStyle),
-            IconCategoryHeader(IconCategory),
-            Icon(IconName, IconStyle),
-        }
-
-        let mut gallery_items: Vec<GalleryItem> = Vec::new();
-
-        // Add group headers by category
-        for category in GroupHeaderCategory::all() {
-            gallery_items.push(GalleryItem::GroupHeaderCategory(*category));
-            for style in category.styles() {
-                gallery_items.push(GalleryItem::GroupHeader(*style));
-            }
-        }
-
-        // Add icons by category, showing each icon with default style
-        for category in IconCategory::all() {
-            gallery_items.push(GalleryItem::IconCategoryHeader(*category));
-            for icon in category.icons() {
-                gallery_items.push(GalleryItem::Icon(icon, IconStyle::Default));
-            }
-        }
+        // Build gallery items via the shared helper so collect_state (the
+        // `stateResult` receipt path) and this renderer stay in lock-step.
+        let gallery_items = build_gallery_items();
 
         // Filter items based on current filter
         let filtered_items: Vec<(usize, GalleryItem)> = if filter.is_empty() {
@@ -62,22 +118,7 @@ impl ScriptListApp {
             gallery_items
                 .iter()
                 .enumerate()
-                .filter(|(_, item)| match item {
-                    GalleryItem::GroupHeaderCategory(cat) => {
-                        cat.name().to_lowercase().contains(&filter_lower)
-                    }
-                    GalleryItem::GroupHeader(style) => {
-                        style.name().to_lowercase().contains(&filter_lower)
-                            || style.description().to_lowercase().contains(&filter_lower)
-                    }
-                    GalleryItem::IconCategoryHeader(cat) => {
-                        cat.name().to_lowercase().contains(&filter_lower)
-                    }
-                    GalleryItem::Icon(icon, _) => {
-                        icon.name().to_lowercase().contains(&filter_lower)
-                            || icon.description().to_lowercase().contains(&filter_lower)
-                    }
-                })
+                .filter(|(_, item)| gallery_item_matches(item, &filter_lower))
                 .map(|(i, item)| (i, item.clone()))
                 .collect()
         };

@@ -25,6 +25,11 @@ pub(crate) struct AppChromeColors {
     pub text_dimmed_hex: u32,
     pub accent_hex: u32,
 
+    /// `text_primary` composited with `opacity.text_placeholder` (0.40 by default).
+    /// The canonical semantic token for placeholder-tier chrome text: launcher
+    /// microcopy hints, empty-state search placeholders, and quiet trailing hints.
+    pub placeholder_text_rgba: u32,
+
     pub window_surface_rgba: u32,
     pub surface_rgba: u32,
     pub input_surface_rgba: u32,
@@ -107,6 +112,11 @@ impl AppChromeColors {
             text_dimmed_hex: colors.text.dimmed,
             accent_hex: colors.accent.selected,
 
+            placeholder_text_rgba: hex_to_rgba_with_opacity(
+                colors.text.primary,
+                opacity.text_placeholder,
+            ),
+
             window_surface_rgba: hex_to_rgba_with_opacity(colors.background.main, opacity.main),
             surface_rgba: hex_to_rgba_with_opacity(colors.background.title_bar, opacity.title_bar),
             input_surface_rgba: hex_to_rgba_with_opacity(
@@ -151,11 +161,8 @@ impl AppChromeColors {
                 opacity.border_active.max(opacity.border_inactive),
             ),
 
-            selection_rgba: hex_to_rgba_with_opacity(
-                colors.accent.selected_subtle,
-                opacity.selected,
-            ),
-            hover_rgba: hex_to_rgba_with_opacity(colors.accent.selected_subtle, opacity.hover),
+            selection_rgba: hex_to_rgba_with_opacity(colors.text.primary, opacity.selected),
+            hover_rgba: hex_to_rgba_with_opacity(colors.text.primary, opacity.hover),
 
             badge_bg_rgba: hex_to_rgba_with_opacity(
                 colors.background.search_box,
@@ -202,11 +209,24 @@ mod tests {
 
         assert_eq!(
             chrome.selection_rgba,
-            hex_to_rgba_with_opacity(theme.colors.accent.selected_subtle, opacity.selected,)
+            hex_to_rgba_with_opacity(theme.colors.text.primary, opacity.selected,)
         );
         assert_eq!(
             chrome.hover_rgba,
-            hex_to_rgba_with_opacity(theme.colors.accent.selected_subtle, opacity.hover,)
+            hex_to_rgba_with_opacity(theme.colors.text.primary, opacity.hover,)
+        );
+    }
+
+    #[test]
+    fn placeholder_text_rgba_uses_shared_text_placeholder_alpha() {
+        let theme = Theme::dark_default();
+        let chrome = AppChromeColors::from_theme(&theme);
+        let opacity = theme.get_opacity();
+
+        assert_eq!(
+            chrome.placeholder_text_rgba,
+            hex_to_rgba_with_opacity(theme.colors.text.primary, opacity.text_placeholder),
+            "placeholder text must resolve from text_primary + shared placeholder alpha"
         );
     }
 

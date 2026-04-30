@@ -31,6 +31,8 @@ impl ScriptListApp {
     /// Shared recompute helper: every filtered search path routes through here
     /// so plugin skills are always included in main-menu results.
     fn recompute_filtered_results(&self, filter_text: &str) -> Vec<scripts::SearchResult> {
+        let search_text =
+            crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, filter_text);
         let search_start = std::time::Instant::now();
         let results = scripts::fuzzy_search_unified_all_with_skills(
             &self.scripts,
@@ -38,16 +40,21 @@ impl ScriptListApp {
             &self.builtin_entries,
             &self.apps,
             &self.skills,
-            filter_text,
+            search_text,
         );
+        let results = match self.menu_syntax_mode.advanced_query_for(filter_text) {
+            Some(query) => crate::menu_syntax::apply_advanced_query(results, query),
+            None => results,
+        };
         let search_elapsed = search_start.elapsed();
 
         if !filter_text.is_empty() {
             logging::log(
                 "PERF",
                 &format!(
-                    "Search '{}' took {:.2}ms ({} results from {} total, including {} skills)",
+                    "Search '{}' (computed '{}') took {:.2}ms ({} results from {} total, including {} skills)",
                     filter_text,
+                    search_text,
                     search_elapsed.as_secs_f64() * 1000.0,
                     results.len(),
                     self.scripts.len()
@@ -62,6 +69,7 @@ impl ScriptListApp {
 
         tracing::info!(
             filter_text = %filter_text,
+            search_text = %search_text,
             result_count = results.len(),
             script_count = self.scripts.len(),
             scriptlet_count = self.scriptlets.len(),
@@ -77,10 +85,29 @@ impl ScriptListApp {
     /// P1: Now uses caching - invalidates only when filter_text changes
     pub(crate) fn filtered_results(&self) -> Vec<scripts::SearchResult> {
         let filter_text = self.filter_text();
+        // When a composer-style menu-syntax popup owns the input (e.g. `+t`
+        // or `!dep`), the main launcher should not report or render fuzzy
+        // matches — the popup is the sole surface for the typed characters.
+        // Without this gate, `getState.visibleChoiceCount`, automation
+        // `getElements`, and selection-coercion code would keep iterating
+        // over stale fuzzy results (e.g. 8 "+"-ish script matches) behind
+        // the popup.
+        if self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(filter_text)
+            || self.menu_syntax_mode.command_owns_input_for(filter_text)
+        {
+            return Vec::new();
+        }
+
         // P1: Return cached results if filter hasn't changed
-        if filter_text == self.filter_cache_key {
+        if self
+            .main_menu_result_caches
+            .has_filtered_results_for(filter_text)
+        {
             logging::log_debug("CACHE", &format!("Filter cache HIT for '{}'", filter_text));
-            return self.cached_filtered_results.clone();
+            return self.main_menu_result_caches.clone_filtered_results();
         }
 
         // P1: Cache miss - need to recompute (will be done by get_filtered_results_mut)
@@ -88,7 +115,8 @@ impl ScriptListApp {
             "CACHE",
             &format!(
                 "Filter cache MISS - need recompute for '{}' (cached key: '{}')",
-                filter_text, self.filter_cache_key
+                filter_text,
+                self.main_menu_result_caches.filtered_cache_key()
             ),
         );
 
@@ -98,7 +126,21 @@ impl ScriptListApp {
     /// P1: Get filtered results with cache update (mutable version)
     /// Call this when you need to ensure cache is updated
     pub(crate) fn get_filtered_results_cached(&mut self) -> &Vec<scripts::SearchResult> {
-        if self.filter_text != self.filter_cache_key {
+        if self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(&self.filter_text)
+            || self.menu_syntax_mode.command_owns_input_for(&self.filter_text)
+        {
+            self.main_menu_result_caches
+                .store_filtered_results(self.filter_text.clone(), Vec::new());
+            return self.main_menu_result_caches.filtered_results();
+        }
+
+        if !self
+            .main_menu_result_caches
+            .has_filtered_results_for(&self.filter_text)
+        {
             let filter_text = self.filter_text.clone();
             logging::log(
                 "FILTER_PERF",
@@ -113,8 +155,10 @@ impl ScriptListApp {
                 ),
             );
             let search_start = std::time::Instant::now();
-            self.cached_filtered_results = self.recompute_filtered_results(&filter_text);
-            self.filter_cache_key = filter_text.clone();
+            let filtered_results = self.recompute_filtered_results(&filter_text);
+            let filtered_result_count = filtered_results.len();
+            self.main_menu_result_caches
+                .store_filtered_results(filter_text.clone(), filtered_results);
             let search_elapsed = search_start.elapsed();
 
             logging::log(
@@ -123,20 +167,20 @@ impl ScriptListApp {
                     "[4a/5] SEARCH_DONE '{}' in {:.2}ms -> {} results (skills={})",
                     filter_text,
                     search_elapsed.as_secs_f64() * 1000.0,
-                    self.cached_filtered_results.len(),
+                    filtered_result_count,
                     self.skills.len(),
                 ),
             );
         }
         // NOTE: Removed cache HIT log - fires every render, only log MISS for diagnostics
-        &self.cached_filtered_results
+        self.main_menu_result_caches.filtered_results()
     }
 
     /// P1: Invalidate filter cache (call when scripts/scriptlets change)
     #[allow(dead_code)]
     pub(crate) fn invalidate_filter_cache(&mut self) {
         logging::log_debug("CACHE", "Filter cache INVALIDATED");
-        self.filter_cache_key = String::from("\0_INVALIDATED_\0");
+        self.main_menu_result_caches.invalidate_filtered_results();
     }
 
     fn active_script_list_attachment_portal_kind(
@@ -167,7 +211,10 @@ impl ScriptListApp {
         matches!(
             (kind, result),
             (PortalKind::ScriptSearch, scripts::SearchResult::Script(_))
-                | (PortalKind::ScriptletSearch, scripts::SearchResult::Scriptlet(_))
+                | (
+                    PortalKind::ScriptletSearch,
+                    scripts::SearchResult::Scriptlet(_)
+                )
                 | (PortalKind::SkillSearch, scripts::SearchResult::Skill(_))
         )
     }
@@ -199,14 +246,32 @@ impl ScriptListApp {
     pub(crate) fn get_grouped_results_cached(
         &mut self,
     ) -> (Arc<[GroupedListItem]>, Arc<[scripts::SearchResult]>) {
+        // The grouped cache is keyed by `computed_filter_text`, which can
+        // lag one coalescing tick behind the live input. Menu syntax is an
+        // ownership boundary, so never return stale grouped rows while the
+        // live input is owned by the trigger popup or capture composer.
+        let live_filter_text = self.filter_text.as_str();
+        let computed_filter_text = self.computed_filter_text.as_str();
+        let live_menu_syntax_owns_main_list = self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(live_filter_text)
+            || self.menu_syntax_mode.command_owns_input_for(live_filter_text);
+        if live_menu_syntax_owns_main_list && live_filter_text != computed_filter_text {
+            return (
+                Arc::<[GroupedListItem]>::from(Vec::new()),
+                Arc::<[scripts::SearchResult]>::from(Vec::new()),
+            );
+        }
+
         // P3: Key off computed_filter_text for two-stage filtering
-        if self.computed_filter_text == self.grouped_cache_key {
+        if self
+            .main_menu_result_caches
+            .has_grouped_results_for(&self.computed_filter_text)
+        {
             // NOTE: Removed cache HIT log - fires every render frame, causing log spam.
             // Cache hits are normal operation. Only log cache MISS (below) for diagnostics.
-            return (
-                self.cached_grouped_items.clone(),
-                self.cached_grouped_flat_results.clone(),
-            );
+            return self.main_menu_result_caches.clone_grouped_results();
         }
 
         // Cache miss - need to recompute
@@ -245,23 +310,64 @@ impl ScriptListApp {
                 menu_bar_bundle_id
             ),
         );
-        let (grouped_items, flat_results) = get_grouped_results(
-            &self.scripts,
-            &self.scriptlets,
-            &self.builtin_entries,
-            &self.apps,
-            &self.skills,
-            &self.frecency_store,
-            &self.computed_filter_text,
-            &suggested_config,
-            &menu_bar_items,
-            menu_bar_bundle_id.as_deref(),
-        );
-        let (grouped_items, flat_results) = prepend_inline_calculator_group(
-            grouped_items,
-            flat_results,
-            self.inline_calculator.as_ref(),
-        );
+        let raw_filter_text = self.computed_filter_text.as_str();
+        let menu_syntax_owns_main_list = self.menu_syntax_trigger_popup_state.owns_main_list()
+            || self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(raw_filter_text)
+            || self
+                .menu_syntax_mode
+                .command_owns_input_for(raw_filter_text);
+
+        let (grouped_items, flat_results) = if menu_syntax_owns_main_list {
+            // A composer-style menu-syntax surface owns the input. Suppress
+            // the main launcher list so fuzzy search, capture-handler rows,
+            // and the "Use X with…" fallback section do not leak through the
+            // transparent popup (e.g. typing `+todo` should not also render
+            // capture-mode rows behind the picker). Refine (`:`) remains
+            // structured launcher search and is handled below.
+            (Vec::new(), Vec::new())
+        } else if let Some(invocation) = self.menu_syntax_mode.capture_for(raw_filter_text) {
+            // Capture mode replaces the normal launcher grouping entirely.
+            // Do not mix with Suggested/Favorites/Recent/menu-bar/fallback.
+            crate::scripts::build_capture_mode_results(&self.scripts, invocation)
+        } else if let Some(hint) = self.menu_syntax_mode.incomplete_hint_for(raw_filter_text) {
+            // Menu-syntax trigger picker rows are now owned by the detached
+            // popup window at
+            // `crate::menu_syntax_trigger_popup_window::MenuSyntaxTriggerPopupWindow`
+            // (Oracle iter 015 D2b). The main launcher list shows only the
+            // terse hint line so the two surfaces do not collide — the
+            // rich qualifier / capture target rows live in the popup.
+            crate::scripts::build_menu_syntax_hint_results(hint)
+        } else {
+            let search_text =
+                crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, raw_filter_text);
+            let advanced_query = self.menu_syntax_mode.advanced_query_for(raw_filter_text);
+            crate::scripts::get_grouped_results_with_validation_and_query(
+                &self.scripts,
+                &self.scriptlets,
+                &self.builtin_entries,
+                &self.apps,
+                &self.skills,
+                &self.frecency_store,
+                search_text,
+                &suggested_config,
+                &menu_bar_items,
+                menu_bar_bundle_id.as_deref(),
+                Some(&self.input_history),
+                self.script_validation_report.as_deref(),
+                advanced_query,
+            )
+        };
+        let (grouped_items, flat_results) = if menu_syntax_owns_main_list {
+            (grouped_items, flat_results)
+        } else {
+            prepend_inline_calculator_group(
+                grouped_items,
+                flat_results,
+                self.inline_calculator.as_ref(),
+            )
+        };
         let (grouped_items, flat_results) =
             if let Some(kind) = self.active_script_list_attachment_portal_kind() {
                 self.apply_script_list_attachment_portal_filter(kind, flat_results)
@@ -281,12 +387,14 @@ impl ScriptListApp {
             }
         }
 
-        // P1-Arc: Convert to Arc<[T]> for cheap clone
-        self.cached_grouped_first_selectable_index = first_selectable_index;
-        self.cached_grouped_last_selectable_index = last_selectable_index;
-        self.cached_grouped_items = grouped_items.into();
-        self.cached_grouped_flat_results = flat_results.into();
-        self.grouped_cache_key = self.computed_filter_text.clone();
+        let computed_filter_text = self.computed_filter_text.clone();
+        self.main_menu_result_caches.store_grouped_results(
+            computed_filter_text,
+            grouped_items,
+            flat_results,
+            first_selectable_index,
+            last_selectable_index,
+        );
 
         logging::log(
             "FILTER_PERF",
@@ -294,13 +402,13 @@ impl ScriptListApp {
                 "[4b/5] GROUP_DONE '{}' in {:.2}ms -> {} items (from {} results)",
                 self.computed_filter_text,
                 elapsed.as_secs_f64() * 1000.0,
-                self.cached_grouped_items.len(),
-                self.cached_grouped_flat_results.len()
+                self.main_menu_result_caches.grouped_items().len(),
+                self.main_menu_result_caches.grouped_flat_result_count()
             ),
         );
 
         // Log total time from input to grouped results if we have the start time
-        if let Some(perf_start) = self.filter_perf_start {
+        if let Some(perf_start) = self.main_menu_render_diagnostics.filter_perf_start {
             let total_elapsed = perf_start.elapsed();
             logging::log(
                 "FILTER_PERF",
@@ -312,10 +420,7 @@ impl ScriptListApp {
             );
         }
 
-        (
-            self.cached_grouped_items.clone(),
-            self.cached_grouped_flat_results.clone(),
-        )
+        self.main_menu_result_caches.clone_grouped_results()
     }
 
     /// P1: Invalidate grouped results cache (call when scripts/scriptlets/apps change)
@@ -325,9 +430,7 @@ impl ScriptListApp {
         // This ensures the cache check (computed_filter_text == grouped_cache_key) fails,
         // forcing a recompute on the next get_grouped_results_cached() call.
         // DO NOT set computed_filter_text here - that would cause both to match (false cache HIT).
-        self.cached_grouped_first_selectable_index = None;
-        self.cached_grouped_last_selectable_index = None;
-        self.grouped_cache_key = String::from("\0_INVALIDATED_\0");
+        self.main_menu_result_caches.invalidate_grouped_results();
     }
 
     /// Get the currently selected search result, correctly mapping from grouped index.
@@ -342,17 +445,16 @@ impl ScriptListApp {
     /// - No results exist
     pub(crate) fn get_selected_result(&mut self) -> Option<scripts::SearchResult> {
         let selected_index = self.selected_index;
-        let (grouped_items, flat_results) = self.get_grouped_results_cached();
+        self.get_grouped_results_cached();
 
-        match grouped_items.get(selected_index) {
-            Some(GroupedListItem::Item(idx)) => {
-                if self.inline_calculator_for_result_index(*idx).is_some() {
-                    None
-                } else {
-                    flat_results.get(*idx).cloned()
-                }
-            }
-            _ => None,
+        let result_idx = self
+            .main_menu_result_caches
+            .flat_result_index_for_grouped_item(selected_index)?;
+        if self.inline_calculator_for_result_index(result_idx).is_some() {
+            None
+        } else {
+            self.main_menu_result_caches
+                .cloned_search_result_for_flat_index(result_idx)
         }
     }
 
@@ -566,8 +668,9 @@ impl ScriptListApp {
 
                 // Matched portion — with emphasis
                 let matched: String = chars[overlap_start..overlap_end].iter().collect();
-                new_spans
-                    .push(syntax::HighlightedSpan::with_match_emphasis(matched, span.color));
+                new_spans.push(syntax::HighlightedSpan::with_match_emphasis(
+                    matched, span.color,
+                ));
 
                 // After-match portion
                 if overlap_end < span_len {
@@ -614,8 +717,11 @@ mod tests {
         ];
         let flat_results = Vec::new();
 
-        let (grouped, flat) =
-            prepend_inline_calculator_group(grouped_items, flat_results, Some(&calculator_result()));
+        let (grouped, flat) = prepend_inline_calculator_group(
+            grouped_items,
+            flat_results,
+            Some(&calculator_result()),
+        );
 
         assert!(matches!(
             grouped.first(),
@@ -626,7 +732,10 @@ mod tests {
             grouped.get(1),
             Some(GroupedListItem::Item(INLINE_CALCULATOR_RESULT_INDEX))
         ));
-        assert!(matches!(grouped.get(2), Some(GroupedListItem::SectionHeader(_, _))));
+        assert!(matches!(
+            grouped.get(2),
+            Some(GroupedListItem::SectionHeader(_, _))
+        ));
         assert!(matches!(grouped.get(3), Some(GroupedListItem::Item(0))));
         assert!(matches!(grouped.get(4), Some(GroupedListItem::Item(1))));
         assert!(flat.is_empty());

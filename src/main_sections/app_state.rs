@@ -4,6 +4,279 @@ enum FileSearchSelectionMode {
     UserLockedPath,
 }
 
+/// Render and filter-performance diagnostics owned by the main script list surface.
+#[derive(Debug)]
+struct MainMenuRenderDiagnosticsState {
+    /// Last filter value that produced render diagnostics.
+    last_render_log_filter: String,
+    /// Last selection index that produced render diagnostics.
+    last_render_log_selection: usize,
+    /// Last item count that produced render diagnostics.
+    last_render_log_item_count: usize,
+    /// True when the current render changed enough to log preview diagnostics.
+    log_this_render: bool,
+    /// Start time for the current input-to-grouped-results performance sample.
+    filter_perf_start: Option<std::time::Instant>,
+}
+
+impl Default for MainMenuRenderDiagnosticsState {
+    fn default() -> Self {
+        Self {
+            last_render_log_filter: String::new(),
+            last_render_log_selection: usize::MAX,
+            last_render_log_item_count: usize::MAX,
+            log_this_render: true,
+            filter_perf_start: None,
+        }
+    }
+}
+
+/// Fallback commands shown when the main-menu search has no direct matches.
+#[derive(Default)]
+struct MainMenuFallbackState {
+    active: bool,
+    selected_index: usize,
+    cached_items: Vec<crate::fallbacks::FallbackItem>,
+}
+
+impl MainMenuFallbackState {
+    fn is_active(&self) -> bool {
+        self.active && !self.cached_items.is_empty()
+    }
+
+    fn clear(&mut self) {
+        self.active = false;
+        self.selected_index = 0;
+        self.cached_items.clear();
+    }
+
+    fn replace_items(&mut self, items: Vec<crate::fallbacks::FallbackItem>) {
+        self.active = !items.is_empty();
+        self.selected_index = 0;
+        self.cached_items = items;
+    }
+
+    fn selected_item(&self) -> Option<&crate::fallbacks::FallbackItem> {
+        if !self.is_active() {
+            return None;
+        }
+        self.cached_items.get(self.selected_index)
+    }
+
+    fn move_up(&mut self) -> bool {
+        if !self.is_active() || self.selected_index == 0 {
+            return false;
+        }
+        self.selected_index -= 1;
+        true
+    }
+
+    fn move_down(&mut self) -> bool {
+        if !self.is_active() {
+            return false;
+        }
+        if self.selected_index >= self.cached_items.len().saturating_sub(1) {
+            return false;
+        }
+        self.selected_index += 1;
+        true
+    }
+}
+
+const MAIN_MENU_RESULT_CACHE_UNINITIALIZED_KEY: &str = "\0_UNINITIALIZED_\0";
+const MAIN_MENU_RESULT_CACHE_INVALIDATED_KEY: &str = "\0_INVALIDATED_\0";
+const MAIN_MENU_RESULT_CACHE_APPS_LOADED_KEY: &str = "\0_APPS_LOADED_\0";
+const QUICK_TERMINAL_INITIAL_COLS: u16 = 80;
+const QUICK_TERMINAL_INITIAL_ROWS: u16 = 24;
+const QUICK_TERMINAL_WARM_TTL: std::time::Duration = std::time::Duration::from_secs(600);
+
+/// Search and grouped-result caches owned by the main script-list surface.
+struct MainMenuResultCacheState {
+    cached_filtered_results: Vec<scripts::SearchResult>,
+    filter_cache_key: String,
+    cached_grouped_items: Arc<[GroupedListItem]>,
+    cached_grouped_flat_results: Arc<[scripts::SearchResult]>,
+    cached_grouped_first_selectable_index: Option<usize>,
+    cached_grouped_last_selectable_index: Option<usize>,
+    grouped_cache_key: String,
+}
+
+impl Default for MainMenuResultCacheState {
+    fn default() -> Self {
+        Self {
+            cached_filtered_results: Vec::new(),
+            filter_cache_key: String::from(MAIN_MENU_RESULT_CACHE_UNINITIALIZED_KEY),
+            cached_grouped_items: Arc::from([]),
+            cached_grouped_flat_results: Arc::from([]),
+            cached_grouped_first_selectable_index: None,
+            cached_grouped_last_selectable_index: None,
+            grouped_cache_key: String::from(MAIN_MENU_RESULT_CACHE_UNINITIALIZED_KEY),
+        }
+    }
+}
+
+impl MainMenuResultCacheState {
+    fn has_filtered_results_for(&self, filter_text: &str) -> bool {
+        self.filter_cache_key == filter_text
+    }
+
+    fn filtered_cache_key(&self) -> &str {
+        &self.filter_cache_key
+    }
+
+    fn clone_filtered_results(&self) -> Vec<scripts::SearchResult> {
+        self.cached_filtered_results.clone()
+    }
+
+    fn filtered_results(&self) -> &Vec<scripts::SearchResult> {
+        &self.cached_filtered_results
+    }
+
+    fn store_filtered_results(&mut self, filter_text: String, results: Vec<scripts::SearchResult>) {
+        self.cached_filtered_results = results;
+        self.filter_cache_key = filter_text;
+    }
+
+    fn has_grouped_results_for(&self, computed_filter_text: &str) -> bool {
+        self.grouped_cache_key == computed_filter_text
+    }
+
+    fn grouped_cache_key(&self) -> &str {
+        &self.grouped_cache_key
+    }
+
+    fn clone_grouped_results(&self) -> (Arc<[GroupedListItem]>, Arc<[scripts::SearchResult]>) {
+        (
+            self.cached_grouped_items.clone(),
+            self.cached_grouped_flat_results.clone(),
+        )
+    }
+
+    fn grouped_items(&self) -> &[GroupedListItem] {
+        &self.cached_grouped_items
+    }
+
+    fn grouped_flat_results(&self) -> &[scripts::SearchResult] {
+        &self.cached_grouped_flat_results
+    }
+
+    fn grouped_flat_result_count(&self) -> usize {
+        self.cached_grouped_flat_results.len()
+    }
+
+    fn flat_result_index_for_grouped_item(&self, grouped_index: usize) -> Option<usize> {
+        match self.cached_grouped_items.get(grouped_index) {
+            Some(GroupedListItem::Item(result_idx)) => Some(*result_idx),
+            _ => None,
+        }
+    }
+
+    fn flat_result_index_for_coerced_grouped_selection(
+        &self,
+        selected_index: usize,
+    ) -> Option<(usize, usize)> {
+        let grouped_index =
+            crate::list_item::coerce_selection(self.grouped_items(), selected_index)?;
+        let result_idx = self.flat_result_index_for_grouped_item(grouped_index)?;
+        Some((grouped_index, result_idx))
+    }
+
+    fn search_result_for_flat_index(&self, flat_result_index: usize) -> Option<&scripts::SearchResult> {
+        self.cached_grouped_flat_results.get(flat_result_index)
+    }
+
+    fn cloned_search_result_for_flat_index(
+        &self,
+        flat_result_index: usize,
+    ) -> Option<scripts::SearchResult> {
+        self.search_result_for_flat_index(flat_result_index).cloned()
+    }
+
+    fn search_result_for_grouped_item(&self, grouped_index: usize) -> Option<&scripts::SearchResult> {
+        let result_idx = self.flat_result_index_for_grouped_item(grouped_index)?;
+        self.search_result_for_flat_index(result_idx)
+    }
+
+    fn cloned_search_result_for_grouped_item(
+        &self,
+        grouped_index: usize,
+    ) -> Option<scripts::SearchResult> {
+        self.search_result_for_grouped_item(grouped_index).cloned()
+    }
+
+    fn first_search_result_at_or_after_grouped_item(
+        &self,
+        grouped_index: usize,
+    ) -> Option<&scripts::SearchResult> {
+        (grouped_index..self.cached_grouped_items.len())
+            .find_map(|index| self.search_result_for_grouped_item(index))
+    }
+
+    fn cloned_first_search_result_at_or_after_grouped_item(
+        &self,
+        grouped_index: usize,
+    ) -> Option<scripts::SearchResult> {
+        self.first_search_result_at_or_after_grouped_item(grouped_index)
+            .cloned()
+    }
+
+    fn grouped_search_results(&self) -> impl Iterator<Item = &scripts::SearchResult> {
+        self.cached_grouped_items.iter().filter_map(|item| match item {
+            GroupedListItem::Item(result_idx) => self.search_result_for_flat_index(*result_idx),
+            GroupedListItem::SectionHeader(..) => None,
+        })
+    }
+
+    fn selectable_bounds(&self) -> (Option<usize>, Option<usize>) {
+        (
+            self.cached_grouped_first_selectable_index,
+            self.cached_grouped_last_selectable_index,
+        )
+    }
+
+    fn first_selectable_index(&self) -> Option<usize> {
+        self.cached_grouped_first_selectable_index
+    }
+
+    fn last_selectable_index(&self) -> Option<usize> {
+        self.cached_grouped_last_selectable_index
+    }
+
+    fn has_selectable_grouped_item(&self) -> bool {
+        self.cached_grouped_first_selectable_index.is_some()
+    }
+
+    fn store_grouped_results(
+        &mut self,
+        computed_filter_text: String,
+        grouped_items: Vec<GroupedListItem>,
+        flat_results: Vec<scripts::SearchResult>,
+        first_selectable_index: Option<usize>,
+        last_selectable_index: Option<usize>,
+    ) {
+        self.cached_grouped_first_selectable_index = first_selectable_index;
+        self.cached_grouped_last_selectable_index = last_selectable_index;
+        self.cached_grouped_items = grouped_items.into();
+        self.cached_grouped_flat_results = flat_results.into();
+        self.grouped_cache_key = computed_filter_text;
+    }
+
+    fn mark_apps_loaded(&mut self) {
+        self.filter_cache_key = String::from(MAIN_MENU_RESULT_CACHE_APPS_LOADED_KEY);
+        self.grouped_cache_key = String::from(MAIN_MENU_RESULT_CACHE_APPS_LOADED_KEY);
+    }
+
+    fn invalidate_filtered_results(&mut self) {
+        self.filter_cache_key = String::from(MAIN_MENU_RESULT_CACHE_INVALIDATED_KEY);
+    }
+
+    fn invalidate_grouped_results(&mut self) {
+        self.cached_grouped_first_selectable_index = None;
+        self.cached_grouped_last_selectable_index = None;
+        self.grouped_cache_key = String::from(MAIN_MENU_RESULT_CACHE_INVALIDATED_KEY);
+    }
+}
+
 struct ScriptListApp {
     /// H1 Optimization: Arc-wrapped scripts for cheap cloning during filter operations
     scripts: Vec<std::sync::Arc<scripts::Script>>,
@@ -11,6 +284,10 @@ struct ScriptListApp {
     scriptlets: Vec<std::sync::Arc<scripts::Scriptlet>>,
     /// Plugin-owned skills for main-menu search and ACP skill launch
     skills: Vec<std::sync::Arc<crate::plugins::PluginSkill>>,
+    /// Latest validation report describing scripts that were excluded from the
+    /// catalog (e.g., binding collisions). Used to surface the launcher
+    /// "Script Issues" row and feed the diagnostic view.
+    script_validation_report: Option<std::sync::Arc<crate::scripts::ValidationReport>>,
     builtin_entries: Vec<builtins::BuiltInEntry>,
     /// Cached list of installed applications for main search and AppLauncherView
     apps: Vec<app_launcher::AppInfo>,
@@ -24,6 +301,10 @@ struct ScriptListApp {
     focused_clipboard_entry_id: Option<String>,
     /// P0 FIX: Cached windows for WindowSwitcherView (avoids cloning per frame)
     cached_windows: Vec<window_control::WindowInfo>,
+    /// Cached browser tabs for BrowserTabsView (avoids repeated AppleScript calls while open)
+    cached_browser_tabs: Vec<browser_tabs::BrowserTabInfo>,
+    /// Cached browser history entries for BrowserHistoryView.
+    cached_browser_history: Vec<browser_history::BrowserHistoryEntry>,
     /// Cached file results for FileSearchView (avoids cloning per frame)
     cached_file_results: Vec<file_search::FileResult>,
     /// Cached process list for ProcessManagerView (avoids cloning per frame)
@@ -32,6 +313,9 @@ struct ScriptListApp {
     process_manager_refresh_task: Option<gpui::Task<()>>,
     /// Cached menu bar entries for CurrentAppCommandsView (populated on open)
     cached_current_app_entries: Vec<builtins::BuiltInEntry>,
+    /// Session metadata for CurrentAppCommandsView, including the source app identity.
+    current_app_commands_session:
+        Option<crate::menu_bar::current_app_commands::CurrentAppCommandsSession>,
     selected_index: usize,
     /// Main menu filter text (mirrors gpui-component input state)
     filter_text: String,
@@ -59,6 +343,12 @@ struct ScriptListApp {
     show_logs: bool,
     /// Whether the focused-info panel is visible (toggled via Cmd+I / "Show Info" action)
     show_info_panel: bool,
+    /// Single warm PTY reserved for the next launcher Quick Terminal open.
+    quick_terminal_warm_pty: Option<crate::terminal::TerminalHandle>,
+    /// True while the one-slot Quick Terminal warm PTY pool is being refilled.
+    quick_terminal_warm_inflight: bool,
+    /// Creation timestamp for TTL validation before consuming the warm PTY.
+    quick_terminal_warm_created_at: Option<std::time::Instant>,
     /// Theme wrapped in Arc for cheap cloning when passing to prompts/dialogs
     theme: std::sync::Arc<theme::Theme>,
     #[allow(dead_code)]
@@ -95,14 +385,26 @@ struct ScriptListApp {
     clipboard_list_scroll_handle: UniformListScrollHandle,
     // Scroll handle for emoji picker grid (uniform_list virtualized rows)
     emoji_scroll_handle: UniformListScrollHandle,
+    // Frozen frequent-emoji snapshot for the currently open EmojiPickerView.
+    // Rebuilt from ~/.kenv/emoji-usage.json when the picker opens; render +
+    // navigation + Enter all consume the same Vec so selection indices stay
+    // stable while the view is open. See Oracle-Session
+    // `emoji-picker-frecency-recency` — "freeze ranking at view-open time".
+    emoji_frequent_snapshot: Vec<String>,
     // Scroll handle for window switcher list
     window_list_scroll_handle: UniformListScrollHandle,
+    // Scroll handle for browser tabs list
+    browser_tabs_scroll_handle: UniformListScrollHandle,
     // Scroll handle for process manager list
     process_list_scroll_handle: UniformListScrollHandle,
     // Scroll handle for current app commands list
     current_app_commands_scroll_handle: UniformListScrollHandle,
     // Scroll handle for ACP history list
     acp_history_scroll_handle: ScrollHandle,
+    // Scroll handle for browser history list
+    browser_history_scroll_handle: ScrollHandle,
+    // Scroll handle for dictation history list
+    dictation_history_scroll_handle: ScrollHandle,
     // Scroll handle for notes browse portal list
     notes_browse_scroll_handle: ScrollHandle,
     // Scroll handle for design gallery list
@@ -117,6 +419,8 @@ struct ScriptListApp {
     file_search_debounce_task: Option<gpui::Task<()>>,
     // Current directory being listed (for instant filter mode)
     file_search_current_dir: Option<String>,
+    // Whether the current directory cache includes dot-prefixed entries
+    file_search_current_dir_show_hidden: bool,
     // Frozen filter during directory transitions (prevents wrong results flash)
     // When Some, use this filter instead of deriving from query
     // Outer Option: None = use query filter, Some = use frozen filter
@@ -153,24 +457,48 @@ struct ScriptListApp {
     focused_input: FocusedInput,
     // Current script process PID for explicit cleanup (belt-and-suspenders)
     current_script_pid: Option<u32>,
-    // P1: Cache for filtered_results() - invalidate on filter_text change only
-    cached_filtered_results: Vec<scripts::SearchResult>,
-    filter_cache_key: String,
-    // P1: Cache for get_grouped_results() - invalidate on filter_text change only
-    // This avoids recomputing grouped results 9+ times per keystroke
-    // P1-Arc: Use Arc<[T]> for cheap clone in render closures
-    cached_grouped_items: Arc<[GroupedListItem]>,
-    cached_grouped_flat_results: Arc<[scripts::SearchResult]>,
-    #[allow(dead_code)]
-    cached_grouped_first_selectable_index: Option<usize>,
-    #[allow(dead_code)]
-    cached_grouped_last_selectable_index: Option<usize>,
-    grouped_cache_key: String,
+    /// Main menu filtered and grouped result caches.
+    main_menu_result_caches: MainMenuResultCacheState,
     // P3: Two-stage filter - display vs search separation with coalescing
     /// What the search cache is built from (may lag behind filter_text during rapid typing)
     computed_filter_text: String,
     /// Coalesces filter updates and keeps only the latest value per tick
     filter_coalescer: FilterCoalescer,
+    /// Raw-guarded parse of the current filter text for power syntax
+    /// (`:` advanced query, `;target` / `target:` capture, `;` hint rows).
+    /// Parsed at input-change time in `handle_filter_input_change` and
+    /// `set_filter_text_immediate` so result grouping and execution can consume
+    /// a stable snapshot without racing the filter coalescer.
+    menu_syntax_mode: crate::menu_syntax::MenuSyntaxMode,
+    /// Cached state for the menu-syntax trigger popup (iter 019 commit D1 +
+    /// iter 020 commit D2a). `filter_input_change` runs
+    /// `plan_trigger_popup_transition` on every filter update and keeps this
+    /// field in sync. The GPUI window consuming this state ships in a
+    /// follow-up commit; today we only maintain the snapshot + selected row id
+    /// and emit tracing so the state machine is observable in production.
+    menu_syntax_trigger_popup_state:
+        crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState,
+    /// Run 12 Pass 11 — pending Cmd+Enter inline AI proposal for
+    /// `cmd-enter-inline-ai-proposal`. Set by the Cmd+Enter handler when the
+    /// user is composing power syntax; threaded into the snapshot so the hint
+    /// card can render the proposal title + accept-label inline. Cleared on
+    /// filter change or Esc/Tab dismissal. Pass 11 ships a deterministic stub
+    /// proposal so the receipt is observable without an LLM round-trip; the
+    /// real ACP/LLM call wiring is a follow-up.
+    pub(crate) pending_menu_syntax_ai_proposal:
+        Option<crate::menu_syntax_ai::MenuSyntaxAiProposal>,
+    /// When `Some(filter)`, the menu-syntax trigger popup must NOT
+    /// automatically re-open for that exact filter text. Set by the
+    /// keyboard-apply dispatcher after an Accept (Enter) outcome so the
+    /// user does not see the popup "flicker" back open immediately after
+    /// they committed a target selection — e.g. typing `+`, pressing
+    /// Enter on `Todo inbox` sets the filter to `;todo ` which would
+    /// otherwise re-trigger `plan_trigger_popup_transition` → `Open`
+    /// with the handler snapshot. The suppression is single-use: any
+    /// filter change that produces a DIFFERENT raw text clears it so the
+    /// popup can open again when the user keeps typing or deletes back
+    /// to a partial trigger.
+    menu_syntax_trigger_popup_suppressed_filter: Option<String>,
     // Scroll stabilization: track last scrolled-to index to avoid redundant scroll_to_item calls
     last_scrolled_index: Option<usize>,
     // Preview cache: avoid re-reading file and re-highlighting on every render
@@ -195,24 +523,12 @@ struct ScriptListApp {
     // Input mode: Mouse vs Keyboard - when Keyboard, hover effects are disabled
     // to prevent dual-highlight. Mouse movement switches back to Mouse mode.
     input_mode: InputMode,
-    // Fallback mode: when true, we're showing fallback commands instead of scripts
-    // This happens when filter_text doesn't match any scripts
-    fallback_mode: bool,
-    // Selected index within the fallback list (0-based)
-    fallback_selected_index: usize,
-    // Cached fallback items for the current filter_text
-    cached_fallbacks: Vec<crate::fallbacks::FallbackItem>,
+    /// Main-menu fallback commands for no-match script searches.
+    main_menu_fallback_state: MainMenuFallbackState,
     // Theme before chooser was opened (for cancel/restore)
     theme_before_chooser: Option<std::sync::Arc<theme::Theme>>,
-    // Render log deduplication: only log when meaningful state changes (not cursor blink)
-    last_render_log_filter: String,
-    last_render_log_selection: usize,
-    last_render_log_item_count: usize,
-    /// Transient flag: true if current render has state changes worth logging
-    /// Set at start of render_script_list, read by render_preview_panel
-    log_this_render: bool,
-    // Filter performance tracking: start time of filter change event
-    filter_perf_start: Option<std::time::Instant>,
+    /// Main script-list render diagnostics and input-to-render timing receipts.
+    main_menu_render_diagnostics: MainMenuRenderDiagnosticsState,
     // Pending path action - when set, show ActionsDialog for this path
     // Uses Arc<Mutex<>> so callbacks can write to it
     pending_path_action: Arc<Mutex<Option<PathInfo>>>,
@@ -304,13 +620,35 @@ struct ScriptListApp {
     /// Persistent embedded ACP chat entity so repeated Tab opens can reuse
     /// the same live ACP connection instead of cold-starting a new one.
     pub(crate) embedded_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
+    /// Hidden, never-shown ACP chat entity warmed at startup. It is consumed
+    /// by the first compatible ACP open so prompt submit avoids initialization.
+    pub(crate) prewarmed_acp_chat: Option<Entity<crate::ai::acp::view::AcpChatView>>,
+    /// Cached ready script path from the ACP `SCRIPT_READY` receipt. Updated
+    /// whenever the ACP observer fires. Used by footer button resolution
+    /// (which only has `&self`) without needing a `cx` to read the ACP entity.
+    pub(crate) acp_ready_script_path: Option<std::path::PathBuf>,
+    /// Cached ACP footer dot status so child ACP notifications only repaint
+    /// the parent-owned native footer when the visible footer state changes.
+    pub(crate) acp_footer_dot_status: Option<crate::footer_popup::FooterDotStatus>,
+    /// Cached ACP model label paired with `acp_footer_dot_status`.
+    pub(crate) acp_footer_model_display: Option<String>,
+    /// Snapshot of shared launcher host state while an attachment portal owns
+    /// the main window.
+    pub(crate) attachment_portal_host_snapshot: Option<AttachmentPortalHostSnapshot>,
     /// Previous surface to restore when leaving an attachment portal (file search / clipboard).
     pub(crate) attachment_portal_return_view: Option<AppView>,
     /// Previous focus target to restore when leaving an attachment portal.
     pub(crate) attachment_portal_return_focus_target: Option<FocusTarget>,
+    /// Window width to restore when leaving an attachment portal.
+    pub(crate) attachment_portal_return_width: Option<f32>,
     /// Which attachment portal is currently active, when any.
     pub(crate) active_attachment_portal_kind:
         Option<crate::ai::window::context_picker::types::PortalKind>,
+    /// App-owned placement machine for the ACP surface. Source of
+    /// truth for the `blocks_launcher_ai_entry` and
+    /// `is_attachment_portal` predicates. Written only through
+    /// `transition_acp_surface`; do not mutate directly.
+    pub(crate) acp_surface_state: crate::ai::acp::surface_state::AcpSurfaceState,
     /// Input history for shell-like up/down navigation through previous inputs
     input_history: input_history::InputHistory,
     /// Pending API key configuration - tracks which provider is being configured
@@ -376,6 +714,21 @@ struct ScriptListApp {
     main_window_preflight_cache_key: String,
     /// Window orchestrator — pure state machine for window visibility and focus.
     window_orchestrator: crate::window_orchestrator::OrchestratorState,
+}
+
+#[derive(Clone, Debug)]
+struct AttachmentPortalHostSnapshot {
+    filter_text: String,
+    computed_filter_text: String,
+    pending_filter_sync: bool,
+    pending_placeholder: Option<String>,
+    hovered_index: Option<usize>,
+    selected_index: usize,
+    opened_from_main_menu: bool,
+    focused_input: FocusedInput,
+    pending_focus: Option<FocusTarget>,
+    width_before_portal: Option<f32>,
+    width_after_portal_open: Option<f32>,
 }
 
 /// Result of alias matching - either a Script or Scriptlet

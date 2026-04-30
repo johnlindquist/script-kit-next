@@ -111,6 +111,15 @@ pub fn show_main_window_without_activation() {
             }
         };
 
+        // Oracle-Session `window-activation-invariants-guard` PR1 — fail fast
+        // if the panel drifted from its expected configuration before we
+        // attempt to bring it forward. In debug builds a mismatch panics;
+        // in release it logs a grep-friendly report and continues.
+        let _ = assert_main_panel_invariants(
+            "visibility_focus::show_main_window_without_activation/pre_show",
+            PanelInvariantPhase::PreShow,
+        );
+
         // orderFrontRegardless brings window to front without activating the app
         let _: () = msg_send![window, orderFrontRegardless];
 
@@ -118,6 +127,11 @@ pub fn show_main_window_without_activation() {
         // For NSPanel with NonactivatingPanel style (PopUp windows), this works
         // without activating the application
         let _: () = msg_send![window, makeKeyWindow];
+
+        let _ = assert_main_panel_invariants(
+            "visibility_focus::show_main_window_without_activation/post_make_key",
+            PanelInvariantPhase::PostMakeKey,
+        );
 
         logging::log(
             "PANEL",
@@ -165,6 +179,14 @@ pub fn show_main_window_background() {
                 return;
             }
         };
+
+        // Oracle-Session `window-activation-invariants-guard` PR1 — check the
+        // panel configuration before surfacing it, even in the background
+        // path where we deliberately skip `makeKeyWindow`.
+        let _ = assert_main_panel_invariants(
+            "visibility_focus::show_main_window_background",
+            PanelInvariantPhase::BackgroundShow,
+        );
 
         // orderFrontRegardless brings the window to front without activating the app.
         // Crucially, we do NOT call makeKeyWindow so keyboard focus stays with

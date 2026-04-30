@@ -213,9 +213,9 @@ pub fn get_notes_command_bar_actions(info: &NotesInfo) -> Vec<Action> {
         actions.push(
             Action::new(
                 "send_to_ai",
-                "Send to ACP Chat",
+                "Send to Agent Chat",
                 Some(
-                    "Open ACP inside the Notes window and stage the note cart as @mentions"
+                    "Open Agent Chat inside the Notes window and stage the note cart as @mentions"
                         .to_string(),
                 ),
                 ActionCategory::ScriptContext,

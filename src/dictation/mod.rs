@@ -4,6 +4,7 @@
 pub mod capture;
 mod device;
 pub mod download;
+mod history;
 mod runtime;
 mod transcription;
 mod types;
@@ -17,9 +18,15 @@ pub use device::{
     save_dictation_device_id, DeviceResolution, DictationDeviceMenuItem,
     DictationDeviceSelectionAction,
 };
+pub use history::{
+    build_history_entry, delete_history_entry, format_history_duration_ms,
+    format_history_timestamp, get_history_entry, hydrate_dictation_resource_from_history,
+    load_history, record_dictation_history, search_history, DictationHistoryEntry,
+    DictationHistorySearchField, DictationHistorySearchHit,
+};
 pub use runtime::{
-    abort_dictation, can_cycle_dictation_target, cycle_dictation_target, dictation_elapsed,
-    get_dictation_target, is_dictation_recording, maybe_unload_transcriber,
+    abort_dictation, can_cycle_dictation_target, current_dictation_phase, cycle_dictation_target,
+    dictation_elapsed, get_dictation_target, is_dictation_recording, maybe_unload_transcriber,
     set_dictation_target_cycle, set_overlay_phase, snapshot_overlay_state, toggle_dictation,
     transcribe_captured_audio,
 };
@@ -37,6 +44,7 @@ pub use types::{
 };
 pub use visualizer::{animate_bars, silent_bars};
 pub(crate) use window::overlay_phase_copy;
+pub(crate) use window::render_dictation_overlay_state_preview;
 pub use window::{
     begin_overlay_session, close_dictation_overlay, is_dictation_overlay_open,
     open_dictation_overlay, overlay_generation, set_overlay_abort_callback,

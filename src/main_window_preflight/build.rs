@@ -1,21 +1,11 @@
 use crate::main_window_preflight::types::{
     MainWindowPreflightAction, MainWindowPreflightActionKind, MainWindowPreflightReceipt,
 };
-use crate::{AppView, GroupedListItem};
+use crate::AppView;
 
 fn selected_result(app: &crate::ScriptListApp) -> Option<crate::scripts::SearchResult> {
-    let grouped_items = &app.cached_grouped_items;
-    let flat_results = &app.cached_grouped_flat_results;
-
-    let mut ix = app.selected_index;
-    while let Some(item) = grouped_items.get(ix) {
-        match item {
-            GroupedListItem::Item(result_ix) => return flat_results.get(*result_ix).cloned(),
-            GroupedListItem::SectionHeader(..) => ix += 1,
-        }
-    }
-
-    None
+    app.main_menu_result_caches
+        .cloned_first_search_result_at_or_after_grouped_item(app.selected_index)
 }
 
 fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflightActionKind {
@@ -28,6 +18,9 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
         crate::scripts::SearchResult::Agent(_) => MainWindowPreflightActionKind::RunAgent,
         crate::scripts::SearchResult::Skill(_) => MainWindowPreflightActionKind::OpenSkill,
         crate::scripts::SearchResult::Fallback(_) => MainWindowPreflightActionKind::RunFallback,
+        crate::scripts::SearchResult::ScriptIssue(_) => {
+            MainWindowPreflightActionKind::InspectIssues
+        }
     }
 }
 
@@ -69,7 +62,7 @@ pub(crate) fn build_main_window_preflight_receipt(
 
     let enter_action = MainWindowPreflightAction {
         kind: enter_action_kind(&result),
-        label: result.get_default_action_text().to_string(),
+        label: app.main_window_primary_action_label(),
         subject: result.name().to_string(),
         type_label: result.type_label().to_string(),
         source_name: result.source_name().map(ToString::to_string),

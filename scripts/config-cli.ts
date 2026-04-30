@@ -2,7 +2,7 @@
 /**
  * Script Kit Config CLI
  * 
- * A CLI tool for AI agents to read and modify ~/.scriptkit/kit/config.ts
+ * A CLI tool for AI agents to read and modify ~/.scriptkit/config.ts
  * 
  * Usage:
  *   bun scripts/config-cli.ts get [key]        - Read value(s)
@@ -33,7 +33,7 @@ import type {
   ValidateConfigChangeResult,
 } from './config-schema';
 
-// NOTE: This CLI manages the full ~/.scriptkit/kit/config.ts surface,
+// NOTE: This CLI manages the full ~/.scriptkit/config.ts surface,
 // including runtime preference groups such as theme, dictation, AI, and
 // windowManagement.
 
@@ -106,15 +106,39 @@ interface DictationPreferences {
   selectedDeviceId?: string;
 }
 
+interface AiProfile {
+  id: string;
+  label: string;
+  selectedModelId?: string;
+  selectedAcpAgentId?: string;
+  systemPromptSlug?: string;
+}
+
 interface AiPreferences {
   selectedModelId?: string;
   selectedAcpAgentId?: string;
+  profiles?: AiProfile[];
+  activeProfileId?: string;
 }
 
 type SnapMode = "off" | "simple" | "expanded" | "precision";
 
 interface WindowManagementPreferences {
   snapMode?: SnapMode;
+}
+
+type WindowVibrancyMaterial =
+  | "default"
+  | "none"
+  | "hud"
+  | "popover"
+  | "sidebar";
+
+type WindowAnimationMode = "system" | "reduced" | "off";
+
+interface WindowAppearanceConfig {
+  vibrancy?: WindowVibrancyMaterial;
+  animations?: WindowAnimationMode;
 }
 
 interface CommandConfig {
@@ -131,6 +155,65 @@ interface ClaudeCodeConfig {
   permissionMode?: ClaudeCodePermissionMode;
   allowedTools?: string;
   addDirs?: string[];
+}
+
+type McpTransport = "stdio" | "http";
+
+interface McpBaseServerConfig {
+  name?: string;
+  description?: string;
+  enabled?: boolean;
+}
+
+interface McpStdioServerConfig extends McpBaseServerConfig {
+  transport: "stdio";
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+}
+
+interface McpHttpServerConfig extends McpBaseServerConfig {
+  transport: "http";
+  endpoint: string;
+  headers?: Record<string, string>;
+}
+
+type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig;
+
+interface McpConfig {
+  enabled?: boolean;
+  servers?: Record<string, McpServerConfig>;
+}
+
+type PowerSyntaxCaptureSigil = ";" | "+" | "both";
+type PowerSyntaxCommandSigil = ">" | "disabled";
+
+interface PowerSyntaxCmdEnterAiConfig {
+  enabled?: boolean;
+  modelId?: string;
+  systemPrompt?: string;
+}
+
+interface PowerSyntaxConfig {
+  enabled?: boolean;
+  captureSigil?: PowerSyntaxCaptureSigil;
+  commandSigil?: PowerSyntaxCommandSigil;
+  cmdEnterAi?: PowerSyntaxCmdEnterAiConfig;
+}
+
+interface TrayConfig {
+  showCurrentAppCommands?: boolean;
+  showNotes?: boolean;
+  showAgentChat?: boolean;
+  showReloadScripts?: boolean;
+  showHelp?: boolean;
+  showSocialLinks?: boolean;
+  showUpdateCheck?: boolean;
+}
+
+interface UpdatesConfig {
+  autoCheck?: boolean;
 }
 
 interface Config {
@@ -158,8 +241,13 @@ interface Config {
   dictation?: DictationPreferences;
   ai?: AiPreferences;
   windowManagement?: WindowManagementPreferences;
+  windowAppearance?: WindowAppearanceConfig;
   commands?: Record<string, CommandConfig>;
   claudeCode?: ClaudeCodeConfig;
+  mcp?: McpConfig;
+  powerSyntax?: PowerSyntaxConfig;
+  tray?: TrayConfig;
+  updates?: UpdatesConfig;
 }
 
 // =============================================================================
@@ -224,6 +312,10 @@ const DEFAULTS: Config & Record<string, unknown> = {
     permissionMode: "plan",
     allowedTools: undefined,
     addDirs: []
+  },
+  mcp: {
+    enabled: true,
+    servers: {}
   }
 };
 
@@ -500,6 +592,104 @@ const CONFIG_SCHEMA: ConfigOption[] = [
     default: undefined,
     description: "Drag-snap density for desktop tiling"
   },
+  {
+    key: "windowAppearance.vibrancy",
+    type: '"default" | "none" | "hud" | "popover" | "sidebar" | undefined',
+    default: undefined,
+    description: "Schema-only window vibrancy material; runtime keeps built-in defaults until wired"
+  },
+  {
+    key: "windowAppearance.animations",
+    type: '"system" | "reduced" | "off" | undefined',
+    default: undefined,
+    description: "Schema-only show/hide animation mode; runtime keeps built-in defaults until wired"
+  },
+  {
+    key: "powerSyntax.enabled",
+    type: "boolean | undefined",
+    default: undefined,
+    description: "Schema-only Power Syntax master switch; runtime keeps built-in defaults until wired"
+  },
+  {
+    key: "powerSyntax.captureSigil",
+    type: '";" | "+" | "both" | undefined',
+    default: undefined,
+    description: 'Schema-only capture sigil preference ("both" keeps legacy + and prefers ;)',
+    example: '"both"'
+  },
+  {
+    key: "powerSyntax.commandSigil",
+    type: '">" | "disabled" | undefined',
+    default: undefined,
+    description: 'Schema-only command invocation sigil preference ("disabled" turns off > invocation once wired)',
+    example: '">"'
+  },
+  {
+    key: "powerSyntax.cmdEnterAi.enabled",
+    type: "boolean | undefined",
+    default: undefined,
+    description: "Schema-only Cmd+Enter AI enablement for Power Syntax"
+  },
+  {
+    key: "powerSyntax.cmdEnterAi.modelId",
+    type: "string | undefined",
+    default: undefined,
+    description: "Schema-only Cmd+Enter AI model override; falls back to active Agent Chat model"
+  },
+  {
+    key: "powerSyntax.cmdEnterAi.systemPrompt",
+    type: "string | undefined",
+    default: undefined,
+    description: "Schema-only Cmd+Enter AI system prompt override; falls back to active Agent Chat model"
+  },
+  {
+    key: "tray.showCurrentAppCommands",
+    type: "boolean | undefined",
+    default: undefined,
+    description: "Schema-only tray visibility for the dynamic <App> Commands header row; default true once wired"
+  },
+  {
+    key: "tray.showNotes",
+    type: "boolean | undefined",
+    default: undefined,
+    description: "Schema-only tray visibility for Open Notes; default true once wired"
+  },
+  {
+    key: "tray.showAgentChat",
+    type: "boolean | undefined",
+    default: undefined,
+    description: "Schema-only tray visibility for Open Agent Chat; default true once wired"
+  },
+  {
+    key: "tray.showReloadScripts",
+    type: "boolean | undefined",
+    default: undefined,
+    description: "Schema-only tray visibility for Reload Scripts; default true once wired"
+  },
+  {
+    key: "tray.showHelp",
+    type: "boolean | undefined",
+    default: undefined,
+    description: "Schema-only tray visibility for Help/Feedback; default true once wired"
+  },
+  {
+    key: "tray.showSocialLinks",
+    type: "boolean | undefined",
+    default: undefined,
+    description: "Schema-only tray visibility for Follow Us, GitHub, and Discord; default true once wired"
+  },
+  {
+    key: "tray.showUpdateCheck",
+    type: "boolean | undefined",
+    default: undefined,
+    description: "Schema-only tray visibility for Check for Updates and Version rows; default true once wired"
+  },
+  {
+    key: "updates.autoCheck",
+    type: "boolean | undefined",
+    default: undefined,
+    description: "Schema-only update auto-check preference; default true once wired"
+  },
   // --- Commands & Claude Code ---
   {
     key: "commands",
@@ -546,7 +736,7 @@ const CONFIG_SCHEMA: ConfigOption[] = [
 // Utilities
 // =============================================================================
 
-const CONFIG_PATH = path.join(os.homedir(), '.scriptkit', 'kit', 'config.ts');
+const CONFIG_PATH = path.join(os.homedir(), '.scriptkit', 'config.ts');
 
 interface Result<T> {
   success: boolean;
@@ -797,6 +987,46 @@ function validateValue(key: string, value: unknown): { valid: boolean; error?: s
       return {
         valid: false,
         error: `windowManagement.snapMode must be one of: ${validModes.join(', ')}`,
+      };
+    }
+  }
+
+  if (key === 'windowAppearance.vibrancy' && value !== undefined) {
+    const validMaterials: WindowVibrancyMaterial[] = ['default', 'none', 'hud', 'popover', 'sidebar'];
+    if (!validMaterials.includes(value as WindowVibrancyMaterial)) {
+      return {
+        valid: false,
+        error: `windowAppearance.vibrancy must be one of: ${validMaterials.join(', ')}`,
+      };
+    }
+  }
+
+  if (key === 'windowAppearance.animations' && value !== undefined) {
+    const validModes: WindowAnimationMode[] = ['system', 'reduced', 'off'];
+    if (!validModes.includes(value as WindowAnimationMode)) {
+      return {
+        valid: false,
+        error: `windowAppearance.animations must be one of: ${validModes.join(', ')}`,
+      };
+    }
+  }
+
+  if (key === 'powerSyntax.captureSigil' && value !== undefined) {
+    const validSigils: PowerSyntaxCaptureSigil[] = [';', '+', 'both'];
+    if (!validSigils.includes(value as PowerSyntaxCaptureSigil)) {
+      return {
+        valid: false,
+        error: `powerSyntax.captureSigil must be one of: ${validSigils.join(', ')}`,
+      };
+    }
+  }
+
+  if (key === 'powerSyntax.commandSigil' && value !== undefined) {
+    const validSigils: PowerSyntaxCommandSigil[] = ['>', 'disabled'];
+    if (!validSigils.includes(value as PowerSyntaxCommandSigil)) {
+      return {
+        valid: false,
+        error: `powerSyntax.commandSigil must be one of: ${validSigils.join(', ')}`,
       };
     }
   }
@@ -1130,8 +1360,8 @@ async function cmdValidate(): Promise<void> {
       'clipboardHistoryMaxTextLength', 'suggested', 'notesHotkey',
       'aiHotkey', 'aiHotkeyEnabled', 'logsHotkey', 'logsHotkeyEnabled',
       'dictationHotkey', 'dictationHotkeyEnabled', 'watcher', 'layout',
-      'theme', 'dictation', 'ai', 'windowManagement',
-      'commands', 'claudeCode',
+      'theme', 'dictation', 'ai', 'windowManagement', 'windowAppearance',
+      'commands', 'claudeCode', 'mcp', 'powerSyntax', 'tray', 'updates',
     ];
     for (const key of Object.keys(config)) {
       if (!knownTopLevel.includes(key)) {

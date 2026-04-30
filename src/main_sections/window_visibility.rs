@@ -42,6 +42,24 @@ fn sync_main_automation_window(
         return;
     };
 
+    // Preserve whatever `semantic_surface` the subview-routing path already
+    // stamped onto the `main` registry entry (via
+    // `update_automation_semantic_surface` after a `triggerBuiltin` arm).
+    // If this upsert silently hardcoded `"scriptList"`, any window-resize /
+    // focus-change that follows a subview transition would clobber the
+    // re-key — the subview would appear on screen yet the automation
+    // surface would report `scriptList` the next time
+    // `listAutomationWindows` ran. Falling back to `"scriptList"` on fresh
+    // entries keeps the default for the initial open path.
+    let preserved_surface = crate::windows::resolve_automation_window(Some(
+        &crate::protocol::AutomationWindowTarget::Id {
+            id: "main".to_string(),
+        },
+    ))
+    .ok()
+    .and_then(|info| info.semantic_surface)
+    .or_else(|| Some("scriptList".to_string()));
+
     crate::windows::upsert_runtime_window_handle("main", handle);
     crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
         id: "main".to_string(),
@@ -49,7 +67,7 @@ fn sync_main_automation_window(
         title: Some("Script Kit".to_string()),
         focused,
         visible,
-        semantic_surface: Some("scriptList".to_string()),
+        semantic_surface: preserved_surface,
         bounds: bounds.or_else(current_main_automation_bounds),
         parent_window_id: None,
         parent_kind: None,
@@ -231,21 +249,12 @@ fn show_main_window_helper(
     };
     platform::move_first_window_to_bounds(&bounds);
 
-    // 7. Configure as floating panel (first time only)
-    if !PANEL_CONFIGURED.load(Ordering::SeqCst) {
-        platform::configure_as_floating_panel();
-        // HACK: Swizzle GPUI's BlurredView to preserve native CAChameleonLayer tint
-        // GPUI hides this layer which removes the native macOS vibrancy tinting.
-        // By swizzling, we get proper native blur appearance like Raycast/Spotlight.
-        platform::swizzle_gpui_blurred_view();
-        // Configure vibrancy material based on theme's actual colors
-        // Uses VibrantDark for dark-colored themes, VibrantLight for light-colored themes
-        let theme = theme::get_cached_theme();
-        let is_dark = theme.should_use_dark_vibrancy();
-        let material = theme.get_vibrancy().material;
-        platform::configure_window_vibrancy_material_for_appearance(is_dark, material);
-        PANEL_CONFIGURED.store(true, Ordering::SeqCst);
-    }
+    // 7. Configure as floating panel (first time only).
+    //    Oracle-Session `window-activation-invariants-guard` PR1: the helper
+    //    only flips `PANEL_CONFIGURED` to `true` after a successful
+    //    post-configure invariant report, so an early bail inside
+    //    `configure_as_floating_panel` no longer poisons the one-shot guard.
+    platform::ensure_main_panel_configured("window_visibility::show_main_window_helper");
 
     // 8. Show without app activation, then focus (DEFERRED via cx.spawn).
     //
@@ -370,6 +379,53 @@ fn hide_main_window_helper(app_entity: Entity<ScriptListApp>, cx: &mut App) {
         }
         view.reset_to_script_list(ctx);
     });
+    // After the view has been reset back to ScriptList, re-key the
+    // automation surface so the next list snapshot reports the truth.
+    // Without this, a window hidden while in `FileSearchView` would leak
+    // the `"fileSearch"` surface tag across its next show even though
+    // `reset_to_script_list` has already returned the view to the
+    // script list.
+    crate::windows::update_automation_semantic_surface("main", Some("scriptList".to_string()));
+    // Sibling teardown for the embedded AI (`kind: Ai`, `id: "ai"`) entry.
+    // Matches the `ensure_embedded_ai_window(false)` call in
+    // `close_acp_chat_to_script_list` (the in-app Escape/close-flow path)
+    // so the hide path doesn't leave a stale `ai` child entry behind main
+    // once the view is back on ScriptList. Without this, `listAutomationWindows`
+    // post-hide reports `{id:"ai", visible:true, semanticSurface:"acpChat"}`
+    // even though main is hidden + re-keyed to `"scriptList"` — the anomaly
+    // filed by Run 9 Pass #20 as `attacker-hide-path-embedded-ai-registry-stale`.
+    // Idempotent no-op if the entry isn't present (safe to call on any hide).
+    crate::windows::ensure_embedded_ai_window(false);
+    // Full teardown for actions-dialog (`id: "actions-dialog"`).
+    // Pass #29 fix (`cmd-k-on-unfocused-clipboard-pops-overlay-not-actions`):
+    // upgraded from bare `remove_automation_window("actions-dialog")` to
+    // full `close_actions_window`. The bare registry op (Pass #23) left
+    // the `ACTIONS_WINDOW` static `Mutex<Option<WindowHandle>>` holding a
+    // stale handle after hide; a later `simulateKey cmd+k` on an unfocused
+    // window read `is_actions_window_open()=true` and took the CLOSE
+    // branch, popping whichever overlay was top (e.g. ClipboardHistoryView)
+    // instead of opening an actions dialog that was never there.
+    // `close_actions_window` clears BOTH the static AND the registry via
+    // its first line (`remove_automation_window("actions-dialog")`), so
+    // it is strictly stronger than the pre-#29 call. Idempotent.
+    crate::actions::close_actions_window(cx);
+    // Sibling teardown for confirm-popup (`id: "confirm-popup"`, PromptPopup
+    // kind). Pass #25 fix: close_confirm_window at src/confirm/window.rs:385
+    // is the only production path removing this id; no hide dispatcher calls
+    // it (`attacker-hide-path-confirm-popup-registry-stale`). Same bypass
+    // shape as the actions-dialog sibling above; pure registry op, idempotent.
+    crate::windows::remove_automation_window("confirm-popup");
+
+    // Pre-emptively resize the main window back to its default mini
+    // dimensions (480×440) so `listAutomationWindows` reports consistent
+    // bounds during the hidden phase. Without this, a window grown by a
+    // subview (fileSearch/emoji picker → 750×500) leaks its grown bounds
+    // through the automation registry until the next `show()` self-heals.
+    // Gated on `MainWindowMode::Mini` so Full-mode sizing is never clobbered.
+    if app_entity.read(cx).main_window_mode == MainWindowMode::Mini {
+        crate::window_resize::resize_to_mini_main_window_sync(Default::default());
+        sync_main_automation_window(current_main_automation_bounds(), false, false);
+    }
 
     // 5. Hide appropriately based on secondary windows
     if notes_open || ai_open || acp_chat_open {

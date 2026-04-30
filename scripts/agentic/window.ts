@@ -25,6 +25,29 @@ const DEFAULT_SETTLE_MS = 300;
 const DEFAULT_CAPTURE_RETRY = 1;
 const DEFAULT_CAPTURE_SETTLE_MS = 200;
 
+// The process/owner name reported by CGWindowListCopyWindowInfo for the
+// Script Kit GPUI binary. This is the executable name ("script-kit-gpui"),
+// NOT the user-visible display name ("Script Kit") — the two differ because
+// the app uses NSApp.setActivationPolicy(.accessory) and ships no Info.plist
+// CFBundleName alias at enumeration time. Any `--title "Script Kit"` filter
+// the caller supplies must transparently match this owner name.
+const QUARTZ_OWNER_NAME = "script-kit-gpui";
+
+// Layer threshold at which a Script Kit window is considered "above normal
+// windows" and therefore frontmost-enough for CGEvent delivery. Main panel
+// configured at NSFloatingWindowLevel (3); Quartz reports layer=101 in
+// practice because the WindowServer maps NSFloatingWindowLevel into its
+// own layer namespace. Detached popups may report other elevated layers
+// (≥20 for most panel subtypes). Anything ≥ 3 is a non-desktop, non-normal
+// window — treat it as "frontmost" for our purposes.
+const PANEL_FRONTMOST_LAYER_MIN = 3;
+
+// Resolved swift helper path (sibling file).
+const MACOS_WINDOW_QUERY_SWIFT = new URL(
+  "./macos-window-query.swift",
+  import.meta.url
+).pathname;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -175,56 +198,113 @@ async function runCommand(
 }
 
 // ---------------------------------------------------------------------------
-// Window ID resolution (Quartz CGWindowListCopyWindowInfo)
+// Window ID resolution (Quartz CGWindowListCopyWindowInfo via Swift helper)
 // ---------------------------------------------------------------------------
+
+/**
+ * Shape returned by `scripts/agentic/macos-window-query.swift` per window.
+ * Kept loose (record) because the swift script is the single source of truth
+ * for the exact field names — window.ts is a consumer.
+ */
+interface QuartzWindowRecord {
+  windowId: number;
+  ownerName: string;
+  ownerPid: number;
+  title: string;
+  layer: number;
+  alpha: number;
+  onscreen: boolean;
+  storeType: number;
+  bounds: { x: number; y: number; width: number; height: number };
+}
+
+/**
+ * Normalize a string for fuzzy matching: lowercase, strip non-alphanumerics.
+ * This lets `--title "Script Kit"` match an owner name of "script-kit-gpui",
+ * which is required because macOS `accessory` apps surface their executable
+ * name (not the display name) in CGWindowListCopyWindowInfo.
+ */
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/**
+ * Return true if either the window title or the owner process name matches
+ * the user-supplied title substring. Matching is done on a normalized form
+ * (lowercase, alphanumerics only) so "Script Kit" matches "script-kit-gpui".
+ */
+function windowMatchesTitle(
+  w: QuartzWindowRecord,
+  titleSubstr: string
+): boolean {
+  if (titleSubstr.length === 0) return true;
+  const needle = normalizeForMatch(titleSubstr);
+  if (needle.length === 0) return true;
+  const title = normalizeForMatch(w.title ?? "");
+  const owner = normalizeForMatch(w.ownerName ?? "");
+  return title.includes(needle) || owner.includes(needle);
+}
+
+/**
+ * Call the Swift CGWindowList helper. Returns an empty list on any error
+ * (logged to stderr). Prefers swift over python because macOS ships swift
+ * but not PyObjC — see the swift file's header for the full rationale.
+ */
+async function runSwiftWindowQuery(): Promise<QuartzWindowRecord[]> {
+  try {
+    const proc = Bun.spawn(
+      ["swift", MACOS_WINDOW_QUERY_SWIFT, "--owner", QUARTZ_OWNER_NAME],
+      { stdout: "pipe", stderr: "pipe" }
+    );
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    const code = await proc.exited;
+    if (code !== 0) {
+      stderrLog("window_query_swift_nonzero_exit", {
+        exitCode: code,
+        stderr: stderr.slice(0, 400),
+      });
+      return [];
+    }
+    const parsed = JSON.parse(stdout);
+    if (parsed?.status !== "ok" || !Array.isArray(parsed.windows)) {
+      stderrLog("window_query_swift_bad_envelope", {
+        status: parsed?.status,
+        errorCode: parsed?.error?.code,
+      });
+      return [];
+    }
+    return parsed.windows as QuartzWindowRecord[];
+  } catch (e: any) {
+    stderrLog("window_query_swift_error", { message: e.message });
+    return [];
+  }
+}
 
 /**
  * Resolve the CGWindowID for a Script Kit window.
  * Returns the numeric ID (>0) or 0 if no window found.
- * Prefers Quartz enumeration for reliable IDs that screencapture -l accepts.
+ * Prefers the Swift Quartz helper for reliable IDs that screencapture -l
+ * accepts, falls back to AX.
  */
 async function resolveWindowId(titleSubstr: string): Promise<{ windowId: number; method: "quartz" | "ax" }> {
-  // Primary: Quartz CGWindowListCopyWindowInfo
-  try {
-    const script = `
-do shell script "python3 -c \\"
-import Quartz, json
-windows = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)
-for w in windows:
-    owner = w.get('kCGWindowOwnerName', '')
-    name = w.get('kCGWindowName', '')
-    wid = w.get('kCGWindowNumber', 0)
-    layer = w.get('kCGWindowLayer', -1)
-    bounds = w.get('kCGWindowBounds', {})
-    width = bounds.get('Width', 0)
-    height = bounds.get('Height', 0)
-    if 'Script Kit' in owner and width > 100 and height > 100:
-        print(json.dumps({'wid': wid, 'name': name, 'owner': owner, 'layer': layer}))
-\\""`;
-    const raw = await runOsascript(script);
-    const lines = raw
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const lowerTitle = titleSubstr.toLowerCase();
-    for (const line of lines) {
-      const parsed = JSON.parse(line) as {
-        wid?: number;
-        name?: string;
-        owner?: string;
-      };
-      const name = parsed.name ?? "";
-      const owner = parsed.owner ?? "";
-      const matchesTitle =
-        lowerTitle.length === 0 ||
-        name.toLowerCase().includes(lowerTitle) ||
-        owner.toLowerCase().includes(lowerTitle);
-      if (matchesTitle && parsed.wid && parsed.wid > 0) {
-        return { windowId: parsed.wid, method: "quartz" };
+  const windows = await runSwiftWindowQuery();
+  if (windows.length > 0) {
+    // Prefer panel windows (layer >= PANEL_FRONTMOST_LAYER_MIN, onscreen)
+    // over off-screen or desktop-level windows, so screencapture -l picks
+    // the live visible panel when multiple app instances exist.
+    const ranked = [...windows].sort((a, b) => {
+      const aScore =
+        (a.onscreen ? 100 : 0) + (a.layer >= PANEL_FRONTMOST_LAYER_MIN ? 10 : 0);
+      const bScore =
+        (b.onscreen ? 100 : 0) + (b.layer >= PANEL_FRONTMOST_LAYER_MIN ? 10 : 0);
+      return bScore - aScore;
+    });
+    for (const w of ranked) {
+      if (w.windowId > 0 && windowMatchesTitle(w, titleSubstr)) {
+        return { windowId: w.windowId, method: "quartz" };
       }
     }
-  } catch {
-    // fall through to AX
   }
 
   // Fallback: AXIdentifier
@@ -270,45 +350,33 @@ end tell`;
 // ---------------------------------------------------------------------------
 
 async function enumerateQuartzWindows(titleSubstr: string): Promise<WindowInfo[]> {
-  try {
-    const script = `
-do shell script "python3 -c \\"
-import Quartz, json
-windows = Quartz.CGWindowListCopyWindowInfo(Quartz.kCGWindowListOptionOnScreenOnly, Quartz.kCGNullWindowID)
-results = []
-for w in windows:
-    owner = w.get('kCGWindowOwnerName', '')
-    name = w.get('kCGWindowName', '')
-    wid = w.get('kCGWindowNumber', 0)
-    layer = w.get('kCGWindowLayer', -1)
-    bounds = w.get('kCGWindowBounds', {})
-    if 'Script Kit' in owner:
-        results.append({'wid': wid, 'owner': owner, 'name': name, 'layer': layer, 'x': int(bounds.get('X', 0)), 'y': int(bounds.get('Y', 0)), 'w': int(bounds.get('Width', 0)), 'h': int(bounds.get('Height', 0))})
-print(json.dumps(results))
-\\""`;
-    const raw = await runOsascript(script);
-    const parsed = JSON.parse(raw.trim());
-    const lowerTitle = titleSubstr.toLowerCase();
-    return (parsed as any[])
-      .filter((w: any) => {
-        if (lowerTitle.length === 0) return true;
-        const name = String(w.name ?? "").toLowerCase();
-        const owner = String(w.owner ?? "").toLowerCase();
-        return name.includes(lowerTitle) || owner.includes(lowerTitle);
-      })
-      .map((w: any) => ({
-        windowId: w.wid,
-        ownerName: w.owner,
-        title: w.name,
-        layer: w.layer,
-        bounds: { x: w.x, y: w.y, width: w.w, height: w.h },
-        frontmost: false, // filled in below
-        focused: false,
-        visible: w.w > 0 && w.h > 0,
-      }));
-  } catch {
-    return [];
-  }
+  const raw = await runSwiftWindowQuery();
+  if (raw.length === 0) return [];
+  return raw
+    .filter((w) => windowMatchesTitle(w, titleSubstr))
+    .map((w) => ({
+      windowId: w.windowId,
+      ownerName: w.ownerName,
+      title: w.title,
+      layer: w.layer,
+      bounds: {
+        x: w.bounds.x,
+        y: w.bounds.y,
+        width: w.bounds.width,
+        height: w.bounds.height,
+      },
+      // `frontmost` is computed from panel-presence in checkFrontmost +
+      // findWindows. For NonactivatingPanels the NSApp.frontmost boolean is
+      // always false (the app has .accessory activation policy), so we treat
+      // a visible elevated-layer panel as frontmost-for-input-purposes.
+      frontmost: w.onscreen && w.layer >= PANEL_FRONTMOST_LAYER_MIN,
+      focused: w.onscreen && w.layer >= PANEL_FRONTMOST_LAYER_MIN,
+      visible:
+        w.onscreen &&
+        w.bounds.width > 0 &&
+        w.bounds.height > 0 &&
+        w.alpha > 0,
+    }));
 }
 
 // ---------------------------------------------------------------------------
@@ -316,35 +384,20 @@ print(json.dumps(results))
 // ---------------------------------------------------------------------------
 
 async function checkFrontmost(): Promise<{ frontmost: boolean; focused: boolean }> {
-  let frontmost = false;
-  let focused = false;
-  try {
-    const frontApp = await runOsascript(
-      'tell application "System Events" to get name of first process whose frontmost is true'
-    );
-    frontmost = frontApp.includes("Script Kit");
-  } catch {
-    // couldn't verify
-  }
-  try {
-    const keyResult = await runOsascript(`
-tell application "System Events"
-  set appProcs to every process whose name contains "Script Kit"
-  if (count of appProcs) > 0 then
-    set p to item 1 of appProcs
-    set focWin to value of attribute "AXFocusedWindow" of p
-    if focWin is not missing value then
-      return "key"
-    else
-      return "no-key"
-    end if
-  end if
-end tell`);
-    focused = keyResult === "key";
-  } catch {
-    // AX query can fail
-  }
-  return { frontmost, focused };
+  // Script Kit GPUI runs with NSApp.setActivationPolicy(.accessory) and
+  // presents its main surface as a NonactivatingPanel (WindowKind::PopUp at
+  // NSFloatingWindowLevel). Under that configuration, the traditional
+  // "process is frontmost" check via System Events will ALWAYS return false
+  // — an accessory app cannot become NSApp.frontmost by design. For
+  // agentic CGEvent delivery the question we actually care about is "is the
+  // panel visible and above normal windows?", which we derive from
+  // Quartz: any Script Kit window with `onscreen=true` and
+  // `layer >= PANEL_FRONTMOST_LAYER_MIN`.
+  const panels = await runSwiftWindowQuery();
+  const panelPresent = panels.some(
+    (w) => w.onscreen && w.layer >= PANEL_FRONTMOST_LAYER_MIN && w.alpha > 0
+  );
+  return { frontmost: panelPresent, focused: panelPresent };
 }
 
 // ---------------------------------------------------------------------------
@@ -361,14 +414,20 @@ async function findWindows(titleSubstr: string): Promise<FindResult> {
   }
 
   const windows = await enumerateQuartzWindows(titleSubstr);
+  // Per-window frontmost/focused is already populated in
+  // enumerateQuartzWindows from onscreen + layer, so we do NOT clobber
+  // windows[0] from a bulk checkFrontmost() call. Off-screen helper
+  // windows (tray items, secondary panels) must remain frontmost=false.
 
-  // Fill in frontmost status
-  const { frontmost, focused } = await checkFrontmost();
-  if (windows.length > 0) {
-    // First window inherits frontmost/focused (Quartz returns front-to-back order)
-    windows[0].frontmost = frontmost;
-    windows[0].focused = focused;
-  }
+  // Surface the panel-visible windows first so downstream consumers (focus,
+  // capture, surface classification) see the live main panel at index 0.
+  windows.sort((a, b) => {
+    const score = (w: WindowInfo) =>
+      (w.visible ? 100 : 0) +
+      (w.layer >= PANEL_FRONTMOST_LAYER_MIN ? 10 : 0) +
+      (w.frontmost ? 1 : 0);
+    return score(b) - score(a);
+  });
 
   return { windows, appRunning: appRunning || windows.length > 0 };
 }
@@ -385,10 +444,33 @@ async function focusWindow(
   for (let attempt = 1; attempt <= retryCount; attempt++) {
     stderrLog("window_focus_attempt", { attempt, retryCount, titleSubstr });
 
+    // Early-out: the Script Kit main window is a NonactivatingPanel owned
+    // by an accessory-policy app, so AppleScript-based activation
+    // (`set frontmost of process`) is a no-op at best and an error at
+    // worst. If a panel is already visible and above normal windows, we
+    // are already "frontmost" in the CGEvent-delivery sense. Skip the
+    // activation attempt entirely in that case.
+    const preCheck = await checkFrontmost();
+    if (preCheck.frontmost) {
+      lastFrontmost = preCheck.frontmost;
+      lastFocused = preCheck.focused;
+      const resolved = await resolveWindowId(titleSubstr);
+      windowId = resolved.windowId;
+      stderrLog("window_focus_panel_already_visible", {
+        attempt,
+        windowId,
+      });
+      break;
+    }
+
     try {
+      // Activation path for the (increasingly unlikely) case where the
+      // app is NOT an accessory / NOT a NonactivatingPanel. Both "Script
+      // Kit" (display name) and "script-kit-gpui" (executable name) are
+      // matched so future rebuilds don't regress this.
       await runOsascript(`
 tell application "System Events"
-  set appProcs to every process whose name contains "Script Kit"
+  set appProcs to every process whose (name contains "Script Kit") or (name contains "script-kit-gpui")
   if (count of appProcs) > 0 then
     set frontmost of item 1 of appProcs to true
   else

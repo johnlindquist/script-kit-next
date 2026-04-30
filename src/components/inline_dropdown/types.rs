@@ -7,6 +7,7 @@ pub(crate) struct InlineDropdownColors {
     pub(crate) divider_rgba: u32,
     pub(crate) foreground: Hsla,
     pub(crate) muted_foreground: Hsla,
+    pub(crate) accent: Hsla,
 }
 
 impl InlineDropdownColors {
@@ -18,6 +19,7 @@ impl InlineDropdownColors {
             divider_rgba: chrome.divider_rgba,
             foreground: gpui::rgb(theme.colors.text.primary).into(),
             muted_foreground: gpui::rgb(theme.colors.text.muted).into(),
+            accent: gpui::rgb(theme.colors.accent.selected).into(),
         }
     }
 
@@ -29,6 +31,7 @@ impl InlineDropdownColors {
             divider_rgba: chrome.divider_rgba,
             foreground: gpui::rgb(theme.colors.text.primary).into(),
             muted_foreground: gpui::rgb(theme.colors.text.muted).into(),
+            accent: gpui::rgb(theme.colors.accent.selected).into(),
         }
     }
 }

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-04-11T01:24:10.842Z",
+  "updatedAt": "2026-04-14T14:22:54.563Z",
   "agents": {
     "tab-ai-instant-context-a1": {
       "id": "tab-ai-instant-context-a1",
@@ -512,6 +512,106 @@
         "src/app_execute/builtin_execution.rs": "2026-04-11T01:23:45.981Z",
         "src/app_execute/utility_views.rs": "2026-04-11T01:23:46.053Z"
       }
+    },
+    "surface-proof-a1": {
+      "id": "surface-proof-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Implement the oracle-salvaged agentic-testing surface-proof contract. Success means scripts/agentic/index.ts exposes surface-proof as the default seconds-first proof entrypoint for main, actionsDialog, promptPopup, and acpDetached using exact-id promotion from scripts/agentic/scenario.ts; source-audit tests cover the new scenarios/help; the agentic-testing skill examples are updated; and lat docs are updated with the new automation contract. Relevant anchors already surfaced: scripts/agentic/index.ts, scripts/agentic/scenario.ts, .claude/skills/agentic-testing/SKILL.md, lat.md/automation.md, the oracle notes in .notes/failed-oracles/20260413-013455-agentic-testing-research.md / 20260413-034834-agentic-testing-research.md / 20260413-051247-agentic-testing-research.md, and the AGENTS.md post-task requirement to run lat check after docs updates. Add focused tests for the new contract and verify with the smallest appropriate checks.",
+      "scope": "scripts/agentic/** tests/automation/** .claude/skills/agentic-testing/** lat.md/automation.md",
+      "readonly": false,
+      "status": "abandoned",
+      "claims": [],
+      "createdAt": "2026-04-13T13:11:05.731Z",
+      "lastSeenAt": "2026-04-14T13:07:56.701Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "3b2d792423e9c670d96244a1bd8729155e61675e",
+      "notes": "[auto-pruned] stale for 86048s, pid=93981 not alive",
+      "pid": 93981
+    },
+    "surface-proof-a2": {
+      "id": "surface-proof-a2",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Retry of surface-proof-a1 after a stall. Implement the oracle-salvaged agentic-testing surface-proof contract. Success means scripts/agentic/index.ts exposes surface-proof as the default seconds-first proof entrypoint for main, actionsDialog, promptPopup, and acpDetached using exact-id promotion from scripts/agentic/scenario.ts; source-audit tests cover the new scenarios/help; the agentic-testing skill examples are updated; and lat docs are updated with the new automation contract. Relevant anchors already surfaced: scripts/agentic/index.ts, scripts/agentic/scenario.ts, .claude/skills/agentic-testing/SKILL.md, lat.md/automation.md, tests/automation/* targeting/source-audit tests, and the oracle notes in .notes/failed-oracles/20260413-013455-agentic-testing-research.md / 20260413-034834-agentic-testing-research.md / 20260413-051247-agentic-testing-research.md. Add focused tests, run the narrowest valid checks, run lat check, and close with the required JSON report.",
+      "scope": "scripts/agentic/** tests/automation/** .claude/skills/agentic-testing/** lat.md/automation.md",
+      "readonly": false,
+      "status": "abandoned",
+      "claims": [],
+      "createdAt": "2026-04-13T13:13:54.171Z",
+      "lastSeenAt": "2026-04-14T13:07:56.701Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "3b2d792423e9c670d96244a1bd8729155e61675e",
+      "notes": "[auto-pruned] stale for 86014s, pid=27090 not alive",
+      "pid": 27090
+    },
+    "salvage-portal-a1": {
+      "id": "salvage-portal-a1",
+      "kind": "codex",
+      "mode": "exec",
+      "model": "openai/gpt-5.4",
+      "task": "Implement the highest-signal salvage plan from .notes/salvage.md: formalize the ACP portal state-machine kernel and land the concrete ClipboardHistory contract fix, plus the reusable test seam and the DictationHistory contract coverage that the salvage note says reuses the same scaffolding. Success means the shared portal logic in src/ai/acp/portal_contract.rs is refactored around the oracle-described reducer/state helpers, portal_target_from_part() accepts the ClipboardHistory ?id= form, the hidden test_support seam is exported for integration tests, tests/portal_state_machine_contracts.rs covers ClipboardHistory and DictationHistory variants, lat.md/tests/acp-portal-contract.md is updated, and repo verification passes. Known anchors from the salvage note: src/ai/acp/portal_contract.rs, src/render_builtins/clipboard.rs, src/ai/acp/view.rs, src/test_support/acp_portal.rs, src/lib.rs, tests/portal_state_machine_contracts.rs, lat.md/tests/acp-portal-contract.md, and oracle artifacts under .ploop/runs/autoloop-1776145667366-a80c4187/artifacts/oracle-autoloop-research-1776164479267.oracle-output.md and .ploop/runs/autoloop-1776145887239-0b9241f0/artifacts/oracle-autoloop-research-1776164175189.oracle-output.md. You are not alone in the codebase; do not revert others' edits, and adjust to any concurrent changes you encounter.",
+      "scope": "src/ai/acp/** src/render_builtins/clipboard.rs src/test_support/** src/lib.rs tests/portal_state_machine_contracts.rs lat.md/tests/acp-portal-contract.md",
+      "readonly": false,
+      "status": "needs_split",
+      "claims": [],
+      "createdAt": "2026-04-14T13:08:21.390Z",
+      "lastSeenAt": "2026-04-14T13:19:19.279Z",
+      "host": "johns.macbook.pro.lan",
+      "startSha": "536dc4db8cd0a9da918ff9f2aea5f68ee5ddb90f",
+      "notes": "[policy] commits touch files outside declared scope",
+      "report": {
+        "schema": "opex.agent_report.v1",
+        "agentId": "salvage-portal-a1",
+        "taskSummary": "Formalized the ACP portal state-machine kernel, fixed clipboard history id URI handling, exported a reusable portal test seam, added clipboard and dictation contract coverage, updated lat docs, and verified the scoped portal tests.",
+        "tests": [
+          {
+            "cmd": "cargo test --test portal_state_machine_contracts",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo test acp_portal_contract --lib --tests",
+            "result": "pass"
+          },
+          {
+            "cmd": "cargo fmt -- src/ai/acp/portal_contract.rs src/ai/acp/view.rs src/app_impl/attachment_portal.rs src/lib.rs src/test_support/mod.rs src/test_support/acp_portal.rs src/render_builtins/file_search.rs tests/portal_state_machine_contracts.rs",
+            "result": "pass"
+          },
+          {
+            "cmd": "lat check",
+            "result": "pass"
+          }
+        ],
+        "changedFiles": [
+          "lat.md/tests/acp-portal-contract.md",
+          "src/ai/acp/portal_contract.rs",
+          "src/ai/acp/view.rs",
+          "src/app_impl/attachment_portal.rs",
+          "src/lib.rs",
+          "src/render_builtins/file_search.rs",
+          "src/test_support/acp_portal.rs",
+          "src/test_support/mod.rs",
+          "tests/portal_state_machine_contracts.rs"
+        ],
+        "commitCount": 1,
+        "commitShas": [
+          "43d7fa32e53b6925d87572de5d6f26fa58d11899"
+        ],
+        "commitFiles": [
+          "lat.md/tests/acp-portal-contract.md",
+          "src/ai/acp/portal_contract.rs",
+          "src/ai/acp/view.rs",
+          "src/app_impl/attachment_portal.rs",
+          "src/lib.rs",
+          "src/render_builtins/file_search.rs",
+          "src/test_support/acp_portal.rs",
+          "src/test_support/mod.rs",
+          "tests/portal_state_machine_contracts.rs"
+        ]
+      },
+      "claimed_at": {}
     }
   }
 }

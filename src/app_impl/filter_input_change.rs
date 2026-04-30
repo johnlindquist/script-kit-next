@@ -30,6 +30,54 @@ impl ScriptListApp {
         }
         self.pending_filter_sync = false;
 
+        if matches!(&self.current_view, AppView::CurrentAppCommandsView { .. }) {
+            self.filter_text = new_text.clone();
+            if let Err(error) = self.refresh_current_app_commands_session_if_needed(&new_text, cx) {
+                tracing::warn!(
+                    error = %error,
+                    query = %new_text,
+                    "current_app_commands.refresh_failed_on_filter_change"
+                );
+            }
+            if let AppView::CurrentAppCommandsView {
+                filter,
+                selected_index,
+            } = &mut self.current_view
+            {
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    let input_mode = if self.input_mode == InputMode::Keyboard {
+                        "keyboard"
+                    } else {
+                        "mouse"
+                    };
+
+                    let (_filtered, receipt) = crate::builtins::filter_menu_bar_entries(
+                        &self.cached_current_app_entries,
+                        &new_text,
+                    );
+
+                    tracing::debug!(
+                        query = %receipt.query,
+                        normalized_query = %receipt.normalized_query,
+                        total_entries = receipt.total_entries,
+                        matched_entries = receipt.matched_entries,
+                        input_mode = %input_mode,
+                        "current_app_commands.filter_updated"
+                    );
+
+                    Self::scroll_builtin_to_top_with_log(
+                        &self.current_app_commands_scroll_handle,
+                        "current_app_commands",
+                        self.cached_current_app_entries.len(),
+                        &new_text,
+                        input_mode,
+                    );
+                    cx.notify();
+                }
+            }
+            return;
+        }
+
         // Sync filter to builtin views that use the shared input
         match &mut self.current_view {
             AppView::ClipboardHistoryView {
@@ -153,6 +201,28 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
+            AppView::BrowserTabsView {
+                filter,
+                selected_index,
+            } => {
+                self.filter_text = new_text.clone();
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    let input_mode = if self.input_mode == InputMode::Keyboard {
+                        "keyboard"
+                    } else {
+                        "mouse"
+                    };
+                    Self::scroll_builtin_to_top_with_log(
+                        &self.browser_tabs_scroll_handle,
+                        "browser_tabs",
+                        self.cached_browser_tabs.len(),
+                        &new_text,
+                        input_mode,
+                    );
+                    cx.notify();
+                }
+                return; // Don't run main menu filter logic
+            }
             AppView::ProcessManagerView {
                 filter,
                 selected_index,
@@ -185,43 +255,6 @@ impl ScriptListApp {
                 }
                 return; // Don't run main menu filter logic
             }
-            AppView::CurrentAppCommandsView {
-                filter,
-                selected_index,
-            } => {
-                self.filter_text = new_text.clone();
-                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    let input_mode = if self.input_mode == InputMode::Keyboard {
-                        "keyboard"
-                    } else {
-                        "mouse"
-                    };
-
-                    let (_filtered, receipt) = crate::builtins::filter_menu_bar_entries(
-                        &self.cached_current_app_entries,
-                        &new_text,
-                    );
-
-                    tracing::debug!(
-                        query = %receipt.query,
-                        normalized_query = %receipt.normalized_query,
-                        total_entries = receipt.total_entries,
-                        matched_entries = receipt.matched_entries,
-                        input_mode = %input_mode,
-                        "current_app_commands.filter_updated"
-                    );
-
-                    Self::scroll_builtin_to_top_with_log(
-                        &self.current_app_commands_scroll_handle,
-                        "current_app_commands",
-                        self.cached_current_app_entries.len(),
-                        &new_text,
-                        input_mode,
-                    );
-                    cx.notify();
-                }
-                return; // Don't run main menu filter logic
-            }
             AppView::SearchAiPresetsView {
                 filter,
                 selected_index,
@@ -249,6 +282,28 @@ impl ScriptListApp {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     self.acp_history_scroll_handle.scroll_to_top_of_item(0);
+                    cx.notify();
+                }
+                return; // Don't run main menu filter logic
+            }
+            AppView::BrowserHistoryView {
+                filter,
+                selected_index,
+            } => {
+                self.filter_text = new_text.clone();
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    self.browser_history_scroll_handle.scroll_to_top_of_item(0);
+                    cx.notify();
+                }
+                return; // Don't run main menu filter logic
+            }
+            AppView::DictationHistoryView {
+                filter,
+                selected_index,
+            } => {
+                self.filter_text = new_text.clone();
+                if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
+                    self.dictation_history_scroll_handle.scroll_to_top_of_item(0);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic
@@ -367,8 +422,10 @@ impl ScriptListApp {
                     if let Some(parsed) = crate::file_search::parse_directory_path(&new_text) {
                         let dir_changed =
                             self.file_search_current_dir.as_ref() != Some(&parsed.directory);
+                        let hidden_visibility_changed =
+                            self.file_search_current_dir_show_hidden != parsed.show_hidden;
 
-                        if dir_changed {
+                        if dir_changed || hidden_visibility_changed {
                             self.restart_file_search_stream_for_query(
                                 new_text.clone(),
                                 presentation,
@@ -438,7 +495,7 @@ impl ScriptListApp {
                     self.open_tab_ai_acp_with_mention_picker(window, cx);
                 }
                 ScriptListSpecialEntry::QuickTerminal => {
-                    self.open_quick_terminal(cx);
+                    self.open_quick_terminal(None, cx);
                 }
                 ScriptListSpecialEntry::ActionsHelp => {
                     if self.has_actions() {
@@ -447,6 +504,129 @@ impl ScriptListApp {
                 }
             }
             return;
+        }
+
+        self.set_menu_syntax_mode_from_filter(&new_text);
+
+        // Iter 019 D1 / iter 020 D2a — run the pure popup state machine on
+        // every filter update and mirror the resulting transition into the
+        // cached `menu_syntax_trigger_popup_state` field. The GPUI window
+        // consumer lands in a follow-up commit; today we only track state +
+        // emit tracing so the transitions are observable in production.
+        {
+            // Honor post-Accept suppression. When the dispatcher just
+            // committed a target selection (Enter on `+todo`), the
+            // resulting filter text (`+todo `) would otherwise re-trigger
+            // the state machine → `Open` with the handler snapshot,
+            // flickering the popup back open immediately after dismissal.
+            // We skip the state machine entirely for the exact suppressed
+            // filter and clear the suppression the moment the filter
+            // deviates (user types a body character or deletes back).
+            let popup_suppressed_for_this_text = self
+                .menu_syntax_trigger_popup_suppressed_filter
+                .as_deref()
+                .map(|s| s == new_text)
+                .unwrap_or(false);
+            if !popup_suppressed_for_this_text
+                && self.menu_syntax_trigger_popup_suppressed_filter.is_some()
+            {
+                self.menu_syntax_trigger_popup_suppressed_filter = None;
+            }
+
+            let picker_ctx = crate::menu_syntax::TriggerPickerContext {
+                recent_queries: self.input_history.recent_entries(8),
+                scripts: self.scripts.clone(),
+                scriptlets: self.scriptlets.clone(),
+            };
+            let transition = if popup_suppressed_for_this_text {
+                // User just accepted; popup should stay closed for this
+                // exact filter. Represent that as NoChange so the rest of
+                // the block runs uniformly.
+                crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange
+            } else {
+                crate::menu_syntax_trigger_popup::plan_trigger_popup_transition(
+                    &self.menu_syntax_trigger_popup_state,
+                    &new_text,
+                    &picker_ctx,
+                )
+            };
+            let capture_composer_owns_input = self
+                .menu_syntax_mode
+                .capture_composer_owns_input_for(&new_text);
+            let mut needs_popup_sync = false;
+            match &transition {
+                crate::menu_syntax_trigger_popup::TriggerPopupTransition::NoChange => {}
+                crate::menu_syntax_trigger_popup::TriggerPopupTransition::Close => {
+                    if self.menu_syntax_trigger_popup_state.snapshot.is_some() {
+                        tracing::info!(
+                            target: "script_kit::menu_syntax_popup",
+                            event = "menu_syntax_trigger_popup_close",
+                            filter = %new_text,
+                        );
+                    }
+                    self.menu_syntax_trigger_popup_state = Default::default();
+                    crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+                }
+                crate::menu_syntax_trigger_popup::TriggerPopupTransition::Open {
+                    snapshot,
+                    selected_row_id,
+                } => {
+                    tracing::info!(
+                        target: "script_kit::menu_syntax_popup",
+                        event = "menu_syntax_trigger_popup_open",
+                        filter = %new_text,
+                        row_count = snapshot.rows.len(),
+                        selected_row_id = ?selected_row_id,
+                    );
+                    self.menu_syntax_trigger_popup_state =
+                        crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+                            snapshot: Some(snapshot.clone()),
+                            selected_row_id: selected_row_id.clone(),
+                        };
+                    needs_popup_sync = true;
+                }
+                crate::menu_syntax_trigger_popup::TriggerPopupTransition::Update {
+                    snapshot,
+                    selected_row_id,
+                } => {
+                    tracing::info!(
+                        target: "script_kit::menu_syntax_popup",
+                        event = "menu_syntax_trigger_popup_update",
+                        filter = %new_text,
+                        row_count = snapshot.rows.len(),
+                        selected_row_id = ?selected_row_id,
+                    );
+                    self.menu_syntax_trigger_popup_state =
+                        crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+                            snapshot: Some(snapshot.clone()),
+                            selected_row_id: selected_row_id.clone(),
+                        };
+                    needs_popup_sync = true;
+                }
+            }
+            if needs_popup_sync {
+                self.sync_menu_syntax_trigger_popup_window_for_filter(
+                    new_text.clone(),
+                    window,
+                    cx,
+                );
+                // Popup ownership just flipped — invalidate the grouped
+                // results cache so the main launcher list is rebuilt with
+                // the popup-aware gate in `get_grouped_results_cached`.
+                // Without this, a cache computed before the popup opened
+                // would stay visible behind the popup (e.g. typing `+`
+                // shows 468 stale fuzzy results when setFilter triggered
+                // the synchronous reconcile before the state machine ran).
+                self.invalidate_grouped_cache();
+            } else if matches!(
+                &transition,
+                crate::menu_syntax_trigger_popup::TriggerPopupTransition::Close
+            ) || capture_composer_owns_input
+            {
+                // Popup just closed or the capture composer now owns the
+                // input — rebuild the main list with the ownership gate.
+                self.invalidate_grouped_cache();
+            }
         }
 
         if new_text == self.filter_text {
@@ -475,7 +655,7 @@ impl ScriptListApp {
         // Instead, we'll reset selection when the cache actually updates.
         self.last_scrolled_index = None;
 
-        if new_text.ends_with(' ') {
+        if !self.menu_syntax_mode.is_menu_syntax_for(&new_text) && new_text.ends_with(' ') {
             let trimmed = new_text.trim_end_matches(' ');
             if !trimmed.is_empty() && trimmed == previous_text {
                 if let Some(alias_match) = self.find_alias_match(trimmed) {
@@ -592,6 +772,7 @@ impl ScriptListApp {
     /// from a clean slate.
     fn reset_file_search_transient_state(&mut self) {
         self.file_search_current_dir = None;
+        self.file_search_current_dir_show_hidden = false;
         self.file_search_loading = false;
         self.file_search_frozen_filter = None;
         self.file_search_actions_path = None;
@@ -605,9 +786,9 @@ impl ScriptListApp {
     }
 
     /// Spawn a streaming file-search task that feeds batched results back
-    /// into `apply_file_search_stream_batch`.  Used by both the directory
-    /// and Spotlight paths so the batch/cancel/resize logic lives in one
-    /// place.
+    /// into `apply_file_search_stream_batch`.  Directory streams defer UI
+    /// updates until done so rows do not visibly reshuffle while loading;
+    /// Spotlight streams can still reveal progressive matches.
     fn spawn_file_search_stream_task(
         &mut self,
         gen: u64,
@@ -617,6 +798,7 @@ impl ScriptListApp {
         query_guard: Option<String>,
         clear_on_first_batch: bool,
         sort_on_done: bool,
+        defer_batches_until_done: bool,
         cx: &mut Context<Self>,
     ) {
         let cancel = crate::file_search::new_cancel_token();
@@ -678,6 +860,10 @@ impl ScriptListApp {
                             break;
                         }
                     }
+                }
+
+                if defer_batches_until_done && !done {
+                    continue;
                 }
 
                 if !pending.is_empty() || done {
@@ -828,6 +1014,7 @@ impl ScriptListApp {
 
         if let Some(parsed) = crate::file_search::parse_directory_path(&query) {
             self.file_search_current_dir = Some(parsed.directory.clone());
+            self.file_search_current_dir_show_hidden = parsed.show_hidden;
             self.file_search_frozen_filter = if preserve_old_results_until_first_batch {
                 old_filter
             } else {
@@ -851,6 +1038,7 @@ impl ScriptListApp {
                 None,
                 preserve_old_results_until_first_batch,
                 true,
+                true,
                 cx,
             );
             cx.notify();
@@ -859,6 +1047,7 @@ impl ScriptListApp {
 
         // Spotlight search path
         self.file_search_current_dir = None;
+        self.file_search_current_dir_show_hidden = false;
         self.file_search_frozen_filter = None;
         self.cached_file_results.clear();
         self.file_search_display_indices.clear();
@@ -872,6 +1061,7 @@ impl ScriptListApp {
             presentation,
             75,
             Some(query),
+            false,
             false,
             false,
             cx,
@@ -916,6 +1106,7 @@ mod tests {
             "AppView::EmojiPickerView",
             "AppView::AppLauncherView",
             "AppView::WindowSwitcherView",
+            "AppView::BrowserTabsView",
             "AppView::DesignGalleryView",
             "AppView::ThemeChooserView",
             "AppView::FileSearchView",
@@ -964,6 +1155,7 @@ mod tests {
             "AppView::EmojiPickerView",
             "AppView::AppLauncherView",
             "AppView::WindowSwitcherView",
+            "AppView::BrowserTabsView",
             "AppView::ProcessManagerView",
         ] {
             let view_pos = source

@@ -234,9 +234,8 @@ pub use mdfind::{
     new_cancel_token, search_files, search_files_streaming, CancelToken, SearchEvent,
 };
 pub use os_open::{
-    duplicate_path, move_path, move_to_trash, open_file, open_in_terminal, open_with,
-    prompt_move_destination_dir, prompt_rename_target_name, quick_look, rename_path,
-    reveal_in_finder, show_info,
+    duplicate_path, move_path, move_to_trash, open_file, open_with, prompt_move_destination_dir,
+    prompt_rename_target_name, quick_look, rename_path, reveal_in_finder, show_info,
 };
 
 /// Payload for file drag-out from the mini explorer.
@@ -1343,16 +1342,6 @@ mod tests {
     fn test_terminal_working_directory_falls_back_to_current_dir_without_parent() {
         let resolved = terminal_working_directory("readme.md", false);
         assert_eq!(resolved, ".");
-    }
-    #[cfg(not(target_os = "macos"))]
-    #[test]
-    fn test_open_in_terminal_returns_explicit_unsupported_error_on_non_macos() {
-        let error = open_in_terminal("/tmp/projects/readme.md", false).unwrap_err();
-        assert!(
-            error.contains("only supported on macOS"),
-            "error should explain platform limitation, got: {}",
-            error
-        );
     }
     #[cfg(not(target_os = "macos"))]
     #[test]

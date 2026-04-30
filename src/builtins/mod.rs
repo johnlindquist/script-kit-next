@@ -15,6 +15,15 @@
 //! - **Permission Commands**: Accessibility permission management
 //!
 
+pub mod trigger_registry;
+pub mod trigger_resolve;
+
+// Re-export only the single startup-validation entry point. The canonical
+// `TriggerBuiltin` enum and the `registry()` accessor are addressed through
+// `crate::builtins::trigger_registry::{...}` so there is exactly one path
+// to the registry symbols.
+pub use trigger_registry::validate_trigger_registry;
+
 use crate::config::BuiltInConfig;
 use crate::menu_bar::current_app_commands::{
     GENERATE_SCRIPT_FROM_CURRENT_APP_LABEL, GENERATE_SCRIPT_WITH_AI_LABEL,
@@ -121,15 +130,15 @@ pub enum AiCommandType {
     GenerateScript,
     /// Generate a new Script Kit script using the frontmost app's live context
     GenerateScriptFromCurrentApp,
-    /// Send a screenshot of the entire screen to ACP Chat
+    /// Send a screenshot of the entire screen to Agent Chat
     SendScreenToAi,
-    /// Send a screenshot of the focused window to ACP Chat
+    /// Send a screenshot of the focused window to Agent Chat
     SendFocusedWindowToAi,
-    /// Send the currently selected text to ACP Chat
+    /// Send the currently selected text to Agent Chat
     SendSelectedTextToAi,
-    /// Send the focused browser tab URL/content to ACP Chat
+    /// Send the focused browser tab URL/content to Agent Chat
     SendBrowserTabToAi,
-    /// Send a selected screen area to ACP Chat (interactive selection)
+    /// Send a selected screen area to Agent Chat (interactive selection)
     SendScreenAreaToAi,
     /// Create a new AI chat preset/template
     CreateAiPreset,
@@ -173,12 +182,6 @@ pub enum FrecencyCommandType {
 pub enum SettingsCommandType {
     /// Reset all window positions to defaults
     ResetWindowPositions,
-    /// Configure Vercel AI Gateway API key
-    ConfigureVercelApiKey,
-    /// Configure OpenAI API key
-    ConfigureOpenAiApiKey,
-    /// Configure Anthropic API key
-    ConfigureAnthropicApiKey,
     /// Browse and apply color themes
     ChooseTheme,
     /// Select microphone for dictation
@@ -270,17 +273,21 @@ pub enum BuiltInFeature {
     App(String),
     /// Window switcher for managing and tiling windows
     WindowSwitcher,
+    /// Browser tabs switcher for searching and activating open tabs
+    BrowserTabs,
     /// Design gallery for viewing separator and icon variations
     DesignGallery,
     /// In-app StoryBrowser compare/adopt tool (storybook feature only)
     #[cfg(feature = "storybook")]
     DesignExplorer,
-    /// ACP Chat window for conversing with AI assistants
+    /// Agent Chat window for conversing with AI assistants
     AiChat,
     /// Notes window for quick notes and scratchpad
     Notes,
     /// Emoji picker for selecting and copying emojis
     EmojiPicker,
+    /// Sync the Script Kit workspace to a GitHub repository
+    SyncToGithub,
     /// Menu bar action from the frontmost application
     MenuBarAction(MenuBarActionInfo),
 
@@ -316,10 +323,19 @@ pub enum BuiltInFeature {
     DictationToFrontmostApp,
     /// Voice dictation that always targets the notes editor
     DictationToNotes,
+    /// Dictation transcript history browser
+    DictationHistory,
     /// Settings hub for viewing configuration panels
     Settings,
     /// ACP conversation history browser
     AcpHistory,
+    /// SDK reference browser — in-product view over `kit://sdk-reference`
+    SdkReference,
+    /// Script template catalog — launcher view that picks a starter template
+    /// then opens the naming prompt. Kept distinct from
+    /// [`ScriptCommandType::NewScript`] so the fast `New Script` path stays
+    /// one-keystroke for MCP/API/trigger callers.
+    NewScriptFromTemplate,
 }
 /// A built-in feature entry that appears in the main search
 #[derive(Debug, Clone)]
@@ -434,12 +450,14 @@ impl BuiltInEntry {
             BuiltInFeature::AppLauncher => "Open App Launcher",
             BuiltInFeature::App(_) => "Launch App",
             BuiltInFeature::WindowSwitcher => "Open Window Switcher",
+            BuiltInFeature::BrowserTabs => "Open Browser Tabs",
             BuiltInFeature::DesignGallery => "Open Gallery",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Open Explorer",
-            BuiltInFeature::AiChat => "Open ACP Chat",
+            BuiltInFeature::AiChat => "Open Agent Chat",
             BuiltInFeature::Notes => "Open Notes",
             BuiltInFeature::EmojiPicker => "Open Emoji Picker",
+            BuiltInFeature::SyncToGithub => "Sync to GitHub",
             BuiltInFeature::MenuBarAction(_) => "Execute Menu Item",
             BuiltInFeature::SystemAction(action) => match action {
                 SystemActionType::EmptyTrash => "Empty Trash",
@@ -480,7 +498,7 @@ impl BuiltInEntry {
                 NotesCommandType::QuickCapture => "Start Quick Capture",
             },
             BuiltInFeature::AiCommand(action) => match action {
-                AiCommandType::OpenAi | AiCommandType::MiniAi => "Open ACP Chat",
+                AiCommandType::OpenAi | AiCommandType::MiniAi => "Open Agent Chat",
                 AiCommandType::NewConversation => "Start New Chat",
                 AiCommandType::ClearConversation => "Clear Conversation",
                 AiCommandType::GenerateScript => "Generate Script",
@@ -509,9 +527,6 @@ impl BuiltInEntry {
             },
             BuiltInFeature::SettingsCommand(action) => match action {
                 SettingsCommandType::ResetWindowPositions => "Reset Window Positions",
-                SettingsCommandType::ConfigureVercelApiKey => "Configure Vercel API Key",
-                SettingsCommandType::ConfigureOpenAiApiKey => "Configure OpenAI API Key",
-                SettingsCommandType::ConfigureAnthropicApiKey => "Configure Anthropic API Key",
                 SettingsCommandType::ChooseTheme => "Open Theme Designer",
                 SettingsCommandType::SelectMicrophone => "Select Microphone",
                 SettingsCommandType::DisableWindowSnapping => "Disable Window Snapping",
@@ -545,8 +560,11 @@ impl BuiltInEntry {
             BuiltInFeature::DictationToAiHarness => "Start Dictation to AI",
             BuiltInFeature::DictationToFrontmostApp => "Start Dictation to App",
             BuiltInFeature::DictationToNotes => "Start Dictation to Notes",
+            BuiltInFeature::DictationHistory => "Open Dictation History",
             BuiltInFeature::Settings => "Open Script Kit Settings",
             BuiltInFeature::AcpHistory => "Open Conversation History",
+            BuiltInFeature::SdkReference => "Open SDK Reference",
+            BuiltInFeature::NewScriptFromTemplate => "Browse Templates",
         }
     }
 
@@ -558,12 +576,14 @@ impl BuiltInEntry {
             BuiltInFeature::AppLauncher => "Apps",
             BuiltInFeature::App(_) => "Launch",
             BuiltInFeature::WindowSwitcher => "Switch",
+            BuiltInFeature::BrowserTabs => "Tabs",
             BuiltInFeature::DesignGallery => "Gallery",
             #[cfg(feature = "storybook")]
             BuiltInFeature::DesignExplorer => "Explorer",
             BuiltInFeature::AiChat => "Chat",
             BuiltInFeature::Notes => "Notes",
             BuiltInFeature::EmojiPicker => "Emoji",
+            BuiltInFeature::SyncToGithub => "Sync",
             BuiltInFeature::MenuBarAction(_) => "Menu Item",
             BuiltInFeature::SystemAction(action) => match action {
                 SystemActionType::EmptyTrash => "Empty Trash",
@@ -633,9 +653,6 @@ impl BuiltInEntry {
             },
             BuiltInFeature::SettingsCommand(action) => match action {
                 SettingsCommandType::ResetWindowPositions => "Reset Windows",
-                SettingsCommandType::ConfigureVercelApiKey => "Vercel Key",
-                SettingsCommandType::ConfigureOpenAiApiKey => "OpenAI Key",
-                SettingsCommandType::ConfigureAnthropicApiKey => "Anthropic Key",
                 SettingsCommandType::ChooseTheme => "Theme",
                 SettingsCommandType::SelectMicrophone => "Microphone",
                 SettingsCommandType::DisableWindowSnapping => "Snap Off",
@@ -669,8 +686,11 @@ impl BuiltInEntry {
             BuiltInFeature::DictationToAiHarness => "Dictate AI",
             BuiltInFeature::DictationToFrontmostApp => "Dictate App",
             BuiltInFeature::DictationToNotes => "Dictate Notes",
+            BuiltInFeature::DictationHistory => "History",
             BuiltInFeature::Settings => "Kit Settings",
             BuiltInFeature::AcpHistory => "History",
+            BuiltInFeature::SdkReference => "SDK Docs",
+            BuiltInFeature::NewScriptFromTemplate => "Templates",
         }
     }
 }
@@ -731,13 +751,27 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             debug!("Added Window Switcher built-in entry");
         }
 
-        // ACP Chat is always available from the launcher.
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/browser-tabs",
+            "Search Browser Tabs",
+            "Search all open browser tabs by title or URL and jump to the selected tab",
+            vec![
+                "browser", "tabs", "tab", "search", "switch", "chrome", "safari", "arc", "brave",
+                "edge", "raycast", "url", "web",
+            ],
+            BuiltInFeature::BrowserTabs,
+            "globe",
+        ));
+        debug!("Added Browser Tabs built-in entry");
+
+        // Agent Chat is always available from the launcher.
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/ai-chat",
-            "ACP Chat",
-            "Open ACP Chat with fresh context",
+            "Agent Chat",
+            "Open Agent Chat with fresh context",
             vec![
                 "ai",
+                "agent",
                 "harness",
                 "chat",
                 "assistant",
@@ -749,7 +783,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             BuiltInFeature::AiChat,
             "bot",
         ));
-        debug!("Added ACP Chat built-in entry");
+        debug!("Added Agent Chat built-in entry");
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/acp-history",
@@ -760,6 +794,43 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "history",
         ));
         debug!("Added ACP History built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/sdk-reference",
+            "SDK Reference",
+            "Browse Script Kit SDK functions while writing scripts",
+            vec![
+                "sdk",
+                "reference",
+                "api",
+                "docs",
+                "documentation",
+                "script",
+                "scripting",
+                "functions",
+                "help",
+            ],
+            BuiltInFeature::SdkReference,
+            "book-open",
+        ));
+        debug!("Added SDK Reference built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/dictation-history",
+            "Dictation History",
+            "Browse, search, and reuse saved dictation transcripts",
+            vec![
+                "dictation",
+                "history",
+                "voice",
+                "speech",
+                "transcript",
+                "mic",
+            ],
+            BuiltInFeature::DictationHistory,
+            "mic",
+        ));
+        debug!("Added Dictation History built-in entry");
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/favorites",
@@ -788,6 +859,26 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
             "smile",
         ));
         debug!("Added Emoji Picker built-in entry");
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/sync-to-github",
+            "Sync to GitHub",
+            "Initialize git and sync the Script Kit workspace to GitHub",
+            vec![
+                "sync",
+                "github",
+                "git",
+                "backup",
+                "repository",
+                "repo",
+                "push",
+                "scripts",
+                "scriptkit",
+            ],
+            BuiltInFeature::SyncToGithub,
+            "github",
+        ));
+        debug!("Added Sync to GitHub built-in entry");
 
         // Design Gallery is only available in debug builds (developer tool)
         #[cfg(debug_assertions)]
@@ -1183,7 +1274,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/generate-script-with-ai",
             GENERATE_SCRIPT_WITH_AI_LABEL,
-            "Open ACP Chat to generate a Script Kit script from your prompt text",
+            "Open Agent Chat to generate a Script Kit script from your prompt text",
             vec![
                 "generate",
                 "script",
@@ -1222,7 +1313,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-screen-to-ai",
             "Send Screen to AI",
-            "Capture the full screen and send it to ACP Chat",
+            "Capture the full screen and send it to Agent Chat",
             vec![
                 "send",
                 "screen",
@@ -1239,7 +1330,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-focused-window-to-ai",
             "Send Focused Window to AI",
-            "Capture the focused window and send it to ACP Chat",
+            "Capture the focused window and send it to Agent Chat",
             vec![
                 "send",
                 "window",
@@ -1256,7 +1347,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-selected-text-to-ai",
             "Send Selected Text to AI",
-            "Send the currently selected text to ACP Chat",
+            "Send the currently selected text to Agent Chat",
             vec![
                 "send",
                 "selected",
@@ -1273,7 +1364,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/send-browser-tab-to-ai",
             "Send Focused Browser Tab to AI",
-            "Send the current browser tab URL to ACP Chat",
+            "Send the current browser tab URL to Agent Chat",
             vec![
                 "send", "browser", "tab", "url", "safari", "chrome", "ai", "chat", "web",
             ],
@@ -1330,20 +1421,29 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/new-script",
-            "New Script (Template)",
-            "Create a new Script Kit script from a guided starter template",
+            "New Script",
+            "Create a blank Script Kit script and open it in your editor",
+            vec!["new", "script", "create", "blank", "typescript", "code"],
+            BuiltInFeature::ScriptCommand(ScriptCommandType::NewScript),
+            "plus",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/new-script-from-template",
+            "New Script from Template",
+            "Choose a starter template, name it, and open the generated script",
             vec![
                 "new",
                 "script",
-                "create",
                 "template",
                 "starter",
                 "boilerplate",
                 "scaffold",
-                "code",
+                "choice",
+                "arg",
             ],
-            BuiltInFeature::ScriptCommand(ScriptCommandType::NewScript),
-            "plus",
+            BuiltInFeature::NewScriptFromTemplate,
+            "layout-template",
         ));
 
         entries.push(BuiltInEntry::new_with_icon(
@@ -1433,6 +1533,10 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "configure",
                 "options",
                 "setup",
+                "permissions",
+                "permission",
+                "accessibility",
+                "privacy",
             ],
             BuiltInFeature::Settings,
             "settings",
@@ -1440,8 +1544,53 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
         // Settings Commands
         // =========================================================================
-        // These actions are intentionally routed through the Script Kit Settings hub
-        // instead of competing as top-level launcher commands.
+
+        if crate::window_state::has_custom_positions() {
+            entries.push(BuiltInEntry::new_with_icon(
+                "builtin/reset-window-positions",
+                "Reset Window Positions",
+                "Restore all windows to default positions",
+                vec![
+                    "reset", "window", "position", "default", "restore", "layout", "location",
+                ],
+                BuiltInFeature::SettingsCommand(SettingsCommandType::ResetWindowPositions),
+                "refresh-cw",
+            ));
+        }
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/choose-theme",
+            "Theme Designer",
+            "Design your color theme with live preview",
+            vec![
+                "theme",
+                "appearance",
+                "color",
+                "dark",
+                "light",
+                "scheme",
+                "designer",
+            ],
+            BuiltInFeature::SettingsCommand(SettingsCommandType::ChooseTheme),
+            "palette",
+        ));
+
+        entries.push(BuiltInEntry::new_with_icon(
+            "builtin/select-microphone",
+            "Select Microphone",
+            "Choose which microphone to use for dictation",
+            vec![
+                "microphone",
+                "mic",
+                "audio",
+                "input",
+                "dictation",
+                "device",
+                "recording",
+            ],
+            BuiltInFeature::SettingsCommand(SettingsCommandType::SelectMicrophone),
+            "mic",
+        ));
 
         let snap_mode = crate::window_control::current_snap_mode();
 
@@ -1629,33 +1778,17 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
                 "context",
                 "browser",
                 "selection",
+                // Collapsed alias coverage from Turn This Into a Command.
+                "turn this into a command",
+                "teach",
+                "save",
+                "recipe",
             ],
             BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp),
             "target",
         ));
-
-        entries.push(BuiltInEntry::new_with_icon(
-            "builtin/turn-this-into-a-command",
-            crate::menu_bar::current_app_commands::TURN_THIS_INTO_A_COMMAND_LABEL,
-            "Describe what you want in the frontmost app; Script Kit captures a reusable automation recipe and opens script generation",
-            vec![
-                "turn",
-                "this",
-                "into",
-                "command",
-                "teach",
-                "automation",
-                "current",
-                "app",
-                "save",
-                "script",
-                "recipe",
-                "intent",
-                "generate",
-            ],
-            BuiltInFeature::UtilityCommand(UtilityCommandType::TurnThisIntoCommand),
-            "puzzle",
-        ));
+        // Turn This Into a Command intentionally collapses into Do in Current App
+        // in the launcher registry. The execution path remains for compatibility.
 
         #[cfg(debug_assertions)]
         {
@@ -1852,7 +1985,7 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
         entries.push(BuiltInEntry::new_with_icon(
             "builtin/dictation-to-ai",
             "Dictate to AI",
-            "Voice dictation — speak and submit to ACP Chat",
+            "Voice dictation - speak and submit to Agent Chat",
             vec![
                 "dictate ai",
                 "voice ai",
@@ -1867,6 +2000,47 @@ pub fn get_builtin_entries(config: &BuiltInConfig) -> Vec<BuiltInEntry> {
 
     debug!(count = entries.len(), "Built-in entries loaded");
     entries
+}
+
+fn hidden_builtin_entry(id: &str) -> Option<BuiltInEntry> {
+    match id {
+        "builtin/dictation-to-app" => Some(BuiltInEntry::new_with_icon(
+            id,
+            "Start Dictation to Agent Chat",
+            "Start dictation and submit the result to Agent Chat",
+            vec![
+                "dictation",
+                "dictate",
+                "voice",
+                "microphone",
+                "app",
+                "acp",
+                "chat",
+                "ai",
+            ],
+            BuiltInFeature::DictationToAiHarness,
+            "mic",
+        )),
+        "builtin/dictation-to-notes" => Some(BuiltInEntry::new_with_icon(
+            id,
+            "Start Dictation to Notes",
+            "Start dictation and insert the result into the notes editor",
+            vec!["dictation", "dictate", "voice", "microphone", "notes"],
+            BuiltInFeature::DictationToNotes,
+            "mic",
+        )),
+        _ => None,
+    }
+}
+
+/// Resolve a builtin command ID even when the route is intentionally hidden
+/// from the top-level launcher registry.
+pub fn resolve_builtin_entry(id: &str, config: &BuiltInConfig) -> Option<BuiltInEntry> {
+    let canonical_id = crate::config::canonical_builtin_command_id(id);
+    get_builtin_entries(config)
+        .into_iter()
+        .find(|entry| entry.id == canonical_id)
+        .or_else(|| hidden_builtin_entry(&canonical_id))
 }
 // --- merged from part_002.rs ---
 // ============================================================================
@@ -2172,13 +2346,26 @@ mod tests {
         assert!(window_switcher.keywords.contains(&"manage".to_string()));
         assert!(window_switcher.keywords.contains(&"switcher".to_string()));
 
-        // Check AI harness entry
+        // Check browser tabs entry
+        let browser_tabs = entries.iter().find(|e| e.id == "builtin/browser-tabs");
+        assert!(browser_tabs.is_some());
+        let browser_tabs = browser_tabs.unwrap();
+        assert_eq!(browser_tabs.name, "Search Browser Tabs");
+        assert_eq!(browser_tabs.feature, BuiltInFeature::BrowserTabs);
+        assert!(browser_tabs.keywords.contains(&"browser".to_string()));
+        assert!(browser_tabs.keywords.contains(&"tabs".to_string()));
+        assert!(browser_tabs.keywords.contains(&"raycast".to_string()));
+        assert!(browser_tabs.keywords.contains(&"chrome".to_string()));
+        assert!(browser_tabs.keywords.contains(&"safari".to_string()));
+
+        // Check Agent Chat entry
         let ai_chat = entries.iter().find(|e| e.id == "builtin/ai-chat");
         assert!(ai_chat.is_some());
         let ai_chat = ai_chat.unwrap();
-        assert_eq!(ai_chat.name, "ACP Chat");
+        assert_eq!(ai_chat.name, "Agent Chat");
         assert_eq!(ai_chat.feature, BuiltInFeature::AiChat);
         assert!(ai_chat.keywords.contains(&"ai".to_string()));
+        assert!(ai_chat.keywords.contains(&"agent".to_string()));
         assert!(ai_chat.keywords.contains(&"harness".to_string()));
         assert!(ai_chat.keywords.contains(&"claude".to_string()));
         assert!(ai_chat.keywords.contains(&"gpt".to_string()));
@@ -2223,7 +2410,7 @@ mod tests {
         let entries = get_builtin_entries(&config);
 
         // App launcher no longer creates a built-in entry (apps appear in main search)
-        // But ACP Chat, Notes and Design Gallery are always enabled (plus new command entries)
+        // But Agent Chat, Notes and Design Gallery are always enabled (plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
@@ -2241,7 +2428,7 @@ mod tests {
         };
         let entries = get_builtin_entries(&config);
 
-        // ACP Chat, Notes, and Design Gallery are always enabled (plus new command entries)
+        // Agent Chat, Notes, and Design Gallery are always enabled (plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
         assert!(entries.iter().any(|e| e.id == "builtin/design-gallery"));
@@ -2260,7 +2447,7 @@ mod tests {
         };
         let entries = get_builtin_entries(&config);
 
-        // Window switcher + ACP Chat + Notes + Design Gallery (always enabled, plus new command entries)
+        // Window switcher + Agent Chat + Notes + Design Gallery (always enabled, plus new command entries)
         assert!(entries.iter().any(|e| e.id == "builtin/window-switcher"));
         assert!(entries.iter().any(|e| e.id == "builtin/ai-chat"));
         assert!(entries.iter().any(|e| e.id == "builtin/open-notes"));
@@ -2553,6 +2740,32 @@ mod tests {
         assert!(entries.iter().any(|e| e.id == "builtin/new-script"));
         assert!(entries.iter().any(|e| e.id == "builtin/new-extension"));
     }
+
+    #[test]
+    fn builtins_include_new_script_fast_path_and_template_path() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let fast_path = entries
+            .iter()
+            .find(|e| e.id == "builtin/new-script")
+            .expect("builtin/new-script fast path should exist");
+        assert_eq!(
+            fast_path.feature,
+            BuiltInFeature::ScriptCommand(ScriptCommandType::NewScript),
+            "builtin/new-script must keep routing to ScriptCommandType::NewScript"
+        );
+
+        let template_path = entries
+            .iter()
+            .find(|e| e.id == "builtin/new-script-from-template")
+            .expect("builtin/new-script-from-template catalog path should exist");
+        assert_eq!(
+            template_path.feature,
+            BuiltInFeature::NewScriptFromTemplate,
+            "builtin/new-script-from-template must route to NewScriptFromTemplate",
+        );
+    }
     #[test]
     fn test_new_creation_commands_are_discoverable() {
         let config = BuiltInConfig::default();
@@ -2565,20 +2778,6 @@ mod tests {
         assert!(
             new_script.name.to_lowercase().contains("new"),
             "New Script entry name should prominently include 'new'"
-        );
-        assert!(
-            new_script
-                .keywords
-                .iter()
-                .any(|k| k.eq_ignore_ascii_case("template")),
-            "New Script entry should be discoverable via 'template'"
-        );
-        assert!(
-            new_script
-                .keywords
-                .iter()
-                .any(|k| k.eq_ignore_ascii_case("starter")),
-            "New Script entry should be discoverable via 'starter'"
         );
 
         let new_extension = entries
@@ -2600,12 +2799,96 @@ mod tests {
             "New Scriptlet entry should be discoverable via 'frontmatter'"
         );
     }
+
+    #[test]
+    fn new_script_fast_path_label_does_not_claim_template() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let fast_path = entries
+            .iter()
+            .find(|e| e.id == "builtin/new-script")
+            .expect("builtin/new-script should exist");
+
+        assert_eq!(
+            fast_path.name, "New Script",
+            "fast path name must be plain 'New Script' — the template catalog owns the 'Template' label"
+        );
+        let description_lower = fast_path.description.to_lowercase();
+        assert!(
+            !description_lower.contains("template"),
+            "fast-path description must not claim template behavior: {description_lower:?}"
+        );
+        assert!(
+            !description_lower.contains("starter"),
+            "fast-path description must not claim starter behavior: {description_lower:?}"
+        );
+        assert_eq!(
+            fast_path.feature,
+            BuiltInFeature::ScriptCommand(ScriptCommandType::NewScript),
+            "fast-path must keep routing to the direct naming-prompt flow"
+        );
+    }
+
+    #[test]
+    fn new_script_fast_path_does_not_own_template_keywords() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let fast_path = entries
+            .iter()
+            .find(|e| e.id == "builtin/new-script")
+            .expect("builtin/new-script should exist");
+
+        for forbidden in ["template", "starter", "boilerplate", "scaffold"] {
+            assert!(
+                !fast_path
+                    .keywords
+                    .iter()
+                    .any(|k| k.eq_ignore_ascii_case(forbidden)),
+                "fast path must not advertise '{forbidden}' — that keyword belongs to builtin/new-script-from-template"
+            );
+        }
+    }
+
+    #[test]
+    fn new_script_from_template_owns_template_discovery_terms() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        let template_path = entries
+            .iter()
+            .find(|e| e.id == "builtin/new-script-from-template")
+            .expect("builtin/new-script-from-template should exist");
+
+        assert_eq!(
+            template_path.feature,
+            BuiltInFeature::NewScriptFromTemplate,
+            "template path must route to BuiltInFeature::NewScriptFromTemplate"
+        );
+
+        for required in [
+            "template",
+            "starter",
+            "boilerplate",
+            "scaffold",
+            "choice",
+            "arg",
+        ] {
+            assert!(
+                template_path
+                    .keywords
+                    .iter()
+                    .any(|k| k.eq_ignore_ascii_case(required)),
+                "template path must own the '{required}' discovery keyword"
+            );
+        }
+    }
     #[test]
     fn test_permission_command_entries_exist() {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        // Check that permission command entries exist
         assert!(entries.iter().any(|e| e.id == "builtin/check-permissions"));
         assert!(entries
             .iter()
@@ -2714,23 +2997,35 @@ mod tests {
     }
 
     #[test]
-    fn test_settings_hub_absorbs_direct_settings_commands() {
+    fn test_settings_command_entries_exist() {
         let config = BuiltInConfig::default();
         let entries = get_builtin_entries(&config);
 
-        for id in [
-            "builtin/reset-window-positions",
-            "builtin/configure-vercel-api",
-            "builtin/configure-openai-api",
-            "builtin/configure-anthropic-api",
-            "builtin/choose-theme",
-            "builtin/select-microphone",
-        ] {
-            assert!(
-                entries.iter().all(|entry| entry.id != id),
-                "{id} should be routed through the Script Kit Settings hub instead of the top-level registry"
-            );
-        }
+        assert!(entries
+            .iter()
+            .all(|entry| entry.id != "builtin/configure-vercel-api"));
+        assert!(entries
+            .iter()
+            .all(|entry| entry.id != "builtin/configure-openai-api"));
+        assert!(entries
+            .iter()
+            .all(|entry| entry.id != "builtin/configure-anthropic-api"));
+        assert!(entries
+            .iter()
+            .any(|entry| entry.id == "builtin/choose-theme"));
+        assert!(entries
+            .iter()
+            .any(|entry| entry.id == "builtin/select-microphone"));
+    }
+
+    #[test]
+    fn test_clear_suggested_command_exists() {
+        let config = BuiltInConfig::default();
+        let entries = get_builtin_entries(&config);
+
+        assert!(entries
+            .iter()
+            .any(|entry| entry.id == "builtin/clear-suggested"));
     }
 
     #[test]
@@ -2749,8 +3044,21 @@ mod tests {
             entries
                 .iter()
                 .any(|entry| entry.id == "builtin/dictation-to-ai"),
-            "builtin/dictation-to-ai should remain available as an explicit ACP Chat route"
+            "builtin/dictation-to-ai should remain available as an explicit Agent Chat route"
         );
+    }
+
+    #[test]
+    fn test_resolve_builtin_entry_supports_hidden_dictation_routes() {
+        let config = BuiltInConfig::default();
+
+        let app_route = resolve_builtin_entry("builtin/dictation-to-app", &config)
+            .expect("dictation-to-app route should resolve");
+        assert_eq!(app_route.feature, BuiltInFeature::DictationToAiHarness);
+
+        let notes_route = resolve_builtin_entry("builtin/dictation-to-notes", &config)
+            .expect("dictation-to-notes route should resolve");
+        assert_eq!(notes_route.feature, BuiltInFeature::DictationToNotes);
     }
 
     #[test]
@@ -3045,6 +3353,41 @@ mod tests {
         assert!(
             entry.keywords.contains(&"menubar".to_string()),
             "Do in Current App should include 'menubar' keyword from collapsed entry"
+        );
+    }
+
+    #[test]
+    fn turn_this_into_command_builtin_is_no_longer_registered() {
+        let entries = get_builtin_entries(&BuiltInConfig::default());
+        let found = entries
+            .iter()
+            .find(|e| e.id == "builtin/turn-this-into-a-command");
+        assert!(
+            found.is_none(),
+            "builtin/turn-this-into-a-command should no longer be registered (collapsed into Do in Current App)"
+        );
+    }
+
+    #[test]
+    fn do_in_current_app_absorbs_turn_this_into_command_keywords() {
+        let entries = get_builtin_entries(&BuiltInConfig::default());
+        let entry = entries
+            .iter()
+            .find(|e| e.id == "builtin/do-in-current-app")
+            .expect("builtin/do-in-current-app must be registered");
+        assert!(
+            entry
+                .keywords
+                .contains(&"turn this into a command".to_string()),
+            "Do in Current App should include the collapsed turn-this alias phrase"
+        );
+        assert!(
+            entry.keywords.contains(&"teach".to_string()),
+            "Do in Current App should include the collapsed 'teach' keyword"
+        );
+        assert!(
+            entry.keywords.contains(&"recipe".to_string()),
+            "Do in Current App should include the collapsed 'recipe' keyword"
         );
     }
 

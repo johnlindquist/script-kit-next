@@ -86,11 +86,11 @@ impl Render for ScriptListApp {
             );
             // First close the chat prompt
             self.go_back_or_close(window, cx);
-            // Then show the Vercel API key configuration prompt
+            // Then show the direct-provider API key configuration prompt
             self.show_api_key_prompt(
-                "SCRIPT_KIT_VERCEL_API_KEY",
-                "Enter your Vercel AI Gateway API key",
-                "Vercel AI Gateway",
+                "SCRIPT_KIT_OPENAI_API_KEY",
+                "Enter your OpenAI API key",
+                "OpenAI",
                 cx,
             );
         }
@@ -119,21 +119,55 @@ impl Render for ScriptListApp {
             script_kit_gpui::mark_window_shown();
             logging::log("FOCUS", "Main window gained focus - resetting grace timer");
 
+            if matches!(self.current_view, AppView::FileSearchView { .. }) {
+                let stopped_drag = cx.stop_active_drag(window);
+                self.pending_focus = Some(FocusTarget::MainFilter);
+                self.focused_input = FocusedInput::MainFilter;
+                logging::log(
+                    "FOCUS",
+                    &format!(
+                        "FileSearch focus gained: stopped_drag={} pending_focus=MainFilter",
+                        stopped_drag
+                    ),
+                );
+                tracing::debug!(
+                    target: "script_kit::keyboard",
+                    event = "file_search_refocus_restored_keyboard",
+                    stopped_drag,
+                    "File search restored main-filter keyboard focus after refocus"
+                );
+            }
+
             // Close popups when the main window regains focus (user clicked on it)
             if confirm::is_confirm_window_open() {
-                logging::log("FOCUS", "Main window regained focus - closing confirm popup");
+                logging::log(
+                    "FOCUS",
+                    "Main window regained focus - closing confirm popup",
+                );
                 confirm::route_key_to_confirm_popup("escape", cx);
             }
             if actions::is_actions_window_open() {
-                actions::close_actions_window(cx);
-                self.show_actions_popup = false;
-                self.actions_closed_at = Some(std::time::Instant::now());
-                self.actions_dialog = None;
-                self.mark_filter_resync_after_actions_if_needed();
-                self.pop_focus_overlay(cx);
+                logging::log(
+                    "FOCUS",
+                    "Main window regained focus - closing actions popup via canonical close path",
+                );
+                self.close_actions_popup_for_current_view(window, cx);
             }
         }
         if self.was_window_focused && !is_window_focused {
+            if matches!(self.current_view, AppView::FileSearchView { .. }) {
+                logging::log(
+                    "FOCUS",
+                    &format!(
+                        "FileSearch focus lost: visible={} pinned={} within_grace={} actions_open={} confirm_open={}",
+                        script_kit_gpui::is_main_window_visible(),
+                        self.is_pinned,
+                        script_kit_gpui::is_within_focus_grace_period(),
+                        actions::is_actions_window_open(),
+                        confirm::is_confirm_window_open()
+                    ),
+                );
+            }
             // Window just lost focus (user clicked another window)
             // Only auto-dismiss if we're in a dismissable view AND window is visible AND not pinned
             // AND we're past the focus grace period (prevents race condition on window open)
@@ -148,12 +182,18 @@ impl Render for ScriptListApp {
                 && !crate::dictation::is_dictation_overlay_open()
                 && !crate::dictation::is_dictation_recording()
                 && self.tab_ai_save_offer_state.is_none()
+                && self.shortcut_recorder_state.is_none()
             {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus while in dismissable view - closing",
                 );
                 self.close_and_reset_window(cx);
+            } else if self.shortcut_recorder_state.is_some() {
+                logging::log(
+                    "FOCUS",
+                    "Main window lost focus but shortcut recorder is open - staying open",
+                );
             } else if self.tab_ai_save_offer_state.is_some() {
                 logging::log(
                     "FOCUS",
@@ -196,6 +236,7 @@ impl Render for ScriptListApp {
                 | AppView::EmojiPickerView { .. }
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
+                | AppView::BrowserTabsView { .. }
                 | AppView::DesignGalleryView { .. }
                 | AppView::FileSearchView { .. }
                 | AppView::ThemeChooserView { .. }
@@ -204,6 +245,7 @@ impl Render for ScriptListApp {
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::AcpHistoryView { .. }
+                | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
                 | AppView::MiniPrompt { .. }
                 | AppView::ArgPrompt { .. }
@@ -226,6 +268,107 @@ impl Render for ScriptListApp {
         let current_view = self.current_view.clone();
         let main_content: AnyElement = match current_view {
             AppView::ScriptList => self.render_script_list(cx).into_any_element(),
+            AppView::About {
+                state,
+                update_state,
+                ..
+            } => {
+                let app = cx.entity().downgrade();
+                let dismiss_app = app.clone();
+                let github_app = app.clone();
+                let discord_app = app.clone();
+                let follow_app = app.clone();
+                let check_app = app.clone();
+                let release_app = app.clone();
+                let toggle_app = app.clone();
+                let key_app = app;
+                let actions = crate::about::render::AboutSurfaceActions {
+                    dismiss: std::rc::Rc::new(move |_event, _window, cx| {
+                        if let Some(app) = dismiss_app.upgrade() {
+                            app.update(cx, |this, cx| this.dismiss_about(cx));
+                        }
+                    }),
+                    open_github: std::rc::Rc::new(move |_event, _window, _cx| {
+                        if let Err(error) = open::that(crate::branding::URL_GITHUB) {
+                            logging::log("ABOUT", &format!("Failed to open GitHub: {}", error));
+                        }
+                        let _ = github_app.upgrade();
+                    }),
+                    open_discord: std::rc::Rc::new(move |_event, _window, _cx| {
+                        if let Err(error) = open::that(crate::branding::URL_DISCORD) {
+                            logging::log("ABOUT", &format!("Failed to open Discord: {}", error));
+                        }
+                        let _ = discord_app.upgrade();
+                    }),
+                    follow_x: std::rc::Rc::new(move |_event, _window, _cx| {
+                        if let Err(error) = open::that(crate::branding::URL_FOLLOW_US) {
+                            logging::log("ABOUT", &format!("Failed to open X: {}", error));
+                        }
+                        let _ = follow_app.upgrade();
+                    }),
+                    check_updates: std::rc::Rc::new({
+                        let update_state = update_state.clone();
+                        move |_event, _window, cx| {
+                            let state = update_state.clone();
+                            let app = check_app.clone();
+                            crate::updates::check_now(state, || {});
+                            cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+                                cx.background_executor()
+                                    .timer(std::time::Duration::from_secs(12))
+                                    .await;
+                                cx.update(move |cx| {
+                                    if let Some(app) = app.upgrade() {
+                                        app.update(cx, |_this, cx| cx.notify());
+                                    }
+                                });
+                            })
+                            .detach();
+                        }
+                    }),
+                    open_release: std::rc::Rc::new({
+                        let update_state = update_state.clone();
+                        move |_event, _window, _cx| {
+                            let snapshot = update_state
+                                .read()
+                                .map(|guard| guard.clone())
+                                .unwrap_or_else(|_| crate::updates::UpdateState::Idle);
+                            if let Some(url) = snapshot.release_url() {
+                                if let Err(error) = open::that(url) {
+                                    logging::log(
+                                        "ABOUT",
+                                        &format!("Failed to open release page: {}", error),
+                                    );
+                                }
+                            }
+                            let _ = release_app.upgrade();
+                        }
+                    }),
+                    toggle_acknowledgements: std::rc::Rc::new(move |_event, _window, cx| {
+                        if let Some(app) = toggle_app.upgrade() {
+                            app.update(cx, |this, cx| this.toggle_about_acknowledgements(cx));
+                        }
+                    }),
+                    key_down: std::rc::Rc::new(move |event, _window, cx| {
+                        if crate::ui_foundation::is_key_escape(event.keystroke.key.as_str()) {
+                            if let Some(app) = key_app.upgrade() {
+                                app.update(cx, |this, cx| this.dismiss_about(cx));
+                            }
+                            cx.stop_propagation();
+                        } else {
+                            cx.propagate();
+                        }
+                    }),
+                };
+                crate::about::render::render_about_surface(
+                    &state,
+                    update_state,
+                    &self.focus_handle,
+                    actions,
+                    window,
+                    cx,
+                )
+                .into_any_element()
+            }
             AppView::ActionsDialog => self.render_actions_dialog(cx),
             AppView::ArgPrompt {
                 id,
@@ -307,6 +450,12 @@ impl Render for ScriptListApp {
             } => self
                 .render_window_switcher(filter, selected_index, cx)
                 .into_any_element(),
+            AppView::BrowserTabsView {
+                filter,
+                selected_index,
+            } => self
+                .render_browser_tabs(filter, selected_index, cx)
+                .into_any_element(),
             AppView::DesignGalleryView {
                 filter,
                 selected_index,
@@ -343,6 +492,24 @@ impl Render for ScriptListApp {
             AppView::CreationFeedback { ref path } => {
                 self.render_creation_feedback(path.clone(), cx)
             }
+            AppView::ScriptIssuesView { ref report } => {
+                self.render_script_issues_view(report.clone(), cx)
+            }
+            AppView::SdkReferenceView {
+                ref filter,
+                selected_index,
+                ref entries,
+            } => self.render_sdk_reference_view(filter, selected_index, entries.clone(), cx),
+            AppView::ScriptTemplateCatalogView {
+                ref filter,
+                selected_index,
+                ref templates,
+            } => self.render_script_template_catalog_view(
+                filter,
+                selected_index,
+                templates.clone(),
+                cx,
+            ),
             AppView::BrowseKitsView {
                 ref query,
                 selected_index,
@@ -385,9 +552,7 @@ impl Render for ScriptListApp {
             AppView::SettingsView {
                 filter,
                 selected_index,
-            } => {
-                self.render_settings(filter, selected_index, cx)
-            }
+            } => self.render_settings(filter, selected_index, cx),
             AppView::FavoritesBrowseView {
                 filter,
                 selected_index,
@@ -400,6 +565,18 @@ impl Render for ScriptListApp {
             } => self
                 .render_acp_history(filter, selected_index, cx)
                 .into_any_element(),
+            AppView::BrowserHistoryView {
+                filter,
+                selected_index,
+            } => self
+                .render_browser_history(filter, selected_index, cx)
+                .into_any_element(),
+            AppView::DictationHistoryView {
+                filter,
+                selected_index,
+            } => self
+                .render_dictation_history(filter, selected_index, cx)
+                .into_any_element(),
             AppView::NotesBrowseView {
                 filter,
                 selected_index,
@@ -407,6 +584,13 @@ impl Render for ScriptListApp {
                 .render_notes_browse_portal(filter, selected_index, cx)
                 .into_any_element(),
             AppView::AcpChatView { entity } => entity.into_any_element(),
+            AppView::ConfirmPrompt {
+                options,
+                focused_button,
+                ..
+            } => self
+                .render_confirm_prompt(options, focused_button, cx)
+                .into_any_element(),
         };
 
         // Wrap content in a container that can have the debug grid overlay
@@ -480,8 +664,13 @@ impl Render for ScriptListApp {
         }
 
         // Clear perf tracking after one complete render cycle
-        if self.filter_perf_start.is_some() && !self.filter_text.is_empty() {
-            self.filter_perf_start = None;
+        if self
+            .main_menu_render_diagnostics
+            .filter_perf_start
+            .is_some()
+            && !self.filter_text.is_empty()
+        {
+            self.main_menu_render_diagnostics.filter_perf_start = None;
         }
 
         // Get vibrancy background - None when vibrancy enabled (let Root handle blur)
@@ -493,6 +682,32 @@ impl Render for ScriptListApp {
         // Get themed border color with 25% opacity (0x40 = 64/255)
         let border_color = rgba((self.theme.colors.ui.border << 8) | 0x40);
 
+        let actions_window_open = actions::is_actions_window_open();
+        let actions_background_shield = if actions_window_open {
+            Some(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .occlude()
+                    .on_any_mouse_down(cx.listener(|this, _, window, cx| {
+                        logging::log(
+                            "FOCUS",
+                            "Main window shield clicked - closing actions popup via canonical close path",
+                        );
+                        this.close_actions_popup_for_current_view(window, cx);
+                        cx.stop_propagation();
+                    }))
+                    .on_mouse_move(cx.listener(|_this, _: &MouseMoveEvent, _window, cx| {
+                        cx.stop_propagation();
+                    }))
+                    .on_scroll_wheel(cx.listener(|_this, _event: &gpui::ScrollWheelEvent, _window, cx| {
+                        cx.stop_propagation();
+                    })),
+            )
+        } else {
+            None
+        };
+
         // Outer container: holds both the clipped main content and the dialog
         // layer which must NOT be clipped (same pattern as Notes window).
         div()
@@ -502,7 +717,7 @@ impl Render for ScriptListApp {
             // Route keys to confirm popup when it's open (Escape/Enter/Tab).
             // This must be at the outermost level to intercept before any
             // view-specific handlers.
-            .capture_key_down(cx.listener(|_this, event: &KeyDownEvent, _window, cx| {
+            .capture_key_down(cx.listener(|this, event: &KeyDownEvent, window, cx| {
                 let key = event.keystroke.key.as_str();
                 if confirm::consume_main_window_key_while_confirm_open(
                     key,
@@ -510,22 +725,122 @@ impl Render for ScriptListApp {
                     cx,
                 ) {
                     cx.stop_propagation();
+                    return;
+                }
+
+                if matches!(this.current_view, AppView::FileSearchView { .. })
+                    && !actions::is_actions_window_open()
+                {
+                    if crate::ui_foundation::is_key_escape(key) {
+                        logging::log(
+                            "KEY",
+                            "Escape - closing FileSearchView from root capture",
+                        );
+                        if this.is_in_attachment_portal() {
+                            this.close_attachment_portal_cancel(cx);
+                        } else if !this.clear_builtin_view_filter(cx) {
+                            this.go_back_or_close(window, cx);
+                        }
+                        cx.stop_propagation();
+                        return;
+                    }
+
+                    if event.keystroke.modifiers.platform && key.eq_ignore_ascii_case("w") {
+                        logging::log("KEY", "Cmd+W - closing FileSearchView from root capture");
+                        this.close_and_reset_window(cx);
+                        cx.stop_propagation();
+                    }
                 }
             }))
+            .capture_any_mouse_down(cx.listener(|this, _, window, cx| {
+                if matches!(this.current_view, AppView::FileSearchView { .. }) {
+                    let needs_app_reactivate =
+                        take_file_search_native_drag_awaiting_app_reactivate();
+                    let stopped_drag = cx.stop_active_drag(window);
+                    if needs_app_reactivate || stopped_drag {
+                        if needs_app_reactivate {
+                            platform::activate_main_window();
+                        }
+                        window.activate_window();
+                        let input_state = this.gpui_input_state.clone();
+                        this.focus_main_filter(window, cx);
+                        logging::log(
+                            "FOCUS",
+                            &format!(
+                                "FileSearch root mouse capture: stopped_drag={} restored_main_filter_focus=true activated_window=true needs_app_reactivate={} main_window_focused={}",
+                                stopped_drag,
+                                needs_app_reactivate,
+                                platform::is_main_window_focused()
+                            ),
+                        );
+                        if needs_app_reactivate {
+                            window.defer(cx, move |window, cx| {
+                                platform::activate_main_window();
+                                window.activate_window();
+                                input_state.update(cx, |state, cx| {
+                                    state.focus(window, cx);
+                                });
+                                logging::log(
+                                    "FOCUS",
+                                    &format!(
+                                        "FileSearch deferred root refocus: rekeyed_panel=true activated_app=true main_window_focused={}",
+                                        platform::is_main_window_focused()
+                                    ),
+                                );
+                            });
+                        }
+                        cx.stop_propagation();
+                    }
+                }
+            }))
+            .on_drag_move::<file_search::FileDragPayload>(
+                cx.listener(|this, _event, window, cx| {
+                    if matches!(this.current_view, AppView::FileSearchView { .. }) {
+                        let stopped_drag = cx.stop_active_drag(window);
+                        if stopped_drag {
+                            logging::log(
+                                "FOCUS",
+                                &format!(
+                                    "FileSearch root drag move cleanup: stopped_drag=true main_window_focused={}",
+                                    platform::is_main_window_focused()
+                                ),
+                            );
+                            cx.stop_propagation();
+                        }
+                    }
+                }),
+            )
             // Close popups when the user clicks anywhere on the main window.
             // Uses on_any_mouse_down to handle left, right, and middle clicks.
-            .on_any_mouse_down(cx.listener(|this, _, _window, cx| {
+            .on_any_mouse_down(cx.listener(|this, _, window, cx| {
+                if matches!(this.current_view, AppView::FileSearchView { .. }) {
+                    window.activate_window();
+                    this.focus_main_filter(window, cx);
+                    logging::log(
+                        "FOCUS",
+                        &format!(
+                            "FileSearch root mouse down: restored_main_filter_focus=true activated_window=true main_window_focused={} actions_open={} confirm_open={}",
+                            platform::is_main_window_focused(),
+                            actions::is_actions_window_open(),
+                            confirm::is_confirm_window_open()
+                        ),
+                    );
+                }
                 if confirm::is_confirm_window_open() {
                     logging::log("FOCUS", "Main window clicked - closing confirm popup");
                     confirm::route_key_to_confirm_popup("escape", cx);
                 }
                 if actions::is_actions_window_open() {
-                    actions::close_actions_window(cx);
-                    this.show_actions_popup = false;
-                    this.actions_closed_at = Some(std::time::Instant::now());
-                    this.actions_dialog = None;
-                    this.mark_filter_resync_after_actions_if_needed();
-                    this.pop_focus_overlay(cx);
+                    logging::log(
+                        "FOCUS",
+                        "Main window clicked - closing actions popup via canonical close path",
+                    );
+                    this.close_actions_popup_for_current_view(window, cx);
+                }
+                if this.shortcut_recorder_state.is_some() {
+                    logging::log("SHORTCUT", "Main window clicked - closing shortcut recorder");
+                    this.close_shortcut_recorder(cx);
+                    cx.stop_propagation();
                 }
             }))
             .child(
@@ -568,6 +883,9 @@ impl Render for ScriptListApp {
                     })
                     // Tab AI save-offer overlay (on top after successful Tab AI execution)
                     .when_some(tab_ai_save_offer_overlay, |container, overlay| {
+                        container.child(overlay)
+                    })
+                    .when_some(actions_background_shield, |container, overlay| {
                         container.child(overlay)
                     })
                     .when_some(grid_config, |container, config| {

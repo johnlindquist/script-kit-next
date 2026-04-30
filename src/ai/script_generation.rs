@@ -70,9 +70,11 @@ RUNTIME ASSUMPTIONS
 UX QUALITY BAR
 
 * Ask for missing inputs (arg/fields/path/find/drop/editor). Don't hardcode what you can prompt for.
-* Prefer interactive UI over logs: show results with div(md(...)) or editor(...).
-* Lists should be rich choice objects: { name, value, description?, preview? }.
-  * preview is HTML (often md(...)) or a function returning HTML.
+* Default to the shared main-menu-sized prompt flow. Prefer arg/fields/select on the launcher shell before inventing a denser surface.
+* Expanded split-view browsers are rare exceptions for preview-dense workflows like file search or clipboard history. Do not build one unless the preview is essential to the selection decision.
+* Prefer interactive UI over logs: use arg/fields/select for input and use div(md(...)) or editor(...) after the user has made a choice.
+* Lists should usually be simple choice objects: { name, value, description? }.
+* Do not use choice `preview` fields, `setPreview()`, or `setPanel()` for ordinary commands.
 * Add actions for common operations (Copy/Open/Save/Reveal/Retry) via Action[] on arg/div/editor or setActions().
 * Use sensible defaults and remember preferences when helpful (env/db/store).
 * Prompt APIs are stateful UI surfaces. Never call them concurrently.
@@ -122,16 +124,16 @@ const filePath = path.join(outDir, `note-${new Date().toISOString().slice(0, 10)
 await writeFile(filePath, note, "utf8");
 await div(md(`✅ Saved to: \`${filePath}\``));
 
-Example 2 — List with choices + preview
+Example 2 — Main-menu-sized list with follow-up detail
 import "@scriptkit/sdk";
-export const metadata = { name: "Clipboard Picker", description: "Search clipboard history, preview items, copy the selection" };
+export const metadata = { name: "Clipboard Picker", description: "Search clipboard history, inspect one item, then copy it" };
 const items = (await getClipboardHistory()).slice(0, 100);
 const value = await arg("Pick a clipboard item", items.map((i) => ({
   name: i.name || i.value.slice(0, 80),
   description: i.description || formatDateToNow(new Date(i.timestamp)),
   value: i.value,
-  preview: md(`## Preview\n\n${i.value.slice(0, 2000)}`),
 })));
+await div(md(`## Selected item\n\n${value.slice(0, 2000)}`));
 await clipboard.writeText(value);
 toast("Copied");
 
@@ -170,7 +172,7 @@ toast("Updated");
 COMPACT API REFERENCE (ONE LINE PER FUNCTION, GROUPED)
 
 Prompts & Rendering
-* arg(...) — text input or searchable choices (supports actions + preview)
+* arg(...) — text input or searchable choices; default command surface
 * select(...) — multi-select list
 * grid(...) — multi-select grid
 * fields(...) — quick form, returns string[]
@@ -192,8 +194,8 @@ UI Helpers
 * setHint(text) — hint under input
 * setEnter(text) — enter button label
 * setFooter(text) — footer content
-* setPreview(html, classes?) — preview panel
-* setPanel(html, classes?) — panel content
+* setPreview(html, classes?) — dense preview API; avoid for normal commands
+* setPanel(html, classes?) — dense panel API; avoid for normal commands
 * setLoading(boolean) — spinner/loading state
 * setProgress(number) — progress bar 0..1
 * setStatus({ status, message }) — tray status + message
@@ -316,7 +318,6 @@ struct PreparedGeneratedScript {
     slug_source: String,
     slug_source_kind: &'static str,
     contract: GeneratedScriptContractAudit,
-    current_app_recipe: Option<CurrentAppCommandRecipe>,
 }
 
 #[derive(Debug, Clone)]
@@ -461,7 +462,7 @@ pub fn generate_script_from_prompt_with_receipt(
         receipt_path: receipt_path.display().to_string(),
         shell_execution_warning,
         contract: prepared.contract.clone(),
-        current_app_recipe: prepared.current_app_recipe.clone(),
+        current_app_recipe: None,
     };
 
     write_generated_script_receipt(&receipt_path, &receipt)?;
@@ -536,13 +537,6 @@ fn prepare_script_from_ai_response_with_contract(
     let finalized = enforce_script_kit_conventions(&extracted, normalized_prompt, &slug);
     let contract = audit_generated_script_contract(&finalized);
 
-    if contract.has_current_app_recipe_header && !contract.current_app_recipe_header_at_top {
-        anyhow::bail!(
-            "Generated script contract invalid (state=current_app_recipe_header_not_at_top). \
-             The script contains // Current-App-Recipe-* headers, but they are not at the top of the file after normalization."
-        );
-    }
-
     if contract
         .warnings
         .iter()
@@ -565,25 +559,12 @@ fn prepare_script_from_ai_response_with_contract(
         );
     }
 
-    let current_app_recipe = extract_current_app_recipe_from_script(&finalized);
-
-    if current_app_recipe.is_some() {
-        tracing::info!(
-            target: "ai",
-            correlation_id = "ai-script-generation",
-            state = "current_app_recipe_extracted",
-            slug = %slug,
-            "Extracted current-app recipe from generated script"
-        );
-    }
-
     Ok(PreparedGeneratedScript {
         slug,
         source: finalized,
         slug_source,
         slug_source_kind,
         contract,
-        current_app_recipe,
     })
 }
 
@@ -630,7 +611,7 @@ pub(crate) fn save_generated_script_from_response(
         receipt_path: receipt_path.display().to_string(),
         shell_execution_warning: false,
         contract: prepared.contract,
-        current_app_recipe: prepared.current_app_recipe,
+        current_app_recipe: None,
     };
     write_generated_script_receipt(&receipt_path, &receipt)?;
 
@@ -1113,9 +1094,9 @@ fn has_concurrent_prompt_api_usage(script: &str) -> bool {
     })
 }
 
-/// Split recipe headers from the rest of the script so they can be preserved at the top.
-fn split_reserved_header_prefix(script: &str) -> (String, String) {
-    let mut prefix_lines = Vec::new();
+/// Drop machine-only recipe headers from generated scripts so the final file is
+/// ordinary shareable code instead of a container for generation metadata.
+fn strip_reserved_header_prefix(script: &str) -> String {
     let mut body_lines = Vec::new();
     let mut saw_recipe_header = false;
     let mut collecting_prefix = true;
@@ -1125,12 +1106,10 @@ fn split_reserved_header_prefix(script: &str) -> (String, String) {
 
         if collecting_prefix && trimmed.starts_with("// Current-App-Recipe-") {
             saw_recipe_header = true;
-            prefix_lines.push(line.to_string());
             continue;
         }
 
         if collecting_prefix && saw_recipe_header && trimmed.is_empty() {
-            prefix_lines.push(line.to_string());
             continue;
         }
 
@@ -1138,20 +1117,15 @@ fn split_reserved_header_prefix(script: &str) -> (String, String) {
         body_lines.push(line.to_string());
     }
 
-    (
-        prefix_lines.join("\n").trim_end().to_string(),
-        body_lines.join("\n").trim().to_string(),
-    )
+    if saw_recipe_header {
+        body_lines.join("\n").trim().to_string()
+    } else {
+        script.trim().to_string()
+    }
 }
 
 fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> String {
-    let trimmed_script = script.trim();
-    let (reserved_prefix, body) = split_reserved_header_prefix(trimmed_script);
-    let body = if body.is_empty() {
-        trimmed_script.to_string()
-    } else {
-        body
-    };
+    let body = strip_reserved_header_prefix(script);
 
     let mut prefix_lines: Vec<String> = Vec::new();
 
@@ -1213,10 +1187,6 @@ fn enforce_script_kit_conventions(script: &str, prompt: &str, slug: &str) -> Str
         .join("\n");
 
     let mut sections = Vec::new();
-
-    if !reserved_prefix.is_empty() {
-        sections.push(reserved_prefix);
-    }
 
     if !prefix_lines.is_empty() {
         sections.push(prefix_lines.join("\n"));
@@ -1462,6 +1432,24 @@ await div("ready");
         assert!(
             AI_SCRIPT_GENERATION_SYSTEM_PROMPT.contains("export const metadata"),
             "system prompt examples must use export const metadata"
+        );
+    }
+
+    #[test]
+    fn test_ai_script_generation_system_prompt_defaults_to_main_menu_sized_flows() {
+        let prompt = AI_SCRIPT_GENERATION_SYSTEM_PROMPT;
+
+        assert!(
+            prompt.contains("Default to the shared main-menu-sized prompt flow"),
+            "system prompt should bias generated commands toward main-menu-sized flows"
+        );
+        assert!(
+            prompt.contains("Expanded split-view browsers are rare exceptions"),
+            "system prompt should make expanded split-view browsers opt-in exceptions"
+        );
+        assert!(
+            prompt.contains("Do not use choice `preview` fields, `setPreview()`, or `setPanel()`"),
+            "system prompt should steer models away from dense preview APIs by default"
         );
     }
 
@@ -1820,7 +1808,7 @@ await div("ok");
     }
 
     #[test]
-    fn current_app_recipe_headers_stay_at_top_after_enforcement() {
+    fn current_app_recipe_headers_are_stripped_during_enforcement() {
         let input = r#"// Current-App-Recipe-Base64: abc123
 // Current-App-Recipe-Name: Safari Save Selection
 
@@ -1838,20 +1826,10 @@ await div("ok");
             "safari-save-selection",
         );
 
-        let first_non_empty = output
-            .lines()
-            .find(|line| !line.trim().is_empty())
-            .expect("output should have non-empty lines");
-
-        assert_eq!(first_non_empty, "// Current-App-Recipe-Base64: abc123");
-
+        assert!(!output.contains("Current-App-Recipe-"));
         let contract = audit_generated_script_contract(&output);
-        assert!(contract.has_current_app_recipe_header);
+        assert!(!contract.has_current_app_recipe_header);
         assert!(contract.current_app_recipe_header_at_top);
-        assert!(!contract
-            .warnings
-            .iter()
-            .any(|warning| warning == "current_app_recipe_header_not_at_top"));
     }
 
     #[test]
@@ -1992,10 +1970,7 @@ await div(JSON.stringify(urls));
         assert_eq!(receipt, deserialized);
         assert!(json.contains("\"schemaVersion\": 1"));
         assert!(json.contains("\"metadataStyle\": \"metadataExport\""));
-        assert!(
-            !json.contains("\"currentAppRecipe\""),
-            "None recipe should be skipped in serialization"
-        );
+        assert!(!json.contains("\"currentAppRecipe\""));
     }
 
     #[test]
@@ -2016,8 +1991,8 @@ await div("Ready");
                 .unwrap();
         assert_eq!(prepared.slug_source_kind, "metadata_export");
         assert_eq!(prepared.slug, "safari-close-duplicate-tabs");
-        assert!(prepared.contract.has_current_app_recipe_header);
-        assert!(prepared.contract.current_app_recipe_header_at_top);
+        assert!(!prepared.source.contains("Current-App-Recipe-"));
+        assert!(!prepared.contract.has_current_app_recipe_header);
     }
 
     #[test]
@@ -2041,60 +2016,9 @@ await div("Ready");
     }
 
     #[test]
-    fn generated_script_receipt_includes_current_app_recipe() {
-        use base64::Engine as _;
-
-        // Build a valid recipe using Rust types to guarantee serde field names match
-        use crate::menu_bar::current_app_commands::{
-            CurrentAppCommandRecipe as TestRecipe, CurrentAppIntentTraceReceipt,
-            CurrentAppScriptPromptReceipt,
-        };
-
-        let test_recipe = TestRecipe {
-            schema_version: 1,
-            recipe_type: "currentAppCommand".to_string(),
-            raw_query: "close duplicate tabs".to_string(),
-            effective_query: "close duplicate tabs".to_string(),
-            suggested_script_name: "safari-close-duplicate-tabs".to_string(),
-            trace: CurrentAppIntentTraceReceipt {
-                schema_version: 1,
-                source: "current_app_commands".to_string(),
-                app_name: "Safari".to_string(),
-                bundle_id: "com.apple.Safari".to_string(),
-                raw_query: "close duplicate tabs".to_string(),
-                effective_query: "close duplicate tabs".to_string(),
-                normalized_query: "close duplicate tabs".to_string(),
-                top_level_menu_count: 8,
-                leaf_entry_count: 120,
-                filtered_entries: 0,
-                exact_matches: 0,
-                action: "generate_script".to_string(),
-                selected_entry: None,
-                candidates: vec![],
-                prompt_receipt: None,
-                prompt_preview: None,
-            },
-            prompt_receipt: CurrentAppScriptPromptReceipt {
-                app_name: "Safari".to_string(),
-                bundle_id: "com.apple.Safari".to_string(),
-                total_menu_items: 120,
-                included_menu_items: 120,
-                included_user_request: true,
-                included_selected_text: false,
-                included_browser_url: false,
-            },
-            prompt: "You are writing a Script Kit automation...".to_string(),
-        };
-
-        let recipe_json = serde_json::to_string(&test_recipe).expect("serialize test recipe");
-
-        let encoded = base64::engine::general_purpose::STANDARD.encode(recipe_json.as_bytes());
-
+    fn generated_script_receipt_omits_current_app_recipe_payloads() {
         let script_source = format!(
-            r#"// Current-App-Recipe-Base64: {encoded}
-// Current-App-Recipe-Name: Safari Close Duplicate Tabs
-
-export const metadata = {{
+            r#"export const metadata = {{
   name: "Safari Close Duplicate Tabs",
   description: "Close duplicate tabs in the current Safari window",
 }};
@@ -2110,20 +2034,6 @@ await div("Ready");
         )
         .expect("should prepare script");
 
-        assert!(
-            prepared.current_app_recipe.is_some(),
-            "prepared script should contain extracted recipe"
-        );
-
-        let recipe = prepared
-            .current_app_recipe
-            .as_ref()
-            .expect("recipe present");
-        assert_eq!(recipe.recipe_type, "currentAppCommand");
-        assert_eq!(recipe.prompt_receipt.bundle_id, "com.apple.Safari");
-        assert_eq!(recipe.effective_query, "close duplicate tabs");
-
-        // Verify receipt serialization includes the recipe
         let receipt = GeneratedScriptReceipt {
             schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
             prompt: "close duplicate tabs in Safari".to_string(),
@@ -2136,7 +2046,7 @@ await div("Ready");
             receipt_path: "/tmp/test.scriptkit.json".to_string(),
             shell_execution_warning: false,
             contract: prepared.contract.clone(),
-            current_app_recipe: prepared.current_app_recipe.clone(),
+            current_app_recipe: None,
         };
 
         let json = serde_json::to_string_pretty(&receipt).expect("serialize receipt");
@@ -2144,19 +2054,11 @@ await div("Ready");
             serde_json::from_str(&json).expect("deserialize receipt");
 
         assert_eq!(receipt, deserialized);
-        assert!(
-            json.contains("\"currentAppRecipe\""),
-            "receipt JSON should include currentAppRecipe when present"
-        );
-        assert!(
-            json.contains("com.apple.Safari"),
-            "receipt JSON should contain the recipe's bundle ID"
-        );
+        assert!(!json.contains("\"currentAppRecipe\""));
     }
 
     #[test]
-    fn generated_script_receipt_ignores_invalid_current_app_recipe_header() {
-        // Script with invalid base64 in recipe header
+    fn generated_script_receipt_strips_invalid_current_app_recipe_header() {
         let script_with_bad_base64 = r#"// Current-App-Recipe-Base64: not-valid-base64!!!
 // Current-App-Recipe-Name: Bad Recipe
 
@@ -2181,12 +2083,9 @@ await div("ok");
         )
         .expect("should prepare script despite invalid recipe header");
 
-        assert!(
-            prepared.current_app_recipe.is_none(),
-            "prepared script should have None recipe for invalid header"
-        );
+        assert!(!prepared.source.contains("Current-App-Recipe-"));
+        assert!(!prepared.contract.has_current_app_recipe_header);
 
-        // Verify receipt still works without recipe
         let receipt = GeneratedScriptReceipt {
             schema_version: AI_GENERATED_SCRIPT_RECEIPT_SCHEMA_VERSION,
             prompt: "test with bad recipe".to_string(),
@@ -2199,17 +2098,14 @@ await div("ok");
             receipt_path: "/tmp/test.scriptkit.json".to_string(),
             shell_execution_warning: false,
             contract: prepared.contract.clone(),
-            current_app_recipe: prepared.current_app_recipe.clone(),
+            current_app_recipe: None,
         };
 
         let json = serde_json::to_string_pretty(&receipt).expect("serialize receipt");
         let deserialized: GeneratedScriptReceipt =
             serde_json::from_str(&json).expect("deserialize receipt");
         assert_eq!(receipt, deserialized);
-        assert!(
-            !json.contains("\"currentAppRecipe\""),
-            "receipt JSON should not include currentAppRecipe field when None"
-        );
+        assert!(!json.contains("\"currentAppRecipe\""));
     }
 
     #[test]

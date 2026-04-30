@@ -144,7 +144,8 @@ pub struct ActionsDialogConfig {
     pub anchor: AnchorPosition,
     /// Whether to show icons for actions (if available)
     pub show_icons: bool,
-    /// Whether to show the footer with keyboard hints
+    /// Legacy footer flag. Actions dialogs intentionally render without a footer;
+    /// shortcuts stay inline with each action row.
     pub show_footer: bool,
     /// Placeholder shown when the actions search is empty
     pub search_placeholder: Option<String>,
@@ -159,7 +160,7 @@ impl Default for ActionsDialogConfig {
             section_style: SectionStyle::default(),
             anchor: AnchorPosition::default(),
             show_icons: false,
-            show_footer: true,
+            show_footer: false,
             search_placeholder: None,
             show_context_header: true,
         }
@@ -185,8 +186,7 @@ pub enum ActionCategory {
     #[cfg(test)]
     ScriptOps,
 
-    /// Application-wide actions (test-only reserved category).
-    #[cfg(test)]
+    /// Application-wide actions surfaced when no script-context entries apply.
     GlobalOps,
 
     /// Terminal actions (Clear, Copy, Paste, Scroll, etc.)

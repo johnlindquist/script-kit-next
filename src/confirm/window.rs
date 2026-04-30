@@ -1067,22 +1067,42 @@ impl Render for ConfirmPopupWindow {
             theme.colors.ui.border.with_opacity(0.30)
         };
 
-        // Confirm action colors
-        let (confirm_keycap_bg, confirm_keycap_color, confirm_label_color) = if is_danger {
-            let e = theme.colors.ui.error;
-            (e.with_opacity(0.06), e.to_rgb(), e.to_rgb())
-        } else {
-            let a = theme.colors.accent.selected;
-            (a.with_opacity(0.06), a.to_rgb(), title_color)
-        };
-
-        // Cancel action colors
-        let cancel_keycap_bg = theme.colors.ui.border.with_opacity(0.06);
-
         // Read focused button state for visual feedback
         let current_focused = get_confirm_focused_button();
         let cancel_focused = current_focused == FocusedButton::Cancel;
         let confirm_focused = current_focused == FocusedButton::Confirm;
+
+        // Per-button accent: focused button uses theme accent (or error for danger
+        // Confirm), unfocused uses muted gray. This makes the active Tab target
+        // visually obvious instead of leaving the user guessing which button Enter
+        // will hit.
+        let accent = theme.colors.accent.selected;
+        let muted_keycap_bg = theme.colors.ui.border.with_opacity(0.06);
+
+        let (cancel_keycap_bg, cancel_keycap_color, cancel_label_color) = if cancel_focused {
+            (accent.with_opacity(0.06), accent.to_rgb(), title_color)
+        } else {
+            (muted_keycap_bg, muted_color, muted_color)
+        };
+
+        // Both keycaps use theme.accent.selected when focused so the Esc and
+        // Enter glyphs share a consistent visual key style. Danger only colors
+        // the *label* (the action verb) so the destructive intent still reads,
+        // without making the keycap glyph itself diverge from the Cancel side.
+        let confirm_label_color_focused = if is_danger {
+            theme.colors.ui.error.to_rgb()
+        } else {
+            title_color
+        };
+        let (confirm_keycap_bg, confirm_keycap_color, confirm_label_color) = if confirm_focused {
+            (
+                accent.with_opacity(0.06),
+                accent.to_rgb(),
+                confirm_label_color_focused,
+            )
+        } else {
+            (muted_keycap_bg, muted_color, muted_color)
+        };
 
         let entity = cx.entity();
         let cancel_entity = entity.clone();
@@ -1141,13 +1161,13 @@ impl Render for ConfirmPopupWindow {
                             .bg(cancel_keycap_bg)
                             .text_xs()
                             .font_family(FONT_MONO)
-                            .text_color(muted_color)
+                            .text_color(cancel_keycap_color)
                             .child("Esc"),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(muted_color)
+                            .text_color(cancel_label_color)
                             .child(self.cancel_text.clone()),
                     ),
             )

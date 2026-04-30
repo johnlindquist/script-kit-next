@@ -1,5 +1,5 @@
-// Name: Test ACP Chat Scrolling and Search
-// Description: Visual tests for ACP Chat list scrolling and search functionality
+// Name: Test Agent Chat Scrolling and Search
+// Description: Visual tests for Agent Chat list scrolling and search functionality
 
 import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';
@@ -17,11 +17,11 @@ async function captureAndSave(name: string): Promise<string> {
   return filepath;
 }
 
-console.error('[TEST] Starting ACP Chat scroll and search tests...');
-console.error('[TEST] Note: This test expects ACP Chat to already be open');
+console.error('[TEST] Starting Agent Chat scroll and search tests...');
+console.error('[TEST] Note: This test expects Agent Chat to already be open');
 
 // Test 1: Initial state - should show chat list in sidebar
-console.error('[TEST] 1. Capturing initial ACP Chat state...');
+console.error('[TEST] 1. Capturing initial Agent Chat state...');
 await captureAndSave('01-initial-state');
 
 // Give time for any animations
@@ -31,7 +31,7 @@ await new Promise(r => setTimeout(r, 1000));
 console.error('[TEST] 2. Capturing after render...');
 await captureAndSave('02-after-render');
 
-console.error('[TEST] ACP Chat scroll test complete!');
+console.error('[TEST] Agent Chat scroll test complete!');
 console.error('[TEST] Check screenshots in: ' + screenshotDir);
 
 process.exit(0);

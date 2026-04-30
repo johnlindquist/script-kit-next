@@ -182,7 +182,6 @@ impl NotesApp {
             navigating_history: false,
             focus_mode: false,
             sort_mode: NotesSortMode::default(),
-            show_shortcuts_help: false,
             last_save_confirmed: None,
             action_feedback: None,
             pending_focus_surface: None,

@@ -2,6 +2,7 @@ use super::types::{Action, ActionCategory};
 use crate::designs::icon_variations::IconName;
 use crate::file_search::FileInfo;
 use crate::prompts::PathInfo;
+use std::path::Path;
 
 // =========================================================================
 // Current-directory context for file-search view-level actions
@@ -55,6 +56,21 @@ fn sort_description(base: &str, active: bool) -> String {
     }
 }
 
+/// Build the canonical path action that opens Quick Terminal rooted at the path.
+///
+/// The filesystem work is intentionally deferred to dispatch; constructing
+/// action lists must stay cheap for search rows.
+pub fn open_in_quick_terminal_action(_path: &Path) -> Action {
+    Action::new(
+        "file:open_in_quick_terminal",
+        "Open in Quick Terminal",
+        Some("Opens Quick Terminal at this location".to_string()),
+        ActionCategory::ScriptContext,
+    )
+    .with_icon(IconName::Terminal)
+    .with_section("Share")
+}
+
 /// Build view-level actions for the current browsed directory.
 pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> Vec<Action> {
     let name_asc_active = dir_info.sort_mode == FileSearchSortMode::NameAsc;
@@ -82,12 +98,11 @@ pub fn get_file_search_directory_actions(dir_info: &FileSearchDirectoryInfo) -> 
         .with_icon(IconName::FolderOpen)
         .with_section("Directory"),
         Action::new(
-            "file:open_current_directory_in_terminal",
-            "Open in Terminal",
-            Some("Opens a terminal at the current directory".to_string()),
+            "file:open_current_directory_in_quick_terminal",
+            "Open in Quick Terminal",
+            Some("Opens Quick Terminal at the current directory".to_string()),
             ActionCategory::ScriptContext,
         )
-        .with_shortcut("\u{2318}T")
         .with_icon(IconName::Terminal)
         .with_section("Directory"),
         Action::new(
@@ -228,7 +243,7 @@ impl FileSearchSecondaryCommand {
 
 /// The canonical list of secondary commands for the file-search surface.
 /// Order here determines action-list order and footer label order.
-pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10] = [
+pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 9] = [
     FileSearchSecondaryCommand {
         action_id: "rename_path",
         title: "Rename\u{2026}",
@@ -309,18 +324,6 @@ pub(crate) const FILE_SEARCH_SECONDARY_COMMANDS: [FileSearchSecondaryCommand; 10
         icon: IconName::Trash,
         section: "Destructive",
         key: "backspace_or_delete",
-        requires_shift: false,
-        files_only: false,
-        macos_only: false,
-    },
-    FileSearchSecondaryCommand {
-        action_id: "open_in_terminal",
-        title: "Open in Terminal",
-        description: "Opens a terminal at this location",
-        shortcut: "\u{2318}T",
-        icon: IconName::Terminal,
-        section: "Actions",
-        key: "t",
         requires_shift: false,
         files_only: false,
         macos_only: false,
@@ -439,27 +442,28 @@ pub fn get_file_context_actions(file_info: &FileInfo) -> Vec<Action> {
         .with_section("Share"),
     );
 
+    actions.push(open_in_quick_terminal_action(Path::new(&file_info.path)));
+
     // Secondary commands from the shared contract
     for command in FILE_SEARCH_SECONDARY_COMMANDS.iter().copied() {
         if !command.supports(file_info.is_dir) {
             continue;
         }
         actions.push(command.to_action(file_info));
+    }
 
-        // Attach to ACP Chat — inserted after open_in_terminal for files only
-        if command.action_id == "open_in_terminal" && !file_info.is_dir {
-            actions.push(
-                Action::new(
-                    "file:attach_to_ai",
-                    "Attach to ACP Chat",
-                    Some("Attaches this file to ACP Chat".to_string()),
-                    ActionCategory::ScriptContext,
-                )
-                .with_shortcut("\u{2303}\u{2318}A")
-                .with_icon(IconName::MessageCircle)
-                .with_section("Actions"),
-            );
-        }
+    if !file_info.is_dir {
+        actions.push(
+            Action::new(
+                "file:attach_to_ai",
+                "Attach to Agent Chat",
+                Some("Attaches this file to Agent Chat".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("\u{2303}\u{2318}A")
+            .with_icon(IconName::MessageCircle)
+            .with_section("Actions"),
+        );
     }
 
     actions
@@ -536,6 +540,7 @@ pub fn get_path_context_actions(path_info: &PathInfo) -> Vec<Action> {
         )
         .with_shortcut("⌘⇧F")
         .with_icon(IconName::FolderOpen),
+        open_in_quick_terminal_action(Path::new(&path_info.path)),
         Action::new(
             "file:open_in_editor",
             "Open in Editor",
@@ -544,14 +549,6 @@ pub fn get_path_context_actions(path_info: &PathInfo) -> Vec<Action> {
         )
         .with_shortcut("⌘E")
         .with_icon(IconName::Pencil),
-        Action::new(
-            "file:open_in_terminal",
-            "Open in Terminal",
-            Some("Opens a terminal at this location".to_string()),
-            ActionCategory::ScriptContext,
-        )
-        .with_shortcut("⌘T")
-        .with_icon(IconName::Terminal),
         Action::new(
             "file:copy_filename",
             "Copy Filename",
@@ -682,10 +679,10 @@ mod namespace_tests {
             .find(|action| action.id == "file:attach_to_ai")
             .expect("missing file attach_to_ai action");
 
-        assert_eq!(attach.title, "Attach to ACP Chat");
+        assert_eq!(attach.title, "Attach to Agent Chat");
         assert_eq!(
             attach.description.as_deref(),
-            Some("Attaches this file to ACP Chat")
+            Some("Attaches this file to Agent Chat")
         );
         assert_eq!(attach.shortcut.as_deref(), Some("⌃⌘A"));
         assert_eq!(attach.icon, Some(IconName::MessageCircle));
@@ -725,8 +722,8 @@ mod namespace_tests {
             "missing file:open_in_editor"
         );
         assert!(
-            ids.contains(&"file:open_in_terminal"),
-            "missing file:open_in_terminal"
+            ids.contains(&"file:open_in_quick_terminal"),
+            "missing file:open_in_quick_terminal"
         );
         assert!(ids.contains(&"file:copy_path"), "missing file:copy_path");
         assert!(
@@ -737,6 +734,18 @@ mod namespace_tests {
             ids.contains(&"file:move_to_trash"),
             "missing file:move_to_trash"
         );
+    }
+
+    #[test]
+    fn test_open_in_quick_terminal_has_no_shortcut() {
+        let actions = get_file_context_actions(&sample_file_info(false));
+        let action = actions
+            .iter()
+            .find(|action| action.id == "file:open_in_quick_terminal")
+            .expect("missing open_in_quick_terminal action");
+
+        assert_eq!(action.title, "Open in Quick Terminal");
+        assert_eq!(action.shortcut, None);
     }
 
     #[test]
@@ -844,7 +853,6 @@ mod secondary_command_contract_tests {
                 "open_in_editor",
                 "copy_path",
                 "move_to_trash",
-                "open_in_terminal",
                 "quick_look",
                 "show_info",
             ]
@@ -867,7 +875,6 @@ mod secondary_command_contract_tests {
                 "\u{2318}E",
                 "\u{2318}\u{21e7}C",
                 "\u{2318}\u{232b}",
-                "\u{2318}T",
                 "\u{2318}Y",
                 "\u{2318}I",
             ]
@@ -926,7 +933,7 @@ mod secondary_command_contract_tests {
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         assert!(
             ids.contains(&"file:attach_to_ai"),
-            "Files should have Attach to ACP Chat"
+            "Files should have Attach to Agent Chat"
         );
     }
 
@@ -937,7 +944,7 @@ mod secondary_command_contract_tests {
         let ids: Vec<&str> = actions.iter().map(|a| a.id.as_str()).collect();
         assert!(
             !ids.contains(&"file:attach_to_ai"),
-            "Directories must not have Attach to ACP Chat"
+            "Directories must not have Attach to Agent Chat"
         );
     }
 
@@ -1037,11 +1044,11 @@ mod secondary_command_contract_tests {
     }
 
     #[test]
-    fn resolver_cmd_t_resolves_to_open_in_terminal() {
+    fn resolver_cmd_t_has_no_terminal_binding() {
         let dir = make_dir("src", "/tmp/src");
         assert_eq!(
             resolve_file_search_secondary_action_id("t", true, false, &dir),
-            Some("open_in_terminal")
+            None
         );
     }
 

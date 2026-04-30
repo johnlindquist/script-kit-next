@@ -135,7 +135,7 @@ async function runTests() {
       console.error('[SMOKE] If Configure Shortcut was triggered, recorder should be visible');
       console.error('[SMOKE] Expected UI elements:');
       console.error('[SMOKE]   - Modal overlay with command name');
-      console.error('[SMOKE]   - "Press any key combination..." prompt');
+      console.error('[SMOKE]   - Compact "Press keys" prompt');
       console.error('[SMOKE]   - Clear, Cancel, Save buttons');
       console.error('[SMOKE]   - Keycaps showing captured modifiers/keys');
       if (recorderPath) {

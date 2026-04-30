@@ -189,7 +189,7 @@ impl KeyboardShortcut {
     }
 }
 /// A menu bar item with its children and metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MenuBarItem {
     /// The display title of the menu item
     pub title: String,
@@ -671,7 +671,10 @@ pub mod current_app_commands;
 
 #[allow(unused_imports)] // Will be used when CurrentAppCommands execution is wired
 pub use current_app_commands::{
-    load_frontmost_menu_snapshot, FrontmostMenuSnapshot, FrontmostMenuSnapshotReceipt,
+    capture_current_app_commands_session, current_app_commands_session_identity_changed,
+    load_frontmost_menu_snapshot, load_live_current_app_commands_identity,
+    CurrentAppCommandsLiveIdentity, CurrentAppCommandsSession, FrontmostMenuSnapshot,
+    FrontmostMenuSnapshotReceipt,
 };
 
 #[cfg(test)]

@@ -138,6 +138,8 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
     match host {
         ActionsDialogHost::MainList => "MainList",
         ActionsDialogHost::ClipboardHistory => "ClipboardHistory",
+        ActionsDialogHost::DictationHistory => "DictationHistory",
+        ActionsDialogHost::Favorites => "Favorites",
         ActionsDialogHost::EmojiPicker => "EmojiPicker",
         ActionsDialogHost::FileSearch => "FileSearch",
         ActionsDialogHost::ChatPrompt => "ChatPrompt",
@@ -151,11 +153,12 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
         ActionsDialogHost::BuiltinList => "BuiltinList",
         ActionsDialogHost::AcpChat => "AcpChat",
         ActionsDialogHost::AcpHistory => "AcpHistory",
+        ActionsDialogHost::AcpDetached => "AcpDetached",
     }
 }
 
 impl ScriptListApp {
-    fn make_actions_window_on_close_callback(
+    pub(crate) fn make_actions_window_on_close_callback(
         app_entity: Entity<Self>,
         host: ActionsDialogHost,
         log_message: &'static str,
@@ -181,7 +184,7 @@ impl ScriptListApp {
         })
     }
 
-    fn spawn_open_actions_window(
+    pub(crate) fn spawn_open_actions_window(
         cx: &mut Context<Self>,
         parent_window_handle: gpui::AnyWindowHandle,
         main_bounds: gpui::Bounds<gpui::Pixels>,
@@ -252,16 +255,36 @@ impl ScriptListApp {
     fn begin_actions_popup_window_open(&mut self, cx: &mut Context<Self>, window: &mut Window) {
         self.show_actions_popup = true;
         self.actions_closed_at = None; // Clear debounce on open
+        self.hovered_index = None;
         self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
         self.focus_handle.focus(window, cx);
         self.gpui_input_focused = false;
     }
 
     fn actions_dialog_host_for_current_view(&self) -> Option<ActionsDialogHost> {
-        match self.actions_support_for_view() {
-            super::actions_dialog::ActionsSupport::SharedDialog(host) => Some(host),
-            super::actions_dialog::ActionsSupport::None => None,
-        }
+        self.current_actions_host()
+    }
+
+    /// Predicate for the stdin `simulateKey` generic Cmd+K fallback.
+    ///
+    /// Per-view simulateKey arms can still claim richer Cmd+K behavior first.
+    /// This helper is only for the outer fallback: plain Cmd+K on a view that
+    /// participates in the shared actions dialog should toggle actions instead
+    /// of falling through to the unhandled-view warning.
+    pub(crate) fn simulate_key_requests_generic_actions_toggle(
+        &self,
+        key_lower: &str,
+        has_cmd: bool,
+        has_shift: bool,
+        has_alt: bool,
+        has_ctrl: bool,
+    ) -> bool {
+        has_cmd
+            && !has_shift
+            && !has_alt
+            && !has_ctrl
+            && key_lower == "k"
+            && self.current_actions_host().is_some()
     }
 
     /// Single per-view actions-toggle dispatcher.
@@ -309,10 +332,7 @@ impl ScriptListApp {
         if matches!(&self.current_view, AppView::FileSearchView { .. }) {
             let selected = self.selected_file_search_result_owned();
             if let Some((display_index, _)) = &selected {
-                if let AppView::FileSearchView {
-                    selected_index, ..
-                } = &mut self.current_view
-                {
+                if let AppView::FileSearchView { selected_index, .. } = &mut self.current_view {
                     *selected_index = *display_index;
                 }
             }
@@ -349,6 +369,41 @@ impl ScriptListApp {
                 event = "actions_toggle_dispatch_ignored_no_clipboard_selection",
                 trigger = trigger,
                 "Ignored shared actions toggle because clipboard history has no selected entry"
+            );
+            return false;
+        }
+
+        if matches!(&self.current_view, AppView::DictationHistoryView { .. }) {
+            if let Some(entry) = self.selected_dictation_history_entry() {
+                self.toggle_dictation_history_actions(entry, window, cx);
+                return true;
+            }
+            if self.show_actions_popup || crate::actions::is_actions_window_open() {
+                self.toggle_actions(cx, window);
+                return true;
+            }
+            tracing::info!(
+                target: "script_kit::actions",
+                event = "actions_toggle_dispatch_ignored_no_dictation_selection",
+                trigger = trigger,
+                "Ignored shared actions toggle because dictation history has no selected entry"
+            );
+            return false;
+        }
+
+        if matches!(&self.current_view, AppView::FavoritesBrowseView { .. }) {
+            if self.selected_favorite_id().is_some()
+                || self.show_actions_popup
+                || crate::actions::is_actions_window_open()
+            {
+                self.toggle_favorites_actions(window, cx);
+                return true;
+            }
+            tracing::info!(
+                target: "script_kit::actions",
+                event = "actions_toggle_dispatch_ignored_no_favorite_selection",
+                trigger = trigger,
+                "Ignored shared actions toggle because favorites has no selected item"
             );
             return false;
         }
@@ -483,16 +538,18 @@ impl ScriptListApp {
                 "Suppressed actions reopen because the dialog was just closed"
             );
         } else {
-            if !self.has_actions() {
-                tracing::info!(
-                    target: "script_kit::actions",
-                    event = "actions_toggle_ignored_no_actions",
-                    host = host_label,
-                    view = ?self.current_view,
-                    "Ignored actions toggle because the current selection has no actions"
-                );
-                return;
-            }
+            // Run 14 Pass 1 — any view that passed the
+            // `actions_dialog_host_for_current_view` check at the top of
+            // this function explicitly participates in the shared actions
+            // dialog. Suppressing the keystroke when that host has no
+            // contextual actions leaves the user with no signal that
+            // Cmd+K landed (story `actions-debounce-builtins-cross-host-live`:
+            // Cmd+K silently swallowed on file-search). Always open the
+            // dialog when a host claims the view; the dialog itself can
+            // render the empty / global-only section. The original
+            // `has_actions` gate is preserved at the host-resolution layer
+            // (line 486) which short-circuits views that don't participate.
+            let _ = self.has_actions();
 
             let position = self.main_list_actions_window_position();
             crate::actions::emit_actions_popup_event(
@@ -509,6 +566,23 @@ impl ScriptListApp {
             self.begin_actions_popup_window_open(cx, window);
 
             let acp_context = if let AppView::AcpChatView { ref entity } = self.current_view {
+                // Trigger a preflight `session/new` so the agent re-advertises its
+                // model catalog before we snapshot `available_models` for the
+                // Change Model drill-down. Fire-and-forget: this dialog opening
+                // uses whatever the thread has right now; subsequent openings pick
+                // up whatever the agent just advertised.
+                let thread_for_refresh =
+                    if let crate::ai::acp::AcpChatSession::Live(ref thread) =
+                        entity.read(cx).session
+                    {
+                        Some(thread.clone())
+                    } else {
+                        None
+                    };
+                if let Some(thread) = thread_for_refresh {
+                    thread.update(cx, |thread, cx| thread.refresh_models(cx));
+                }
+
                 let (selected_agent_id, catalog_entries, selected_model_id, available_models) = {
                     let view = entity.read(cx);
                     match &view.session {
@@ -551,14 +625,67 @@ impl ScriptListApp {
             } else {
                 None
             };
-            let script_info = self.get_focused_script_info();
+            // Run 14 Pass 3 — story
+            // `actions-cmdk-builtin-list-views-empty-state`: when the
+            // current view is a BuiltinList host (browser-tabs,
+            // window-switcher, theme-chooser, etc.) the live `selected_index`
+            // pertains to that view's own list, NOT the script list cache
+            // that `get_focused_script_info` reads from. Forcing both
+            // script + scriptlet context to None here ensures the dialog
+            // only renders the Pass-3-of-Run-13 global actions, not stale
+            // main-list rows from a previously-focused script.
+            let on_builtin_list = matches!(host, ActionsDialogHost::BuiltinList);
+            let script_info = if on_builtin_list {
+                None
+            } else {
+                self.get_focused_script_info()
+            };
 
             // Get the full scriptlet with actions if focused item is a scriptlet
-            let focused_scriptlet = self.get_focused_scriptlet_with_actions();
+            let focused_scriptlet = if on_builtin_list {
+                None
+            } else {
+                self.get_focused_scriptlet_with_actions()
+            };
+
+            // Run 12 Pass 7 — compute the Power Syntax section from the live
+            // filter parse + active mode BEFORE the dialog-construction closure
+            // (can't borrow `self` inside `cx.new`). Returns None when not
+            // composing a Power Syntax expression so the dialog falls back to
+            // the legacy script_context + global rows.
+            let power_syntax_section_for_dialog: Option<crate::menu_syntax_actions::PowerSyntaxActionSection> = {
+                use crate::menu_syntax::{
+                    builtin_schema, MenuSyntaxActionState,
+                };
+                let raw = self.filter_text().to_string();
+                let mode = &self.menu_syntax_mode;
+                if let Some(invocation) = mode.capture_for(&raw) {
+                    let target = invocation.target.clone();
+                    let schema = builtin_schema(&target);
+                    let state = MenuSyntaxActionState::CaptureComposer {
+                        target: &target,
+                        payload: invocation,
+                        schema: schema.as_ref(),
+                    };
+                    Some(crate::menu_syntax_actions::power_syntax_action_section(&state))
+                } else if let Some(argv) = mode.command_for(&raw) {
+                    let state = MenuSyntaxActionState::CommandComposer {
+                        head: &argv.head,
+                        argv: &argv.argv,
+                    };
+                    Some(crate::menu_syntax_actions::power_syntax_action_section(&state))
+                } else if let Some(query) = mode.advanced_query_for(&raw) {
+                    let state = MenuSyntaxActionState::RefineQuery { query };
+                    Some(crate::menu_syntax_actions::power_syntax_action_section(&state))
+                } else {
+                    None
+                }
+            };
 
             // Create the dialog entity HERE in main app (for keyboard routing)
             let theme_arc = std::sync::Arc::clone(&self.theme);
             let is_mini = matches!(self.main_window_mode, MainWindowMode::Mini);
+            let is_acp_actions_dialog = acp_context.is_some();
             // Create the dialog entity
             let dialog = cx.new(|cx| {
                 let focus_handle = cx.focus_handle();
@@ -612,9 +739,24 @@ impl ScriptListApp {
                     });
                 }
 
-                // If we have a scriptlet with actions, pass it to the dialog
-                if let Some(ref scriptlet) = focused_scriptlet {
-                    dialog.set_focused_scriptlet(script_info.clone(), Some(scriptlet.clone()));
+                // If we have a scriptlet with actions, pass it to the dialog.
+                // ACP owns its route stack and action source; script/global
+                // rebuild hooks would replace Change Agent/Model with launcher
+                // actions.
+                if !is_acp_actions_dialog {
+                    if let Some(ref scriptlet) = focused_scriptlet {
+                        dialog
+                            .set_focused_scriptlet(script_info.clone(), Some(scriptlet.clone()));
+                    }
+                }
+
+                // Run 12 Pass 7 — wire the cmdk-actions Power Syntax section.
+                // The owned section was computed BEFORE entering this closure
+                // (can't borrow `self` inside `cx.new`); push it now. ACP uses
+                // its own route-backed actions, so skip the generic script/global
+                // action rebuild there.
+                if !is_acp_actions_dialog {
+                    dialog.set_menu_syntax_section(power_syntax_section_for_dialog.clone());
                 }
 
                 // Skip track_focus so the parent window keeps keyboard routing
@@ -1321,7 +1463,10 @@ mod terminal_command_shortcut_tests {
         assert_eq!(config.section_style, SectionStyle::Headers);
         assert_eq!(config.anchor, AnchorPosition::Top);
         assert!(config.show_icons);
-        assert!(config.show_footer, "Mini mode actions should show the shared footer");
+        assert!(
+            config.show_footer,
+            "Mini mode actions should show the shared footer"
+        );
     }
 
     #[test]

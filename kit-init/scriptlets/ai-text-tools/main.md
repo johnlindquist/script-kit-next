@@ -23,7 +23,7 @@ Template guide:
 
 Transform selected text using AI with the prompt-level `chat()` function. Each tool grabs selected text, sends it to the AI with a system prompt, and opens an interactive chat for follow-up questions.
 
-> These scriptlets use `chat()` (a prompt function). For programmatic AI conversations, see the ACP Chat SDK (`aiStartChat`, `aiSendMessage`, etc.) in the User Guide.
+> These scriptlets use `chat()` (a prompt function). For programmatic AI conversations, see the Agent Chat SDK (`aiStartChat`, `aiSendMessage`, etc.) in the User Guide.
 
 **Requirements:** Set `SCRIPT_KIT_ANTHROPIC_API_KEY` or `SCRIPT_KIT_OPENAI_API_KEY`.
 

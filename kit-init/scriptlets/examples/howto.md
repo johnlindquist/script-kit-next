@@ -15,7 +15,7 @@ icon: graduation-cap
 This guide explains how to create custom text expansions for Script Kit.
 
 > One-shot path:
-> 1. Create `~/.scriptkit/kit/main/scriptlets/<name>.md`
+> 1. Create `~/.scriptkit/plugins/main/scriptlets/<name>.md`
 > 2. Copy the Quick Start Template below
 > 3. Use `metadata` code fences for new bundles
 > 4. Use `tool:<name>` only when you need TypeScript + SDK
@@ -25,10 +25,10 @@ This guide explains how to create custom text expansions for Script Kit.
 # File Location
 
 For harness-generated user bundles, create `.md` files in:
-`~/.scriptkit/kit/main/scriptlets/`
+`~/.scriptkit/plugins/main/scriptlets/`
 
 Example path:
-- `~/.scriptkit/kit/main/scriptlets/snippets.md`
+- `~/.scriptkit/plugins/main/scriptlets/snippets.md`
 
 Do not create new user bundles in app-managed or example plugins.
 
@@ -166,7 +166,7 @@ Your Name
 ```
 ```
 
-Save as: `~/.scriptkit/kit/main/scriptlets/my-snippets.md`
+Save as: `~/.scriptkit/plugins/main/scriptlets/my-snippets.md`
 
 ---
 

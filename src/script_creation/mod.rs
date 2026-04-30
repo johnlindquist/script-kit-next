@@ -38,7 +38,7 @@ const WINDOWS_RESERVED_FILENAMES: [&str; 22] = [
 ];
 /// Root directory for a given plugin under the active Script Kit workspace.
 pub fn plugin_dir(plugin_id: &str) -> PathBuf {
-    crate::setup::get_kit_path().join("kit").join(plugin_id)
+    crate::plugins::plugins_container_dir().join(plugin_id)
 }
 /// Scripts directory for a given plugin.
 pub fn scripts_dir_for_plugin(plugin_id: &str) -> PathBuf {
@@ -56,11 +56,11 @@ pub fn agents_dir_for_plugin(plugin_id: &str) -> PathBuf {
 pub fn skills_dir_for_plugin(plugin_id: &str) -> PathBuf {
     plugin_dir(plugin_id).join("skills")
 }
-/// Scripts directory under the active Script Kit workspace (default: `kit/main/scripts`).
+/// Scripts directory under the active Script Kit workspace (default: `plugins/main/scripts`).
 pub fn scripts_dir() -> PathBuf {
     scripts_dir_for_plugin("main")
 }
-/// Scriptlets directory under the active Script Kit workspace (default: `kit/main/scriptlets`).
+/// Scriptlets directory under the active Script Kit workspace (default: `plugins/main/scriptlets`).
 pub fn scriptlets_dir() -> PathBuf {
     scriptlets_dir_for_plugin("main")
 }
@@ -286,7 +286,7 @@ await notify("Saved");
 "#
     )
 }
-/// Create a new script file in ~/.scriptkit/kit/main/scripts/
+/// Create a new script file in ~/.scriptkit/plugins/main/scripts/
 ///
 /// # Arguments
 ///
@@ -336,7 +336,7 @@ fn create_new_script_in_dir(name: &str, scripts_dir: &Path) -> Result<PathBuf> {
 
     Ok(script_path)
 }
-/// Create a new scriptlet file in ~/.scriptkit/kit/main/scriptlets/
+/// Create a new scriptlet file in ~/.scriptkit/plugins/main/scriptlets/
 ///
 /// # Arguments
 ///
@@ -746,6 +746,8 @@ mod tests {
             window_management: None,
             commands: None,
             claude_code: None,
+            mcp: None,
+            hidden_commands: None,
         };
         assert_eq!(default_config.get_editor(), "code");
 
@@ -777,6 +779,8 @@ mod tests {
             window_management: None,
             commands: None,
             claude_code: None,
+            mcp: None,
+            hidden_commands: None,
         };
         assert_eq!(custom_config.get_editor(), "vim");
 

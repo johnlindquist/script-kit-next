@@ -16,7 +16,7 @@ use super::metadata::extract_schedule_metadata_from_file;
 
 /// Scan scripts directory and register scripts with schedule metadata
 ///
-/// Walks through ~/.scriptkit/*/scripts/ looking for .ts/.js files with
+/// Walks through ~/.scriptkit/plugins/*/scripts/ looking for .ts/.js files with
 /// `// Cron:` or `// Schedule:` metadata comments, and registers them
 /// with the provided scheduler.
 ///
@@ -25,8 +25,8 @@ use super::metadata::extract_schedule_metadata_from_file;
 pub fn register_scheduled_scripts(scheduler: &Scheduler) -> usize {
     let kit_path = get_kit_path();
 
-    // Glob pattern to find scripts in all kits (under kit/ subdirectory)
-    let pattern = kit_path.join("kit/*/scripts");
+    // Glob pattern to find scripts in all plugin roots.
+    let pattern = kit_path.join("plugins/*/scripts");
     let pattern_str = pattern.to_string_lossy().to_string();
 
     // Find all kit script directories

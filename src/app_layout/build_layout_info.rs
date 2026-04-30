@@ -11,6 +11,7 @@ impl ScriptListApp {
         // Determine current prompt type
         let prompt_type = match &self.current_view {
             AppView::ScriptList => "mainMenu",
+            AppView::About { .. } => "about",
             AppView::ArgPrompt { .. } => "arg",
             AppView::DivPrompt { .. } => "div",
             AppView::FormPrompt { .. } => "form",
@@ -27,6 +28,7 @@ impl ScriptListApp {
             AppView::ClipboardHistoryView { .. } => "clipboardHistory",
             AppView::AppLauncherView { .. } => "appLauncher",
             AppView::WindowSwitcherView { .. } => "windowSwitcher",
+            AppView::BrowserTabsView { .. } => "browserTabs",
             AppView::DesignGalleryView { .. } => "designGallery",
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => "designExplorer",
@@ -48,8 +50,14 @@ impl ScriptListApp {
             AppView::SettingsView { .. } => "settings",
             AppView::FavoritesBrowseView { .. } => "favoritesBrowse",
             AppView::AcpHistoryView { .. } => "acpHistory",
+            AppView::BrowserHistoryView { .. } => "browserHistory",
+            AppView::DictationHistoryView { .. } => "dictationHistory",
             AppView::NotesBrowseView { .. } => "notesBrowse",
             AppView::AcpChatView { .. } => "acpChat",
+            AppView::ScriptIssuesView { .. } => "scriptIssues",
+            AppView::SdkReferenceView { .. } => "sdkReference",
+            AppView::ScriptTemplateCatalogView { .. } => "scriptTemplateCatalog",
+            AppView::ConfirmPrompt { .. } => "confirmPrompt",
         };
 
         let mut components = Vec::new();

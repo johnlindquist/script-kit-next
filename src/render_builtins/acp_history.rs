@@ -27,6 +27,28 @@ impl ScriptListApp {
         let filtered_entries: Vec<crate::ai::acp::history::AcpHistoryEntry> =
             hits.into_iter().map(|h| h.entry).collect();
         let filtered_len = filtered_entries.len();
+        let selected_index = if let Some(reanchored) =
+            Self::builtin_reanchor_selection_from_scroll_handle(
+                selected_index,
+                &self.acp_history_scroll_handle,
+                filtered_len,
+            )
+        {
+            tracing::info!(
+                target: "script_kit::scroll",
+                event = "builtin_selection_resynced_from_scrollbar",
+                view = "acp_history",
+                reason = "render",
+                selected_before = selected_index,
+                selected_after = reanchored,
+            );
+            if let AppView::AcpHistoryView { selected_index, .. } = &mut self.current_view {
+                *selected_index = reanchored;
+            }
+            reanchored
+        } else {
+            selected_index
+        };
 
         // Load preview for selected entry
         let selected_session_id = filtered_entries
@@ -513,6 +535,10 @@ mod acp_history_scroll_contract {
         assert!(
             SOURCE.contains("this.acp_history_scroll_handle"),
             "ACP history keyboard navigation should scroll the selected row into view"
+        );
+        assert!(
+            SOURCE.contains("builtin_reanchor_selection_from_scroll_handle"),
+            "ACP history should reanchor selection after ScrollHandle movement"
         );
     }
 

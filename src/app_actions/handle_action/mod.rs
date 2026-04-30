@@ -134,12 +134,12 @@ impl DeferredAiWindowAction {
             Self::OpenOnly => Ok("open_only"),
             Self::SetInput { text, submit } => {
                 if chat.is_setup_mode() {
-                    return Err("ACP Chat is in setup mode".to_string());
+                    return Err("Agent Chat is in setup mode".to_string());
                 }
                 chat.set_input(text, cx);
                 if submit {
                     let Some(thread) = chat.thread() else {
-                        return Err("ACP Chat thread unavailable".to_string());
+                        return Err("Agent Chat thread unavailable".to_string());
                     };
                     thread
                         .update(cx, |thread, cx| thread.submit_input(cx))
@@ -153,7 +153,7 @@ impl DeferredAiWindowAction {
                 submit,
             } => {
                 if chat.is_setup_mode() {
-                    return Err("ACP Chat is in setup mode".to_string());
+                    return Err("Agent Chat is in setup mode".to_string());
                 }
 
                 use base64::Engine as _;
@@ -161,33 +161,36 @@ impl DeferredAiWindowAction {
                 let png_bytes = base64::engine::general_purpose::STANDARD
                     .decode(image_base64)
                     .map_err(|error| format!("Failed to decode image attachment: {error}"))?;
-                let temp_path = std::env::temp_dir()
-                    .join(format!("script-kit-acp-clipboard-{}.png", uuid::Uuid::new_v4()));
+                let temp_path = std::env::temp_dir().join(format!(
+                    "script-kit-acp-clipboard-{}.png",
+                    uuid::Uuid::new_v4()
+                ));
                 std::fs::write(&temp_path, png_bytes)
                     .map_err(|error| format!("Failed to write image attachment: {error}"))?;
                 let path = temp_path.to_string_lossy().into_owned();
 
-                chat.live_thread().update(cx, |thread, cx| {
-                    thread.add_context_part(
-                        crate::ai::AiContextPart::FilePath {
-                            path,
-                            label: "Clipboard Image".to_string(),
-                        },
-                        cx,
-                    );
-                    thread.set_input(text, cx);
-                    if submit {
-                        thread.submit_input(cx)?;
-                    }
-                    Ok::<(), String>(())
-                })
-                .map_err(|error| error.to_string())?;
+                chat.live_thread()
+                    .update(cx, |thread, cx| {
+                        thread.add_context_part(
+                            crate::ai::AiContextPart::FilePath {
+                                path,
+                                label: "Clipboard Image".to_string(),
+                            },
+                            cx,
+                        );
+                        thread.set_input(text, cx);
+                        if submit {
+                            thread.submit_input(cx)?;
+                        }
+                        Ok::<(), String>(())
+                    })
+                    .map_err(|error| error.to_string())?;
 
                 Ok("set_input_with_image")
             }
             Self::AddAttachment { path } => {
                 if chat.is_setup_mode() {
-                    return Err("ACP Chat is in setup mode".to_string());
+                    return Err("Agent Chat is in setup mode".to_string());
                 }
 
                 let label = std::path::Path::new(&path)
@@ -197,10 +200,7 @@ impl DeferredAiWindowAction {
                     .unwrap_or_else(|| path.clone());
 
                 chat.live_thread().update(cx, |thread, cx| {
-                    thread.add_context_part(
-                        crate::ai::AiContextPart::FilePath { path, label },
-                        cx,
-                    );
+                    thread.add_context_part(crate::ai::AiContextPart::FilePath { path, label }, cx);
                 });
 
                 Ok("add_attachment")
@@ -404,7 +404,7 @@ impl ScriptListApp {
                 open_result.and_then(|()| {
                     this.update(cx, |this, cx| {
                         let Some(entity) = this.active_acp_chat_entity() else {
-                            return Err("ACP Chat not ready after open".to_string());
+                            return Err("Agent Chat not ready after open".to_string());
                         };
                         deferred_action.apply_to_acp(entity, cx)
                     })
@@ -442,7 +442,7 @@ impl ScriptListApp {
                             duration_ms = started_at.elapsed().as_millis() as u64,
                             "Failed to complete deferred chat handoff after hiding main window"
                         );
-                        this.show_error_toast(format!("Failed to send to ACP Chat: {}", error), cx);
+                        this.show_error_toast(format!("Failed to send to Agent Chat: {}", error), cx);
                     });
                 }
             }
@@ -624,6 +624,21 @@ impl ScriptListApp {
             .cloned()
     }
 
+    fn selected_dictation_history_entry(&self) -> Option<crate::dictation::DictationHistoryEntry> {
+        let AppView::DictationHistoryView {
+            filter,
+            selected_index,
+        } = &self.current_view
+        else {
+            return None;
+        };
+
+        crate::dictation::search_history(filter, 100)
+            .into_iter()
+            .nth(*selected_index)
+            .map(|hit| hit.entry)
+    }
+
     /// Return true when the current view has any available actions.
     fn has_actions(&mut self) -> bool {
         match &self.current_view {
@@ -636,6 +651,9 @@ impl ScriptListApp {
                     "has_actions (clipboard)",
                 );
                 has
+            }
+            AppView::DictationHistoryView { .. } => {
+                self.selected_dictation_history_entry().is_some()
             }
             _ => {
                 let script_info = self.get_focused_script_info();
@@ -658,7 +676,29 @@ impl ScriptListApp {
 
                 let global_count_before = actions.len();
                 actions.extend(crate::actions::get_global_actions());
-                let result = !actions.is_empty();
+                // Run 12 Pass 7 — Power Syntax composer states ALWAYS have
+                // Cmd+K actions available (cancel, copy filter, default time,
+                // edit argv, …). The legacy `has_actions` only counted script-
+                // and global-rows, so composing `+cal …` with no script match
+                // would silently swallow Cmd+K. Treat the composer states as
+                // self-sufficient for the gate.
+                let composing_power_syntax = {
+                    let raw = self.filter_text();
+                    self.menu_syntax_mode.capture_for(raw).is_some()
+                        || self.menu_syntax_mode.command_for(raw).is_some()
+                        || self.menu_syntax_mode.advanced_query_for(raw).is_some()
+                };
+                // Run 13 Pass 1 (user bug report) — Cmd+K on the main script
+                // list MUST always open the actions dialog, even when the
+                // selected entry has no script-context actions and
+                // get_global_actions() is currently empty. The legacy gate
+                // here returned false in that case, silently swallowing the
+                // keystroke and matching the user's "Cmd+K doesn't work at
+                // all" report. Always-true on ScriptList lets the dialog
+                // surface its built-in/global rows (or an empty placeholder)
+                // so the keystroke is visible and discoverable.
+                let on_script_list = matches!(self.current_view, AppView::ScriptList);
+                let result = !actions.is_empty() || composing_power_syntax || on_script_list;
                 tracing::debug!(
                     event = "has_actions.check",
                     has_script_info = has_script_info,
@@ -758,13 +798,13 @@ impl ScriptListApp {
             }) else {
                 return DispatchOutcome::error(
                     crate::action_helpers::ERROR_ACTION_FAILED,
-                    format!("ACP model '{model_id}' is no longer available"),
+                    format!("Model '{model_id}' is no longer available"),
                 );
             };
 
             if current_selected_model_id.as_deref() == Some(model_id) {
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some(format!("ACP is already using {model_display_name}"));
+                outcome.user_message = Some(format!("Already using {model_display_name}"));
                 return outcome;
             }
 
@@ -789,7 +829,129 @@ impl ScriptListApp {
             );
 
             let mut outcome = DispatchOutcome::success();
-            outcome.user_message = Some(format!("Switched ACP model to {model_display_name}"));
+            outcome.user_message = Some(format!("Switched model to {model_display_name}"));
+            return outcome;
+        }
+
+        if let Some(profile_name) =
+            crate::actions::acp_switch_profile_name_from_action(action_id)
+        {
+            let (current_selected_agent_id, available_agents) = {
+                let view = entity.read(cx);
+                match &view.session {
+                    crate::ai::acp::AcpChatSession::Setup(state) => (
+                        state
+                            .selected_agent
+                            .as_ref()
+                            .map(|agent| agent.id.to_string()),
+                        state.catalog_entries.clone(),
+                    ),
+                    crate::ai::acp::AcpChatSession::Live(thread) => {
+                        let thread = thread.read(cx);
+                        (
+                            thread.selected_agent_id().map(str::to_string),
+                            thread.available_agents().to_vec(),
+                        )
+                    }
+                }
+            };
+
+            let mut prefs = crate::config::load_user_preferences();
+            let Some(profile) = prefs
+                .ai
+                .profiles
+                .iter()
+                .find(|profile| profile.name == profile_name)
+                .cloned()
+            else {
+                return DispatchOutcome::error(
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    format!("Profile '{profile_name}' is no longer available"),
+                );
+            };
+
+            let profile_agent_id = profile
+                .agent
+                .as_ref()
+                .map(|agent| agent.trim())
+                .filter(|agent| !agent.is_empty())
+                .map(str::to_string);
+            let should_relaunch = profile_agent_id
+                .as_deref()
+                .is_some_and(|agent_id| current_selected_agent_id.as_deref() != Some(agent_id));
+            let agent_display_name = profile_agent_id
+                .as_deref()
+                .and_then(|agent_id| {
+                    available_agents
+                        .iter()
+                        .find(|entry| entry.id.as_ref() == agent_id)
+                })
+                .map(|entry| entry.display_name.to_string())
+                .or_else(|| profile_agent_id.clone())
+                .unwrap_or_else(|| "current agent".to_string());
+
+            prefs.ai.selected_profile_name = Some(profile.name.clone());
+            if let Some(agent_id) = profile_agent_id.clone() {
+                prefs.ai.selected_acp_agent_id = Some(agent_id);
+            }
+
+            let persist_result = crate::config::save_user_preferences(&prefs);
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_switch_profile_persist_result",
+                profile_name = %profile.name,
+                profile_agent_id = ?profile_agent_id,
+                persisted = persist_result.is_ok(),
+            );
+
+            if let Err(error) = persist_result {
+                return DispatchOutcome::error(
+                    crate::action_helpers::ERROR_ACTION_FAILED,
+                    format!("Failed to persist profile '{}': {error}", profile.name),
+                );
+            }
+
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_switch_profile_requested",
+                profile_name = %profile.name,
+                profile_agent_id = ?profile_agent_id,
+                current_agent_id = ?current_selected_agent_id,
+                should_relaunch,
+            );
+
+            if should_relaunch {
+                let Some(next_agent_id) = profile_agent_id.clone() else {
+                    return DispatchOutcome::error(
+                        crate::action_helpers::ERROR_ACTION_FAILED,
+                        format!("Profile '{}' has no agent to relaunch", profile.name),
+                    );
+                };
+
+                entity.update(cx, |view, cx| {
+                    view.stage_agent_switch_retry(next_agent_id.clone(), cx);
+                });
+
+                tracing::info!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_switch_profile_relaunch_requested",
+                    profile_name = %profile.name,
+                    agent_id = %next_agent_id,
+                );
+
+                self.close_tab_ai_harness_terminal(cx);
+                self.open_tab_ai_acp_with_entry_intent(None, cx);
+
+                let mut outcome = DispatchOutcome::success();
+                outcome.user_message = Some(format!(
+                    "Switching profile to {} ({agent_display_name})\u{2026}",
+                    profile.name
+                ));
+                return outcome;
+            }
+
+            let mut outcome = DispatchOutcome::success();
+            outcome.user_message = Some(format!("Profile: {}", profile.name));
             return outcome;
         }
 
@@ -822,7 +984,7 @@ impl ScriptListApp {
 
             if current_selected_agent_id.as_deref() == Some(agent_id) {
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message = Some(format!("ACP is already using {agent_display_name}"));
+                outcome.user_message = Some(format!("Already using {agent_display_name}"));
                 return outcome;
             }
 
@@ -851,7 +1013,7 @@ impl ScriptListApp {
                 return DispatchOutcome::error(
                     crate::action_helpers::ERROR_ACTION_FAILED,
                     format!(
-                        "Failed to persist ACP agent selection for {agent_display_name}: {error}"
+                        "Failed to persist agent selection for {agent_display_name}: {error}"
                     ),
                 );
             }
@@ -874,7 +1036,7 @@ impl ScriptListApp {
 
             let mut outcome = DispatchOutcome::success();
             outcome.user_message = Some(format!(
-                "Switching ACP agent to {agent_display_name}\u{2026}"
+                "Switching agent to {agent_display_name}\u{2026}"
             ));
             return outcome;
         }
@@ -1108,10 +1270,7 @@ impl ScriptListApp {
                                 format!("ai-script-{}", chrono::Utc::now().format("%H%M%S"))
                             });
 
-                        let path = crate::setup::get_kit_path()
-                            .join("kit")
-                            .join("main")
-                            .join("scripts")
+                        let path = crate::plugins::plugin_scripts_dir("main")
                             .join(format!("{name}.{ext}"));
 
                         if let Err(e) = std::fs::write(&path, &code) {
@@ -1285,8 +1444,7 @@ impl ScriptListApp {
                         "ACP export-as-markdown blocked"
                     );
                     let mut outcome = DispatchOutcome::success();
-                    outcome.user_message =
-                        Some("No ACP messages to copy".to_string());
+                    outcome.user_message = Some("No Agent Chat messages to copy".to_string());
                     return outcome;
                 };
 
@@ -1302,8 +1460,7 @@ impl ScriptListApp {
                 );
 
                 let mut outcome = DispatchOutcome::success();
-                outcome.user_message =
-                    Some("Copied ACP conversation as markdown".to_string());
+                outcome.user_message = Some("Copied Agent Chat conversation as markdown".to_string());
                 outcome
             }
             "acp_save_as_note" => {
@@ -1338,7 +1495,7 @@ impl ScriptListApp {
                         "ACP save-as-note blocked"
                     );
                     let mut o = DispatchOutcome::success();
-                    o.user_message = Some("No ACP messages to save".to_string());
+                    o.user_message = Some("No Agent Chat messages to save".to_string());
                     return o;
                 };
 
@@ -1355,8 +1512,7 @@ impl ScriptListApp {
                             "ACP save-as-note completed"
                         );
                         let mut o = DispatchOutcome::success();
-                        o.user_message =
-                            Some("Saved ACP conversation to Notes".to_string());
+                        o.user_message = Some("Saved Agent Chat conversation to Notes".to_string());
                         o
                     }
                     Err(e) => {
@@ -1384,6 +1540,7 @@ impl ScriptListApp {
                             selected_index: 0,
                         },
                         "Search conversation history...",
+                        true,
                         cx,
                     );
                 }
@@ -1480,15 +1637,15 @@ impl ScriptListApp {
                         detached_window_activated = true,
                     );
                     let mut o = DispatchOutcome::success();
-                    o.user_message = Some("Chat detached to window".to_string());
+                    o.user_message = Some("Chat kept open in window".to_string());
                     o
                 }
             }
             "acp_reattach_panel" => {
                 crate::ai::acp::chat_window::close_chat_window(cx);
-                self.open_tab_ai_acp_with_entry_intent(None, cx);
+                self.reattach_embedded_acp_from_detached(cx);
                 let mut o = DispatchOutcome::success();
-                o.user_message = Some("Chat re-attached to panel".to_string());
+                o.user_message = Some("Chat returned to panel".to_string());
                 o
             }
             "acp_close" => {
@@ -1542,6 +1699,43 @@ impl ScriptListApp {
             return;
         }
 
+        let selected_dictation_entry = if action_id_stripped.starts_with("dictation_history_") {
+            self.selected_dictation_history_entry()
+        } else {
+            None
+        };
+        let dictation_outcome = self.handle_dictation_history_action(
+            &action_id_stripped,
+            selected_dictation_entry,
+            &dctx,
+            cx,
+        );
+        if dictation_outcome.was_handled() {
+            log_dispatch_outcome(
+                &action_id_stripped,
+                &dctx.trace_id,
+                "dictation_history",
+                &dictation_outcome,
+                &start,
+            );
+            self.show_outcome_feedback(&dictation_outcome, cx);
+            return;
+        }
+
+        let favorites_outcome =
+            self.handle_favorites_action(&action_id_stripped, &dctx, window, cx);
+        if favorites_outcome.was_handled() {
+            log_dispatch_outcome(
+                &action_id_stripped,
+                &dctx.trace_id,
+                "favorites",
+                &favorites_outcome,
+                &start,
+            );
+            self.show_outcome_feedback(&favorites_outcome, cx);
+            return;
+        }
+
         // Only script-list-hosted actions should force a ScriptList transition.
         if should_transition_to_script_list {
             self.transition_to_script_list_after_action(cx);
@@ -1549,7 +1743,7 @@ impl ScriptListApp {
 
         // Dispatch through handler chain, collecting the final outcome.
         let (handler, outcome) = {
-            let o = self.handle_shortcut_alias_action(&action_id_stripped, &dctx, cx);
+            let o = self.handle_shortcut_alias_action(&action_id_stripped, &dctx, window, cx);
             if o.was_handled() {
                 ("shortcut_alias", o)
             } else {
@@ -1624,6 +1818,8 @@ fn log_dispatch_outcome(
 
 // Include semantic submodules — each adds `impl ScriptListApp` methods.
 include!("clipboard.rs");
+include!("dictation_history.rs");
+include!("favorites.rs");
 include!("scripts.rs");
 include!("shortcuts.rs");
 include!("files.rs");

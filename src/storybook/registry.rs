@@ -63,6 +63,13 @@ mod tests {
         let _ = stories_by_surface(StorySurface::Footer);
         let _ = stories_by_surface(StorySurface::Header);
         let _ = stories_by_surface(StorySurface::ActionDialog);
+        let _ = stories_by_surface(StorySurface::DictationOverlay);
+        let _ = stories_by_surface(StorySurface::ConfirmPopup);
+        let _ = stories_by_surface(StorySurface::ContextPickerPopup);
+        let _ = stories_by_surface(StorySurface::ShortcutRecorder);
+        let _ = stories_by_surface(StorySurface::NotesWindow);
+        let _ = stories_by_surface(StorySurface::AcpChat);
+        let _ = stories_by_surface(StorySurface::BuiltInBrowser);
     }
 
     #[test]
@@ -74,7 +81,7 @@ mod tests {
     }
 
     #[test]
-    fn main_menu_surface_has_single_story() {
+    fn main_menu_surface_has_canonical_story() {
         assert!(
             stories_by_surface(StorySurface::MainMenu)
                 .into_iter()
@@ -99,7 +106,35 @@ mod tests {
         );
         assert!(
             !stories_by_surface(StorySurface::MiniAiChat).is_empty(),
-            "Mini ACP Chat surface should have at least one story"
+            "Mini Agent Chat surface should have at least one story"
+        );
+        assert!(
+            !stories_by_surface(StorySurface::DictationOverlay).is_empty(),
+            "Dictation Overlay surface should have at least one story"
+        );
+        assert!(
+            !stories_by_surface(StorySurface::ConfirmPopup).is_empty(),
+            "Confirm Popup surface should have at least one story"
+        );
+        assert!(
+            !stories_by_surface(StorySurface::ContextPickerPopup).is_empty(),
+            "Context Picker Popup surface should have at least one story"
+        );
+        assert!(
+            !stories_by_surface(StorySurface::ShortcutRecorder).is_empty(),
+            "Shortcut Recorder surface should have at least one story"
+        );
+        assert!(
+            !stories_by_surface(StorySurface::NotesWindow).is_empty(),
+            "Notes Window surface should have at least one story"
+        );
+        assert!(
+            !stories_by_surface(StorySurface::AcpChat).is_empty(),
+            "Agent Chat surface should have at least one story"
+        );
+        assert!(
+            !stories_by_surface(StorySurface::BuiltInBrowser).is_empty(),
+            "Built-In Browser surface should have at least one story"
         );
     }
 
@@ -108,10 +143,10 @@ mod tests {
         let categories = all_categories();
         assert!(
             categories.len() >= 2,
-            "design lab should expose at least Launcher + Layouts categories, got: {categories:?}"
+            "design lab should expose at least Launcher + Adoptable Surfaces categories, got: {categories:?}"
         );
         assert!(categories.contains(&"Launcher"));
-        assert!(categories.contains(&"Layouts"));
+        assert!(categories.contains(&"Adoptable Surfaces"));
     }
 
     #[test]

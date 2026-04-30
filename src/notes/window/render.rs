@@ -1,7 +1,7 @@
 use super::*;
 
 impl NotesApp {
-    /// Render the ACP surface with a thin Notes-owned titlebar containing a
+    /// Render the Agent Chat surface with a thin Notes-owned titlebar containing a
     /// mode switch so the user can toggle back to the Notes editor.
     pub(super) fn render_acp_surface(&self, cx: &mut Context<Self>) -> AnyElement {
         let muted_color = cx.theme().muted_foreground;
@@ -24,7 +24,7 @@ impl NotesApp {
                     .items_center()
                     .justify_center()
                     .gap_2()
-                    // Notes/ACP switch — two clickable labels.
+                    // Notes/Agent switch — two clickable labels.
                     .child(
                         div()
                             .id("notes-switch-notes")
@@ -48,7 +48,7 @@ impl NotesApp {
                             .id("notes-switch-acp")
                             .text_sm()
                             .text_color(accent_color)
-                            .child("ACP"),
+                            .child("Agent"),
                     ),
             )
             .child(
@@ -103,7 +103,7 @@ impl NotesApp {
                     .justify_center()
                     .text_sm()
                     .text_color(muted_color.opacity(OPACITY_MUTED))
-                    .child("ACP is loading…")
+                    .child("Agent Chat is loading...")
                     .into_any_element(),
                 None,
             )
@@ -199,9 +199,6 @@ impl Render for NotesApp {
             .when(in_acp_mode, |d| d.child(self.render_acp_surface(cx)))
             .when(show_actions && !in_acp_mode, |d| {
                 d.child(self.render_actions_panel_overlay(cx))
-            })
-            .when(self.show_shortcuts_help && !in_acp_mode, |d| {
-                d.child(self.render_shortcuts_help(cx))
             })
             .children(gpui_component::Root::render_dialog_layer(window, cx))
             .children(gpui_component::Root::render_notification_layer(window, cx))

@@ -139,8 +139,10 @@ impl ScriptListApp {
     /// Reset all state and return to the script list view.
     /// This clears all prompt state and resizes the window appropriately.
     pub(crate) fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
+        let closing_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
         let old_view = match &self.current_view {
             AppView::ScriptList => "ScriptList",
+            AppView::About { .. } => "About",
             AppView::ActionsDialog => "ActionsDialog",
             AppView::ArgPrompt { .. } => "ArgPrompt",
             AppView::DivPrompt { .. } => "DivPrompt",
@@ -159,6 +161,7 @@ impl ScriptListApp {
             AppView::EmojiPickerView { .. } => "EmojiPickerView",
             AppView::AppLauncherView { .. } => "AppLauncherView",
             AppView::WindowSwitcherView { .. } => "WindowSwitcherView",
+            AppView::BrowserTabsView { .. } => "BrowserTabsView",
             AppView::DesignGalleryView { .. } => "DesignGalleryView",
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => "DesignExplorerView",
@@ -178,8 +181,14 @@ impl ScriptListApp {
             AppView::SettingsView { .. } => "SettingsView",
             AppView::FavoritesBrowseView { .. } => "FavoritesBrowseView",
             AppView::AcpHistoryView { .. } => "AcpHistoryView",
+            AppView::BrowserHistoryView { .. } => "BrowserHistoryView",
+            AppView::DictationHistoryView { .. } => "DictationHistoryView",
             AppView::NotesBrowseView { .. } => "NotesBrowseView",
             AppView::AcpChatView { .. } => "AcpChatView",
+            AppView::ScriptIssuesView { .. } => "ScriptIssuesView",
+            AppView::SdkReferenceView { .. } => "SdkReferenceView",
+            AppView::ScriptTemplateCatalogView { .. } => "ScriptTemplateCatalogView",
+            AppView::ConfirmPrompt { .. } => "ConfirmPrompt",
         };
 
         let old_focused_input = self.focused_input;
@@ -209,9 +218,35 @@ impl ScriptListApp {
         // Stop process manager refresh if it was running
         self.stop_process_manager_refresh();
 
+        // If reset bypasses the normal ACP close button/Escape route, still
+        // hide ACP-owned popups before the view is dropped. This covers
+        // window hide/reset paths after launcher-triggered "/" or "@" opens.
+        if let AppView::AcpChatView { entity } = &self.current_view {
+            self.embedded_acp_chat = Some(entity.clone());
+            entity.update(cx, |view, cx| {
+                view.prepare_for_host_hide(cx);
+            });
+        }
+
         // Reset view
         self.current_view = AppView::ScriptList;
         self.main_window_mode = MainWindowMode::Mini;
+
+        if closing_acp_chat {
+            self.acp_ready_script_path = None;
+            self.acp_footer_dot_status = None;
+            self.acp_footer_model_display = None;
+            self.tab_ai_harness_return_view = None;
+            self.tab_ai_harness_return_focus_target = None;
+            crate::windows::update_automation_semantic_surface(
+                "main",
+                Some("scriptList".to_string()),
+            );
+            crate::windows::ensure_embedded_ai_window(false);
+            self.transition_acp_surface(
+                crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed,
+            );
+        }
 
         // CRITICAL: Reset focused_input to MainFilter so the cursor appears
         // This was a bug where focused_input could remain as ArgPrompt/None after

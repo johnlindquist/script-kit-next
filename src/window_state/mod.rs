@@ -77,7 +77,7 @@ impl WindowRole {
             WindowRole::Notes => "Notes",
             WindowRole::Ai => "AI",
             WindowRole::AiMini => "AI Mini",
-            WindowRole::AcpChat => "ACP Chat",
+            WindowRole::AcpChat => "Agent Chat",
         }
     }
 }

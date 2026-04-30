@@ -148,7 +148,9 @@ fn score_candidate(
     // For main-window targets, penalize candidates that are clearly secondary
     // windows (Notes, AI) so we never accidentally prefer them.
     if resolved.kind == AutomationWindowKind::Main
-        && (candidate.title.contains("Notes") || candidate.title.contains("AI"))
+        && (candidate.title.contains("Notes")
+            || candidate.title.contains("AI")
+            || candidate.title.contains("Agent Chat"))
     {
         score -= 200;
     }

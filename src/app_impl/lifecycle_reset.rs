@@ -209,6 +209,9 @@ impl ScriptListApp {
             AppView::WindowSwitcherView { filter, .. } if !filter.is_empty() => {
                 Some("WindowSwitcher filter")
             }
+            AppView::BrowserTabsView { filter, .. } if !filter.is_empty() => {
+                Some("BrowserTabs filter")
+            }
             AppView::ProcessManagerView { filter, .. } if !filter.is_empty() => {
                 Some("ProcessManager filter")
             }
@@ -225,6 +228,12 @@ impl ScriptListApp {
             AppView::AcpHistoryView { filter, .. } if !filter.is_empty() => {
                 Some("AcpHistory filter")
             }
+            AppView::BrowserHistoryView { filter, .. } if !filter.is_empty() => {
+                Some("BrowserHistory filter")
+            }
+            AppView::DictationHistoryView { filter, .. } if !filter.is_empty() => {
+                Some("DictationHistory filter")
+            }
             AppView::NotesBrowseView { filter, .. } if !filter.is_empty() => {
                 Some("NotesBrowse filter")
             }
@@ -233,6 +242,9 @@ impl ScriptListApp {
             }
             AppView::ThemeChooserView { filter, .. } if !filter.is_empty() => {
                 Some("ThemeChooser filter")
+            }
+            AppView::ScriptTemplateCatalogView { filter, .. } if !filter.is_empty() => {
+                Some("ScriptTemplateCatalog filter")
             }
             AppView::FileSearchView { query, .. } if !query.is_empty() => Some("FileSearch query"),
             _ => None,
@@ -284,6 +296,14 @@ impl ScriptListApp {
                 self.window_list_scroll_handle
                     .scroll_to_item(0, ScrollStrategy::Top);
             }
+            AppView::BrowserTabsView {
+                filter,
+                selected_index,
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.browser_tabs_scroll_handle
+                    .scroll_to_item(0, ScrollStrategy::Top);
+            }
             AppView::ProcessManagerView {
                 filter,
                 selected_index,
@@ -319,6 +339,20 @@ impl ScriptListApp {
                 Self::clear_builtin_query_state(filter, selected_index);
                 self.acp_history_scroll_handle.scroll_to_top_of_item(0);
             }
+            AppView::BrowserHistoryView {
+                filter,
+                selected_index,
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.browser_history_scroll_handle.scroll_to_top_of_item(0);
+            }
+            AppView::DictationHistoryView {
+                filter,
+                selected_index,
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+                self.dictation_history_scroll_handle.scroll_to_top_of_item(0);
+            }
             AppView::NotesBrowseView {
                 filter,
                 selected_index,
@@ -344,6 +378,13 @@ impl ScriptListApp {
                     offset_in_item: px(0.),
                 });
             }
+            AppView::ScriptTemplateCatalogView {
+                filter,
+                selected_index,
+                ..
+            } => {
+                Self::clear_builtin_query_state(filter, selected_index);
+            }
             AppView::FileSearchView {
                 query,
                 selected_index,
@@ -353,6 +394,8 @@ impl ScriptListApp {
                 // Cancel any pending search
                 self.file_search_debounce_task = None;
                 self.file_search_loading = false;
+                self.file_search_current_dir = None;
+                self.file_search_current_dir_show_hidden = false;
                 self.cached_file_results.clear();
                 self.file_search_display_indices.clear();
                 self.file_search_preview_thumbnail = FileSearchThumbnailPreviewState::Idle;

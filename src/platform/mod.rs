@@ -31,4 +31,5 @@ include!("ai_commands.rs");
 include!("osascript.rs");
 include!("cursor.rs");
 include!("screen_capture_overlay.rs");
+include!("panel_invariants.rs");
 include!("tests.rs");

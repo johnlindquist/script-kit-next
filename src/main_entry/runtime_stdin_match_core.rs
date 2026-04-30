@@ -16,19 +16,10 @@
                                 let bounds = platform::calculate_eye_line_bounds_on_mouse_display(window_size);
                                 window_ops::queue_move(bounds, window, ctx);
 
-                                if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
-                                    platform::configure_as_floating_panel();
-                                    platform::swizzle_gpui_blurred_view();
-                                    // Configure vibrancy based on actual theme colors
-                                    let theme = theme::get_cached_theme();
-                                    let is_dark = theme.should_use_dark_vibrancy();
-                                    let material = theme.get_vibrancy().material;
-                                    platform::configure_window_vibrancy_material_for_appearance(
-                                        is_dark,
-                                        material,
-                                    );
-                                    PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
-                                }
+                                // Oracle-Session `window-activation-invariants-guard` PR1.
+                                platform::ensure_main_panel_configured(
+                                    "runtime_stdin_match_core::run",
+                                );
 
                                 // Show window WITHOUT activating (floating panel behavior)
                                 platform::show_main_window_without_activation();
@@ -95,19 +86,10 @@
                                 };
                                 window_ops::queue_move(bounds, window, ctx);
 
-                                if !PANEL_CONFIGURED.load(std::sync::atomic::Ordering::SeqCst) {
-                                    platform::configure_as_floating_panel();
-                                    platform::swizzle_gpui_blurred_view();
-                                    // Configure vibrancy based on actual theme colors
-                                    let theme = theme::get_cached_theme();
-                                    let is_dark = theme.should_use_dark_vibrancy();
-                                    let material = theme.get_vibrancy().material;
-                                    platform::configure_window_vibrancy_material_for_appearance(
-                                        is_dark,
-                                        material,
-                                    );
-                                    PANEL_CONFIGURED.store(true, std::sync::atomic::Ordering::SeqCst);
-                                }
+                                // Oracle-Session `window-activation-invariants-guard` PR1.
+                                platform::ensure_main_panel_configured(
+                                    "runtime_stdin_match_core::show",
+                                );
 
                                 // Show window WITHOUT activating (floating panel behavior)
                                 platform::show_main_window_without_activation();
@@ -145,6 +127,50 @@
                                 script_kit_gpui::set_main_window_visible(false);
                                 sync_main_automation_window(current_main_automation_bounds(), false, false);
 
+                                // Reset the view back to the script list and re-key the
+                                // automation `semanticSurface` to `"scriptList"` so the
+                                // next list snapshot reports the truth. Without this, a
+                                // hide issued while in e.g. `FileSearchView` would leak
+                                // the `"fileSearch"` surface tag across its next show
+                                // and leave the automation introspection channel
+                                // diverged from `getState.promptType` (Pass #19 side
+                                // finding; covered by `tool-hide-rpc-surface-reset`).
+                                view.reset_to_script_list(ctx);
+                                crate::windows::update_automation_semantic_surface(
+                                    "main",
+                                    Some("scriptList".to_string()),
+                                );
+                                // Sibling teardown for the embedded AI (`kind: Ai`,
+                                // `id: "ai"`) registry entry. See the matching
+                                // `ensure_embedded_ai_window(false)` in
+                                // `src/app_impl/tab_ai_mode/mod.rs::close_acp_chat_to_script_list`
+                                // and the three-site lock-step across the Hide dispatchers
+                                // (this file, runtime_stdin.rs, app_run_setup.rs,
+                                // + window_visibility.rs::hide_main_window_helper).
+                                // Idempotent no-op when the entry isn't present. Closes
+                                // Run 9 Pass #20 `attacker-hide-path-embedded-ai-registry-stale`.
+                                crate::windows::ensure_embedded_ai_window(false);
+                                // Full teardown for actions-dialog
+                                // (`id: "actions-dialog"`). Pass #29 fix
+                                // (`cmd-k-on-unfocused-clipboard-pops-overlay-not-actions`):
+                                // upgraded from bare `remove_automation_window` to full
+                                // `close_actions_window`. Pass #23's bare registry op
+                                // left the `ACTIONS_WINDOW` static holding a stale handle;
+                                // a later `simulateKey cmd+k` on an unfocused window read
+                                // `is_actions_window_open()=true` and took the CLOSE branch,
+                                // popping whichever overlay was on top instead of opening
+                                // the actions dialog. `close_actions_window` clears the
+                                // static AND the registry; idempotent.
+                                crate::actions::close_actions_window(ctx);
+                                // Sibling teardown for confirm-popup
+                                // (`id: "confirm-popup"`, PromptPopup kind).
+                                // Pass #25 fix: close_confirm_window at
+                                // src/confirm/window.rs:385 is the only
+                                // production removal path; no hide dispatcher
+                                // calls it (`attacker-hide-path-confirm-popup-registry-stale`).
+                                // Pure registry op; idempotent.
+                                crate::windows::remove_automation_window("confirm-popup");
+
                                 // Check if Notes or AI windows are open
                                 let notes_open = notes::is_notes_window_open();
                                 let ai_open = ai::is_ai_window_open();
@@ -164,62 +190,14 @@
                                 view.set_filter_text_immediate(text.clone(), window, ctx);
                                 let _ = view.get_filtered_results_cached(); // Update cache
                             }
-                            ExternalCommand::TriggerBuiltin { ref name } => {
-                                logging::log("STDIN", &format!("Triggering built-in: '{}'", name));
-                                // Opened via protocol command - ESC should close window (not return to main menu)
-                                view.opened_from_main_menu = false;
-                                // Match built-in name and trigger the corresponding feature
-                                match name.to_lowercase().as_str() {
-                                    "design-gallery" | "designgallery" | "design gallery" => {
-                                        view.current_view = AppView::DesignGalleryView {
-                                            filter: String::new(),
-                                            selected_index: 0,
-                                        };
-                                        view.update_window_size_deferred(window, ctx);
-                                    }
-                                    // P0 FIX: Store data in self, view holds only state
-                                    "clipboard" | "clipboard-history" | "clipboardhistory" => {
-                                        view.cached_clipboard_entries =
-                                            clipboard_history::get_cached_entries(100);
-                                        view.focused_clipboard_entry_id = view
-                                            .cached_clipboard_entries
-                                            .first()
-                                            .map(|entry| entry.id.clone());
-                                        view.current_view = AppView::ClipboardHistoryView {
-                                            filter: String::new(),
-                                            selected_index: 0,
-                                        };
-                                        view.update_window_size_deferred(window, ctx);
-                                    }
-                                    // P0 FIX: Use existing self.apps, view holds only state
-                                    "apps" | "app-launcher" | "applauncher" => {
-                                        view.current_view = AppView::AppLauncherView {
-                                            filter: String::new(),
-                                            selected_index: 0,
-                                        };
-                                        view.update_window_size_deferred(window, ctx);
-                                    }
-                                    "file-search" | "filesearch" | "files" | "searchfiles" => {
-                                        view.open_file_search(String::new(), ctx);
-                                    }
-                                    "emoji" | "emoji-picker" | "emojipicker" => {
-                                        view.filter_text = String::new();
-                                        view.pending_filter_sync = true;
-                                        view.pending_placeholder = Some("Search Emoji & Symbols...".to_string());
-                                        view.current_view = AppView::EmojiPickerView {
-                                            filter: String::new(),
-                                            selected_index: 0,
-                                            selected_category: None,
-                                        };
-                                        view.hovered_index = None;
-                                        view.pending_focus = Some(FocusTarget::MainFilter);
-                                        view.update_window_size_deferred(window, ctx);
-                                    }
-                                    "tab-ai" | "tabai" => {
-                                        view.open_tab_ai_acp_with_entry_intent(None, ctx);
-                                    }
-                                    _ => {
-                                        logging::log("ERROR", &format!("Unknown built-in: '{}'", name));
-                                    }
-                                }
+                            ref cmd @ ExternalCommand::TriggerBuiltin { .. } => {
+                                // Canonical dispatch lives in the shared helper — see
+                                // src/app_impl/trigger_builtin_dispatch.rs. This
+                                // file is only consumed by the source-audit tests
+                                // in src/app_impl/tests.rs, so keep it in lock-step
+                                // with app_run_setup.rs.
+                                logging::log("STDIN", "Triggering built-in (see structured logs)");
+                                let _ = view.dispatch_trigger_builtin(cmd, window, ctx);
+                                let _ = view
+                                    .rekey_main_automation_surface_after_trigger_builtin_dispatch();
                             }

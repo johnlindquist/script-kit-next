@@ -48,7 +48,7 @@ const EMBEDDED_WINDOW_MANAGEMENT_EXTENSION: &str =
 /// Embedded AI Text Tools extension (built-in extension that ships with the app)
 const EMBEDDED_AI_TEXT_TOOLS_EXTENSION: &str =
     include_str!("../../kit-init/scriptlets/ai-text-tools/main.md");
-/// Embedded ACP Chat example extension (built-in extension that ships with the app)
+/// Embedded Agent Chat example extension (built-in extension that ships with the app)
 const EMBEDDED_EXAMPLE_EXTENSION_ACP_CHAT: &str =
     include_str!("../../kit-init/scriptlets/examples/acp-chat.md");
 /// Embedded Custom Actions example extension (built-in extension that ships with the app)
@@ -70,22 +70,29 @@ const EMBEDDED_EXAMPLES_HOWTO: &str = include_str!("../../kit-init/scriptlets/ex
 /// Embedded Examples extension - minimal starter bundle
 const EMBEDDED_EXAMPLES_STARTER: &str =
     include_str!("../../kit-init/scriptlets/examples/starter.md");
+/// Embedded Examples extension - Power Syntax command scriptlets
+const EMBEDDED_EXAMPLES_POWER_SYNTAX: &str =
+    include_str!("../../kit-init/scriptlets/examples/power-syntax.md");
 /// Root-level CLAUDE.md for the ~/.scriptkit workspace (the harness cwd)
 const EMBEDDED_ROOT_CLAUDE_MD: &str = include_str!("../../kit-init/ROOT_CLAUDE.md");
 /// Root-level AGENTS.md SDK reference for the ~/.scriptkit workspace
 const EMBEDDED_ROOT_AGENTS_MD: &str = include_str!("../../kit-init/ROOT_AGENTS.md");
 /// Skills README
 const EMBEDDED_SKILLS_README: &str = include_str!("../../kit-init/skills/README.md");
-/// Skill: script authoring
-const EMBEDDED_SKILL_SCRIPT_AUTHORING: &str =
-    include_str!("../../kit-init/skills/script-authoring/SKILL.md");
-/// Skill: scriptlets
-const EMBEDDED_SKILL_SCRIPTLETS: &str = include_str!("../../kit-init/skills/scriptlets/SKILL.md");
-/// Skill: config & theming
-const EMBEDDED_SKILL_CONFIG: &str = include_str!("../../kit-init/skills/config/SKILL.md");
+/// Skill: new script
+const EMBEDDED_SKILL_NEW_SCRIPT: &str = include_str!("../../kit-init/skills/new-script/SKILL.md");
+/// Skill: new scriptlet
+const EMBEDDED_SKILL_NEW_SCRIPTLET: &str =
+    include_str!("../../kit-init/skills/new-scriptlet/SKILL.md");
+/// Skill: config updates
+const EMBEDDED_SKILL_UPDATE_CONFIG: &str =
+    include_str!("../../kit-init/skills/update-config/SKILL.md");
+/// Skill: external MCP server configuration
+const EMBEDDED_SKILL_CONFIGURE_MCP: &str =
+    include_str!("../../kit-init/skills/configure-mcp/SKILL.md");
 /// Skill: troubleshooting
 const EMBEDDED_SKILL_TROUBLESHOOTING: &str =
-    include_str!("../../kit-init/skills/troubleshooting/SKILL.md");
+    include_str!("../../kit-init/skills/troubleshoot/SKILL.md");
 /// Example script: hello-world
 const EMBEDDED_EXAMPLE_HELLO_WORLD: &str =
     include_str!("../../kit-init/examples/scripts/hello-world.ts");
@@ -98,6 +105,72 @@ const EMBEDDED_EXAMPLE_CLIPBOARD_TRANSFORM: &str =
 /// Example script: path-picker
 const EMBEDDED_EXAMPLE_PATH_PICKER: &str =
     include_str!("../../kit-init/examples/scripts/path-picker.ts");
+/// Example script helper: OAuth device flow
+const EMBEDDED_EXAMPLE_OAUTH_DEVICE_FLOW_HELPER: &str =
+    include_str!("../../kit-init/examples/scripts/lib/oauth-device-flow.ts");
+/// Example script: GitHub device login
+const EMBEDDED_EXAMPLE_GITHUB_DEVICE_LOGIN: &str =
+    include_str!("../../kit-init/examples/scripts/github-device-login.ts");
+/// Example script: Microsoft Graph device login
+const EMBEDDED_EXAMPLE_MICROSOFT_GRAPH_DEVICE_LOGIN: &str =
+    include_str!("../../kit-init/examples/scripts/microsoft-graph-device-login.ts");
+/// Example script: Google Calendar device login
+const EMBEDDED_EXAMPLE_GOOGLE_CALENDAR_DEVICE_LOGIN: &str =
+    include_str!("../../kit-init/examples/scripts/google-calendar-device-login.ts");
+/// Example script: generic OAuth device flow
+const EMBEDDED_EXAMPLE_GENERIC_OAUTH_DEVICE_FLOW: &str =
+    include_str!("../../kit-init/examples/scripts/generic-oauth-device-flow.ts");
+/// Example script: Power Syntax local GitHub capture
+const EMBEDDED_EXAMPLE_POWER_SYNTAX_GITHUB: &str =
+    include_str!("../../scripts/examples/menu-syntax/capture-github-local.ts");
+/// Example script: Power Syntax expense ledger capture
+const EMBEDDED_EXAMPLE_POWER_SYNTAX_EXPENSE: &str =
+    include_str!("../../scripts/examples/menu-syntax/capture-expense-ledger.ts");
+/// Example script: Power Syntax snippet capture
+const EMBEDDED_EXAMPLE_POWER_SYNTAX_SNIPPET: &str =
+    include_str!("../../scripts/examples/menu-syntax/capture-snippet-library.ts");
+/// Example script: Power Syntax refine fixture
+const EMBEDDED_EXAMPLE_POWER_SYNTAX_REFINE: &str =
+    include_str!("../../scripts/examples/menu-syntax/power-syntax-refine-fixture.ts");
+/// Example script: Power Syntax command env dump
+const EMBEDDED_EXAMPLE_POWER_SYNTAX_ENV: &str =
+    include_str!("../../scripts/examples/menu-syntax/dump-command-env.ts");
+/// Example script: Power Syntax payload lab
+const EMBEDDED_EXAMPLE_POWER_SYNTAX_PAYLOAD: &str =
+    include_str!("../../scripts/examples/menu-syntax/payload-lab.ts");
+/// Example script: Power Syntax duplicate command
+const EMBEDDED_EXAMPLE_POWER_SYNTAX_DUPE: &str =
+    include_str!("../../scripts/examples/menu-syntax/ambiguous-command-script.ts");
+/// Canonical menu syntax handler: todo inbox
+const EMBEDDED_CANONICAL_CAPTURE_TODO_INBOX: &str =
+    include_str!("../../scripts/examples/menu-syntax/capture-todo-inbox.ts");
+/// Canonical menu syntax handler: calendar event
+const EMBEDDED_CANONICAL_CREATE_CALENDAR_EVENT: &str =
+    include_str!("../../scripts/examples/menu-syntax/create-calendar-event.ts");
+/// Canonical menu syntax handler: macOS Calendar event
+const EMBEDDED_CANONICAL_CREATE_MAC_CALENDAR_EVENT: &str =
+    include_str!("../../scripts/examples/menu-syntax/create-mac-calendar-event.ts");
+/// Canonical menu syntax handler: Google Calendar event
+const EMBEDDED_CANONICAL_ADD_GOOGLE_CALENDAR_EVENT: &str =
+    include_str!("../../scripts/examples/menu-syntax/add-google-calendar-event.ts");
+/// Canonical menu syntax handler: reminder
+const EMBEDDED_CANONICAL_CREATE_REMINDER: &str =
+    include_str!("../../scripts/examples/menu-syntax/create-reminder.ts");
+/// Canonical menu syntax handler: snooze task
+const EMBEDDED_CANONICAL_SNOOZE_TASK: &str =
+    include_str!("../../scripts/examples/menu-syntax/snooze-task.ts");
+/// Canonical menu syntax handler: defer task
+const EMBEDDED_CANONICAL_DEFER_TASK: &str =
+    include_str!("../../scripts/examples/menu-syntax/defer-task.ts");
+/// Canonical menu syntax handler: daily note
+const EMBEDDED_CANONICAL_APPEND_DAILY_NOTE: &str =
+    include_str!("../../scripts/examples/menu-syntax/append-daily-note.ts");
+/// Canonical menu syntax handler: social draft
+const EMBEDDED_CANONICAL_DRAFT_SOCIAL_POST: &str =
+    include_str!("../../scripts/examples/menu-syntax/draft-social-post.ts");
+/// Canonical menu syntax handler: tagged link
+const EMBEDDED_CANONICAL_SAVE_TAGGED_LINK: &str =
+    include_str!("../../scripts/examples/menu-syntax/save-tagged-link.ts");
 /// Example skill: review-pr
 const EMBEDDED_EXAMPLE_SKILL_REVIEW_PR: &str =
     include_str!("../../kit-init/examples/skills/review-pr/SKILL.md");
@@ -112,14 +185,14 @@ const EMBEDDED_EXAMPLES_README: &str = include_str!("../../kit-init/examples/REA
 /// Examples START_HERE launchpad
 const EMBEDDED_EXAMPLES_START_HERE: &str = include_str!("../../kit-init/examples/START_HERE.md");
 /// Skill: notes — working with the Notes window and automation targets
-const EMBEDDED_SKILL_NOTES: &str = include_str!("../../kit-init/skills/notes/SKILL.md");
-/// Skill: agent authoring (compatibility — skills are now the preferred reusable AI unit)
-const EMBEDDED_SKILL_AGENTS: &str = include_str!("../../kit-init/skills/agents/SKILL.md");
-/// Skill: ACP Chat — programmatic ACP Chat flows, typed context parts, streaming, and lifecycle
-const EMBEDDED_SKILL_ACP_CHAT: &str = include_str!("../../kit-init/skills/acp-chat/SKILL.md");
+const EMBEDDED_SKILL_MANAGE_NOTES: &str =
+    include_str!("../../kit-init/skills/manage-notes/SKILL.md");
+/// Skill: new agent (compatibility — skills are now the preferred reusable AI unit)
+const EMBEDDED_SKILL_NEW_AGENT: &str = include_str!("../../kit-init/skills/new-agent/SKILL.md");
+/// Skill: Agent Chat — programmatic chat flows, typed context parts, streaming, and lifecycle
+const EMBEDDED_SKILL_START_CHAT: &str = include_str!("../../kit-init/skills/start-chat/SKILL.md");
 /// Skill: custom actions — Actions Menu commands in scripts and companion .actions.md files
-const EMBEDDED_SKILL_CUSTOM_ACTIONS: &str =
-    include_str!("../../kit-init/skills/custom-actions/SKILL.md");
+const EMBEDDED_SKILL_ADD_ACTIONS: &str = include_str!("../../kit-init/skills/add-actions/SKILL.md");
 /// Default ACP agent catalog (seeded on first run — provider/catalog selection, not plugin skills)
 const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
   "schemaVersion": 1,
@@ -130,7 +203,38 @@ const EMBEDDED_ACP_AGENTS_JSON: &str = r#"{
       "command": "opencode",
       "args": ["acp"],
       "env": {},
-      "models": []
+      "models": [],
+      "install": {
+        "command": "npm",
+        "args": ["install", "-g", "opencode-ai"]
+      }
+    },
+    {
+      "id": "gemini-cli",
+      "displayName": "Gemini CLI",
+      "command": "gemini",
+      "args": ["--acp"],
+      "env": {},
+      "models": [],
+      "install": {
+        "command": "npm",
+        "args": ["install", "-g", "@google/gemini-cli"]
+      }
+    },
+    {
+      "id": "codex-acp",
+      "displayName": "Codex",
+      "command": "npx",
+      "args": ["@zed-industries/codex-acp"],
+      "env": {},
+      "models": [],
+      "install": {
+        "command": "npx",
+        "args": ["@zed-industries/codex-acp"]
+      },
+      "auth": {
+        "summary": "Authenticate with ChatGPT, CODEX_API_KEY, or OPENAI_API_KEY."
+      }
     }
   ]
 }"#;
@@ -179,12 +283,32 @@ pub fn get_kit_path() -> PathBuf {
         None => std::env::temp_dir().join("script-kit"),
     }
 }
+
+/// Container for all Script Kit plugins under the active workspace.
+pub fn plugins_path() -> PathBuf {
+    get_kit_path().join("plugins")
+}
+
+/// User-owned TypeScript configuration file under the active workspace.
+pub fn config_ts_path() -> PathBuf {
+    get_kit_path().join("config.ts")
+}
+
+/// User-owned theme override file under the active workspace.
+pub fn theme_json_path() -> PathBuf {
+    get_kit_path().join("theme.json")
+}
+
+/// User-authored theme presets directory under the active workspace.
+pub fn themes_dir() -> PathBuf {
+    get_kit_path().join("themes")
+}
 /// Migrate from legacy ~/.kenv to new ~/.scriptkit structure
 ///
 /// This function handles one-time migration from the old directory structure:
 /// - Moves ~/.kenv contents to ~/.scriptkit
-/// - Moves ~/.kenv/scripts to ~/.scriptkit/kit/main/scripts
-/// - Moves ~/.kenv/scriptlets to ~/.scriptkit/kit/main/scriptlets
+/// - Moves ~/.kenv/scripts to ~/.scriptkit/plugins/main/scripts
+/// - Moves ~/.kenv/scriptlets to ~/.scriptkit/plugins/main/scriptlets
 /// - Creates a symlink ~/.kenv -> ~/.scriptkit for backwards compatibility
 ///
 /// Returns true if migration was performed, false if not needed
@@ -209,9 +333,12 @@ pub fn migrate_from_kenv() -> bool {
         "Migrating from ~/.kenv to ~/.scriptkit"
     );
 
-    // Create the new structure (under kit/ subdirectory)
-    let main_scripts = new_scriptkit.join("kit").join("main").join("scripts");
-    let main_scriptlets = new_scriptkit.join("kit").join("main").join("scriptlets");
+    // Create the new plugin structure.
+    let main_scripts = new_scriptkit.join("plugins").join("main").join("scripts");
+    let main_scriptlets = new_scriptkit
+        .join("plugins")
+        .join("main")
+        .join("scriptlets");
 
     if let Err(e) = fs::create_dir_all(&main_scripts) {
         warn!(error = %e, "Failed to create main/scripts directory");
@@ -223,7 +350,7 @@ pub fn migrate_from_kenv() -> bool {
         return false;
     }
 
-    // Move scripts from ~/.kenv/scripts to ~/.scriptkit/kit/main/scripts
+    // Move scripts from ~/.kenv/scripts to ~/.scriptkit/plugins/main/scripts
     let old_scripts = old_kenv.join("scripts");
     if old_scripts.exists() && old_scripts.is_dir() {
         if let Ok(entries) = fs::read_dir(&old_scripts) {
@@ -244,7 +371,7 @@ pub fn migrate_from_kenv() -> bool {
         }
     }
 
-    // Move scriptlets from ~/.kenv/scriptlets to ~/.scriptkit/kit/main/scriptlets
+    // Move scriptlets from ~/.kenv/scriptlets to ~/.scriptkit/plugins/main/scriptlets
     let old_scriptlets = old_kenv.join("scriptlets");
     if old_scriptlets.exists() && old_scriptlets.is_dir() {
         if let Ok(entries) = fs::read_dir(&old_scriptlets) {
@@ -265,13 +392,12 @@ pub fn migrate_from_kenv() -> bool {
         }
     }
 
-    // Move user config files into ~/.scriptkit/kit/
-    let kit_root = new_scriptkit.join("kit");
-    if let Err(e) = fs::create_dir_all(&kit_root) {
+    // Move user config files into ~/.scriptkit/
+    if let Err(e) = fs::create_dir_all(&new_scriptkit) {
         warn!(
             error = %e,
-            path = %kit_root.display(),
-            "Failed to create ~/.scriptkit/kit during migration"
+            path = %new_scriptkit.display(),
+            "Failed to create ~/.scriptkit during migration"
         );
         return false;
     }
@@ -281,13 +407,11 @@ pub fn migrate_from_kenv() -> bool {
         "theme.json",
         "tsconfig.json",
         "package.json",
-        // Legacy runtime preferences file; preserve it during migration so
-        // config.ts fallback/cleanup can absorb known keys safely.
         "settings.json",
     ];
     for file in kit_files {
         let old_path = old_kenv.join(file);
-        let new_path = kit_root.join(file);
+        let new_path = new_scriptkit.join(file);
         if old_path.exists() && !new_path.exists() {
             if let Err(e) = fs::rename(&old_path, &new_path) {
                 warn!(
@@ -438,6 +562,12 @@ pub fn ensure_kit_setup() -> SetupResult {
         };
     }
 
+    // Seed the user-themes directory so save/load operations don't race the
+    // first-use creation on the hot path.
+    if let Err(e) = crate::theme::user_themes::ensure_user_themes_dir() {
+        warnings.push(format!("Failed to create user themes dir: {e}"));
+    }
+
     // Plugin roots: each plugin gets {scripts,scriptlets,agents,skills} + plugin.json
     ensure_plugin_root(
         &kit_dir,
@@ -490,9 +620,9 @@ pub fn ensure_kit_setup() -> SetupResult {
     );
     ensure_plugin_root(
         &kit_dir,
-        "authoring",
-        "Authoring",
-        "Built-in skills and authoring references",
+        "scriptkit",
+        "Script Kit",
+        "Built-in Script Kit skills and references",
         &mut warnings,
     );
 
@@ -516,17 +646,16 @@ pub fn ensure_kit_setup() -> SetupResult {
         ensure_dir(&dir, &mut warnings);
     }
 
-    // Migrate legacy kit/skills → root skills (idempotent)
-    migrate_legacy_skills_to_workspace_root(&kit_dir, &mut warnings);
-
     // App-managed: SDK (refresh if changed)
     let sdk_path = kit_dir.join("sdk").join("kit-sdk.ts");
     write_string_if_changed(&sdk_path, EMBEDDED_SDK, &mut warnings, "sdk/kit-sdk.ts");
 
+    let plugins_dir = kit_dir.join("plugins");
+
     // App-managed: Built-in CleanShot X extension (refresh if changed)
     // This extension ships with the app and provides screenshot/recording commands
     let cleanshot_path = kit_dir
-        .join("kit")
+        .join("plugins")
         .join("cleanshot")
         .join("scriptlets")
         .join("main.md");
@@ -534,13 +663,13 @@ pub fn ensure_kit_setup() -> SetupResult {
         &cleanshot_path,
         EMBEDDED_CLEANSHOT_EXTENSION,
         &mut warnings,
-        "kit/cleanshot/scriptlets/main.md",
+        "plugins/cleanshot/scriptlets/main.md",
     );
 
     // App-managed: Built-in CleanShot X shared actions (refresh if changed)
     // These actions are automatically available for all CleanShot scriptlets
     let cleanshot_actions_path = kit_dir
-        .join("kit")
+        .join("plugins")
         .join("cleanshot")
         .join("scriptlets")
         .join("main.actions.md");
@@ -548,13 +677,13 @@ pub fn ensure_kit_setup() -> SetupResult {
         &cleanshot_actions_path,
         EMBEDDED_CLEANSHOT_ACTIONS,
         &mut warnings,
-        "kit/cleanshot/scriptlets/main.actions.md",
+        "plugins/cleanshot/scriptlets/main.actions.md",
     );
 
     // App-managed: Built-in 1Password extension (refresh if changed)
     // This extension ships with the app and provides password manager CLI commands
     let onepassword_path = kit_dir
-        .join("kit")
+        .join("plugins")
         .join("1password")
         .join("scriptlets")
         .join("main.md");
@@ -562,13 +691,13 @@ pub fn ensure_kit_setup() -> SetupResult {
         &onepassword_path,
         EMBEDDED_1PASSWORD_EXTENSION,
         &mut warnings,
-        "kit/1password/scriptlets/main.md",
+        "plugins/1password/scriptlets/main.md",
     );
 
     // App-managed: Built-in Quick Links extension (refresh if changed)
     // This extension ships with the app and provides quick access to common websites
     let quicklinks_path = kit_dir
-        .join("kit")
+        .join("plugins")
         .join("quicklinks")
         .join("scriptlets")
         .join("main.md");
@@ -576,13 +705,13 @@ pub fn ensure_kit_setup() -> SetupResult {
         &quicklinks_path,
         EMBEDDED_QUICKLINKS_EXTENSION,
         &mut warnings,
-        "kit/quicklinks/scriptlets/main.md",
+        "plugins/quicklinks/scriptlets/main.md",
     );
 
     // App-managed: Built-in Quick Links shared actions (refresh if changed)
     // These actions are automatically available for all Quick Links scriptlets
     let quicklinks_actions_path = kit_dir
-        .join("kit")
+        .join("plugins")
         .join("quicklinks")
         .join("scriptlets")
         .join("main.actions.md");
@@ -590,13 +719,13 @@ pub fn ensure_kit_setup() -> SetupResult {
         &quicklinks_actions_path,
         EMBEDDED_QUICKLINKS_ACTIONS,
         &mut warnings,
-        "kit/quicklinks/scriptlets/main.actions.md",
+        "plugins/quicklinks/scriptlets/main.actions.md",
     );
 
     // App-managed: Built-in Window Management extension (refresh if changed)
     // This extension ships with the app and provides window tiling and positioning
     let window_management_path = kit_dir
-        .join("kit")
+        .join("plugins")
         .join("window-management")
         .join("scriptlets")
         .join("main.md");
@@ -604,13 +733,13 @@ pub fn ensure_kit_setup() -> SetupResult {
         &window_management_path,
         EMBEDDED_WINDOW_MANAGEMENT_EXTENSION,
         &mut warnings,
-        "kit/window-management/scriptlets/main.md",
+        "plugins/window-management/scriptlets/main.md",
     );
 
     // App-managed: Built-in AI Text Tools extension (refresh if changed)
     // This extension ships with the app and provides AI-powered text transformations
     let ai_text_tools_path = kit_dir
-        .join("kit")
+        .join("plugins")
         .join("ai-text-tools")
         .join("scriptlets")
         .join("main.md");
@@ -618,43 +747,49 @@ pub fn ensure_kit_setup() -> SetupResult {
         &ai_text_tools_path,
         EMBEDDED_AI_TEXT_TOOLS_EXTENSION,
         &mut warnings,
-        "kit/ai-text-tools/scriptlets/main.md",
+        "plugins/ai-text-tools/scriptlets/main.md",
     );
 
     // App-managed: Built-in Examples extension (refresh if changed)
     // This extension ships with the app and provides complete scriptlet pattern reference
-    let examples_dir = kit_dir.join("kit").join("examples").join("scriptlets");
+    let examples_dir = plugins_dir.join("examples").join("scriptlets");
     write_string_if_changed(
         &examples_dir.join("main.md"),
         EMBEDDED_EXAMPLES_MAIN,
         &mut warnings,
-        "kit/examples/scriptlets/main.md",
+        "plugins/examples/scriptlets/main.md",
     );
     write_string_if_changed(
         &examples_dir.join("advanced.md"),
         EMBEDDED_EXAMPLES_ADVANCED,
         &mut warnings,
-        "kit/examples/scriptlets/advanced.md",
+        "plugins/examples/scriptlets/advanced.md",
     );
     write_string_if_changed(
         &examples_dir.join("howto.md"),
         EMBEDDED_EXAMPLES_HOWTO,
         &mut warnings,
-        "kit/examples/scriptlets/howto.md",
+        "plugins/examples/scriptlets/howto.md",
     );
     write_string_if_changed(
         &examples_dir.join("starter.md"),
         EMBEDDED_EXAMPLES_STARTER,
         &mut warnings,
-        "kit/examples/scriptlets/starter.md",
+        "plugins/examples/scriptlets/starter.md",
+    );
+    write_string_if_changed(
+        &examples_dir.join("power-syntax.md"),
+        EMBEDDED_EXAMPLES_POWER_SYNTAX,
+        &mut warnings,
+        "plugins/examples/scriptlets/power-syntax.md",
     );
 
-    // App-managed: Built-in ACP Chat example extension (refresh if changed)
+    // App-managed: Built-in Agent Chat example extension (refresh if changed)
     write_string_if_changed(
         &examples_dir.join("acp-chat").join("main.md"),
         EMBEDDED_EXAMPLE_EXTENSION_ACP_CHAT,
         &mut warnings,
-        "kit/examples/scriptlets/acp-chat/main.md",
+        "plugins/examples/scriptlets/acp-chat/main.md",
     );
 
     // App-managed: Built-in Custom Actions example extension (refresh if changed)
@@ -662,13 +797,13 @@ pub fn ensure_kit_setup() -> SetupResult {
         &examples_dir.join("custom-actions").join("main.md"),
         EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS,
         &mut warnings,
-        "kit/examples/scriptlets/custom-actions/main.md",
+        "plugins/examples/scriptlets/custom-actions/main.md",
     );
     write_string_if_changed(
         &examples_dir.join("custom-actions").join("main.actions.md"),
         EMBEDDED_EXAMPLE_EXTENSION_CUSTOM_ACTIONS_ACTIONS,
         &mut warnings,
-        "kit/examples/scriptlets/custom-actions/main.actions.md",
+        "plugins/examples/scriptlets/custom-actions/main.actions.md",
     );
 
     // App-managed: Built-in Notes example extension (refresh if changed)
@@ -676,41 +811,37 @@ pub fn ensure_kit_setup() -> SetupResult {
         &examples_dir.join("notes").join("main.md"),
         EMBEDDED_EXAMPLE_EXTENSION_NOTES,
         &mut warnings,
-        "kit/examples/scriptlets/notes/main.md",
+        "plugins/examples/scriptlets/notes/main.md",
     );
 
     // User-owned: config.ts (only create if missing)
-    // Located in kit/ directory so it can be version controlled with user scripts
-    let config_path = kit_dir.join("kit").join("config.ts");
+    let config_path = kit_dir.join("config.ts");
     write_string_if_missing(
         &config_path,
         EMBEDDED_CONFIG_TEMPLATE,
         &mut warnings,
-        "kit/config.ts",
+        "config.ts",
     );
 
     // User-owned (optional): theme.json (only create if missing)
-    // Located in kit/ directory so it can be version controlled with user scripts
-    let theme_path = kit_dir.join("kit").join("theme.json");
+    let theme_path = kit_dir.join("theme.json");
     write_string_if_missing(
         &theme_path,
         EMBEDDED_THEME_EXAMPLE,
         &mut warnings,
-        "kit/theme.json",
+        "theme.json",
     );
 
-    // App-managed: tsconfig.json path mappings in kit/ directory (merge-safe)
-    // Located at ~/.scriptkit/kit/tsconfig.json to be alongside user scripts
-    ensure_tsconfig_paths(&kit_dir.join("kit").join("tsconfig.json"), &mut warnings);
+    // App-managed: tsconfig.json path mappings in the workspace root (merge-safe)
+    ensure_tsconfig_paths(&kit_dir.join("tsconfig.json"), &mut warnings);
 
-    // App-managed: package.json for top-level await support in kit/ directory
-    // The "type": "module" allows scripts in kit/main/scripts/*.ts to use top-level await
-    let package_json_path = kit_dir.join("kit").join("package.json");
+    // App-managed: package.json for top-level await support in plugin scripts
+    let package_json_path = kit_dir.join("package.json");
     write_string_if_missing(
         &package_json_path,
         EMBEDDED_PACKAGE_JSON,
         &mut warnings,
-        "kit/package.json",
+        "package.json",
     );
 
     // User-owned: GUIDE.md (only create if missing)
@@ -747,109 +878,94 @@ pub fn ensure_kit_setup() -> SetupResult {
         "AGENTS.md",
     );
 
-    // Redirect stubs for kit/CLAUDE.md and kit/AGENTS.md so agents that
-    // happen to look there are pointed to the root-level canonical files.
-    let kit_claude_redirect = "# See ../CLAUDE.md\n\n\
-        This file has moved to the workspace root for better agent discoverability.\n\
-        Read `~/.scriptkit/CLAUDE.md` instead.\n";
+    // App-managed: Skills library — seeded into the Script Kit plugin (refresh if changed)
+    let scriptkit_skills = plugins_dir.join("scriptkit").join("skills");
     write_string_if_changed(
-        &kit_dir.join("kit").join("CLAUDE.md"),
-        kit_claude_redirect,
-        &mut warnings,
-        "kit/CLAUDE.md redirect",
-    );
-    let kit_agents_redirect = "# See ../AGENTS.md\n\n\
-        This file has moved to the workspace root for better agent discoverability.\n\
-        Read `~/.scriptkit/AGENTS.md` instead.\n";
-    write_string_if_changed(
-        &kit_dir.join("kit").join("AGENTS.md"),
-        kit_agents_redirect,
-        &mut warnings,
-        "kit/AGENTS.md redirect",
-    );
-
-    // App-managed: Skills library — seeded into the authoring plugin (refresh if changed)
-    let authoring_skills = kit_dir.join("kit").join("authoring").join("skills");
-    write_string_if_changed(
-        &authoring_skills.join("README.md"),
+        &scriptkit_skills.join("README.md"),
         EMBEDDED_SKILLS_README,
         &mut warnings,
-        "kit/authoring/skills/README.md",
+        "plugins/scriptkit/skills/README.md",
     );
     write_string_if_changed(
-        &authoring_skills.join("script-authoring").join("SKILL.md"),
-        EMBEDDED_SKILL_SCRIPT_AUTHORING,
+        &scriptkit_skills.join("new-script").join("SKILL.md"),
+        EMBEDDED_SKILL_NEW_SCRIPT,
         &mut warnings,
-        "kit/authoring/skills/script-authoring/SKILL.md",
+        "plugins/scriptkit/skills/new-script/SKILL.md",
     );
     write_string_if_changed(
-        &authoring_skills.join("scriptlets").join("SKILL.md"),
-        EMBEDDED_SKILL_SCRIPTLETS,
+        &scriptkit_skills.join("new-scriptlet").join("SKILL.md"),
+        EMBEDDED_SKILL_NEW_SCRIPTLET,
         &mut warnings,
-        "kit/authoring/skills/scriptlets/SKILL.md",
+        "plugins/scriptkit/skills/new-scriptlet/SKILL.md",
     );
     write_string_if_changed(
-        &authoring_skills.join("config").join("SKILL.md"),
-        EMBEDDED_SKILL_CONFIG,
+        &scriptkit_skills.join("update-config").join("SKILL.md"),
+        EMBEDDED_SKILL_UPDATE_CONFIG,
         &mut warnings,
-        "kit/authoring/skills/config/SKILL.md",
+        "plugins/scriptkit/skills/update-config/SKILL.md",
     );
     write_string_if_changed(
-        &authoring_skills.join("troubleshooting").join("SKILL.md"),
+        &scriptkit_skills.join("configure-mcp").join("SKILL.md"),
+        EMBEDDED_SKILL_CONFIGURE_MCP,
+        &mut warnings,
+        "plugins/scriptkit/skills/configure-mcp/SKILL.md",
+    );
+    write_string_if_changed(
+        &scriptkit_skills.join("troubleshoot").join("SKILL.md"),
         EMBEDDED_SKILL_TROUBLESHOOTING,
         &mut warnings,
-        "kit/authoring/skills/troubleshooting/SKILL.md",
+        "plugins/scriptkit/skills/troubleshoot/SKILL.md",
     );
     write_string_if_changed(
-        &authoring_skills.join("notes").join("SKILL.md"),
-        EMBEDDED_SKILL_NOTES,
+        &scriptkit_skills.join("manage-notes").join("SKILL.md"),
+        EMBEDDED_SKILL_MANAGE_NOTES,
         &mut warnings,
-        "kit/authoring/skills/notes/SKILL.md",
+        "plugins/scriptkit/skills/manage-notes/SKILL.md",
     );
     write_string_if_changed(
-        &authoring_skills.join("agents").join("SKILL.md"),
-        EMBEDDED_SKILL_AGENTS,
+        &scriptkit_skills.join("new-agent").join("SKILL.md"),
+        EMBEDDED_SKILL_NEW_AGENT,
         &mut warnings,
-        "kit/authoring/skills/agents/SKILL.md",
+        "plugins/scriptkit/skills/new-agent/SKILL.md",
     );
     write_string_if_changed(
-        &authoring_skills.join("acp-chat").join("SKILL.md"),
-        EMBEDDED_SKILL_ACP_CHAT,
+        &scriptkit_skills.join("start-chat").join("SKILL.md"),
+        EMBEDDED_SKILL_START_CHAT,
         &mut warnings,
-        "kit/authoring/skills/acp-chat/SKILL.md",
+        "plugins/scriptkit/skills/start-chat/SKILL.md",
     );
     write_string_if_changed(
-        &authoring_skills.join("custom-actions").join("SKILL.md"),
-        EMBEDDED_SKILL_CUSTOM_ACTIONS,
+        &scriptkit_skills.join("add-actions").join("SKILL.md"),
+        EMBEDDED_SKILL_ADD_ACTIONS,
         &mut warnings,
-        "kit/authoring/skills/custom-actions/SKILL.md",
+        "plugins/scriptkit/skills/add-actions/SKILL.md",
     );
 
     // App-managed: Example scripts — seeded into the examples plugin (refresh if changed)
-    let examples_plugin = kit_dir.join("kit").join("examples");
+    let examples_plugin = plugins_dir.join("examples");
     write_string_if_changed(
         &examples_plugin.join("README.md"),
         EMBEDDED_EXAMPLES_README,
         &mut warnings,
-        "kit/examples/README.md",
+        "plugins/examples/README.md",
     );
     write_string_if_changed(
         &examples_plugin.join("START_HERE.md"),
         EMBEDDED_EXAMPLES_START_HERE,
         &mut warnings,
-        "kit/examples/START_HERE.md",
+        "plugins/examples/START_HERE.md",
     );
     write_string_if_changed(
         &examples_plugin.join("scripts").join("hello-world.ts"),
         EMBEDDED_EXAMPLE_HELLO_WORLD,
         &mut warnings,
-        "kit/examples/scripts/hello-world.ts",
+        "plugins/examples/scripts/hello-world.ts",
     );
     write_string_if_changed(
         &examples_plugin.join("scripts").join("choose-from-list.ts"),
         EMBEDDED_EXAMPLE_CHOOSE_FROM_LIST,
         &mut warnings,
-        "kit/examples/scripts/choose-from-list.ts",
+        "plugins/examples/scripts/choose-from-list.ts",
     );
     write_string_if_changed(
         &examples_plugin
@@ -857,13 +973,110 @@ pub fn ensure_kit_setup() -> SetupResult {
             .join("clipboard-transform.ts"),
         EMBEDDED_EXAMPLE_CLIPBOARD_TRANSFORM,
         &mut warnings,
-        "kit/examples/scripts/clipboard-transform.ts",
+        "plugins/examples/scripts/clipboard-transform.ts",
     );
     write_string_if_changed(
         &examples_plugin.join("scripts").join("path-picker.ts"),
         EMBEDDED_EXAMPLE_PATH_PICKER,
         &mut warnings,
-        "kit/examples/scripts/path-picker.ts",
+        "plugins/examples/scripts/path-picker.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("lib")
+            .join("oauth-device-flow.ts"),
+        EMBEDDED_EXAMPLE_OAUTH_DEVICE_FLOW_HELPER,
+        &mut warnings,
+        "plugins/examples/scripts/lib/oauth-device-flow.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("github-device-login.ts"),
+        EMBEDDED_EXAMPLE_GITHUB_DEVICE_LOGIN,
+        &mut warnings,
+        "plugins/examples/scripts/github-device-login.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("microsoft-graph-device-login.ts"),
+        EMBEDDED_EXAMPLE_MICROSOFT_GRAPH_DEVICE_LOGIN,
+        &mut warnings,
+        "plugins/examples/scripts/microsoft-graph-device-login.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("google-calendar-device-login.ts"),
+        EMBEDDED_EXAMPLE_GOOGLE_CALENDAR_DEVICE_LOGIN,
+        &mut warnings,
+        "plugins/examples/scripts/google-calendar-device-login.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("generic-oauth-device-flow.ts"),
+        EMBEDDED_EXAMPLE_GENERIC_OAUTH_DEVICE_FLOW,
+        &mut warnings,
+        "plugins/examples/scripts/generic-oauth-device-flow.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("power-syntax-capture-github-local.ts"),
+        EMBEDDED_EXAMPLE_POWER_SYNTAX_GITHUB,
+        &mut warnings,
+        "plugins/examples/scripts/power-syntax-capture-github-local.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("power-syntax-capture-expense-ledger.ts"),
+        EMBEDDED_EXAMPLE_POWER_SYNTAX_EXPENSE,
+        &mut warnings,
+        "plugins/examples/scripts/power-syntax-capture-expense-ledger.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("power-syntax-capture-snippet-library.ts"),
+        EMBEDDED_EXAMPLE_POWER_SYNTAX_SNIPPET,
+        &mut warnings,
+        "plugins/examples/scripts/power-syntax-capture-snippet-library.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("power-syntax-refine-fixture.ts"),
+        EMBEDDED_EXAMPLE_POWER_SYNTAX_REFINE,
+        &mut warnings,
+        "plugins/examples/scripts/power-syntax-refine-fixture.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("power-syntax-command-env-dump.ts"),
+        EMBEDDED_EXAMPLE_POWER_SYNTAX_ENV,
+        &mut warnings,
+        "plugins/examples/scripts/power-syntax-command-env-dump.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("power-syntax-payload-lab.ts"),
+        EMBEDDED_EXAMPLE_POWER_SYNTAX_PAYLOAD,
+        &mut warnings,
+        "plugins/examples/scripts/power-syntax-payload-lab.ts",
+    );
+    write_string_if_changed(
+        &examples_plugin
+            .join("scripts")
+            .join("power-syntax-duplicate-command.ts"),
+        EMBEDDED_EXAMPLE_POWER_SYNTAX_DUPE,
+        &mut warnings,
+        "plugins/examples/scripts/power-syntax-duplicate-command.ts",
     );
     write_string_if_changed(
         &examples_plugin
@@ -872,7 +1085,7 @@ pub fn ensure_kit_setup() -> SetupResult {
             .join("SKILL.md"),
         EMBEDDED_EXAMPLE_SKILL_REVIEW_PR,
         &mut warnings,
-        "kit/examples/skills/review-pr/SKILL.md",
+        "plugins/examples/skills/review-pr/SKILL.md",
     );
     write_string_if_changed(
         &examples_plugin
@@ -881,7 +1094,7 @@ pub fn ensure_kit_setup() -> SetupResult {
             .join("SKILL.md"),
         EMBEDDED_EXAMPLE_SKILL_PLAN_FEATURE,
         &mut warnings,
-        "kit/examples/skills/plan-feature/SKILL.md",
+        "plugins/examples/skills/plan-feature/SKILL.md",
     );
     write_string_if_changed(
         &examples_plugin
@@ -890,7 +1103,7 @@ pub fn ensure_kit_setup() -> SetupResult {
             .join("SKILL.md"),
         EMBEDDED_EXAMPLE_SKILL_EXPLAIN_CODE,
         &mut warnings,
-        "kit/examples/skills/explain-code/SKILL.md",
+        "plugins/examples/skills/explain-code/SKILL.md",
     );
 
     // App-managed: Example extension references (refresh if changed)
@@ -898,25 +1111,31 @@ pub fn ensure_kit_setup() -> SetupResult {
         &examples_plugin.join("scriptlets").join("main.md"),
         EMBEDDED_EXAMPLES_MAIN,
         &mut warnings,
-        "kit/examples/scriptlets/main.md",
+        "plugins/examples/scriptlets/main.md",
     );
     write_string_if_changed(
         &examples_plugin.join("scriptlets").join("advanced.md"),
         EMBEDDED_EXAMPLES_ADVANCED,
         &mut warnings,
-        "kit/examples/scriptlets/advanced.md",
+        "plugins/examples/scriptlets/advanced.md",
     );
     write_string_if_changed(
         &examples_plugin.join("scriptlets").join("howto.md"),
         EMBEDDED_EXAMPLES_HOWTO,
         &mut warnings,
-        "kit/examples/scriptlets/howto.md",
+        "plugins/examples/scriptlets/howto.md",
     );
     write_string_if_changed(
         &examples_plugin.join("scriptlets").join("starter.md"),
         EMBEDDED_EXAMPLES_STARTER,
         &mut warnings,
-        "kit/examples/scriptlets/starter.md",
+        "plugins/examples/scriptlets/starter.md",
+    );
+    write_string_if_changed(
+        &examples_plugin.join("scriptlets").join("power-syntax.md"),
+        EMBEDDED_EXAMPLES_POWER_SYNTAX,
+        &mut warnings,
+        "plugins/examples/scriptlets/power-syntax.md",
     );
 
     // App-managed: Example agents (refresh if changed)
@@ -924,7 +1143,7 @@ pub fn ensure_kit_setup() -> SetupResult {
         &examples_plugin.join("agents").join("review-pr.claude.md"),
         EMBEDDED_EXAMPLE_AGENT_REVIEW_PR,
         &mut warnings,
-        "kit/examples/agents/review-pr.claude.md",
+        "plugins/examples/agents/review-pr.claude.md",
     );
     write_string_if_changed(
         &examples_plugin
@@ -932,7 +1151,7 @@ pub fn ensure_kit_setup() -> SetupResult {
             .join("plan-feature.i.gemini.md"),
         EMBEDDED_EXAMPLE_AGENT_PLAN_FEATURE,
         &mut warnings,
-        "kit/examples/agents/plan-feature.i.gemini.md",
+        "plugins/examples/agents/plan-feature.i.gemini.md",
     );
 
     // App-managed: .gitignore (refresh if changed)
@@ -943,7 +1162,7 @@ pub fn ensure_kit_setup() -> SetupResult {
 # =============================================================================
 # Node.js / Bun dependencies
 # =============================================================================
-# Root node_modules (for package.json at ~/.scriptkit/kit/)
+# Root node_modules (for package.json at ~/.scriptkit/plugins/)
 node_modules/
 
 # Kit-specific node_modules (e.g., main/node_modules, examples/node_modules)
@@ -1082,7 +1301,7 @@ fn ensure_dir(path: &Path, warnings: &mut Vec<String>) {
 
 /// Migrate legacy plugin-scoped `extensions/` directories to `scriptlets/`.
 fn migrate_plugin_extensions_to_scriptlets(kit_dir: &Path, warnings: &mut Vec<String>) {
-    let plugins_root = kit_dir.join("kit");
+    let plugins_root = kit_dir.join("plugins");
     let Ok(entries) = fs::read_dir(&plugins_root) else {
         return;
     };
@@ -1171,7 +1390,7 @@ fn ensure_plugin_root(
     description: &str,
     warnings: &mut Vec<String>,
 ) {
-    let root = kit_dir.join("kit").join(plugin_id);
+    let root = kit_dir.join("plugins").join(plugin_id);
     ensure_dir(&root.join("scripts"), warnings);
     ensure_dir(&root.join("scriptlets"), warnings);
     ensure_dir(&root.join("agents"), warnings);
@@ -1184,168 +1403,11 @@ fn ensure_plugin_root(
         &root.join("plugin.json"),
         &manifest,
         warnings,
-        &format!("kit/{plugin_id}/plugin.json"),
+        &format!("plugins/{plugin_id}/plugin.json"),
     );
 
     info!(plugin_id = %plugin_id, "plugin_root_ensured");
 }
-/// Migrate skills from legacy locations into `kit/authoring/skills/`.
-///
-/// Handles two legacy sources:
-/// 1. `~/.scriptkit/kit/skills/` (oldest)
-/// 2. `~/.scriptkit/skills/` (previous root-level layout)
-///
-/// Existing target files are preserved; conflicts are skipped with a warning.
-/// Empty legacy directories are removed after migration.
-fn migrate_legacy_skills_to_workspace_root(kit_dir: &Path, warnings: &mut Vec<String>) {
-    let authoring_skills = kit_dir.join("kit").join("authoring").join("skills");
-
-    // Migrate from oldest legacy location: kit/skills/ → kit/authoring/skills/
-    let oldest_legacy = kit_dir.join("kit").join("skills");
-    if oldest_legacy.exists() && oldest_legacy.is_dir() {
-        if let Err(error) = fs::create_dir_all(&authoring_skills) {
-            warnings.push(format!(
-                "Failed to create authoring skills directory {}: {}",
-                authoring_skills.display(),
-                error
-            ));
-            return;
-        }
-        merge_move_directory_contents(&oldest_legacy, &authoring_skills, warnings);
-        remove_dir_if_empty(&oldest_legacy, warnings);
-    }
-
-    // Migrate from previous root-level location: skills/ → kit/authoring/skills/
-    let root_skills = kit_dir.join("skills");
-    if root_skills.exists() && root_skills.is_dir() {
-        if let Err(error) = fs::create_dir_all(&authoring_skills) {
-            warnings.push(format!(
-                "Failed to create authoring skills directory {}: {}",
-                authoring_skills.display(),
-                error
-            ));
-            return;
-        }
-        merge_move_directory_contents(&root_skills, &authoring_skills, warnings);
-        remove_dir_if_empty(&root_skills, warnings);
-    }
-}
-
-/// Recursively merge-move `src_dir` contents into `dst_dir`.
-/// Files already present at the destination are skipped.
-/// Directories are merged recursively; empty source dirs are removed afterward.
-fn merge_move_directory_contents(src_dir: &Path, dst_dir: &Path, warnings: &mut Vec<String>) {
-    let entries = match fs::read_dir(src_dir) {
-        Ok(entries) => entries,
-        Err(error) => {
-            warnings.push(format!(
-                "Failed to read legacy skills directory {}: {}",
-                src_dir.display(),
-                error
-            ));
-            return;
-        }
-    };
-
-    for entry in entries {
-        let entry = match entry {
-            Ok(entry) => entry,
-            Err(error) => {
-                warnings.push(format!(
-                    "Failed to read legacy skills entry in {}: {}",
-                    src_dir.display(),
-                    error
-                ));
-                continue;
-            }
-        };
-
-        let src_path = entry.path();
-        let dst_path = dst_dir.join(entry.file_name());
-
-        if src_path.is_dir() {
-            if dst_path.exists() {
-                if !dst_path.is_dir() {
-                    warnings.push(format!(
-                        "Cannot merge legacy skills directory {} into non-directory {}",
-                        src_path.display(),
-                        dst_path.display()
-                    ));
-                    continue;
-                }
-                merge_move_directory_contents(&src_path, &dst_path, warnings);
-                remove_dir_if_empty(&src_path, warnings);
-                continue;
-            }
-
-            if let Err(error) = fs::rename(&src_path, &dst_path) {
-                warnings.push(format!(
-                    "Failed to move legacy skills directory {} -> {}: {}",
-                    src_path.display(),
-                    dst_path.display(),
-                    error
-                ));
-            } else {
-                info!(
-                    from = %src_path.display(),
-                    to = %dst_path.display(),
-                    "Moved legacy skills directory"
-                );
-            }
-            continue;
-        }
-
-        if dst_path.exists() {
-            debug!(
-                from = %src_path.display(),
-                to = %dst_path.display(),
-                "Skipping legacy skill file because destination already exists"
-            );
-            continue;
-        }
-
-        if let Err(error) = fs::rename(&src_path, &dst_path) {
-            warnings.push(format!(
-                "Failed to move legacy skills file {} -> {}: {}",
-                src_path.display(),
-                dst_path.display(),
-                error
-            ));
-        } else {
-            info!(
-                from = %src_path.display(),
-                to = %dst_path.display(),
-                "Moved legacy skill file"
-            );
-        }
-    }
-}
-
-/// Remove a directory only if it is empty.
-fn remove_dir_if_empty(path: &Path, warnings: &mut Vec<String>) {
-    let mut entries = match fs::read_dir(path) {
-        Ok(entries) => entries,
-        Err(error) => {
-            warnings.push(format!(
-                "Failed to inspect directory {} for cleanup: {}",
-                path.display(),
-                error
-            ));
-            return;
-        }
-    };
-
-    if entries.next().is_none() {
-        if let Err(error) = fs::remove_dir(path) {
-            warnings.push(format!(
-                "Failed to remove empty directory {}: {}",
-                path.display(),
-                error
-            ));
-        }
-    }
-}
-
 fn write_string_if_missing(path: &Path, contents: &str, warnings: &mut Vec<String>, label: &str) {
     if path.exists() {
         return;
@@ -1430,7 +1492,7 @@ fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<Strin
     }
 }
 /// Ensure tsconfig.json has proper TypeScript/Bun settings (merge-safe)
-/// The tsconfig lives at ~/.scriptkit/kit/tsconfig.json, SDK at ~/.scriptkit/sdk/
+/// The tsconfig lives at ~/.scriptkit/plugins/tsconfig.json, SDK at ~/.scriptkit/sdk/
 ///
 /// Sets essential options while preserving user customizations:
 /// - target: ESNext (for top-level await and modern features)
@@ -1443,8 +1505,8 @@ fn write_string_if_changed(path: &Path, contents: &str, warnings: &mut Vec<Strin
 fn ensure_tsconfig_paths(tsconfig_path: &Path, warnings: &mut Vec<String>) {
     use serde_json::{json, Value};
 
-    // Path is relative from kit/ to sdk/: ../sdk/kit-sdk.ts
-    let expected_sdk_path = json!(["../sdk/kit-sdk.ts"]);
+    // Path is relative from the workspace root to sdk/.
+    let expected_sdk_path = json!(["./sdk/kit-sdk.ts"]);
 
     let mut config: Value = if tsconfig_path.exists() {
         match fs::read_to_string(tsconfig_path) {
@@ -1560,10 +1622,43 @@ fn bun_exe_name() -> &'static str {
 }
 // --- merged from part_005.rs ---
 fn create_sample_files(kit_dir: &Path, warnings: &mut Vec<String>) {
-    // Create sample files in the main kit (under kit/ subdirectory)
-    let main_scripts_dir = kit_dir.join("kit").join("main").join("scripts");
-    let main_scriptlets_dir = kit_dir.join("kit").join("main").join("scriptlets");
-    let main_agents_dir = kit_dir.join("kit").join("main").join("agents");
+    // Create sample files in the main plugin.
+    let main_scripts_dir = kit_dir.join("plugins").join("main").join("scripts");
+    let main_scriptlets_dir = kit_dir.join("plugins").join("main").join("scriptlets");
+    let main_agents_dir = kit_dir.join("plugins").join("main").join("agents");
+
+    let canonical_menu_syntax_scripts = [
+        (
+            "capture-todo-inbox.ts",
+            EMBEDDED_CANONICAL_CAPTURE_TODO_INBOX,
+        ),
+        (
+            "create-calendar-event.ts",
+            EMBEDDED_CANONICAL_CREATE_CALENDAR_EVENT,
+        ),
+        (
+            "create-mac-calendar-event.ts",
+            EMBEDDED_CANONICAL_CREATE_MAC_CALENDAR_EVENT,
+        ),
+        (
+            "add-google-calendar-event.ts",
+            EMBEDDED_CANONICAL_ADD_GOOGLE_CALENDAR_EVENT,
+        ),
+        ("create-reminder.ts", EMBEDDED_CANONICAL_CREATE_REMINDER),
+        ("snooze-task.ts", EMBEDDED_CANONICAL_SNOOZE_TASK),
+        ("defer-task.ts", EMBEDDED_CANONICAL_DEFER_TASK),
+        ("append-daily-note.ts", EMBEDDED_CANONICAL_APPEND_DAILY_NOTE),
+        ("draft-social-post.ts", EMBEDDED_CANONICAL_DRAFT_SOCIAL_POST),
+        ("save-tagged-link.ts", EMBEDDED_CANONICAL_SAVE_TAGGED_LINK),
+    ];
+    for (filename, contents) in canonical_menu_syntax_scripts {
+        write_string_if_missing(
+            &main_scripts_dir.join(filename),
+            contents,
+            warnings,
+            &format!("plugins/main/scripts/{filename}"),
+        );
+    }
 
     // Create hello-world.ts script
     let hello_script_path = main_scripts_dir.join("hello-world.ts");
@@ -1764,19 +1859,19 @@ Script Kit watches these files and reloads automatically:
 
 | File/Directory | What happens on change |
 |----------------|------------------------|
-| `kit/config.ts` | Reloads configuration (hotkeys, settings) |
-| `kit/theme.json` | Applies new theme colors immediately |
-| `kit/main/scripts/*.ts` | Updates script list and metadata |
-| `kit/main/scriptlets/*.md` | Updates scriptlet list |
+| `config.ts` | Reloads configuration (hotkeys, settings) |
+| `theme.json` | Applies new theme colors immediately |
+| `plugins/main/scripts/*.ts` | Updates script list and metadata |
+| `plugins/main/scriptlets/*.md` | Updates scriptlet list |
 
 ## Scripts
 
-Scripts are TypeScript files in `kit/main/scripts/`. They have full access to the Script Kit SDK.
+Scripts are TypeScript files in `plugins/main/scripts/`. They have full access to the Script Kit SDK.
 
 ### Example Script
 
 ```typescript
-// kit/main/scripts/my-script.ts
+// plugins/main/scripts/my-script.ts
 
 export const metadata = {
   name: "My Script",
@@ -1842,7 +1937,7 @@ shortcut: cmd shift x
 
 ## Configuration (config.ts)
 
-Your `kit/config.ts` controls Script Kit behavior:
+Your `config.ts` controls Script Kit behavior:
 
 ```typescript
 export default {
@@ -1864,9 +1959,9 @@ export default {
 } satisfies Config;
 ```
 
-## Theme (kit/theme.json)
+## Theme (theme.json)
 
-Customize colors in `kit/theme.json`:
+Customize colors in `theme.json`:
 
 ```json
 {
@@ -1900,7 +1995,7 @@ export SK_PATH=~/my-scripts
 
 ## Quick Tips
 
-1. **Create a new script**: Add a `.ts` file to `kit/main/scripts/`
+1. **Create a new script**: Add a `.ts` file to `plugins/main/scripts/`
 2. **Add a hotkey**: Set `shortcut` in the metadata
 3. **Test changes**: Scripts reload automatically on save
 4. **View logs**: Check `logs/script-kit-gpui.jsonl` for debugging
@@ -1950,24 +2045,24 @@ mod tests {
         drop(lock);
     }
 
-    /// Test that kit directory structure uses kit/ subdirectory
-    /// Expected structure: ~/.scriptkit/kit/main/scripts, ~/.scriptkit/kit/main/scriptlets
+    /// Test that plugin directories live under plugins/
+    /// Expected structure: ~/.scriptkit/plugins/main/scripts, ~/.scriptkit/plugins/main/scriptlets
     #[test]
-    fn test_kit_directory_uses_kit_subdirectory() {
+    fn test_plugin_directory_uses_plugins_subdirectory() {
         with_sk_path(|kit_root| {
             let result = ensure_kit_setup();
 
-            let kit_main_scripts = kit_root.join("kit").join("main").join("scripts");
-            let kit_main_extensions = kit_root.join("kit").join("main").join("scriptlets");
+            let kit_main_scripts = kit_root.join("plugins").join("main").join("scripts");
+            let kit_main_extensions = kit_root.join("plugins").join("main").join("scriptlets");
 
             assert!(
                 kit_main_scripts.exists(),
-                "Expected kit/main/scripts to exist at {:?}",
+                "Expected plugins/main/scripts to exist at {:?}",
                 kit_main_scripts
             );
             assert!(
                 kit_main_extensions.exists(),
-                "Expected kit/main/scriptlets to exist at {:?}",
+                "Expected plugins/main/scriptlets to exist at {:?}",
                 kit_main_extensions
             );
 
@@ -1982,15 +2077,15 @@ mod tests {
         });
     }
 
-    /// Test that sample files are created in kit/main/scripts
+    /// Test that sample files are created in plugins/main/scripts
     #[test]
-    fn test_sample_files_in_kit_subdirectory() {
+    fn test_sample_files_in_plugins_subdirectory() {
         with_sk_path(|kit_root| {
             let result = ensure_kit_setup();
 
             if result.is_fresh_install {
                 let hello_script = kit_root
-                    .join("kit")
+                    .join("plugins")
                     .join("main")
                     .join("scripts")
                     .join("hello-world.ts");
@@ -2001,6 +2096,49 @@ mod tests {
                 );
             }
         });
+    }
+
+    #[test]
+    fn test_fresh_install_seeds_canonical_menu_syntax_handlers() {
+        let lock = crate::test_utils::SK_PATH_TEST_LOCK
+            .get_or_init(|| std::sync::Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let temp_dir = TempDir::new().unwrap();
+        let kit_root = temp_dir.path().join("scriptkit-fresh-menu-syntax");
+        std::env::set_var(SK_PATH_ENV, kit_root.to_str().unwrap());
+
+        let result = ensure_kit_setup();
+        assert!(result.is_fresh_install);
+
+        let main_scripts = kit_root.join("plugins").join("main").join("scripts");
+        for filename in [
+            "capture-todo-inbox.ts",
+            "create-calendar-event.ts",
+            "create-mac-calendar-event.ts",
+            "add-google-calendar-event.ts",
+            "create-reminder.ts",
+            "snooze-task.ts",
+            "defer-task.ts",
+            "append-daily-note.ts",
+            "draft-social-post.ts",
+            "save-tagged-link.ts",
+        ] {
+            let path = main_scripts.join(filename);
+            assert!(path.exists(), "expected seeded handler at {:?}", path);
+            let content = fs::read_to_string(&path).unwrap();
+            assert!(
+                content.contains("menuSyntax"),
+                "{filename} should declare menuSyntax metadata"
+            );
+            assert!(
+                content.contains(r#"family: "capture.v1""#),
+                "{filename} should declare a capture.v1 handler"
+            );
+        }
+
+        std::env::remove_var(SK_PATH_ENV);
+        drop(lock);
     }
 
     #[test]
@@ -2115,49 +2253,49 @@ mod tests {
             result.warnings.is_empty() || !result.warnings.iter().any(|w| w.contains("Failed"))
         );
 
-        // Verify kit/ subdirectory structure
-        let kit_dir = kit_root.join("kit");
-        assert!(kit_dir.exists(), "kit/ directory should exist");
+        // Verify plugins/ subdirectory structure
+        let plugins_dir = kit_root.join("plugins");
+        assert!(plugins_dir.exists(), "plugins/ directory should exist");
 
         // Verify main kit directories
-        let main_dir = kit_dir.join("main");
+        let main_dir = plugins_dir.join("main");
         assert!(
             main_dir.join("scripts").exists(),
-            "kit/main/scripts/ should exist"
+            "plugins/main/scripts/ should exist"
         );
         assert!(
             main_dir.join("scriptlets").exists(),
-            "kit/main/scriptlets/ should exist"
+            "plugins/main/scriptlets/ should exist"
         );
         assert!(
             main_dir.join("agents").exists(),
-            "kit/main/agents/ should exist"
+            "plugins/main/agents/ should exist"
         );
 
-        // Verify user config files in kit/
+        // Verify user config files at workspace root
         assert!(
-            kit_dir.join("config.ts").exists(),
-            "kit/config.ts should exist"
+            kit_root.join("config.ts").exists(),
+            "config.ts should exist"
         );
         assert!(
-            kit_dir.join("theme.json").exists(),
-            "kit/theme.json should exist"
+            kit_root.join("theme.json").exists(),
+            "theme.json should exist"
         );
         assert!(
-            kit_dir.join("package.json").exists(),
-            "kit/package.json should exist"
+            kit_root.join("package.json").exists(),
+            "package.json should exist"
         );
         assert!(
-            kit_dir.join("tsconfig.json").exists(),
-            "kit/tsconfig.json should exist"
+            kit_root.join("tsconfig.json").exists(),
+            "tsconfig.json should exist"
         );
         assert!(
-            kit_dir.join("AGENTS.md").exists(),
-            "kit/AGENTS.md should exist"
+            kit_root.join("AGENTS.md").exists(),
+            "AGENTS.md should exist"
         );
         assert!(
-            kit_dir.join("CLAUDE.md").exists(),
-            "kit/CLAUDE.md should exist"
+            kit_root.join("CLAUDE.md").exists(),
+            "CLAUDE.md should exist"
         );
 
         // Verify SDK directory
@@ -2191,7 +2329,7 @@ mod tests {
         );
 
         // Verify config.ts content
-        let config_content = fs::read_to_string(kit_dir.join("config.ts")).unwrap();
+        let config_content = fs::read_to_string(kit_root.join("config.ts")).unwrap();
         assert!(
             config_content.contains("@scriptkit/sdk"),
             "config.ts should import @scriptkit/sdk"
@@ -2202,7 +2340,7 @@ mod tests {
         );
 
         // Verify package.json has correct name and type
-        let package_content = fs::read_to_string(kit_dir.join("package.json")).unwrap();
+        let package_content = fs::read_to_string(kit_root.join("package.json")).unwrap();
         assert!(
             package_content.contains("@scriptkit/kit"),
             "package.json should have @scriptkit/kit name"
@@ -2212,18 +2350,6 @@ mod tests {
             "package.json should enable ESM"
         );
 
-        // kit/AGENTS.md and kit/CLAUDE.md are now redirect stubs
-        let kit_agents_content = fs::read_to_string(kit_dir.join("AGENTS.md")).unwrap();
-        assert!(
-            kit_agents_content.contains("../AGENTS.md"),
-            "kit/AGENTS.md should redirect to root"
-        );
-        let kit_claude_content = fs::read_to_string(kit_dir.join("CLAUDE.md")).unwrap();
-        assert!(
-            kit_claude_content.contains("../CLAUDE.md"),
-            "kit/CLAUDE.md should redirect to root"
-        );
-
         // Root-level AGENTS.md has the actual SDK reference
         let agents_content = fs::read_to_string(kit_root.join("AGENTS.md")).unwrap();
         assert!(
@@ -2231,7 +2357,7 @@ mod tests {
             "Root AGENTS.md should mention Script Kit"
         );
         assert!(
-            agents_content.contains("~/.scriptkit/kit/config.ts"),
+            agents_content.contains("~/.scriptkit/config.ts"),
             "Root AGENTS.md should have correct config path"
         );
 
@@ -2247,15 +2373,15 @@ mod tests {
         );
 
         // Verify CleanShot X built-in extension
-        let cleanshot_dir = kit_dir.join("cleanshot").join("scriptlets");
+        let cleanshot_dir = plugins_dir.join("cleanshot").join("scriptlets");
         assert!(
             cleanshot_dir.exists(),
-            "kit/cleanshot/scriptlets/ should exist"
+            "plugins/cleanshot/scriptlets/ should exist"
         );
         let cleanshot_extension = cleanshot_dir.join("main.md");
         assert!(
             cleanshot_extension.exists(),
-            "kit/cleanshot/scriptlets/main.md should exist"
+            "plugins/cleanshot/scriptlets/main.md should exist"
         );
         let cleanshot_content = fs::read_to_string(&cleanshot_extension).unwrap();
         assert!(
@@ -2272,15 +2398,15 @@ mod tests {
         );
 
         // Verify 1Password built-in extension
-        let onepassword_dir = kit_dir.join("1password").join("scriptlets");
+        let onepassword_dir = plugins_dir.join("1password").join("scriptlets");
         assert!(
             onepassword_dir.exists(),
-            "kit/1password/scriptlets/ should exist"
+            "plugins/1password/scriptlets/ should exist"
         );
         let onepassword_extension = onepassword_dir.join("main.md");
         assert!(
             onepassword_extension.exists(),
-            "kit/1password/scriptlets/main.md should exist"
+            "plugins/1password/scriptlets/main.md should exist"
         );
         let onepassword_content = fs::read_to_string(&onepassword_extension).unwrap();
         assert!(
@@ -2297,15 +2423,15 @@ mod tests {
         );
 
         // Verify Quick Links built-in extension
-        let quicklinks_dir = kit_dir.join("quicklinks").join("scriptlets");
+        let quicklinks_dir = plugins_dir.join("quicklinks").join("scriptlets");
         assert!(
             quicklinks_dir.exists(),
-            "kit/quicklinks/scriptlets/ should exist"
+            "plugins/quicklinks/scriptlets/ should exist"
         );
         let quicklinks_extension = quicklinks_dir.join("main.md");
         assert!(
             quicklinks_extension.exists(),
-            "kit/quicklinks/scriptlets/main.md should exist"
+            "plugins/quicklinks/scriptlets/main.md should exist"
         );
         let quicklinks_content = fs::read_to_string(&quicklinks_extension).unwrap();
         assert!(
@@ -2343,10 +2469,13 @@ mod tests {
 
         // Verify documented paths actually exist
         let documented_paths = [
-            ("kit/main/scripts", "~/.scriptkit/kit/main/scripts/"),
-            ("kit/main/scriptlets", "~/.scriptkit/kit/main/scriptlets/"),
-            ("kit/config.ts", "~/.scriptkit/kit/config.ts"),
-            ("kit/theme.json", "~/.scriptkit/kit/theme.json"),
+            ("plugins/main/scripts", "~/.scriptkit/plugins/main/scripts/"),
+            (
+                "plugins/main/scriptlets",
+                "~/.scriptkit/plugins/main/scriptlets/",
+            ),
+            ("config.ts", "~/.scriptkit/config.ts"),
+            ("theme.json", "~/.scriptkit/theme.json"),
             ("sdk/kit-sdk.ts", "~/.scriptkit/sdk/"),
         ];
 
@@ -2385,9 +2514,8 @@ mod tests {
 mod tab_ai_agent_doc_contract_tests {
     const ROOT_CLAUDE: &str = include_str!("../../kit-init/ROOT_CLAUDE.md");
     const ROOT_AGENTS: &str = include_str!("../../kit-init/ROOT_AGENTS.md");
-    const REPO_CLAUDE: &str = include_str!("../../CLAUDE.md");
-    const REPO_AGENTS: &str = include_str!("../../AGENTS.md");
     const AI_MOD_SOURCE: &str = include_str!("../ai/mod.rs");
+    const TAB_CONTEXT_SOURCE: &str = include_str!("../ai/tab_context.rs");
 
     fn assert_tab_ai_doc_contract(source: &str, label: &str) {
         for needle in [
@@ -2401,6 +2529,8 @@ mod tab_ai_agent_doc_contract_tests {
             "CaptureContextOptions::tab_ai_submit()",
             "Cmd+W",
             "Escape",
+            "Agent Chat",
+            "open_tab_ai_acp_with_entry_intent",
         ] {
             assert!(source.contains(needle), "{label} must contain `{needle}`");
         }
@@ -2411,22 +2541,25 @@ mod tab_ai_agent_doc_contract_tests {
         );
 
         assert!(
-            !source.contains("instant terminal session"),
-            "{label} must not describe Claude Code as an instant terminal session"
+            source
+                .contains("Plain `Tab` in `AppView::ScriptList` routes through the ACP entry path"),
+            "{label} must describe plain Tab as the ACP entry path"
         );
 
-        if source.contains("TabAiChat") || source.contains("open_tab_ai_full_view_chat") {
-            assert!(
-                source.contains("Legacy compatibility only"),
-                "{label} may mention legacy Tab AI symbols only behind an explicit legacy notice"
-            );
-        }
+        assert!(
+            !source.contains("Plain `Tab` opens the harness terminal"),
+            "{label} must not describe plain Tab as opening the harness terminal"
+        );
+        assert!(
+            !source.contains("`Shift+Tab` in `AppView::ScriptList` with non-empty filter text"),
+            "{label} must not describe Shift+Tab in ScriptList as the default quick-submit path"
+        );
     }
 
     fn assert_tab_ai_schema_detail_contract(source: &str, label: &str) {
         for needle in [
-            "`TabAiExecutionRecord` (v2)",
-            "Compatibility-only types still present",
+            "pub const TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION: u32 = 2;",
+            "pub struct TabAiExecutionRecord",
             "PanelOnlyElements",
             "CollectorFallback",
             "NoSemanticElements",
@@ -2438,7 +2571,7 @@ mod tab_ai_agent_doc_contract_tests {
         }
 
         for stale in [
-            "`TabAiExecutionRecord` (v1)",
+            "TAB_AI_EXECUTION_RECORD_SCHEMA_VERSION: u32 = 1",
             "record + status + output + duration",
             "Persisted memory: intent, script, target bundle_id, outcome",
             "PanelOnlyWarning",
@@ -2462,32 +2595,17 @@ mod tab_ai_agent_doc_contract_tests {
     }
 
     #[test]
-    fn repo_claude_doc_matches_landed_tab_ai_contract() {
-        assert_tab_ai_doc_contract(REPO_CLAUDE, "CLAUDE.md");
+    fn tab_ai_schema_detail_matches_current_tab_ai_types() {
+        assert_tab_ai_schema_detail_contract(TAB_CONTEXT_SOURCE, "src/ai/tab_context.rs");
     }
 
     #[test]
-    fn repo_agents_doc_matches_landed_tab_ai_contract() {
-        assert_tab_ai_doc_contract(REPO_AGENTS, "AGENTS.md");
-    }
-
-    #[test]
-    fn repo_claude_schema_detail_matches_current_tab_ai_types() {
-        assert_tab_ai_schema_detail_contract(REPO_CLAUDE, "CLAUDE.md");
-    }
-
-    #[test]
-    fn repo_agents_schema_detail_matches_current_tab_ai_types() {
-        assert_tab_ai_schema_detail_contract(REPO_AGENTS, "AGENTS.md");
-    }
-
-    #[test]
-    fn ai_mod_docs_reflect_tab_ai_harness_primary_path() {
+    fn ai_mod_docs_reflect_acp_primary_path() {
         for needle in [
             "//! AI surfaces and shared contracts.",
-            "//! - Submission shape: flat text-native",
-            "//! - Surface: `AppView::QuickTerminalView` rendered by `TermPrompt`",
-            "//! - Legacy chat/window code still exists, but it is not the default Tab AI surface.",
+            "//! - User-facing AI chat surface: Agent Chat",
+            "//! - Entry points should route to `open_tab_ai_acp_with_entry_intent(...)` when they need the canonical chat UI",
+            "//! - The legacy `window/` module remains only for deprecated compatibility flows and should not be used for new entry points",
         ] {
             assert!(
                 AI_MOD_SOURCE.contains(needle),
@@ -2496,8 +2614,8 @@ mod tab_ai_agent_doc_contract_tests {
         }
 
         assert!(
-            !AI_MOD_SOURCE.contains("//! AI Chat Module"),
-            "src/ai/mod.rs must not describe the module as chat-only anymore"
+            !AI_MOD_SOURCE.contains("//! - Submission shape: flat text-native"),
+            "src/ai/mod.rs must not describe QuickTerminalView as the primary AI surface"
         );
     }
 }
@@ -2509,14 +2627,14 @@ mod asset_destination_tests {
     /// Resolve the relative destination path for an embedded kit-init asset.
     ///
     /// Skills map to the workspace root (`skills/…`), the config template
-    /// maps to `kit/config.ts`, and everything else passes through unchanged.
+    /// maps to `config.ts`, and everything else passes through unchanged.
     fn embedded_asset_destination_relative(asset: &str) -> PathBuf {
         if let Some(_rest) = asset.strip_prefix("skills/") {
             // skills/ already carries the correct relative prefix
             return PathBuf::from(asset);
         }
         match asset {
-            "config-template.ts" => PathBuf::from("kit/config.ts"),
+            "config-template.ts" => PathBuf::from("config.ts"),
             other => PathBuf::from(other),
         }
     }
@@ -2524,8 +2642,8 @@ mod asset_destination_tests {
     #[test]
     fn skills_install_to_workspace_root_skills_directory() {
         assert_eq!(
-            embedded_asset_destination_relative("skills/config/SKILL.md"),
-            PathBuf::from("skills/config/SKILL.md")
+            embedded_asset_destination_relative("skills/update-config/SKILL.md"),
+            PathBuf::from("skills/update-config/SKILL.md")
         );
     }
 
@@ -2541,7 +2659,7 @@ mod asset_destination_tests {
     fn config_template_installs_under_kit_directory() {
         assert_eq!(
             embedded_asset_destination_relative("config-template.ts"),
-            PathBuf::from("kit/config.ts")
+            PathBuf::from("config.ts")
         );
     }
 
@@ -2553,19 +2671,17 @@ mod asset_destination_tests {
         );
     }
 
-    /// Verify that `ensure_kit_setup` actually writes skills to root-level
-    /// `skills/` (not `kit/skills/`).
+    /// Verify that `ensure_kit_setup` writes bundled skills under the Script Kit plugin.
     #[test]
-    fn setup_creates_skills_at_workspace_root() {
+    fn setup_creates_skills_under_scriptkit_plugin() {
         let source = include_str!("mod.rs");
-        // The setup code must join skills dirs directly on kit_dir, not on kit_dir.join("kit")
         assert!(
-            source.contains(r#".join("skills").join("script-authoring")"#),
-            "ensure_kit_setup must create skills/script-authoring at workspace root"
+            source.contains(r#".join("scriptkit").join("skills")"#),
+            "ensure_kit_setup must create bundled skills under plugins/scriptkit/skills"
         );
         assert!(
-            source.contains(r#".join("skills").join("config")"#),
-            "ensure_kit_setup must create skills/config at workspace root"
+            source.contains(r#".join("skills").join("update-config")"#),
+            "ensure_kit_setup must create the update-config skill under the Script Kit plugin"
         );
         // Verify skills are NOT nested under kit/ in the non-test portion of the file.
         // We search only the first 900 lines (the setup logic) to avoid matching test code.

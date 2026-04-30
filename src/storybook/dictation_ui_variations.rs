@@ -4,9 +4,9 @@ use gpui::*;
 use crate::dictation::DictationTarget;
 use crate::list_item::FONT_MONO;
 use crate::storybook::{story_container, story_section, StoryVariant};
-use crate::theme::get_cached_theme;
 use crate::theme::opacity::{OPACITY_ACTIVE, OPACITY_SELECTED};
-use crate::ui_foundation::HexColorExt;
+use crate::theme::{get_cached_theme, AppChromeColors, Theme};
+use crate::ui_foundation::{hex_to_rgba_with_opacity, HexColorExt};
 
 const GLASS_BG_OPACITY: f32 = 0.24;
 const GLASS_BORDER_OPACITY: f32 = 0.18;
@@ -23,15 +23,16 @@ const WAVEFORM_BAR_WIDTH_PX: f32 = 4.0;
 const WAVEFORM_BAR_GAP_PX: f32 = 4.0;
 const WAVEFORM_BAR_MIN_HEIGHT_PX: f32 = 4.0;
 const WAVEFORM_BAR_MAX_HEIGHT_PX: f32 = 20.0;
-const TRANSCRIBING_DOT_COUNT: usize = 3;
-const TRANSCRIBING_DOT_SIZE_PX: f32 = 4.0;
-const TRANSCRIBING_DOT_GAP_PX: f32 = 4.0;
 const SOUND_THRESHOLD: f32 = 0.10;
 const SILENT_BARS: [f32; WAVEFORM_BAR_COUNT] = [0.08; WAVEFORM_BAR_COUNT];
-const TRANSCRIBING_PULSE_PERIOD_SECS: f64 = 1.4;
-const TRANSCRIBING_PULSE_STAGGER_SECS: f64 = 0.2;
-const PULSE_OPACITY_MIN: f32 = 0.3;
-const PULSE_OPACITY_MAX: f32 = 1.0;
+
+fn semantic_text(theme: &Theme, opacity: f32) -> Hsla {
+    theme
+        .colors
+        .text
+        .primary
+        .with_opacity(opacity.clamp(0.0, 1.0))
+}
 
 fn format_elapsed(elapsed: std::time::Duration) -> SharedString {
     let elapsed_secs = elapsed.as_secs();
@@ -53,24 +54,8 @@ fn has_sound(bars: &[f32; WAVEFORM_BAR_COUNT]) -> bool {
     bars.iter().any(|&bar| bar > SOUND_THRESHOLD)
 }
 
-fn transcribing_dot_opacities_at(elapsed_secs: f64) -> [f32; TRANSCRIBING_DOT_COUNT] {
-    let mut opacities = [0.0_f32; TRANSCRIBING_DOT_COUNT];
-    for (i, opacity) in opacities.iter_mut().enumerate() {
-        let phase = elapsed_secs - (i as f64 * TRANSCRIBING_PULSE_STAGGER_SECS);
-        let t = std::f64::consts::TAU * phase / TRANSCRIBING_PULSE_PERIOD_SECS;
-        let wave = 0.5 + 0.5 * t.sin();
-        *opacity = PULSE_OPACITY_MIN + (PULSE_OPACITY_MAX - PULSE_OPACITY_MIN) * wave as f32;
-    }
-    opacities
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PreviewPhase {
-    Recording,
-    Transcribing,
-    Confirming,
-    Finished,
-    Failed,
+fn uses_native_rim(spec: DictationUiVariationSpec) -> bool {
+    spec.id == "compact-capsule"
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,7 +84,6 @@ enum BadgeTone {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SilenceTone {
-    Error,
     Neutral,
     Dim,
 }
@@ -116,7 +100,6 @@ struct DictationUiVariationSpec {
     name: &'static str,
     family: &'static str,
     description: &'static str,
-    phase: PreviewPhase,
     target: DictationTarget,
     elapsed_secs: u64,
     bars: [f32; WAVEFORM_BAR_COUNT],
@@ -133,7 +116,6 @@ struct DictationUiVariationSpec {
     border_opacity: f32,
     timer_opacity: f32,
     content_opacity: f32,
-    status_text: &'static str,
     show_badge: bool,
 }
 
@@ -149,36 +131,34 @@ const RIBBON_BARS: [f32; WAVEFORM_BAR_COUNT] =
 
 const SPECS: [DictationUiVariationSpec; 21] = [
     DictationUiVariationSpec {
-        id: "stock-tightened",
-        name: "Stock Tightened",
-        family: "Quiet",
-        description: "Current dictation pill with tighter spacing and quieter chrome.",
-        phase: PreviewPhase::Recording,
-        target: DictationTarget::AiChatComposer,
-        elapsed_secs: 44,
+        id: "compact-capsule",
+        name: "Compact Capsule",
+        family: "Shape Rhythm",
+        description:
+            "Compact standalone capsule with a neutral native rim like the main menu edge.",
+        target: DictationTarget::NotesEditor,
+        elapsed_secs: 39,
         bars: ACTIVE_BARS,
         layout: PreviewLayout::Standard,
-        waveform: WaveformKind::Bars,
-        badge_tone: BadgeTone::Present,
-        silence_tone: SilenceTone::Error,
+        waveform: WaveformKind::ThinBars,
+        badge_tone: BadgeTone::Minimal,
+        silence_tone: SilenceTone::Neutral,
         accent_mode: AccentMode::None,
-        width: 384.0,
-        height: OVERLAY_HEIGHT_PX,
-        horizontal_padding: 14.0,
-        content_gap: 10.0,
+        width: 312.0,
+        height: 32.0,
+        horizontal_padding: 11.0,
+        content_gap: 8.0,
         surface_opacity: 0.20,
-        border_opacity: 0.14,
-        timer_opacity: OPACITY_SELECTED,
-        content_opacity: OPACITY_ACTIVE,
-        status_text: "Done",
+        border_opacity: 0.36,
+        timer_opacity: 0.78,
+        content_opacity: 0.94,
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "timer-forward",
-        name: "Timer Forward",
-        family: "Quiet",
-        description: "Promotes the timer to primary weight while keeping the waveform secondary.",
-        phase: PreviewPhase::Recording,
+        name: "Timer Lead",
+        family: "Default Surface",
+        description: "Keeps elapsed time readable with the same restrained weight as metadata.",
         target: DictationTarget::NotesEditor,
         elapsed_secs: 68,
         bars: QUIET_BARS,
@@ -195,22 +175,20 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: GLASS_BORDER_OPACITY,
         timer_opacity: 1.0,
         content_opacity: 0.72,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "badge-whisper",
-        name: "Badge Whisper",
-        family: "Quiet",
-        description: "Leaves the destination badge nearly text-like until the user cycles targets.",
-        phase: PreviewPhase::Recording,
+        name: "Destination Whisper",
+        family: "Default Surface",
+        description: "Keeps the destination as quiet text instead of a button-like chip.",
         target: DictationTarget::ExternalApp,
         elapsed_secs: 31,
         bars: ACTIVE_BARS,
         layout: PreviewLayout::Standard,
         waveform: WaveformKind::Bars,
         badge_tone: BadgeTone::Minimal,
-        silence_tone: SilenceTone::Error,
+        silence_tone: SilenceTone::Neutral,
         accent_mode: AccentMode::None,
         width: OVERLAY_WIDTH_PX,
         height: OVERLAY_HEIGHT_PX,
@@ -220,22 +198,20 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.12,
         timer_opacity: OPACITY_SELECTED,
         content_opacity: OPACITY_ACTIVE,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "ghost-glass",
-        name: "Ghost Glass",
-        family: "Quiet",
-        description: "Pushes the surface closer to vibrancy with barely-there fill and edge.",
-        phase: PreviewPhase::Recording,
+        name: "Glass Bar",
+        family: "Default Surface",
+        description: "Uses a lighter vibrancy read so the standalone surface separates cleanly.",
         target: DictationTarget::AiChatComposer,
         elapsed_secs: 52,
         bars: ACTIVE_BARS,
         layout: PreviewLayout::Standard,
         waveform: WaveformKind::Bars,
         badge_tone: BadgeTone::Whisper,
-        silence_tone: SilenceTone::Error,
+        silence_tone: SilenceTone::Neutral,
         accent_mode: AccentMode::None,
         width: OVERLAY_WIDTH_PX,
         height: OVERLAY_HEIGHT_PX,
@@ -245,15 +221,14 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.10,
         timer_opacity: 0.66,
         content_opacity: 0.94,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "mono-everywhere",
-        name: "Mono Everywhere",
-        family: "Quiet",
-        description: "Unifies timer, target, and status text under one terminal-like voice.",
-        phase: PreviewPhase::Recording,
+        name: "Utility Readout",
+        family: "Default Surface",
+        description:
+            "Keeps timer and target utility text monospaced on the launcher opacity ladder.",
         target: DictationTarget::MainWindowPrompt,
         elapsed_secs: 96,
         bars: ACTIVE_BARS,
@@ -270,15 +245,13 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: GLASS_BORDER_OPACITY,
         timer_opacity: 0.88,
         content_opacity: 0.88,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "flat-accent",
-        name: "Flat Accent",
-        family: "Quiet",
-        description: "Relies on content and state accents more than on border definition.",
-        phase: PreviewPhase::Recording,
+        name: "Accent Needle",
+        family: "Default Surface",
+        description: "Adds one restrained accent tick without changing the overlay into a control.",
         target: DictationTarget::MainWindowFilter,
         elapsed_secs: 23,
         bars: ACTIVE_BARS,
@@ -295,15 +268,13 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.06,
         timer_opacity: 0.72,
         content_opacity: 0.96,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "center-quiet",
-        name: "Center Quiet",
-        family: "Quiet",
-        description: "Lets the center signal relax during pauses so the pill feels calmer.",
-        phase: PreviewPhase::Recording,
+        name: "Pause Quiet",
+        family: "Default Surface",
+        description: "Treats idle input as muted signal instead of an error-like state.",
         target: DictationTarget::NotesEditor,
         elapsed_secs: 18,
         bars: QUIET_BARS,
@@ -320,22 +291,20 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.14,
         timer_opacity: 0.62,
         content_opacity: 0.74,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "split-pill",
-        name: "Split Pill",
-        family: "Structural",
-        description: "Uses spacing rhythm to make the timer, signal, and destination read faster.",
-        phase: PreviewPhase::Recording,
+        name: "Balanced Columns",
+        family: "Shape Rhythm",
+        description: "Balances timer, waveform, and destination inside one standalone bar.",
         target: DictationTarget::AiChatComposer,
         elapsed_secs: 83,
         bars: ACTIVE_BARS,
         layout: PreviewLayout::Standard,
         waveform: WaveformKind::Bars,
         badge_tone: BadgeTone::Present,
-        silence_tone: SilenceTone::Error,
+        silence_tone: SilenceTone::Neutral,
         accent_mode: AccentMode::None,
         width: 408.0,
         height: OVERLAY_HEIGHT_PX,
@@ -345,16 +314,13 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: GLASS_BORDER_OPACITY,
         timer_opacity: OPACITY_SELECTED,
         content_opacity: OPACITY_ACTIVE,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "dual-rail",
-        name: "Dual Rail",
-        family: "Structural",
-        description:
-            "Stacks the target under the timer so the waveform gets more uninterrupted room.",
-        phase: PreviewPhase::Recording,
+        name: "Left Rail",
+        family: "Shape Rhythm",
+        description: "Stacks timer and target at left so the meter remains visually centered.",
         target: DictationTarget::ExternalApp,
         elapsed_secs: 58,
         bars: ACTIVE_BARS,
@@ -371,15 +337,13 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: GLASS_BORDER_OPACITY,
         timer_opacity: 0.96,
         content_opacity: OPACITY_ACTIVE,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "symmetric-core",
-        name: "Symmetric Core",
-        family: "Structural",
-        description: "Centers the timer above the signal for a more instrument-like reading mode.",
-        phase: PreviewPhase::Recording,
+        name: "Center Stack",
+        family: "Shape Rhythm",
+        description: "Tests a compact centered overlay with vertical information hierarchy.",
         target: DictationTarget::AiChatComposer,
         elapsed_secs: 105,
         bars: QUIET_BARS,
@@ -396,22 +360,20 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.14,
         timer_opacity: 0.96,
         content_opacity: 0.84,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "wide-meter",
-        name: "Wide Meter",
-        family: "Structural",
-        description: "Expands the waveform so dictation feels more live than badge-oriented.",
-        phase: PreviewPhase::Recording,
+        name: "Wide Signal",
+        family: "Shape Rhythm",
+        description: "Gives speech signal more width while destination remains secondary.",
         target: DictationTarget::MainWindowPrompt,
         elapsed_secs: 72,
         bars: WIDE_BARS,
         layout: PreviewLayout::Standard,
         waveform: WaveformKind::Bars,
         badge_tone: BadgeTone::Whisper,
-        silence_tone: SilenceTone::Error,
+        silence_tone: SilenceTone::Neutral,
         accent_mode: AccentMode::None,
         width: 432.0,
         height: OVERLAY_HEIGHT_PX,
@@ -421,47 +383,43 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.16,
         timer_opacity: 0.66,
         content_opacity: 0.98,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
-        id: "compact-capsule",
-        name: "Compact Capsule",
-        family: "Structural",
-        description: "Shrinks toward a system HUD while preserving the same information order.",
-        phase: PreviewPhase::Recording,
-        target: DictationTarget::NotesEditor,
-        elapsed_secs: 39,
+        id: "stock-tightened",
+        name: "Default Quiet",
+        family: "Default Surface",
+        description: "Refines the standalone pill with launcher text tiers and quieter chrome.",
+        target: DictationTarget::AiChatComposer,
+        elapsed_secs: 44,
         bars: ACTIVE_BARS,
         layout: PreviewLayout::Standard,
-        waveform: WaveformKind::ThinBars,
-        badge_tone: BadgeTone::Minimal,
+        waveform: WaveformKind::Bars,
+        badge_tone: BadgeTone::Present,
         silence_tone: SilenceTone::Neutral,
         accent_mode: AccentMode::None,
-        width: 348.0,
-        height: 34.0,
-        horizontal_padding: 12.0,
+        width: 384.0,
+        height: OVERLAY_HEIGHT_PX,
+        horizontal_padding: 14.0,
         content_gap: 10.0,
-        surface_opacity: 0.22,
-        border_opacity: 0.12,
-        timer_opacity: 0.88,
-        content_opacity: 0.90,
-        status_text: "Done",
+        surface_opacity: 0.20,
+        border_opacity: 0.14,
+        timer_opacity: OPACITY_SELECTED,
+        content_opacity: OPACITY_ACTIVE,
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "tall-signal",
         name: "Tall Signal",
-        family: "Structural",
-        description: "Adds a bit more height so active dictation reads from peripheral vision.",
-        phase: PreviewPhase::Recording,
+        family: "Shape Rhythm",
+        description: "Adds height for peripheral readability without adding persistent controls.",
         target: DictationTarget::AiChatComposer,
         elapsed_secs: 61,
         bars: WIDE_BARS,
         layout: PreviewLayout::Standard,
         waveform: WaveformKind::Bars,
         badge_tone: BadgeTone::Present,
-        silence_tone: SilenceTone::Error,
+        silence_tone: SilenceTone::Neutral,
         accent_mode: AccentMode::None,
         width: OVERLAY_WIDTH_PX,
         height: 52.0,
@@ -471,22 +429,20 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: GLASS_BORDER_OPACITY,
         timer_opacity: 0.72,
         content_opacity: 1.0,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "badge-dock",
-        name: "Badge Dock",
-        family: "Structural",
-        description: "Turns the destination into a docked end-cap instead of an internal chip.",
-        phase: PreviewPhase::Recording,
+        name: "Docked Target",
+        family: "Shape Rhythm",
+        description: "Pins destination metadata to the edge with a divider rather than a chip.",
         target: DictationTarget::ExternalApp,
         elapsed_secs: 47,
         bars: ACTIVE_BARS,
         layout: PreviewLayout::DockedBadge,
         waveform: WaveformKind::Bars,
         badge_tone: BadgeTone::Docked,
-        silence_tone: SilenceTone::Error,
+        silence_tone: SilenceTone::Neutral,
         accent_mode: AccentMode::None,
         width: 414.0,
         height: OVERLAY_HEIGHT_PX,
@@ -496,15 +452,13 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.16,
         timer_opacity: 0.72,
         content_opacity: 0.96,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "green-ready",
-        name: "Green Ready",
-        family: "State and Signal",
-        description: "Uses richer success emphasis while the session is clearly hearing speech.",
-        phase: PreviewPhase::Recording,
+        name: "Active Speech",
+        family: "Signal Language",
+        description: "Shows a confident success signal only when speech is actually present.",
         target: DictationTarget::AiChatComposer,
         elapsed_secs: 28,
         bars: ACTIVE_BARS,
@@ -521,15 +475,13 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: GLASS_BORDER_OPACITY,
         timer_opacity: 0.72,
         content_opacity: 1.0,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "red-means-problem",
-        name: "Red Means Problem",
-        family: "State and Signal",
-        description: "Keeps natural pauses neutral and saves red strictly for real errors.",
-        phase: PreviewPhase::Failed,
+        name: "Quiet Listening",
+        family: "Signal Language",
+        description: "Keeps low input neutral and legible instead of implying failure.",
         target: DictationTarget::ExternalApp,
         elapsed_secs: 17,
         bars: SILENT_BARS,
@@ -546,15 +498,13 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.16,
         timer_opacity: 0.56,
         content_opacity: 0.92,
-        status_text: "Mic access denied",
-        show_badge: false,
+        show_badge: true,
     },
     DictationUiVariationSpec {
         id: "transcribe-thread",
-        name: "Transcribe Thread",
-        family: "State and Signal",
-        description: "Uses a stitched pulse instead of three dots during transcription.",
-        phase: PreviewPhase::Transcribing,
+        name: "Thread Meter",
+        family: "Signal Language",
+        description: "Uses a stitched low-height signal for a calmer always-on meter.",
         target: DictationTarget::AiChatComposer,
         elapsed_secs: 54,
         bars: RIBBON_BARS,
@@ -571,18 +521,16 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.14,
         timer_opacity: 0.64,
         content_opacity: 0.90,
-        status_text: "Transcribing",
         show_badge: false,
     },
     DictationUiVariationSpec {
         id: "transcript-flash",
-        name: "Transcript Flash",
-        family: "State and Signal",
-        description: "Shows the first dictated words for a beat instead of a generic done state.",
-        phase: PreviewPhase::Finished,
+        name: "Soft Glow",
+        family: "Signal Language",
+        description: "Raises the glass density slightly for contrast without making it heavy.",
         target: DictationTarget::NotesEditor,
         elapsed_secs: 80,
-        bars: SILENT_BARS,
+        bars: QUIET_BARS,
         layout: PreviewLayout::Standard,
         waveform: WaveformKind::Bars,
         badge_tone: BadgeTone::Minimal,
@@ -596,18 +544,16 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.16,
         timer_opacity: 0.52,
         content_opacity: 1.0,
-        status_text: "drafted release notes and tagged risks...",
         show_badge: false,
     },
     DictationUiVariationSpec {
         id: "confirm-lock",
-        name: "Confirm Lock",
-        family: "State and Signal",
-        description: "Makes stop or continue feel like a stronger temporary mode lock.",
-        phase: PreviewPhase::Confirming,
+        name: "Action Ready",
+        family: "Signal Language",
+        description: "Keeps the default completion affordance quiet and inline with the signal.",
         target: DictationTarget::ExternalApp,
         elapsed_secs: 87,
-        bars: SILENT_BARS,
+        bars: ACTIVE_BARS,
         layout: PreviewLayout::Standard,
         waveform: WaveformKind::Bars,
         badge_tone: BadgeTone::Present,
@@ -621,22 +567,21 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: GLASS_BORDER_OPACITY,
         timer_opacity: 0.56,
         content_opacity: 1.0,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "gold-needle",
-        name: "Gold Needle",
-        family: "State and Signal",
-        description: "Adds a restrained Script Kit gold tick inside the live signal cluster.",
-        phase: PreviewPhase::Recording,
+        name: "Accent Peak",
+        family: "Signal Language",
+        description:
+            "Marks the live peak with a single theme accent instead of a new color family.",
         target: DictationTarget::AiChatComposer,
         elapsed_secs: 41,
         bars: NEEDLE_BARS,
         layout: PreviewLayout::Standard,
         waveform: WaveformKind::Bars,
         badge_tone: BadgeTone::Present,
-        silence_tone: SilenceTone::Error,
+        silence_tone: SilenceTone::Neutral,
         accent_mode: AccentMode::GoldNeedle,
         width: OVERLAY_WIDTH_PX,
         height: OVERLAY_HEIGHT_PX,
@@ -646,15 +591,13 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.16,
         timer_opacity: 0.72,
         content_opacity: 1.0,
-        status_text: "Done",
         show_badge: true,
     },
     DictationUiVariationSpec {
         id: "signal-ribbon",
         name: "Signal Ribbon",
-        family: "State and Signal",
-        description: "Collapses the live meter into a denser ribbon that feels more continuous.",
-        phase: PreviewPhase::Recording,
+        family: "Signal Language",
+        description: "Compresses the meter into a continuous low-height readout.",
         target: DictationTarget::MainWindowPrompt,
         elapsed_secs: 63,
         bars: RIBBON_BARS,
@@ -671,7 +614,6 @@ const SPECS: [DictationUiVariationSpec; 21] = [
         border_opacity: 0.14,
         timer_opacity: 0.72,
         content_opacity: 0.92,
-        status_text: "Done",
         show_badge: true,
     },
 ];
@@ -698,35 +640,46 @@ pub fn render_dictation_ui_compare_thumbnail(stable_id: &str) -> AnyElement {
 }
 
 pub fn render_dictation_ui_gallery() -> AnyElement {
+    let theme = get_cached_theme();
+    let opacity = theme.get_opacity();
+    let chrome = AppChromeColors::from_theme(&theme);
+
     let mut root = story_container()
-        .gap_6()
+        .gap(px(18.0))
         .child(
             div()
                 .flex()
                 .flex_col()
-                .gap_1()
+                .gap(px(6.0))
                 .child(
                     div()
                         .text_sm()
-                        .text_color(rgb(get_cached_theme().colors.text.tertiary))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(semantic_text(&theme, opacity.text_strong))
                         .child("Dictation Overlay"),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(rgb(get_cached_theme().colors.text.muted))
+                        .max_w(px(720.0))
+                        .text_color(semantic_text(&theme, opacity.text_muted_alpha))
                         .child(
-                            "Twenty-one storybook-only variations built from the current dictation pill geometry, waveform sizing, and phase states.",
+                            "Twenty-one storybook-only standalone dictation overlay concepts using launcher-aligned density, contrast, text hierarchy, and quiet chrome.",
                         ),
                 ),
         );
 
-    for family in ["Quiet", "Structural", "State and Signal"] {
-        let mut section = story_section(family).gap(px(12.0));
+    for family in ["Default Surface", "Shape Rhythm", "Signal Language"] {
+        let mut section = story_section(family).gap(px(10.0));
         for spec in SPECS.iter().copied().filter(|spec| spec.family == family) {
             section = section.child(render_gallery_item(spec));
         }
-        root = root.child(section);
+        root = root.child(
+            section
+                .border_t_1()
+                .border_color(rgba(chrome.divider_rgba))
+                .pt(px(12.0)),
+        );
     }
 
     root.into_any_element()
@@ -738,15 +691,18 @@ fn resolve_spec(stable_id: &str) -> Option<DictationUiVariationSpec> {
 
 fn render_gallery_item(spec: DictationUiVariationSpec) -> AnyElement {
     let theme = get_cached_theme();
+    let opacity = theme.get_opacity();
+    let chrome = AppChromeColors::from_theme(&theme);
+
     div()
         .flex()
         .flex_col()
         .gap(px(8.0))
         .p(px(12.0))
-        .bg(theme.colors.background.title_bar.with_opacity(0.22))
+        .bg(rgba(chrome.surface_rgba))
         .border_1()
-        .border_color(theme.colors.ui.border.with_opacity(0.18))
-        .rounded(px(12.0))
+        .border_color(rgba(chrome.divider_rgba))
+        .rounded(px(8.0))
         .child(
             div()
                 .flex()
@@ -755,13 +711,14 @@ fn render_gallery_item(spec: DictationUiVariationSpec) -> AnyElement {
                 .child(
                     div()
                         .text_sm()
-                        .text_color(rgb(theme.colors.text.primary))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(semantic_text(&theme, opacity.text_strong))
                         .child(spec.name),
                 )
                 .child(
                     div()
                         .text_xs()
-                        .text_color(rgb(theme.colors.text.muted))
+                        .text_color(semantic_text(&theme, opacity.text_hint))
                         .child(spec.description),
                 ),
         )
@@ -771,30 +728,64 @@ fn render_gallery_item(spec: DictationUiVariationSpec) -> AnyElement {
 
 fn render_spec_stage(spec: DictationUiVariationSpec, compact: bool) -> AnyElement {
     let theme = get_cached_theme();
-    let stage_height = if compact { 108.0 } else { 132.0 };
-    let scale = if compact { 0.82 } else { 1.0 };
+    let chrome = AppChromeColors::from_theme(&theme);
+    let stage_height = if compact { 104.0 } else { 132.0 };
+    let scale = if compact { 0.78 } else { 1.0 };
 
     div()
         .w_full()
         .h(px(stage_height))
         .flex()
         .justify_center()
-        .items_end()
-        .pb(px(if compact { 12.0 } else { 14.0 }))
-        .bg(theme.colors.background.title_bar.with_opacity(0.45))
+        .items_center()
+        .p(px(if compact { 6.0 } else { 8.0 }))
+        .bg(rgba(chrome.preview_surface_rgba))
         .border_1()
-        .border_color(theme.colors.ui.border.with_opacity(0.12))
-        .rounded(px(12.0))
-        .child(render_overlay(spec, scale))
+        .border_color(rgba(chrome.divider_rgba))
+        .rounded(px(8.0))
+        .child(
+            div()
+                .w_full()
+                .h_full()
+                .flex()
+                .justify_center()
+                .items_center()
+                .rounded(px(7.0))
+                .border_1()
+                .border_color(rgba(chrome.border_rgba))
+                .bg(rgba(chrome.selection_rgba))
+                .child(
+                    div()
+                        .shadow(vec![BoxShadow {
+                            color: theme.colors.ui.border.with_opacity(0.18),
+                            offset: point(px(0.0), px(8.0)),
+                            blur_radius: px(18.0),
+                            spread_radius: px(0.0),
+                        }])
+                        .child(render_overlay(spec, scale)),
+                ),
+        )
         .into_any_element()
 }
 
 fn render_overlay(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
     let theme = get_cached_theme();
-    let mut surface_bg = rgb(theme.colors.background.main);
-    surface_bg.a = spec.surface_opacity;
-    let mut border_color = rgb(theme.colors.ui.border);
-    border_color.a = spec.border_opacity;
+    let native_rim = uses_native_rim(spec);
+    let surface_opacity = if theme.is_dark_mode() {
+        let lift = if native_rim { 0.12 } else { 0.18 };
+        (spec.surface_opacity + lift).min(0.58)
+    } else {
+        spec.surface_opacity
+    };
+    let surface_bg = rgba(hex_to_rgba_with_opacity(
+        theme.colors.background.title_bar,
+        surface_opacity,
+    ));
+    let border_color = if native_rim {
+        semantic_text(&theme, if theme.is_dark_mode() { 0.34 } else { 0.28 })
+    } else {
+        theme.colors.ui.border.with_opacity(spec.border_opacity)
+    };
 
     let width = spec.width * scale;
     let height = spec.height * scale;
@@ -816,13 +807,21 @@ fn render_overlay(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
         .rounded(px(radius))
         .border_1()
         .border_color(border_color)
+        .when(native_rim, |d| {
+            d.shadow(vec![BoxShadow {
+                color: theme.colors.ui.border.with_opacity(0.22),
+                offset: point(px(0.0), px(8.0 * scale)),
+                blur_radius: px(20.0 * scale),
+                spread_radius: px(0.0),
+            }])
+        })
         .child(render_overlay_inner(spec, scale))
         .into_any_element()
 }
 
 fn render_overlay_inner(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
     let timer = render_timer(spec, scale);
-    let content = render_phase_content(spec, scale);
+    let content = render_waveform(spec, scale);
     let badge = render_target_badge(spec, scale);
 
     match spec.layout {
@@ -919,48 +918,25 @@ fn render_timer(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
         .w(px(TIMER_SPACER_WIDTH_PX * scale))
         .text_size(px(STATUS_TEXT_SIZE_PX * scale))
         .font_family(FONT_MONO)
-        .text_color(theme.colors.text.muted.with_opacity(spec.timer_opacity))
+        .text_color(semantic_text(&theme, spec.timer_opacity))
         .child(format_elapsed(std::time::Duration::from_secs(
             spec.elapsed_secs,
         )))
         .into_any_element()
 }
 
-fn render_phase_content(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
-    match spec.phase {
-        PreviewPhase::Recording => render_waveform(spec, scale),
-        PreviewPhase::Transcribing => render_transcribing(spec, scale),
-        PreviewPhase::Confirming => render_confirming(spec, scale),
-        PreviewPhase::Finished => render_status(spec.status_text, true, spec, scale),
-        PreviewPhase::Failed => render_status(spec.status_text, false, spec, scale),
-    }
-}
-
 fn render_waveform(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
     let theme = get_cached_theme();
     let active = has_sound(&spec.bars);
-    let base_hex = match spec.silence_tone {
-        SilenceTone::Error => {
-            if active {
-                theme.colors.ui.success
-            } else {
-                theme.colors.ui.error
-            }
-        }
-        SilenceTone::Neutral => {
-            if active {
-                theme.colors.ui.success
-            } else {
-                theme.colors.text.muted
-            }
-        }
-        SilenceTone::Dim => {
-            if active {
-                theme.colors.ui.success
-            } else {
-                theme.colors.text.tertiary
-            }
-        }
+    let base_hex = if active {
+        theme.colors.ui.success
+    } else {
+        theme.colors.text.primary
+    };
+    let inactive_scale = match spec.silence_tone {
+        SilenceTone::Neutral if !active => theme.get_opacity().text_hint,
+        SilenceTone::Dim if !active => theme.get_opacity().text_placeholder,
+        _ => 1.0,
     };
 
     let (bar_width, bar_gap) = match spec.waveform {
@@ -978,9 +954,11 @@ fn render_waveform(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
         .h(px(WAVEFORM_BAR_MAX_HEIGHT_PX * scale));
 
     for (index, level) in spec.bars.iter().copied().enumerate() {
-        let mut color = base_hex.with_opacity(waveform_bar_opacity(level) * spec.content_opacity);
+        let mut color = base_hex
+            .with_opacity(waveform_bar_opacity(level) * spec.content_opacity * inactive_scale);
         if matches!(spec.waveform, WaveformKind::Thread) {
-            color = base_hex.with_opacity((0.45 + level * 0.35) * spec.content_opacity);
+            color = base_hex
+                .with_opacity((0.45 + level * 0.35) * spec.content_opacity * inactive_scale);
         }
         let height = match spec.waveform {
             WaveformKind::Thread => (WAVEFORM_BAR_MIN_HEIGHT_PX + level * 6.0) * scale,
@@ -1011,97 +989,6 @@ fn render_waveform(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
     waveform.into_any_element()
 }
 
-fn render_transcribing(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
-    if matches!(spec.waveform, WaveformKind::Thread) {
-        return render_waveform(spec, scale);
-    }
-
-    let theme = get_cached_theme();
-    let dot_opacities = transcribing_dot_opacities_at(0.55);
-    let mut dots = div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(TRANSCRIBING_DOT_GAP_PX * scale));
-
-    for opacity in dot_opacities.iter().take(TRANSCRIBING_DOT_COUNT) {
-        dots = dots.child(
-            div()
-                .w(px(TRANSCRIBING_DOT_SIZE_PX * scale))
-                .h(px(TRANSCRIBING_DOT_SIZE_PX * scale))
-                .bg(theme
-                    .colors
-                    .ui
-                    .success
-                    .with_opacity(*opacity * spec.content_opacity))
-                .rounded(px(999.0)),
-        );
-    }
-
-    dots.into_any_element()
-}
-
-fn render_confirming(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
-    let theme = get_cached_theme();
-    let text_size = STATUS_TEXT_SIZE_PX * scale;
-
-    div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(8.0 * scale))
-        .child(
-            div()
-                .px(px(8.0 * scale))
-                .py(px(2.0 * scale))
-                .bg(theme.colors.ui.error.with_opacity(0.14))
-                .border_1()
-                .border_color(theme.colors.ui.error.with_opacity(0.45))
-                .rounded(px(999.0))
-                .text_size(px(text_size))
-                .font_family(FONT_MONO)
-                .text_color(theme.colors.ui.error.with_opacity(OPACITY_ACTIVE))
-                .child("Stop"),
-        )
-        .child(
-            div()
-                .px(px(8.0 * scale))
-                .py(px(2.0 * scale))
-                .bg(theme.colors.ui.success.with_opacity(0.08))
-                .border_1()
-                .border_color(theme.colors.ui.success.with_opacity(0.35))
-                .rounded(px(999.0))
-                .text_size(px(text_size))
-                .font_family(FONT_MONO)
-                .text_color(theme.colors.ui.success.with_opacity(spec.content_opacity))
-                .child("Continue"),
-        )
-        .into_any_element()
-}
-
-fn render_status(
-    text: &'static str,
-    success: bool,
-    spec: DictationUiVariationSpec,
-    scale: f32,
-) -> AnyElement {
-    let theme = get_cached_theme();
-    let color = if success {
-        theme.colors.text.primary.with_opacity(spec.content_opacity)
-    } else {
-        theme.colors.ui.error.with_opacity(OPACITY_ACTIVE)
-    };
-
-    div()
-        .max_w(px((spec.width - 48.0) * scale))
-        .text_size(px(STATUS_TEXT_SIZE_PX * scale))
-        .font_family(FONT_MONO)
-        .text_color(color)
-        .overflow_hidden()
-        .child(text)
-        .into_any_element()
-}
-
 fn render_target_badge(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
     if !spec.show_badge {
         return div()
@@ -1110,6 +997,8 @@ fn render_target_badge(spec: DictationUiVariationSpec, scale: f32) -> AnyElement
     }
 
     let theme = get_cached_theme();
+    let opacity = theme.get_opacity();
+    let chrome = AppChromeColors::from_theme(&theme);
     let label = spec.target.overlay_label();
     let text_size = STATUS_TEXT_SIZE_PX * scale;
     let slot_width = TARGET_BADGE_SLOT_WIDTH_PX * scale;
@@ -1121,7 +1010,7 @@ fn render_target_badge(spec: DictationUiVariationSpec, scale: f32) -> AnyElement
             .justify_end()
             .text_size(px(text_size))
             .font_family(FONT_MONO)
-            .text_color(theme.colors.text.muted.with_opacity(0.56))
+            .text_color(semantic_text(&theme, opacity.text_placeholder))
             .child(label)
             .into_any_element(),
         BadgeTone::Minimal => div()
@@ -1130,8 +1019,8 @@ fn render_target_badge(spec: DictationUiVariationSpec, scale: f32) -> AnyElement
             .justify_end()
             .text_size(px(text_size))
             .font_family(FONT_MONO)
-            .text_color(theme.colors.text.tertiary.with_opacity(0.74))
-            .child(label.to_uppercase())
+            .text_color(semantic_text(&theme, opacity.text_hint))
+            .child(label)
             .into_any_element(),
         BadgeTone::Present => div()
             .w(px(slot_width))
@@ -1141,13 +1030,13 @@ fn render_target_badge(spec: DictationUiVariationSpec, scale: f32) -> AnyElement
                 div()
                     .px(px(7.0 * scale))
                     .py(px(2.0 * scale))
-                    .bg(theme.colors.background.title_bar.with_opacity(0.28))
+                    .bg(rgba(chrome.badge_bg_rgba))
                     .border_1()
-                    .border_color(theme.colors.ui.border.with_opacity(0.22))
+                    .border_color(rgba(chrome.badge_border_rgba))
                     .rounded(px(999.0))
                     .text_size(px(text_size))
                     .font_family(FONT_MONO)
-                    .text_color(theme.colors.text.muted.with_opacity(0.80))
+                    .text_color(semantic_text(&theme, opacity.text_strong))
                     .child(label),
             )
             .into_any_element(),
@@ -1157,7 +1046,7 @@ fn render_target_badge(spec: DictationUiVariationSpec, scale: f32) -> AnyElement
             .h_full()
             .text_size(px(text_size))
             .font_family(FONT_MONO)
-            .text_color(theme.colors.text.primary.with_opacity(0.90))
+            .text_color(semantic_text(&theme, opacity.text_strong))
             .child(label)
             .into_any_element(),
     }
@@ -1165,20 +1054,22 @@ fn render_target_badge(spec: DictationUiVariationSpec, scale: f32) -> AnyElement
 
 fn render_dual_rail_badge(spec: DictationUiVariationSpec, scale: f32) -> AnyElement {
     let theme = get_cached_theme();
+    let opacity = theme.get_opacity();
     div()
         .text_size(px((STATUS_TEXT_SIZE_PX - 1.0) * scale))
         .font_family(FONT_MONO)
-        .text_color(theme.colors.text.tertiary.with_opacity(0.82))
+        .text_color(semantic_text(&theme, opacity.text_hint))
         .child(spec.target.overlay_label())
         .into_any_element()
 }
 
 fn theme_badge_dock_bg() -> Hsla {
-    get_cached_theme()
+    let theme = get_cached_theme();
+    theme
         .colors
-        .background
-        .title_bar
-        .with_opacity(0.26)
+        .text
+        .primary
+        .with_opacity(theme.get_opacity().hover)
 }
 
 #[cfg(test)]

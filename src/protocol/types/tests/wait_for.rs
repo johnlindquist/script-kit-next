@@ -452,6 +452,8 @@ fn acp_state_result_round_trips() {
         picker: None,
         last_accepted_item: None,
         context_chip_count: 1,
+        context_summary: None,
+        dictation_phase: None,
         context_ready: true,
         has_pending_permission: false,
         input_layout: None,

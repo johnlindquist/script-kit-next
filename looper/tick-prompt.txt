@@ -1,0 +1,109 @@
+AFK audit loop — Run <RUN_N> tick.
+
+Run context (immutable for this run):
+- Run number: <RUN_N>
+- Start (UTC): <START_ISO>
+- Budget: <BUDGET_MIN> min
+- Deadline (UTC): <DEADLINE_ISO> (epoch <DEADLINE_EPOCH>)
+- Buffer cutoff (UTC): <BUFFER_ISO> (epoch <BUFFER_EPOCH>) — no new pass after this
+- Cron id: read from <AUDIT_ROOT>/log.md Run <RUN_N> header; CronList is authoritative (exactly one active cron this run)
+- Audit root: <AUDIT_ROOT>
+- Agentic session: <SESSION_NAME> (via <AGENTIC_CMD>)
+
+Rule source: looper/ at project root. Five invariants in looper/README.md; per-rule files in looper/rules/. Read the rule file when you need it; do not invent rules.
+
+Execute these steps IN ORDER. Abort on any preflight failure — do not "try anyway".
+
+STEP 0 — Kill switch.
+If `.audit-pause` exists at project root, exit immediately. Do not CronDelete (user may be inspecting).
+
+STEP 1 — Budget check.
+Compute now_epoch=$(date -u +%s).
+If now_epoch >= <BUFFER_EPOCH>:
+  (a) Look up the cron id: call CronList, take the sole active recurring job (or filter by schedule). Call CronDelete <id>.
+  (b) Append a scheduler-stop entry to <AUDIT_ROOT>/log.md using the format in looper/rules/scheduler-stop.md (both Step 1 and Step 9 share the format; Notes line differs).
+  (c) Commit with subject: audit(scheduler): Run <RUN_N> stop at buffer cutoff; CronDelete <id>
+  (d) Exit. Do NOT pick a story.
+
+STEP 2 — Worktree coexistence check.
+Run `git status --porcelain` and snapshot the pre-existing dirty paths. A dirty
+tree is allowed: other agents or the user may be working concurrently.
+- Treat pre-existing dirty paths as external work unless this tick's story
+  explicitly owns that path.
+- Do not stash, revert, reset, restore, clean, or commit external work.
+- Prefer a story whose write set does not intersect pre-existing dirty paths.
+- If the chosen story requires a pre-existing dirty path, inspect that path's
+  diff first. Proceed only when the existing edits are clearly in-scope for
+  the same story; otherwise mark/skip the story and pick the next eligible one.
+- When committing, stage explicit pathspecs only (`git add -- path...`), never
+  `git add .` / `git add -A`. Before `git commit`, `git diff --cached --name-only`
+  must contain only this tick's owned files.
+
+STEP 3 — Session + tool-gap promotion.
+- Confirm `<AGENTIC_CMD> status <SESSION_NAME>` reports alive. If dead, restart per scope §"Allowed actions". If restart fails twice, commit audit(scheduler): session restart failed … and exit.
+- Run `bash <AUDIT_ROOT>/promote-tool-gaps.sh`. Commit any resulting edits as `audit(backlog): promote tool-* slugs (tick <RUN_N>.<PASS_N>)`. This is not a pass.
+
+STEP 4 — Discipline preflight.
+Compute all three and honor all three:
+- Pin cap (scope-tunable; default ≤7 in last 20):
+  PINS=$(git log -20 --format="%s" | grep -c '^Prompt: Pin ')
+  If PINS >= 7, Pin is FORBIDDEN this tick. Pick a non-Pin pass type.
+- Bug-yield floor (scope-tunable; default ≥1 per 5):
+  YIELD=$(git log -5 --format="%s" | grep -cE '^Prompt: (Fix|Add|Extend) ')
+  If YIELD == 0, next pass MUST be Fix/Add/Extend (no Pin/Verify/Probe).
+- Surface rotation (scope-tunable; default ≥6 distinct in last 10):
+  LAST10=$(grep -E '^- \*\*Surface\*\*:' <AUDIT_ROOT>/log.md | head -10 | sort -u)
+  The next pass's surface MUST NOT appear in LAST10 unless fewer than 6 distinct surfaces remain across open stories.
+
+STEP 5 — Story pick.
+- If this is the 4th, 8th, 12th … pass of the run → attacker mode (see looper/rules/attacker-mode.md). ≥20 actions, ≥3 categories, required.
+- Otherwise: top-down first `[ ]` in <AUDIT_ROOT>/stories.md. Priority: `tool-*` slugs (auto-promoted backlog) drain first. Story's inferred surface must satisfy STEP 4's rotation/breadth constraint; otherwise pick the next eligible.
+- If the chosen story cannot be verified with current tools → mark `[!]` with a tool-gap note. The pass ships the tool extension (`Prompt: Extend agentic-testing — add <verb> RPC for <surface>`) if the gap is actionable; otherwise log-only.
+
+STEP 6 — Verify / fix / re-verify.
+Exercise the story via <AGENTIC_CMD>. Prefer state receipts (getState, waitFor, batch) over screenshots. If red, make a minimal fix and re-run the same verification. If still red after one fix attempt, log `failed`, leave `[ ]`, move on. Screenshots are acceptable only when state proof is insufficient.
+
+STEP 7 — Commit (one per pass).
+Subject verb discipline (REQUIRED — see looper/rules/discipline.md):
+  Prompt: Fix …      user-visible behavior change
+  Prompt: Add …      new RPC verb, receipt field, or capability
+  Prompt: Extend …   expand existing tool to a new case
+  Prompt: Pin …      source-level contract test; subject MUST name the defended refactor:
+                     Prompt: Pin <invariant> against <named refactor>
+  Prompt: Verify …   pass-only; fresh baseline receipt, no code change
+  Prompt: Probe …    attacker pass, no acceptance criteria
+  Prompt: Reproduce  attacker anomaly with named trigger sequence
+
+Commit body MUST include (universal):
+  User story: <slug> — <exact text from stories.md>
+  Pass: #<K> of AFK audit Run <RUN_N> <START_ISO>
+  Proof: <key state receipt fields, or screenshot path>
+  Falsifier: <one concrete receipt state that would have proven this pass wrong>
+
+Pin passes ALSO require:
+  Refactor threat: <specific contributor action — not passive abstraction>
+
+Attacker passes (Probe/Reproduce) ALSO require:
+  Adversarial categories: <≥3 from menu — see looper/rules/attacker-mode.md>
+  Actions: <count ≥ 20>
+
+The log.md pass entry is staged in the SAME commit with `Commit: <sha-pending>` placeholder.
+Stage with explicit pathspecs only. Pre-existing external dirty paths may remain
+unstaged in the worktree; that is expected and must not block the commit.
+
+STEP 8 — SHA backfill.
+Immediately after STEP 7:
+- Read the just-created commit's short SHA: `git log -1 --format=%h`
+- Edit <AUDIT_ROOT>/log.md to replace the most recent `<sha-pending>` with the actual SHA.
+- Commit with subject: `audit(log): backfill Run <RUN_N> Pass #<K> sha <short-sha>`
+This is bookkeeping, not a pass. Does NOT count toward pin cap or bug-yield floor.
+
+STEP 9 — Pre-emptive next-fire check.
+Compute next_fire_epoch = UTC epoch of the next scheduled minute (from the cron's minute list, e.g. :07,:17,:27,:37,:47,:57).
+If next_fire_epoch >= <BUFFER_EPOCH>:
+  (a) Look up cron id via CronList, call CronDelete.
+  (b) Append scheduler-stop entry (Notes line names it as "pre-emptive pre-next-fire stop; next fire at <ISO>Z epoch <next> would be past buffer").
+  (c) Commit with subject: audit(scheduler): Run <RUN_N> pre-emptive stop before next-fire past buffer
+This catches the edge where THIS tick is within buffer but the NEXT would fire past it.
+
+END. Do not ScheduleWakeup — the cron handles cadence. Do not edit scope.md unless the pass specifically extends governance (and if so, use a `looper:` commit for the rule itself, separate from the pass).

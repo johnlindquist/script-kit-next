@@ -343,6 +343,288 @@ impl ScriptListApp {
             .into_any_element()
     }
 
+    pub(crate) fn render_script_issues_view(
+        &mut self,
+        report: std::sync::Arc<crate::scripts::ValidationReport>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list(
+                "script_issues_view",
+                self.has_nonempty_sdk_actions(),
+            ),
+        );
+        let hints = crate::components::universal_prompt_hints();
+        crate::components::emit_prompt_hint_audit("render_prompts::script_issues", &hints);
+
+        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
+        let design_spacing = render_context.design_spacing;
+        let vibrancy_bg = get_vibrancy_background(render_context.theme);
+        let text_color = rgba((self.theme.colors.text.primary << 8) | 0xFF);
+        let muted_color = rgba((self.theme.colors.text.muted << 8) | 0xFF);
+        let accent_color = rgba((self.theme.colors.accent.selected << 8) | 0xFF);
+        let panel_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x22);
+        let border_color = rgba((self.theme.colors.ui.border << 8) | 0x40);
+
+        let failed_count = report.failed_scripts.len();
+        let header_summary = format!(
+            "{} script{} failed · {} fatal · {} warning{}",
+            failed_count,
+            if failed_count == 1 { "" } else { "s" },
+            report.fatal_count,
+            report.warning_count,
+            if report.warning_count == 1 { "" } else { "s" },
+        );
+
+        // Build the per-script blocks.
+        let mut blocks: Vec<AnyElement> = Vec::new();
+        for failed in report.failed_scripts.iter() {
+            let path_str = failed.path.display().to_string();
+            let name = failed.name.clone();
+
+            let mut issue_lines: Vec<AnyElement> = Vec::new();
+            for issue in failed.fatal.iter() {
+                let detail = Self::script_issue_detail_line(issue);
+                issue_lines.push(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .child(
+                            div()
+                                .text_color(text_color)
+                                .text_size(px(13.))
+                                .child(issue.message.clone()),
+                        )
+                        .when(!detail.is_empty(), |d| {
+                            d.child(
+                                div()
+                                    .text_color(muted_color)
+                                    .text_size(px(11.))
+                                    .child(detail),
+                            )
+                        })
+                        .when(!issue.related.is_empty(), |d| {
+                            let related: Vec<AnyElement> = issue
+                                .related
+                                .iter()
+                                .map(|r| {
+                                    div()
+                                        .text_color(muted_color)
+                                        .text_size(px(11.))
+                                        .child(format!("↔ {} — {}", r.name, r.path.display()))
+                                        .into_any_element()
+                                })
+                                .collect();
+                            d.child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(2.))
+                                    .pl(px(12.))
+                                    .children(related),
+                            )
+                        })
+                        .into_any_element(),
+                );
+            }
+
+            blocks.push(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .p(px(design_spacing.padding_lg))
+                    .bg(panel_bg)
+                    .border_1()
+                    .border_color(border_color)
+                    .rounded(px(6.))
+                    .child(
+                        div()
+                            .text_color(accent_color)
+                            .text_size(px(14.))
+                            .child(name),
+                    )
+                    .child(
+                        div()
+                            .text_color(muted_color)
+                            .text_size(px(11.))
+                            .child(path_str),
+                    )
+                    .children(issue_lines)
+                    .into_any_element(),
+            );
+        }
+
+        let empty_state: Option<AnyElement> = if failed_count == 0 {
+            Some(
+                div()
+                    .text_color(muted_color)
+                    .text_size(px(13.))
+                    .child("No script issues — every script passed validation.")
+                    .into_any_element(),
+            )
+        } else {
+            None
+        };
+
+        // Key handler: Escape → back to ScriptList; Cmd+C → copy diagnostics text.
+        let entity = cx.entity().downgrade();
+        let report_for_keys = report.clone();
+        let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
+            let key = event.keystroke.key.as_str();
+            let has_cmd = event.keystroke.modifiers.platform;
+            if crate::ui_foundation::is_key_escape(key) {
+                this.go_back_or_close(window, cx);
+                return;
+            }
+            if has_cmd && key.eq_ignore_ascii_case("c") {
+                let text = Self::format_script_issues_diagnostics(&report_for_keys);
+                match crate::platform::copy_text_to_clipboard(&text) {
+                    Ok(()) => {
+                        if let Some(app) = entity.upgrade() {
+                            app.update(cx, |this, cx| {
+                                this.show_hud(
+                                    "Diagnostics copied".to_string(),
+                                    Some(2000),
+                                    cx,
+                                );
+                            });
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "script_issues copy_text_to_clipboard failed");
+                    }
+                }
+            }
+        });
+
+        crate::components::prompt_shell_container(0.0, vibrancy_bg)
+            .id("script-issues-shell")
+            .h(window_resize::layout::STANDARD_HEIGHT)
+            .key_context("ScriptIssuesView")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(design_spacing.padding_md))
+                    .flex_1()
+                    .w_full()
+                    .min_h(px(0.))
+                    .overflow_y_scrollbar()
+                    .p(px(design_spacing.padding_xl))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .text_color(text_color)
+                                    .text_size(px(16.))
+                                    .child("Script Issues"),
+                            )
+                            .child(
+                                div()
+                                    .text_color(muted_color)
+                                    .text_size(px(12.))
+                                    .child(header_summary),
+                            ),
+                    )
+                    .when_some(empty_state, |d, el| d.child(el))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(design_spacing.padding_sm))
+                            .children(blocks),
+                    ),
+            )
+            .when_some(
+                self.main_window_footer_slot(self.clickable_universal_hint_strip(cx)),
+                |d, footer| d.child(footer),
+            )
+            .into_any_element()
+    }
+
+    fn script_issue_detail_line(issue: &crate::scripts::ScriptValidationIssue) -> String {
+        let field = issue
+            .field
+            .map(|f| format!("[{:?}] ", f))
+            .unwrap_or_default();
+        let kind_detail = match &issue.kind {
+            crate::scripts::ScriptValidationKind::MetadataParse { detail }
+            | crate::scripts::ScriptValidationKind::SchemaParse { detail } => detail.clone(),
+            crate::scripts::ScriptValidationKind::InvalidValue { value, reason } => {
+                format!("value={value:?} — {reason}")
+            }
+            crate::scripts::ScriptValidationKind::DuplicateBinding { binding, value } => {
+                format!("{:?} duplicate: {:?}", binding, value)
+            }
+        };
+        if field.is_empty() && kind_detail.is_empty() {
+            String::new()
+        } else {
+            format!("{field}{kind_detail}").trim().to_string()
+        }
+    }
+
+    pub(crate) fn format_script_issues_diagnostics(
+        report: &crate::scripts::ValidationReport,
+    ) -> String {
+        let mut out = String::new();
+        out.push_str(&format!(
+            "Script Issues — {} failed · {} fatal · {} warning(s)\n",
+            report.failed_scripts.len(),
+            report.fatal_count,
+            report.warning_count,
+        ));
+        if report.failed_scripts.is_empty() {
+            out.push_str("No failing scripts in this report.\n");
+            return out;
+        }
+        for failed in report.failed_scripts.iter() {
+            out.push('\n');
+            out.push_str(&format!(
+                "## {}\n  path: {}\n",
+                failed.name,
+                failed.path.display()
+            ));
+            for issue in failed.fatal.iter() {
+                let field = issue
+                    .field
+                    .map(|f| format!("[{:?}] ", f))
+                    .unwrap_or_default();
+                out.push_str(&format!("  - {field}{}\n", issue.message));
+                let kind_detail = match &issue.kind {
+                    crate::scripts::ScriptValidationKind::MetadataParse { detail }
+                    | crate::scripts::ScriptValidationKind::SchemaParse { detail } => {
+                        detail.clone()
+                    }
+                    crate::scripts::ScriptValidationKind::InvalidValue { value, reason } => {
+                        format!("value={value:?} — {reason}")
+                    }
+                    crate::scripts::ScriptValidationKind::DuplicateBinding { binding, value } => {
+                        format!("{:?} duplicate: {:?}", binding, value)
+                    }
+                };
+                if !kind_detail.is_empty() {
+                    out.push_str(&format!("      kind: {kind_detail}\n"));
+                }
+                for related in issue.related.iter() {
+                    out.push_str(&format!(
+                        "      ↔ {} — {}\n",
+                        related.name,
+                        related.path.display()
+                    ));
+                }
+            }
+        }
+        out
+    }
+
     pub(crate) fn render_creation_feedback(
         &mut self,
         path: std::path::PathBuf,
@@ -407,6 +689,94 @@ impl ScriptListApp {
                     .overflow_y_scrollbar()
                     .p(px(design_spacing.padding_xl))
                     .child(panel),
+            )
+            .when_some(
+                self.main_window_footer_slot(self.clickable_universal_hint_strip(cx)),
+                |d, footer| d.child(footer),
+            )
+            .into_any_element()
+    }
+
+    /// In-window confirm surface — replaces the popup confirm dialog when the
+    /// main window is the active context. Title + body in the main content
+    /// area; footer reuses the native AppKit footer with Apply/Close buttons
+    /// labeled per [`ParentConfirmOptions`].
+    pub(crate) fn render_confirm_prompt(
+        &mut self,
+        options: crate::confirm::ParentConfirmOptions,
+        focused_button: ConfirmFocusedButton,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        use gpui_component::button::ButtonVariant;
+
+        let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
+        let theme = self.theme.clone();
+        let design_spacing = render_context.design_spacing;
+        let vibrancy_bg = get_vibrancy_background(render_context.theme);
+
+        let is_danger = matches!(options.confirm_variant, ButtonVariant::Danger);
+        let title_color = rgba(
+            ((if is_danger {
+                theme.colors.ui.error
+            } else {
+                theme.colors.text.primary
+            }) << 8)
+                | 0xFF,
+        );
+        let body_color = rgba((theme.colors.text.secondary << 8) | 0xFF);
+
+        let handle_key = cx.listener(move |this, event: &gpui::KeyDownEvent, window, cx| {
+            let key = event.keystroke.key.as_str();
+            if crate::ui_foundation::is_key_escape(key) {
+                this.resolve_confirm_prompt(false, window, cx);
+                cx.stop_propagation();
+            } else if key.eq_ignore_ascii_case("enter") {
+                let confirm = matches!(
+                    this.confirm_prompt_focused_button(),
+                    Some(ConfirmFocusedButton::Confirm),
+                );
+                this.resolve_confirm_prompt(confirm, window, cx);
+                cx.stop_propagation();
+            } else if key.eq_ignore_ascii_case("tab") {
+                this.toggle_confirm_prompt_focus(cx);
+                cx.stop_propagation();
+            }
+        });
+
+        let _ = focused_button; // focus state is reflected via the native footer
+
+        crate::components::prompt_shell_container(0.0, vibrancy_bg)
+            .id("confirm-prompt-shell")
+            .h(window_resize::layout::STANDARD_HEIGHT)
+            .key_context("ConfirmPrompt")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .child(
+                div()
+                    .flex_1()
+                    .w_full()
+                    .min_h(px(0.))
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(design_spacing.padding_md))
+                    .p(px(design_spacing.padding_xl))
+                    .child(
+                        div()
+                            .text_color(title_color)
+                            .text_size(px(20.))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child(options.title.clone()),
+                    )
+                    .child(
+                        div()
+                            .max_w(px(560.))
+                            .text_color(body_color)
+                            .text_size(px(14.))
+                            .text_center()
+                            .child(options.body.clone()),
+                    ),
             )
             .when_some(
                 self.main_window_footer_slot(self.clickable_universal_hint_strip(cx)),

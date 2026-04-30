@@ -12,6 +12,7 @@ impl ScriptListApp {
         &mut self,
         action_id: &str,
         dctx: &DispatchContext,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> DispatchOutcome {
         let _ = dctx; // Reserved for future async path logging
@@ -53,7 +54,7 @@ impl ScriptListApp {
                         item_type = result.type_label(),
                         "launcher_shortcut_recorder_requested"
                     );
-                    self.show_shortcut_recorder(command_id, command_name, cx);
+                    self.show_shortcut_recorder(command_id, command_name, window, cx);
                 } else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,

@@ -224,7 +224,7 @@ impl NotesApp {
                     self.open_selected_note_cart_in_embedded_acp("NotesAction::SendToAi", cx);
                 self.close_actions_panel(window, cx);
                 if opened {
-                    self.show_action_feedback("Staged in ACP Chat", false);
+                    self.show_action_feedback("Staged in Agent Chat", false);
                 }
                 return;
             }
@@ -580,7 +580,7 @@ impl NotesApp {
         let semantic_id = target.semantic_id.clone();
 
         let Some(entity) = self.embedded_acp_chat.as_ref().cloned() else {
-            return Err("Notes ACP chat entity unavailable".to_string());
+            return Err("Notes Agent Chat entity unavailable".to_string());
         };
 
         tracing::info!(
@@ -590,25 +590,25 @@ impl NotesApp {
             semantic_id = %semantic_id,
             label = %label,
         );
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_embedded_acp_target_staged_via_shared_host_path",
+            source,
+            semantic_id = %semantic_id,
+            label = %label,
+        );
 
         entity
             .update(cx, move |chat, cx| {
                 if chat.is_setup_mode() {
-                    return Err("ACP Chat is in setup mode".to_string());
+                    return Err("Agent Chat is in setup mode".to_string());
                 }
 
-                // Reused embedded ACP sessions must not keep stale note text
-                // in the composer.
-                chat.set_input(String::new(), cx);
-
-                chat.live_thread().update(cx, move |thread, cx| {
-                    thread.add_context_part(
-                        crate::ai::message_parts::AiContextPart::FocusedTarget { target, label },
-                        cx,
-                    );
-                });
-
-                Ok::<(), String>(())
+                chat.stage_inline_context_parts_from_host(
+                    vec![crate::ai::message_parts::AiContextPart::FocusedTarget { target, label }],
+                    source,
+                    cx,
+                )
             })
             .map_err(|error| error.to_string())?;
 
@@ -754,105 +754,25 @@ impl NotesApp {
             item_count = part_count,
         );
 
-        if self.embedded_acp_chat.is_none() {
-            let requirements = crate::ai::acp::preflight::AcpLaunchRequirements::default();
-            let view = match crate::ai::acp::hosted::spawn_hosted_view(None, requirements, cx) {
-                Ok(view) => view,
-                Err(err) => {
-                    tracing::warn!(
-                        target: "script_kit::tab_ai",
-                        event = "notes_cart_handoff_open_failed",
-                        error = %err,
-                    );
-                    self.show_action_feedback("ACP unavailable", true);
-                    return false;
-                }
-            };
-            let notes_entity = cx.entity().downgrade();
-            let toggle_entity = notes_entity.clone();
-            let close_entity = notes_entity.clone();
-            let history_entity = notes_entity;
-
-            view.update(cx, |chat, _cx| {
-                chat.set_footer_host(crate::ai::acp::view::AcpFooterHost::External);
-
-                chat.set_on_toggle_actions(move |window, cx| {
-                    if let Some(entity) = toggle_entity.upgrade() {
-                        entity.update(cx, |app, cx| {
-                            app.toggle_acp_actions(window, cx);
-                        });
-                    }
-                });
-
-                chat.set_on_close_requested(move |window, cx| {
-                    if let Some(entity) = close_entity.upgrade() {
-                        entity.update(cx, |app, cx| {
-                            app.switch_to_notes_surface(window, cx);
-                        });
-                    }
-                });
-
-                chat.set_on_open_history_command(move |window, cx| {
-                    if let Some(entity) = history_entity.upgrade() {
-                        entity.update(cx, |app, cx| {
-                            let _ = app.open_embedded_acp_history_popup(window, cx);
-                        });
-                    }
-                });
-            });
-            self.embedded_acp_chat = Some(view);
-        }
+        let entity = match self.ensure_embedded_acp_view(None, cx) {
+            Ok(view) => view,
+            Err(err) => {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "notes_cart_handoff_open_failed",
+                    error = %err,
+                );
+                self.show_action_feedback("Agent unavailable", true);
+                return false;
+            }
+        };
 
         self.surface_mode = NotesSurfaceMode::Acp;
         self.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);
         cx.notify();
 
-        let Some(entity) = self.embedded_acp_chat.as_ref().cloned() else {
-            tracing::warn!(
-                target: "script_kit::tab_ai",
-                event = "notes_cart_handoff_missing_embedded_chat",
-            );
-            self.show_action_feedback("ACP unavailable", true);
-            return false;
-        };
-
         let stage_result = entity.update(cx, move |chat, cx| {
-            if chat.is_setup_mode() {
-                return Err("ACP Chat is in setup mode".to_string());
-            }
-
-            chat.set_input(String::new(), cx);
-
-            let current_text = chat.live_thread().read(cx).input.text().to_string();
-            let mut staged_text = current_text;
-            let mut staged_aliases = Vec::new();
-
-            for part in parts {
-                let inline_token = crate::ai::context_mentions::part_to_inline_token(&part)
-                    .unwrap_or_else(|| format!("@{}", part.label()));
-                if !staged_text.is_empty() && !staged_text.ends_with(' ') {
-                    staged_text.push(' ');
-                }
-                staged_text.push_str(&inline_token);
-                staged_text.push(' ');
-                staged_aliases.push((inline_token, part));
-            }
-
-            chat.live_thread().update(cx, |thread, cx| {
-                for (_, part) in &staged_aliases {
-                    thread.add_context_part(part.clone(), cx);
-                }
-                thread.input.set_text(staged_text.clone());
-                thread.input.set_cursor(staged_text.len());
-                cx.notify();
-            });
-
-            for (inline_token, part) in staged_aliases {
-                chat.register_typed_alias(inline_token.clone(), part);
-                chat.register_inline_owned_token(inline_token);
-            }
-
-            Ok::<(), String>(())
+            chat.stage_inline_context_parts_from_host(parts, source, cx)
         });
 
         if let Err(err) = stage_result {
@@ -861,7 +781,7 @@ impl NotesApp {
                 event = "notes_cart_handoff_stage_failed",
                 error = %err,
             );
-            self.show_action_feedback("ACP unavailable", true);
+            self.show_action_feedback("Agent unavailable", true);
             return false;
         }
 
@@ -922,7 +842,7 @@ impl NotesApp {
                         source,
                         error = %error,
                     );
-                    self.show_action_feedback("ACP unavailable", true);
+                    self.show_action_feedback("Agent unavailable", true);
                     return false;
                 }
 
@@ -941,7 +861,7 @@ impl NotesApp {
                     source,
                     error = %error,
                 );
-                self.show_action_feedback("ACP unavailable", true);
+                self.show_action_feedback("Agent unavailable", true);
                 false
             }
         }

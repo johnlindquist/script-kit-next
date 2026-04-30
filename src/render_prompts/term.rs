@@ -8,6 +8,10 @@ mod __render_prompts_term_docs {
 // This file is included via include!() macro in main.rs
 
 const TERM_PROMPT_KEY_CONTEXT: &str = "term_prompt";
+/// Tiny gutter applied around the terminal grid in QuickTerminalView so cells
+/// don't touch the panel border. Routed through `TermPrompt::edge_to_edge_inset_px`
+/// so render, resize, and mouse hit-testing all see the same inset.
+const QUICK_TERMINAL_INSET_PX: f32 = 6.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TermPromptActionsMode {
@@ -128,18 +132,17 @@ fn render_terminal_prompt_hint_strip(
 
     let leading = if show_script_verification_hint {
         let theme = crate::theme::get_cached_theme();
-        Some(crate::components::prompt_layout_shell::render_hint_strip_leading_text(
-            "This session must bun build, run with SK_VERIFY=1, and fix failures before reporting success.",
-            theme.colors.text.primary,
-        ))
+        Some(
+            crate::components::prompt_layout_shell::render_hint_strip_leading_text(
+                "This session must bun build, run with SK_VERIFY=1, and fix failures before reporting success.",
+                theme.colors.text.primary,
+            ),
+        )
     } else {
         None
     };
 
-    crate::components::prompt_layout_shell::render_simple_hint_strip(
-        items.join(" · "),
-        leading,
-    )
+    crate::components::prompt_layout_shell::render_simple_hint_strip(items.join(" · "), leading)
 }
 
 impl ScriptListApp {
@@ -203,9 +206,16 @@ impl ScriptListApp {
 
         // Sync suppress_keys with actions popup state so terminal ignores keys when popup is open
         let show_actions = self.show_actions_popup;
+        let is_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
         entity.update(cx, |term, _| {
             term.suppress_keys = show_actions;
-            term.escape_cancels = !matches!(self.current_view, AppView::QuickTerminalView { .. });
+            term.escape_cancels = !is_quick_terminal;
+            term.edge_to_edge = is_quick_terminal;
+            term.edge_to_edge_inset_px = if is_quick_terminal {
+                QUICK_TERMINAL_INSET_PX
+            } else {
+                0.0
+            };
         });
 
         // VIBRANCY: Use foundation helper - returns None when vibrancy enabled (let Root handle bg)
@@ -213,7 +223,15 @@ impl ScriptListApp {
 
         // Use explicit height from layout constants instead of h_full()
         // h_full() doesn't work at the root level because there's no parent to fill
-        let content_height = window_resize::layout::MAX_HEIGHT;
+        // Wrapper height holds the terminal entity AND the footer hint strip,
+        // so it must equal the full panel height. Using the terminal-grid-only
+        // `quick_terminal_content_height()` here would leave a `FOOTER_HEIGHT`
+        // gap below the footer.
+        let content_height = if is_quick_terminal {
+            window_resize::quick_terminal_panel_height()
+        } else {
+            window_resize::layout::MAX_HEIGHT
+        };
 
         // Key handler for Cmd+K actions toggle
         let actions_mode_for_handler = actions_mode;
@@ -264,7 +282,7 @@ impl ScriptListApp {
                         // This is intentional: CLI harnesses (Claude Code, Codex, etc.)
                         // use Escape for their own TUI navigation (cancel, dismiss, etc.).
                         //
-                        // Verification-bearing script-authoring launches use
+                        // Verification-bearing new-script launches use
                         // QuickTerminalView intentionally so the Bun gate happens
                         // inside the live harness terminal session.
                         if is_quick_terminal
@@ -390,8 +408,6 @@ impl ScriptListApp {
             // TermPrompt so scroll works even when GPUI targets the wrapper div.
             // Regular script terminals handle scroll natively inside TermPrompt.
             .child({
-                let is_quick_terminal =
-                    matches!(self.current_view, AppView::QuickTerminalView { .. });
                 let terminal_entity_for_scroll = entity.clone();
                 div()
                     .flex_1()
@@ -413,25 +429,18 @@ impl ScriptListApp {
                     })
                     .child(entity)
             })
-            // Terminal-specific footer: advertise the route-aware paste-back
-            // action plus close while the PTY keeps full control of plain
-            // Escape and unhandled keys.
-            // When the native main-window footer is active, suppress the GPUI hint strip.
+            // Footer: Quick Terminal uses the native AppKit main-window footer
+            // (registered via main_window_footer_surface → "quick_terminal"),
+            // matching the main menu chrome exactly. SDK terminal paths still
+            // use the GPUI route-aware hint strip with paste-back + close hints.
             .when_some(
-                self.main_window_footer_slot(
-                    render_terminal_prompt_hint_strip(
-                        if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
-                            self.tab_ai_harness_apply_back_route.as_ref()
-                        } else {
-                            None
-                        },
-                        if matches!(self.current_view, AppView::QuickTerminalView { .. }) {
-                            self.tab_ai_harness_return_view.as_ref()
-                        } else {
-                            None
-                        },
-                    ),
-                ),
+                if is_quick_terminal {
+                    self.main_window_footer_slot(
+                        crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(),
+                    )
+                } else {
+                    self.main_window_footer_slot(render_terminal_prompt_hint_strip(None, None))
+                },
                 |d, footer| d.child(footer),
             )
             // Actions dialog overlay
@@ -606,7 +615,8 @@ mod term_prompt_render_tests {
             "term prompt should declare a custom hint strip footer, not the universal one"
         );
         assert!(
-            TERM_RENDER_SOURCE.contains("exception_reason: Some(\"terminal_owns_contextual_footer\")"),
+            TERM_RENDER_SOURCE
+                .contains("exception_reason: Some(\"terminal_owns_contextual_footer\")"),
             "term prompt should document why it has a custom footer"
         );
         assert!(
@@ -635,6 +645,10 @@ mod term_prompt_render_tests {
             TERM_RENDER_SOURCE.contains("close_tab_ai_harness_terminal"),
             "Cmd+W must restore the previous view via close_tab_ai_harness_terminal"
         );
+        assert!(
+            TERM_RENDER_SOURCE.contains("term.edge_to_edge = is_quick_terminal;"),
+            "QuickTerminalView must switch the terminal into edge-to-edge rendering"
+        );
     }
 
     #[test]
@@ -647,7 +661,10 @@ mod term_prompt_render_tests {
 
     #[test]
     fn test_terminal_return_hint_label_reflects_return_destination() {
-        assert_eq!(terminal_return_hint_label(Some(&AppView::ScriptList)), "⌘W Main Menu");
+        assert_eq!(
+            terminal_return_hint_label(Some(&AppView::ScriptList)),
+            "⌘W Main Menu"
+        );
         assert_eq!(terminal_return_hint_label(None), "⌘W Close");
         // Any non-ScriptList saved view should say "Return"
         assert!(terminal_return_hint_label(Some(&AppView::ScriptList)).contains("Main Menu"));

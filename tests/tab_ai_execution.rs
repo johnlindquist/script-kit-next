@@ -383,7 +383,8 @@ fn prompt_handler_completes_tab_ai_on_real_script_lifecycle_events() {
 
 #[test]
 fn tab_ai_success_opens_real_save_offer_overlay() {
-    let source = std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode");
+    let source =
+        std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab_ai_mode");
     let normalized = normalize_ws(&source);
     assert!(
         normalized.contains("self.open_tab_ai_save_offer(record, cx);"),

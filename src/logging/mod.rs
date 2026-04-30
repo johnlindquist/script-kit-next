@@ -25,6 +25,18 @@
 //! {"timestamp":"2024-12-25T10:30:45.123Z","level":"INFO","target":"script_kit_gpui::main","message":"Script executed","fields":{"event_type":"script_event","script_id":"abc","duration_ms":42}}
 //! ```
 
+mod rate_limit;
+mod safe_user_value;
+
+#[allow(unused_imports)]
+pub use rate_limit::{
+    log_rate_limit, LogRateDecision, LOG_RL_MAX_KEYS, LOG_RL_STALE_AFTER, LOG_RL_WINDOW,
+};
+#[allow(unused_imports)]
+pub use safe_user_value::{
+    log_user_value, log_user_value_with_limit, LogSafe, SAFE_USER_VALUE_MAX_BYTES,
+};
+
 // --- merged from part_000.rs ---
 use serde_json::{Map, Value};
 use std::cell::RefCell;
@@ -1958,7 +1970,7 @@ mod tests {
     }
     #[test]
     fn test_category_to_code_config() {
-        // From: "Successfully loaded config from ~/.scriptkit/kit/config.ts"
+        // From: "Successfully loaded config from ~/.scriptkit/config.ts"
         assert_eq!(category_to_code("CONFIG"), 'N');
         assert_eq!(category_to_code("config"), 'N');
         assert_eq!(category_to_code("Config"), 'N');

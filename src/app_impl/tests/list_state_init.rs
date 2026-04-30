@@ -20,8 +20,11 @@
 mod tests {
     use std::fs;
 
-    /// Read startup fragments used by ScriptListApp::new() in execution order.
-    fn read_new_startup_sequence() -> String {
+    /// Read legacy startup source-audit fragments in their historical order.
+    ///
+    /// These files are retained as parity fixtures; production startup is
+    /// module-wired through `src/app_impl/startup.rs`.
+    fn read_legacy_startup_source_audit_sequence() -> String {
         let files = [
             "src/app_impl/startup_new_prelude.rs",
             "src/app_impl/startup_new_state.rs",
@@ -46,7 +49,7 @@ mod tests {
     /// because main_list_state is initialized with 0 items but scripts have been loaded.
     #[test]
     fn test_new_calls_sync_list_state() {
-        let new_body = read_new_startup_sequence();
+        let new_body = read_legacy_startup_source_audit_sequence();
 
         // sync_list_state must be called somewhere in new()
         assert!(
@@ -63,7 +66,7 @@ mod tests {
     /// This ensures the initial selection is valid (not pointing at a section header).
     #[test]
     fn test_new_calls_validate_selection_bounds() {
-        let new_body = read_new_startup_sequence();
+        let new_body = read_legacy_startup_source_audit_sequence();
 
         // validate_selection_bounds must be called somewhere in new()
         assert!(
@@ -80,7 +83,7 @@ mod tests {
     /// depends on that count being correct.
     #[test]
     fn test_sync_before_validate() {
-        let new_body = read_new_startup_sequence();
+        let new_body = read_legacy_startup_source_audit_sequence();
 
         let sync_pos = new_body
             .find("sync_list_state")
@@ -102,7 +105,7 @@ mod tests {
     /// before we know the count. sync_list_state() then updates this count.
     #[test]
     fn test_list_state_initial_count_is_zero() {
-        let new_body = read_new_startup_sequence();
+        let new_body = read_legacy_startup_source_audit_sequence();
 
         // main_list_state should be initialized with 0 items
         assert!(
@@ -117,7 +120,7 @@ mod tests {
     /// This ensures there are scripts available when we sync the list state.
     #[test]
     fn test_scripts_loaded_before_sync() {
-        let new_body = read_new_startup_sequence();
+        let new_body = read_legacy_startup_source_audit_sequence();
 
         let read_scripts_pos = new_body
             .find("scripts::read_scripts()")

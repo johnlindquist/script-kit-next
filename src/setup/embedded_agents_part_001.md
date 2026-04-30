@@ -104,12 +104,12 @@ if (files.length === 0) {
 
 | Path | Purpose |
 |------|---------|
-| `~/.scriptkit/kit/main/scripts/` | Your scripts |
-| `~/.scriptkit/kit/main/scriptlets/` | Your scriptlets |
-| `~/.scriptkit/kit/main/skills/` | Your AI skills (preferred reusable AI unit) |
-| `~/.scriptkit/kit/main/agents/` | Legacy AI agent definitions (compatibility) |
-| `~/.scriptkit/kit/config.ts` | Configuration |
-| `~/.scriptkit/kit/theme.json` | Theme customization |
+| `~/.scriptkit/plugins/main/scripts/` | Your scripts |
+| `~/.scriptkit/plugins/main/scriptlets/` | Your scriptlets |
+| `~/.scriptkit/plugins/main/skills/` | Your AI skills (preferred reusable AI unit) |
+| `~/.scriptkit/plugins/main/agents/` | Legacy AI agent definitions (compatibility) |
+| `~/.scriptkit/config.ts` | Configuration |
+| `~/.scriptkit/theme.json` | Theme customization |
 | `~/.scriptkit/sdk/` | SDK (managed by app) |
 | `~/.scriptkit/CLAUDE.md` | Agent instructions (workspace root) |
 | `~/.scriptkit/AGENTS.md` | SDK reference (workspace root) |

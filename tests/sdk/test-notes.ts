@@ -48,7 +48,7 @@ async function runTests() {
     const start = Date.now();
     logTest(test, 'running');
     try {
-      const skill = await Bun.file(new URL('../../kit-init/skills/notes/SKILL.md', import.meta.url)).text();
+      const skill = await Bun.file(new URL('../../kit-init/skills/manage-notes/SKILL.md', import.meta.url)).text();
       const required = [
         '"type": "kind", "kind": "notes"',
         'panel:notes-window',

@@ -1,0 +1,186 @@
+# Protocol
+
+Script Kit GPUI’s live protocol is split between a tagged JSONL app message enum and an HTTP MCP server. Together they expose prompt control, automation queries, and read-only resource access.
+
+## Current shape
+
+The protocol lives under `src/protocol/` and groups message, types, semantic-id, io, transactions, plus the PR2 additions `version` and `deprecations`.
+
+`Message` is a serde-tagged enum built from prompt, system-control, query, and AI-related variant groups.
+
+The older module listing is stale — `version` and `deprecations` were added as part of the Oracle-Session `protocol-builtin-boundary-refactor-plan` PR2 work.
+
+### Version envelope
+
+Every JSONL message carries an **optional** `protocolVersion: number` field. Absence means v1, so rolling the envelope out to legacy SDKs is non-breaking.
+
+The canonical reader is [[src/protocol/version.rs#read_wire_version]]; it returns [[src/protocol/version.rs#ProtocolVersion]] or a typed [[src/protocol/version.rs#ProtocolVersionError]]. Outbound messages stamp the current version in place via [[src/protocol/version.rs#attach_current_version]].
+
+The two constants [[src/protocol/version.rs#CURRENT_PROTOCOL_VERSION]] and [[src/protocol/version.rs#MIN_PROTOCOL_VERSION]] define the inclusive accept range — inbound versions outside that window are rejected with `ProtocolVersionError::Unsupported` rather than being silently coerced.
+
+### Deprecation registry
+
+Field-level deprecations live in one static table, [[src/protocol/deprecations.rs#DEPRECATED_FIELDS]], so a rename can be landed once and then removed by flipping a single `remove_in` slot.
+
+The first row pins the `triggerBuiltin.name` → `triggerBuiltin.builtinId` rename: deprecated in v2, scheduled for removal in v3. The validator [[src/protocol/deprecations.rs#validate_deprecations]] returns a list of [[src/protocol/deprecations.rs#ProtocolDeprecationWarning]] observations for fields that are still present-but-deprecated, and a typed [[src/protocol/deprecations.rs#ProtocolDeprecationError]] when a field has already been removed at the current wire version.
+
+A parser that has not yet adopted the envelope can call this with [[src/protocol/version.rs#ProtocolVersion]]`::default_legacy` and still get correct behaviour on the legacy v1 path.
+
+### Ingress observer
+
+One pure composition of the version reader and the deprecation validator, so callers don't re-derive the same pair of checks across entry points (Oracle-Session `protocol-builtin-boundary-refactor-plan` PR8).
+
+- [[src/protocol/ingress.rs#observe_ingress]] parses a raw JSONL line, then delegates to [[src/protocol/ingress.rs#observe_value]] which composes [[src/protocol/version.rs#read_wire_version]] and [[src/protocol/deprecations.rs#validate_deprecations]] over the same JSON value. The return type is [[src/protocol/ingress.rs#ObservedIngress]] — envelope version, optional message `kind`, a list of [[src/protocol/deprecations.rs#ProtocolDeprecationWarning]], and an optional [[src/protocol/deprecations.rs#ProtocolDeprecationError]]. Pre-deprecation failures (bad JSON, non-object root, unsupported envelope) surface as a separate [[src/protocol/ingress.rs#IngressObserveError]] so a caller that only wants the version health check can ignore the deprecation half.
+- PR8b wired the first counter-bumping side-effect: [[src/protocol/ingress.rs#record_unsupported_version]] is called from [[src/protocol/io/reader.rs#JsonlReader]]'s `next_message_graceful_with_handler` loop at the top of every line, before `parse_message_graceful`. It bumps [[src/protocol_stats.rs#PROTOCOL_STATS]]`.stdin_unsupported_protocol_version_total` (zero-tolerance threshold [[src/protocol_stats.rs#STDIN_UNSUPPORTED_PROTOCOL_VERSION_THRESHOLD]]) the first time a peer sends an out-of-range envelope, and emits one rate-limited `tracing::warn!` per `(stdin_unsupported_protocol_version, found)` window. The MCP `kit://diagnostics/protocol-stats` health flag flips to `!ok` on the first occurrence — no live-dispatch behavior change. `parse_message_graceful` itself is still un-wired.
+- Nine inline tests pin the composition: well-formed v2 trigger-builtin (no warnings), legacy `name` on v1 + v2 (one warning, no error), invalid JSON, non-object root, unsupported version (999), missing `type`, unrelated kind, and a `observe_value_matches_observe_ingress` guard that keeps the two entry points from drifting. Six additional tests in the `record` submodule pin the counter-bumping contract: valid v2 + legacy-no-envelope + malformed JSON + non-object root + non-integer-version = no delta; `protocolVersion: 999` = exactly one delta. All six serialize on a module-private `Mutex` + call [[src/protocol_stats.rs#reset_for_test]] to defend against concurrent test threads racing on the atomic counter.
+
+#### Ingress observation golden transcripts
+
+`tests/protocol_ingress_golden.rs` drives [[src/protocol/ingress.rs#observe_ingress]] through a JSONL fixture at `tests/golden/protocol/ingress_observations.jsonl` — one `{name, line, expect}` case per line, readable from the fixture without touching Rust.
+
+The `expect` block is either a shape match (`kind` / `version` / `warningsFor[]` / `hasDeprecationError`) or a discriminating error name (`InvalidJson` / `NotObject` / `Version`).
+
+Three invariants are pinned: every line round-trips through the observer, the fixture exercises every [[src/protocol/ingress.rs#IngressObserveError]] variant (so a refactor that silently collapses two error classes fails this test even if individual success cases still pass), and every row in [[src/protocol/deprecations.rs#DEPRECATED_FIELDS]] is covered by at least one fixture line that warns on its `(kind, field)` pair. Oracle-Session `protocol-builtin-boundary-engineering-plan` recommendation #6. Complements the inline `#[cfg(test)]` suite by letting reviewers extend coverage without touching Rust.
+
+## Prompt and control messages
+
+`Message` is a serde-tagged enum built from prompt, response, and system-control families.
+
+The current message families cover the prompt surfaces (`arg`, `div`, `editor`, `fields`, `form`, `path`, `drop`, `hotkey`, `term`, `chat`, `mic`, `webcam`), response messages (`submit`, `update`), and system-control operations (`exit`, `show`, `hide`, window management, and UI update messages).
+
+The `capabilities` module advertises handshake flags such as `submitJson`, `semanticIdV2`, `unknownTypeOk`, `forwardCompat`, `choiceKey`, and `mouseDataV2`.
+
+The stdin verbs `show`, `hide`, and `simulateKey` are fire-and-forget: each `ExternalCommand` arm performs its UI-side effect and returns without emitting a response envelope keyed to the incoming `requestId`. Callers that issue `rpc show` / `rpc hide` / `rpc simulateKey` with `--await-parse` will see a parse receipt but no `responses.ndjson` line matching the `requestId` — the authoritative post-call state is obtained by a follow-up `getState` (or `getElements` / `listAutomationWindows`). This matches the surface as inspected at source in the three dispatcher files `src/main_entry/runtime_stdin_match_core.rs` (Show + Hide), `src/main_entry/runtime_stdin_match_simulate_key.rs` (whole file = SimulateKey arm), and `src/main_entry/app_run_setup.rs` (all three arms) — none of these arm bodies reference `response_tx` / `response_sender` / `reader_response_tx`, nor construct a `Message::*Result {` envelope. The contract is pinned at source level in `tests/stdin_show_hide_simulatekey_no_response_envelope_contract.rs` (4 tests: Show/Hide/SimulateKey arm bodies forbid response-emission sinks; source-audit snippet dispatchers forbid response-sender bindings in scope). A contributor adding a `showResult` / `hideResult` / `simulateKeyResult` variant + `response_tx.send(Message::...Result { request_id, .. })` at the tail of each arm would break every automation script that currently treats absence-of-envelope as the "follow with getState" signal — and must defeat the contract test before merge. Related: Hide additionally calls [[src/app_impl/registries_state.rs#ScriptListApp#reset_to_script_list]] so the next `show` lands in ScriptList regardless of the dismissed view's surface — pinned separately by the `tool-hide-rpc-surface-reset` lineage.
+
+## Query and introspection
+
+The live query surface includes `getState`, `getElements`, `getLayoutInfo`, `captureScreenshot`, and scriptlet/file-search variants.
+
+`getState` and `getElements` both accept an optional `target: AutomationWindowTarget`, so automation can inspect non-default surfaces explicitly.
+
+`elementsResult` now returns the visible element list plus `totalCount`, `truncated`, `focusedSemanticId`, `selectedSemanticId`, and machine-readable `warnings`. That is the current contract, not just a basic element list.
+
+`stateResult` carries both `choiceCount` (total dataset) and `visibleChoiceCount` (filter-aware). Automation harnesses verifying empty-filter-result acceptance clauses must key on `visibleChoiceCount`, never `choiceCount` — the latter is unchanged by the active filter and so cannot drop to zero on a filter miss. Both field names are pinned at source level in `tests/state_result_visible_choice_count_contract.rs`.
+
+The subset invariant `visibleChoiceCount <= choiceCount` holds in every view: `choiceCount` is the size of the total dataset `filtered_results()` searches over, and `visibleChoiceCount = filtered_results().len()` after filtering. In the `ScriptList` view specifically, `choiceCount` sums the same 5 collections passed to [[src/app_impl/filtering_cache.rs#ScriptListApp#recompute_filtered_results]] — scripts, scriptlets, builtin_entries, apps, and skills. Any future 6th collection added to that search entry point must also be added to the `choiceCount` sum in [[src/prompt_handler/mod.rs]]'s `state_for_script_list` arm; otherwise automation relying on the subset invariant sees `visibleChoiceCount > choiceCount`. Pinned at source level in `tests/scriptlist_choicecount_includes_skills_contract.rs` (3 tests: sum expression preservation, search-entry-point arity, tracing-event field parity).
+
+In the `EmojiPickerView` arm of `collect_state` (`src/prompt_handler/mod.rs`), the invariant is preserved by computing two distinct bindings: `dataset_count` iterates `crate::emoji::EMOJIS` filtered only by the active `selected_category`, and `visible_count` calls `crate::emoji::search_emojis(filter)` narrowed by the same category. Pre-Run-9 Pass #6, the arm reused a single `filtered_count` in both tuple slots so `setFilter "heart"` dropped `choiceCount` from 296 to 24 alongside `visibleChoiceCount` — violating the "choiceCount is unchanged by the active filter" rule. The post-fix receipt is `setFilter "heart"` → `{choiceCount:296, visibleChoiceCount:24}`. Pinned at source level in `tests/emoji_picker_state_choice_count_asymmetry_contract.rs` (4 tests: `dataset_count` binds from `EMOJIS` directly, `visible_count` binds from `search_emojis(filter)`, tuple slots are dataset-then-visible in that order, pre-fix `filtered_count,\n…filtered_count,` double-use shape is forbidden).
+
+In the `DesignGalleryView` arm of `collect_state`, the same invariant is preserved via shared helpers declared at module scope in [[src/render_builtins/design_gallery.rs]]: `build_gallery_items()` constructs the canonical `Vec<GalleryItem>` iterating `GroupHeaderCategory::all()` + `IconCategory::all()` (the same data the renderer displays); `gallery_item_matches(&GalleryItem, &str)` is the single filter predicate; `design_gallery_total_items()` returns the dataset ceiling (filter-agnostic); `design_gallery_filtered_len(filter)` returns the filter-narrowed count. The arm binds `dataset_count = design_gallery_total_items()` into the `choice_count` tuple slot and `visible_count = design_gallery_filtered_len(filter)` into the `visible_choice_count` slot. Pre-Run-9 Pass #9, the arm used a single static `total_items = SeparatorStyle::count() + total_icon_count() + 8 + 6` in BOTH slots — so `setFilter "icon"` returned `{choiceCount:85, visibleChoiceCount:85}` with visibleChoiceCount pinned at the stale dataset ceiling regardless of filter (the inverse shape of the pre-Pass-#6 EmojiPicker bug, where both counts collapsed together). Post-fix receipt is `triggerBuiltin design-gallery` + empty filter → `{choiceCount:68, visibleChoiceCount:68}`; `setFilter "icon"` → `{choiceCount:68, visibleChoiceCount:1}`; `setFilter ""` → `{choiceCount:68, visibleChoiceCount:68}`. Pinned at source level in `tests/design_gallery_state_choice_count_asymmetry_contract.rs` (6 tests: `dataset_count` binds from `design_gallery_total_items()`, `visible_count` binds from `design_gallery_filtered_len(filter)`, tuple slots are dataset-then-visible in that order, pre-fix `total_items,\n…total_items,` double-use shape is forbidden, the shared helpers are declared with their documented signatures, the renderer routes through `build_gallery_items()` + `gallery_item_matches`).
+
+`getElements` under the `ActionsDialogHost::BuiltinList` host group (13 views mapped at [[src/app_impl/actions_dialog.rs]] lines 31–43 — BrowserHistory, BrowserTabs, WindowSwitcher, CurrentAppCommands, ProcessManager, ThemeChooser, SearchAiPresets, CreateAiPreset, Settings, FavoritesBrowse, DesignGallery, BrowseKits, InstalledKits) must dispatch into a per-view arm of [[src/app_layout/collect_elements.rs]]'s `collect_visible_elements` rather than falling through to the `_ =>` catch-all. The catch-all emits a single `panel:current-view` element with `warnings:["collector_used_current_view_fallback"]` — a panel-only receipt that strips the input + list + row* semantics automation needs. Pre-Run-9 Pass #11, only 5 of the 13 BuiltinList views had collect arms (WindowSwitcher, ProcessManager, BrowseKits, ThemeChooser, CurrentAppCommands); the other 8 fell through to the catch-all and were unobservable at element granularity via `getElements target=Main`. Pass #11 added the `BrowserTabsView` arm: its rows come from `cached_browser_tabs.iter().map(|tab| tab.display_title())` for empty-filter and `crate::browser_tabs::fuzzy_search_browser_tabs(&cached_browser_tabs, filter)` for non-empty-filter — the same two paths the renderer uses at [[src/render_builtins/browser_tabs.rs]] and the state arm at [[src/prompt_handler/mod.rs]] so row count + text do not drift across the three sites. Semantic IDs are `input:browser-tabs-filter`, `list:browser-tabs`, `choice:<idx>:<slug>`. Post-fix receipt: `triggerBuiltin browser-tabs` + `getElements` returns `totalCount:41, elements:[input:browser-tabs-filter, list:browser-tabs ("39 items"), choice:0..N]`, `focusedSemanticId:"input:browser-tabs-filter"`, no warnings. Pinned at source level in `tests/collect_elements_browser_tabs_arm_contract.rs` (3 tests: arm presence, semantic-id string stability, fuzzy-search predicate + `display_title()` alignment with the renderer and state arm). The remaining 7 uncovered BuiltinList views (BrowserHistory, SearchAiPresets, CreateAiPreset, Settings, FavoritesBrowse, DesignGallery, InstalledKits) still fall through — each requires its own collect arm added in a later pass, mirroring this pattern.
+
+`CurrentAppCommandsView` is stricter than a name-only list: [[src/builtins/mod.rs#filter_menu_bar_entries]] searches names, descriptions, and keywords with multi-term semantics. AURP-05 routes renderer rows, `getState` counts/selected value, and `getElements` rows through the helper family in [[src/render_builtins/current_app_commands.rs#ScriptListApp#current_app_commands_filtered_entries]]. `current_app_commands_visible_row_names`, `current_app_commands_dataset_and_visible_counts`, and `current_app_commands_selected_visible_row_name` project the same filtered entry set for the three surfaces. Run 10 surfaced the original drift with query `cmux`: `getState.visibleChoiceCount=97` while `getElements` returned 20 name-only rows before the shared helper path.
+
+`stateResult.inputValue` echoes the caller's most recent `setFilter.text` (or `ArgPrompt`/`MiniPrompt`/`MicroPrompt` input) verbatim — no length cap, no truncation, no encoding transformation. The sole bound is the stdin line cap `MAX_STDIN_COMMAND_BYTES = 16 * 1024` applied at line ingest in `src/stdin_commands/mod.rs`. Callers consuming `getState.inputValue` MUST handle payloads up to that cap. The contract is pinned at source level in `tests/stdin_setfilter_input_value_verbatim_contract.rs` (4 tests: doc-comment presence at the writer, absence of truncation between signature and store, ScriptList arm returns bare `self.filter_text.clone()`, 16 KiB cap literal stays in sync). Introducing a cap anywhere along the path silently changes caller behavior and must defeat the contract test before merge.
+
+Every stdin `requestId` is accepted and echoed back on its response envelope verbatim — the same no-cap / no-truncation / no-transformation rule as `inputValue`, applied to the caller's own correlation handle. The ingest-side type is `ExternalCommandRequestId` (`src/stdin_commands/mod.rs`), a `#[serde(transparent)]` newtype over `String` whose `From<String>` impl is a bare pass-through; the response-envelope type (e.g. `StateResult.request_id`) is a bare `String` so the round-trip is byte-for-byte. The stdin line cap `MAX_STDIN_COMMAND_BYTES = 16 * 1024` is the sole bound: a 10 000-char `requestId` round-trips with `rid_len=10000` on the response envelope (Run 8 Pass #24 baseline, Run 9 Pass #2 re-verified). The contract is pinned at source level in `tests/stdin_requestid_verbatim_contract.rs` (5 tests: transparent-newtype shape over `String`, no length-bounded wrapper anywhere in the declaration + standard impls, `From<String>` is a pass-through, `MAX_STDIN_COMMAND_BYTES` literal stays sole bound, response envelope keeps bare `String` + anomaly-slug citation comment). A length-bounded wrapper (`Bounded<N>`/`SmallString<N>`/`ArrayString<N>`), a `TryFrom<String>` validation, or a `.truncate(N)` / `.chars().take(N)` step anywhere along the path silently breaks long-correlation-id callers and must defeat this test before merge.
+
+`stateResult` also carries `screenshotIdentity: Option<String>` — the bare filename of the most recent Tab AI screenshot captured in this process lifetime, or omitted when no capture has occurred. The filename already encodes three independent identity axes (timestamp + PID + sequence) via [[src/ai/harness/screenshot_files.rs#build_tab_ai_screenshot_filename]], so automation can verify identity threading from capture through ACP context by reading `getState.screenshotIdentity` directly instead of grepping the filesystem. The field is populated by the main-window `getState` arm reading [[src/ai/harness/screenshot_files.rs#current_screenshot_identity]], which is the single accessor over the `TAB_AI_SCREENSHOT_LAST_IDENTITY` static that both capture paths write via [[src/ai/harness/screenshot_files.rs#record_last_screenshot_identity]]. Pinned at source level in `tests/state_result_screenshot_identity_contract.rs` (4 tests: variant declaration + camelCase rename + skip_if_none, constructor param, capture-path record calls, snapshot-reads-through-accessor).
+
+### getConfigFingerprint stdin RPC
+
+A read-only probe exposing the current `~/.kit/config.ts` fingerprint so automation can verify a write landed on disk without shelling out to `bun` or `stat`.
+
+`ExternalCommand::GetConfigFingerprint { requestId }` is handled in all three stdin dispatcher surfaces (`src/main_entry/runtime_stdin.rs`, `src/main_entry/app_run_setup.rs`, `src/main_entry/runtime_stdin_match_tail.rs`). Each calls [[src/config/loader.rs#current_config_fingerprint_receipt]] — the single public accessor — and emits a `config_fingerprint_result` tracing event carrying the serialized [[src/config/loader.rs#ConfigFingerprintReceipt]] (`path`, `len`, `modified_ms`; plus a reserved `fingerprint_hash: Option<String>` slot that is skipped on serialize while the hash remains unpopulated).
+
+The `(len, modified_ms)` pair IS the cache-hit check input used by the loader's `try_load_cached_config`, so comparing two receipts confirms "the next `bun` invocation will re-read the file". When the file is missing or stat fails the event still fires with `ok = false` and `error_code = "config_file_missing"` so automation can distinguish "no file" from "command did not land". Pinned at source level in `tests/get_config_fingerprint_contract.rs` (4 tests: variant shape + `requestId` only, request_id/command_type wiring to the `"getConfigFingerprint"` literal, triple-dispatcher presence + all structured-tracing fields + `config_file_missing` error code, receipt struct field visibility + serde shape + mod.rs re-export).
+
+## Deterministic transactions
+
+`waitFor` and `batch` are built on `TransactionStateProvider` in `src/protocol/transaction_executor.rs`.
+
+They operate on `UiStateSnapshot`, emit traces, and return structured failures with stable error codes instead of forcing callers to parse ad hoc logs.
+
+This is the part of the protocol that keeps UI automation repeatable when a script needs to wait for focus, selection, or a particular semantic ID.
+
+## MCP resources
+
+MCP resources are the read-only side channel for state and metadata.
+
+The current set includes `kit://state`, `scripts://`, `scriptlets://`, `kit://scripts`, `kit://scriptlets`, `kit://sdk-reference`, `kit://context`, `kit://context/schema`, `kit://clipboard-history`, `kit://focused-item`, `kit://git-status`, `kit://git-diff`, `kit://processes`, `kit://system`, `kit://dictation`, `kit://dictation-history`, `kit://calendar`, `kit://notifications`, `kit://stdin-commands`, `kit://trigger-builtins`, `kit://diagnostics/protocol-stats`, and the transaction resources.
+
+The stale wiki wording only showed a smaller subset. The current code also supports context diagnostics, schema-versioned script and scriptlet envelopes, and transaction resource documents.
+
+`kit://dictation` is now backed by a persistent JSONL history on disk instead of only transient in-memory state. Startup hydrates the latest saved dictations into the resource slot, new transcripts append to that log and refresh the resource, and an empty history publishes `available: false` so ACP hides `@dictation` until data exists.
+
+`kit://dictation-history` is the selection-grade counterpart to that provider snapshot. `?id=<entry-id>` returns the transcript text for one saved dictation, while bare or `?limit=N` reads return newest-first history summaries for browser and ACP portal flows.
+
+Those summary payloads now include both storage-grade fields and display-grade metadata. Each item still exposes the raw RFC3339 timestamp and millisecond duration, but it also carries `displayTimestamp` and `displayDuration` strings so ACP and built-in UIs can show human-readable values without reimplementing formatting.
+
+### Drift-audited reference resources
+
+`kit://stdin-commands` and `kit://trigger-builtins` are markdown reference resources whose payloads are pinned against runtime accessors, so the docs cannot silently fall behind the code.
+
+Oracle-Session `mcp-resource-doc-drift-tests` PR1 landed a reusable harness in `tests/mcp_resource_drift.rs`. The design has three moving parts:
+
+- **Single runtime source of truth.** Each resource exposes one public accessor that returns the canonical name set: [[src/stdin_commands/mod.rs#all_external_command_verbs]] backs `kit://stdin-commands`, and [[src/builtins/trigger_registry.rs#all_trigger_builtin_command_ids]] backs `kit://trigger-builtins`. Both accessors are unit-tested to match their dispatch match arms exhaustively (`external_command_verbs_cover_every_variant`, `trigger_builtin_command_ids_cover_every_variant`), so a new `ExternalCommand` variant or `TriggerBuiltin` variant fails the build until the slice is updated.
+- **Marker-block payload format.** Resource prose wraps its canonical declaration list in HTML comments, e.g. `<!-- drift-audit:stdin-verbs:start -->` / `<!-- drift-audit:stdin-verbs:end -->`. Only lines that match ``- `name`: ...`` inside that block are counted as declarations, so JSON examples and prose mentions cannot become accidental drift signals.
+- **`ResourceDriftAudit` trait + `DriftReport`.** One trait declares `expected_set()` (from the accessor) and `payload_set()` (from the marker block). The shared `audit()` impl diffs both with `BTreeSet::difference`, returning a `DriftReport` whose `Display` impl prints a stable "missing X, unexpected Y" message plus the `expected source` path so a failure points straight at the accessor that disagrees.
+
+The harness is extensible — a new audited resource only needs a struct, a `ResourceDriftAudit` impl, and one `#[test]` that calls `assert_audit_ok`. Tests never scrape Rust source and never duplicate match arms; all source-of-truth lives in the accessor. Pinned by `tests/mcp_resource_drift.rs` (5 tests: two per-resource drift audits, one registry-definition presence, two parser sanity cases for marker-block scoping and JSON-example rejection).
+
+### Protocol-stats diagnostics resource
+
+`kit://diagnostics/protocol-stats` is a live JSON view over the Rust↔Bun protocol-boundary counters (Oracle-Session `protocol-builtin-boundary-refactor-plan` PR4). It replaces "grep app.log for suspicious lines" with a machine-readable health chip.
+
+The body is [[src/protocol_stats.rs#ProtocolStatsReport]] (camelCase on the wire): `snapshot` carries per-counter totals, `health` carries `ok` plus a `flags` list of threshold-crossed counters, and `thresholds` echoes the Rust-side limits so MCP consumers don't have to hardcode them. The health function [[src/protocol_stats.rs#health]] walks the snapshot in declaration order, so the `flags` list is stable across reads.
+
+Threshold policy is zero-tolerance for any violation of the ingress contract ([[src/protocol_stats.rs#STDIN_PARSE_FAILED_THRESHOLD]], [[src/protocol_stats.rs#STDIN_COMMAND_TOO_LARGE_THRESHOLD]], [[src/protocol_stats.rs#STDIN_UNSUPPORTED_PROTOCOL_VERSION_THRESHOLD]]) but tolerant of expected traffic — [[src/protocol_stats.rs#TRIGGER_BUILTIN_UNKNOWN_THRESHOLD]] allows 10 typos before firing, and [[src/protocol_stats.rs#TRIGGER_BUILTIN_DEPRECATED_NAME_THRESHOLD]] allows 10 000 legacy-SDK calls before the flag trips. The reader lives in [[src/mcp_resources/mod.rs#read_protocol_stats_resource]] under the [[src/mcp_resources/mod.rs#PROTOCOL_STATS_DIAGNOSTICS_URI]] constant.
+
+Pinned by `tests/protocol_stats_report_contract.rs` (6 tests: resource registration in `get_resource_definitions`, read-through parseability, top-level key presence + camelCase thresholds, zero-counters-is-ok, stable flag ordering, `current_report` equals `health(&snapshot)`). The 10 inline tests in `src/protocol_stats.rs` add per-threshold edge cases and the camelCase serde rename check.
+
+## MCP server
+
+The MCP server is a separate HTTP entrypoint layered on top of the same app state and resource registries.
+
+- It listens on `localhost:43210` by default and honors `MCP_PORT`.
+- It uses bearer-token authentication from `~/.scriptkit/agent-token`.
+- It writes discovery metadata to `~/.scriptkit/server.json`.
+- The live RPC surface is JSON-RPC 2.0 over HTTP with `initialize`, `tools/list`, `tools/call`, `resources/list`, and `resources/read`.
+
+That is the current durable server contract. The older doc framing around a tiny fixed resource set is stale.
+
+### In-process JSON-RPC golden transcripts
+
+`tests/mcp_protocol_golden.rs` drives the pure parser + dispatcher through a JSONL fixture, pinning response shape and JSON-RPC error codes BEFORE any future split of [[src/mcp_protocol/mod.rs#parse_request]] / [[src/mcp_protocol/mod.rs#handle_request_with_context]].
+
+The fixture at `tests/golden/mcp/basic_rpc.jsonl` has one case per line — `{name, request, id?, outcome}`, with `outcome` either `{ok: {resultKeys}}` (shape match) or `{error: {code}}` (exact JSON-RPC code). Three tests enforce invariants: every line round-trips cleanly, the fixture covers every standard error code Script Kit emits (`PARSE_ERROR` / `INVALID_REQUEST` / `METHOD_NOT_FOUND` constants inside the `error_codes` submodule), and every currently-exercised `McpMethod` variant (Initialize/ToolsList/ResourcesList) has at least one success case. Oracle-Session `protocol-builtin-boundary-engineering-plan` recommendation #7.
+
+Result values are intentionally NOT pinned byte-exact — version strings and tool list ordering are non-deterministic — so the test catches "tools/list no longer returns a `tools` key" without churning on every upstream tool addition.
+
+## Tool exposure
+
+Two different tool families are exposed through MCP:
+
+- Built-in `kit/*` tools come from `src/mcp_kit_tools.rs`.
+- Script-defined tools are generated from scripts that declare schema through the local SDK surface.
+
+That means the MCP tool catalog is partly static and partly derived from the current script inventory, rather than being a hand-maintained list.
+
+## Drift from older docs
+
+The old protocol docs lag the live module split. In current code:
+
+- `getState` and `getElements` both support explicit window targets.
+- `elementsResult` includes focus, selection, truncation, and warnings.
+- `kit://context` supports profiles, per-field flags, diagnostics, and a schema URI.
+- `kit://sdk-reference` is schema-versioned and includes a harness workflow contract.
+- `kit://state`, `scripts://`, and `scriptlets://` still exist as legacy aliases alongside versioned resources.
+
+## Source files
+
+Current code references for this page:
+
+- [src/protocol/mod.rs](../src/protocol/mod.rs)
+- [src/protocol/version.rs](../src/protocol/version.rs)
+- [src/protocol/deprecations.rs](../src/protocol/deprecations.rs)
+- [src/protocol/message/mod.rs](../src/protocol/message/mod.rs)
+- [src/protocol/message/variants/query_ops.rs](../src/protocol/message/variants/query_ops.rs)
+- [src/protocol/types/mod.rs](../src/protocol/types/mod.rs)
+- [src/protocol/transaction_executor.rs](../src/protocol/transaction_executor.rs)
+- [src/mcp_resources/mod.rs](../src/mcp_resources/mod.rs)
+- [src/dictation/history.rs](../src/dictation/history.rs)
+- [src/mcp_server/mod.rs](../src/mcp_server/mod.rs)
+- [src/mcp_kit_tools.rs](../src/mcp_kit_tools.rs)
+- [scripts/kit-sdk.ts](../scripts/kit-sdk.ts)

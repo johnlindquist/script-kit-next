@@ -85,7 +85,11 @@ fn test_read_scriptlets_keeps_first_scriptlet_when_file_starts_with_heading() {
     }
 
     let temp_dir = TempDir::new().expect("create temp dir");
-    let scriptlets_dir = temp_dir.path().join("kit").join("main").join("scriptlets");
+    let scriptlets_dir = temp_dir
+        .path()
+        .join("plugins")
+        .join("main")
+        .join("scriptlets");
     fs::create_dir_all(&scriptlets_dir).expect("create scriptlets dir");
 
     let scriptlet_file = scriptlets_dir.join("scriptlets.md");
@@ -109,4 +113,23 @@ two
 
     let names: Vec<String> = scriptlets.iter().map(|s| s.name.clone()).collect();
     assert_eq!(names, vec!["First Scriptlet", "Second Scriptlet"]);
+}
+
+#[test]
+fn power_syntax_scriptlet_examples_parse_command_slugs() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("kit-init")
+        .join("scriptlets")
+        .join("examples")
+        .join("power-syntax.md");
+    let content = std::fs::read_to_string(path).expect("read power syntax scriptlets");
+    let scriptlets = crate::scriptlets::parse_markdown_as_scriptlets(&content, None);
+    let commands: Vec<&str> = scriptlets
+        .iter()
+        .map(|scriptlet| scriptlet.command.as_str())
+        .collect();
+
+    assert!(commands.contains(&"ps-stamp"));
+    assert!(commands.contains(&"ps-dupe"));
+    assert_eq!(commands.len(), 2);
 }

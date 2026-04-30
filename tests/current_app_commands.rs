@@ -11,10 +11,11 @@ use script_kit_gpui::config::BuiltInConfig;
 use script_kit_gpui::menu_bar::current_app_commands::{
     build_current_app_command_recipe, build_current_app_intent_trace_receipt,
     build_generate_script_prompt_from_snapshot, build_generated_script_prompt_from_recipe,
-    normalize_trace_current_app_intent_request, normalize_turn_this_into_a_command_request,
-    parse_current_app_command_recipe_json, resolve_do_in_current_app_intent,
-    suggest_current_app_command_name, verify_current_app_command_recipe, DoInCurrentAppAction,
-    FrontmostMenuSnapshot, CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION,
+    current_app_commands_session_identity_changed, normalize_trace_current_app_intent_request,
+    normalize_turn_this_into_a_command_request, parse_current_app_command_recipe_json,
+    resolve_do_in_current_app_intent, suggest_current_app_command_name,
+    verify_current_app_command_recipe, CurrentAppCommandsLiveIdentity, CurrentAppCommandsSession,
+    DoInCurrentAppAction, FrontmostMenuSnapshot, CURRENT_APP_COMMAND_RECIPE_SCHEMA_VERSION,
 };
 use script_kit_gpui::menu_bar::{KeyboardShortcut, MenuBarItem, ModifierFlags};
 
@@ -34,18 +35,11 @@ fn do_in_current_app_builtin_is_registered() {
         entry.feature,
         BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp)
     );
-
-    let do_pos = entries
-        .iter()
-        .position(|e| e.id == "builtin/do-in-current-app")
-        .unwrap();
-    let turn_pos = entries
-        .iter()
-        .position(|e| e.id == "builtin/turn-this-into-a-command")
-        .unwrap();
     assert!(
-        do_pos < turn_pos,
-        "builtin/do-in-current-app should appear before builtin-turn-this-into-a-command"
+        entry
+            .keywords
+            .contains(&"turn this into a command".to_string()),
+        "builtin/do-in-current-app should absorb the collapsed turn-this alias phrase"
     );
 }
 
@@ -57,6 +51,54 @@ fn current_app_commands_builtin_is_no_longer_registered() {
             .iter()
             .all(|e| e.id != "builtin/current-app-commands"),
         "builtin/current-app-commands should no longer be in the registry"
+    );
+}
+
+#[test]
+fn current_app_commands_view_executes_via_guarded_helper() {
+    let source = std::fs::read_to_string("src/render_builtins/current_app_commands.rs")
+        .expect("must read current_app_commands renderer");
+    assert!(
+        source.contains("execute_selected_current_app_command("),
+        "current app commands view must execute through the guarded helper"
+    );
+    assert!(
+        source.contains("let original_entry_index = *orig_idx;")
+            && source.contains("execute_selected_current_app_command(")
+            && source.contains("original_entry_index,"),
+        "current app commands clicks must execute using the original cached entry index"
+    );
+}
+
+#[test]
+fn builtin_execution_tracks_current_app_commands_session_switches() {
+    let source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("must read builtin execution source");
+    assert!(
+        source.contains("\"current_app_commands.session_switched\""),
+        "builtin execution must log current-app session switches"
+    );
+    assert!(
+        source.contains("load_live_current_app_commands_identity()"),
+        "builtin execution must consult the live current-app identity before refreshing"
+    );
+    assert!(
+        source.contains("present_current_app_commands_session("),
+        "builtin execution must present a current-app session"
+    );
+    assert!(
+        source.contains("invalidate_current_app_commands_session("),
+        "builtin execution must invalidate stale current-app sessions when refresh fails"
+    );
+}
+
+#[test]
+fn app_state_persists_current_app_commands_session_metadata() {
+    let source = std::fs::read_to_string("src/main_sections/app_state.rs")
+        .expect("must read app state source");
+    assert!(
+        source.contains("current_app_commands_session"),
+        "app state must retain current-app session metadata"
     );
 }
 
@@ -197,6 +239,7 @@ fn menu_bar_items_to_entries_shape() {
 #[test]
 fn snapshot_into_entries_delegates_correctly() {
     let snapshot = FrontmostMenuSnapshot {
+        pid: 42,
         app_name: "Safari".into(),
         bundle_id: "com.apple.Safari".into(),
         items: sample_safari_items(),
@@ -216,6 +259,7 @@ fn snapshot_into_entries_delegates_correctly() {
 #[test]
 fn snapshot_empty_items_yields_empty_entries() {
     let snapshot = FrontmostMenuSnapshot {
+        pid: 42,
         app_name: "TestApp".into(),
         bundle_id: "com.example.TestApp".into(),
         items: vec![],
@@ -339,6 +383,7 @@ fn generate_script_from_current_app_builtin_is_registered() {
 
 fn safari_snapshot_with_menus() -> FrontmostMenuSnapshot {
     FrontmostMenuSnapshot {
+        pid: 42,
         app_name: "Safari".into(),
         bundle_id: "com.apple.Safari".into(),
         items: vec![
@@ -435,6 +480,7 @@ fn prompt_shaping_truncates_to_20_menu_items() {
         .collect();
 
     let snapshot = FrontmostMenuSnapshot {
+        pid: 42,
         app_name: "BigApp".into(),
         bundle_id: "com.example.BigApp".into(),
         items: vec![
@@ -618,29 +664,13 @@ fn trace_receipt_serializes_to_valid_json() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn turn_this_into_a_command_builtin_is_registered() {
+fn turn_this_into_a_command_builtin_is_no_longer_registered() {
     let entries = builtins::get_builtin_entries(&BuiltInConfig::default());
-    let entry = entries
-        .iter()
-        .find(|e| e.id == "builtin/turn-this-into-a-command")
-        .expect("builtin/turn-this-into-a-command must be in the registry");
-
-    assert_eq!(
-        entry.feature,
-        BuiltInFeature::UtilityCommand(UtilityCommandType::TurnThisIntoCommand)
-    );
-
-    let do_pos = entries
-        .iter()
-        .position(|e| e.id == "builtin/do-in-current-app")
-        .unwrap();
-    let turn_pos = entries
-        .iter()
-        .position(|e| e.id == "builtin/turn-this-into-a-command")
-        .unwrap();
     assert!(
-        do_pos < turn_pos,
-        "Turn This Into a Command should follow Do in Current App"
+        entries
+            .iter()
+            .all(|e| e.id != "builtin/turn-this-into-a-command"),
+        "builtin/turn-this-into-a-command should no longer be in the registry"
     );
 }
 
@@ -953,6 +983,7 @@ fn verify_current_app_command_recipe_reports_app_name_drift() {
 
     // Verify against a different app
     let different_app = FrontmostMenuSnapshot {
+        pid: 84,
         app_name: "Finder".into(),
         bundle_id: "com.apple.finder".into(),
         items: vec![],
@@ -966,6 +997,52 @@ fn verify_current_app_command_recipe_reports_app_name_drift() {
     assert_eq!(verification.expected_app_name, "Safari");
     assert_eq!(verification.actual_app_name, "Finder");
     assert!(verification.warning_count >= 2);
+}
+
+#[test]
+fn current_app_session_keeps_same_bundle_same_pid() {
+    let session = CurrentAppCommandsSession {
+        pid: 100,
+        app_name: "Safari".into(),
+        bundle_id: "com.apple.Safari".into(),
+        placeholder: "Search Safari commands…".into(),
+        top_level_menu_count: 4,
+        leaf_entry_count: 12,
+        source: "frontmost_app_tracker",
+        entries: vec![],
+    };
+    let live = CurrentAppCommandsLiveIdentity {
+        pid: 100,
+        bundle_id: "com.apple.Safari".into(),
+    };
+
+    assert!(
+        !current_app_commands_session_identity_changed(&session, Some(&live)),
+        "same bundle + same pid should keep the existing session"
+    );
+}
+
+#[test]
+fn current_app_session_detects_same_bundle_different_pid() {
+    let session = CurrentAppCommandsSession {
+        pid: 100,
+        app_name: "Safari".into(),
+        bundle_id: "com.apple.Safari".into(),
+        placeholder: "Search Safari commands…".into(),
+        top_level_menu_count: 4,
+        leaf_entry_count: 12,
+        source: "frontmost_app_tracker",
+        entries: vec![],
+    };
+    let live = CurrentAppCommandsLiveIdentity {
+        pid: 200,
+        bundle_id: "com.apple.Safari".into(),
+    };
+
+    assert!(
+        current_app_commands_session_identity_changed(&session, Some(&live)),
+        "same bundle + different pid must invalidate or refresh the session"
+    );
 }
 
 #[test]
@@ -1054,7 +1131,7 @@ fn build_current_app_command_recipe_marks_context_flags() {
 }
 
 #[test]
-fn generated_script_prompt_from_recipe_embeds_contract_and_recipe_header() {
+fn generated_script_prompt_from_recipe_embeds_contract_without_recipe_headers() {
     let recipe = build_current_app_command_recipe(
         safari_snapshot_with_menus(),
         Some("close duplicate tabs"),
@@ -1073,16 +1150,14 @@ fn generated_script_prompt_from_recipe_embeds_contract_and_recipe_header() {
         "prompt must request Script Kit TypeScript"
     );
     assert!(
-        prompt.contains("Current-App-Recipe-Base64:"),
-        "prompt must embed base64 recipe header"
+        prompt.contains("Write the captured app names, menu labels, URLs, and other values directly in the code where they are used."),
+        "prompt must require inline captured values"
     );
     assert!(
-        prompt.contains("Current-App-Recipe-Name:"),
-        "prompt must embed recipe name header"
-    );
-    assert!(
-        prompt.contains("Safari Close Duplicate Tabs"),
-        "prompt must include suggested script name"
+        prompt.contains(
+            "Do not add machine-readable recipe headers or encoded metadata blocks to the script."
+        ),
+        "prompt must forbid machine-readable recipe headers"
     );
     assert!(
         prompt.contains("Bias toward direct menu-command automation"),
@@ -1091,9 +1166,7 @@ fn generated_script_prompt_from_recipe_embeds_contract_and_recipe_header() {
 }
 
 #[test]
-fn generated_script_prompt_base64_roundtrips_recipe() {
-    use base64::Engine as _;
-
+fn generated_script_prompt_keeps_recipe_context_in_plain_text() {
     let recipe = build_current_app_command_recipe(
         safari_snapshot_with_menus(),
         Some("close duplicate tabs"),
@@ -1103,30 +1176,11 @@ fn generated_script_prompt_base64_roundtrips_recipe() {
 
     let prompt = build_generated_script_prompt_from_recipe(&recipe);
 
-    // Extract base64 from the prompt
-    let base64_prefix = "Current-App-Recipe-Base64: ";
-    let base64_start = prompt
-        .find(base64_prefix)
-        .expect("prompt must contain base64 prefix")
-        + base64_prefix.len();
-    let base64_end = prompt[base64_start..]
-        .find('\n')
-        .expect("base64 line must end with newline")
-        + base64_start;
-    let base64_str = &prompt[base64_start..base64_end];
-
-    let decoded_bytes = base64::engine::general_purpose::STANDARD
-        .decode(base64_str)
-        .expect("base64 must decode");
-    let decoded_json: serde_json::Value =
-        serde_json::from_slice(&decoded_bytes).expect("decoded bytes must be valid JSON");
-
-    assert_eq!(decoded_json["recipeType"], "currentAppCommand");
-    assert_eq!(decoded_json["effectiveQuery"], "close duplicate tabs");
-    assert_eq!(
-        decoded_json["suggestedScriptName"],
-        "Safari Close Duplicate Tabs"
-    );
+    assert_eq!(recipe.suggested_script_name, "Safari Close Duplicate Tabs");
+    assert!(prompt.contains("close duplicate tabs"));
+    assert!(prompt.contains("selected text here"));
+    assert!(prompt.contains("https://example.com"));
+    assert!(!prompt.contains("Current-App-Recipe-Base64:"));
 }
 
 // ---------------------------------------------------------------------------

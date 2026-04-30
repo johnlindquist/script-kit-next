@@ -213,6 +213,24 @@ fn no_content_search_when_name_already_matches() {
     );
 }
 
+#[test]
+fn current_app_recipe_headers_do_not_contribute_body_matches() {
+    let scripts = vec![make_script(
+        "generated-current-app-script",
+        None,
+        Some(
+            "// Current-App-Recipe-Name: summarize all the text on the screen\n\
+             // Current-App-Recipe-Base64: ZXdvZ0lDSnlaV05wY0dWVWVYQmxJam9nSW1OMWNuSmxiblJCY0hCRGIyMXRZVzVrSWl3S0lDSmxabVpsWTNScGRtVlJkV1Z5ZVNJNklDSnpkVzF0WVhKcGVtVWdZV3hzSUhSb1pTQjBaWGgwSUc5dUlIUm9aU0J6WTNKbFpXNGlDZ29nSUhCeWIyMXdkRkpqWldsd2RDSTZJSHNLQ0FvPQ==\n",
+        ),
+    )];
+
+    let results = fuzzy_search_scripts(&scripts, "summarize all the text on the screen");
+    assert!(
+        results.is_empty(),
+        "current-app recipe headers are machine metadata and must not create launcher matches"
+    );
+}
+
 // ── Fuzzy body matching ──────────────────────────────────────────────
 
 #[test]

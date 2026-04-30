@@ -36,6 +36,27 @@ impl ScriptListApp {
                 .collect()
         };
         let filtered_len = filtered_windows.len();
+        let selected_index = if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
+            selected_index,
+            &self.window_list_scroll_handle,
+            filtered_len,
+            8,
+        ) {
+            tracing::info!(
+                target: "script_kit::scroll",
+                event = "builtin_selection_resynced_from_scrollbar",
+                view = "window_switcher",
+                reason = "render",
+                selected_before = selected_index,
+                selected_after = reanchored,
+            );
+            if let AppView::WindowSwitcherView { selected_index, .. } = &mut self.current_view {
+                *selected_index = reanchored;
+            }
+            reanchored
+        } else {
+            selected_index
+        };
 
         // Key handler for window switcher
         let handle_key = cx.listener(
@@ -346,11 +367,101 @@ impl ScriptListApp {
             // Left side: Window list (50% width)
             .child(
                 div()
+                    .relative()
                     .w_1_2()
                     .h_full()
                     .min_h(px(0.))
                     .py(px(design_spacing.padding_xs))
-                    .child(list_element),
+                    .on_scroll_wheel(cx.listener(
+                        move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                            let view_state = if let AppView::WindowSwitcherView {
+                                filter,
+                                selected_index,
+                            } = &this.current_view
+                            {
+                                Some((filter.clone(), *selected_index))
+                            } else {
+                                None
+                            };
+
+                            let Some((current_filter, current_selected)) = view_state else {
+                                return;
+                            };
+
+                            let filtered_len = if current_filter.is_empty() {
+                                this.cached_windows.len()
+                            } else {
+                                let filter_lower = current_filter.to_lowercase();
+                                this.cached_windows
+                                    .iter()
+                                    .filter(|window| {
+                                        window.title.to_lowercase().contains(&filter_lower)
+                                            || window.app.to_lowercase().contains(&filter_lower)
+                                    })
+                                    .count()
+                            };
+
+                            let Some(new_selected) = this.builtin_scroll_target_from_wheel(
+                                event,
+                                current_selected,
+                                filtered_len,
+                            ) else {
+                                if filtered_len > 0 {
+                                    cx.stop_propagation();
+                                }
+                                return;
+                            };
+
+                            if let AppView::WindowSwitcherView { selected_index, .. } =
+                                &mut this.current_view
+                            {
+                                *selected_index = new_selected;
+                            }
+
+                            this.window_list_scroll_handle
+                                .scroll_to_item(new_selected, ScrollStrategy::Nearest);
+
+                            if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
+                                new_selected,
+                                &this.window_list_scroll_handle,
+                                filtered_len,
+                                8,
+                            ) {
+                                if let AppView::WindowSwitcherView { selected_index, .. } =
+                                    &mut this.current_view
+                                {
+                                    *selected_index = reanchored;
+                                }
+                                tracing::info!(
+                                    target: "script_kit::scroll",
+                                    event = "builtin_selection_resynced_from_scrollbar",
+                                    view = "window_switcher",
+                                    reason = "wheel",
+                                    selected_before = new_selected,
+                                    selected_after = reanchored,
+                                );
+                            }
+
+                            Self::log_builtin_scroll_event(
+                                "window_switcher",
+                                "scroll_to_item",
+                                "wheel",
+                                filtered_len,
+                                Some(new_selected),
+                                Some(new_selected),
+                                Some(&current_filter),
+                                "mouse",
+                            );
+                            cx.notify();
+                            cx.stop_propagation();
+                        },
+                    ))
+                    .child(list_element)
+                    .child(self.builtin_uniform_list_scrollbar(
+                        &self.window_list_scroll_handle,
+                        filtered_len,
+                        8,
+                    )),
             )
             // Right side: Actions panel (50% width)
             .child(
@@ -448,6 +559,27 @@ mod window_switcher_chrome_audit {
         assert!(
             !source.contains("⌘K Actions"),
             "window_switcher should not advertise ⌘K Actions without a working dialog"
+        );
+    }
+
+    #[test]
+    fn window_switcher_uses_wheel_contract_and_vendor_scrollbar() {
+        let source = include_str!("window_switcher.rs");
+        assert!(
+            source.contains(".on_scroll_wheel(cx.listener("),
+            "window_switcher should intercept wheel scrolling on the list pane"
+        );
+        assert!(
+            source.contains("builtin_scroll_target_from_wheel("),
+            "window_switcher should use shared wheel delta conversion"
+        );
+        assert!(
+            source.contains("builtin_reanchor_selection_from_scroll("),
+            "window_switcher should reanchor selection after handle movement"
+        );
+        assert!(
+            source.contains("builtin_uniform_list_scrollbar("),
+            "window_switcher should attach the shared vendor scrollbar helper"
         );
     }
 }

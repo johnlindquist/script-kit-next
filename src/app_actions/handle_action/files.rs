@@ -17,7 +17,8 @@ impl ScriptListApp {
     where
         F: FnOnce(
             Option<&scripts::SearchResult>,
-        ) -> Result<std::path::PathBuf, crate::action_helpers::PathExtractionError>,
+        )
+            -> Result<std::path::PathBuf, crate::action_helpers::PathExtractionError>,
     {
         // file_search_actions_path takes priority (consumed on use)
         if let Some(path) = self.file_search_actions_path.take() {
@@ -114,7 +115,8 @@ impl ScriptListApp {
 
         if can_patch_in_place {
             // Remove the old entry from the cache.
-            self.cached_file_results.retain(|entry| entry.path != old_path);
+            self.cached_file_results
+                .retain(|entry| entry.path != old_path);
 
             // If the item was renamed/moved into the current directory, add it.
             if let Some(new_path) = preferred_path {
@@ -256,7 +258,8 @@ impl ScriptListApp {
                     self.resolve_file_action_path(crate::action_helpers::extract_path_for_reveal);
 
                 if let Ok(path) = path_result {
-                    let reveal_result_rx = self.reveal_in_finder_with_feedback_async(&path, trace_id);
+                    let reveal_result_rx =
+                        self.reveal_in_finder_with_feedback_async(&path, trace_id);
                     let trace_id = trace_id.to_string();
                     let start = std::time::Instant::now();
                     cx.spawn(async move |this, cx| {
@@ -297,10 +300,9 @@ impl ScriptListApp {
                     })
                     .detach();
                 } else {
-                    let msg = path_result
-                        .err()
-                        .flatten()
-                        .unwrap_or_else(|| gpui::SharedString::from("Cannot reveal this item type in Finder"));
+                    let msg = path_result.err().flatten().unwrap_or_else(|| {
+                        gpui::SharedString::from("Cannot reveal this item type in Finder")
+                    });
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
                         msg.to_string(),
@@ -325,11 +327,9 @@ impl ScriptListApp {
                         );
                     }
                     Err(msg) => {
-                        let error_msg = msg
-                            .map(|m| m.to_string())
-                            .unwrap_or_else(|| {
-                                selection_required_message_for_action(action_id).to_string()
-                            });
+                        let error_msg = msg.map(|m| m.to_string()).unwrap_or_else(|| {
+                            selection_required_message_for_action(action_id).to_string()
+                        });
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
                             error_msg,
@@ -338,20 +338,79 @@ impl ScriptListApp {
                 }
                 DispatchOutcome::success()
             }
+            "open_in_quick_terminal" => {
+                tracing::info!(category = "UI", "open in Quick Terminal action");
+                let path_result = self.resolve_file_action_path(
+                    crate::action_helpers::extract_path_for_quick_terminal,
+                );
+
+                match path_result {
+                    Ok(path) => match crate::action_helpers::resolve_quick_terminal_cwd(&path) {
+                        Ok(cwd) => {
+                            self.open_quick_terminal(Some(cwd), cx);
+                            DispatchOutcome::success()
+                        }
+                        Err(message) => DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            message,
+                        ),
+                    },
+                    Err(msg) => {
+                        let error_msg = msg.map(|m| m.to_string()).unwrap_or_else(|| {
+                            selection_required_message_for_action(action_id).to_string()
+                        });
+                        DispatchOutcome::error(
+                            crate::action_helpers::ERROR_ACTION_FAILED,
+                            error_msg,
+                        )
+                    }
+                }
+            }
             "copy_deeplink" => {
                 tracing::info!(category = "UI", "copy deeplink action");
                 if let Some(result) = self.get_selected_result() {
-                    let name = result.name();
-                    let deeplink_name = crate::actions::to_deeplink_name(name);
-                    let deeplink_url = format!("scriptkit://run/{}", deeplink_name);
+                    if crate::script_sharing::is_shareable_result(&result) {
+                        match crate::script_sharing::bundle_from_search_result(&result).and_then(
+                            |bundle| {
+                                crate::script_sharing::encode_share_bundle(&bundle)
+                                    .map(|uri| (bundle, uri))
+                            },
+                        ) {
+                            Ok((bundle, share_uri)) => {
+                                crate::script_sharing::mark_recently_exported_share(&share_uri);
+                                tracing::info!(
+                                    category = "UI",
+                                    share_uri = %share_uri,
+                                    title = %bundle.title,
+                                    "copying share uri to clipboard"
+                                );
+                                self.copy_to_clipboard_with_feedback(
+                                    &share_uri,
+                                    format!("Copied share link for {}", bundle.title),
+                                    true,
+                                    cx,
+                                );
+                            }
+                            Err(error) => {
+                                return DispatchOutcome::error(
+                                    crate::action_helpers::ERROR_ACTION_FAILED,
+                                    format!("Failed to build share link: {}", error),
+                                );
+                            }
+                        }
+                    } else {
+                        let name = result.name();
+                        let deeplink_name = crate::actions::to_deeplink_name(name);
+                        let deeplink_url = format!("scriptkit://run/{}", deeplink_name);
 
-                    tracing::info!(category = "UI", deeplink = %deeplink_url, "copying deeplink to clipboard");
-                    self.copy_to_clipboard_with_feedback(
-                        &deeplink_url,
-                        format!("Copied: {}", deeplink_url),
-                        true,
-                        cx,
-                    );
+                        tracing::info!(category = "UI", deeplink = %deeplink_url, "copying deeplink to clipboard");
+                        self.copy_to_clipboard_with_feedback(
+                            &deeplink_url,
+                            format!("Copied: {}", deeplink_url),
+                            true,
+                            cx,
+                        );
+                    }
                 } else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
@@ -380,9 +439,7 @@ impl ScriptListApp {
                             self.open_ai_window_after_main_hide(
                                 action_id,
                                 &dctx.trace_id,
-                                DeferredAiWindowAction::AddAttachment {
-                                    path: path.clone(),
-                                },
+                                DeferredAiWindowAction::AddAttachment { path: path.clone() },
                                 cx,
                             );
 
@@ -394,14 +451,8 @@ impl ScriptListApp {
                     match result {
                         Ok(()) => {
                             if action_id != "attach_to_ai" {
-                                if let Some(message) =
-                                    file_search_action_success_hud(action_id)
-                                {
-                                    self.show_hud(
-                                        message.to_string(),
-                                        Some(HUD_SHORT_MS),
-                                        cx,
-                                    );
+                                if let Some(message) = file_search_action_success_hud(action_id) {
+                                    self.show_hud(message.to_string(), Some(HUD_SHORT_MS), cx);
                                 }
                             }
                             self.clear_file_search_action_target();
@@ -438,11 +489,7 @@ impl ScriptListApp {
                 match crate::script_creation::open_in_editor(&path_buf, &self.config) {
                     Ok(()) => {
                         self.clear_file_search_action_target();
-                        self.show_hud(
-                            "Opened in Editor".to_string(),
-                            Some(HUD_SHORT_MS),
-                            cx,
-                        );
+                        self.show_hud("Opened in Editor".to_string(), Some(HUD_SHORT_MS), cx);
                         self.hide_main_and_reset(cx);
                     }
                     Err(e) => {
@@ -450,33 +497,6 @@ impl ScriptListApp {
                         return DispatchOutcome::error(
                             crate::action_helpers::ERROR_ACTION_FAILED,
                             format!("Failed to open in editor: {}", e),
-                        );
-                    }
-                }
-                DispatchOutcome::success()
-            }
-            "open_in_terminal" => {
-                let Some((path, is_dir, _)) = self.resolve_file_search_path_info() else {
-                    return DispatchOutcome::error(
-                        crate::action_helpers::ERROR_ACTION_FAILED,
-                        "No file selected",
-                    );
-                };
-                match crate::file_search::open_in_terminal(&path, is_dir) {
-                    Ok(_) => {
-                        self.clear_file_search_action_target();
-                        self.show_hud(
-                            "Opened in Terminal".to_string(),
-                            Some(HUD_SHORT_MS),
-                            cx,
-                        );
-                        self.hide_main_and_reset(cx);
-                    }
-                    Err(e) => {
-                        self.clear_file_search_action_target();
-                        return DispatchOutcome::error(
-                            crate::action_helpers::ERROR_ACTION_FAILED,
-                            format!("Failed to open in terminal: {}", e),
                         );
                     }
                 }
@@ -507,10 +527,7 @@ impl ScriptListApp {
                         Err(e) => {
                             let _ = this.update(cx, |this, cx| {
                                 this.clear_file_search_action_target();
-                                this.show_error_toast(
-                                    format!("Failed to rename: {}", e),
-                                    cx,
-                                );
+                                this.show_error_toast(format!("Failed to rename: {}", e), cx);
                                 this.restore_file_search_input_focus(cx);
                             });
                             return;
@@ -536,10 +553,7 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 this.file_search_actions_path = None;
-                                this.show_error_toast(
-                                    format!("Failed to rename: {}", e),
-                                    cx,
-                                );
+                                this.show_error_toast(format!("Failed to rename: {}", e), cx);
                                 this.restore_file_search_input_focus(cx);
                             }
                         }
@@ -575,10 +589,7 @@ impl ScriptListApp {
                             Err(e) => {
                                 let _ = this.update(cx, |this, cx| {
                                     this.clear_file_search_action_target();
-                                    this.show_error_toast(
-                                        format!("Failed to move: {}", e),
-                                        cx,
-                                    );
+                                    this.show_error_toast(format!("Failed to move: {}", e), cx);
                                     this.restore_file_search_input_focus(cx);
                                 });
                                 return;
@@ -607,10 +618,7 @@ impl ScriptListApp {
                             }
                             Err(e) => {
                                 this.clear_file_search_action_target();
-                                this.show_error_toast(
-                                    format!("Failed to move: {}", e),
-                                    cx,
-                                );
+                                this.show_error_toast(format!("Failed to move: {}", e), cx);
                                 this.restore_file_search_input_focus(cx);
                             }
                         }
@@ -641,12 +649,8 @@ impl ScriptListApp {
                         "Move to Trash",
                     );
 
-                    match crate::confirm::confirm_with_parent_dialog(
-                        cx,
-                        confirm_options,
-                        &trace_id,
-                    )
-                    .await
+                    match crate::confirm::confirm_with_parent_dialog(cx, confirm_options, &trace_id)
+                        .await
                     {
                         Ok(true) => {}
                         Ok(false) => {
@@ -744,11 +748,7 @@ impl ScriptListApp {
                 match crate::file_search::duplicate_path(&path) {
                     Ok(new_path) => {
                         self.clear_file_search_action_target();
-                        self.show_hud(
-                            format!("Duplicated {}", name),
-                            Some(HUD_MEDIUM_MS),
-                            cx,
-                        );
+                        self.show_hud(format!("Duplicated {}", name), Some(HUD_MEDIUM_MS), cx);
                         self.refresh_file_search_after_insert(
                             &new_path,
                             previous_display_index,
@@ -817,8 +817,12 @@ impl ScriptListApp {
                 let label = match mode {
                     crate::actions::FileSearchSortMode::NameAsc => "Sorted by Name (A\u{2192}Z)",
                     crate::actions::FileSearchSortMode::NameDesc => "Sorted by Name (Z\u{2192}A)",
-                    crate::actions::FileSearchSortMode::ModifiedDesc => "Sorted by Modified (Newest)",
-                    crate::actions::FileSearchSortMode::ModifiedAsc => "Sorted by Modified (Oldest)",
+                    crate::actions::FileSearchSortMode::ModifiedDesc => {
+                        "Sorted by Modified (Newest)"
+                    }
+                    crate::actions::FileSearchSortMode::ModifiedAsc => {
+                        "Sorted by Modified (Oldest)"
+                    }
                 };
                 self.show_hud(label.to_string(), Some(HUD_SHORT_MS), cx);
                 self.restore_file_search_input_focus(cx);
@@ -833,7 +837,9 @@ impl ScriptListApp {
                     );
                 };
                 let (query, presentation) = if let AppView::FileSearchView {
-                    query, presentation, ..
+                    query,
+                    presentation,
+                    ..
                 } = &self.current_view
                 {
                     (query.clone(), *presentation)
@@ -879,34 +885,25 @@ impl ScriptListApp {
                         "No current directory to copy",
                     );
                 };
-                self.copy_to_clipboard_with_feedback(
-                    &dir,
-                    format!("Copied: {dir}"),
-                    true,
-                    cx,
-                );
+                self.copy_to_clipboard_with_feedback(&dir, format!("Copied: {dir}"), true, cx);
                 DispatchOutcome::success()
             }
-            "open_current_directory_in_terminal" => {
+            "open_current_directory_in_quick_terminal" => {
                 let Some(dir) = self.current_file_search_directory_abs() else {
                     return DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
                         "No current directory to open",
                     );
                 };
-                match crate::file_search::open_in_terminal(&dir, true) {
-                    Ok(_) => {
-                        self.show_hud(
-                            "Opened in Terminal".to_string(),
-                            Some(HUD_SHORT_MS),
-                            cx,
-                        );
-                        self.hide_main_and_reset(cx);
+                match crate::action_helpers::resolve_quick_terminal_cwd(std::path::Path::new(&dir))
+                {
+                    Ok(cwd) => {
+                        self.open_quick_terminal(Some(cwd), cx);
                         DispatchOutcome::success()
                     }
                     Err(e) => DispatchOutcome::error(
                         crate::action_helpers::ERROR_ACTION_FAILED,
-                        format!("Failed to open current directory in terminal: {e}"),
+                        format!("Failed to open current directory in Quick Terminal: {e}"),
                     ),
                 }
             }
@@ -916,37 +913,43 @@ impl ScriptListApp {
 
     /// Compare two file-search results according to the given sort mode.
     ///
-    /// Directories always sort before files regardless of mode.
+    /// Name sorts group directories first. Modified-time sorts compare files
+    /// and directories together so the newest or oldest item wins.
     /// This is the single source of truth for file-search ordering.
     fn compare_file_search_results_for_mode(
         mode: crate::actions::FileSearchSortMode,
         a: &crate::file_search::FileResult,
         b: &crate::file_search::FileResult,
     ) -> std::cmp::Ordering {
-        let a_is_dir = matches!(a.file_type, crate::file_search::FileType::Directory);
-        let b_is_dir = matches!(b.file_type, crate::file_search::FileType::Directory);
-        match (a_is_dir, b_is_dir) {
-            (true, false) => return std::cmp::Ordering::Less,
-            (false, true) => return std::cmp::Ordering::Greater,
-            _ => {}
-        }
         match mode {
             crate::actions::FileSearchSortMode::NameAsc => {
+                let a_is_dir = matches!(a.file_type, crate::file_search::FileType::Directory);
+                let b_is_dir = matches!(b.file_type, crate::file_search::FileType::Directory);
+                match (a_is_dir, b_is_dir) {
+                    (true, false) => return std::cmp::Ordering::Less,
+                    (false, true) => return std::cmp::Ordering::Greater,
+                    _ => {}
+                }
                 a.name.to_lowercase().cmp(&b.name.to_lowercase())
             }
             crate::actions::FileSearchSortMode::NameDesc => {
+                let a_is_dir = matches!(a.file_type, crate::file_search::FileType::Directory);
+                let b_is_dir = matches!(b.file_type, crate::file_search::FileType::Directory);
+                match (a_is_dir, b_is_dir) {
+                    (true, false) => return std::cmp::Ordering::Less,
+                    (false, true) => return std::cmp::Ordering::Greater,
+                    _ => {}
+                }
                 b.name.to_lowercase().cmp(&a.name.to_lowercase())
             }
-            crate::actions::FileSearchSortMode::ModifiedDesc => {
-                b.modified
-                    .cmp(&a.modified)
-                    .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-            }
-            crate::actions::FileSearchSortMode::ModifiedAsc => {
-                a.modified
-                    .cmp(&b.modified)
-                    .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-            }
+            crate::actions::FileSearchSortMode::ModifiedDesc => b
+                .modified
+                .cmp(&a.modified)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
+            crate::actions::FileSearchSortMode::ModifiedAsc => a
+                .modified
+                .cmp(&b.modified)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase())),
         }
     }
 

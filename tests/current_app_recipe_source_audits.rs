@@ -97,26 +97,28 @@ fn trace_builder_has_generate_script_branch_with_prompt_preview() {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Generated script prompt embeds round-trip recipe headers
+// 4. Generated script prompt requires plain shareable code output
 // ---------------------------------------------------------------------------
 
 #[test]
-fn generated_script_prompt_embeds_roundtrip_recipe_headers() {
+fn generated_script_prompt_forbids_recipe_headers_and_requires_inline_values() {
     let source = read_source("src/menu_bar/current_app_commands.rs");
     let body = slice_from(&source, "pub fn build_generated_script_prompt_from_recipe(");
 
     assert!(
-        body.contains("// Current-App-Recipe-Base64:"),
-        "generated prompt must embed a base64 recipe header for replay and audit"
+        body.contains("Write the captured app names, menu labels, URLs, and other values directly in the code where they are used."),
+        "generated prompt must require inline captured values"
     );
     assert!(
-        body.contains("// Current-App-Recipe-Name:"),
-        "generated prompt must embed a stable recipe-name header"
+        body.contains(
+            "Do not add machine-readable recipe headers or encoded metadata blocks to the script."
+        ),
+        "generated prompt must forbid encoded recipe headers"
     );
 
     tracing::info!(
         anchor = "build_generated_script_prompt_from_recipe",
         invariant = "prompt",
-        "audited: generated prompt embeds base64 recipe and name headers"
+        "audited: generated prompt keeps current-app scripts as plain shareable code"
     );
 }

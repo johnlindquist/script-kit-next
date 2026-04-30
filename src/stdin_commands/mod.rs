@@ -46,8 +46,27 @@ fn default_grid_size() -> u32 {
 }
 /// Maximum bytes accepted for a single external stdin JSONL command.
 const MAX_STDIN_COMMAND_BYTES: usize = 16 * 1024;
+/// Current stdin JSONL protocol version. Missing `protocolVersion` fields
+/// default to [`STDIN_PROTOCOL_VERSION`] for backward compatibility with
+/// the pre-v1 Bun SDK. Values other than this constant are rejected up
+/// front before any typed deserialization, so the Rust side has one
+/// well-defined version gate.
+pub const STDIN_PROTOCOL_VERSION: u16 = 1;
 const CAPTURE_WINDOW_RELATIVE_ROOTS: [&str; 2] = [".test-screenshots", "test-screenshots"];
 const CAPTURE_WINDOW_SCRIPTKIT_ROOT: &str = "screenshots";
+/// Stdin RPC `requestId` newtype.
+///
+/// Verbatim-echo contract (anomaly slug `attacker-stdin-requestid-unbounded`):
+/// every inbound `requestId` is accepted and echoed back on the response
+/// envelope byte-for-byte, with no length cap, no truncation, and no
+/// encoding transformation. The sole bound is the stdin line cap
+/// [`MAX_STDIN_COMMAND_BYTES`] = 16 KiB applied at line ingest. A
+/// non-default [`TryFrom<String>`] constructor, a length-bounded wrapper
+/// (`Bounded<N>`, `SmallString<N>`, …), or a `.truncate(N)` / `.chars()
+/// .take(N)` step anywhere along the receive→echo path silently changes
+/// caller behavior for correlation ids that legitimately exceed the cap.
+/// Pinned at source level in
+/// `tests/stdin_requestid_verbatim_contract.rs`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 #[serde(transparent)]
 pub struct ExternalCommandRequestId(String);
@@ -365,9 +384,19 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Trigger a built-in feature by name (for testing)
+    /// Trigger a built-in feature by canonical `builtinId` (v1+) or by
+    /// legacy `name` alias (v1-deprecated). Exactly one of `builtinId`
+    /// or `name` MUST be supplied; the receiver decides which path ran
+    /// via [`ExternalCommand::trigger_builtin_ref`].
     TriggerBuiltin {
-        name: String,
+        /// Canonical `builtin/...` command id. Preferred over `name`.
+        #[serde(default, rename = "builtinId")]
+        builtin_id: Option<String>,
+        /// Deprecated v1 fallback — legacy alias string. Resolved via
+        /// the `TriggerBuiltinRegistry` legacy-alias table. Callers
+        /// should migrate to `builtinId`.
+        #[serde(default)]
+        name: Option<String>,
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
@@ -383,14 +412,14 @@ pub enum ExternalCommand {
     },
     /// Open the Notes window (for testing)
     OpenNotes,
-    /// Open the ACP Chat window (for testing)
+    /// Open the Agent Chat window (for testing)
     OpenAi,
-    /// Open the Mini ACP Chat window (for testing)
+    /// Open the Mini Agent Chat window (for testing)
     OpenMiniAi,
-    /// Open the ACP Chat window with mock data (for visual testing)
+    /// Open the Agent Chat window with mock data (for visual testing)
     /// This inserts sample conversations to test the UI layout
     OpenAiWithMockData,
-    /// Open the Mini ACP Chat window with mock data (for visual testing)
+    /// Open the Mini Agent Chat window with mock data (for visual testing)
     OpenMiniAiWithMockData,
     /// Show the AI command bar (Cmd+K menu) for testing the refactored ActionsDialog
     ShowAiCommandBar,
@@ -405,7 +434,7 @@ pub enum ExternalCommand {
         request_id: Option<ExternalCommandRequestId>,
     },
     /// Capture a screenshot of a window by title pattern and save to file (for testing)
-    /// title: Title pattern to match (e.g., "Script Kit ACP" for the ACP Chat window)
+    /// title: Title pattern to match (e.g., "Script Kit Agent" for the Agent Chat window)
     /// path: File path to save the PNG screenshot
     CaptureWindow {
         title: String,
@@ -430,8 +459,8 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
-    /// Set the ACP chat input text and optionally submit (for testing ACP composer behavior)
-    /// text: Message text to set in the ACP input field
+    /// Set the Agent Chat input text and optionally submit (for testing composer behavior)
+    /// text: Message text to set in the Agent Chat input field
     /// submit: If true, submit the message after setting
     SetAcpInput {
         text: String,
@@ -489,8 +518,129 @@ pub enum ExternalCommand {
         #[serde(default, rename = "requestId")]
         request_id: Option<ExternalCommandRequestId>,
     },
+    /// Trigger an action on a shared-actions-dialog host by its action_id (for testing).
+    ///
+    /// Bypasses keyboard simulation so agentic-testing harnesses can fire a known
+    /// action without driving Cmd+K → arrow-nav → Enter through simulateKey. Pairs
+    /// with `getElements` against the actions-dialog window to discover valid ids.
+    ///
+    /// actionId: The action's unique id from the actions-dialog UI (e.g. the value
+    ///   exposed via getElements on the automation window).
+    /// host: Optional camelCase host label. Accepted values: "argPrompt",
+    ///   "divPrompt", "editorPrompt", "termPrompt", "formPrompt", "chatPrompt",
+    ///   "mainList", "fileSearch", "clipboardHistory", "dictationHistory",
+    ///   "emojiPicker", "appLauncher", "builtinList", "webcamPrompt", "acpChat",
+    ///   "acpHistory". When omitted, resolves to the current view's host.
+    TriggerAction {
+        #[serde(rename = "actionId")]
+        action_id: String,
+        #[serde(default)]
+        host: Option<String>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
+    /// Invoke the ACP composer's `paste_text_from_clipboard` handler directly
+    /// on the active `AppView::AcpChatView`, bypassing the OS Cmd+V heuristic
+    /// (which routes pastes to the frontmost app — during automation runs
+    /// that's the invoking terminal, not the ACP composer).
+    ///
+    /// Pairs with the Pass #31 source-level invariants pinned in
+    /// `tests/acp_composer_paste_text_contract.rs`: this command is the
+    /// substrate that lets live verification actually exercise the pinned
+    /// paste-receiver shape (arboard read → CRLF normalize → `prepare_pasted_text`
+    /// → `thread.input.insert_str`) against the current system clipboard.
+    ///
+    /// Returns a `Err("Agent Chat view is not active")` via the structured
+    /// tracing channel when no `AcpChatView` is active; `Err("clipboard is
+    /// empty or text fetch failed")` when `paste_text_from_clipboard` returns
+    /// false (empty clipboard, non-text clipboard, or arboard init failure).
+    PasteClipboardIntoAcp {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
+    /// Inject a synthetic dictation transcript result into the agentic-testing
+    /// surface. The handler routes through the same delivery helper used after
+    /// transcription, so tests can prove ACP reveal/focus behavior without
+    /// depending on microphone capture or the local transcription model.
+    ///
+    /// transcript: Synthetic transcript text. Only `.len()` is logged — content
+    ///   is not emitted at info level (real transcripts carry PII).
+    /// target: Optional target label. Accepted values mirror `DictationTarget`:
+    ///   "mainWindowFilter", "mainWindowPrompt", "notesEditor", "aiChatComposer",
+    ///   "tabAiHarness", "externalApp", plus short aliases like "acp". Unknown
+    ///   or absent values fall back to the active dictation target, then the
+    ///   current UI-derived target.
+    PushDictationResult {
+        transcript: String,
+        #[serde(default)]
+        target: Option<String>,
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
+    /// Read-only probe exposing the current `~/.kit/config.ts`
+    /// fingerprint so automation can verify a write landed on disk
+    /// without shelling out to `bun` or `stat`. The handler emits a
+    /// `config_fingerprint_result` tracing event carrying the receipt
+    /// JSON (`path`, `len`, `modified_ms`, and an optional
+    /// `fingerprintHash` reserved for a future content-hash extension).
+    /// When the file is missing or stat fails the event still fires
+    /// with `ok = false` and `error_code = "config_file_missing"` so
+    /// automation can distinguish "no file" from "command did not
+    /// land".
+    GetConfigFingerprint {
+        #[serde(default, rename = "requestId")]
+        request_id: Option<ExternalCommandRequestId>,
+    },
 }
+/// Result of normalizing a [`ExternalCommand::TriggerBuiltin`] payload.
+/// Carries the raw string plus whether it came from the canonical or
+/// the deprecated alias slot, so dispatch can bump the right counter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuiltinRef<'a> {
+    /// Canonical `builtin/...` or `builtin-...` command id supplied as
+    /// `builtinId`. Routed through `lookup_command_id`.
+    CanonicalId(&'a str),
+    /// Deprecated legacy alias supplied as `name`. Routed through
+    /// `lookup_legacy_alias` and bumps the
+    /// `trigger_builtin_deprecated_name_total` counter.
+    LegacyAlias(&'a str),
+}
+
 impl ExternalCommand {
+    /// Extract the canonical-id-or-legacy-alias pair from a
+    /// `TriggerBuiltin` payload, rejecting ambiguous combinations up
+    /// front (both present, neither present).
+    ///
+    /// Returns `Ok(None)` when the variant is not `TriggerBuiltin`.
+    pub fn trigger_builtin_ref(&self) -> Result<Option<BuiltinRef<'_>>, String> {
+        match self {
+            Self::TriggerBuiltin {
+                builtin_id: Some(id),
+                name: None,
+                ..
+            } => Ok(Some(BuiltinRef::CanonicalId(id.as_str()))),
+            Self::TriggerBuiltin {
+                builtin_id: None,
+                name: Some(n),
+                ..
+            } => Ok(Some(BuiltinRef::LegacyAlias(n.as_str()))),
+            Self::TriggerBuiltin {
+                builtin_id: Some(_),
+                name: Some(_),
+                ..
+            } => Err(
+                "triggerBuiltin accepts either `builtinId` or deprecated `name`, not both"
+                    .to_string(),
+            ),
+            Self::TriggerBuiltin {
+                builtin_id: None,
+                name: None,
+                ..
+            } => Err("triggerBuiltin requires `builtinId` (or deprecated `name`)".to_string()),
+            _ => Ok(None),
+        }
+    }
+
     pub fn request_id(&self) -> Option<&str> {
         match self {
             Self::Run { request_id, .. }
@@ -507,7 +657,11 @@ impl ExternalCommand {
             | Self::GetAiWindowState { request_id, .. }
             | Self::ShowGrid { request_id, .. }
             | Self::ShowShortcutRecorder { request_id, .. }
-            | Self::ExecuteFallback { request_id, .. } => {
+            | Self::ExecuteFallback { request_id, .. }
+            | Self::TriggerAction { request_id, .. }
+            | Self::PushDictationResult { request_id, .. }
+            | Self::GetConfigFingerprint { request_id, .. }
+            | Self::PasteClipboardIntoAcp { request_id, .. } => {
                 request_id.as_ref().map(ExternalCommandRequestId::as_str)
             }
             _ => None,
@@ -538,8 +692,52 @@ impl ExternalCommand {
             Self::HideGrid => "hideGrid",
             Self::ShowShortcutRecorder { .. } => "showShortcutRecorder",
             Self::ExecuteFallback { .. } => "executeFallback",
+            Self::TriggerAction { .. } => "triggerAction",
+            Self::PasteClipboardIntoAcp { .. } => "pasteClipboardIntoAcp",
+            Self::PushDictationResult { .. } => "pushDictationResult",
+            Self::GetConfigFingerprint { .. } => "getConfigFingerprint",
         }
     }
+}
+
+/// Every accepted stdin JSONL verb, in a stable order. This is the single
+/// source of truth for drift audits that compare the `kit://stdin-commands`
+/// MCP resource payload against the real `ExternalCommand` parser. The unit
+/// test `external_command_verbs_cover_every_variant` pins the invariant that
+/// every arm of [`ExternalCommand::command_type`] has a matching entry here.
+pub const EXTERNAL_COMMAND_VERBS: &[&str] = &[
+    "run",
+    "show",
+    "hide",
+    "setFilter",
+    "triggerBuiltin",
+    "simulateKey",
+    "openNotes",
+    "openAi",
+    "openMiniAi",
+    "openAiWithMockData",
+    "openMiniAiWithMockData",
+    "showAiCommandBar",
+    "simulateAiKey",
+    "captureWindow",
+    "setAiSearch",
+    "setAiInput",
+    "setAcpInput",
+    "getAiWindowState",
+    "showGrid",
+    "hideGrid",
+    "showShortcutRecorder",
+    "executeFallback",
+    "triggerAction",
+    "pasteClipboardIntoAcp",
+    "pushDictationResult",
+    "getConfigFingerprint",
+];
+
+/// Accessor used by `tests/mcp_resource_drift.rs` and by the
+/// `kit://stdin-commands` MCP resource so both sides read the same list.
+pub fn all_external_command_verbs() -> &'static [&'static str] {
+    EXTERNAL_COMMAND_VERBS
 }
 #[derive(Debug, Clone)]
 pub enum StdinCommand {
@@ -601,12 +799,97 @@ pub struct StdinCommandEnvelope {
     pub correlation_id: String,
 }
 
+/// Read the optional `protocolVersion` field from a raw command value.
+/// Missing values default to [`STDIN_PROTOCOL_VERSION`] for backward
+/// compatibility with the pre-v1 Bun SDK. Values outside the accepted
+/// set are rejected here so the typed deserializer never runs with a
+/// version it does not understand.
+fn parse_protocol_version(raw: &serde_json::Value) -> anyhow::Result<u16> {
+    match raw.get("protocolVersion") {
+        None => Ok(STDIN_PROTOCOL_VERSION),
+        Some(v) => {
+            let n = v
+                .as_u64()
+                .ok_or_else(|| anyhow::anyhow!("protocolVersion must be an unsigned integer"))?;
+            let n = u16::try_from(n)
+                .map_err(|_| anyhow::anyhow!("protocolVersion {n} is out of range"))?;
+            anyhow::ensure!(
+                n == STDIN_PROTOCOL_VERSION,
+                "unsupported protocolVersion={n}; expected {}",
+                STDIN_PROTOCOL_VERSION
+            );
+            Ok(n)
+        }
+    }
+}
+
 fn parse_stdin_command(trimmed: &str) -> anyhow::Result<StdinCommand> {
-    if let Ok(command) = serde_json::from_str::<ExternalCommand>(trimmed) {
-        return Ok(StdinCommand::External(command));
+    // Two-step parse: (1) decode once as Value, (2) version-gate, (3)
+    // re-deserialize into the typed enum. Avoids an extra allocation
+    // of the whole JSON tree for the common v1 path while giving us
+    // one clear place to reject unknown protocol versions.
+    let mut raw: serde_json::Value = serde_json::from_str(trimmed)?;
+    let version = parse_protocol_version(&raw).inspect_err(|_| {
+        let total = crate::protocol_stats::increment(
+            &crate::protocol_stats::PROTOCOL_STATS.stdin_unsupported_protocol_version_total,
+        );
+        if crate::protocol_stats::should_log_occurrence(total) {
+            tracing::warn!(
+                category = "STDIN",
+                event_type = "stdin_unsupported_protocol_version",
+                occurrences_total = total,
+                "rejected stdin command with unsupported protocolVersion"
+            );
+        }
+    })?;
+
+    // Strip the version key so the `deny_unknown_fields` typed decoders
+    // do not choke on the framing envelope. The version is already
+    // validated above; it has no semantic payload for the typed layer.
+    if let Some(obj) = raw.as_object_mut() {
+        obj.remove("protocolVersion");
     }
 
-    let message = serde_json::from_str::<crate::protocol::Message>(trimmed)?;
+    // Capture the ExternalCommand error (instead of discarding via `if let Ok`)
+    // so we can surface it with full field-level detail when the caller's `type`
+    // names a known automation verb. Without this, a typo like
+    // `{"type":"setFilter","value":"foo"}` (wrong field name — setFilter uses
+    // `text`) would fall through to the Message fallback below, whose
+    // "unknown variant `setFilter`, expected one of `hello`, `arg`, `submit`,
+    // …" error mentions the SDK prompt-response enum instead of the real
+    // payload shape problem. See Pass #8 of Run 8 AFK audit
+    // (`audits/afk/log.md` entry `stdin-parse-externalcommand-field-error-masked-by-sdk-variant-list`).
+    let ext_err = match serde_json::from_value::<ExternalCommand>(raw.clone()) {
+        Ok(command) => {
+            tracing::debug!(
+                category = "STDIN",
+                event_type = "stdin_protocol_version_checked",
+                protocol_version = version,
+                command_type = command.command_type(),
+                "Parsed external command"
+            );
+            return Ok(StdinCommand::External(command));
+        }
+        Err(err) => err,
+    };
+
+    if let Some(known_verb) = raw
+        .get("type")
+        .and_then(serde_json::Value::as_str)
+        .filter(|t| EXTERNAL_COMMAND_VERBS.contains(t))
+    {
+        return Err(anyhow::anyhow!(
+            "automation_payload_mismatch: \"{known_verb}\" is a known automation verb but the payload did not validate: {ext_err}"
+        ));
+    }
+
+    let message = serde_json::from_value::<crate::protocol::Message>(raw)?;
+    tracing::debug!(
+        category = "STDIN",
+        event_type = "stdin_protocol_version_checked",
+        protocol_version = version,
+        "Parsed protocol message"
+    );
     Ok(StdinCommand::Protocol(Box::new(message)))
 }
 
@@ -657,6 +940,45 @@ pub fn create_stdout_response_sender() -> mpsc::SyncSender<crate::protocol::Mess
     response_tx
 }
 // --- merged from part_001.rs ---
+
+/// Lenient pre-deserialization `requestId` extract used to scope
+/// correlation IDs on parse failures. Mirrors the sed pattern used by
+/// `scripts/agentic/session.sh` cmd_send:
+///     sed -nE 's/.*"requestId"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p'
+/// + the conservative charset regex `^[A-Za-z0-9_.:/-]+$` that defends
+///   the log-tail grep from attacker-controlled metachars.
+///
+/// Returns `Some(id)` only when the JSON contains a `"requestId":"..."`
+/// pair whose value is non-empty and matches the charset; otherwise
+/// `None` so callers fall back to a synthetic UUID.
+///
+/// Used by the `Err(_)` arm in [`start_stdin_listener`] so that
+/// `stdin_parse_failed` events carry `correlation_id = "stdin:req:<id>"`
+/// and can be correlated by the shell-side receipt scope exactly like
+/// successful parses — closes the concurrent sad-path cross-correlation
+/// anomaly filed by Run 5 Pass #12 (phase C: 5 parallel malformed sends
+/// with distinct requestIds all reported the same error text).
+pub(crate) fn extract_request_id_lenient(line: &str) -> Option<String> {
+    let marker = "\"requestId\"";
+    let start = line.find(marker)?;
+    let after_key = &line[start + marker.len()..];
+    let colon = after_key.find(':')?;
+    let after_colon = after_key[colon + 1..].trim_start();
+    let inner = after_colon.strip_prefix('"')?;
+    let end = inner.find('"')?;
+    let id = &inner[..end];
+    if id.is_empty() {
+        return None;
+    }
+    if !id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | ':' | '/'))
+    {
+        return None;
+    }
+    Some(id.to_string())
+}
+
 /// Start a thread that listens on stdin for external JSONL commands.
 /// Returns an async_channel::Receiver that can be awaited without polling.
 ///
@@ -736,7 +1058,20 @@ pub fn start_stdin_listener() -> async_channel::Receiver<StdinCommandEnvelope> {
                             }
                         }
                         Err(e) => {
-                            let correlation_id = format!("stdin:parse:{}", Uuid::new_v4());
+                            // Scope correlation_id on the requestId when the
+                            // malformed payload still carries one in a
+                            // structurally-valid `"requestId":"..."` pair —
+                            // symmetric with the happy-path correlation above
+                            // so concurrent parse-failed events can be
+                            // de-interleaved by the shell-side receipt scope
+                            // (`scripts/agentic/session.sh` cmd_send uses
+                            // `grep -F -- "cid=stdin:req:${req_id} "`).
+                            // Fallback to a synthetic UUID when no valid
+                            // requestId can be lenient-extracted — preserves
+                            // the offset-first single-caller precondition.
+                            let correlation_id = extract_request_id_lenient(trimmed)
+                                .map(|id| format!("stdin:req:{}", id))
+                                .unwrap_or_else(|| format!("stdin:parse:{}", Uuid::new_v4()));
                             let _guard = logging::set_correlation_id(correlation_id.clone());
                             tracing::warn!(
                                 category = "STDIN",
@@ -796,9 +1131,123 @@ pub fn start_stdin_listener() -> async_channel::Receiver<StdinCommandEnvelope> {
 mod tests {
     use super::*;
     use anyhow::Context;
+    use std::collections::BTreeSet;
     use std::io::Cursor;
     use std::path::Path;
     use tempfile::TempDir;
+
+    /// Pins `EXTERNAL_COMMAND_VERBS` to the exhaustive
+    /// [`ExternalCommand::command_type`] match: every sample variant's verb
+    /// MUST appear in the slice. Adding a new variant forces both sides to
+    /// grow — the match arm below is exhaustive.
+    #[test]
+    fn external_command_verbs_cover_every_variant() {
+        let variants: Vec<ExternalCommand> = vec![
+            ExternalCommand::Run {
+                path: String::new(),
+                request_id: None,
+            },
+            ExternalCommand::Show { request_id: None },
+            ExternalCommand::Hide { request_id: None },
+            ExternalCommand::SetFilter {
+                text: String::new(),
+                request_id: None,
+            },
+            ExternalCommand::TriggerBuiltin {
+                builtin_id: None,
+                name: None,
+                request_id: None,
+            },
+            ExternalCommand::SimulateKey {
+                key: String::new(),
+                modifiers: Vec::new(),
+                request_id: None,
+            },
+            ExternalCommand::OpenNotes,
+            ExternalCommand::OpenAi,
+            ExternalCommand::OpenMiniAi,
+            ExternalCommand::OpenAiWithMockData,
+            ExternalCommand::OpenMiniAiWithMockData,
+            ExternalCommand::ShowAiCommandBar,
+            ExternalCommand::SimulateAiKey {
+                key: String::new(),
+                modifiers: Vec::new(),
+                request_id: None,
+            },
+            ExternalCommand::CaptureWindow {
+                title: String::new(),
+                path: String::new(),
+                request_id: None,
+            },
+            ExternalCommand::SetAiSearch {
+                text: String::new(),
+                request_id: None,
+            },
+            ExternalCommand::SetAiInput {
+                text: String::new(),
+                submit: false,
+                request_id: None,
+            },
+            ExternalCommand::SetAcpInput {
+                text: String::new(),
+                submit: false,
+                request_id: None,
+            },
+            ExternalCommand::GetAiWindowState { request_id: None },
+            ExternalCommand::ShowGrid {
+                grid_size: 8,
+                show_bounds: false,
+                show_box_model: false,
+                show_alignment_guides: false,
+                show_dimensions: false,
+                depth: GridDepthOption::default(),
+                request_id: None,
+            },
+            ExternalCommand::HideGrid,
+            ExternalCommand::ShowShortcutRecorder {
+                command_id: String::new(),
+                command_name: String::new(),
+                request_id: None,
+            },
+            ExternalCommand::ExecuteFallback {
+                fallback_id: String::new(),
+                input: String::new(),
+                request_id: None,
+            },
+            ExternalCommand::TriggerAction {
+                action_id: String::new(),
+                host: None,
+                request_id: None,
+            },
+            ExternalCommand::PasteClipboardIntoAcp { request_id: None },
+            ExternalCommand::PushDictationResult {
+                transcript: String::new(),
+                target: None,
+                request_id: None,
+            },
+            ExternalCommand::GetConfigFingerprint { request_id: None },
+        ];
+
+        let declared: BTreeSet<&str> = EXTERNAL_COMMAND_VERBS.iter().copied().collect();
+        for variant in &variants {
+            let verb = variant.command_type();
+            assert!(
+                declared.contains(verb),
+                "verb {verb:?} produced by an ExternalCommand variant is not in EXTERNAL_COMMAND_VERBS"
+            );
+        }
+
+        assert_eq!(
+            declared.len(),
+            EXTERNAL_COMMAND_VERBS.len(),
+            "EXTERNAL_COMMAND_VERBS must be de-duplicated"
+        );
+        assert_eq!(
+            declared.len(),
+            variants.len(),
+            "sample list in this test must cover every ExternalCommand verb"
+        );
+    }
 
     #[test]
     fn test_read_stdin_line_bounded_skips_oversized_line_and_recovers() -> anyhow::Result<()> {
@@ -922,13 +1371,98 @@ mod tests {
 
     #[test]
     fn test_external_command_trigger_builtin_deserialization() -> anyhow::Result<()> {
+        // Deprecated `name` path still parses in v1 so the pre-v1 Bun
+        // SDK keeps working until callers migrate to `builtinId`.
         let json = r#"{"type": "triggerBuiltin", "name": "clipboardHistory"}"#;
         let cmd: ExternalCommand = serde_json::from_str(json)?;
-        match cmd {
-            ExternalCommand::TriggerBuiltin { name, .. } => assert_eq!(name, "clipboardHistory"),
-            _ => panic!("Expected TriggerBuiltin command"),
+        match &cmd {
+            ExternalCommand::TriggerBuiltin {
+                name: Some(n),
+                builtin_id: None,
+                ..
+            } => assert_eq!(n, "clipboardHistory"),
+            _ => panic!("Expected TriggerBuiltin with deprecated `name` only"),
         }
+        assert_eq!(
+            cmd.trigger_builtin_ref().unwrap(),
+            Some(BuiltinRef::LegacyAlias("clipboardHistory"))
+        );
         Ok(())
+    }
+
+    #[test]
+    fn trigger_builtin_prefers_canonical_builtin_id() -> anyhow::Result<()> {
+        let json = r#"{"type":"triggerBuiltin","builtinId":"builtin/clipboard-history"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json)?;
+        assert_eq!(
+            cmd.trigger_builtin_ref().unwrap(),
+            Some(BuiltinRef::CanonicalId("builtin/clipboard-history"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn trigger_builtin_rejects_both_fields() {
+        let json = r#"{"type":"triggerBuiltin","builtinId":"builtin/clipboard-history","name":"clipboard"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let err = cmd.trigger_builtin_ref().unwrap_err();
+        assert!(
+            err.contains("either `builtinId` or deprecated `name`"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn trigger_builtin_rejects_neither_field() {
+        let json = r#"{"type":"triggerBuiltin"}"#;
+        let cmd: ExternalCommand = serde_json::from_str(json).unwrap();
+        let err = cmd.trigger_builtin_ref().unwrap_err();
+        assert!(
+            err.contains("requires `builtinId`"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_stdin_command_defaults_missing_protocol_version_to_v1() -> anyhow::Result<()> {
+        // No `protocolVersion` field → treated as v1. Preserves
+        // compatibility with the pre-v1 Bun SDK.
+        let parsed = parse_stdin_command(r#"{"type":"show"}"#)?;
+        assert!(matches!(
+            parsed,
+            StdinCommand::External(ExternalCommand::Show { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_stdin_command_accepts_v1_protocol_version() -> anyhow::Result<()> {
+        let parsed = parse_stdin_command(r#"{"type":"show","protocolVersion":1}"#)?;
+        assert!(matches!(
+            parsed,
+            StdinCommand::External(ExternalCommand::Show { .. })
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_stdin_command_rejects_unsupported_protocol_version() {
+        let err = parse_stdin_command(r#"{"type":"show","protocolVersion":2}"#)
+            .expect_err("v2 must be rejected");
+        assert!(
+            err.to_string().contains("unsupported protocolVersion"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn parse_stdin_command_rejects_non_integer_protocol_version() {
+        let err = parse_stdin_command(r#"{"type":"show","protocolVersion":"one"}"#)
+            .expect_err("non-integer protocolVersion must be rejected");
+        assert!(
+            err.to_string().contains("unsigned integer"),
+            "unexpected error: {err}"
+        );
     }
 
     #[test]
@@ -1057,6 +1591,51 @@ mod tests {
         assert_eq!(parsed.request_id(), Some("wf-1"));
         assert!(matches!(parsed, StdinCommand::Protocol(_)));
         Ok(())
+    }
+
+    #[test]
+    fn parse_stdin_command_surfaces_external_command_error_for_known_verb_with_wrong_field() {
+        let err = parse_stdin_command(r#"{"type":"setFilter","value":"foo"}"#)
+            .expect_err("wrong field name should fail parse");
+        let display = format!("{err:#}");
+        assert!(
+            display.contains("automation_payload_mismatch"),
+            "expected context to tag the error as automation_payload_mismatch; got: {display}"
+        );
+        assert!(
+            display.contains("\"setFilter\""),
+            "expected context to name the attempted verb; got: {display}"
+        );
+        assert!(
+            !display.contains("unknown variant `setFilter`"),
+            "must NOT fall back to SDK Message error text; got: {display}"
+        );
+    }
+
+    #[test]
+    fn parse_stdin_command_surfaces_external_command_error_for_missing_required_field() {
+        let err = parse_stdin_command(r#"{"type":"setFilter"}"#)
+            .expect_err("missing required field should fail parse");
+        let display = format!("{err:#}");
+        assert!(
+            display.contains("automation_payload_mismatch"),
+            "expected automation_payload_mismatch context; got: {display}"
+        );
+    }
+
+    #[test]
+    fn parse_stdin_command_unknown_type_still_uses_sdk_message_fallback() {
+        let err = parse_stdin_command(r#"{"type":"totallyFakeVerbXyz","foo":"bar"}"#)
+            .expect_err("unknown verb should fail parse");
+        let display = format!("{err:#}");
+        assert!(
+            !display.contains("automation_payload_mismatch"),
+            "truly unknown verbs must NOT be tagged as automation_payload_mismatch; got: {display}"
+        );
+        assert!(
+            display.contains("unknown variant"),
+            "unknown verbs should surface the Message-enum unknown-variant error; got: {display}"
+        );
     }
 
     #[test]

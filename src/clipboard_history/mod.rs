@@ -22,7 +22,7 @@
 
 mod blob_store;
 mod cache;
-mod change_detection;
+pub(crate) mod change_detection;
 mod clipboard;
 mod config;
 mod database;

@@ -1,11 +1,11 @@
 ---
 name: agentic-testing
-description: Autonomously verify code changes by building, launching Script Kit GPUI, sending stdin JSON commands, capturing screenshots, and reading logs. Run after implementing changes to confirm correctness.
+description: Verify Script Kit GPUI changes with the fastest valid proof path — warm sessions, exact targets, state receipts first, screenshots and native focus only when needed.
 ---
 
 # Agentic Testing
 
-Verify code changes by observing the running app. Build, start via named pipe, interact via stdin JSON, capture screenshots, read logs.
+Verify code changes with the fastest proof that can establish correctness. Reuse warm sessions, prefer state receipts and exact targets, and escalate to screenshots or OS-level focus only when lower-cost proof cannot answer the question.
 
 ## When to Use
 
@@ -14,6 +14,22 @@ Verify code changes by observing the running app. Build, start via named pipe, i
 - When Oracle's autonomous verification says "Run the agentic-testing skill"
 - Before marking a task as complete
 - Especially after changes to: prompts, views, keyboard handlers, ACP chat, actions dialog
+
+## Seconds-First Default
+
+Most verification runs should complete in seconds, not minutes. Default to the smallest proof tier that answers the question without stealing focus or blocking the user.
+
+1. No-runtime proof: docs, skills, source audits, or focused tests only. Do not launch the app if runtime evidence is unnecessary.
+2. State-first runtime proof: reuse a warm session and prove behavior with `getElements`, `getState`, `waitFor`, `batch`, and exact automation targets. This is the default for routing, selection, focus, popup ownership, and protocol bugs.
+3. Visual proof: capture one screenshot only when layout, styling, visibility, animation, or real-shell composition is part of the acceptance criteria.
+4. Native input and focus enforcement: use only when protocol-level and GPUI-level paths cannot exercise the real bug.
+
+Rules:
+- If your plan starts with cold start -> show -> screenshot -> log scrape, stop and look for a state-first proof.
+- Reuse an existing healthy session before starting a new one.
+- Avoid stealing OS focus unless the bug specifically involves native focus or the proof requires real keyboard or mouse delivery.
+- Prefer exact target threading and targeted receipts over reading generic global state.
+- If a non-visual proof is taking longer than about 10 seconds, redesign the proof before continuing.
 
 ## Safety Rules (MANDATORY)
 
@@ -45,14 +61,24 @@ Verify code changes by observing the running app. Build, start via named pipe, i
 
 Every verification follows the same core loop:
 
-### 1. Build
+### 1. Build Only What the Change Can Break
 ```bash
 cargo build 2>&1 | tail -5
 ```
-Must complete with `Finished`. If it fails, fix the build error first.
+Only rebuild when the touched files can invalidate the binary or helper you need to exercise.
 
-### 2. Start a Session (Preferred)
+- Docs, skills, notes, or source-audit-only changes: skip build.
+- Bun or shell harness changes with no Rust protocol changes: reuse the current debug binary if it already exists and a healthy session can start.
+- Rust or runtime changes: run `cargo build`.
+
+If you do build, it must complete with `Finished`. If it fails, fix the build error first.
+
+### 2. Reuse or Start a Session
 ```bash
+# First look for a healthy reusable session
+bun scripts/agentic/session-state.ts --list
+bash scripts/agentic/session.sh status default
+
 # Start or resume a named session — works from any shell
 # session.sh waits for the APP_READY log marker instead of sleeping
 SESSION_JSON="$(bash scripts/agentic/session.sh start default 2>/dev/null)"
@@ -70,7 +96,7 @@ fi
 The session wrapper manages the named pipe, forwarder process, and PID tracking.
 Sessions are reusable across shells — no `exec 3>` / fd 3 trick required.
 `session.sh start` means the app is stdin-ready, not necessarily capture-ready.
-Before screenshot proof, send `{"type":"show"}` and allow a short settle.
+Prefer resume over cold start. A warm session plus state-only receipts should be the default path.
 
 **Session commands:**
 ```bash
@@ -98,13 +124,15 @@ exec 3>"$PIPE"
 sleep 3
 ```
 
-### 3. Show the Window
+### 3. Show the Window Only When Needed
 ```bash
 # Session-based (any shell)
 bash scripts/agentic/session.sh send default '{"type":"show"}'
 sleep 1.5
 ```
-The app starts hidden. Always send `show` first.
+The app starts hidden. State-only proofs should usually skip this step entirely.
+
+Show the window only for screenshots, native input, or other proofs that require the real visible surface.
 
 ### 4. Interact
 Send commands via the session. Common commands:
@@ -114,11 +142,20 @@ S="bash scripts/agentic/session.sh send default"
 # Set filter text
 $S '{"type":"setFilter","text":"search term"}'
 
+# Read current state without touching focus
+bash scripts/agentic/session.sh rpc default '{"type":"getState","requestId":"s1"}' --expect stateResult
+
 # Discover visible elements (returns semantic IDs)
 bash scripts/agentic/session.sh rpc default '{"type":"getElements","requestId":"e1"}' --expect elementsResult
 
+# Discover an attached popup or detached surface directly by target
+bash scripts/agentic/session.sh rpc default '{"type":"getElements","requestId":"e2","target":{"type":"kind","kind":"actionsDialog","index":0}}' --expect elementsResult
+
 # Select element by semantic ID (from getElements response)
 bash scripts/agentic/session.sh rpc default '{"type":"batch","requestId":"b1","commands":[{"type":"selectBySemanticId","semanticId":"choice:0:apple","submit":true}]}' --expect batchResult
+
+# When supported, mutate popup state directly instead of typing through native focus
+bash scripts/agentic/session.sh rpc default '{"type":"batch","requestId":"b2","target":{"type":"kind","kind":"actionsDialog","index":0},"commands":[{"type":"setInput","text":"alias"}]}' --expect batchResult
 
 # Trigger a built-in view
 $S '{"type":"triggerBuiltin","name":"clipboard"}'
@@ -127,11 +164,14 @@ $S '{"type":"triggerBuiltin","name":"emoji"}'
 $S '{"type":"triggerBuiltin","name":"apps"}'
 $S '{"type":"triggerBuiltin","name":"file-search"}'
 
-# Simulate keys (dispatches to current view)
+# Simulate keys (dispatches to current view; not suitable for interceptor bugs)
 $S '{"type":"simulateKey","key":"enter","modifiers":[]}'
 $S '{"type":"simulateKey","key":"escape","modifiers":[]}'
 $S '{"type":"simulateKey","key":"k","modifiers":["cmd"]}'
 $S '{"type":"simulateKey","key":"w","modifiers":["cmd"]}'
+
+# Prefer GPUI event dispatch over simulateKey when you need the real key pipeline
+bash scripts/agentic/session.sh rpc default '{"type":"simulateGpuiEvent","requestId":"g1","target":{"type":"main"},"event":{"type":"keyDown","key":"down","modifiers":[]}}' --expect simulateGpuiEventResult
 
 # Type individual characters (for views with text input)
 $S '{"type":"simulateKey","key":"h","modifiers":[]}'
@@ -191,6 +231,8 @@ Cleanup is mandatory, even after failures or interrupted runs.
 | Action | Wait strategy |
 |--------|--------------|
 | App startup | `session.sh start` readiness wait; fallback 0.5s only if `ready=false` |
+| Warm session reuse | Prefer 0-1s `status` / resume over creating a fresh process |
+| State-only proof | Aim for 3-10s total; no screenshot or OS focus |
 | `show` window | 0.3s macOS focus-settling delay |
 | `setFilter` | 1s sleep or waitFor stateMatch |
 | `triggerBuiltin` (opens new view) | waitFor appropriate condition |
@@ -208,6 +250,8 @@ for macOS focus-settling (0.3s) and file I/O (1s screenshot write).
 **Rule:** Do not add a fixed `sleep 3` after `session.sh start`. The session
 wrapper is responsible for readiness. Only use the 0.5s fallback when `ready=false`.
 
+**Rule:** If a non-visual proof is trending beyond this budget, stop and redesign around `getElements`, `getState`, `waitFor`, `batch`, exact targets, or session reuse before escalating.
+
 ## Session Management
 
 Use `scripts/agentic/session.sh` instead of hand-rolling `mkfifo` + `exec 3>` in ad hoc shells.
@@ -224,6 +268,15 @@ The session wrapper uses a background forwarder process so any shell can send co
 - Check session health with `session.sh status` or `session-state.ts` before sending commands
 - Stop sessions with `session.sh stop` when done — do not leave orphan processes
 - Treat cleanup as part of the test itself: a run is incomplete until the session is stopped and verified dead
+
+## Field Notes
+
+These are practical lessons from real ACP verification runs in this repo.
+
+- If `session.sh start` reports a dead session even though the log reached `STARTUP_READY`, inspect the log before assuming the app crashed. In some debug runs the wrapper/forwarder dies while `script-kit-gpui` is still healthy. When that happens, switch to the legacy single-shell FIFO fallback so you can keep stdin open yourself.
+- `window.ts` and `macos-input.ts --ensure-focus` may fail against the debug binary because the process name is `script-kit-gpui`, not the bundled `Script Kit` app identity. If focus/capture helpers cannot find the app, use `System Events` targeting `process "script-kit-gpui"` directly.
+- For debug-only window capture, direct region screenshots via `screencapture -R<x,y,w,h>` can be more reliable than the bundle-oriented window resolver. Use runtime automation bounds or `System Events` window position/size to compute the region.
+- ACP pasted-text verification needs two deletes when the cursor is immediately after a newly inserted token: the first backspace removes the trailing space, the second removes the token atomically. Query `getAcpState` after each step so you do not misread a correct first delete as a failure.
 
 ## Screenshot Assertion (verify-shot.ts)
 
@@ -331,6 +384,46 @@ primary proof; screenshot is secondary visual confirmation.
 **Always prefer the canonical CLI over ad hoc shell sequences.** The orchestrator
 encodes the correct verification order, focus enforcement, probe resets, and
 checkpoint strategy so agents do not need to reconstruct these from scratch.
+
+## Default Surface Proof (Preferred)
+
+Use `surface-proof` as the default seconds-first proof command for an already-open product surface.
+
+```bash
+bash scripts/agentic/session.sh start default
+bun scripts/agentic/index.ts surface-proof --session default --kind main
+bun scripts/agentic/index.ts surface-proof --session default --kind promptPopup --index 0
+bun scripts/agentic/index.ts surface-proof --session default --kind acpDetached --index 0
+bash scripts/agentic/session.sh stop default
+```
+
+This path reuses a warm session, promotes the target through `automation-window.ts inspect`, returns a machine-readable proof bundle, and does not call `show` unless the proof explicitly needs a visible surface.
+
+Sample output shape:
+
+```json
+{
+  "schemaVersion": 1,
+  "recipe": "surface-proof",
+  "status": "pass",
+  "summary": "Deterministic attachedPopup proof succeeded for promptPopup",
+  "proofBundle": {
+    "schemaVersion": 2,
+    "scenario": "prompt-popup-exact-id",
+    "surfaceClass": "attachedPopup",
+    "resolvedTarget": {
+      "windowId": "promptPopup:0",
+      "windowKind": "PromptPopup"
+    },
+    "steps": [
+      { "type": "resolveTarget" },
+      { "type": "inspect" },
+      { "type": "waitFor" }
+    ],
+    "warnings": []
+  }
+}
+```
 
 ### Canonical ACP proof commands
 
@@ -543,6 +636,8 @@ See [references/recipes.md](references/recipes.md) for named verification patter
 
 - `simulateKey` does NOT go through GPUI's `intercept_keystrokes()`. Use `triggerBuiltin` for ACP Chat entry, not `simulateKey` Tab.
 - `AcpChatView` accepts single-char `simulateKey` for typing, `enter` for submit, `w`+cmd for close.
+- Attached popups like `ActionsDialog` and `PromptPopup` can expose targeted state snapshots even when they do not expose an independent GPUI key handle. Read state from the popup target first; only escalate to parent-window or native input when you must drive real key delivery.
+- `simulateGpuiEvent` is better than `simulateKey` for interceptor bugs, but `handle_unavailable` means the target has no usable runtime handle for that path. Treat that as a proof-design problem, not a cue to spam retries.
 - The app window auto-hides when focus is lost. If captures fail with "Window not found", the window was dismissed.
 - `captureWindow` filters out windows under 100x100 (tray icons).
 - Always unset API keys if you need the setup card: `unset ANTHROPIC_API_KEY`.

@@ -29,6 +29,9 @@ pub(super) fn configure_ai_window_vibrancy() {
                         // Found the AI window - configure vibrancy
                         // Disable dragging by window background to prevent titlebar interference
                         // with mouse clicks on content (e.g., setup card buttons)
+                        // SAFETY: `window` is a live `NSWindow *` from `[NSApp windows]`.
+                        // `setMovableByWindowBackground:` is an `NSWindow` BOOL setter
+                        // returning `void`; no recoverable error channel exists.
                         let _: () = msg_send![window, setMovableByWindowBackground: false];
                         let theme = crate::theme::get_cached_theme();
                         let is_dark = theme.should_use_dark_vibrancy();
@@ -42,6 +45,9 @@ pub(super) fn configure_ai_window_vibrancy() {
                         let current: u64 = msg_send![window, collectionBehavior];
                         // Clear IgnoresCycle bit, set ParticipatesInCycle and MoveToActiveSpace
                         let desired: u64 = (current & !64) | 128 | 2;
+                        // SAFETY: `setCollectionBehavior:` is an `NSWindow` setter returning
+                        // `void`; `desired` is built from the existing behavior plus documented
+                        // `NSWindowCollectionBehavior` bits.
                         let _: () = msg_send![window, setCollectionBehavior:desired];
 
                         // Log detailed breakdown of collection behavior bits
@@ -112,12 +118,19 @@ fn configure_ai_as_floating_panel() {
                         let current: u64 = msg_send![window, collectionBehavior];
                         // OR in MoveToActiveSpace (2) + FullScreenAuxiliary (256)
                         let desired: u64 = current | 2 | 256;
+                        // SAFETY: `setCollectionBehavior:` is an `NSWindow` setter returning
+                        // `void`; `desired` is built from the existing behavior plus documented
+                        // `NSWindowCollectionBehavior` bits.
                         let _: () = msg_send![window, setCollectionBehavior:desired];
 
-                        // Disable window restoration
+                        // SAFETY: `setRestorable:` is an `NSWindow` BOOL setter returning
+                        // `void`. macOS may ignore in some system-managed situations but
+                        // there is no return value to inspect.
                         let _: () = msg_send![window, setRestorable:false];
 
-                        // Disable close/hide animation for instant dismiss (NSWindowAnimationBehaviorNone = 2)
+                        // SAFETY: `setAnimationBehavior:` is an `NSWindow` setter returning
+                        // `void`. We pass `2` (`NSWindowAnimationBehaviorNone`) for instant
+                        // dismiss.
                         let _: () = msg_send![window, setAnimationBehavior: 2i64];
 
                         // ═══════════════════════════════════════════════════════════════════════════

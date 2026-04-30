@@ -77,7 +77,7 @@ fn test_get_grouped_results_selection_priority_with_frecency() {
     );
 
     // Verify the structure explicitly
-    // grouped[0] = SectionHeader("SUGGESTED")
+    // grouped[0] = SectionHeader("Suggested")
     // grouped[1] = Item(zebra-script) <- THIS should be first selection
     // grouped[2] = SectionHeader("SCRIPTS") or next type-based section
     // grouped[3+] = Other items sorted alphabetically within their sections
@@ -93,12 +93,12 @@ fn test_get_grouped_results_selection_priority_with_frecency() {
         })
         .collect();
 
-    // First 3 items should be: SUGGESTED header, frecency item, MAIN header (kit-based section)
+    // First 3 items should be: Suggested header, frecency item, Main header (kit-based section)
     // Scripts without kit_name default to "main" kit
     assert_eq!(
         &grouped_names[..3],
-        &["[SUGGESTED]", "zebra-script", "[MAIN]"],
-        "First 3 items should be: SUGGESTED header, frecency item, MAIN header. Got: {:?}",
+        &["[Suggested]", "zebra-script", "[Main]"],
+        "First 3 items should be: Suggested header, frecency item, Main header. Got: {:?}",
         grouped_names
     );
 }
@@ -172,24 +172,24 @@ fn test_get_grouped_results_no_frecency_items_in_type_sections() {
     // With default suggestions enabled and empty frecency, "Clipboard History" (which is in
     // DEFAULT_SUGGESTED_ITEMS) appears in SUGGESTED. App Launcher is not in defaults, stays in COMMANDS.
     // Expected structure:
-    // [SUGGESTED], Clipboard History (matches DEFAULT_SUGGESTED_ITEMS)
-    // [MAIN], alpha-script, zebra-script
-    // [COMMANDS], App Launcher
+    // [Suggested], Clipboard History (matches DEFAULT_SUGGESTED_ITEMS)
+    // [Main], alpha-script, zebra-script
+    // [Commands], App Launcher
     assert_eq!(
-        grouped_names[0], "[SUGGESTED]",
-        "First item should be SUGGESTED header when frecency is empty but defaults match. Got: {:?}",
+        grouped_names[0], "[Suggested]",
+        "First item should be Suggested header when frecency is empty but defaults match. Got: {:?}",
         grouped_names
     );
 
     assert_eq!(
         grouped_names,
         vec![
-            "[SUGGESTED]",
+            "[Suggested]",
             "Clipboard History",
-            "[MAIN]",
+            "[Main]",
             "alpha-script",
             "zebra-script",
-            "[COMMANDS]",
+            "[Commands]",
             "App Launcher",
         ],
         "Items matching DEFAULT_SUGGESTED_ITEMS should be in SUGGESTED, rest in type-based sections. Got: {:?}",
@@ -198,16 +198,184 @@ fn test_get_grouped_results_no_frecency_items_in_type_sections() {
 }
 
 #[test]
+fn test_get_grouped_results_prefers_last_selected_result_for_exact_query() {
+    let scripts = wrap_scripts(vec![
+        Script {
+            name: "open-alpha".to_string(),
+            path: PathBuf::from("/open-alpha.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: Some("Open the alpha flow".to_string()),
+            alias: None,
+            shortcut: None,
+            ..Default::default()
+        },
+        Script {
+            name: "open-zeta".to_string(),
+            path: PathBuf::from("/open-zeta.ts"),
+            extension: "ts".to_string(),
+            icon: None,
+            description: Some("Open the zeta flow".to_string()),
+            alias: None,
+            shortcut: None,
+            ..Default::default()
+        },
+    ]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
+    let builtins: Vec<BuiltInEntry> = vec![];
+    let apps: Vec<AppInfo> = vec![];
+    let frecency_store = FrecencyStore::new();
+
+    let (baseline_grouped, baseline_results) = get_grouped_results(
+        &scripts,
+        &scriptlets,
+        &builtins,
+        &apps,
+        &[],
+        &frecency_store,
+        "open",
+        &SuggestedConfig::default(),
+        &[],
+        None,
+    );
+    let baseline_first = baseline_grouped
+        .iter()
+        .find_map(|item| match item {
+            GroupedListItem::Item(idx) => Some(baseline_results[*idx].name().to_string()),
+            GroupedListItem::SectionHeader(_, _) => None,
+        })
+        .expect("baseline search should have a selectable result");
+    assert_eq!(baseline_first, "open-alpha");
+
+    let mut input_history = crate::input_history::InputHistory::new();
+    input_history.add_entry_with_selection("open", Some("script/main:open-zeta".to_string()));
+
+    let (grouped, results) = get_grouped_results_with_input_history(
+        &scripts,
+        &scriptlets,
+        &builtins,
+        &apps,
+        &[],
+        &frecency_store,
+        "open",
+        &SuggestedConfig::default(),
+        &[],
+        None,
+        Some(&input_history),
+    );
+
+    let remembered_first = grouped
+        .iter()
+        .find_map(|item| match item {
+            GroupedListItem::Item(idx) => Some(results[*idx].name().to_string()),
+            GroupedListItem::SectionHeader(_, _) => None,
+        })
+        .expect("remembered search should have a selectable result");
+    assert_eq!(remembered_first, "open-zeta");
+}
+
+#[test]
+fn test_get_grouped_results_prefers_last_selected_builtin_for_exact_query() {
+    use crate::builtins::{BuiltInFeature, BuiltInGroup};
+
+    let scripts = wrap_scripts(vec![]);
+    let scriptlets: Vec<Arc<Scriptlet>> = wrap_scriptlets(vec![]);
+    let builtins = vec![
+        BuiltInEntry {
+            id: "builtin/clipboard-history".to_string(),
+            name: "Clipboard History".to_string(),
+            description: "Browse clipboard history".to_string(),
+            keywords: vec!["history".to_string(), "clipboard".to_string()],
+            feature: BuiltInFeature::ClipboardHistory,
+            icon: None,
+            group: BuiltInGroup::Core,
+        },
+        BuiltInEntry {
+            id: "builtin/acp-history".to_string(),
+            name: "Conversation History".to_string(),
+            description: "Browse Agent Chat conversations".to_string(),
+            keywords: vec!["history".to_string(), "conversation".to_string()],
+            feature: BuiltInFeature::AcpHistory,
+            icon: None,
+            group: BuiltInGroup::Core,
+        },
+        BuiltInEntry {
+            id: "builtin/dictation-history".to_string(),
+            name: "Dictation History".to_string(),
+            description: "Browse saved dictations".to_string(),
+            keywords: vec!["history".to_string(), "dictation".to_string()],
+            feature: BuiltInFeature::DictationHistory,
+            icon: None,
+            group: BuiltInGroup::Core,
+        },
+    ];
+    let apps: Vec<AppInfo> = vec![];
+    let frecency_store = FrecencyStore::new();
+
+    let (baseline_grouped, baseline_results) = get_grouped_results(
+        &scripts,
+        &scriptlets,
+        &builtins,
+        &apps,
+        &[],
+        &frecency_store,
+        "history",
+        &SuggestedConfig::default(),
+        &[],
+        None,
+    );
+    let baseline_first = baseline_grouped
+        .iter()
+        .find_map(|item| match item {
+            GroupedListItem::Item(idx) => Some(baseline_results[*idx].name().to_string()),
+            GroupedListItem::SectionHeader(_, _) => None,
+        })
+        .expect("baseline builtin search should have a selectable result");
+    assert_eq!(baseline_first, "Clipboard History");
+
+    let mut input_history = crate::input_history::InputHistory::new();
+    input_history.add_entry_with_selection(
+        "history",
+        Some("builtin/dictation-history".to_string()),
+    );
+
+    let (grouped, results) = get_grouped_results_with_input_history(
+        &scripts,
+        &scriptlets,
+        &builtins,
+        &apps,
+        &[],
+        &frecency_store,
+        "history",
+        &SuggestedConfig::default(),
+        &[],
+        None,
+        Some(&input_history),
+    );
+
+    let remembered_first = grouped
+        .iter()
+        .find_map(|item| match item {
+            GroupedListItem::Item(idx) => Some(results[*idx].name().to_string()),
+            GroupedListItem::SectionHeader(_, _) => None,
+        })
+        .expect("remembered builtin search should have a selectable result");
+    assert_eq!(remembered_first, "Dictation History");
+}
+
+#[test]
 fn test_get_grouped_results_default_suggestions_for_new_users() {
     // When frecency store is empty (new user), items matching DEFAULT_SUGGESTED_ITEMS
     // should appear in the SUGGESTED section to help users discover features.
-    use crate::builtins::{BuiltInFeature, BuiltInGroup};
+    use crate::builtins::{
+        BuiltInFeature, BuiltInGroup, NotesCommandType, ScriptCommandType, UtilityCommandType,
+    };
 
-    // Create builtins that match some of the DEFAULT_SUGGESTED_ITEMS
+    // Create builtins that match DEFAULT_SUGGESTED_ITEMS plus one non-default command.
     let builtins = vec![
         BuiltInEntry {
             id: "builtin/ai-chat".to_string(),
-            name: "ACP Chat".to_string(),
+            name: "Agent Chat".to_string(),
             description: "Chat with AI assistants".to_string(),
             keywords: vec!["ai".to_string(), "chat".to_string()],
             feature: BuiltInFeature::AiChat,
@@ -215,12 +383,21 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
-            id: "builtin/notes".to_string(),
-            name: "Notes".to_string(),
-            description: "Quick notes".to_string(),
-            keywords: vec!["notes".to_string()],
-            feature: BuiltInFeature::Notes,
-            icon: Some("📝".to_string()),
+            id: "builtin/do-in-current-app".to_string(),
+            name: "Do in Current App".to_string(),
+            description: "Use the current app's menu commands or generate automation".to_string(),
+            keywords: vec!["current".to_string(), "app".to_string()],
+            feature: BuiltInFeature::UtilityCommand(UtilityCommandType::DoInCurrentApp),
+            icon: Some("target".to_string()),
+            group: BuiltInGroup::Core,
+        },
+        BuiltInEntry {
+            id: "builtin/new-script".to_string(),
+            name: "New Script".to_string(),
+            description: "Create a blank Script Kit script".to_string(),
+            keywords: vec!["new".to_string(), "script".to_string()],
+            feature: BuiltInFeature::ScriptCommand(ScriptCommandType::NewScript),
+            icon: Some("plus".to_string()),
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
@@ -230,6 +407,51 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
             keywords: vec!["clipboard".to_string()],
             feature: BuiltInFeature::ClipboardHistory,
             icon: Some("📋".to_string()),
+            group: BuiltInGroup::Core,
+        },
+        BuiltInEntry {
+            id: "builtin/open-notes".to_string(),
+            name: "Open Notes".to_string(),
+            description: "Open the Notes window".to_string(),
+            keywords: vec!["notes".to_string()],
+            feature: BuiltInFeature::NotesCommand(NotesCommandType::OpenNotes),
+            icon: Some("notebook-pen".to_string()),
+            group: BuiltInGroup::Core,
+        },
+        BuiltInEntry {
+            id: "builtin/file-search".to_string(),
+            name: "Search Files".to_string(),
+            description: "Browse directories, search files, and open results".to_string(),
+            keywords: vec!["file".to_string(), "search".to_string()],
+            feature: BuiltInFeature::FileSearch,
+            icon: Some("folder-search".to_string()),
+            group: BuiltInGroup::Core,
+        },
+        BuiltInEntry {
+            id: "builtin/browser-tabs".to_string(),
+            name: "Search Browser Tabs".to_string(),
+            description: "Search open browser tabs".to_string(),
+            keywords: vec!["browser".to_string(), "tabs".to_string()],
+            feature: BuiltInFeature::BrowserTabs,
+            icon: Some("globe".to_string()),
+            group: BuiltInGroup::Core,
+        },
+        BuiltInEntry {
+            id: "builtin/quick-terminal".to_string(),
+            name: "Quick Terminal".to_string(),
+            description: "Open a quick terminal".to_string(),
+            keywords: vec!["terminal".to_string()],
+            feature: BuiltInFeature::UtilityCommand(UtilityCommandType::QuickTerminal),
+            icon: Some("square-terminal".to_string()),
+            group: BuiltInGroup::Core,
+        },
+        BuiltInEntry {
+            id: "builtin/sdk-reference".to_string(),
+            name: "SDK Reference".to_string(),
+            description: "Browse Script Kit SDK functions".to_string(),
+            keywords: vec!["sdk".to_string(), "reference".to_string()],
+            feature: BuiltInFeature::SdkReference,
+            icon: Some("book-open".to_string()),
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
@@ -273,16 +495,21 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
         .collect();
 
     // Default suggestions should appear in order from DEFAULT_SUGGESTED_ITEMS
-    // ACP Chat, Notes, Clipboard History are in defaults (in that order)
     // Some Other Command is NOT in defaults, goes to COMMANDS
     assert_eq!(
         grouped_names,
         vec![
-            "[SUGGESTED]",
-            "ACP Chat",
-            "Notes",
+            "[Suggested]",
+            "Agent Chat",
+            "Do in Current App",
+            "New Script",
             "Clipboard History",
-            "[COMMANDS]",
+            "Open Notes",
+            "Search Files",
+            "Search Browser Tabs",
+            "Quick Terminal",
+            "SDK Reference",
+            "[Commands]",
             "Some Other Command",
         ],
         "Default suggested items should appear in SUGGESTED for new users, others in COMMANDS. Got: {:?}",
@@ -291,14 +518,34 @@ fn test_get_grouped_results_default_suggestions_for_new_users() {
 }
 
 #[test]
+fn test_default_suggested_items_match_real_builtin_catalog() {
+    let config = crate::config::BuiltInConfig::default();
+    let entries = crate::builtins::get_builtin_entries(&config);
+    let builtin_names: std::collections::HashSet<&str> =
+        entries.iter().map(|entry| entry.name.as_str()).collect();
+
+    let missing: Vec<&str> = super::grouping::DEFAULT_SUGGESTED_ITEMS
+        .iter()
+        .copied()
+        .filter(|name| !builtin_names.contains(name))
+        .collect();
+
+    assert!(
+        missing.is_empty(),
+        "DEFAULT_SUGGESTED_ITEMS must use exact built-in names. Missing: {:?}",
+        missing
+    );
+}
+
+#[test]
 fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
     // When frecency store has data, don't use default suggestions
-    use crate::builtins::{BuiltInFeature, BuiltInGroup};
+    use crate::builtins::{BuiltInFeature, BuiltInGroup, NotesCommandType};
 
     let builtins = vec![
         BuiltInEntry {
             id: "builtin/ai-chat".to_string(),
-            name: "ACP Chat".to_string(),
+            name: "Agent Chat".to_string(),
             description: "Chat with AI assistants".to_string(),
             keywords: vec!["ai".to_string()],
             feature: BuiltInFeature::AiChat,
@@ -306,12 +553,12 @@ fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
             group: BuiltInGroup::Core,
         },
         BuiltInEntry {
-            id: "builtin/notes".to_string(),
-            name: "Notes".to_string(),
-            description: "Quick notes".to_string(),
+            id: "builtin/open-notes".to_string(),
+            name: "Open Notes".to_string(),
+            description: "Open the Notes window".to_string(),
             keywords: vec!["notes".to_string()],
-            feature: BuiltInFeature::Notes,
-            icon: Some("📝".to_string()),
+            feature: BuiltInFeature::NotesCommand(NotesCommandType::OpenNotes),
+            icon: Some("notebook-pen".to_string()),
             group: BuiltInGroup::Core,
         },
     ];
@@ -327,7 +574,7 @@ fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
         uuid::Uuid::new_v4()
     ));
     let mut frecency_store = FrecencyStore::with_path(temp_path.clone());
-    frecency_store.record_use("builtin:builtin/notes"); // Record usage for Notes
+    frecency_store.record_use("builtin:builtin/open-notes"); // Record usage for Open Notes
 
     let (grouped, results) = get_grouped_results(
         &scripts,
@@ -353,11 +600,11 @@ fn test_get_grouped_results_no_default_suggestions_when_frecency_exists() {
         })
         .collect();
 
-    // With frecency data, SUGGESTED shows frecency-based items (Notes has usage)
-    // ACP Chat has no usage, goes to COMMANDS
+    // With frecency data, SUGGESTED shows frecency-based items (Open Notes has usage)
+    // Agent Chat has no usage, goes to COMMANDS
     assert_eq!(
         grouped_names,
-        vec!["[SUGGESTED]", "Notes", "[COMMANDS]", "ACP Chat",],
+        vec!["[Suggested]", "Open Notes", "[Commands]", "Agent Chat",],
         "With frecency data, should use frecency-based suggestions, not defaults. Got: {:?}",
         grouped_names
     );
@@ -446,4 +693,3 @@ fn test_get_grouped_results_items_reference_correct_indices() {
         }
     }
 }
-

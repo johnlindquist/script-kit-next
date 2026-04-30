@@ -1,5 +1,6 @@
 use crate::designs::DesignColors;
 use crate::theme::Theme;
+use crate::ui::chrome::alpha_from_opacity;
 
 /// Canonical height for prompt action buttons (Run/Actions/Save/Cancel/etc.).
 pub const BUTTON_GHOST_HEIGHT: f32 = 28.0;
@@ -22,7 +23,7 @@ pub const BUTTON_SHORTCUT_MARGIN_LEFT_PX: f32 = 4.0;
 /// Canonical button corner radius.
 pub const BUTTON_RADIUS_PX: f32 = 6.0;
 /// Light-mode hover overlay alpha for ghost/icon buttons.
-const BUTTON_HOVER_OVERLAY_ALPHA_LIGHT: u8 = 0x26;
+const BUTTON_HOVER_OVERLAY_ALPHA_LIGHT: u8 = 0x2e;
 /// Dark-mode hover overlay alpha for ghost/icon buttons.
 const BUTTON_HOVER_OVERLAY_ALPHA_DARK: u8 = 0x2e;
 
@@ -82,10 +83,9 @@ impl ButtonColors {
     /// Create ButtonColors from theme reference
     /// Uses accent.selected (yellow/gold) to match logo and selected item highlights
     pub fn from_theme(theme: &Theme) -> Self {
-        let hover_overlay = Self::overlay_with_alpha(
-            theme.colors.accent.selected_subtle,
-            Self::hover_overlay_alpha(theme.is_dark_mode()),
-        );
+        let hover_overlay_alpha = alpha_from_opacity(theme.get_opacity().hover) as u8;
+        let hover_overlay =
+            Self::overlay_with_alpha(theme.colors.accent.selected_subtle, hover_overlay_alpha);
 
         Self {
             text_color: theme.colors.accent.selected, // Yellow/gold - matches logo & highlights
@@ -103,7 +103,7 @@ impl ButtonColors {
     /// Create ButtonColors from design colors for design system support
     /// Uses the primary accent color to match the design's brand
     ///
-    /// NOTE: This defaults to dark mode hover overlay (white at 15%).
+    /// NOTE: This defaults to the shared hover affordance floor.
     /// For light mode support, use `from_design_with_theme()` instead.
     pub fn from_design(colors: &DesignColors) -> Self {
         // Default to dark mode (white hover overlay)

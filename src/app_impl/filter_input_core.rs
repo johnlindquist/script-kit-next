@@ -16,6 +16,21 @@ impl ScriptListApp {
         matches!(new_text, "~" | "/" | "@" | ">" | "?")
     }
 
+    /// Parse `raw` through the menu-syntax classifier and store the result in
+    /// [`ScriptListApp::menu_syntax_mode`]. Called from every input-change
+    /// boundary (per-keystroke `handle_filter_input_change`, programmatic
+    /// `set_filter_text_immediate`) so result grouping and execution see a
+    /// snapshot tied to the current raw input instead of racing the filter
+    /// coalescer's `computed_filter_text` field.
+    pub(crate) fn set_menu_syntax_mode_from_filter(&mut self, raw: &str) {
+        let capture_targets = crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
+        self.menu_syntax_mode =
+            crate::menu_syntax::MenuSyntaxMode::from_input_with_capture_targets(
+                raw,
+                &capture_targets,
+            );
+    }
+
     pub(crate) fn current_view_uses_shared_filter_input(&self) -> bool {
         matches!(
             self.current_view,
@@ -24,6 +39,7 @@ impl ScriptListApp {
                 | AppView::EmojiPickerView { .. }
                 | AppView::AppLauncherView { .. }
                 | AppView::WindowSwitcherView { .. }
+                | AppView::BrowserTabsView { .. }
                 | AppView::DesignGalleryView { .. }
                 | AppView::ThemeChooserView { .. }
                 | AppView::FileSearchView { .. }
@@ -32,6 +48,8 @@ impl ScriptListApp {
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::AcpHistoryView { .. }
+                | AppView::BrowserHistoryView { .. }
+                | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
         )
     }
@@ -128,12 +146,75 @@ impl ScriptListApp {
     /// Used by both the builtin "Search Files" entry (Full) and the `~`
     /// trigger from ScriptList (Mini).
     ///
-    /// The view paints immediately with an empty/loading state; results
-    /// stream in asynchronously via `restart_file_search_stream_for_query`.
+    /// Directory mini-entry from ScriptList seeds its first rows before
+    /// switching surfaces; other opens paint loading state and stream results
+    /// asynchronously via `restart_file_search_stream_for_query`.
     pub(crate) fn open_file_search_view(
         &mut self,
         query: String,
         presentation: FileSearchPresentation,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_file_search_view_with_result_transition(query, presentation, false, cx);
+    }
+
+    /// Browse within file search without blanking the current directory view
+    /// before the next directory stream has produced its first batch.
+    pub(crate) fn open_file_search_view_preserving_current_results(
+        &mut self,
+        query: String,
+        presentation: FileSearchPresentation,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_file_search_view_with_result_transition(query, presentation, true, cx);
+    }
+
+    fn seed_file_search_directory_results_for_first_paint(&mut self, query: &str) -> bool {
+        let Some(parsed) = crate::file_search::parse_directory_path(query) else {
+            return false;
+        };
+
+        let results = crate::file_search::list_directory_with_options(
+            &parsed.directory,
+            crate::file_search::DEFAULT_CACHE_LIMIT,
+            parsed.show_hidden,
+        );
+
+        if results.is_empty() {
+            tracing::info!(
+                category = "FILE_SEARCH",
+                query,
+                directory = %parsed.directory,
+                "Mini file-search first-paint seed found no directory rows"
+            );
+            return false;
+        }
+
+        self.cached_file_results = results;
+        self.file_search_current_dir = Some(parsed.directory.clone());
+        self.file_search_current_dir_show_hidden = parsed.show_hidden;
+        self.file_search_frozen_filter = None;
+        self.apply_file_search_sort_mode();
+        self.recompute_file_search_display_indices();
+        self.restore_file_search_selection_after_results_change(None);
+
+        tracing::info!(
+            category = "FILE_SEARCH",
+            query,
+            directory = %parsed.directory,
+            cached_count = self.cached_file_results.len(),
+            display_count = self.file_search_display_indices.len(),
+            "Seeded mini file-search directory rows before first paint"
+        );
+
+        true
+    }
+
+    fn open_file_search_view_with_result_transition(
+        &mut self,
+        query: String,
+        presentation: FileSearchPresentation,
+        preserve_current_results_until_first_batch: bool,
         cx: &mut Context<Self>,
     ) {
         // Preserve sort mode when already inside file search (e.g. browsing
@@ -145,6 +226,7 @@ impl ScriptListApp {
             %query,
             ?presentation,
             preserve_sort_mode,
+            preserve_current_results_until_first_batch,
             "Opening file search view"
         );
 
@@ -163,24 +245,42 @@ impl ScriptListApp {
         self.pending_focus = Some(FocusTarget::MainFilter);
         self.focused_input = FocusedInput::MainFilter;
 
-        self.cached_file_results.clear();
-        self.file_search_display_indices.clear();
-        self.file_search_current_dir = None;
-        self.file_search_frozen_filter = None;
-        self.file_search_selection_mode = FileSearchSelectionMode::AutoFirst;
         if !preserve_sort_mode {
             self.file_search_sort_mode = crate::actions::FileSearchSortMode::default();
         }
 
-        // Full view still needs its split-view resize immediately.
-        // Mini opens small and grows only as results arrive.
-        Self::resize_file_search_window_for_presentation(presentation, 0);
+        let stabilize_fresh_mini_directory_entry = !preserve_current_results_until_first_batch
+            && !preserve_sort_mode
+            && presentation == FileSearchPresentation::Mini;
+        let seeded_initial_results = stabilize_fresh_mini_directory_entry
+            && self.seed_file_search_directory_results_for_first_paint(&query);
 
+        if !preserve_current_results_until_first_batch && !seeded_initial_results {
+            self.cached_file_results.clear();
+            self.file_search_display_indices.clear();
+            self.file_search_current_dir = None;
+            self.file_search_current_dir_show_hidden = false;
+        }
+        self.file_search_frozen_filter = None;
+        self.file_search_selection_mode = FileSearchSelectionMode::AutoFirst;
+
+        // Fresh opens paint their empty/loading state immediately. Internal
+        // directory browsing keeps the previous rows and size until the next
+        // stream's first batch replaces them.
+        if !preserve_current_results_until_first_batch {
+            Self::resize_file_search_window_for_presentation(
+                presentation,
+                self.file_search_display_indices.len(),
+            );
+        }
+
+        let preserve_stream_results =
+            preserve_current_results_until_first_batch || seeded_initial_results;
         self.restart_file_search_stream_for_query(
             query,
             presentation,
             None,
-            false,
+            preserve_stream_results,
             cx,
         );
     }
@@ -200,10 +300,12 @@ mod tests {
             "AppView::EmojiPickerView",
             "AppView::AppLauncherView",
             "AppView::WindowSwitcherView",
+            "AppView::BrowserTabsView",
             "AppView::DesignGalleryView",
             "AppView::ThemeChooserView",
             "AppView::FileSearchView",
             "AppView::SettingsView",
+            "AppView::BrowserHistoryView",
         ];
 
         for view in required_views {
@@ -218,7 +320,9 @@ mod tests {
     #[test]
     fn test_should_enter_file_search_from_script_list() {
         use super::ScriptListApp;
-        assert!(ScriptListApp::should_enter_file_search_from_script_list("~"));
+        assert!(ScriptListApp::should_enter_file_search_from_script_list(
+            "~"
+        ));
         assert!(ScriptListApp::should_enter_file_search_from_script_list(
             "~/src"
         ));
@@ -236,10 +340,7 @@ mod tests {
     #[test]
     fn test_normalize_mini_file_search_query() {
         use super::ScriptListApp;
-        assert_eq!(
-            ScriptListApp::normalize_mini_file_search_query("~"),
-            "~/"
-        );
+        assert_eq!(ScriptListApp::normalize_mini_file_search_query("~"), "~/");
         assert_eq!(
             ScriptListApp::normalize_mini_file_search_query("~/src"),
             "~/src"
@@ -307,6 +408,42 @@ mod tests {
             assert!(
                 !ScriptListApp::is_transient_script_list_trigger(query),
                 "expected '{query}' to remain a real query"
+            );
+        }
+    }
+
+    #[test]
+    fn test_power_syntax_prefixes_do_not_route_to_special_surfaces() {
+        use super::ScriptListApp;
+
+        for query in [
+            ":type:script shortcut:true",
+            ":",
+            ";todo Renew passport tomorrow",
+            "+",
+            "+xyz unknown target",
+            "todo: Renew passport tomorrow",
+            "cal: Lunch next friday",
+            ">deploy -- prod",
+            "!",
+            "#finance search",
+        ] {
+            assert_eq!(
+                ScriptListApp::special_entry_from_script_list_filter(query),
+                None,
+                "power-user syntax '{query}' must not route through special_entry_from_script_list_filter"
+            );
+        }
+    }
+
+    #[test]
+    fn test_power_syntax_prefixes_are_not_transient_triggers() {
+        use super::ScriptListApp;
+
+        for prefix in [":", "+", "!", "#"] {
+            assert!(
+                !ScriptListApp::is_transient_script_list_trigger(prefix),
+                "power-user prefix '{prefix}' must not be classified as a transient trigger"
             );
         }
     }

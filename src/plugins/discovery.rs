@@ -7,9 +7,9 @@ use tracing::info;
 use super::manifest::read_plugin_manifest;
 use super::types::{PluginIndex, PluginRoot};
 
-/// Return the container directory for all plugins: `<kit_path>/kit/`.
+/// Return the container directory for all plugins: `<kit_path>/plugins/`.
 pub fn plugins_container_dir() -> PathBuf {
-    crate::setup::get_kit_path().join("kit")
+    crate::setup::plugins_path()
 }
 
 /// Return the scripts directory for a given plugin.
@@ -77,7 +77,7 @@ pub fn discover_plugins_in(container: &Path) -> Result<PluginIndex> {
     Ok(PluginIndex { plugins })
 }
 
-/// Discover all plugins under the default container (`<kit_path>/kit/`).
+/// Discover all plugins under the default container (`<kit_path>/plugins/`).
 pub fn discover_plugins() -> Result<PluginIndex> {
     discover_plugins_in(&plugins_container_dir())
 }

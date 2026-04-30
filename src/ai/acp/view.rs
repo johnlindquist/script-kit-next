@@ -47,17 +47,30 @@ pub(crate) struct AcpMentionSession {
     trigger: ContextPickerTrigger,
     /// Character range of the trigger+query in the input text.
     trigger_range: std::ops::Range<usize>,
+    /// Query text typed after the trigger.
+    query: String,
     /// Currently highlighted row index.
     pub(crate) selected_index: usize,
+    /// First visible row in the popup list.
+    visible_start: usize,
     /// Ranked picker items for the current query.
     pub(crate) items: Vec<ContextPickerItem>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AcpDismissedMentionTrigger {
+    trigger: ContextPickerTrigger,
+    trigger_range: std::ops::Range<usize>,
+    query: String,
+    cursor: usize,
+}
+
 #[derive(Debug, Clone)]
-struct AcpPortalEditSession {
-    portal_kind: crate::ai::window::context_picker::types::PortalKind,
-    mention_range: std::ops::Range<usize>,
-    original_token: String,
+struct AcpPendingPortalSession {
+    contract: crate::ai::acp::portal_contract::AcpPortalLaunchContract,
+    composer_text: String,
+    composer_cursor: usize,
+    state: crate::ai::acp::portal_contract::AcpPortalSessionState,
 }
 
 #[derive(Debug, Clone)]
@@ -311,9 +324,22 @@ pub(crate) enum AcpChatSession {
 /// setup card so the next ACP open path can consume them ahead of
 /// fallback preference loading.
 #[derive(Debug, Clone)]
+pub(crate) struct AcpRetryDraftState {
+    pub input_text: String,
+    pub input_cursor: usize,
+    pub pending_context_parts: Vec<crate::ai::message_parts::AiContextPart>,
+    pub pasted_text_tokens: Vec<crate::pasted_text::PastedTextToken>,
+    pub pasted_image_tokens: Vec<crate::pasted_image::PastedImageToken>,
+    pub typed_mention_aliases:
+        std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
+    pub inline_owned_context_tokens: HashSet<String>,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct AcpRetryRequest {
     pub preferred_agent_id: Option<String>,
     pub launch_requirements: super::preflight::AcpLaunchRequirements,
+    pub draft_state: Option<AcpRetryDraftState>,
 }
 
 impl AcpRetryRequest {
@@ -324,6 +350,7 @@ impl AcpRetryRequest {
                 .as_ref()
                 .map(|agent| agent.id.to_string()),
             launch_requirements: setup.launch_requirements,
+            draft_state: None,
         }
     }
 }
@@ -347,6 +374,34 @@ pub(crate) struct AcpHistoryMenuState {
     pub(crate) selected_index: usize,
     pub(crate) query: String,
     pub(crate) hits: Vec<super::history::AcpHistorySearchHit>,
+}
+
+/// Parsed `SCRIPT_READY path=... validated=true` receipt from assistant output.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ScriptReadyReceipt {
+    pub path: std::path::PathBuf,
+    pub validated: bool,
+}
+
+/// Parse the last `SCRIPT_READY path=<path> validated=true` line from text.
+pub(crate) fn parse_script_ready_receipt(text: &str) -> Option<ScriptReadyReceipt> {
+    let line = text
+        .lines()
+        .rev()
+        .find(|line| line.trim_start().starts_with("SCRIPT_READY "))?;
+    let mut path: Option<std::path::PathBuf> = None;
+    let mut validated = false;
+    for token in line.split_whitespace().skip(1) {
+        if let Some(rest) = token.strip_prefix("path=") {
+            path = Some(std::path::PathBuf::from(rest));
+        } else if token == "validated=true" {
+            validated = true;
+        }
+    }
+    Some(ScriptReadyReceipt {
+        path: path?,
+        validated,
+    })
 }
 
 /// GPUI view entity wrapping an `AcpThread` for the Tab AI surface.
@@ -386,6 +441,8 @@ pub(crate) struct AcpChatView {
     _slash_discovery_task: Task<()>,
     /// Active @-mention picker session (None = picker hidden).
     pub(crate) mention_session: Option<AcpMentionSession>,
+    /// Exact active trigger dismissed by pointer/escape while the input text remains unchanged.
+    dismissed_mention_trigger: Option<AcpDismissedMentionTrigger>,
     /// Cached parent window metadata for the detached picker popup.
     mention_popup_parent_window: Option<AcpMentionPopupParentWindow>,
     /// Canonical inline tokens that currently own their attached context part.
@@ -397,6 +454,10 @@ pub(crate) struct AcpChatView {
     /// to full `AiContextPart` values for resolution and sync.
     typed_mention_aliases:
         std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
+    /// Large pasted blocks collapsed into inline tokens for compact composer display.
+    pasted_text_tokens: Vec<crate::pasted_text::PastedTextToken>,
+    /// Clipboard images collapsed into inline pills while remaining attached as files.
+    pasted_image_tokens: Vec<crate::pasted_image::PastedImageToken>,
     /// Agent picker overlay state for setup mode (None = hidden).
     setup_agent_picker: Option<AcpSetupAgentPickerState>,
     /// Most recently accepted picker item (for telemetry/testing).
@@ -412,17 +473,23 @@ pub(crate) struct AcpChatView {
     on_toggle_actions: Option<AcpFooterActionHandler>,
     /// Host-owned footer callback for closing the ACP surface.
     on_close_requested: Option<AcpFooterActionHandler>,
+    /// Host-owned shortcut callback for closing the host window from ACP.
+    on_close_window_requested: Option<AcpFooterActionHandler>,
     /// Host-owned callback for opening the dedicated history command surface.
     on_open_history_command: Option<AcpFooterActionHandler>,
     /// Host-owned callback for opening a full built-in view as an attachment portal.
     on_open_portal: Option<AcpPortalHandler>,
-    /// Stashed query text for the next portal open, consumed once by the
-    /// portal host to prefilter the selected browser.
-    pending_portal_query: Option<(crate::ai::window::context_picker::types::PortalKind, String)>,
-    /// Replacement session for reopening an existing inline mention through
-    /// its backing portal and swapping the token in place on return.
-    pending_portal_edit: Option<AcpPortalEditSession>,
+    /// Transactional session for the currently staged attachment portal open.
+    pending_portal_session: Option<AcpPendingPortalSession>,
     footer_host: AcpFooterHost,
+    /// Validated script path from a `SCRIPT_READY` receipt in assistant output.
+    /// When `Some`, the footer Run button dispatches this path instead of
+    /// the generic `execute_selected`.
+    ready_script_path: Option<std::path::PathBuf>,
+    /// Pending slash-command to prime on first picker refresh (e.g. "new-script").
+    pending_slash_prime: Option<String>,
+    /// True while a deferred context capture is in-flight, driving the footer loading dot.
+    context_capture_pending: bool,
     /// Portal kinds the host allows this ACP surface to open.
     ///
     /// Defaults to all kinds. Notes-hosted ACP narrows this to only
@@ -477,7 +544,9 @@ impl AcpChatView {
         vec![
             PortalKind::AcpHistory,
             PortalKind::FileSearch,
+            PortalKind::BrowserHistory,
             PortalKind::ClipboardHistory,
+            PortalKind::DictationHistory,
             PortalKind::ScriptSearch,
             PortalKind::ScriptletSearch,
             PortalKind::SkillSearch,
@@ -511,8 +580,19 @@ impl AcpChatView {
             return;
         }
 
+        let cancel_portal = self.has_pending_history_portal_session();
         self.mark_history_popup_closed(cx);
         self.sync_history_popup_window_from_cached_parent(cx);
+        if cancel_portal {
+            tracing::info!(
+                target: "script_kit::acp",
+                event = "acp_history_portal_dismissed_via_popup",
+            );
+            let _ = self.cancel_pending_portal_session(
+                crate::ai::window::context_picker::types::PortalKind::AcpHistory,
+                cx,
+            );
+        }
     }
 
     pub(crate) fn dismiss_history_popup_from_window(
@@ -524,6 +604,7 @@ impl AcpChatView {
             return;
         }
 
+        let cancel_portal = self.has_pending_history_portal_session();
         tracing::info!(
             target: "script_kit::tab_ai",
             event = "acp_history_popup_closed",
@@ -531,6 +612,17 @@ impl AcpChatView {
             "Closed ACP history popup from detached window lifecycle"
         );
         self.mark_history_popup_closed(cx);
+        if cancel_portal {
+            tracing::info!(
+                target: "script_kit::acp",
+                event = "acp_history_portal_dismissed_from_window",
+                reason,
+            );
+            let _ = self.cancel_pending_portal_session(
+                crate::ai::window::context_picker::types::PortalKind::AcpHistory,
+                cx,
+            );
+        }
     }
 
     fn char_to_byte_offset(text: &str, char_idx: usize) -> usize {
@@ -608,6 +700,7 @@ impl AcpChatView {
             crate::ai::acp::picker_popup::AcpMentionPopupSnapshot {
                 trigger: session.trigger,
                 selected_index: session.selected_index,
+                visible_start: session.visible_start,
                 items: session.items,
                 width,
             },
@@ -628,6 +721,13 @@ impl AcpChatView {
         callback: impl Fn(&mut Window, &mut App) + 'static,
     ) {
         self.on_close_requested = Some(std::sync::Arc::new(callback));
+    }
+
+    pub(crate) fn set_on_close_window_requested(
+        &mut self,
+        callback: impl Fn(&mut Window, &mut App) + 'static,
+    ) {
+        self.on_close_window_requested = Some(std::sync::Arc::new(callback));
     }
 
     pub(crate) fn set_on_open_portal(
@@ -654,20 +754,26 @@ impl AcpChatView {
     }
 
     fn footer_snapshot(&self, cx: &App) -> AcpFooterSnapshot {
-        use crate::ai::acp::thread::AcpThreadStatus;
-
         let thread = self.live_thread().read(cx);
-        let dot_status = match thread.status {
-            AcpThreadStatus::Streaming => crate::footer_popup::FooterDotStatus::Streaming,
-            AcpThreadStatus::WaitingForPermission => {
-                crate::footer_popup::FooterDotStatus::WaitingForPermission
-            }
-            AcpThreadStatus::Error => crate::footer_popup::FooterDotStatus::Error,
-            AcpThreadStatus::Idle => crate::footer_popup::FooterDotStatus::Idle,
-        };
         AcpFooterSnapshot {
-            dot_status,
+            dot_status: self.footer_dot_status(cx),
             model_display: thread.selected_model_display().to_string(),
+        }
+    }
+
+    pub(crate) fn footer_dot_status(&self, cx: &App) -> crate::footer_popup::FooterDotStatus {
+        use crate::ai::acp::thread::AcpThreadStatus;
+        use crate::footer_popup::FooterDotStatus;
+
+        if self.context_capture_pending {
+            return FooterDotStatus::Streaming;
+        }
+
+        match self.live_thread().read(cx).status {
+            AcpThreadStatus::Streaming => FooterDotStatus::Streaming,
+            AcpThreadStatus::WaitingForPermission => FooterDotStatus::WaitingForPermission,
+            AcpThreadStatus::Error => FooterDotStatus::Error,
+            AcpThreadStatus::Idle => FooterDotStatus::Idle,
         }
     }
 
@@ -811,7 +917,6 @@ impl AcpChatView {
         let actions_selected = crate::actions::is_actions_window_open();
 
         let run_view = weak_view.clone();
-        let ai_view = weak_view.clone();
         let actions_view = weak_view.clone();
 
         div()
@@ -852,15 +957,6 @@ impl AcpChatView {
                             });
                         }
                     }),
-                    crate::components::SelectableHint::new(
-                        "⌘↵ AI",
-                        move |_event, window, cx| {
-                            if let Some(entity) = ai_view.upgrade() {
-                                let focus_handle = entity.read(cx).focus_handle(cx);
-                                window.focus(&focus_handle, cx);
-                            }
-                        },
-                    ),
                     crate::components::SelectableHint::new("⌘K Actions", move |_, window, cx| {
                         if let Some(entity) = actions_view.upgrade() {
                             entity.update(cx, |chat, cx| {
@@ -925,11 +1021,205 @@ impl AcpChatView {
         self.typed_mention_aliases.insert(token, part);
     }
 
+    pub(crate) fn register_inline_owned_context_part(
+        &mut self,
+        token: String,
+        part: crate::ai::message_parts::AiContextPart,
+    ) {
+        if let crate::ai::message_parts::AiContextPart::TextBlock {
+            label,
+            source,
+            text,
+            ..
+        } = &part
+        {
+            if source.starts_with("clipboard://pasted-text/")
+                && !self
+                    .pasted_text_tokens
+                    .iter()
+                    .any(|existing| existing.token == token)
+            {
+                self.pasted_text_tokens
+                    .push(crate::pasted_text::PastedTextToken {
+                        token: token.clone(),
+                        label: label.clone(),
+                        text: text.clone(),
+                    });
+            }
+        }
+
+        if let crate::ai::message_parts::AiContextPart::FilePath { path, label } = &part {
+            if crate::pasted_image::label_looks_like_pasted_image(label)
+                && !self
+                    .pasted_image_tokens
+                    .iter()
+                    .any(|existing| existing.token == token)
+            {
+                self.pasted_image_tokens
+                    .push(crate::pasted_image::PastedImageToken {
+                        token: token.clone(),
+                        label: label.clone(),
+                        path: path.clone(),
+                    });
+            }
+        }
+
+        self.register_typed_alias(token.clone(), part);
+        self.register_inline_owned_token(token);
+    }
+
     /// Read-only access to the typed mention alias registry.
     pub(crate) fn typed_aliases(
         &self,
     ) -> &std::collections::HashMap<String, crate::ai::message_parts::AiContextPart> {
         &self.typed_mention_aliases
+    }
+
+    fn sync_pasted_clipboard_tokens(&mut self, cx: &App) {
+        let text = self.live_thread().read(cx).input.text().to_string();
+        crate::pasted_text::sync_pasted_text_tokens(&mut self.pasted_text_tokens, &text);
+        crate::pasted_image::sync_pasted_image_tokens(&mut self.pasted_image_tokens, &text);
+        self.typed_mention_aliases
+            .retain(|token, _| text.contains(token));
+    }
+
+    fn pasted_text_pill_ranges(
+        &self,
+        input_text: &str,
+    ) -> Vec<crate::components::text_input::TextInlinePillRange> {
+        let theme = crate::theme::get_cached_theme();
+        crate::pasted_text::token_ranges(input_text, &self.pasted_text_tokens)
+            .iter()
+            .map(|pill| crate::components::text_input::TextInlinePillRange {
+                start: pill.range.start,
+                end: pill.range.end,
+                label: pill.label.clone(),
+                text_color: theme.colors.text.primary,
+                background_color: theme.colors.accent.selected_subtle,
+                border_color: theme.colors.ui.border,
+            })
+            .collect()
+    }
+
+    fn pasted_image_pill_ranges(
+        &self,
+        input_text: &str,
+    ) -> Vec<crate::components::text_input::TextInlinePillRange> {
+        let theme = crate::theme::get_cached_theme();
+        crate::pasted_image::token_ranges(input_text, &self.pasted_image_tokens)
+            .iter()
+            .map(|pill| crate::components::text_input::TextInlinePillRange {
+                start: pill.range.start,
+                end: pill.range.end,
+                label: pill.label.clone(),
+                text_color: theme.colors.text.primary,
+                background_color: theme.colors.accent.selected_subtle,
+                border_color: theme.colors.ui.border,
+            })
+            .collect()
+    }
+
+    fn paste_image_from_clipboard(&mut self, cx: &mut Context<Self>) -> bool {
+        use crate::prompts::chat::MAX_IMAGE_BYTES;
+        use base64::Engine as _;
+
+        let Ok(mut clipboard) = arboard::Clipboard::new() else {
+            return false;
+        };
+        let Ok(image_data) = clipboard.get_image() else {
+            return false;
+        };
+
+        let Ok(encoded) = crate::clipboard_history::encode_image_as_png(&image_data) else {
+            return false;
+        };
+        let base64_data = encoded.strip_prefix("png:").unwrap_or(&encoded);
+        let Ok(png_bytes) = base64::engine::general_purpose::STANDARD.decode(base64_data) else {
+            return false;
+        };
+
+        if png_bytes.len() > MAX_IMAGE_BYTES {
+            tracing::warn!(
+                target: "script_kit::tab_ai",
+                event = "acp_pasted_image_rejected_too_large",
+                size_bytes = png_bytes.len(),
+                max_bytes = MAX_IMAGE_BYTES,
+            );
+            return false;
+        }
+
+        let Ok(path) = crate::pasted_image::write_png_bytes_to_temp_file(&png_bytes) else {
+            return false;
+        };
+        let prepared = crate::pasted_image::prepare_pasted_image(&path, &self.pasted_image_tokens);
+        let token = prepared.token.clone();
+        let insertion_text = prepared.insertion_text;
+
+        self.live_thread().update(cx, move |thread, cx| {
+            thread.input.insert_str(&insertion_text);
+            cx.notify();
+        });
+
+        let part = crate::ai::message_parts::AiContextPart::FilePath {
+            path,
+            label: token.label.clone(),
+        };
+        self.pasted_image_tokens.push(token.clone());
+        self.typed_mention_aliases.insert(token.token, part);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_clipboard_image_pasted",
+            label = %token.label,
+            width = image_data.width,
+            height = image_data.height,
+            size_bytes = png_bytes.len(),
+        );
+        self.sync_inline_mentions(cx);
+
+        true
+    }
+
+    pub(crate) fn paste_text_from_clipboard(&mut self, cx: &mut Context<Self>) -> bool {
+        let Ok(mut clipboard) = arboard::Clipboard::new() else {
+            return false;
+        };
+        let Ok(text) = clipboard.get_text() else {
+            return false;
+        };
+        let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+        if normalized.is_empty() {
+            return false;
+        }
+
+        let prepared =
+            crate::pasted_text::prepare_pasted_text(&normalized, &self.pasted_text_tokens);
+        let token = prepared.token.clone();
+        let insertion_text = prepared.insertion_text;
+
+        self.live_thread().update(cx, move |thread, cx| {
+            thread.input.insert_str(&insertion_text);
+            cx.notify();
+        });
+
+        if let Some(token) = token {
+            let part = crate::ai::message_parts::AiContextPart::TextBlock {
+                label: token.label.clone(),
+                source: format!(
+                    "clipboard://pasted-text/{}",
+                    self.pasted_text_tokens.len() + 1
+                ),
+                text: normalized,
+                mime_type: Some("text/plain".to_string()),
+            };
+            self.pasted_text_tokens.push(token.clone());
+            self.typed_mention_aliases.insert(token.token, part);
+        } else {
+            self.sync_pasted_clipboard_tokens(cx);
+        }
+
+        self.sync_inline_mentions(cx);
+
+        true
     }
 
     /// Expand typed display tokens in the input text back to full paths/URIs
@@ -1037,6 +1327,36 @@ impl AcpChatView {
         }
     }
 
+    fn reset_agent_chat_zoom(&mut self, cx: &mut Context<Self>) {
+        let mut theme = crate::theme::get_cached_theme();
+        let defaults = crate::theme::FontConfig::default();
+        let mut fonts = theme.fonts.clone().unwrap_or_default();
+        fonts.ui_size = defaults.ui_size;
+        fonts.mono_size = defaults.mono_size;
+        theme.fonts = Some(fonts);
+
+        match crate::theme::service::persist_theme_and_sync_all_windows(
+            cx,
+            &theme,
+            "acp_cmd_0_reset_agent_chat_zoom",
+        ) {
+            Ok(_) => {
+                tracing::info!(
+                    target: "script_kit::keyboard",
+                    event = "acp_cmd_0_reset_agent_chat_zoom",
+                );
+                cx.notify();
+            }
+            Err(error) => {
+                tracing::warn!(
+                    target: "script_kit::keyboard",
+                    event = "acp_cmd_0_reset_agent_chat_zoom_failed",
+                    error = %error,
+                );
+            }
+        }
+    }
+
     fn trigger_close_requested(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(callback) = self.on_close_requested.clone() {
             Self::spawn_footer_callback(callback, window, cx);
@@ -1046,6 +1366,14 @@ impl AcpChatView {
                 event = "acp_footer_close_no_callback",
                 "ACP footer close click dropped because no host callback was installed"
             );
+        }
+    }
+
+    fn trigger_close_window_requested(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(callback) = self.on_close_window_requested.clone() {
+            Self::spawn_footer_callback(callback, window, cx);
+        } else {
+            self.trigger_close_requested(window, cx);
         }
     }
 
@@ -1065,8 +1393,49 @@ impl AcpChatView {
         self.mention_session = None;
         self.history_menu = None;
         self.setup_agent_picker = None;
-        self.pending_portal_query = None;
-        self.pending_portal_edit = None;
+        // Clear a bare `@` / `/` trigger left over from a launcher-initiated
+        // transient entry. Without this, the thread-change observer
+        // registered at `Self::new` can re-fire on a later notify (agent
+        // preflight, model discovery, etc.), see the lingering trigger
+        // character still in the composer, and pop the mention/slash
+        // picker back open on top of the now-visible main menu.
+        if let AcpChatSession::Live(thread) = &self.session {
+            let text = thread.read(cx).input.text().to_string();
+            if text == "@" || text == "/" {
+                thread.update(cx, |thread, cx| {
+                    thread.input.set_text(String::new());
+                    thread.input.set_cursor(0);
+                    cx.notify();
+                });
+            }
+        }
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn prepare_for_attachment_portal_open(&mut self, cx: &mut Context<Self>) {
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+        self.permission_options_open = false;
+        self.mention_session = None;
+        self.history_menu = None;
+        self.setup_agent_picker = None;
+
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "acp_attachment_portal_prepare",
+        );
+
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    pub(crate) fn resume_after_attachment_portal_close(&mut self, cx: &mut Context<Self>) {
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "acp_attachment_portal_resume",
+        );
+
         self.sync_acp_popup_windows_from_cached_parent(cx);
         cx.notify();
     }
@@ -1352,6 +1721,29 @@ impl AcpChatView {
     ) {
         self.history_menu = None;
         self.sync_history_popup_window_from_cached_parent(cx);
+        let had_pending_history_portal = self.has_pending_history_portal_session();
+        if had_pending_history_portal {
+            if let Err(error) = self.attach_history_session(
+                &entry.session_id,
+                super::history_attachment::AcpHistoryAttachMode::Summary,
+                cx,
+            ) {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_history_popup_attach_failed",
+                    session_id = %entry.session_id,
+                    mode = "summary",
+                    error = %error,
+                );
+                let _ = self.cancel_pending_portal_session(
+                    crate::ai::window::context_picker::types::PortalKind::AcpHistory,
+                    cx,
+                );
+                return;
+            } else {
+                return;
+            }
+        }
         if let Some(conv) = super::history::load_conversation(&entry.session_id) {
             self.live_thread().update(cx, |thread, cx| {
                 thread.load_saved_messages(&conv.messages, cx);
@@ -1476,6 +1868,27 @@ impl AcpChatView {
         cx.notify();
     }
 
+    fn has_pending_history_portal_session(&self) -> bool {
+        matches!(
+            self.pending_portal_session.as_ref(),
+            Some(session)
+                if session.contract.portal_kind
+                    == crate::ai::window::context_picker::types::PortalKind::AcpHistory
+        )
+    }
+
+    fn build_history_attachment_part(
+        &self,
+        session_id: &str,
+        mode: super::history_attachment::AcpHistoryAttachMode,
+    ) -> anyhow::Result<AiContextPart> {
+        let (path, label) = super::history_attachment::write_history_attachment(session_id, mode)?;
+        Ok(AiContextPart::FilePath {
+            path: path.to_string_lossy().to_string(),
+            label,
+        })
+    }
+
     /// Attach a prior conversation as a context chip via the existing file attachment path.
     pub(crate) fn attach_history_session(
         &mut self,
@@ -1483,17 +1896,25 @@ impl AcpChatView {
         mode: super::history_attachment::AcpHistoryAttachMode,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
-        let (path, label) = super::history_attachment::write_history_attachment(session_id, mode)?;
-        let display_path = path.to_string_lossy().to_string();
+        let part = self.build_history_attachment_part(session_id, mode)?;
+        let (display_path, label) = match &part {
+            AiContextPart::FilePath { path, label } => (path.clone(), label.clone()),
+            _ => unreachable!("history attachments must be file-backed"),
+        };
+
+        if self.has_pending_history_portal_session() {
+            tracing::info!(
+                target: "script_kit::acp",
+                event = "acp_history_portal_selection_attached_via_contract",
+                session_id = %session_id,
+                mode = ?mode,
+            );
+            self.attach_portal_part(part, cx);
+            return Ok(());
+        }
 
         self.live_thread().update(cx, |thread, cx| {
-            thread.add_context_part(
-                AiContextPart::FilePath {
-                    path: display_path.clone(),
-                    label: label.clone(),
-                },
-                cx,
-            );
+            thread.add_context_part(part.clone(), cx);
         });
 
         tracing::info!(
@@ -1509,25 +1930,22 @@ impl AcpChatView {
         Ok(())
     }
 
-    /// Take the pending portal query for `kind` (consumed once by the host).
-    pub(crate) fn take_pending_portal_query(
-        &mut self,
+    /// Read the staged portal query for `kind`.
+    pub(crate) fn portal_query_for(
+        &self,
         kind: crate::ai::window::context_picker::types::PortalKind,
     ) -> Option<String> {
-        let pending = self.pending_portal_query.take()?;
-        if pending.0 == kind {
-            Some(pending.1)
-        } else {
-            self.pending_portal_query = Some(pending);
-            None
-        }
+        self.pending_portal_session
+            .as_ref()
+            .filter(|session| session.contract.portal_kind == kind)
+            .map(|session| {
+                crate::ai::acp::portal_contract::picker_portal_query(kind, &session.contract.query)
+            })
     }
 
     /// Backward-compatible helper for the ACP history host flow.
     pub(crate) fn take_pending_history_portal_query(&mut self) -> Option<String> {
-        self.take_pending_portal_query(
-            crate::ai::window::context_picker::types::PortalKind::AcpHistory,
-        )
+        self.portal_query_for(crate::ai::window::context_picker::types::PortalKind::AcpHistory)
     }
 
     /// Open the history popup pre-seeded with search hits from the portal.
@@ -1678,10 +2096,7 @@ impl AcpChatView {
             return true;
         }
 
-        if self.mention_session.is_some() {
-            self.mention_session = None;
-            self.sync_mention_popup_window_from_cached_parent(cx);
-            cx.notify();
+        if self.dismiss_mention_picker(cx) {
             return true;
         }
 
@@ -1690,11 +2105,65 @@ impl AcpChatView {
             return true;
         }
 
+        if self.attach_menu_open {
+            self.attach_menu_open = false;
+            cx.notify();
+            return true;
+        }
+
         false
     }
 
+    /// Cancel an active ACP turn from an Escape shortcut.
+    ///
+    /// Returns true when Escape was consumed by cancellation. Host-level
+    /// interceptors call this before falling back to "return to main menu",
+    /// because focused child routing is not guaranteed for every Escape path.
+    pub(crate) fn cancel_streaming_from_escape(&mut self, cx: &mut Context<Self>) -> bool {
+        let is_streaming = matches!(
+            self.live_thread().read(cx).status,
+            AcpThreadStatus::Streaming
+        );
+        if !is_streaming {
+            return false;
+        }
+
+        tracing::info!(
+            target: "script_kit::keyboard",
+            event = "acp_escape_cancel_streaming_requested",
+        );
+        self.live_thread()
+            .update(cx, |thread, cx| thread.cancel_streaming(cx));
+        true
+    }
+
     pub(crate) fn has_escape_dismissible_popup(&self) -> bool {
-        self.model_selector_open || self.mention_session.is_some() || self.history_menu.is_some()
+        self.model_selector_open
+            || self.mention_session.is_some()
+            || self.history_menu.is_some()
+            || self.attach_menu_open
+    }
+
+    pub(crate) fn dismiss_mention_picker(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(session) = self.mention_session.take() else {
+            return false;
+        };
+        let cursor = self.live_thread().read(cx).input.cursor();
+        self.dismissed_mention_trigger = Some(AcpDismissedMentionTrigger {
+            trigger: session.trigger,
+            trigger_range: session.trigger_range.clone(),
+            query: session.query.clone(),
+            cursor,
+        });
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_mention_picker_dismissed",
+            trigger = ?session.trigger,
+            query = %session.query,
+        );
+        self.sync_mention_popup_window_from_cached_parent(cx);
+        cx.notify();
+        true
     }
 
     /// Access the live thread entity, if in live mode.
@@ -1708,6 +2177,41 @@ impl AcpChatView {
     /// Whether this view is in setup mode (no live thread).
     pub(crate) fn is_setup_mode(&self) -> bool {
         matches!(self.session, AcpChatSession::Setup(_))
+    }
+
+    /// Returns the validated script path if a `SCRIPT_READY` receipt exists.
+    pub(crate) fn ready_script_path(&self) -> Option<std::path::PathBuf> {
+        self.ready_script_path.clone()
+    }
+
+    /// Whether a deferred context capture is in-flight (drives footer loading dot).
+    pub(crate) fn is_context_capture_pending(&self) -> bool {
+        self.context_capture_pending
+    }
+
+    /// Set the context capture pending state (drives footer loading dot).
+    pub(crate) fn set_context_capture_pending(&mut self, pending: bool) {
+        self.context_capture_pending = pending;
+    }
+
+    /// Prime the slash command picker to show `/{slash_name}` on first open.
+    ///
+    /// Sets the input text to `/{slash_name}` and triggers a mention session
+    /// refresh so the picker row for that skill is pre-selected.
+    pub(crate) fn prime_slash_entry(&mut self, slash_name: &str, cx: &mut Context<Self>) {
+        let prefill = format!("/{slash_name}");
+        self.pending_slash_prime = Some(slash_name.to_string());
+        self.live_thread().update(cx, |thread, cx| {
+            thread.input.set_text(prefill.clone());
+            thread.input.set_cursor(prefill.chars().count());
+            cx.notify();
+        });
+        self.refresh_mention_session(cx);
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_slash_entry_primed",
+            slash_name,
+        );
     }
 
     /// Internal accessor returning a reference to the live thread entity.
@@ -1728,42 +2232,55 @@ impl AcpChatView {
     /// and context readiness — everything an agent needs to verify ACP
     /// interactions without screenshots.
     pub(crate) fn collect_acp_state_snapshot(&self, cx: &App) -> crate::protocol::AcpStateSnapshot {
-        use crate::protocol::{
-            AcpInputLayoutMetrics, AcpPickerState as PickerState, AcpStateSnapshot,
-            ACP_STATE_SCHEMA_VERSION,
-        };
-
-        // Build setup snapshot from either session mode.
         let setup_snapshot = self.build_setup_protocol_snapshot(cx);
 
         if self.is_setup_mode() {
-            let snapshot = AcpStateSnapshot {
-                status: "setup".to_string(),
-                setup: setup_snapshot,
-                ..Default::default()
-            };
-
-            if let Some(ref setup) = snapshot.setup {
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_setup_snapshot_built",
-                    reason_code = %setup.reason_code,
-                    primary_action = ?setup.primary_action,
-                    compatible_count = setup.compatible_agent_ids.len(),
-                    agent_picker_open = setup.agent_picker_open,
-                );
-            }
-
-            return snapshot;
+            return self.build_acp_setup_state_snapshot(setup_snapshot);
         }
 
         let thread = self.live_thread().read(cx);
-        let status_str = match thread.status {
+        self.build_acp_live_state_snapshot(thread, setup_snapshot)
+    }
+
+    fn acp_thread_status_label(status: AcpThreadStatus) -> &'static str {
+        match status {
             AcpThreadStatus::Idle => "idle",
             AcpThreadStatus::Streaming => "streaming",
             AcpThreadStatus::WaitingForPermission => "waitingForPermission",
             AcpThreadStatus::Error => "error",
+        }
+    }
+
+    fn build_acp_setup_state_snapshot(
+        &self,
+        setup_snapshot: Option<crate::protocol::AcpSetupSnapshot>,
+    ) -> crate::protocol::AcpStateSnapshot {
+        let snapshot = crate::protocol::AcpStateSnapshot {
+            status: "setup".to_string(),
+            setup: setup_snapshot,
+            ..Default::default()
         };
+
+        if let Some(ref setup) = snapshot.setup {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_setup_snapshot_built",
+                reason_code = %setup.reason_code,
+                primary_action = ?setup.primary_action,
+                compatible_count = setup.compatible_agent_ids.len(),
+                agent_picker_open = setup.agent_picker_open,
+            );
+        }
+
+        snapshot
+    }
+
+    fn build_acp_live_state_snapshot(
+        &self,
+        thread: &AcpThread,
+        setup_snapshot: Option<crate::protocol::AcpSetupSnapshot>,
+    ) -> crate::protocol::AcpStateSnapshot {
+        let status_str = Self::acp_thread_status_label(thread.status);
 
         let input_text = thread.input.text().to_string();
         let cursor_index = thread.input.cursor();
@@ -1776,7 +2293,38 @@ impl AcpChatView {
             None
         };
 
-        let picker = self.mention_session.as_ref().map(|session| {
+        let context_ready = thread.context_bootstrap_state() != AcpContextBootstrapState::Preparing;
+
+        let pending_parts = thread.pending_context_parts();
+
+        let dictation_phase = crate::dictation::current_dictation_phase()
+            .map(|phase| phase.as_automation_str().to_string());
+        let input_layout = Self::build_acp_input_layout_metrics(thread, &input_text, cursor_index);
+
+        crate::protocol::AcpStateSnapshot {
+            schema_version: crate::protocol::ACP_STATE_SCHEMA_VERSION,
+            resolved_target: None, // Populated by the caller (prompt handler) based on target resolution.
+            status: status_str.to_string(),
+            input_text,
+            cursor_index,
+            has_selection,
+            selection_range,
+            message_count: thread.messages.len(),
+            picker: self.build_acp_picker_state_snapshot(),
+            last_accepted_item: self.last_accepted_item.clone(),
+            context_chip_count: pending_parts.len(),
+            context_summary: Self::build_acp_context_summary(pending_parts),
+            dictation_phase,
+            context_ready,
+            has_pending_permission: thread.pending_permission.is_some(),
+            input_layout: Some(input_layout),
+            setup: Self::build_acp_live_setup_snapshot(thread, setup_snapshot),
+            warnings: Vec::new(),
+        }
+    }
+
+    fn build_acp_picker_state_snapshot(&self) -> Option<crate::protocol::AcpPickerState> {
+        self.mention_session.as_ref().map(|session| {
             let selected_label = session
                 .items
                 .get(session.selected_index)
@@ -1785,50 +2333,55 @@ impl AcpChatView {
                 ContextPickerTrigger::Mention => "@",
                 ContextPickerTrigger::Slash => "/",
             };
-            PickerState {
+            crate::protocol::AcpPickerState {
                 open: true,
                 trigger: trigger.to_string(),
                 item_count: session.items.len(),
                 selected_index: session.selected_index,
                 selected_label,
             }
-        });
+        })
+    }
 
+    fn build_acp_input_layout_metrics(
+        thread: &AcpThread,
+        input_text: &str,
+        cursor_index: usize,
+    ) -> crate::protocol::AcpInputLayoutMetrics {
         let char_count = input_text.chars().count();
         let (visible_start, visible_end) = thread.input.visible_window_range(60);
-        let cursor_in_window = cursor_index.saturating_sub(visible_start);
+        crate::protocol::AcpInputLayoutMetrics {
+            char_count,
+            visible_start,
+            visible_end,
+            cursor_in_window: cursor_index.saturating_sub(visible_start),
+        }
+    }
 
-        // If the live thread has a runtime recovery setup card, include it.
-        let live_setup = if thread.setup_state().is_some() {
+    fn build_acp_context_summary(
+        pending_parts: &[crate::ai::message_parts::AiContextPart],
+    ) -> Option<String> {
+        if pending_parts.is_empty() {
+            None
+        } else {
+            Some(
+                pending_parts
+                    .iter()
+                    .map(|part| part.label())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            )
+        }
+    }
+
+    fn build_acp_live_setup_snapshot(
+        thread: &AcpThread,
+        setup_snapshot: Option<crate::protocol::AcpSetupSnapshot>,
+    ) -> Option<crate::protocol::AcpSetupSnapshot> {
+        if thread.setup_state().is_some() {
             setup_snapshot
         } else {
             None
-        };
-
-        let context_ready = thread.context_bootstrap_state() != AcpContextBootstrapState::Preparing;
-
-        AcpStateSnapshot {
-            schema_version: ACP_STATE_SCHEMA_VERSION,
-            resolved_target: None, // Populated by the caller (prompt handler) based on target resolution.
-            status: status_str.to_string(),
-            input_text,
-            cursor_index,
-            has_selection,
-            selection_range,
-            message_count: thread.messages.len(),
-            picker,
-            last_accepted_item: self.last_accepted_item.clone(),
-            context_chip_count: thread.pending_context_parts().len(),
-            context_ready,
-            has_pending_permission: thread.pending_permission.is_some(),
-            input_layout: Some(AcpInputLayoutMetrics {
-                char_count,
-                visible_start,
-                visible_end,
-                cursor_in_window,
-            }),
-            setup: live_setup,
-            warnings: Vec::new(),
         }
     }
 
@@ -1858,6 +2411,12 @@ impl AcpChatView {
     }
 
     pub(crate) fn new(thread: Entity<AcpThread>, cx: &mut Context<Self>) -> Self {
+        // Preflight the ACP session so the agent's advertised model list lands
+        // in `thread.available_models` before the user opens the Change Model
+        // picker. Fire-and-forget; `apply_event` handles the resulting
+        // `ModelsAvailable` and `SetupRequired` events.
+        thread.update(cx, |thread, cx| thread.refresh_models(cx));
+
         // Virtualized list: bottom-aligned (chat), 200px overdraw for smooth scroll.
         let list_state = ListState::new(0, ListAlignment::Bottom, px(200.0));
         list_state.set_follow_tail(true);
@@ -1887,6 +2446,25 @@ impl AcpChatView {
             // Re-engage follow-tail when streaming starts so content stays at bottom.
             if is_streaming {
                 this.list_state.set_follow_tail(true);
+            }
+
+            // Scan assistant messages for a SCRIPT_READY receipt.
+            let new_ready = thread_ref
+                .messages
+                .iter()
+                .rev()
+                .filter(|m| matches!(m.role, AcpThreadMessageRole::Assistant))
+                .find_map(|m| parse_script_ready_receipt(m.body.as_ref()))
+                .filter(|r| r.validated)
+                .map(|r| r.path);
+            if new_ready != this.ready_script_path {
+                tracing::info!(
+                    target: "script_kit::footer_popup",
+                    event = "acp_generated_script_ready_state_changed",
+                    ready = new_ready.is_some(),
+                    path = ?new_ready,
+                );
+                this.ready_script_path = new_ready;
             }
 
             // Update the unified picker (@ mentions + / commands) on any input change.
@@ -1949,9 +2527,12 @@ impl AcpChatView {
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: slash_task,
             mention_session: None,
+            dismissed_mention_trigger: None,
             mention_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
             typed_mention_aliases: std::collections::HashMap::new(),
+            pasted_text_tokens: Vec::new(),
+            pasted_image_tokens: Vec::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
             test_probe: AcpTestProbe::default(),
@@ -1959,11 +2540,14 @@ impl AcpChatView {
             pending_history_resume: None,
             on_toggle_actions: None,
             on_close_requested: None,
+            on_close_window_requested: None,
             on_open_history_command: None,
             on_open_portal: None,
-            pending_portal_query: None,
-            pending_portal_edit: None,
+            pending_portal_session: None,
             footer_host: AcpFooterHost::Inline,
+            ready_script_path: None,
+            pending_slash_prime: None,
+            context_capture_pending: false,
             allowed_portal_kinds: Self::all_portal_kinds(),
         }
     }
@@ -2001,9 +2585,12 @@ impl AcpChatView {
             cached_slash_commands: Vec::new(),
             _slash_discovery_task: noop_slash,
             mention_session: None,
+            dismissed_mention_trigger: None,
             mention_popup_parent_window: None,
             inline_owned_context_tokens: HashSet::new(),
             typed_mention_aliases: std::collections::HashMap::new(),
+            pasted_text_tokens: Vec::new(),
+            pasted_image_tokens: Vec::new(),
             setup_agent_picker: None,
             last_accepted_item: None,
             test_probe: AcpTestProbe::default(),
@@ -2011,11 +2598,14 @@ impl AcpChatView {
             pending_history_resume: None,
             on_toggle_actions: None,
             on_close_requested: None,
+            on_close_window_requested: None,
             on_open_history_command: None,
             on_open_portal: None,
-            pending_portal_query: None,
-            pending_portal_edit: None,
+            pending_portal_session: None,
             footer_host: AcpFooterHost::Inline,
+            ready_script_path: None,
+            pending_slash_prime: None,
+            context_capture_pending: false,
             allowed_portal_kinds: Self::all_portal_kinds(),
         }
     }
@@ -2025,7 +2615,7 @@ impl AcpChatView {
     /// with full source identity.
     ///
     /// Uses `discover_plugin_skills()` so skill enumeration is routed through
-    /// plugin ownership instead of hand-scanning `kit/*/skills/`.
+    /// plugin ownership instead of hand-scanning `plugins/*/skills/`.
     fn discover_slash_commands() -> Vec<SlashCommandEntry> {
         let mut commands: Vec<SlashCommandEntry> = Self::DEFAULT_SLASH_COMMANDS
             .iter()
@@ -2185,6 +2775,64 @@ impl AcpChatView {
         result
     }
 
+    fn handle_picker_accept_key(&mut self, key: &str, cx: &mut Context<Self>) -> bool {
+        let accepted_via_key = if crate::ui_foundation::is_key_tab(key) {
+            "tab"
+        } else if crate::ui_foundation::is_key_enter(key) {
+            "enter"
+        } else {
+            return false;
+        };
+
+        let Some(session) = self.mention_session.as_ref() else {
+            return false;
+        };
+
+        let pre_accept_item = session.items.get(session.selected_index).map(|item| {
+            let trigger_str = match session.trigger {
+                crate::ai::window::context_picker::types::ContextPickerTrigger::Mention => "@",
+                crate::ai::window::context_picker::types::ContextPickerTrigger::Slash => "/",
+            };
+            (
+                trigger_str.to_string(),
+                item.label.to_string(),
+                Self::telemetry_item_id(item),
+            )
+        });
+        let cursor_before = self.live_thread().read(cx).input.cursor();
+
+        self.accept_mention_selection_impl(false, cx);
+
+        let cursor_after = self.live_thread().read(cx).input.cursor();
+        let permission_active = self.live_thread().read(cx).pending_permission.is_some();
+        self.emit_key_route_telemetry(
+            key,
+            AcpKeyRouteTelemetryArgs {
+                route: crate::protocol::AcpKeyRoute::Picker,
+                cursor_before,
+                cursor_after,
+                caused_submit: false,
+                consumed: true,
+                permission_active,
+            },
+        );
+        if let Some((trigger, label, id)) = pre_accept_item {
+            self.emit_picker_accepted_telemetry(
+                &trigger,
+                &label,
+                &id,
+                accepted_via_key,
+                cursor_after,
+                false,
+            );
+        }
+        if let Some(ref layout) = self.collect_acp_state_snapshot(cx).input_layout {
+            self.emit_input_layout_telemetry(layout);
+        }
+
+        true
+    }
+
     /// Consume Tab / Shift+Tab. When a permission card is active,
     /// cycle the highlighted option; otherwise just swallow the key so
     /// the global interceptors do not re-open a fresh ACP chat.
@@ -2211,61 +2859,7 @@ impl AcpChatView {
         }
 
         // Plain Tab accepts the focused picker item (same as Enter but without submit).
-        if !has_shift && self.mention_session.is_some() {
-            let pre_accept_item = self.mention_session.as_ref().and_then(|s| {
-                s.items.get(s.selected_index).map(|item| {
-                    let trigger_str = match s.trigger {
-                        crate::ai::window::context_picker::types::ContextPickerTrigger::Mention => {
-                            "@"
-                        }
-                        crate::ai::window::context_picker::types::ContextPickerTrigger::Slash => {
-                            "/"
-                        }
-                    };
-                    (
-                        trigger_str.to_string(),
-                        item.label.to_string(),
-                        Self::telemetry_item_id(item),
-                    )
-                })
-            });
-            let cursor_before = self.live_thread().read(cx).input.cursor();
-            tracing::info!(
-                target: "script_kit::tab_ai",
-                event = "acp_picker_tab_accept",
-                selected_index = self
-                    .mention_session
-                    .as_ref()
-                    .map(|s| s.selected_index)
-                    .unwrap_or(0),
-            );
-            self.accept_mention_selection_impl(false, cx);
-            let cursor_after = self.live_thread().read(cx).input.cursor();
-            let permission_active = self.live_thread().read(cx).pending_permission.is_some();
-            self.emit_key_route_telemetry(
-                "tab",
-                AcpKeyRouteTelemetryArgs {
-                    route: crate::protocol::AcpKeyRoute::Picker,
-                    cursor_before,
-                    cursor_after,
-                    caused_submit: false,
-                    consumed: true,
-                    permission_active,
-                },
-            );
-            if let Some((trigger, label, id)) = pre_accept_item {
-                self.emit_picker_accepted_telemetry(
-                    &trigger,
-                    &label,
-                    &id,
-                    "tab",
-                    cursor_after,
-                    false,
-                );
-            }
-            if let Some(ref layout) = self.collect_acp_state_snapshot(cx).input_layout {
-                self.emit_input_layout_telemetry(layout);
-            }
+        if !has_shift && self.handle_picker_accept_key("tab", cx) {
             return true;
         }
 
@@ -2273,134 +2867,69 @@ impl AcpChatView {
         true
     }
 
-    fn portal_kind_detail_label(
-        kind: crate::ai::window::context_picker::types::PortalKind,
-    ) -> &'static str {
-        match kind {
-            crate::ai::window::context_picker::types::PortalKind::FileSearch => "file portal",
-            crate::ai::window::context_picker::types::PortalKind::ClipboardHistory => {
-                "clipboard portal"
-            }
-            crate::ai::window::context_picker::types::PortalKind::ScriptSearch => "script portal",
-            crate::ai::window::context_picker::types::PortalKind::ScriptletSearch => {
-                "scriptlet portal"
-            }
-            crate::ai::window::context_picker::types::PortalKind::SkillSearch => "skill portal",
-            crate::ai::window::context_picker::types::PortalKind::NotesBrowse => "notes portal",
-            crate::ai::window::context_picker::types::PortalKind::AcpHistory => "history portal",
-        }
-    }
+    fn stage_pending_portal_session(
+        &mut self,
+        contract: crate::ai::acp::portal_contract::AcpPortalLaunchContract,
+        cx: &mut Context<Self>,
+    ) {
+        let thread = self.live_thread().read(cx);
+        let composer_text = thread.input.text().to_string();
+        let composer_cursor = thread.input.cursor();
+        let replace_label = contract.replacement.preview_label();
 
-    fn is_fileish_typed_prefix(prefix: &str) -> bool {
-        matches!(
-            prefix,
-            "file"
-                | "dir"
-                | "rs"
-                | "ts"
-                | "js"
-                | "py"
-                | "rb"
-                | "go"
-                | "java"
-                | "swift"
-                | "c"
-                | "cpp"
-                | "md"
-                | "json"
-                | "toml"
-                | "yaml"
-                | "xml"
-                | "html"
-                | "css"
-                | "sh"
-                | "img"
-                | "vid"
-                | "audio"
-                | "sql"
-                | "txt"
-        )
-    }
-
-    fn portal_target_from_part(
-        part: &crate::ai::message_parts::AiContextPart,
-    ) -> Option<(crate::ai::window::context_picker::types::PortalKind, String)> {
-        use crate::ai::window::context_picker::types::PortalKind;
-
-        match part {
-            crate::ai::message_parts::AiContextPart::ResourceUri { uri, label } => match uri
-                .as_str()
-            {
-                "kit://clipboard-history" => Some((PortalKind::ClipboardHistory, label.clone())),
-                "kit://scripts" => Some((PortalKind::ScriptSearch, label.clone())),
-                _ => None,
-            },
-            crate::ai::message_parts::AiContextPart::FilePath { label, .. } => {
-                Some((PortalKind::FileSearch, label.clone()))
-            }
-            crate::ai::message_parts::AiContextPart::SkillFile {
-                label, skill_name, ..
-            } => Some((
-                PortalKind::SkillSearch,
-                if skill_name.trim().is_empty() {
-                    label.clone()
-                } else {
-                    skill_name.clone()
-                },
-            )),
-            crate::ai::message_parts::AiContextPart::FocusedTarget { target, .. } => {
-                match target.kind.as_str() {
-                    "script" => Some((PortalKind::ScriptSearch, target.label.clone())),
-                    "scriptlet" => Some((PortalKind::ScriptletSearch, target.label.clone())),
-                    "note" => Some((PortalKind::NotesBrowse, target.label.clone())),
-                    "clipboard_entry" => Some((PortalKind::ClipboardHistory, target.label.clone())),
-                    "skill" => Some((PortalKind::SkillSearch, target.label.clone())),
-                    "file" | "directory" => Some((
-                        PortalKind::FileSearch,
-                        target
-                            .metadata
-                            .as_ref()
-                            .and_then(|metadata| metadata.get("path"))
-                            .and_then(|path| path.as_str())
-                            .and_then(|path| {
-                                std::path::Path::new(path)
-                                    .file_name()
-                                    .and_then(|name| name.to_str())
-                                    .map(ToString::to_string)
-                            })
-                            .unwrap_or_else(|| target.label.clone()),
-                    )),
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
-    }
-
-    fn portal_target_from_inline_token(
-        token: &str,
-    ) -> Option<(crate::ai::window::context_picker::types::PortalKind, String)> {
-        use crate::ai::window::context_picker::types::PortalKind;
-
-        match token {
-            "@clipboard" => return Some((PortalKind::ClipboardHistory, String::new())),
-            "@recent-scripts" => return Some((PortalKind::ScriptSearch, String::new())),
-            _ => {}
-        }
-
-        let (prefix, value) = crate::ai::context_mentions::typed_mention_token_parts(token)?;
-        let value = value.trim().to_string();
-        let kind = match prefix.as_str() {
-            "note" => PortalKind::NotesBrowse,
-            "script" => PortalKind::ScriptSearch,
-            "scriptlet" => PortalKind::ScriptletSearch,
-            "skill" => PortalKind::SkillSearch,
-            "clipboard" => PortalKind::ClipboardHistory,
-            "history" => PortalKind::AcpHistory,
-            file_prefix if Self::is_fileish_typed_prefix(file_prefix) => PortalKind::FileSearch,
-            _ => return None,
+        let Some(staged_state) = crate::ai::acp::portal_contract::next_portal_state(
+            crate::ai::acp::portal_contract::AcpPortalSessionState::Idle,
+            crate::ai::acp::portal_contract::AcpPortalSessionEvent::Stage,
+        ) else {
+            tracing::error!(
+                target: "script_kit::acp",
+                event = "acp_portal_stage_state_missing",
+                "idle portal session failed to stage"
+            );
+            return;
         };
-        Some((kind, value))
+
+        self.pending_portal_session = Some(AcpPendingPortalSession {
+            contract: contract.clone(),
+            composer_text,
+            composer_cursor,
+            state: staged_state,
+        });
+        self.mention_session = None;
+        self.history_menu = None;
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "acp_portal_contract_staged",
+            kind = ?contract.portal_kind,
+            query = %contract.query,
+            replace_label = %replace_label,
+        );
+
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
+    }
+
+    fn open_picker_portal(
+        &mut self,
+        portal_kind: crate::ai::window::context_picker::types::PortalKind,
+        replace_range: std::ops::Range<usize>,
+        query: String,
+        cx: &mut Context<Self>,
+    ) {
+        let current_text = self.live_thread().read(cx).input.text().to_string();
+        let contract = crate::ai::acp::portal_contract::AcpPortalLaunchContract {
+            portal_kind,
+            query,
+            replacement: crate::ai::acp::portal_contract::exact_replacement_target_for_range(
+                &current_text,
+                replace_range.clone(),
+                replace_range.start,
+            ),
+        };
+        let _ = self.open_portal_contract(contract, cx);
     }
 
     fn focused_inline_token_span(
@@ -2428,93 +2957,55 @@ impl AcpChatView {
         .find(|mention| cursor > mention.range.start && cursor <= mention.range.end)
     }
 
-    fn focused_inline_portal_target(
+    fn focused_inline_portal_intent(
         &self,
         cx: &App,
-    ) -> Option<(
-        crate::ai::window::context_picker::types::PortalKind,
-        String,
-        crate::ai::context_mentions::InlineTokenSpan,
-    )> {
+    ) -> Option<crate::ai::acp::portal_contract::AcpPortalIntent> {
+        use crate::ai::acp::portal_contract::{
+            intent_from_inline_token, intent_from_part, AcpPortalReplacementTarget,
+        };
+
         let span = self.focused_inline_token_span(cx)?;
+        let replacement = AcpPortalReplacementTarget::ExactToken {
+            char_range: span.range.clone(),
+            original_text: span.token.clone(),
+            fallback_cursor: span.range.start,
+        };
         if let Some(mention) = self.focused_inline_mention(cx) {
-            if let Some((kind, query)) = Self::portal_target_from_part(&mention.part) {
-                return Some((kind, query, span));
-            }
+            return Some(intent_from_part(&mention.part, replacement));
         }
 
-        Self::portal_target_from_inline_token(&span.token).map(|(kind, query)| (kind, query, span))
+        intent_from_inline_token(&span.token, replacement)
     }
 
     fn focused_inline_mention_preview(&self, cx: &App) -> Option<AcpFocusedMentionPreview> {
         let span = self.focused_inline_token_span(cx)?;
-        if let Some(mention) = self.focused_inline_mention(cx) {
-            if let Some((portal_kind, query)) = Self::portal_target_from_part(&mention.part) {
-                let info =
-                    crate::ai::window::context_preview::derive_context_preview_info(&mention.part);
-                let query_hint = if query.trim().is_empty() {
-                    String::new()
-                } else {
-                    format!(" for \"{}\"", query.trim())
-                };
-                return Some(AcpFocusedMentionPreview {
-                    token: span.token,
-                    detail: format!(
-                        "{}{} • {} • Cmd+Shift+O",
-                        Self::portal_kind_detail_label(portal_kind),
-                        query_hint,
-                        info.description
-                    ),
-                });
-            }
-        }
-
-        let (portal_kind, query) = Self::portal_target_from_inline_token(&span.token)?;
-        let query_hint = if query.trim().is_empty() {
-            String::new()
-        } else {
-            format!(" for \"{}\"", query.trim())
-        };
+        let intent = self.focused_inline_portal_intent(cx)?;
         Some(AcpFocusedMentionPreview {
             token: span.token,
-            detail: format!(
-                "{}{} • preview only • Cmd+Shift+O",
-                Self::portal_kind_detail_label(portal_kind),
-                query_hint
-            ),
+            detail: crate::ai::acp::portal_contract::format_intent_preview(&intent),
         })
     }
 
     fn open_focused_mention_portal(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some((kind, query, span)) = self.focused_inline_portal_target(cx) else {
+        use crate::ai::acp::portal_contract::AcpPortalIntent;
+
+        let Some(intent) = self.focused_inline_portal_intent(cx) else {
             return false;
         };
-        if !self.is_portal_kind_allowed(kind) {
-            return false;
-        }
-        let Some(callback) = self.on_open_portal.clone() else {
+        let AcpPortalIntent::Portal(contract) = intent else {
             return false;
         };
 
         tracing::info!(
             target: "script_kit::acp",
             event = "acp_focused_mention_portal_open",
-            kind = ?kind,
-            token = %span.token,
-            query = %query,
+            kind = ?contract.portal_kind,
+            query = %contract.query,
+            replace_label = %contract.replacement.preview_label(),
         );
 
-        self.pending_portal_query = Some((kind, query));
-        self.pending_portal_edit = Some(AcpPortalEditSession {
-            portal_kind: kind,
-            mention_range: span.range,
-            original_token: span.token,
-        });
-        cx.defer(move |cx| {
-            callback(kind, cx);
-        });
-        cx.notify();
-        true
+        self.open_portal_contract(contract, cx)
     }
 
     pub(crate) fn attach_portal_part(
@@ -2530,32 +3021,38 @@ impl AcpChatView {
         let current_text = self.live_thread().read(cx).input.text().to_string();
         let replacement = format!("{inline_token} ");
 
-        let (next_text, next_cursor) = if let Some(edit) = self.pending_portal_edit.take() {
-            tracing::info!(
-                target: "script_kit::acp",
-                event = "acp_portal_attachment_replaced_inline_mention",
-                portal_kind = ?edit.portal_kind,
-                old_token = %edit.original_token,
-                new_token = %inline_token,
-            );
-            (
-                Self::replace_text_in_char_range(
+        let pending_portal_session = self.pending_portal_session.take();
+        let (next_text, next_cursor, exact_match) =
+            if let Some(session) = pending_portal_session.as_ref() {
+                debug_assert_eq!(
+                    session.state,
+                    crate::ai::acp::portal_contract::AcpPortalSessionState::Active
+                );
+                crate::ai::acp::portal_contract::apply_portal_replacement(
                     &current_text,
-                    edit.mention_range.clone(),
+                    &session.contract.replacement,
                     &replacement,
-                ),
-                Self::caret_after_replacement(&edit.mention_range, &replacement),
-            )
-        } else {
-            let separator = if current_text.is_empty() || current_text.ends_with(' ') {
-                ""
+                )
             } else {
-                " "
+                let separator = if current_text.is_empty() || current_text.ends_with(' ') {
+                    ""
+                } else {
+                    " "
+                };
+                let next_text = format!("{current_text}{separator}{inline_token} ");
+                let next_cursor = next_text.chars().count();
+                (next_text, next_cursor, false)
             };
-            let next_text = format!("{current_text}{separator}{inline_token} ");
-            let next_cursor = next_text.chars().count();
-            (next_text, next_cursor)
-        };
+
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "acp_portal_reentry_applied",
+            exact_match,
+            new_token = %inline_token,
+            portal_kind = ?pending_portal_session
+                .as_ref()
+                .map(|session| session.contract.portal_kind),
+        );
 
         self.live_thread().update(cx, |thread, cx| {
             thread.input.set_text(next_text);
@@ -2569,7 +3066,125 @@ impl AcpChatView {
             self.register_inline_owned_token(inline_token);
         }
         self.sync_inline_mentions(cx);
+        self.sync_acp_popup_windows_from_cached_parent(cx);
         cx.notify();
+    }
+
+    pub(crate) fn cancel_pending_portal_session(
+        &mut self,
+        portal_kind: crate::ai::window::context_picker::types::PortalKind,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(session) = self.pending_portal_session.take() else {
+            return false;
+        };
+        if session.contract.portal_kind != portal_kind {
+            self.pending_portal_session = Some(session);
+            return false;
+        }
+
+        let Some(state) = crate::ai::acp::portal_contract::next_portal_state(
+            session.state,
+            crate::ai::acp::portal_contract::AcpPortalSessionEvent::Cancel,
+        ) else {
+            self.pending_portal_session = Some(session);
+            return false;
+        };
+        let restore_text = session.composer_text.clone();
+        let restore_cursor = session.composer_cursor;
+        let cleared_state = crate::ai::acp::portal_contract::clear_terminal_portal_state(state);
+        debug_assert_eq!(
+            cleared_state,
+            crate::ai::acp::portal_contract::AcpPortalSessionState::Idle
+        );
+
+        self.live_thread().update(cx, |thread, cx| {
+            let cursor = restore_cursor.min(restore_text.chars().count());
+            thread.input.set_text(restore_text.clone());
+            thread.input.set_cursor(cursor);
+            cx.notify();
+        });
+
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "acp_portal_session_cancelled",
+            kind = ?portal_kind,
+            restored_cursor = restore_cursor,
+        );
+
+        self.sync_acp_popup_windows_from_cached_parent(cx);
+        cx.notify();
+        true
+    }
+
+    fn open_portal_contract(
+        &mut self,
+        contract: crate::ai::acp::portal_contract::AcpPortalLaunchContract,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        use crate::ai::acp::portal_contract::{
+            decide_portal_open, next_portal_state, AcpPortalOpenRefusal, AcpPortalSessionEvent,
+            AcpPortalSessionState,
+        };
+
+        let portal_kind = contract.portal_kind;
+        let query = contract.query.clone();
+        let is_allowed = self.is_portal_kind_allowed(portal_kind);
+        let has_host_callback = self.on_open_portal.is_some();
+
+        tracing::info!(
+            target: "script_kit::acp",
+            event = "acp_portal_open_decision",
+            kind = ?portal_kind,
+            allowed = is_allowed,
+            has_host_callback,
+        );
+
+        match decide_portal_open(is_allowed, has_host_callback) {
+            Ok(()) => {}
+            Err(AcpPortalOpenRefusal::UnsupportedByHost) => {
+                tracing::info!(
+                    target: "script_kit::acp",
+                    event = "acp_portal_blocked_by_host_capability",
+                    kind = ?portal_kind,
+                );
+                return false;
+            }
+            Err(AcpPortalOpenRefusal::MissingHostCallback) => {
+                tracing::warn!(
+                    target: "script_kit::acp",
+                    event = "acp_portal_open_blocked_missing_host_callback",
+                    kind = ?portal_kind,
+                );
+                return false;
+            }
+        }
+
+        let Some(callback) = self.on_open_portal.clone() else {
+            tracing::warn!(
+                target: "script_kit::acp",
+                event = "acp_portal_open_blocked_missing_host_callback",
+                kind = ?portal_kind,
+            );
+            return false;
+        };
+        self.stage_pending_portal_session(contract, cx);
+        if let Some(session) = self.pending_portal_session.as_mut() {
+            session.state = next_portal_state(session.state, AcpPortalSessionEvent::Activate)
+                .unwrap_or(AcpPortalSessionState::Active);
+        }
+        if portal_kind == crate::ai::window::context_picker::types::PortalKind::AcpHistory {
+            tracing::info!(
+                target: "script_kit::tab_ai",
+                event = "acp_history_portal_query_staged",
+                query = %query,
+            );
+        }
+        cx.defer(move |cx| {
+            callback(portal_kind, cx);
+        });
+        cx.notify();
+        true
     }
 
     fn approve_permission(&mut self, option_id: Option<String>, cx: &mut Context<Self>) {
@@ -2834,6 +3449,130 @@ impl AcpChatView {
             .update(cx, |thread, cx| thread.set_input(value, cx));
     }
 
+    pub(crate) fn stage_inline_context_parts_from_host(
+        &mut self,
+        parts: Vec<crate::ai::message_parts::AiContextPart>,
+        source: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        if self.is_setup_mode() {
+            return Err("Agent Chat is in setup mode".to_string());
+        }
+
+        self.sync_mention_popup_window_from_cached_parent(cx);
+        self.typed_mention_aliases.clear();
+        self.inline_owned_context_tokens.clear();
+        self.pasted_text_tokens.clear();
+        self.pasted_image_tokens.clear();
+
+        let mut staged_text = String::new();
+        let mut staged_aliases = Vec::with_capacity(parts.len());
+
+        for part in parts {
+            let inline_token = crate::ai::context_mentions::part_to_inline_token(&part)
+                .unwrap_or_else(|| {
+                    crate::ai::context_mentions::format_typed_label_mention_token(
+                        "context",
+                        part.label(),
+                    )
+                });
+            if !staged_text.is_empty() && !staged_text.ends_with(' ') {
+                staged_text.push(' ');
+            }
+            staged_text.push_str(&inline_token);
+            staged_text.push(' ');
+            staged_aliases.push((inline_token, part));
+        }
+
+        let staged_cursor = staged_text.chars().count();
+        let staged_parts = staged_aliases
+            .iter()
+            .map(|(_, part)| part.clone())
+            .collect::<Vec<_>>();
+
+        self.live_thread().update(cx, move |thread, cx| {
+            thread.replace_pending_context_parts(staged_parts, source, cx);
+            thread.input.set_text(staged_text.clone());
+            thread.input.set_cursor(staged_cursor);
+            cx.notify();
+        });
+
+        for (inline_token, part) in staged_aliases {
+            self.register_inline_owned_context_part(inline_token, part);
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_host_inline_context_staged",
+            source,
+            token_count = self.inline_owned_context_tokens.len(),
+        );
+        cx.notify();
+        Ok(())
+    }
+
+    /// Stage a plugin skill exactly like accepting it from the ACP slash picker.
+    ///
+    /// Main-menu skill launch is an external handoff, so it replaces stale
+    /// composer context instead of appending to a previous draft, but it still
+    /// leaves the slash text in the composer and does not submit.
+    pub(crate) fn stage_selected_plugin_skill_from_main_menu(
+        &mut self,
+        skill: &crate::plugins::PluginSkill,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if self.is_setup_mode() {
+            return false;
+        }
+
+        self.mention_session = None;
+        self.history_menu = None;
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+        self.last_accepted_item = None;
+        self.pending_history_resume = None;
+        self.pending_portal_session = None;
+        self.inline_owned_context_tokens.clear();
+        self.typed_mention_aliases.clear();
+        self.pasted_text_tokens.clear();
+        self.pasted_image_tokens.clear();
+
+        let owner = if skill.plugin_title.is_empty() {
+            skill.plugin_id.as_str()
+        } else {
+            skill.plugin_title.as_str()
+        };
+        let command_text = build_skill_slash_command_text(&skill.skill_id);
+        let cursor_after = command_text.chars().count();
+        let part = build_skill_context_part(&skill.title, owner, &skill.skill_id, &skill.path);
+
+        self.last_accepted_item = Some(crate::protocol::AcpAcceptedItem {
+            label: skill.title.clone(),
+            id: format!("slash-cmd:plugin:{}:{}", skill.plugin_id, skill.skill_id),
+            trigger: "/".to_string(),
+            cursor_after,
+        });
+
+        self.live_thread().update(cx, |thread, cx| {
+            thread.replace_pending_context_parts(vec![part], "main_menu_selected_skill", cx);
+            thread.input.set_text(command_text.clone());
+            thread.input.set_cursor(cursor_after);
+            thread.mark_context_bootstrap_ready(cx);
+            cx.notify();
+        });
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_main_menu_skill_staged_as_slash_selection",
+            plugin_id = %skill.plugin_id,
+            skill_id = %skill.skill_id,
+            owner,
+            cursor_after,
+            "Main-menu skill staged without auto-submit"
+        );
+        true
+    }
+
     /// Reuse the current live thread for a fresh external entry intent.
     ///
     /// Clears composer-local transient state and thread-scoped pending
@@ -2846,10 +3585,11 @@ impl AcpChatView {
         self.model_selector_open = false;
         self.last_accepted_item = None;
         self.pending_history_resume = None;
-        self.pending_portal_query = None;
-        self.pending_portal_edit = None;
+        self.pending_portal_session = None;
         self.inline_owned_context_tokens.clear();
         self.typed_mention_aliases.clear();
+        self.pasted_text_tokens.clear();
+        self.pasted_image_tokens.clear();
 
         self.live_thread().update(cx, |thread, cx| {
             thread.clear_pending_context_for_new_entry_intent(cx);
@@ -2864,10 +3604,108 @@ impl AcpChatView {
         });
     }
 
+    /// Reuse the current live thread for a fresh external entry intent that
+    /// also replaces host-owned pending context in one atomic handoff.
+    ///
+    /// This is the detached/host reuse path when a surface needs to stage
+    /// new inline context tokens and submit fresh user intent together. The
+    /// two operations cannot be safely sequenced through the separate host
+    /// staging and intent-only reuse helpers because they clear different
+    /// parts of composer/thread state.
+    pub(crate) fn submit_reused_entry_intent_with_host_context(
+        &mut self,
+        intent: String,
+        parts: Vec<crate::ai::message_parts::AiContextPart>,
+        source: &'static str,
+        cx: &mut Context<Self>,
+    ) -> Result<(), String> {
+        if self.is_setup_mode() {
+            return Err("Agent Chat is in setup mode".to_string());
+        }
+
+        self.sync_mention_popup_window_from_cached_parent(cx);
+        self.mention_session = None;
+        self.history_menu = None;
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+        self.last_accepted_item = None;
+        self.pending_history_resume = None;
+        self.pending_portal_session = None;
+        self.typed_mention_aliases.clear();
+        self.inline_owned_context_tokens.clear();
+        self.pasted_text_tokens.clear();
+        self.pasted_image_tokens.clear();
+
+        let trimmed_intent = intent.trim().to_string();
+        let intent_len = trimmed_intent.len();
+        let mut staged_text = String::new();
+        let mut staged_aliases = Vec::with_capacity(parts.len());
+
+        for part in parts {
+            let inline_token = crate::ai::context_mentions::part_to_inline_token(&part)
+                .unwrap_or_else(|| {
+                    crate::ai::context_mentions::format_typed_label_mention_token(
+                        "context",
+                        part.label(),
+                    )
+                });
+            if !staged_text.is_empty() && !staged_text.ends_with(' ') {
+                staged_text.push(' ');
+            }
+            staged_text.push_str(&inline_token);
+            staged_text.push(' ');
+            staged_aliases.push((inline_token, part));
+        }
+
+        if !trimmed_intent.is_empty() {
+            if !staged_text.is_empty() && !staged_text.ends_with(' ') {
+                staged_text.push(' ');
+            }
+            staged_text.push_str(&trimmed_intent);
+        }
+
+        let staged_cursor = staged_text.chars().count();
+        let staged_parts = staged_aliases
+            .iter()
+            .map(|(_, part)| part.clone())
+            .collect::<Vec<_>>();
+
+        for (inline_token, part) in &staged_aliases {
+            self.register_inline_owned_context_part(inline_token.clone(), part.clone());
+        }
+
+        self.live_thread().update(cx, move |thread, cx| {
+            thread.replace_pending_context_parts(staged_parts, source, cx);
+            thread.input.set_text(staged_text.clone());
+            thread.input.set_cursor(staged_cursor);
+            if let Err(error) = thread.submit_input(cx) {
+                tracing::warn!(
+                    target: "script_kit::tab_ai",
+                    event = "acp_reused_entry_intent_with_host_context_submit_failed",
+                    error = %error,
+                );
+                return Err(error.to_string());
+            }
+            cx.notify();
+            Ok::<(), String>(())
+        })?;
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_reused_entry_intent_with_host_context_submitted",
+            source,
+            token_count = self.inline_owned_context_tokens.len(),
+            intent_len,
+        );
+        cx.notify();
+        Ok(())
+    }
+
     fn open_picker_trigger(&mut self, trigger: &str, cx: &mut Context<Self>) {
         self.attach_menu_open = false;
         self.model_selector_open = false;
         self.history_menu = None;
+        self.dismissed_mention_trigger = None;
         self.set_input(trigger.to_string(), cx);
         self.refresh_mention_session(cx);
     }
@@ -3859,9 +4697,14 @@ impl AcpChatView {
             // Muted disabled arrow
             ("\u{2191}", rgba((text_primary << 8) | 0x06), 0.30)
         };
+        let button_id = if is_streaming {
+            "acp-streaming-dot"
+        } else {
+            "acp-send-btn"
+        };
 
         let mut btn = div()
-            .id("acp-send-btn")
+            .id(button_id)
             .flex()
             .items_center()
             .justify_center()
@@ -3910,6 +4753,36 @@ impl AcpChatView {
             .map(|m| (m.trigger, m.char_range, m.query))
     }
 
+    fn focused_inline_token_prefers_preview(
+        text: &str,
+        cursor: usize,
+        typed_aliases: &std::collections::HashMap<String, crate::ai::message_parts::AiContextPart>,
+    ) -> bool {
+        let Some(token_span) = crate::ai::context_mentions::inline_token_at_cursor(text, cursor)
+        else {
+            return false;
+        };
+
+        let has_resolved_mention =
+            crate::ai::context_mentions::parse_inline_context_mentions_with_aliases(
+                text,
+                typed_aliases,
+            )
+            .into_iter()
+            .any(|mention| cursor > mention.range.start && cursor <= mention.range.end);
+
+        has_resolved_mention
+            || crate::ai::acp::portal_contract::portal_target_from_inline_token(&token_span.token)
+                .is_some()
+    }
+
+    fn is_reopen_focused_mention_shortcut(key: &str, modifiers: &gpui::Modifiers) -> bool {
+        let is_cmd_period =
+            modifiers.platform && !modifiers.shift && (key == "." || key == "period");
+        let is_cmd_shift_o = modifiers.platform && modifiers.shift && key.eq_ignore_ascii_case("o");
+        is_cmd_period || is_cmd_shift_o
+    }
+
     /// Re-derive the mention session from current input state.
     ///
     /// Called after every input mutation and cursor movement.
@@ -3928,83 +4801,136 @@ impl AcpChatView {
             .as_ref()
             .map(|s| s.selected_index)
             .unwrap_or(0);
+        let previous_visible_start = self
+            .mention_session
+            .as_ref()
+            .map(|s| s.visible_start)
+            .unwrap_or(0);
 
-        let next_session = match Self::find_active_trigger(&text, cursor) {
-            Some((trigger, trigger_range, query)) => {
-                let mut items = match trigger {
-                    ContextPickerTrigger::Mention => build_picker_items(trigger, &query),
-                    ContextPickerTrigger::Slash => {
-                        if self.cached_slash_commands.is_empty() {
-                            // Async discovery hasn't completed yet — show
-                            // intentional loading row instead of blank list.
-                            vec![slash_picker_loading_row()]
-                        } else {
-                            let entries = if available_commands.is_empty() {
-                                self.cached_slash_commands.clone()
-                            } else {
-                                self.resolved_slash_commands(&available_commands)
-                            };
-                            if entries.is_empty() {
-                                // Discovery completed but catalog is empty
-                                // (no defaults, no plugins, no Claude skills).
-                                vec![slash_picker_empty_row()]
-                            } else {
-                                let payloads: Vec<(SlashCommandPayload, String)> = entries
-                                    .iter()
-                                    .map(|e| (e.to_payload(), e.description.clone()))
-                                    .collect();
-                                let mut items = build_slash_picker_items_with_payloads(
-                                    &query,
-                                    payloads.iter().map(|(p, d)| (p, d.as_str())),
-                                );
-                                if items.is_empty() {
-                                    // Non-empty catalog filtered to zero by
-                                    // query — distinct from empty catalog.
-                                    items.push(slash_picker_no_match_row());
+        let mut dismissed_trigger_still_active = false;
+        let next_session = if Self::focused_inline_token_prefers_preview(
+            &text,
+            cursor,
+            &self.typed_mention_aliases,
+        ) {
+            None
+        } else {
+            match Self::find_active_trigger(&text, cursor) {
+                Some((trigger, trigger_range, query)) => {
+                    let active_trigger = AcpDismissedMentionTrigger {
+                        trigger,
+                        trigger_range: trigger_range.clone(),
+                        query: query.clone(),
+                        cursor,
+                    };
+                    if self.dismissed_mention_trigger.as_ref() == Some(&active_trigger) {
+                        dismissed_trigger_still_active = true;
+                        None
+                    } else {
+                        let mut items = match trigger {
+                            ContextPickerTrigger::Mention => build_picker_items(trigger, &query),
+                            ContextPickerTrigger::Slash => {
+                                if self.cached_slash_commands.is_empty() {
+                                    // Async discovery hasn't completed yet — show
+                                    // intentional loading row instead of blank list.
+                                    vec![slash_picker_loading_row()]
+                                } else {
+                                    let entries = if available_commands.is_empty() {
+                                        self.cached_slash_commands.clone()
+                                    } else {
+                                        self.resolved_slash_commands(&available_commands)
+                                    };
+                                    if entries.is_empty() {
+                                        // Discovery completed but catalog is empty
+                                        // (no defaults, no plugins, no Claude skills).
+                                        vec![slash_picker_empty_row()]
+                                    } else {
+                                        let payloads: Vec<(SlashCommandPayload, String)> = entries
+                                            .iter()
+                                            .map(|e| (e.to_payload(), e.description.clone()))
+                                            .collect();
+                                        let mut items = build_slash_picker_items_with_payloads(
+                                            &query,
+                                            payloads.iter().map(|(p, d)| (p, d.as_str())),
+                                        );
+                                        if items.is_empty() {
+                                            // Non-empty catalog filtered to zero by
+                                            // query — distinct from empty catalog.
+                                            items.push(slash_picker_no_match_row());
+                                        }
+                                        items
+                                    }
                                 }
-                                items
+                            }
+                        };
+
+                        // Filter out portal items the host does not support.
+                        items.retain(|item| {
+                            if let ContextPickerItemKind::Portal(kind) = item.kind {
+                                self.is_portal_kind_allowed(kind)
+                            } else {
+                                true
+                            }
+                        });
+
+                        let mut selected_index =
+                        crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
+                            previous_index,
+                            items.len(),
+                        );
+
+                        // If a slash prime is pending, pre-select the matching row.
+                        if let Some(ref prime_name) = self.pending_slash_prime {
+                            if trigger == ContextPickerTrigger::Slash {
+                                if let Some(ix) = items.iter().position(|item| {
+                                    matches!(
+                                        &item.kind,
+                                        ContextPickerItemKind::SlashCommand(payload)
+                                        if payload.slash_name() == prime_name
+                                    )
+                                }) {
+                                    selected_index = ix;
+                                    // Consume the prime so it doesn't override future selections.
+                                    self.pending_slash_prime = None;
+                                }
                             }
                         }
-                    }
-                };
 
-                // Filter out portal items the host does not support.
-                items.retain(|item| {
-                    if let ContextPickerItemKind::Portal(kind) = item.kind {
-                        self.is_portal_kind_allowed(kind)
-                    } else {
-                        true
+                        let visible = Self::mention_visible_range_from_start(
+                            previous_visible_start,
+                            selected_index,
+                            items.len(),
+                        );
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "acp_mention_picker_refreshed",
+                            layout = "inline_dropdown",
+                            ?trigger,
+                            query = %query,
+                            item_count = items.len(),
+                            selected_index,
+                            live_command_count = available_commands.len(),
+                            anchor_char = trigger_range.start,
+                            visible_start = visible.start,
+                            visible_end = visible.end,
+                        );
+                        Some(AcpMentionSession {
+                            trigger,
+                            trigger_range,
+                            query,
+                            selected_index,
+                            visible_start: visible.start,
+                            items,
+                        })
                     }
-                });
-
-                let selected_index =
-                    crate::components::inline_dropdown::inline_dropdown_clamp_selected_index(
-                        previous_index,
-                        items.len(),
-                    );
-                let visible = Self::mention_visible_range_for(selected_index, items.len());
-                tracing::info!(
-                    target: "script_kit::tab_ai",
-                    event = "acp_mention_picker_refreshed",
-                    layout = "inline_dropdown",
-                    ?trigger,
-                    query = %query,
-                    item_count = items.len(),
-                    selected_index,
-                    live_command_count = available_commands.len(),
-                    anchor_char = trigger_range.start,
-                    visible_start = visible.start,
-                    visible_end = visible.end,
-                );
-                Some(AcpMentionSession {
-                    trigger,
-                    trigger_range,
-                    selected_index,
-                    items,
-                })
+                }
+                None => None,
             }
-            None => None,
         };
+
+        if !dismissed_trigger_still_active {
+            self.dismissed_mention_trigger = None;
+        }
 
         if next_session.is_some() {
             self.last_accepted_item = None;
@@ -4105,10 +5031,22 @@ impl AcpChatView {
         self.accept_mention_selection_impl(false, cx);
     }
 
+    /// Fallback entry for main-window key interceptors that need to keep Enter
+    /// routed to the ACP picker when the composer view does not receive it.
+    pub(crate) fn handle_enter_key(&mut self, cx: &mut Context<Self>) -> bool {
+        self.handle_picker_accept_key("enter", cx)
+    }
+
     pub(crate) fn select_mention_index(&mut self, index: usize) {
         if let Some(session) = self.mention_session.as_mut() {
             if !session.items.is_empty() {
                 session.selected_index = index.min(session.items.len().saturating_sub(1));
+                let visible = Self::mention_visible_range_from_start(
+                    session.visible_start,
+                    session.selected_index,
+                    session.items.len(),
+                );
+                session.visible_start = visible.start;
             }
         }
     }
@@ -4166,6 +5104,12 @@ impl AcpChatView {
         out.push_str(replacement);
         out.push_str(&text[end_byte..]);
         out
+    }
+
+    fn text_in_char_range(text: &str, char_range: std::ops::Range<usize>) -> String {
+        let start_byte = Self::char_to_byte_offset(text, char_range.start);
+        let end_byte = Self::char_to_byte_offset(text, char_range.end);
+        text[start_byte..end_byte].to_string()
     }
 
     /// Return the caret position immediately after replacing `char_range`
@@ -4257,39 +5201,84 @@ impl AcpChatView {
                         });
                     }
                     SlashCommandPayload::PluginSkill(skill) => {
-                        // Plugin skills stage local <skill> content.
+                        // Plugin skills insert `/slash-name ` as visible text
+                        // and attach the skill body as a context part so the
+                        // composer stays compact while the agent still receives
+                        // the staged skill prompt on submit.
                         let owner = if skill.plugin_title.is_empty() {
-                            &skill.plugin_id
+                            skill.plugin_id.clone()
                         } else {
-                            &skill.plugin_title
+                            skill.plugin_title.clone()
                         };
-                        let staged = build_staged_skill_prompt(&skill.title, owner, &skill.path);
+                        let current_text = self.live_thread().read(cx).input.text().to_string();
+                        let command_text = build_skill_slash_command_text(&skill.skill_id);
+                        let next_text = Self::replace_text_in_char_range(
+                            &current_text,
+                            session.trigger_range.clone(),
+                            &command_text,
+                        );
+                        let next_cursor =
+                            Self::caret_after_replacement(&session.trigger_range, &command_text);
+                        let part = build_skill_context_part(
+                            &skill.title,
+                            &owner,
+                            &skill.skill_id,
+                            &skill.path,
+                        );
                         tracing::info!(
                             plugin_id = %skill.plugin_id,
                             skill_id = %skill.skill_id,
                             "acp_slash_skill_selected"
                         );
+                        if let Some(ref mut accepted) = self.last_accepted_item {
+                            accepted.cursor_after = next_cursor;
+                        }
                         self.live_thread().update(cx, |thread, cx| {
-                            thread.input.set_text(staged);
-                            thread.input.set_cursor(0);
-                            cx.notify();
+                            thread.input.set_text(next_text);
+                            thread.input.set_cursor(next_cursor);
+                            thread.add_context_part(part, cx);
+                            if submit {
+                                let _ = thread.submit_input(cx);
+                            } else {
+                                cx.notify();
+                            }
                         });
                     }
                     SlashCommandPayload::ClaudeCodeSkill {
                         skill_id,
                         skill_path,
                     } => {
-                        // Claude Code skills stage local <skill> content.
-                        let staged = build_staged_skill_prompt(skill_id, "Claude Code", skill_path);
+                        // Claude Code skills insert `/slash-name ` and attach
+                        // the skill body as a context part, mirroring plugin
+                        // skill behavior so the composer stays compact.
+                        let current_text = self.live_thread().read(cx).input.text().to_string();
+                        let command_text = build_skill_slash_command_text(skill_id);
+                        let next_text = Self::replace_text_in_char_range(
+                            &current_text,
+                            session.trigger_range.clone(),
+                            &command_text,
+                        );
+                        let next_cursor =
+                            Self::caret_after_replacement(&session.trigger_range, &command_text);
+                        let part =
+                            build_skill_context_part(skill_id, "Claude Code", skill_id, skill_path);
                         tracing::info!(
                             skill_id = %skill_id,
                             path = %skill_path.display(),
                             "acp_slash_claude_skill_selected"
                         );
+                        if let Some(ref mut accepted) = self.last_accepted_item {
+                            accepted.cursor_after = next_cursor;
+                        }
                         self.live_thread().update(cx, |thread, cx| {
-                            thread.input.set_text(staged);
-                            thread.input.set_cursor(0);
-                            cx.notify();
+                            thread.input.set_text(next_text);
+                            thread.input.set_cursor(next_cursor);
+                            thread.add_context_part(part, cx);
+                            if submit {
+                                let _ = thread.submit_input(cx);
+                            } else {
+                                cx.notify();
+                            }
                         });
                     }
                 }
@@ -4301,11 +5290,28 @@ impl AcpChatView {
 
         // ── Build context part; decide if inline-mention sync applies ──
         let (part, inline_text, allow_inline_sync) = match &item.kind {
-            ContextPickerItemKind::BuiltIn(kind) => (
-                kind.part(),
-                kind.spec().mention.unwrap_or("@snapshot").to_string(),
-                session.trigger == ContextPickerTrigger::Mention,
-            ),
+            ContextPickerItemKind::BuiltIn(kind) => {
+                if *kind == crate::ai::context_contract::ContextAttachmentKind::Dictation {
+                    let portal_kind =
+                        crate::ai::window::context_picker::types::PortalKind::DictationHistory;
+                    self.open_picker_portal(
+                        portal_kind,
+                        session.trigger_range.clone(),
+                        crate::ai::acp::portal_contract::picker_portal_query(
+                            portal_kind,
+                            &session.query,
+                        ),
+                        cx,
+                    );
+                    return;
+                }
+
+                (
+                    kind.part(),
+                    kind.spec().mention.unwrap_or("@snapshot").to_string(),
+                    session.trigger == ContextPickerTrigger::Mention,
+                )
+            }
             ContextPickerItemKind::File(path) | ContextPickerItemKind::Folder(path) => {
                 let path_text = path.to_string_lossy().to_string();
                 let file_part = AiContextPart::FilePath {
@@ -4328,58 +5334,15 @@ impl AcpChatView {
             }
             ContextPickerItemKind::SlashCommand(_) | ContextPickerItemKind::Inert => return,
             ContextPickerItemKind::Portal(portal_kind) => {
-                // Defense-in-depth: reject portal kinds the host disallows.
-                if !self.is_portal_kind_allowed(*portal_kind) {
-                    tracing::info!(
-                        target: "script_kit::acp",
-                        event = "acp_portal_blocked_by_host_capability",
-                        kind = ?portal_kind,
-                    );
-                    return;
-                }
-
-                let current_text = self.live_thread().read(cx).input.text().to_string();
-                let remaining = Self::replace_text_in_char_range(
-                    &current_text,
+                self.open_picker_portal(
+                    *portal_kind,
                     session.trigger_range.clone(),
-                    "",
+                    crate::ai::acp::portal_contract::picker_portal_query(
+                        *portal_kind,
+                        &session.query,
+                    ),
+                    cx,
                 );
-                let query = remaining.trim().to_string();
-                self.pending_portal_query = Some((*portal_kind, query.clone()));
-
-                if *portal_kind == crate::ai::window::context_picker::types::PortalKind::AcpHistory
-                {
-                    tracing::info!(
-                        target: "script_kit::tab_ai",
-                        event = "acp_history_portal_query_staged",
-                        query = %query,
-                    );
-                }
-
-                // Remove the trigger text (@file, @clip, etc.) from the input
-                // before opening the portal so it doesn't linger on return.
-                let cleaned = Self::replace_text_in_char_range(
-                    &current_text,
-                    session.trigger_range.clone(),
-                    "",
-                );
-                let cleaned_cursor = session.trigger_range.start;
-                self.live_thread().update(cx, |thread, cx| {
-                    thread.input.set_text(cleaned);
-                    thread.input.set_cursor(cleaned_cursor);
-                    cx.notify();
-                });
-
-                // Dismiss the mention popup and invoke the host portal callback.
-                // Deferred via App::defer to release the AcpChatView entity borrow.
-                self.sync_mention_popup_window_from_cached_parent(cx);
-                if let Some(callback) = self.on_open_portal.clone() {
-                    let kind = *portal_kind;
-                    cx.defer(move |cx| {
-                        callback(kind, cx);
-                    });
-                }
-                cx.notify();
                 return;
             }
         };
@@ -4513,6 +5476,32 @@ impl AcpChatView {
             .collect()
     }
 
+    /// Return a highlight range for a leading `/slash-name` token in the
+    /// composer. Only the first token is recognized because slash commands
+    /// are positional; mid-text `/...` sequences stay in the default color.
+    fn leading_slash_highlight_range(text: &str, accent_color: u32) -> Option<TextHighlightRange> {
+        let mut chars = text.chars();
+        if chars.next()? != '/' {
+            return None;
+        }
+        let mut end = 1usize;
+        for ch in chars {
+            if ch.is_alphanumeric() || ch == '-' || ch == '_' {
+                end += 1;
+            } else {
+                break;
+            }
+        }
+        if end <= 1 {
+            return None;
+        }
+        Some(TextHighlightRange {
+            start: 0,
+            end,
+            color: accent_color,
+        })
+    }
+
     /// Synchronise `pending_context_parts` from the live inline `@mention`
     /// tokens. Removes stale parts whose token was deleted from the input
     /// and adds new parts for freshly typed tokens.
@@ -4550,10 +5539,6 @@ impl AcpChatView {
             token_count = self.inline_owned_context_tokens.len(),
         );
     }
-
-    /// Fixed gold tint for accepted inline `@mentions`.
-    /// Matches the picker bar and fuzzy highlight accent.
-    const ACP_MENTION_INLINE_GOLD: u32 = 0xFBBF24;
 
     /// Fixed picker dropdown width.
     const ACP_MENTION_PICKER_WIDTH: f32 = 320.0;
@@ -4668,7 +5653,7 @@ impl AcpChatView {
         (left, top, picker_width)
     }
 
-    /// Compute the visible range of items around a selected index.
+    /// Compute the visible range of items for a selected index.
     pub(super) fn mention_visible_range_for(
         selected_index: usize,
         item_count: usize,
@@ -4680,9 +5665,27 @@ impl AcpChatView {
         )
     }
 
-    /// Compute the visible range of items around the selected index.
+    /// Compute the visible range of items for the selected index.
+    fn mention_visible_range_from_start(
+        visible_start: usize,
+        selected_index: usize,
+        item_count: usize,
+    ) -> std::ops::Range<usize> {
+        crate::components::inline_dropdown::inline_dropdown_visible_range_from_start(
+            visible_start,
+            selected_index,
+            item_count,
+            Self::MENTION_PICKER_MAX_VISIBLE,
+        )
+    }
+
+    /// Compute the visible range of items for the selected index.
     fn mention_visible_range(session: &AcpMentionSession) -> std::ops::Range<usize> {
-        Self::mention_visible_range_for(session.selected_index, session.items.len())
+        Self::mention_visible_range_from_start(
+            session.visible_start,
+            session.selected_index,
+            session.items.len(),
+        )
     }
 
     // ── Slash command helpers ─────────────────────────────────────
@@ -4711,7 +5714,7 @@ impl AcpChatView {
                 "Authenticate, then press Tab to retry".to_string()
             }
             super::setup_state::AcpSetupAction::OpenCatalog => {
-                "Add or edit an ACP agent in ~/.scriptkit/acp/agents.json, then press Tab to retry"
+                "Add or edit an agent in ~/.scriptkit/acp/agents.json, then press Tab to retry"
                     .to_string()
             }
             super::setup_state::AcpSetupAction::SelectAgent => {
@@ -4914,7 +5917,7 @@ impl AcpChatView {
                         .py(px(4.0))
                         .text_xs()
                         .text_color(rgb(theme.colors.text.muted))
-                        .child("Select an ACP agent"),
+                        .child("Select an agent"),
                 )
                 .children(rows)
                 .child(
@@ -5015,15 +6018,82 @@ impl AcpChatView {
     ///
     /// Preserves the active session's capability requirements so the next
     /// ACP open path can consume them instead of re-deriving from scratch.
+    fn current_retry_draft_state(&self, cx: &App) -> Option<AcpRetryDraftState> {
+        match &self.session {
+            AcpChatSession::Live(thread) => {
+                let thread = thread.read(cx);
+                Some(AcpRetryDraftState {
+                    input_text: thread.input.text().to_string(),
+                    input_cursor: thread.input.cursor(),
+                    pending_context_parts: thread.pending_context_parts().to_vec(),
+                    pasted_text_tokens: self.pasted_text_tokens.clone(),
+                    pasted_image_tokens: self.pasted_image_tokens.clone(),
+                    typed_mention_aliases: self.typed_mention_aliases.clone(),
+                    inline_owned_context_tokens: self.inline_owned_context_tokens.clone(),
+                })
+            }
+            AcpChatSession::Setup(_) => None,
+        }
+    }
+
+    pub(crate) fn restore_retry_draft_state(
+        &mut self,
+        draft_state: AcpRetryDraftState,
+        cx: &mut Context<Self>,
+    ) {
+        self.mention_session = None;
+        self.history_menu = None;
+        self.attach_menu_open = false;
+        self.model_selector_open = false;
+        self.last_accepted_item = None;
+        self.pending_history_resume = None;
+        self.pending_portal_session = None;
+        self.setup_agent_picker = None;
+        self.pasted_text_tokens = draft_state.pasted_text_tokens;
+        self.pasted_image_tokens = draft_state.pasted_image_tokens;
+        self.typed_mention_aliases = draft_state.typed_mention_aliases;
+        self.inline_owned_context_tokens = draft_state.inline_owned_context_tokens;
+
+        let input_text = draft_state.input_text;
+        let input_len = input_text.len();
+        let input_cursor = draft_state.input_cursor.min(input_text.chars().count());
+        let pending_context_parts = draft_state.pending_context_parts;
+
+        self.live_thread().update(cx, move |thread, cx| {
+            thread.replace_pending_context_parts(
+                pending_context_parts,
+                "acp_switch_agent_retry_restore",
+                cx,
+            );
+            thread.input.set_text(input_text.clone());
+            thread.input.set_cursor(input_cursor);
+            cx.notify();
+        });
+
+        self.sync_inline_mentions(cx);
+        self.sync_mention_popup_window_from_cached_parent(cx);
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "acp_switch_agent_retry_draft_restored",
+            input_len,
+            token_count = self.inline_owned_context_tokens.len(),
+        );
+        cx.notify();
+    }
+
     pub(crate) fn stage_agent_switch_retry(
         &mut self,
         next_agent_id: String,
         cx: &mut Context<Self>,
     ) {
         let launch_requirements = self.current_retry_launch_requirements(cx);
+        let draft_state = self.current_retry_draft_state(cx);
+        let has_draft_state = draft_state.is_some();
         self.pending_retry_request = Some(AcpRetryRequest {
             preferred_agent_id: Some(next_agent_id.clone()),
             launch_requirements,
+            draft_state,
         });
         tracing::info!(
             target: "script_kit::tab_ai",
@@ -5031,6 +6101,7 @@ impl AcpChatView {
             agent_id = %next_agent_id,
             needs_embedded_context = launch_requirements.needs_embedded_context,
             needs_image = launch_requirements.needs_image,
+            has_draft_state,
         );
         cx.notify();
     }
@@ -5864,7 +6935,7 @@ impl AcpChatView {
                 detached_window_open,
                 is_detached_host,
                 host = if is_detached_host { "detached" } else { "embedded" },
-                route = if is_detached_host { "detached_local" } else { "propagate_to_main_window" },
+                route = if is_detached_host { "detached_local" } else { "embedded_host_callback" },
             );
             if is_detached_host {
                 // Detached window: open actions popup directly
@@ -5875,10 +6946,26 @@ impl AcpChatView {
                 crate::ai::acp::chat_window::toggle_detached_actions(cx);
                 cx.stop_propagation();
             } else {
-                // Main panel: propagate to parent interceptor
-                cx.propagate();
+                // Embedded main-panel ACP: call the host callback directly.
+                // The composer owns focus, so bubbling back to the launcher
+                // interceptor is not reliable across focus-handle changes.
+                self.trigger_toggle_actions(window, cx);
+                cx.stop_propagation();
             }
             return;
+        }
+
+        if modifiers.platform && key.eq_ignore_ascii_case("w") {
+            let is_detached_host = crate::ai::acp::chat_window::is_chat_window(window);
+            if !is_detached_host {
+                tracing::info!(
+                    target: "script_kit::keyboard",
+                    event = "embedded_acp_cmd_w_host_close_requested",
+                );
+                self.trigger_close_window_requested(window, cx);
+                cx.stop_propagation();
+                return;
+            }
         }
 
         // ── Cmd+. → cancel streaming (standard macOS cancel) ──────
@@ -5891,6 +6978,13 @@ impl AcpChatView {
                 self.live_thread()
                     .update(cx, |thread, cx| thread.cancel_streaming(cx));
             }
+            cx.stop_propagation();
+            return;
+        }
+
+        // ── Cmd+0 → reset Agent Chat zoom/font sizing ───────────
+        if modifiers.platform && !modifiers.alt && !modifiers.shift && key == "0" {
+            self.reset_agent_chat_zoom(cx);
             cx.stop_propagation();
             return;
         }
@@ -5924,6 +7018,26 @@ impl AcpChatView {
             }
             cx.stop_propagation();
             return;
+        }
+
+        // ── Up → recall latest user prompt when composer is empty ─
+        if !modifiers.platform
+            && !modifiers.control
+            && !modifiers.alt
+            && !modifiers.shift
+            && crate::ui_foundation::is_key_up(key)
+        {
+            let recalled = self
+                .live_thread()
+                .update(cx, |thread, cx| thread.recall_last_user_message(cx));
+            if recalled {
+                tracing::info!(
+                    target: "script_kit::keyboard",
+                    event = "acp_plain_up_recalled_last_user_prompt",
+                );
+                cx.stop_propagation();
+                return;
+            }
         }
 
         // ── Cmd+/ → toggle slash command picker ──────────────────
@@ -5983,12 +7097,12 @@ impl AcpChatView {
             return;
         }
 
-        // ── Cmd+Shift+O → reopen focused mention in its portal ──────────
-        if modifiers.platform && modifiers.shift && key.eq_ignore_ascii_case("o") {
-            if self.open_focused_mention_portal(cx) {
-                cx.stop_propagation();
-                return;
-            }
+        // ── Cmd+. / Cmd+Shift+O → reopen focused mention in its portal ───
+        if Self::is_reopen_focused_mention_shortcut(key, modifiers)
+            && self.open_focused_mention_portal(cx)
+        {
+            cx.stop_propagation();
+            return;
         }
 
         // ── Cmd+P → open dedicated history command surface ──────────
@@ -6009,6 +7123,12 @@ impl AcpChatView {
                         } else {
                             session.selected_index - 1
                         };
+                        let visible = Self::mention_visible_range_from_start(
+                            session.visible_start,
+                            session.selected_index,
+                            session.items.len(),
+                        );
+                        session.visible_start = visible.start;
                         tracing::info!(
                             target: "script_kit::tab_ai",
                             event = "acp_mention_selection_changed",
@@ -6028,6 +7148,12 @@ impl AcpChatView {
                 if let Some(session) = self.mention_session.as_mut() {
                     if !session.items.is_empty() {
                         session.selected_index = (session.selected_index + 1) % session.items.len();
+                        let visible = Self::mention_visible_range_from_start(
+                            session.visible_start,
+                            session.selected_index,
+                            session.items.len(),
+                        );
+                        session.visible_start = visible.start;
                         tracing::info!(
                             target: "script_kit::tab_ai",
                             event = "acp_mention_selection_changed",
@@ -6043,56 +7169,9 @@ impl AcpChatView {
                 cx.stop_propagation();
                 return;
             }
-            if crate::ui_foundation::is_key_enter(key) || crate::ui_foundation::is_key_tab(key) {
-                // Both Enter and Tab autocomplete the focused picker item.
-                // Submitting the ACP message still requires a later Enter after
-                // the picker closes.
-                let accepted_via_key = if crate::ui_foundation::is_key_tab(key) {
-                    "tab"
-                } else {
-                    "enter"
-                };
-                let pre_accept_item = self.mention_session.as_ref().and_then(|s| {
-                    s.items.get(s.selected_index).map(|item| {
-                        let trigger_str = match s.trigger {
-                            crate::ai::window::context_picker::types::ContextPickerTrigger::Mention => "@",
-                            crate::ai::window::context_picker::types::ContextPickerTrigger::Slash => "/",
-                        };
-                        (
-                            trigger_str.to_string(),
-                            item.label.to_string(),
-                            Self::telemetry_item_id(item),
-                        )
-                    })
-                });
-                let cursor_before = self.live_thread().read(cx).input.cursor();
-                self.accept_mention_selection_impl(false, cx);
-                let cursor_after = self.live_thread().read(cx).input.cursor();
-                let permission_active = self.live_thread().read(cx).pending_permission.is_some();
-                self.emit_key_route_telemetry(
-                    key,
-                    AcpKeyRouteTelemetryArgs {
-                        route: crate::protocol::AcpKeyRoute::Picker,
-                        cursor_before,
-                        cursor_after,
-                        caused_submit: false,
-                        consumed: true,
-                        permission_active,
-                    },
-                );
-                if let Some((trigger, label, id)) = pre_accept_item {
-                    self.emit_picker_accepted_telemetry(
-                        &trigger,
-                        &label,
-                        &id,
-                        accepted_via_key,
-                        cursor_after,
-                        false,
-                    );
-                }
-                if let Some(ref layout) = self.collect_acp_state_snapshot(cx).input_layout {
-                    self.emit_input_layout_telemetry(layout);
-                }
+            if (crate::ui_foundation::is_key_enter(key) || crate::ui_foundation::is_key_tab(key))
+                && self.handle_picker_accept_key(key, cx)
+            {
                 cx.stop_propagation();
                 return;
             }
@@ -6117,10 +7196,19 @@ impl AcpChatView {
             return;
         }
 
-        // Escape with no open dialogs: let it propagate to the main window
-        // interceptor, which will return to the main menu.
+        // Escape with no open dialogs cancels an active turn first. When the
+        // thread is idle, Escape closes via the host callback.
         if crate::ui_foundation::is_key_escape(key) {
-            cx.propagate();
+            if self.cancel_streaming_from_escape(cx) {
+                cx.stop_propagation();
+                return;
+            }
+            tracing::info!(
+                target: "script_kit::keyboard",
+                event = "embedded_acp_escape_host_close_requested",
+            );
+            self.trigger_close_requested(window, cx);
+            cx.stop_propagation();
             return;
         }
 
@@ -6146,6 +7234,15 @@ impl AcpChatView {
             return;
         }
 
+        if modifiers.platform
+            && key.eq_ignore_ascii_case("v")
+            && (self.paste_image_from_clipboard(cx) || self.paste_text_from_clipboard(cx))
+        {
+            self.refresh_mention_session(cx);
+            cx.stop_propagation();
+            return;
+        }
+
         // ── Token-atomic inline mention deletion ──────────────
         // When backspace/delete lands inside, at the trailing edge, or at
         // the leading edge of an inline @mention token, remove the whole
@@ -6156,10 +7253,53 @@ impl AcpChatView {
             let cursor = self.live_thread().read(cx).input.cursor();
 
             if let Some((next_text, next_cursor)) =
-                crate::ai::context_mentions::remove_inline_mention_at_cursor(
+                crate::pasted_text::remove_pasted_text_token_at_cursor(
                     &current_text,
                     cursor,
                     crate::ui_foundation::is_key_delete(key),
+                    &mut self.pasted_text_tokens,
+                )
+            {
+                self.live_thread().update(cx, |thread, cx| {
+                    thread.input.set_text(next_text);
+                    thread.input.set_cursor(next_cursor);
+                    cx.notify();
+                });
+                self.refresh_mention_session(cx);
+                self.sync_pasted_clipboard_tokens(cx);
+                self.sync_inline_mentions(cx);
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+
+            if let Some((next_text, next_cursor)) =
+                crate::pasted_image::remove_pasted_image_token_at_cursor(
+                    &current_text,
+                    cursor,
+                    crate::ui_foundation::is_key_delete(key),
+                    &mut self.pasted_image_tokens,
+                )
+            {
+                self.live_thread().update(cx, |thread, cx| {
+                    thread.input.set_text(next_text);
+                    thread.input.set_cursor(next_cursor);
+                    cx.notify();
+                });
+                self.refresh_mention_session(cx);
+                self.sync_pasted_clipboard_tokens(cx);
+                self.sync_inline_mentions(cx);
+                cx.notify();
+                cx.stop_propagation();
+                return;
+            }
+
+            if let Some((next_text, next_cursor)) =
+                crate::ai::context_mentions::remove_inline_mention_at_cursor_with_aliases(
+                    &current_text,
+                    cursor,
+                    crate::ui_foundation::is_key_delete(key),
+                    &self.typed_mention_aliases,
                 )
             {
                 tracing::info!(
@@ -6202,6 +7342,7 @@ impl AcpChatView {
                 thread.input = input_snapshot;
                 cx.notify();
             });
+            self.sync_pasted_clipboard_tokens(cx);
             self.refresh_mention_session(cx);
             self.sync_inline_mentions(cx);
             cx.stop_propagation();
@@ -6253,12 +7394,18 @@ impl Render for AcpChatView {
         let colors = Self::prompt_colors();
         let theme = theme::get_cached_theme();
         let mention_accent = theme::get_cached_theme().colors.accent.selected;
-        let mention_highlights = Self::attached_inline_mention_highlight_ranges(
+        let mut mention_highlights = Self::attached_inline_mention_highlight_ranges(
             &input_text,
             &attached_parts,
             mention_accent,
             &self.typed_mention_aliases,
         );
+        if let Some(slash_hl) = Self::leading_slash_highlight_range(&input_text, mention_accent) {
+            mention_highlights.push(slash_hl);
+        }
+        let mut pasted_text_pills = self.pasted_text_pill_ranges(&input_text);
+        pasted_text_pills.extend(self.pasted_image_pill_ranges(&input_text));
+        pasted_text_pills.sort_by_key(|pill| pill.start);
         let pending_permission_has_message_target = pending_permission
             .as_ref()
             .and_then(Self::permission_request_tool_call_id)
@@ -6296,6 +7443,7 @@ impl Render for AcpChatView {
                             crate::window_state::WindowRole::AcpChat,
                             wb,
                         );
+                        this.prepare_for_host_hide(cx);
                         crate::ai::acp::chat_window::clear_chat_window_handle();
                         window.remove_window();
                         cx.stop_propagation();
@@ -6305,6 +7453,9 @@ impl Render for AcpChatView {
                     this.handle_key_down(event, window, cx);
                 }),
             )
+            .on_any_mouse_down(cx.listener(|this, _event, _window, cx| {
+                this.dismiss_mention_picker(cx);
+            }))
             // ── TOP: Input (exact match with main menu mini layout) ────
             // Uses same constants: HEADER_PADDING_X=12, HEADER_PADDING_Y=10,
             // input_height=22 (CURSOR_HEIGHT_LG+2*CURSOR_MARGIN_Y), font_size_lg=16
@@ -6366,6 +7517,7 @@ impl Render for AcpChatView {
                                     cursor_width: 2.0,
                                     container_height: Some(22.0),
                                     highlight_ranges: &mention_highlights,
+                                    pill_ranges: &pasted_text_pills,
                                     ..TextInputRenderConfig::default_for_prompt(&input_text)
                                 })
                                 .into_any_element()
@@ -6666,7 +7818,23 @@ mod tests {
     use crate::ai::acp::permission_broker::{AcpApprovalPreview, AcpApprovalRequest};
     use crate::ai::acp::thread::{AcpThreadMessage, AcpThreadMessageRole};
     use crate::ai::window::context_picker::types::{ContextPickerItem, ContextPickerItemKind};
-    use gpui::SharedString;
+    use gpui::{Modifiers, SharedString};
+    use std::collections::HashMap;
+
+    fn cmd_modifiers() -> Modifiers {
+        Modifiers {
+            platform: true,
+            ..Default::default()
+        }
+    }
+
+    fn cmd_shift_modifiers() -> Modifiers {
+        Modifiers {
+            platform: true,
+            shift: true,
+            ..Default::default()
+        }
+    }
 
     #[test]
     fn mention_picker_width_respects_window_gutters() {
@@ -6721,6 +7889,12 @@ mod tests {
     fn replace_text_in_char_range_preserves_surrounding_text() {
         let updated = AcpChatView::replace_text_in_char_range("hello @con", 6..10, "@snapshot ");
         assert_eq!(updated, "hello @snapshot ");
+    }
+
+    #[test]
+    fn text_in_char_range_extracts_original_trigger_token() {
+        let original = AcpChatView::text_in_char_range("review @fi later", 7..10);
+        assert_eq!(original, "@fi");
     }
 
     #[test]
@@ -6796,5 +7970,145 @@ mod tests {
             AcpChatView::telemetry_item_id(&folder_item),
             "folder:Documents"
         );
+    }
+
+    #[test]
+    fn focused_inline_token_prefers_preview_for_resolved_builtin_mention() {
+        let text = "Review @clipboard now";
+        let cursor = "Review @clipboard".chars().count();
+
+        assert!(AcpChatView::focused_inline_token_prefers_preview(
+            text,
+            cursor,
+            &HashMap::new(),
+        ));
+    }
+
+    #[test]
+    fn focused_inline_token_prefers_preview_for_typed_portal_token() {
+        let text = "Review @note:\"Daily Standup\" soon";
+        let cursor = "Review @note:\"Daily Standup\"".chars().count();
+
+        assert!(AcpChatView::focused_inline_token_prefers_preview(
+            text,
+            cursor,
+            &HashMap::new(),
+        ));
+    }
+
+    #[test]
+    fn focused_inline_token_prefers_preview_ignores_in_progress_query() {
+        let text = "Review @clip";
+        let cursor = text.chars().count();
+
+        assert!(!AcpChatView::focused_inline_token_prefers_preview(
+            text,
+            cursor,
+            &HashMap::new(),
+        ));
+    }
+
+    #[test]
+    fn reopen_focused_mention_shortcut_accepts_cmd_period_and_cmd_shift_o() {
+        assert!(AcpChatView::is_reopen_focused_mention_shortcut(
+            "period",
+            &cmd_modifiers(),
+        ));
+        assert!(AcpChatView::is_reopen_focused_mention_shortcut(
+            "o",
+            &cmd_shift_modifiers(),
+        ));
+        assert!(!AcpChatView::is_reopen_focused_mention_shortcut(
+            "o",
+            &cmd_modifiers(),
+        ));
+    }
+
+    #[test]
+    fn portal_target_from_inline_token_supports_dictation_portal_tokens() {
+        use crate::ai::window::context_picker::types::PortalKind;
+
+        assert_eq!(
+            crate::ai::acp::portal_contract::portal_target_from_inline_token("@dictation"),
+            Some((PortalKind::DictationHistory, String::new()))
+        );
+
+        assert_eq!(
+            crate::ai::acp::portal_contract::portal_target_from_inline_token(
+                "@dictation:entry-123",
+            ),
+            Some((PortalKind::DictationHistory, "entry-123".to_string()))
+        );
+    }
+
+    #[test]
+    fn picker_portal_query_clears_in_progress_dictation_picker_text() {
+        use crate::ai::window::context_picker::types::PortalKind;
+
+        assert_eq!(
+            crate::ai::acp::portal_contract::picker_portal_query(
+                PortalKind::DictationHistory,
+                "di",
+            ),
+            ""
+        );
+    }
+
+    #[test]
+    fn picker_portal_query_preserves_non_dictation_portal_text() {
+        use crate::ai::window::context_picker::types::PortalKind;
+
+        assert_eq!(
+            crate::ai::acp::portal_contract::picker_portal_query(PortalKind::BrowserHistory, "bro"),
+            "bro"
+        );
+    }
+
+    // ── ScriptReadyReceipt parsing tests ──
+
+    #[test]
+    fn parse_script_ready_receipt_valid() {
+        let text = "Some output\nSCRIPT_READY path=/foo/bar.ts validated=true";
+        let receipt = super::parse_script_ready_receipt(text).unwrap();
+        assert_eq!(receipt.path, std::path::PathBuf::from("/foo/bar.ts"));
+        assert!(receipt.validated);
+    }
+
+    #[test]
+    fn parse_script_ready_receipt_not_validated() {
+        let text = "SCRIPT_READY path=/foo/bar.ts validated=false";
+        let receipt = super::parse_script_ready_receipt(text).unwrap();
+        assert_eq!(receipt.path, std::path::PathBuf::from("/foo/bar.ts"));
+        assert!(!receipt.validated);
+    }
+
+    #[test]
+    fn parse_script_ready_receipt_no_match() {
+        let text = "Some random output\nNo receipt here.";
+        assert!(super::parse_script_ready_receipt(text).is_none());
+    }
+
+    #[test]
+    fn parse_script_ready_receipt_missing_path() {
+        let text = "SCRIPT_READY validated=true";
+        assert!(super::parse_script_ready_receipt(text).is_none());
+    }
+
+    #[test]
+    fn parse_script_ready_receipt_uses_last_occurrence() {
+        let text = "SCRIPT_READY path=/old.ts validated=true\nMore text\nSCRIPT_READY path=/new.ts validated=true";
+        let receipt = super::parse_script_ready_receipt(text).unwrap();
+        assert_eq!(receipt.path, std::path::PathBuf::from("/new.ts"));
+    }
+
+    #[test]
+    fn parse_script_ready_receipt_with_home_tilde() {
+        let text = "Validation passed.\nSCRIPT_READY path=~/.scriptkit/plugins/main/scripts/clipboard-cleanup.ts validated=true";
+        let receipt = super::parse_script_ready_receipt(text).unwrap();
+        assert_eq!(
+            receipt.path,
+            std::path::PathBuf::from("~/.scriptkit/plugins/main/scripts/clipboard-cleanup.ts")
+        );
+        assert!(receipt.validated);
     }
 }

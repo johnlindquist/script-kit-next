@@ -35,6 +35,11 @@ required-features = ["storybook"]
 name = "vibrancy-poc"
 path = "src/bin/vibrancy-poc.rs"
 
+[[bin]]
+name = "menu-syntax-doctor"
+path = "src/bin/menu_syntax_doctor.rs"
+test = false
+
 [dependencies]
 gpui = { path = "vendor/gpui" }
 gpui_platform = { path = "vendor/gpui_platform", features = ["font-kit"] }
@@ -42,6 +47,10 @@ gpui_macos = { path = "vendor/gpui_macos" }
 gpui_macros = { path = "vendor/gpui_macros" }
 global-hotkey = "0.7"
 notify = "8.0"
+# System notifications (Notification Center on macOS via mac-notification-sys).
+# Replaces the earlier `osascript -e 'display notification ...'` shell-out for the
+# `notify(...)` SDK API; keeps one crate in control of escaping / delivery.
+notify-rust = "4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"        # YAML frontmatter parsing for scriptlet bundles
@@ -58,6 +67,8 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "time", "tracing-log"] }
 tracing-appender = "0.2"
 chrono = { version = "0.4", features = ["serde"] }
+chrono-english = "0.1.8"
+chrono-tz = "0.10"
 itertools = "0.14"
 strum = { version = "0.26", features = ["derive"] }
 humantime = "2"
@@ -170,6 +181,11 @@ core-foundation = "0.10"
 foreign-types = "0.5"
 # macOS launch-at-login via SMAppService
 smappservice-rs = "0.1"
+# Vendored reference crate (oracle/) for native macOS screenshot capture.
+# Scaffolded in; internal swap of capture_screen_screenshot / capture_focused_window_screenshot
+# is deferred because VisibleWindows crop semantics differ from the active-display crop
+# Tab AI currently relies on.
+macos-screenshot-kit = { path = "oracle/macos-screenshot-kit" }
 
 [patch."https://github.com/zed-industries/zed"]
 gpui = { path = "vendor/gpui" }

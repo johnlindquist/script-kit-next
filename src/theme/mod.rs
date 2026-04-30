@@ -1,7 +1,7 @@
 //! Theme module - Color schemes and styling
 //!
 //! This module provides functionality for:
-//! - Loading theme from ~/.scriptkit/kit/theme.json
+//! - Loading theme from ~/.scriptkit/theme.json
 //! - Color scheme definitions (dark/light mode)
 //! - Terminal ANSI color palette
 //! - gpui-component theme integration
@@ -25,7 +25,8 @@ pub mod opacity;
 pub mod prelude;
 pub mod presets;
 pub mod service;
-mod types;
+pub(crate) mod types;
+pub mod user_themes;
 pub(crate) mod validation;
 
 // Re-export shared chrome contract for app surfaces

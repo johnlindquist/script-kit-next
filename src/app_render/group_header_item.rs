@@ -26,6 +26,8 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::AppLauncher => "Application Launcher".to_string(),
         builtins::BuiltInFeature::App(name) => name.clone(),
         builtins::BuiltInFeature::WindowSwitcher => "Window Manager".to_string(),
+        builtins::BuiltInFeature::BrowserTabs => "Browser Tabs".to_string(),
+        builtins::BuiltInFeature::SyncToGithub => "Sync to GitHub".to_string(),
         builtins::BuiltInFeature::DesignGallery => "Design Gallery".to_string(),
         #[cfg(feature = "storybook")]
         builtins::BuiltInFeature::DesignExplorer => "Design Explorer".to_string(),
@@ -37,6 +39,7 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::NotesCommand(_) => "Notes Command".to_string(),
         builtins::BuiltInFeature::AiCommand(_) => "AI Command".to_string(),
         builtins::BuiltInFeature::ScriptCommand(_) => "Script Creation".to_string(),
+        builtins::BuiltInFeature::NewScriptFromTemplate => "Script Creation".to_string(),
         builtins::BuiltInFeature::PermissionCommand(_) => "Permission Management".to_string(),
         builtins::BuiltInFeature::FrecencyCommand(_) => "Suggested Items".to_string(),
         builtins::BuiltInFeature::UtilityCommand(_) => "Quick Utility".to_string(),
@@ -49,7 +52,9 @@ fn builtin_feature_annotation(feature: &builtins::BuiltInFeature) -> String {
         builtins::BuiltInFeature::DictationToFrontmostApp => "Voice Dictation to App".to_string(),
         builtins::BuiltInFeature::DictationToNotes => "Voice Dictation to Notes".to_string(),
         builtins::BuiltInFeature::AcpHistory => "AI Conversation History".to_string(),
+        builtins::BuiltInFeature::DictationHistory => "Dictation History".to_string(),
         builtins::BuiltInFeature::Settings => "Script Kit Settings".to_string(),
+        builtins::BuiltInFeature::SdkReference => "SDK Reference".to_string(),
     }
 }
 

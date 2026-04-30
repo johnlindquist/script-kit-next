@@ -230,19 +230,15 @@ fn copy_deeplink_present_for_all_script_types() {
 }
 
 #[test]
-fn copy_deeplink_description_contains_formatted_name() {
+fn copy_deeplink_description_uses_portable_share_copy_for_scripts() {
     let script = ScriptInfo::new("My Cool Script", "/path/cool.ts");
     let actions = get_script_context_actions(&script);
     let deeplink = actions.iter().find(|a| a.id == "copy_deeplink").unwrap();
 
-    assert!(
-        deeplink
-            .description
-            .as_ref()
-            .unwrap()
-            .contains("my-cool-script"),
-        "Deeplink description should contain formatted deeplink name, got: {:?}",
-        deeplink.description
+    assert_eq!(deeplink.title, "Share");
+    assert_eq!(
+        deeplink.description.as_deref(),
+        Some("Copy a portable Script Kit share link to clipboard")
     );
 }
 
@@ -305,7 +301,7 @@ fn command_bar_config_notes_style() {
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
     // Inherits default close behaviors
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
@@ -323,7 +319,7 @@ fn actions_dialog_config_default_values() {
     assert!(matches!(config.section_style, SectionStyle::Headers));
     assert!(matches!(config.anchor, AnchorPosition::Bottom));
     assert!(!config.show_icons);
-    assert!(config.show_footer);
+    assert!(!config.show_footer);
 }
 
 // =========================================================================
@@ -804,9 +800,9 @@ fn clipboard_pinned_image_has_unpin_and_image_actions() {
 // =========================================================================
 
 #[test]
-fn global_actions_empty() {
+fn global_actions_seeded() {
     let actions = get_global_actions();
-    assert!(actions.is_empty(), "Global actions should be empty");
+    assert!(!actions.is_empty(), "Global actions should be seeded");
 }
 
 // =========================================================================

@@ -158,14 +158,6 @@ pub fn render_actions_dialog_presentation(
         container = container.child(render_search_row(model, &style, theme, &mono));
     }
 
-    // Two-key hint strip footer — matches live dialog exactly
-    if model.show_footer {
-        container = container.child(div().w_full().child(crate::components::HintStrip::new(vec![
-            "↵ Run".into(),
-            "⌘K Actions".into(),
-        ])));
-    }
-
     container.into_any_element()
 }
 
@@ -360,7 +352,7 @@ mod tests {
             cursor_visible: true,
             show_search: true,
             search_at_top: false,
-            show_footer: true,
+            show_footer: false,
             items: vec![
                 ActionsDialogPresentationItem::Action(ActionsDialogPresentationAction {
                     title: SharedString::from("Open Application"),

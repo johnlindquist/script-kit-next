@@ -9,7 +9,9 @@ use super::dialog::{
     resolve_selected_protocol_action_index, should_rebuild_grouped_items_for_config_change,
     GroupedActionItem,
 };
-use super::types::{Action, ActionCategory, ActionsDialogConfig, SectionStyle};
+use super::types::{
+    Action, ActionCategory, ActionsDialogConfig, AnchorPosition, SearchPosition, SectionStyle,
+};
 
 // ============================================================
 // Helper
@@ -435,7 +437,7 @@ fn action_config_default_values() {
     assert_eq!(config.section_style, SectionStyle::Headers);
     assert_eq!(config.anchor, super::types::AnchorPosition::Bottom);
     assert!(!config.show_icons);
-    assert!(config.show_footer);
+    assert!(!config.show_footer);
 }
 
 // --- merged from part_02.rs ---
@@ -485,6 +487,20 @@ fn config_change_does_not_require_rebuild_when_section_style_same() {
     assert!(!should_rebuild_grouped_items_for_config_change(
         &previous, &next
     ));
+}
+
+#[test]
+fn acp_chat_dialog_config_matches_main_acp_layout() {
+    let config = super::dialog::ActionsDialog::acp_chat_dialog_config();
+
+    assert_eq!(config.search_position, SearchPosition::Top);
+    assert_eq!(config.section_style, SectionStyle::Headers);
+    assert_eq!(config.anchor, AnchorPosition::Top);
+    assert!(config.show_icons);
+    assert!(
+        !config.show_context_header,
+        "ACP actions should use the compact chrome without a duplicate context header"
+    );
 }
 
 #[test]

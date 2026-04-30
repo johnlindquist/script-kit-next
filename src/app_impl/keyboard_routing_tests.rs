@@ -25,6 +25,7 @@ mod tests {
             "src/app_impl/startup_new_arrow.rs",
             "src/app_impl/startup_new_actions.rs",
             "src/app_impl/actions_dialog.rs",
+            "src/app_impl/theme_focus.rs",
         ];
 
         let mut content = String::new();
@@ -281,6 +282,25 @@ mod tests {
         assert!(
             content.contains("stop_propagation"),
             "Arrow key handlers must call stop_propagation after routing to actions dialog"
+        );
+    }
+
+    /// Verify launcher ACP focus restore uses a dedicated host-specific target.
+    ///
+    /// This guards the close path against flattening embedded ACP back into the
+    /// generic chat prompt restore target.
+    #[test]
+    fn test_launcher_acp_actions_restore_uses_dedicated_focus_target() {
+        let content = read_app_impl_sources();
+
+        assert!(
+            content.contains("ActionsDialogHost::AcpChat => FocusRequest::acp_chat()"),
+            "launcher ACP actions close should map to FocusRequest::acp_chat()"
+        );
+        assert!(
+            content.contains("FocusTarget::AcpChat => {")
+                && content.contains("AppView::AcpChatView { entity }"),
+            "pending focus application should restore launcher ACP via AcpChatView"
         );
     }
 }

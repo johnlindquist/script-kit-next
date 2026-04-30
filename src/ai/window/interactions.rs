@@ -33,20 +33,20 @@ impl AiApp {
         self.copied_at = Some(std::time::Instant::now());
         cx.notify();
 
-        // Reset feedback after 2 seconds
-        cx.spawn(async move |this, cx| {
+        // Reset feedback after 2 seconds — stored so a rapid re-copy cancels the prior timer
+        self.copy_feedback_reset_task = Some(cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(2000))
                 .await;
             let _ = cx.update(|cx| {
                 this.update(cx, |this, cx| {
+                    this.copy_feedback_reset_task = None;
                     this.copied_message_id = None;
                     this.copied_at = None;
                     cx.notify();
                 })
             });
-        })
-        .detach();
+        }));
     }
 
     /// Copy the last assistant response to the clipboard (Cmd+Shift+C).
@@ -79,18 +79,18 @@ impl AiApp {
         self.chat_transcript_copied_at = Some(std::time::Instant::now());
         cx.notify();
 
-        cx.spawn(async move |this, cx| {
+        self.chat_transcript_feedback_reset_task = Some(cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(2000))
                 .await;
             let _ = cx.update(|cx| {
                 this.update(cx, |this, cx| {
+                    this.chat_transcript_feedback_reset_task = None;
                     this.chat_transcript_copied_at = None;
                     cx.notify();
                 })
             });
-        })
-        .detach();
+        }));
     }
 
     /// Whether transcript copy feedback should currently be visible.
@@ -234,19 +234,19 @@ impl AiApp {
         self.export_copied_at = Some(std::time::Instant::now());
         cx.notify();
 
-        // Reset feedback after 2 seconds
-        cx.spawn(async move |this, cx| {
+        // Reset feedback after 2 seconds — stored so a rapid re-export cancels the prior timer
+        self.export_feedback_reset_task = Some(cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(std::time::Duration::from_millis(2000))
                 .await;
             let _ = cx.update(|cx| {
                 this.update(cx, |this, cx| {
+                    this.export_feedback_reset_task = None;
                     this.export_copied_at = None;
                     cx.notify();
                 })
             });
-        })
-        .detach();
+        }));
     }
 
     /// Check if the export feedback is currently showing.

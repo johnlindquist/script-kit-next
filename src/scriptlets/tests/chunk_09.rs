@@ -320,7 +320,7 @@ fn with_temp_scriptlet_extensions_dir(test_fn: impl FnOnce(&std::path::Path)) {
         .unwrap_or_else(|e| e.into_inner());
 
     let temp_dir = TempDir::new().expect("create temp dir for scriptlet tests");
-    let extensions_dir = temp_dir.path().join("kit").join("main").join("extensions");
+    let extensions_dir = temp_dir.path().join("plugins").join("main").join("extensions");
     std::fs::create_dir_all(&extensions_dir).expect("create extensions directory");
 
     let previous = std::env::var_os(crate::setup::SK_PATH_ENV);

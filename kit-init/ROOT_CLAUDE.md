@@ -5,7 +5,7 @@ Script Kit is a **Rust (GPUI) + Bun** launcher — NOT the old Electron/Node.js 
 
 ## One-Shot First
 
-Use `~/.scriptkit/kit/examples/START_HERE.md` as the canonical one-shot authoring guide.
+Use `~/.scriptkit/plugins/examples/START_HERE.md` as the canonical one-shot creation guide.
 Open it first when the user wants one new Script Kit artifact in harness mode.
 Use the rest of this file for workspace rules and Tab AI runtime contract after the artifact type is already chosen.
 
@@ -15,44 +15,44 @@ Use this plain-text route first:
 
 ### Script
 - Use for Script Kit UI, Bun APIs, files, HTTP, or multi-step logic
-- Write to `~/.scriptkit/kit/main/scripts/<name>.ts`
+- Write to `~/.scriptkit/plugins/main/scripts/<name>.ts`
 
 ### Scriptlet bundle
 - Use for snippets, text expansion, quick shell commands, or grouped helpers
-- Write to `~/.scriptkit/kit/main/scriptlets/<name>.md`
+- Write to `~/.scriptkit/plugins/main/scriptlets/<name>.md`
 
 ### Skill (preferred reusable AI unit)
-- Use for reusable AI instructions that open ACP Chat when selected from the main menu
-- Write to `~/.scriptkit/kit/main/skills/<name>/SKILL.md`
+- Use for reusable AI instructions that open Agent Chat when selected from the main menu
+- Write to `~/.scriptkit/plugins/main/skills/<name>/SKILL.md`
 - Skills are the preferred way to package reusable AI behavior — plugins are the package boundary
 
 ### mdflow agent (compatibility)
 - Use only when you need a specific backend suffix or legacy mdflow features
-- Write to `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
+- Write to `~/.scriptkit/plugins/main/agents/<name>.<backend>.md`
 - For new reusable AI work, prefer creating a skill instead
 
 ## Guardrails
 
 - Create exactly one artifact per request.
-- Save runnable user files only under `~/.scriptkit/kit/main/`.
+- Save runnable user files only under `~/.scriptkit/plugins/main/`.
 - Do not create a `.ts` script when the request is really a bundle, skill, or agent.
-- For new reusable AI work, create a skill (`kit/main/skills/<name>/SKILL.md`), not an agent.
+- For new reusable AI work, create a skill (`plugins/main/skills/<name>/SKILL.md`), not an agent.
 - For `tool:<name>` scriptlets, the first line must be `import "@scriptkit/sdk";`.
 - Agent files do not use `export const metadata`; use underscore-prefixed `_sk_*` keys.
 - Choose the backend suffix deliberately: `.claude.md`, `.gemini.md`, `.codex.md`, `.copilot.md`, or `.i.gemini.md`.
 
 ## Read Next
 
-- Canonical launchpad → `~/.scriptkit/kit/examples/START_HERE.md`
+- Canonical launchpad → `~/.scriptkit/plugins/examples/START_HERE.md`
 - Machine-readable SDK reference → `kit://sdk-reference`
-- Script details → `~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md`
-- Bundle details → `~/.scriptkit/kit/authoring/skills/scriptlets/SKILL.md`
-- Skills overview → `~/.scriptkit/kit/authoring/skills/README.md`
-- Agent details (compatibility) → `~/.scriptkit/kit/authoring/skills/agents/SKILL.md`
-- Script example → `~/.scriptkit/kit/examples/scripts/hello-world.ts`
-- Skill examples → `~/.scriptkit/kit/examples/skills/`
-- Bundle starter → `~/.scriptkit/kit/examples/scriptlets/starter.md`
-- Agent example → `~/.scriptkit/kit/examples/agents/review-pr.claude.md`
+- Script details → `~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md`
+- Bundle details → `~/.scriptkit/plugins/scriptkit/skills/new-scriptlet/SKILL.md`
+- Skills overview → `~/.scriptkit/plugins/scriptkit/skills/README.md`
+- Agent details (compatibility) → `~/.scriptkit/plugins/scriptkit/skills/new-agent/SKILL.md`
+- Script example → `~/.scriptkit/plugins/examples/scripts/hello-world.ts`
+- Skill examples → `~/.scriptkit/plugins/examples/skills/`
+- Bundle starter → `~/.scriptkit/plugins/examples/scriptlets/starter.md`
+- Agent example → `~/.scriptkit/plugins/examples/agents/review-pr.claude.md`
 
 ## Directory Layout
 
@@ -61,31 +61,31 @@ Use this plain-text route first:
 ├── CLAUDE.md                      ← this file
 ├── AGENTS.md                      ← SDK reference for all agents
 ├── GUIDE.md                       ← comprehensive user guide
-├── kit/                           ← user workspace (version-controllable)
+├── plugins/                       ← plugin roots
 │   ├── main/
 │   │   ├── plugin.json            ← plugin manifest
 │   │   ├── scripts/               ← PUT NEW SCRIPTS HERE
 │   │   ├── scriptlets/            ← markdown scriptlet bundles
 │   │   ├── skills/                ← AI skills (preferred reusable AI unit)
 │   │   └── agents/                ← legacy agent definitions (compatibility)
-│   ├── authoring/
+│   ├── scriptkit/
 │   │   ├── plugin.json
 │   │   └── skills/                ← agent skills (read these!)
-│   │       ├── script-authoring/SKILL.md
-│   │       ├── scriptlets/SKILL.md
-│   │       ├── agents/SKILL.md
-│   │       ├── config/SKILL.md
-│   │       └── troubleshooting/SKILL.md
+│   │       ├── new-script/SKILL.md
+│   │       ├── new-scriptlet/SKILL.md
+│   │       ├── new-agent/SKILL.md
+│   │       ├── update-config/SKILL.md
+│   │       └── troubleshoot/SKILL.md
 │   ├── examples/
 │   │   ├── plugin.json
 │   │   ├── scripts/               ← runnable .ts examples
 │   │   ├── skills/                ← example ACP-first skills
 │   │   ├── scriptlets/            ← built-in scriptlet bundles
 │   │   └── agents/                ← mdflow agent examples
-│   ├── config.ts                  ← user configuration
-│   ├── theme.json                 ← theme colors
-│   ├── package.json               ← enables top-level await
-│   └── tsconfig.json              ← TypeScript + SDK path mapping
+├── config.ts                      ← user configuration
+├── theme.json                     ← theme colors
+├── package.json                   ← enables top-level await
+├── tsconfig.json                  ← TypeScript + SDK path mapping
 ├── sdk/                           ← managed by app (DO NOT EDIT)
 │   └── kit-sdk.ts
 ├── db/                            ← databases
@@ -98,24 +98,24 @@ Use this plain-text route first:
 ### Script Rules
 - Start the file with `import "@scriptkit/sdk";`
 - Use `export const metadata = { name, description }`
-- Save to `kit/main/scripts/*.ts`
+- Save to `plugins/main/scripts/*.ts`
 - Use Bun APIs: `Bun.file()`, `Bun.write()`, and `` $`command` ``
 
 ### Scriptlet Bundle Rules
-- Save one markdown file to `kit/main/scriptlets/*.md`
+- Save one markdown file to `plugins/main/scriptlets/*.md`
 - Prefer `metadata` code fences for new bundles
 - Use `import "@scriptkit/sdk";` only inside `tool:<name>` fences, as the first line of that fence
 - Do not put `export const metadata` at the top of the markdown file
 
 ### Skill Rules (Preferred Reusable AI Unit)
-- Create a directory under `kit/main/skills/<name>/`
+- Create a directory under `plugins/main/skills/<name>/`
 - Add a `SKILL.md` file with YAML frontmatter (`name`, `description`)
-- Skills appear in the main menu and always open ACP Chat when selected
+- Skills appear in the main menu and always open Agent Chat when selected
 - Plugins are the package boundary — each plugin owns its own skills
 - Prefer skills over agents for any new reusable AI work
 
 ### mdflow Agent Rules (Compatibility)
-- Save to `kit/main/agents/<name>.<backend>.md`
+- Save to `plugins/main/agents/<name>.<backend>.md`
 - Use underscore-prefixed `_sk_*` metadata keys
 - Do not use `export const metadata`
 - Do not add `import "@scriptkit/sdk"` to the markdown file
@@ -172,22 +172,23 @@ const result = await $`ls -la ~/Desktop`.text();
 // Open URLs/apps
 await open("https://example.com");
 
-// Notifications
-await notify("Task complete!");
+// Feedback: `hud(message)` for in-launcher overlay, `notify(message)`
+// for an OS-level system notification (Notification Center).
+hud("Task complete!");
 ```
 
 ## Skills
 
-Read `kit/authoring/skills/` for detailed guidance on:
-- **script-authoring** — creating and structuring scripts
-- **scriptlets** — markdown scriptlet bundles with embedded commands
-- **agents** — mdflow-backed agent files
-- **config** — configuration and theming
-- **troubleshooting** — common issues and debugging
+Read `plugins/scriptkit/skills/` for detailed guidance on:
+- **new-script** — creating and updating scripts
+- **new-scriptlet** — markdown scriptlet bundles with embedded commands
+- **new-agent** — mdflow-backed agent files
+- **update-config** — configuration and theming
+- **troubleshoot** — common issues and debugging
 
 ## Examples
 
-See `kit/examples/` for working examples:
+See `plugins/examples/` for working examples:
 - `hello-world.ts` — basic prompt and display
 - `choose-from-list.ts` — rich choices with preview
 - `clipboard-transform.ts` — clipboard read/transform/write
@@ -198,17 +199,17 @@ See `kit/examples/` for working examples:
 
 ## Configuration
 
-- **Config**: `kit/config.ts` — hotkeys, font sizes, built-in features
-- **Theme**: `kit/theme.json` — colors (hex, rgb, rgba)
+- **Config**: `config.ts` — hotkeys, font sizes, built-in features
+- **Theme**: `theme.json` — colors (hex, rgb, rgba)
 - **TypeScript**: `kit/tsconfig.json` — managed by app, maps `@scriptkit/sdk`
 
 ## Tab AI — Quick Terminal with Flat Context Injection
 
-Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` via `TermPrompt`.
+Tab AI now has two distinct surfaces: Agent Chat is the default AI chat UI, while `AppView::QuickTerminalView` remains the PTY-backed harness surface rendered by `TermPrompt`.
 
 **Entry path:**
-- Plain `Tab` opens the harness terminal and stages a flat labeled `Script Kit context` block using `TabAiHarnessSubmissionMode::PasteOnly`.
-- `Shift+Tab` in `AppView::ScriptList` with non-empty filter text opens the same harness surface and submits that filter text as `User intent:` using `TabAiHarnessSubmissionMode::Submit`.
+- Plain `Tab` in `AppView::ScriptList` routes through the ACP entry path and context-capture helpers. Do not describe plain Tab as opening the harness terminal by default.
+- `QuickTerminalView` is opened by explicit harness / verification flows that need a PTY-backed surface.
 - `Tab` / `Shift+Tab` inside `AppView::QuickTerminalView` are forwarded to the PTY. Do not describe them as focus-navigation keys once the harness terminal is open.
 
 **Close semantics:**
@@ -217,14 +218,14 @@ Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` vi
 - The footer hint strip advertises only `⌘W Close`.
 
 **Runtime contract:**
-- Entry path: `open_tab_ai_acp_with_entry_intent(...)` → `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
+- Canonical chat entry: `open_tab_ai_acp_with_entry_intent(...)`
+- Quick-terminal path: `begin_tab_ai_harness_entry()` → `open_tab_ai_harness_terminal_from_request()`
 - Harness session state: `TabAiHarnessSessionState`
-- Harness config: `claudeCode` block in `~/.scriptkit/kit/config.ts`
+- Harness config: `claudeCode` block in `~/.scriptkit/config.ts`
 - Context bundle: `~/.scriptkit/context/latest.md` (deterministic path)
-
 - Context assembly stays intact: `snapshot_tab_ai_ui()` + `capture_context_snapshot(CaptureContextOptions::tab_ai_submit())` + `build_tab_ai_context_from()`
-- The landed default Tab flow is PTY-backed text injection
 - `build_tab_ai_harness_submission()` emits a flat text-native context block plus optional artifact authoring guidance
+- Quick-terminal submissions are encoded with `TabAiHarnessSubmissionMode` and currently use the `PasteOnly` / `Submit` variants.
 - No XML wrappers are used in the landed PTY path
 - `PasteOnly` stages context on a fresh line and does not auto-submit
 - `Submit` with a non-empty intent appends `User intent:` and submits immediately
@@ -235,14 +236,14 @@ Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` vi
 - The richer `tab_ai()` profile with screenshots is reserved for a future Claude-specific SDK path.
 
 **Harness lifecycle:**
-- Each explicit quick-terminal open writes `~/.scriptkit/context/latest.md`, enumerates plugin-owned skills under `~/.scriptkit/kit/*/skills/`, and behaves as a one-shot spawn rendered in `QuickTerminalView`.
+- Each explicit quick-terminal open writes `~/.scriptkit/context/latest.md`, enumerates plugin-owned skills under `~/.scriptkit/plugins/*/skills/`, and behaves as a one-shot spawn rendered in `QuickTerminalView`.
 - Internal silent prewarm may seed the PTY ahead of time, but that is a single-use implementation detail rather than a documented warm multi-turn surface.
-- Recovery — if the harness crashes or exits, the next Tab entry respawns it.
+- Recovery — if the harness crashes or exits, the next explicit quick-terminal entry respawns it.
 
-**ACP Chat vs harness terminal:**
-- Plain `Tab` opens the harness terminal, not ACP Chat.
-- ACP Chat is opened explicitly from skills or ACP SDK entry points (`aiStartChat()`, `aiFocus()`).
-- Do not describe plain Tab as opening ACP Chat.
+**Agent Chat vs harness terminal:**
+- Agent Chat is the user-facing default AI chat surface.
+- Quick Terminal is the PTY-backed harness surface for terminal-native verification and authoring flows.
+- Do not describe plain Tab as opening the harness terminal or `Shift+Tab` in `AppView::ScriptList` as the default quick-submit path.
 
 **Do not describe as current behavior:**
 - Do not describe the old inline chat entity or custom streaming UI as the primary Tab AI surface
@@ -254,7 +255,7 @@ Tab AI's PTY-backed verification path renders in `AppView::QuickTerminalView` vi
 Script Kit watches and auto-reloads:
 | Path | Effect |
 |------|--------|
-| `kit/config.ts` | Reloads configuration |
-| `kit/theme.json` | Applies new theme |
-| `kit/main/scripts/*.ts` | Updates script list |
-| `kit/main/scriptlets/*.md` | Updates extensions |
+| `config.ts` | Reloads configuration |
+| `theme.json` | Applies new theme |
+| `plugins/main/scripts/*.ts` | Updates script list |
+| `plugins/main/scriptlets/*.md` | Updates extensions |

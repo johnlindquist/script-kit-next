@@ -5,7 +5,7 @@
 //! Keeps the first ACP slice text-only for capability safety — no image or
 //! resource blocks are emitted here.
 
-use agent_client_protocol::{ContentBlock, ImageContent, TextContent};
+use agent_client_protocol::{ContentBlock, TextContent};
 
 use crate::ai::harness::{
     build_tab_ai_artifact_authoring_appendix_for_prompt, TabAiArtifactKind,
@@ -22,29 +22,7 @@ pub(crate) fn build_tab_ai_acp_context_blocks(
     context: &TabAiContextBlob,
 ) -> Result<Vec<ContentBlock>, String> {
     let context_text = build_tab_ai_harness_context_block(context)?;
-    let mut blocks = vec![ContentBlock::Text(TextContent::new(context_text))];
-
-    // If a screenshot was captured, embed it as an Image block so the agent
-    // can see what's on the user's screen without an extra tool call.
-    if let Some(path) = context.screenshot_path.as_deref() {
-        match std::fs::read(path) {
-            Ok(bytes) => {
-                use base64::Engine as _;
-                let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                blocks.push(ContentBlock::Image(ImageContent::new(b64, "image/png")));
-                tracing::debug!(
-                    path,
-                    size_bytes = bytes.len(),
-                    "acp_context_screenshot_embedded"
-                );
-            }
-            Err(error) => {
-                tracing::debug!(path, %error, "acp_context_screenshot_read_failed");
-            }
-        }
-    }
-
-    Ok(blocks)
+    Ok(vec![ContentBlock::Text(TextContent::new(context_text))])
 }
 
 /// Return guidance blocks for a prompt when the intent looks like an authoring
@@ -89,6 +67,7 @@ pub(crate) fn build_tab_ai_acp_guidance_blocks_for_prompt(
         includes_script_authoring_skill = appendix.markers.includes_script_authoring_skill,
         includes_bun_build_verification = appendix.markers.includes_bun_build_verification,
         includes_bun_execute_verification = appendix.markers.includes_bun_execute_verification,
+        includes_script_ready_receipt = appendix.markers.includes_script_ready_receipt,
         text_len = appendix.guidance.len(),
     );
 
@@ -172,8 +151,8 @@ mod tests {
     }
 
     #[test]
-    fn guidance_blocks_are_added_only_for_authoring_intents() {
-        // Authoring intent → should include guidance
+    fn guidance_blocks_are_added_only_for_script_creation_intents() {
+        // Script creation intent should include guidance.
         let authoring = build_tab_ai_acp_guidance_blocks_for_prompt(
             "ScriptList",
             Some("build a clipboard cleanup script"),
@@ -181,7 +160,7 @@ mod tests {
         assert_eq!(
             authoring.len(),
             1,
-            "authoring intent should produce one guidance block"
+            "script creation intent should produce one guidance block"
         );
         // Must contain the shared verification contract, not the old static embed
         match &authoring[0] {
@@ -192,21 +171,21 @@ mod tests {
                 );
                 assert!(
                     text.text
-                        .contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"),
-                    "guidance must reference the script-authoring skill"
+                        .contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"),
+                    "guidance must reference the new-script skill"
                 );
             }
             other => panic!("expected text block, got {other:?}"),
         }
 
-        // Non-authoring intent → no guidance
+        // Non-script-creation intent produces no guidance.
         let non_authoring = build_tab_ai_acp_guidance_blocks_for_prompt(
             "FileSearch",
             Some("explain this selection"),
         );
         assert!(
             non_authoring.is_empty(),
-            "non-authoring intent should produce no guidance blocks"
+            "non-script-creation intent should produce no guidance blocks"
         );
     }
 
@@ -254,6 +233,49 @@ mod tests {
                 matches!(block, ContentBlock::Text(_)),
                 "all blocks should be text-only, got {block:?}"
             );
+        }
+    }
+
+    #[test]
+    fn screenshot_path_stays_in_text_context_without_image_block() {
+        let context = TabAiContextBlob::from_parts(
+            crate::ai::TabAiUiSnapshot {
+                prompt_type: "ArgPrompt".to_string(),
+                input_text: Some("what is on my screen".to_string()),
+                focused_semantic_id: None,
+                selected_semantic_id: None,
+                visible_elements: Vec::new(),
+            },
+            crate::context_snapshot::AiContextSnapshot::default(),
+            Vec::new(),
+            None,
+            Vec::new(),
+            Vec::new(),
+            "2026-04-01T00:00:00Z".to_string(),
+        )
+        .with_deferred_capture_fields(
+            Some(crate::ai::TabAiSourceType::Desktop),
+            Some("/tmp/tab-ai-screenshot-test.png".to_string()),
+            None,
+        );
+
+        let blocks = build_tab_ai_acp_context_blocks(&context).expect("context block");
+        assert_eq!(
+            blocks.len(),
+            1,
+            "screenshot path should not add an ACP image block"
+        );
+
+        match &blocks[0] {
+            ContentBlock::Text(text) => {
+                assert!(
+                    text.text
+                        .contains("screenshot path: /tmp/tab-ai-screenshot-test.png"),
+                    "expected screenshot path in text context, got: {}",
+                    text.text
+                );
+            }
+            other => panic!("expected text-only ACP context, got {other:?}"),
         }
     }
 }

@@ -86,7 +86,7 @@
                         });
                     }
                     Some(TrayMenuAction::OpenAiChat) => {
-                        logging::log("TRAY", "ACP Chat menu item clicked");
+                        logging::log("TRAY", "Agent Chat menu item clicked");
                         let _ = cx.update(|cx| {
                             app_entity_for_tray.update(cx, |view, cx| {
                                 view.open_tab_ai_acp_with_entry_intent(None, cx);
@@ -102,7 +102,7 @@
                         // Open config file in editor
                         let editor = config_for_tray_actions.get_editor();
                         let config_path =
-                            shellexpand::tilde("~/.scriptkit/kit/config.ts").to_string();
+                            shellexpand::tilde("~/.scriptkit/config.ts").to_string();
 
                         logging::log(
                             "TRAY",
@@ -259,7 +259,7 @@
             // Event-driven: .recv().await blocks until a message arrives
             while let Ok(hotkey_event) = hotkeys::ai_hotkey_channel().1.recv().await {
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
-                logging::log("HOTKEY", "AI hotkey triggered - opening ACP Chat");
+                logging::log("HOTKEY", "AI hotkey triggered - opening Agent Chat");
                 let _ = cx.update(|cx: &mut gpui::App| {
                     app_entity.update(cx, |view, cx| {
                         view.open_tab_ai_acp_with_entry_intent(None, cx);
@@ -270,11 +270,9 @@
         }).detach();
 
         // Dictation hotkey listener - event-driven via async_channel
-        // The global dictation shortcut should always target the previously
-        // frontmost external app, even when Script Kit is visible. Route
-        // through the dedicated forced frontmost-app builtin so the
-        // contextual main-window/prompt dictation behavior remains available
-        // from the regular builtin entry.
+        // The global dictation shortcut routes to Agent Chat quick-submit.
+        // Contextual main-window/prompt dictation remains available from the
+        // regular builtin entry.
         let app_entity_for_dictation = app_entity.clone();
         cx.spawn(async move |cx: &mut gpui::AsyncApp| {
             logging::log("HOTKEY", "Dictation hotkey listener started (event-driven)");
@@ -282,12 +280,12 @@
                 let _guard = logging::set_correlation_id(hotkey_event.correlation_id.clone());
                 logging::log(
                     "HOTKEY",
-                    "Dictation hotkey triggered - toggling dictation to frontmost app via builtin",
+                    "Dictation hotkey triggered - toggling Agent Chat dictation via builtin",
                 );
                 let app_entity_inner = app_entity_for_dictation.clone();
                 let _ = cx.update(move |cx: &mut gpui::App| {
                     let should_show_window = app_entity_inner.update(cx, |view, ctx| {
-                        view.execute_by_command_id_or_path("builtin/dictation-to-app", ctx)
+                        view.execute_by_command_id_or_path("builtin/dictation-to-ai", ctx)
                     });
                     if should_show_window {
                         logging::log(

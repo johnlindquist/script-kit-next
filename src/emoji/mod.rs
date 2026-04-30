@@ -1229,6 +1229,11 @@ pub const GRID_TILE_GAP: f32 = 4.0;
 /// Fixed height for every emoji picker row (headers and cell rows).
 pub const GRID_ROW_HEIGHT: f32 = 48.0;
 
+/// Label rendered as the section header above the Frequently Used head
+/// block. Pulled into a constant so the renderer, audits, and tests all
+/// agree on the exact text.
+pub const FREQUENTLY_USED_LABEL: &str = "Frequently Used";
+
 /// Build the filtered, category-ordered emoji list used by both the renderer
 /// and the arrow-key navigation handler. This ensures selection indices stay
 /// in sync between rendering and navigation.
@@ -1245,6 +1250,77 @@ pub fn filtered_ordered_emojis(
         ordered.extend(filtered.iter().copied().filter(|e| e.category == cat));
     }
     ordered
+}
+
+/// Return the canonical EMOJIS slice index for an emoji string, used as the
+/// final stable tie-break when ranking frequent emojis. `None` for unknown
+/// strings so callers can sort them last.
+pub fn dataset_order_of(emoji: &str) -> Option<usize> {
+    EMOJIS.iter().position(|e| e.emoji == emoji)
+}
+
+/// Look up the canonical Emoji record for a given string, or `None` if not in
+/// the dataset (e.g. a usage entry left over from a prior dataset).
+pub fn emoji_by_value(emoji: &str) -> Option<Emoji> {
+    EMOJIS.iter().find(|e| e.emoji == emoji).copied()
+}
+
+/// Composite display order used by render + navigation + Enter commit. When
+/// `filter` is empty, `selected_category` is `None`, and `frequent` is
+/// non-empty, the returned vector has two logical sections:
+///
+/// 1. **Frequently Used** — resolved from `frequent` in order; silently drops
+///    unknown strings. (`frequent_count` on the returned `DisplayOrder`.)
+/// 2. **Categories** — the normal category-ordered list with any emoji that
+///    appeared in section 1 removed so the user never sees the same glyph
+///    twice.
+///
+/// Every other combination (non-empty filter, explicit category, empty
+/// snapshot) falls back to the existing category-ordered list with
+/// `frequent_count == 0`, so search and category browsing stay predictable.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DisplayOrder {
+    pub emojis: Vec<Emoji>,
+    /// Number of leading emojis that come from the Frequently Used section.
+    pub frequent_count: usize,
+}
+
+pub fn display_ordered_emojis(
+    filter: &str,
+    selected_category: Option<EmojiCategory>,
+    frequent: &[String],
+) -> DisplayOrder {
+    let base = filtered_ordered_emojis(filter, selected_category);
+
+    let can_show_frequent =
+        filter.trim().is_empty() && selected_category.is_none() && !frequent.is_empty();
+
+    if !can_show_frequent {
+        return DisplayOrder {
+            emojis: base,
+            frequent_count: 0,
+        };
+    }
+
+    let mut seen = std::collections::HashSet::new();
+    let mut frequent_emojis: Vec<Emoji> = Vec::with_capacity(frequent.len());
+    for value in frequent {
+        if !seen.insert(value.clone()) {
+            continue;
+        }
+        if let Some(emoji) = emoji_by_value(value) {
+            frequent_emojis.push(emoji);
+        }
+    }
+
+    let mut combined = Vec::with_capacity(frequent_emojis.len() + base.len());
+    let frequent_count = frequent_emojis.len();
+    combined.extend_from_slice(&frequent_emojis);
+    combined.extend(base.into_iter().filter(|e| !seen.contains(e.emoji)));
+    DisplayOrder {
+        emojis: combined,
+        frequent_count,
+    }
 }
 
 /// Compute the uniform-list row index that contains `selected_index`.
@@ -1315,6 +1391,129 @@ pub struct EmojiCellRow {
 pub struct EmojiGridLayout {
     pub rows: Vec<EmojiCellRow>,
     pub item_to_row: Vec<usize>,
+}
+
+/// Build a grid layout for a display-ordered emoji list that may have a
+/// leading "Frequently Used" head block.
+///
+/// The head block is rendered under a single synthetic section header and
+/// treated as one contiguous region for Up/Down navigation. The remaining
+/// emojis are grouped by category exactly like [`build_emoji_grid_layout`].
+///
+/// Passing `frequent_count == 0` produces the same layout as calling
+/// [`build_emoji_grid_layout`] directly, so callers can unconditionally
+/// route through this helper without branching on snapshot presence.
+pub fn build_display_grid_layout(display: &DisplayOrder, cols: usize) -> EmojiGridLayout {
+    let emojis = &display.emojis;
+    let frequent_count = display.frequent_count.min(emojis.len());
+
+    let mut rows: Vec<EmojiCellRow> = Vec::new();
+    let mut item_to_row = vec![0usize; emojis.len()];
+    let mut visible_row_index = 0usize;
+
+    if frequent_count > 0 {
+        visible_row_index += 1;
+        let mut row_offset = 0usize;
+        while row_offset < frequent_count {
+            let count = (frequent_count - row_offset).min(cols);
+            let start_index = row_offset;
+            let cell_row_index = rows.len();
+
+            rows.push(EmojiCellRow {
+                visible_row_index,
+                start_index,
+                count,
+            });
+
+            for entry in item_to_row.iter_mut().skip(start_index).take(count) {
+                *entry = cell_row_index;
+            }
+
+            visible_row_index += 1;
+            row_offset += count;
+        }
+    }
+
+    let mut flat_offset = frequent_count;
+    for category in all_categories() {
+        let category_count = emojis[flat_offset..]
+            .iter()
+            .take_while(|emoji| emoji.category == category)
+            .count();
+
+        if category_count == 0 {
+            continue;
+        }
+
+        visible_row_index += 1;
+
+        let mut row_offset = 0usize;
+        while row_offset < category_count {
+            let count = (category_count - row_offset).min(cols);
+            let start_index = flat_offset + row_offset;
+            let cell_row_index = rows.len();
+
+            rows.push(EmojiCellRow {
+                visible_row_index,
+                start_index,
+                count,
+            });
+
+            for entry in item_to_row.iter_mut().skip(start_index).take(count) {
+                *entry = cell_row_index;
+            }
+
+            visible_row_index += 1;
+            row_offset += count;
+        }
+
+        flat_offset += category_count;
+    }
+
+    EmojiGridLayout { rows, item_to_row }
+}
+
+/// Single-step scroll row helper mirroring [`compute_scroll_row`] for a
+/// [`DisplayOrder`]. Returns the visible row index of `selected_index`
+/// accounting for the Frequently Used head block (if any) and category
+/// header rows.
+pub fn compute_display_scroll_row(selected_index: usize, display: &DisplayOrder) -> usize {
+    let cols = GRID_COLS;
+    let emojis = &display.emojis;
+    let frequent_count = display.frequent_count.min(emojis.len());
+
+    if selected_index < frequent_count {
+        // 1 header row for "Frequently Used" + cell-row offset within the block.
+        return 1 + selected_index / cols;
+    }
+
+    let head_rows = if frequent_count > 0 {
+        1 + frequent_count.div_ceil(cols)
+    } else {
+        0
+    };
+
+    let tail_index = selected_index - frequent_count;
+    let mut flat_offset: usize = 0;
+    let mut row_offset: usize = head_rows;
+    for cat in all_categories() {
+        let cat_count = emojis[frequent_count..]
+            .iter()
+            .filter(|e| e.category == cat)
+            .count();
+        if cat_count == 0 {
+            continue;
+        }
+        if flat_offset + cat_count > tail_index {
+            let idx_in_cat = tail_index - flat_offset;
+            let cell_row = idx_in_cat / cols;
+            row_offset += 1 + cell_row;
+            return row_offset;
+        }
+        row_offset += 1 + cat_count.div_ceil(cols);
+        flat_offset += cat_count;
+    }
+    row_offset
 }
 
 pub fn build_emoji_grid_layout<T>(
@@ -1668,6 +1867,91 @@ mod tests {
 
         let last = ordered.len() - 1;
         assert_eq!(layout.move_index(last, EmojiNavDirection::Right), last);
+    }
+
+    #[test]
+    fn display_grid_layout_maps_frequent_head_block_to_single_section() {
+        // Choose two emoji values from different categories so the head
+        // block would be split by the category-aware grouping if it
+        // weren't handled as its own section. The frequent block must
+        // map to one contiguous region above the first category header.
+        let frequent = vec!["❤️".to_string(), "🔥".to_string()];
+        let display = display_ordered_emojis("", None, &frequent);
+        assert_eq!(display.frequent_count, 2);
+
+        let layout = build_display_grid_layout(&display, GRID_COLS);
+
+        // First two items live in the same head row: a single cell row
+        // whose visible_row_index == 1 (header row is 0).
+        let row_0 = layout.item_to_row[0];
+        let row_1 = layout.item_to_row[1];
+        assert_eq!(row_0, row_1, "frequent head must be one contiguous row");
+        assert_eq!(layout.rows[row_0].visible_row_index, 1);
+        assert_eq!(layout.rows[row_0].start_index, 0);
+        assert_eq!(layout.rows[row_0].count, 2);
+
+        // Item 2 is the first category cell — it must sit below a
+        // category header row (visible_row_index jumps by at least 2:
+        // one for the end of the head block and one for the category
+        // header).
+        let row_2 = layout.item_to_row[2];
+        assert!(
+            layout.rows[row_2].visible_row_index >= 3,
+            "first category cell must sit below the Frequently Used \
+             head block AND its own category header row"
+        );
+
+        // Navigating Down from the head block must land on a category
+        // cell (not on a header row).
+        let down = layout.move_index(0, EmojiNavDirection::Down);
+        assert!(
+            down >= display.frequent_count,
+            "Down from the head block must enter the category region, \
+             landed at {down} (frequent_count={})",
+            display.frequent_count
+        );
+        // And the reverse direction round-trips cleanly.
+        let up = layout.move_index(down, EmojiNavDirection::Up);
+        assert!(
+            up < display.frequent_count,
+            "Up from first category cell must re-enter the Frequently \
+             Used head block, landed at {up}"
+        );
+    }
+
+    #[test]
+    fn display_grid_layout_matches_build_emoji_grid_when_no_frequent() {
+        // With an empty frequent list the new builder must behave
+        // identically to the legacy builder. This guards the "no regression
+        // when the feature is dormant" invariant.
+        let display = display_ordered_emojis("", None, &[]);
+        assert_eq!(display.frequent_count, 0);
+
+        let base = filtered_ordered_emojis("", None);
+        let legacy = build_emoji_grid_layout(&base, GRID_COLS, |e| e.category);
+        let new = build_display_grid_layout(&display, GRID_COLS);
+
+        assert_eq!(legacy.rows, new.rows);
+        assert_eq!(legacy.item_to_row, new.item_to_row);
+    }
+
+    #[test]
+    fn compute_display_scroll_row_matches_layout_visible_row_index() {
+        // With a frequent head block the single-step scroll helper must
+        // agree with the layout's visible_row_index for every item.
+        let frequent = vec!["❤️".to_string(), "🔥".to_string(), "🎉".to_string()];
+        let display = display_ordered_emojis("", None, &frequent);
+        let layout = build_display_grid_layout(&display, GRID_COLS);
+
+        for ix in 0..display.emojis.len() {
+            let expected = layout.scroll_row_for_index(ix);
+            let actual = compute_display_scroll_row(ix, &display);
+            assert_eq!(
+                actual, expected,
+                "scroll row mismatch at ix={} (expected {expected}, got {actual})",
+                ix
+            );
+        }
     }
 
     #[test]

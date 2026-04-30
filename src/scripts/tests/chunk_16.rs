@@ -44,7 +44,7 @@ fn test_get_grouped_results_respects_frecency_ordering() {
     let builtins: Vec<BuiltInEntry> = vec![];
     let apps: Vec<crate::app_launcher::AppInfo> = vec![];
 
-    // Initially no frecency - should return alphabetical order in MAIN section
+    // Initially no frecency - should return alphabetical order in Main section
     let (grouped1, _results1) = get_grouped_results(
         &scripts,
         &scriptlets,
@@ -58,13 +58,13 @@ fn test_get_grouped_results_respects_frecency_ordering() {
         None,
     );
 
-    // Should have MAIN section header + 3 items
+    // Should have Main section header + 3 items
     assert!(grouped1.len() >= 3);
 
     // Record use for Gamma (should become "recent")
     frecency_store.record_use("/test/gamma.ts");
 
-    // Now get_grouped_results should show Gamma in SUGGESTED section
+    // Now get_grouped_results should show Gamma in Suggested section
     let (grouped2, results2) = get_grouped_results(
         &scripts,
         &scriptlets,
@@ -78,8 +78,8 @@ fn test_get_grouped_results_respects_frecency_ordering() {
         None,
     );
 
-    // Should now have SUGGESTED header, at least one recent item, MAIN header, remaining items
-    // The first section header should be "SUGGESTED"
+    // Should now have Suggested header, at least one recent item, Main header, remaining items
+    // The first section header should be "Suggested"
     let first_header = grouped2.iter().find_map(|item| match item {
         GroupedListItem::SectionHeader(s, _) => Some(s.clone()),
         _ => None,
@@ -87,16 +87,16 @@ fn test_get_grouped_results_respects_frecency_ordering() {
     assert!(
         first_header
             .as_ref()
-            .is_some_and(|s| s.starts_with("SUGGESTED")),
-        "After recording use, SUGGESTED section should appear"
+            .is_some_and(|s| s.starts_with("Suggested")),
+        "After recording use, Suggested section should appear"
     );
 
-    // Find the first item after the SUGGESTED header - it should be Gamma
+    // Find the first item after the Suggested header - it should be Gamma
     let mut found_recent_header = false;
     let mut first_recent_item: Option<&SearchResult> = None;
     for item in grouped2.iter() {
         match item {
-            GroupedListItem::SectionHeader(s, _) if s.starts_with("SUGGESTED") => {
+            GroupedListItem::SectionHeader(s, _) if s.starts_with("Suggested") => {
                 found_recent_header = true;
             }
             GroupedListItem::Item(idx) if found_recent_header && first_recent_item.is_none() => {
@@ -109,12 +109,12 @@ fn test_get_grouped_results_respects_frecency_ordering() {
 
     assert!(
         first_recent_item.is_some(),
-        "Should have at least one item in SUGGESTED section"
+        "Should have at least one item in Suggested section"
     );
     assert_eq!(
         first_recent_item.unwrap().name(),
         "Gamma Script",
-        "The most recently used script should appear first in SUGGESTED section"
+        "The most recently used script should appear first in Suggested section"
     );
 }
 
@@ -185,12 +185,12 @@ fn test_get_grouped_results_updates_after_frecency_change() {
         None,
     );
 
-    // Find items in SUGGESTED section
+    // Find items in Suggested section
     let mut in_recent_section = false;
     let mut recent_items: Vec<&str> = vec![];
     for item in grouped2.iter() {
         match item {
-            GroupedListItem::SectionHeader(s, _) if s.starts_with("SUGGESTED") => {
+            GroupedListItem::SectionHeader(s, _) if s.starts_with("Suggested") => {
                 in_recent_section = true;
             }
             GroupedListItem::SectionHeader(..) => {
@@ -205,11 +205,10 @@ fn test_get_grouped_results_updates_after_frecency_change() {
         }
     }
 
-    // Second Script should now be first in SUGGESTED (higher frecency score)
+    // Second Script should now be first in Suggested (higher frecency score)
     assert!(!recent_items.is_empty(), "Should have recent items");
     assert_eq!(
         recent_items[0], "Second Script",
-        "Script with higher frecency (more uses) should appear first in SUGGESTED"
+        "Script with higher frecency (more uses) should appear first in Suggested"
     );
 }
-

@@ -1,7 +1,7 @@
 //! Configuration module - application settings and config-backed runtime preferences
 //!
 //! This module provides functionality for:
-//! - Loading configuration from ~/.scriptkit/kit/config.ts
+//! - Loading configuration from ~/.scriptkit/config.ts
 //! - Default values for all settings
 //! - Type definitions for config structures
 //!
@@ -31,14 +31,18 @@ pub use defaults::DEFAULT_SUGGESTED_HALF_LIFE_DAYS;
 // Re-export types that are used externally
 #[allow(unused_imports)]
 pub use types::{
-    AiPreferences, BuiltInConfig, ClaudeCodeConfig, Config, DictationPreferences, HotkeyConfig,
-    LayoutConfig, ScriptKitUserPreferences, SuggestedConfig, ThemeSelectionPreferences,
+    AcpProfile, AiPreferences, BuiltInConfig, ClaudeCodeConfig, Config, DictationPreferences,
+    HotkeyConfig, LayoutConfig, McpConfig, McpHttpServerConfig, McpServerConfig,
+    McpStdioServerConfig, ScriptKitUserPreferences, SuggestedConfig, ThemeSelectionPreferences,
     WatcherConfig, WindowManagementPreferences,
 };
 
 // Re-export loader
 #[allow(unused_imports)]
-pub use loader::{load_config, load_user_preferences, save_user_preferences};
+pub use loader::{
+    current_config_fingerprint_receipt, load_config, load_user_preferences, save_user_preferences,
+    ConfigFingerprintReceipt,
+};
 
 // Re-export editor types for safe config writes (public API for other modules)
 #[allow(unused_imports)]

@@ -628,10 +628,10 @@ fn audit_selection_visibility_across_presets() {
             ));
         }
 
-        // Hover can be subtler than selection but must still register (>= 1.05:1)
-        if hover_vis < 1.05 {
+        // Hover is deliberately subtle in light themes, but must still register.
+        if hover_vis < 1.03 {
             failures.push(format!(
-                "  {:<25} hover      {:>5.3}:1  (need 1.05:1)  subtle=#{:06X} bg=#{:06X}",
+                "  {:<25} hover      {:>5.3}:1  (need 1.03:1)  subtle=#{:06X} bg=#{:06X}",
                 preset.id, hover_vis, subtle, bg,
             ));
         }

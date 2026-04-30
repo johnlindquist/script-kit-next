@@ -89,7 +89,7 @@ fn make_agent_match(agent: Arc<Agent>) -> AgentMatch {
 fn unified_search_never_yields_agent_results() {
     let scripts = vec![make_script("hello-world", "main")];
     let scriptlets = vec![make_scriptlet("greet", "main")];
-    let skills = vec![make_skill("authoring", "scriptlets", "Scriptlet Authoring")];
+    let skills = vec![make_skill("scriptkit", "scriptlets", "New Scriptlet")];
 
     // Search with a query that would match anything
     let results =
@@ -108,7 +108,7 @@ fn unified_search_never_yields_agent_results() {
 fn unified_search_with_query_never_yields_agent_results() {
     let scripts = vec![make_script("review-code", "main")];
     let scriptlets = vec![make_scriptlet("lint", "tools")];
-    let skills = vec![make_skill("authoring", "review", "Code Review")];
+    let skills = vec![make_skill("scriptkit", "review", "Code Review")];
 
     let results =
         fuzzy_search_unified_all_with_skills(&scripts, &scriptlets, &[], &[], &skills, "review");
@@ -152,7 +152,7 @@ fn is_suppressed_agent_false_for_script_variant() {
 
 #[test]
 fn is_suppressed_agent_false_for_skill_variant() {
-    let skill = make_skill("authoring", "scriptlets", "Scriptlets");
+    let skill = make_skill("scriptkit", "scriptlets", "Scriptlets");
     let result = SearchResult::Skill(SkillMatch {
         skill,
         score: 100,
@@ -180,7 +180,7 @@ fn skills_appear_in_unified_search_results() {
     let scripts: Vec<Arc<Script>> = vec![];
     let scriptlets: Vec<Arc<Scriptlet>> = vec![];
     let skills = vec![
-        make_skill("authoring", "scriptlets", "Scriptlet Authoring"),
+        make_skill("scriptkit", "scriptlets", "New Scriptlet"),
         make_skill("tools", "review", "Code Review"),
     ];
 
@@ -242,7 +242,7 @@ fn scripts_and_scriptlets_still_launch_after_agent_suppression() {
         make_scriptlet("open-github", "main"),
         make_scriptlet("paste-date", "tools"),
     ];
-    let skills = vec![make_skill("authoring", "scriptlets", "Scriptlets")];
+    let skills = vec![make_skill("scriptkit", "scriptlets", "Scriptlets")];
 
     let results =
         fuzzy_search_unified_all_with_skills(&scripts, &scriptlets, &[], &[], &skills, "");
@@ -286,7 +286,7 @@ fn agent_default_action_text_indicates_suppression() {
 
 #[test]
 fn skill_default_action_text_is_open_skill() {
-    let skill = make_skill("authoring", "scriptlets", "Scriptlets");
+    let skill = make_skill("scriptkit", "scriptlets", "Scriptlets");
     let result = SearchResult::Skill(SkillMatch {
         skill,
         score: 100,
@@ -303,7 +303,7 @@ fn equal_score_skill_sorts_before_scriptlet() {
     // the skill must rank ahead due to the promoted type ordering.
     let scripts: Vec<Arc<Script>> = vec![];
     let scriptlets = vec![make_scriptlet("review-diff", "tools")];
-    let skills = vec![make_skill("authoring", "review", "Review")];
+    let skills = vec![make_skill("scriptkit", "review", "Review")];
 
     let results =
         fuzzy_search_unified_all_with_skills(&scripts, &scriptlets, &[], &[], &skills, "review");
@@ -348,7 +348,7 @@ fn equal_score_skill_sorts_before_scriptlet() {
 fn equal_score_skill_sorts_before_script() {
     let scripts = vec![make_script("review-code", "main")];
     let scriptlets: Vec<Arc<Scriptlet>> = vec![];
-    let skills = vec![make_skill("authoring", "review", "Review")];
+    let skills = vec![make_skill("scriptkit", "review", "Review")];
 
     let results =
         fuzzy_search_unified_all_with_skills(&scripts, &scriptlets, &[], &[], &skills, "review");
@@ -376,11 +376,11 @@ fn grouped_view_skills_before_scripts_in_plugin_section() {
     use script_kit_gpui::frecency::FrecencyStore;
     use script_kit_gpui::scripts::get_grouped_results;
 
-    let scripts = vec![make_script("hello-world", "authoring")];
-    let scriptlets = vec![make_scriptlet("open-docs", "authoring")];
+    let scripts = vec![make_script("hello-world", "scriptkit")];
+    let scriptlets = vec![make_scriptlet("open-docs", "scriptkit")];
     let skills = vec![
-        make_skill("authoring", "scriptlets", "Script Authoring"),
-        make_skill("authoring", "scriptlet-edit", "Scriptlet Edit"),
+        make_skill("scriptkit", "scriptlets", "New Script"),
+        make_skill("scriptkit", "scriptlet-edit", "Scriptlet Edit"),
     ];
 
     let frecency = FrecencyStore::new();
@@ -402,8 +402,8 @@ fn grouped_view_skills_before_scripts_in_plugin_section() {
         None,
     );
 
-    // Find the "authoring" plugin section items
-    let authoring_items: Vec<&str> = grouped
+    // Find the "scriptkit" plugin section items
+    let scriptkit_items: Vec<&str> = grouped
         .iter()
         .skip_while(|item| {
             // Skip until we find the AUTHORING section header
@@ -426,11 +426,11 @@ fn grouped_view_skills_before_scripts_in_plugin_section() {
         .collect();
 
     // Skills must come before scripts and scriptlets in the section
-    let first_non_skill = authoring_items.iter().position(|name| {
+    let first_non_skill = scriptkit_items.iter().position(|name| {
         // Check if this is NOT a skill
         !skills.iter().any(|s| s.title.as_str() == *name)
     });
-    let last_skill = authoring_items
+    let last_skill = scriptkit_items
         .iter()
         .rposition(|name| skills.iter().any(|s| s.title.as_str() == *name));
 
@@ -438,7 +438,7 @@ fn grouped_view_skills_before_scripts_in_plugin_section() {
         assert!(
             last_skill_pos < first_non_skill_pos,
             "All skills must appear before non-skills in plugin section. Order: {:?}",
-            authoring_items
+            scriptkit_items
         );
     }
 }

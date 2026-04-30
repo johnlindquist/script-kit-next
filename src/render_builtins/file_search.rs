@@ -2,6 +2,19 @@ const FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_BYTES: u64 = 20 * 1024 * 1024;
 const FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_DIMENSION: u32 = 8_000;
 const FILE_SEARCH_PREVIEW_THUMBNAIL_MAX_SIDE_PX: f32 = 280.0;
 
+static FILE_SEARCH_NATIVE_DRAG_AWAITING_APP_REACTIVATE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn mark_file_search_native_drag_awaiting_app_reactivate() {
+    FILE_SEARCH_NATIVE_DRAG_AWAITING_APP_REACTIVATE
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+fn take_file_search_native_drag_awaiting_app_reactivate() -> bool {
+    FILE_SEARCH_NATIVE_DRAG_AWAITING_APP_REACTIVATE
+        .swap(false, std::sync::atomic::Ordering::SeqCst)
+}
+
 #[derive(Debug)]
 struct FileSearchThumbnailPreviewImage {
     image: Arc<gpui::RenderImage>,
@@ -52,25 +65,57 @@ impl FileSearchThumbnailLoadFailure {
     }
 }
 
-/// Shared helper for file-search native drag.  Initiates the macOS drag
-/// session and immediately clears GPUI's internal active-drag state so
-/// that keyboard dismissal (Escape) keeps working afterward.
+/// Shared helper for file-search native drag. Initiates the macOS drag
+/// session and schedules GPUI's internal active-drag state to clear after
+/// GPUI finishes storing the row drag preview.
 fn begin_file_search_native_drag(
     drag_path: &str,
     window: &mut gpui::Window,
     cx: &mut gpui::App,
 ) -> gpui::Entity<file_search::FileDragPayload> {
+    crate::logging::log(
+        "FOCUS",
+        &format!("FileSearch native drag start: path={drag_path}"),
+    );
     if let Err(error) = crate::platform::begin_native_file_drag(drag_path) {
+        crate::logging::log(
+            "FOCUS",
+            &format!("FileSearch native drag platform handoff failed: path={drag_path} error={error}"),
+        );
         tracing::warn!(
             path = %drag_path,
             error = %error,
             "failed to start native file drag"
         );
+    } else {
+        mark_file_search_native_drag_awaiting_app_reactivate();
+        crate::logging::log(
+            "FOCUS",
+            &format!("FileSearch native drag platform handoff succeeded: path={drag_path}"),
+        );
     }
-    // GPUI started an internal drag because the row uses `.on_drag(...)`.
-    // Once AppKit owns the drag session, clear GPUI's active drag state so
-    // Escape can dismiss the view normally.
-    cx.stop_active_drag(window);
+    // GPUI sets `active_drag` after this `.on_drag(...)` callback returns.
+    // Defer cleanup so the AppKit handoff cannot leave GPUI thinking a row
+    // drag is still active after the file was dropped into another app.
+    let drag_path_for_log = drag_path.to_string();
+    window.defer(cx, move |window, cx| {
+        let stopped_drag = cx.stop_active_drag(window);
+        crate::logging::log(
+            "FOCUS",
+            &format!(
+                "FileSearch deferred drag cleanup: stopped_drag={} main_window_focused={}",
+                stopped_drag,
+                crate::platform::is_main_window_focused()
+            ),
+        );
+        tracing::debug!(
+            target: "script_kit::keyboard",
+            event = "file_search_native_drag_gpui_state_cleared",
+            path = %drag_path_for_log,
+            stopped_drag,
+            "Cleared GPUI file-search drag state after native drag handoff"
+        );
+    });
     let name = std::path::Path::new(drag_path)
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -212,9 +257,8 @@ impl ScriptListApp {
             path = %path,
             "file_search_thumbnail_preview_state_transition: loading"
         );
-        self.file_search_preview_thumbnail = FileSearchThumbnailPreviewState::Loading {
-            path: path.clone(),
-        };
+        self.file_search_preview_thumbnail =
+            FileSearchThumbnailPreviewState::Loading { path: path.clone() };
         cx.notify();
 
         cx.spawn(async move |this, cx| {
@@ -230,7 +274,9 @@ impl ScriptListApp {
             });
 
             let decode_result = loop {
-                cx.background_executor().timer(std::time::Duration::from_millis(16)).await;
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(16))
+                    .await;
                 match rx.try_recv() {
                     Ok(result) => break result,
                     Err(std::sync::mpsc::TryRecvError::Empty) => {}
@@ -326,17 +372,12 @@ impl ScriptListApp {
         let _box_shadows = self.create_box_shadows();
 
         // Color values for use in closures
+        let ui_border = self.theme.colors.ui.border;
+        let accent_color = self.theme.colors.accent.selected;
+        let list_colors = crate::list_item::ListItemColors::from_theme(&self.theme);
         let text_primary = self.theme.colors.text.primary;
         let text_muted = self.theme.colors.text.muted;
         let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
-        let _accent_color = self.theme.colors.accent.selected;
-        let list_hover = self.theme.colors.accent.selected_subtle;
-        let list_selected = self.theme.colors.accent.selected_subtle;
-        // Use theme opacity for vibrancy-compatible selection/hover (matches main menu)
-        let opacity = self.theme.get_opacity();
-        let selected_alpha = (opacity.selected * 255.0) as u32;
-        let hover_alpha = (opacity.hover * 255.0) as u32;
 
         // Get selected file for preview (if any)
         // Clamp the display index so a stale selected_index from a shrinking
@@ -418,10 +459,12 @@ impl ScriptListApp {
                         return;
                     }
                     ActionsRoute::Execute { action_id } => {
-                        // User selected an action - execute it
-                        // Use handle_action instead of trigger_action_by_name to support
-                        // both built-in actions (open_file, quick_look, etc.) and SDK actions
-                        this.handle_action(action_id, window, cx);
+                        this.execute_action_for_actions_host(
+                            ActionsDialogHost::FileSearch,
+                            action_id,
+                            window,
+                            cx,
+                        );
                         return;
                     }
                 }
@@ -535,10 +578,7 @@ impl ScriptListApp {
                                 };
                                 if let Some((query, sel_idx)) = ai_args {
                                     if this.open_file_search_selection_or_query_in_tab_ai(
-                                        &query,
-                                        sel_idx,
-                                        has_shift,
-                                        cx,
+                                        &query, sel_idx, has_shift, cx,
                                     ) {
                                         cx.stop_propagation();
                                         return;
@@ -546,43 +586,44 @@ impl ScriptListApp {
                                 }
                             } else {
                                 if let Some(file) = get_selected_file() {
-                                    if file.file_type == FileType::Directory {
-                                        // Directory: browse inline (even in portal mode)
-                                        let next_query = format!(
-                                            "{}/",
-                                            file_search::shorten_path(&file.path)
-                                                .trim_end_matches('/')
-                                        );
-                                        let next_presentation = match &this.current_view {
-                                            AppView::FileSearchView {
-                                                presentation, ..
-                                            } => *presentation,
-                                            _ => FileSearchPresentation::Full,
-                                        };
-                                        this.open_file_search_view(
-                                            next_query,
-                                            next_presentation,
-                                            cx,
-                                        );
-                                        cx.stop_propagation();
-                                        return;
-                                    }
-
                                     // Portal mode: attach file to ACP chat and return.
                                     if this.is_in_attachment_portal() {
-                                        let part = crate::ai::message_parts::AiContextPart::FilePath {
-                                            path: file.path.clone(),
-                                            label: std::path::Path::new(&file.path)
-                                                .file_name()
-                                                .map(|n| n.to_string_lossy().to_string())
-                                                .unwrap_or_else(|| file.path.clone()),
-                                        };
+                                        if file.file_type == FileType::Directory {
+                                            let next_query = format!(
+                                                "{}/",
+                                                file_search::shorten_path(&file.path)
+                                                    .trim_end_matches('/')
+                                            );
+                                            let next_presentation = match &this.current_view {
+                                                AppView::FileSearchView {
+                                                    presentation, ..
+                                                } => *presentation,
+                                                _ => FileSearchPresentation::Full,
+                                            };
+                                            this.open_file_search_view_preserving_current_results(
+                                                next_query,
+                                                next_presentation,
+                                                cx,
+                                            );
+                                            cx.stop_propagation();
+                                            return;
+                                        }
+
+                                        let part =
+                                            crate::ai::message_parts::AiContextPart::FilePath {
+                                                path: file.path.clone(),
+                                                label: std::path::Path::new(&file.path)
+                                                    .file_name()
+                                                    .map(|n| n.to_string_lossy().to_string())
+                                                    .unwrap_or_else(|| file.path.clone()),
+                                            };
                                         this.close_attachment_portal_with_part(part, cx);
                                         cx.stop_propagation();
                                         return;
                                     }
 
-                                    // File: open with default app and close
+                                    // Standard file search: open with the default app and close,
+                                    // even when the selected item is a directory.
                                     let _ = file_search::open_file(&file.path);
                                     this.close_and_reset_window(cx);
                                 }
@@ -635,8 +676,11 @@ impl ScriptListApp {
             .filter_map(|&idx| self.cached_file_results.get(idx).map(|f| (idx, f.clone())))
             .collect();
         let current_selected = clamped_selected_index.unwrap_or(usize::MAX);
+        let file_hovered = self.hovered_index;
+        let input_mode = self.input_mode;
         let is_loading = self.file_search_loading;
         let click_entity_handle = cx.entity().downgrade();
+        let hover_entity_handle = cx.entity().downgrade();
 
         // Use uniform_list for virtualized scrolling
         // Skeleton loading: show placeholder rows while loading and no results yet
@@ -651,7 +695,10 @@ impl ScriptListApp {
         );
         let list_element = if is_loading && filtered_len == 0 {
             // Loading with no results yet - show static skeleton rows
-            let skeleton_bg = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(ui_border, crate::theme::opacity::OPACITY_SUBTLE));
+            let skeleton_bg = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                ui_border,
+                crate::theme::opacity::OPACITY_SUBTLE,
+            ));
 
             // Render 6 skeleton rows
             div()
@@ -717,16 +764,37 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some((_result_idx, file)) = files_for_closure.get(ix) {
                                 let is_selected = ix == current_selected;
-
-                                // Use theme opacity for vibrancy-compatible selection
+                                let is_hovered = !is_selected
+                                    && input_mode == InputMode::Mouse
+                                    && file_hovered == Some(ix);
+                                let show_thumbnail =
+                                    file_search::is_thumbnail_preview_supported(&file.path);
                                 let bg = if is_selected {
-                                    rgba((list_selected << 8) | selected_alpha)
+                                    rgba(crate::list_item::row_selected_background_rgba(
+                                        &list_colors,
+                                    ))
+                                } else if is_hovered {
+                                    rgba(crate::list_item::row_hover_background_rgba(&list_colors))
                                 } else {
                                     gpui::transparent_black().into()
                                 };
-                                let hover_bg = rgba((list_hover << 8) | hover_alpha);
-                                let show_thumbnail =
-                                    file_search::is_thumbnail_preview_supported(&file.path);
+                                let icon_color = if show_thumbnail {
+                                    rgb(list_colors.text_muted)
+                                } else {
+                                    rgba(crate::list_item::row_icon_text_rgba(
+                                        &list_colors,
+                                        is_selected,
+                                    ))
+                                };
+                                let name_color = rgba(crate::list_item::row_name_text_rgba(
+                                    &list_colors,
+                                    is_selected,
+                                ));
+                                let metadata_color =
+                                    rgba(crate::list_item::row_description_text_rgba(
+                                        &list_colors,
+                                        is_selected,
+                                    ));
                                 let thumbnail_path = file.path.clone();
                                 let fallback_icon =
                                     file_search::file_type_icon(file.file_type).to_string();
@@ -735,60 +803,88 @@ impl ScriptListApp {
                                 let click_entity = click_entity_handle.clone();
                                 let file_path = file.path.clone();
                                 let file_type = file.file_type;
-                                let click_handler = move |event: &gpui::ClickEvent,
-                                                           _window: &mut Window,
-                                                           cx: &mut gpui::App| {
-                                    if let Some(app) = click_entity.upgrade() {
-                                        let file_path = file_path.clone();
-                                        app.update(cx, |this, cx| {
-                                            this.lock_file_search_selection_to_user_choice();
-                                            if let AppView::FileSearchView {
-                                                selected_index, ..
-                                            } = &mut this.current_view
-                                            {
-                                                *selected_index = ix;
-                                            }
-                                            cx.notify();
+                                let click_handler =
+                                    move |event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = click_entity.upgrade() {
+                                            let file_path = file_path.clone();
+                                            app.update(cx, |this, cx| {
+                                                this.lock_file_search_selection_to_user_choice();
+                                                if let AppView::FileSearchView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
+                                                {
+                                                    *selected_index = ix;
+                                                }
+                                                cx.notify();
 
-                                            // Double-click: browse directory inline or open file
-                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
-                                                if mouse_event.down.click_count == 2 {
-                                                    if file_type == FileType::Directory {
-                                                        let next_query = format!(
-                                                            "{}/",
-                                                            file_search::shorten_path(&file_path)
+                                                // Double-click: browse directory inline or open file
+                                                if let gpui::ClickEvent::Mouse(mouse_event) = event
+                                                {
+                                                    if mouse_event.down.click_count == 2 {
+                                                        if file_type == FileType::Directory {
+                                                            let next_query = format!(
+                                                                "{}/",
+                                                                file_search::shorten_path(
+                                                                    &file_path
+                                                                )
                                                                 .trim_end_matches('/')
-                                                        );
-                                                        let next_presentation =
-                                                            match &this.current_view {
+                                                            );
+                                                            let next_presentation = match &this
+                                                                .current_view
+                                                            {
                                                                 AppView::FileSearchView {
                                                                     presentation,
                                                                     ..
                                                                 } => *presentation,
                                                                 _ => FileSearchPresentation::Full,
                                                             };
-                                                        this.open_file_search_view(
-                                                            next_query,
-                                                            next_presentation,
-                                                            cx,
-                                                        );
-                                                    } else {
-                                                        logging::log(
-                                                            "UI",
-                                                            &format!(
-                                                                "Double-click opening file: {}",
-                                                                file_path
-                                                            ),
-                                                        );
-                                                        let _ =
-                                                            file_search::open_file(&file_path);
-                                                        this.close_and_reset_window(cx);
+                                                            this
+                                                                .open_file_search_view_preserving_current_results(
+                                                                next_query,
+                                                                next_presentation,
+                                                                cx,
+                                                            );
+                                                        } else {
+                                                            logging::log(
+                                                                "UI",
+                                                                &format!(
+                                                                    "Double-click opening file: {}",
+                                                                    file_path
+                                                                ),
+                                                            );
+                                                            let _ =
+                                                                file_search::open_file(&file_path);
+                                                            this.close_and_reset_window(cx);
+                                                        }
                                                     }
                                                 }
-                                            }
-                                        });
-                                    }
-                                };
+                                            });
+                                        }
+                                    };
+
+                                let hover_entity = hover_entity_handle.clone();
+                                let hover_handler =
+                                    move |hov: &bool,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = hover_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if *hov {
+                                                    this.input_mode = InputMode::Mouse;
+                                                    if this.hovered_index != Some(ix) {
+                                                        this.hovered_index = Some(ix);
+                                                        cx.notify();
+                                                    }
+                                                } else if this.hovered_index == Some(ix) {
+                                                    this.hovered_index = None;
+                                                    cx.notify();
+                                                }
+                                            });
+                                        }
+                                    };
 
                                 // Drag payload for native file drag-out
                                 let drag_payload = file_search::FileDragPayload::from_result(file);
@@ -805,22 +901,18 @@ impl ScriptListApp {
                                     .gap(px(12.))
                                     .bg(bg)
                                     .cursor_pointer()
-                                    .when(!is_selected, |d| d.hover(move |s| s.bg(hover_bg)))
-                                    .tooltip(|window, cx| {
-                                        gpui_component::tooltip::Tooltip::new(
-                                            "Open selected file",
-                                        )
-                                        .key_binding(
-                                            gpui::Keystroke::parse("enter")
-                                                .ok()
-                                                .map(gpui_component::kbd::Kbd::new),
-                                        )
-                                        .build(window, cx)
-                                    })
                                     .on_click(click_handler)
-                                    .on_drag(drag_payload, move |_payload, _position, window, cx| {
-                                        begin_file_search_native_drag(&drag_path_for_native, window, cx)
-                                    })
+                                    .on_hover(hover_handler)
+                                    .on_drag(
+                                        drag_payload,
+                                        move |_payload, _position, window, cx| {
+                                            begin_file_search_native_drag(
+                                                &drag_path_for_native,
+                                                window,
+                                                cx,
+                                            )
+                                        },
+                                    )
                                     .child(if show_thumbnail {
                                         let fallback_icon = fallback_icon.clone();
                                         div()
@@ -828,27 +920,30 @@ impl ScriptListApp {
                                             .h(px(32.))
                                             .rounded(px(6.))
                                             .overflow_hidden()
-                                            .bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(ui_border, crate::theme::opacity::OPACITY_SUBTLE)))
+                                            .bg(rgba(
+                                                crate::ui_foundation::hex_to_rgba_with_opacity(
+                                                    ui_border,
+                                                    crate::theme::opacity::OPACITY_SUBTLE,
+                                                ),
+                                            ))
                                             .flex_shrink_0()
                                             .child(
-                                                gpui::img(std::path::PathBuf::from(
-                                                    thumbnail_path,
-                                                ))
-                                                .w_full()
-                                                .h_full()
-                                                .object_fit(gpui::ObjectFit::Cover)
-                                                .with_fallback(move || {
-                                                    div()
-                                                        .w_full()
-                                                        .h_full()
-                                                        .flex()
-                                                        .items_center()
-                                                        .justify_center()
-                                                        .text_sm()
-                                                        .text_color(rgb(text_muted))
-                                                        .child(fallback_icon.clone())
-                                                        .into_any_element()
-                                                }),
+                                                gpui::img(std::path::PathBuf::from(thumbnail_path))
+                                                    .w_full()
+                                                    .h_full()
+                                                    .object_fit(gpui::ObjectFit::Cover)
+                                                    .with_fallback(move || {
+                                                        div()
+                                                            .w_full()
+                                                            .h_full()
+                                                            .flex()
+                                                            .items_center()
+                                                            .justify_center()
+                                                            .text_sm()
+                                                            .text_color(icon_color)
+                                                            .child(fallback_icon.clone())
+                                                            .into_any_element()
+                                                    }),
                                             )
                                     } else {
                                         div()
@@ -858,7 +953,7 @@ impl ScriptListApp {
                                             .items_center()
                                             .justify_center()
                                             .text_lg()
-                                            .text_color(rgb(text_muted))
+                                            .text_color(icon_color)
                                             .flex_shrink_0()
                                             .child(file_search::file_type_icon(file.file_type))
                                     })
@@ -871,13 +966,13 @@ impl ScriptListApp {
                                             .child(
                                                 div()
                                                     .text_sm()
-                                                    .text_color(rgb(text_primary))
+                                                    .text_color(name_color)
                                                     .child(file.name.clone()),
                                             )
                                             .child(
                                                 div()
                                                     .text_xs()
-                                                    .text_color(rgb(text_dimmed))
+                                                    .text_color(metadata_color)
                                                     .child(file_search::shorten_path(&file.path)),
                                             ),
                                     )
@@ -888,12 +983,12 @@ impl ScriptListApp {
                                             .items_end()
                                             .gap(px(2.))
                                             .child(
-                                                div().text_xs().text_color(rgb(text_dimmed)).child(
+                                                div().text_xs().text_color(metadata_color).child(
                                                     file_search::format_file_size(file.size),
                                                 ),
                                             )
                                             .child(
-                                                div().text_xs().text_color(rgb(text_dimmed)).child(
+                                                div().text_xs().text_color(metadata_color).child(
                                                     file_search::format_relative_time(
                                                         file.modified,
                                                     ),
@@ -911,11 +1006,8 @@ impl ScriptListApp {
             .track_scroll(&self.file_search_scroll_handle)
             .into_any_element()
         };
-        let list_scrollbar = self.builtin_uniform_list_scrollbar(
-            &self.file_search_scroll_handle,
-            filtered_len,
-            8,
-        );
+        let list_scrollbar =
+            self.builtin_uniform_list_scrollbar(&self.file_search_scroll_handle, filtered_len, 8);
 
         // Build preview panel content - matching main menu labeled section pattern
         let preview_content = if let Some(file) = &selected_file {
@@ -1044,7 +1136,9 @@ impl ScriptListApp {
                     .p(px(design_spacing.padding_lg))
                     .gap(px(design_spacing.gap_md))
                     .overflow_y_hidden()
-                    .when_some(thumbnail_section, |container, section| container.child(section))
+                    .when_some(thumbnail_section, |container, section| {
+                        container.child(section)
+                    })
                     // Name (chromeless — no type badge pill)
                     .child(
                         div()
@@ -1074,17 +1168,12 @@ impl ScriptListApp {
                     )
             }
         } else if is_loading {
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    div()
-                        .text_sm()
-                        .text_color(rgb(text_muted))
-                        .child("Loading preview\u{2026}"),
-                )
+            div().flex_1().flex().items_center().justify_center().child(
+                div()
+                    .text_sm()
+                    .text_color(rgb(text_muted))
+                    .child("Loading preview\u{2026}"),
+            )
         } else {
             div()
                 .flex_1()
@@ -1144,11 +1233,42 @@ impl ScriptListApp {
                 "Try a broader query, or press \u{2318}\u{21b5} to ask AI how to refine this search",
             )
         };
+        let render_empty_list_state = || {
+            div()
+                .max_w(px(360.0))
+                .px(px(design_spacing.padding_lg))
+                .flex()
+                .flex_col()
+                .items_center()
+                .gap(px(10.0))
+                .child(
+                    div()
+                        .w(px(56.0))
+                        .h(px(10.0))
+                        .rounded(px(5.0))
+                        .bg(rgb(accent_color)),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(rgb(text_primary))
+                        .text_center()
+                        .child(empty_title),
+                )
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(rgb(text_muted))
+                        .text_center()
+                        .child(empty_subtitle),
+                )
+        };
 
         // Footer: strict three-key pattern. The AI entry chords
         // ⌘↵ (Explain) / ⌘⇧↵ (Plan) are now visible in the footer
         // so users can discover them without guessing.
-        let ai_hint = "⌘↵ Explain · ⌘⇧↵ Plan";
+        let ai_hint = "⌘↵ Explain with AI · ⌘⇧↵ Plan with AI";
         let file_search_hints = if self.is_in_attachment_portal() {
             // Portal mode: simplified footer indicating attach context.
             let primary = if selected_file
@@ -1163,22 +1283,14 @@ impl ScriptListApp {
             vec![
                 primary.into(),
                 "Esc Cancel".into(),
-                "Attaching to ACP Chat".into(),
+                "Attaching to Agent Chat".into(),
             ]
-        } else if let Some(file) = selected_file.as_ref() {
-            let primary = if matches!(file.file_type, file_search::FileType::Directory) {
-                "\u{21b5} Browse"
-            } else {
-                "\u{21b5} Open"
-            };
-            vec![
-                primary.into(),
-                ai_hint.into(),
-                "\u{2318}K Actions".into(),
-            ]
+        } else if selected_file.is_some() {
+            let primary = "\u{21b5} Open";
+            vec![primary.into(), ai_hint.into(), "\u{2318}K Actions".into()]
         } else if self.file_search_current_dir.is_some() {
             vec![
-                "\u{21b5} Browse".into(),
+                "\u{21b5} Open".into(),
                 ai_hint.into(),
                 "\u{2318}K Actions".into(),
             ]
@@ -1186,13 +1298,12 @@ impl ScriptListApp {
             vec![ai_hint.into(), "Searching".into(), "\u{2318}F Focus".into()]
         } else {
             let primary = if is_directory_query {
-                "\u{21b5} Browse"
+                "\u{21b5} Open"
             } else {
                 "\u{21b5} Run"
             };
             vec![primary.into(), ai_hint.into(), "\u{2318}F Focus".into()]
         };
-
 
         // Header: bare input + file count (scaffold adds padding/layout)
         let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
@@ -1202,6 +1313,52 @@ impl ScriptListApp {
             .flex_row()
             .items_center()
             .gap(px(HEADER_GAP))
+            .occlude()
+            .capture_any_mouse_down(cx.listener(|this, _event, window, cx| {
+                if matches!(this.current_view, AppView::FileSearchView { .. }) {
+                    let needs_app_reactivate =
+                        take_file_search_native_drag_awaiting_app_reactivate();
+                    let stopped_drag = cx.stop_active_drag(window);
+                    if needs_app_reactivate {
+                        crate::platform::activate_main_window();
+                    }
+                    window.activate_window();
+                    let input_state = this.gpui_input_state.clone();
+                    this.focus_main_filter(window, cx);
+                    logging::log(
+                        "FOCUS",
+                        &format!(
+                            "FileSearch header mouse capture: stopped_drag={} restored_main_filter_focus=true activated_window=true needs_app_reactivate={} main_window_focused={}",
+                            stopped_drag,
+                            needs_app_reactivate,
+                            crate::platform::is_main_window_focused()
+                        ),
+                    );
+                    if needs_app_reactivate {
+                        window.defer(cx, move |window, cx| {
+                            crate::platform::activate_main_window();
+                            window.activate_window();
+                            input_state.update(cx, |state, cx| {
+                                state.focus(window, cx);
+                            });
+                            logging::log(
+                                "FOCUS",
+                                &format!(
+                                    "FileSearch deferred header refocus: rekeyed_panel=true activated_app=true main_window_focused={}",
+                                    crate::platform::is_main_window_focused()
+                                ),
+                            );
+                        });
+                    }
+                }
+            }))
+            .on_mouse_move(cx.listener(|this, _: &MouseMoveEvent, _window, cx| {
+                if this.hovered_index.is_some() {
+                    this.hovered_index = None;
+                    cx.notify();
+                }
+                cx.stop_propagation();
+            }))
             .child(
                 div().flex_1().flex().flex_row().items_center().child(
                     Input::new(&self.gpui_input_state)
@@ -1279,25 +1436,7 @@ impl ScriptListApp {
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .items_center()
-                        .gap(px(6.))
-                        .child(
-                            div()
-                                .text_sm()
-                                .text_color(rgb(text_dimmed))
-                                .child(empty_title),
-                        )
-                        .child(
-                            div()
-                                .text_xs()
-                                .text_color(rgb(text_muted))
-                                .child(empty_subtitle),
-                        ),
-                )
+                .child(render_empty_list_state())
         } else {
             tracing::info!(
                 target: "script_kit::prompt_chrome",
@@ -1324,10 +1463,7 @@ impl ScriptListApp {
         }
 
         // Build GPUI hint strip, then route through the native footer slot
-        let gpui_footer = crate::components::render_simple_hint_strip(
-            file_search_hints,
-            None,
-        );
+        let gpui_footer = crate::components::render_simple_hint_strip(file_search_hints, None);
         let footer = self.main_window_footer_slot(gpui_footer);
 
         if is_mini {
@@ -1354,7 +1490,6 @@ impl ScriptListApp {
             .on_key_down(handle_key)
             .into_any_element()
         }
-
     }
 }
 
@@ -1373,12 +1508,24 @@ mod file_search_thumbnail_tests {
 
     #[test]
     fn test_file_search_thumbnail_is_decodable_extension_matches_supported_decoder_inputs() {
-        assert!(file_search_thumbnail_is_decodable_extension("/tmp/sample.png"));
-        assert!(file_search_thumbnail_is_decodable_extension("/tmp/sample.JPG"));
-        assert!(file_search_thumbnail_is_decodable_extension("/tmp/sample.webp"));
-        assert!(file_search_thumbnail_is_decodable_extension("/tmp/sample.tiff"));
-        assert!(file_search_thumbnail_is_decodable_extension("/tmp/sample.ico"));
-        assert!(!file_search_thumbnail_is_decodable_extension("/tmp/sample.svg"));
+        assert!(file_search_thumbnail_is_decodable_extension(
+            "/tmp/sample.png"
+        ));
+        assert!(file_search_thumbnail_is_decodable_extension(
+            "/tmp/sample.JPG"
+        ));
+        assert!(file_search_thumbnail_is_decodable_extension(
+            "/tmp/sample.webp"
+        ));
+        assert!(file_search_thumbnail_is_decodable_extension(
+            "/tmp/sample.tiff"
+        ));
+        assert!(file_search_thumbnail_is_decodable_extension(
+            "/tmp/sample.ico"
+        ));
+        assert!(!file_search_thumbnail_is_decodable_extension(
+            "/tmp/sample.svg"
+        ));
     }
 
     #[test]
@@ -1496,6 +1643,27 @@ mod file_search_chrome_audit {
         assert!(
             source.contains("file_search_chrome_checkpoint"),
             "file_search must emit a structured checkpoint log for migration verification"
+        );
+    }
+
+    #[test]
+    fn file_search_uses_shared_row_state_helpers() {
+        let source = include_str!("file_search.rs");
+        assert!(
+            source.contains("crate::list_item::row_selected_background_rgba"),
+            "file_search must derive selected row chrome from shared list_item helpers"
+        );
+        assert!(
+            source.contains("crate::list_item::row_hover_background_rgba"),
+            "file_search must derive hover row chrome from shared list_item helpers"
+        );
+        assert!(
+            source.contains("crate::list_item::row_name_text_rgba"),
+            "file_search must derive primary row text from shared list_item helpers"
+        );
+        assert!(
+            source.contains("crate::list_item::row_description_text_rgba"),
+            "file_search must derive metadata text from shared list_item helpers"
         );
     }
 }

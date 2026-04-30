@@ -116,7 +116,10 @@ fn capture_screen_excluding_self(
     const K_CG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY: u32 = 1 << 0;
     const K_CG_NULL_WINDOW_ID: u32 = 0;
     const K_CG_WINDOW_IMAGE_DEFAULT: u32 = 0;
-    const K_CG_WINDOW_IMAGE_NOMINAL_RESOLUTION: u32 = 1 << 9;
+    // Apple's CGWindowImageOption values: kCGWindowImageNominalResolution = 1 << 4.
+    // Previously this was set to `1 << 9`, which is undefined and silently
+    // ignored by CoreGraphics — so captures were not actually requesting 1x.
+    const K_CG_WINDOW_IMAGE_NOMINAL_RESOLUTION: u32 = 1 << 4;
 
     #[link(name = "CoreGraphics", kind = "framework")]
     unsafe extern "C" {
@@ -325,8 +328,16 @@ fn cgimage_to_rgba(
 
     let w = width as usize;
     let h = height as usize;
-    let bytes_per_row = w * 4;
-    let mut rgba = vec![0u8; h * bytes_per_row];
+    // Checked math: unchecked `w * 4` / `h * bytes_per_row` could wrap on huge
+    // images and hand CGBitmapContextCreate a buffer smaller than its metadata
+    // claims, which is out-of-bounds writes in FFI land.
+    let bytes_per_row = w
+        .checked_mul(4)
+        .ok_or("image width overflow computing bytes_per_row")?;
+    let total_bytes = h
+        .checked_mul(bytes_per_row)
+        .ok_or("image dimensions overflow computing buffer size")?;
+    let mut rgba = vec![0u8; total_bytes];
 
     // SAFETY: CGColorSpaceCreateDeviceRGB returns a valid CGColorSpaceRef.
     let color_space = unsafe { CGColorSpaceCreateDeviceRGB() };
@@ -735,104 +746,93 @@ pub fn capture_script_kit_panel_screenshot(
 
 /// Get the URL of the currently focused browser tab.
 ///
-/// Supports Safari, Google Chrome, Arc, Brave, Firefox, and Edge.
+/// Supports Safari, Google Chrome, Arc, Brave, Edge, Chromium, Vivaldi, Opera.
+///
+/// Reads the frontmost app identity from the in-process
+/// `frontmost_app_tracker` (populated by the NSWorkspace observer) instead of
+/// spawning `osascript` to ask `System Events` who the frontmost app is. Only
+/// when the tracked bundle identifier matches a supported browser does this
+/// function spawn a single `osascript` to read the URL from the browser's
+/// scripting dictionary. For non-browser frontmost apps, no subprocess is
+/// spawned at all.
 ///
 /// # Returns
 /// The URL string on success.
+///
+/// # Blocking
+/// This function still spawns `osascript` for the URL query, so it must not
+/// be called directly from the UI thread. Callers should dispatch it through
+/// `cx.background_executor().spawn(...)`.
 #[cfg(target_os = "macos")]
 pub fn get_focused_browser_tab_url() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    use std::process::Command;
+    let Some(tracked) = crate::frontmost_app_tracker::get_last_real_app() else {
+        return Err(
+            "Frontmost app tracker has no tracked app yet — cannot identify browser".into(),
+        );
+    };
 
-    // First, get the frontmost application name
-    let frontmost_script = r#"
-        tell application "System Events"
-            set frontApp to name of first application process whose frontmost is true
-            return frontApp
-        end tell
-    "#;
+    tracing::debug!(
+        bundle_id = %tracked.bundle_id,
+        name = %tracked.name,
+        "frontmost tracker identified app for browser URL lookup"
+    );
 
-    let frontmost_output = Command::new("osascript")
-        .arg("-e")
-        .arg(frontmost_script)
-        .output()?;
-
-    if !frontmost_output.status.success() {
-        return Err("Failed to get frontmost application".into());
-    }
-
-    let frontmost_app = String::from_utf8_lossy(&frontmost_output.stdout)
-        .trim()
-        .to_string();
-
-    tracing::debug!(app = %frontmost_app, "Detected frontmost browser");
-
-    // Map process name to application name and the AppleScript to get URL
-    let (app_name, url_script) = match frontmost_app.as_str() {
-        "Safari" => (
-            "Safari",
-            r#"tell application "Safari" to return URL of front document"#,
-        ),
-        "Google Chrome" => (
-            "Google Chrome",
-            r#"tell application "Google Chrome" to return URL of active tab of front window"#,
-        ),
-        "Arc" => (
-            "Arc",
-            r#"tell application "Arc" to return URL of active tab of front window"#,
-        ),
-        "Brave Browser" => (
-            "Brave Browser",
-            r#"tell application "Brave Browser" to return URL of active tab of front window"#,
-        ),
-        "Firefox" => {
-            // Firefox doesn't support AppleScript well - return an error with helpful message
-            return Err("Firefox doesn't fully support AppleScript for URL retrieval. Try Safari or Chrome.".into());
+    // Match by bundle ID first (stable, not affected by localization), fall
+    // back to matching the localized name as a best effort.
+    let url_script = match tracked.bundle_id.as_str() {
+        "com.apple.Safari" => r#"tell application "Safari" to return URL of front document"#,
+        "com.google.Chrome" => {
+            r#"tell application "Google Chrome" to return URL of active tab of front window"#
         }
-        "Microsoft Edge" => (
-            "Microsoft Edge",
-            r#"tell application "Microsoft Edge" to return URL of active tab of front window"#,
-        ),
-        "Chromium" => (
-            "Chromium",
-            r#"tell application "Chromium" to return URL of active tab of front window"#,
-        ),
-        "Vivaldi" => (
-            "Vivaldi",
-            r#"tell application "Vivaldi" to return URL of active tab of front window"#,
-        ),
-        "Opera" => (
-            "Opera",
-            r#"tell application "Opera" to return URL of active tab of front window"#,
-        ),
+        "company.thebrowser.Browser" => {
+            r#"tell application "Arc" to return URL of active tab of front window"#
+        }
+        "com.brave.Browser" => {
+            r#"tell application "Brave Browser" to return URL of active tab of front window"#
+        }
+        "com.microsoft.edgemac" => {
+            r#"tell application "Microsoft Edge" to return URL of active tab of front window"#
+        }
+        "org.chromium.Chromium" => {
+            r#"tell application "Chromium" to return URL of active tab of front window"#
+        }
+        "com.vivaldi.Vivaldi" => {
+            r#"tell application "Vivaldi" to return URL of active tab of front window"#
+        }
+        "com.operasoftware.Opera" => {
+            r#"tell application "Opera" to return URL of active tab of front window"#
+        }
+        "org.mozilla.firefox" | "org.mozilla.firefoxdeveloperedition" => {
+            return Err(
+                "Firefox doesn't fully support AppleScript for URL retrieval. Try Safari or Chrome.".into(),
+            );
+        }
         _ => {
             return Err(format!(
-                "Frontmost app '{}' is not a supported browser. Supported: Safari, Chrome, Arc, Brave, Edge, Vivaldi, Opera",
-                frontmost_app
-            ).into());
+                "Frontmost app '{}' ({}) is not a supported browser. Supported: Safari, Chrome, Arc, Brave, Edge, Chromium, Vivaldi, Opera",
+                tracked.name, tracked.bundle_id
+            )
+            .into());
         }
     };
 
-    tracing::debug!(app = %app_name, "Getting URL from browser");
+    tracing::debug!(
+        bundle_id = %tracked.bundle_id,
+        "Getting URL from browser via single osascript call"
+    );
 
-    let url_output = Command::new("osascript")
-        .arg("-e")
-        .arg(url_script)
-        .output()?;
+    let url = crate::platform::run_osascript(url_script, "get_focused_browser_tab_url")
+        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+            format!("Failed to get URL from {}: {}", tracked.name, e).into()
+        })?;
 
-    if !url_output.status.success() {
-        let stderr = String::from_utf8_lossy(&url_output.stderr);
-        return Err(format!("Failed to get URL from {}: {}", app_name, stderr).into());
-    }
-
-    let url = String::from_utf8_lossy(&url_output.stdout)
-        .trim()
-        .to_string();
+    let url = url.trim().to_string();
 
     if url.is_empty() {
-        return Err(format!("No URL found in {}", app_name).into());
+        return Err(format!("No URL found in {}", tracked.name).into());
     }
 
-    tracing::debug!(url = %url, app = %app_name, "Browser URL retrieved");
+    tracing::debug!(url = %url, app = %tracked.name, "Browser URL retrieved");
 
     Ok(url)
 }

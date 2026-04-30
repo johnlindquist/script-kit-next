@@ -80,12 +80,6 @@ const TITLEBAR_HEIGHT: f32 = 36.0;
 /// Footer / status-bar height — 28 px keeps it compact while readable.
 const FOOTER_HEIGHT: f32 = 28.0;
 
-/// Keyboard-shortcuts overlay width.
-const SHORTCUTS_PANEL_WIDTH: f32 = 310.0;
-
-/// Keyboard-shortcuts overlay max height.
-const SHORTCUTS_PANEL_MAX_HEIGHT: f32 = 480.0;
-
 /// Browse-panel inline fallback width.
 const BROWSE_PANEL_WIDTH: f32 = 500.0;
 
@@ -123,9 +117,6 @@ const MIN_TARGET_SIZE: f32 = 24.0;
 // Derived / contextual opacity tokens — extracted from inline magic numbers
 // so every transparency in this file is auditable in one place.
 // =============================================================================
-
-/// Near-opaque overlay background (e.g. keyboard-shortcuts help sheet).
-const OPACITY_OVERLAY_BG: f32 = 0.96;
 
 /// Very subtle border dividers inside overlays (section separators).
 const OPACITY_SECTION_BORDER: f32 = 0.2;
@@ -170,9 +161,6 @@ const SAVED_FLASH_MS: u64 = 1500;
 
 /// Duration (ms) of action feedback flash ("Deleted", "Pinned", etc.).
 const ACTION_FEEDBACK_MS: u64 = 2000;
-
-/// Corner radius for shortcuts panel card (px).
-const SHORTCUTS_PANEL_RADIUS: f32 = 10.0;
 
 /// Extra vertical space reserved around the actions panel overlay (px).
 const ACTIONS_PANEL_WINDOW_MARGIN: f32 = 64.0;
@@ -360,9 +348,6 @@ pub struct NotesApp {
     /// Current sort mode for notes list
     sort_mode: NotesSortMode,
 
-    /// Whether the keyboard shortcuts help overlay is shown (Cmd+/)
-    show_shortcuts_help: bool,
-
     /// Instant when the last save completed — used for brief "Saved" flash in footer
     last_save_confirmed: Option<Instant>,
 
@@ -406,7 +391,6 @@ mod render_editor_body;
 mod render_editor_footer;
 mod render_editor_titlebar;
 mod render_overlays;
-mod render_shortcuts;
 mod render_ui;
 mod traits;
 mod vibrancy;

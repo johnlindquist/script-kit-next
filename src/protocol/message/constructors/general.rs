@@ -355,6 +355,14 @@ impl Message {
         Message::Hide {}
     }
 
+    /// Create a windowVisibilityAck reply for a show/hide RPC.
+    pub fn window_visibility_ack(request_id: String, window_visible: bool) -> Self {
+        Message::WindowVisibilityAck {
+            request_id,
+            window_visible,
+        }
+    }
+
     /// Create a browse message to open URL in default browser
     pub fn browse(url: String) -> Self {
         Message::Browse { url }

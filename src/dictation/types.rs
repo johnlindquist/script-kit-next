@@ -125,11 +125,11 @@ impl DictationTarget {
     /// Short, stable label for the overlay destination badge.
     pub fn overlay_label(self) -> &'static str {
         match self {
-            Self::MainWindowFilter => "Main",
+            Self::MainWindowFilter => "Script Kit",
             Self::MainWindowPrompt => "Prompt",
             Self::NotesEditor => "Notes",
             Self::AiChatComposer => "AI",
-            Self::TabAiHarness => "Tab AI",
+            Self::TabAiHarness => "Agent",
             Self::ExternalApp => "App",
         }
     }
@@ -147,6 +147,24 @@ pub enum DictationSessionPhase {
     Delivering,
     Finished,
     Failed(String),
+}
+
+impl DictationSessionPhase {
+    /// Stable camelCase identifier for automation receipts.
+    ///
+    /// The `Failed(_)` variant collapses to the single token `"failed"` — the
+    /// inner message is not part of the automation contract.
+    pub fn as_automation_str(&self) -> &'static str {
+        match self {
+            Self::Idle => "idle",
+            Self::Recording => "recording",
+            Self::Confirming => "confirming",
+            Self::Transcribing => "transcribing",
+            Self::Delivering => "delivering",
+            Self::Finished => "finished",
+            Self::Failed(_) => "failed",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

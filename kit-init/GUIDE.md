@@ -14,7 +14,7 @@ Welcome to Script Kit! This guide will help you get started and master the power
 6. [Configuration](#configuration-configts)
 7. [Themes](#themes-themejson)
 8. [Built-in Features](#built-in-features)
-9. [ACP Chat (BYOK)](#acp-chat-byok)
+9. [Agent Chat](#agent-chat)
 10. [Notes Window](#notes-window)
 11. [File Watching](#file-watching)
 12. [Multiple Environments](#multiple-environments)
@@ -38,10 +38,10 @@ Script Kit is a powerful automation tool that lets you create scripts to automat
 
 1. **Create the scripts directory** (if it doesn't exist):
    ```bash
-   mkdir -p ~/.scriptkit/kit/main/scripts
+   mkdir -p ~/.scriptkit/plugins/main/scripts
    ```
 
-2. **Create your first script** at `~/.scriptkit/kit/main/scripts/hello.ts`:
+2. **Create your first script** at `~/.scriptkit/plugins/main/scripts/hello.ts`:
    ```typescript
    import "@scriptkit/sdk";
 
@@ -70,7 +70,7 @@ The global hotkey opens the Script Kit launcher from anywhere:
 | Windows  | `Ctrl+;`       |
 | Linux    | `Ctrl+;`       |
 
-You can customize this in `~/.scriptkit/kit/config.ts` (see [Configuration](#configuration-configts)).
+You can customize this in `~/.scriptkit/config.ts` (see [Configuration](#configuration-configts)).
 
 ---
 
@@ -81,16 +81,16 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 ```
 ~/.scriptkit/
 ├── CLAUDE.md                    # Canonical harness instructions
-├── AGENTS.md                    # SDK reference for agentic authoring
+├── AGENTS.md                    # SDK reference for agents
 ├── GUIDE.md                     # User guide
-├── kit/
-│   ├── authoring/
+├── plugins/
+│   ├── scriptkit/
 │   │   ├── skills/
-│   │   │   ├── script-authoring/SKILL.md
-│   │   │   ├── scriptlets/SKILL.md
-│   │   │   ├── agents/SKILL.md
-│   │   │   ├── config/SKILL.md
-│   │   │   └── troubleshooting/SKILL.md
+│   │   │   ├── new-script/SKILL.md
+│   │   │   ├── new-scriptlet/SKILL.md
+│   │   │   ├── new-agent/SKILL.md
+│   │   │   ├── update-config/SKILL.md
+│   │   │   └── troubleshoot/SKILL.md
 │   │   ├── plugin.json
 │   ├── examples/
 │   │   ├── scripts/
@@ -101,10 +101,10 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 │   │   ├── scriptlets/
 │   │   ├── skills/
 │   │   └── agents/
-│   ├── config.ts
-│   ├── theme.json
-│   ├── package.json
-│   └── tsconfig.json
+├── config.ts
+├── theme.json
+├── package.json
+├── tsconfig.json
 ├── sdk/
 │   └── kit-sdk.ts
 ├── db/
@@ -116,10 +116,10 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 
 | Directory | Purpose |
 |-----------|---------|
-| `kit/main/scripts/` | Your primary scripts - create `.ts` files here |
-| `kit/main/scriptlets/` | Markdown scriptlet files with shell commands |
-| `kit/main/skills/` | Reusable ACP workflows (preferred reusable AI unit) |
-| `kit/main/agents/` | AI agent definitions |
+| `plugins/main/scripts/` | Your primary scripts - create `.ts` files here |
+| `plugins/main/scriptlets/` | Markdown scriptlet files with shell commands |
+| `plugins/main/skills/` | Reusable ACP workflows (preferred reusable AI unit) |
+| `plugins/main/agents/` | AI agent definitions |
 | `sdk/` | Runtime SDK (auto-extracted, don't edit) |
 | `db/` | SQLite databases for Notes and AI |
 | `logs/` | Debug logs in JSONL format |
@@ -130,10 +130,10 @@ Script Kit stores all its data in `~/.scriptkit/`. Here's the layout:
 
 ### Creating a Script File
 
-Create a `.ts` file in `~/.scriptkit/kit/main/scripts/`:
+Create a `.ts` file in `~/.scriptkit/plugins/main/scripts/`:
 
 ```typescript
-// ~/.scriptkit/kit/main/scripts/my-script.ts
+// ~/.scriptkit/plugins/main/scripts/my-script.ts
 import "@scriptkit/sdk";
 
 export const metadata = {
@@ -159,11 +159,11 @@ export const metadata = {
 };
 ```
 
-### Harness-Safe Authoring Rules
+### Harness-Safe Creation Rules
 
 - Start new scripts with `import "@scriptkit/sdk";`.
 - Use `export const metadata = { name, description }`.
-- Write new scripts as `.ts` files in `kit/main/scripts/`.
+- Write new scripts as `.ts` files in `plugins/main/scripts/`.
 - Treat legacy comment headers as compatibility-only for older files; do not generate them for new harness-authored scripts.
 
 ---
@@ -446,7 +446,7 @@ Scriptlets are markdown files containing one or more mini-scripts. They're perfe
 
 ### Creating a Scriptlet File
 
-Create a `.md` file in `~/.scriptkit/kit/main/scriptlets/`:
+Create a `.md` file in `~/.scriptkit/plugins/main/scriptlets/`:
 
 ~~~md
 ---
@@ -477,7 +477,7 @@ import "@scriptkit/sdk";
 
 const note = await arg("Note");
 await Bun.write(`${env.HOME}/quick-note.txt`, note);
-await notify("Saved");
+hud("Saved");
 ```
 ~~~
 
@@ -618,7 +618,7 @@ Shared actions let you define reusable actions that automatically apply to ALL s
 Create a companion `.actions.md` file with the same base name as your scriptlet bundle:
 
 ```
-~/.scriptkit/kit/main/scriptlets/
+~/.scriptkit/plugins/main/scriptlets/
 ├── quicklinks.md           # Main scriptlet file
 └── quicklinks.actions.md   # Shared actions for all quicklinks
 ```
@@ -746,7 +746,7 @@ await \$\`code \${tmp}\`;
 
 Agent files are reusable backend-specific markdown prompts. They are not TypeScript scripts and they do not use `export const metadata`.
 
-Write them in `~/.scriptkit/kit/main/agents/` with a backend suffix in the filename:
+Write them in `~/.scriptkit/plugins/main/agents/` with a backend suffix in the filename:
 
 - `review.claude.md`
 - `plan.gemini.md`
@@ -772,13 +772,13 @@ Return:
 3. tests to add
 ```
 
-For more patterns, read `~/.scriptkit/kit/examples/agents/`.
+For more patterns, read `~/.scriptkit/plugins/examples/agents/`.
 
 ---
 
 ## Configuration (config.ts)
 
-Create `~/.scriptkit/kit/config.ts` to customize Script Kit:
+Create `~/.scriptkit/config.ts` to customize Script Kit:
 
 ```typescript
 import type { Config } from "@scriptkit/sdk";
@@ -905,8 +905,7 @@ Common key codes:
 
 ### Common Mistakes
 
-- Putting skills at the workspace root instead of in `~/.scriptkit/kit/authoring/skills/`
-- Editing `~/.scriptkit/config.ts` instead of `~/.scriptkit/kit/config.ts` (legacy path)
+- Putting skills at the workspace root instead of in `~/.scriptkit/plugins/scriptkit/skills/`
 - Using `command` / `control` instead of `meta` / `ctrl`
 - Editing `theme.json` when you meant to change `theme.presetId` in `config.ts`
 
@@ -914,7 +913,7 @@ Common key codes:
 
 ## Themes (theme.json)
 
-Customize the look and feel with `~/.scriptkit/kit/theme.json`:
+Customize the look and feel with `~/.scriptkit/theme.json`:
 
 ```json
 {
@@ -1084,58 +1083,34 @@ await tileWindow(windowId, "left");
 
 ---
 
-## ACP Chat (BYOK)
+## Agent Chat
 
-Script Kit includes ACP Chat — a built-in AI chat surface that uses your own API keys (BYOK = Bring Your Own Key). ACP Chat is the primary AI interface, accessible from the launcher and from scripts via the SDK.
+Script Kit includes Agent Chat - a built-in chat surface for command-line agents. Agent Chat is the primary AI interface, accessible from the launcher and from scripts via the SDK.
 
-### Opening ACP Chat
+### Opening Agent Chat
 
-- **From script**: Use `aiStartChat()` to create or continue an ACP Chat conversation
-- **Focus existing ACP Chat**: Use `aiFocus()`
-- **From skills**: Selecting a skill opens ACP Chat
+- **From script**: Use `aiStartChat()` to create or continue an Agent Chat conversation
+- **Focus existing Agent Chat**: Use `aiFocus()`
+- **From skills**: Selecting a skill opens Agent Chat
 - **Hotkey**: `Cmd+Shift+Space` (default, configurable)
-- **Tab behavior**: Plain `Tab` from the launcher opens the PTY-backed harness terminal, not ACP Chat
+- **Tab behavior**: Plain `Tab` from the launcher opens Agent Chat with current context
 
-### API Key Setup
+### Agent Setup
 
-Set one of these environment variables:
-
-| Provider | Environment Variable |
-|----------|---------------------|
-| Anthropic (Claude) | `SCRIPT_KIT_ANTHROPIC_API_KEY` |
-| OpenAI (GPT) | `SCRIPT_KIT_OPENAI_API_KEY` |
-
-**Where to set keys:**
-
-1. **Shell profile** (recommended):
-   ```bash
-   # ~/.zshrc or ~/.bashrc
-   export SCRIPT_KIT_ANTHROPIC_API_KEY="sk-ant-..."
-   ```
-
-2. **Environment file**:
-   ```bash
-   # ~/.scriptkit/.env
-   SCRIPT_KIT_ANTHROPIC_API_KEY=sk-ant-...
-   ```
-
-3. **macOS Keychain** (for extra security):
-   ```bash
-   security add-generic-password -a "$USER" -s "SCRIPT_KIT_ANTHROPIC_API_KEY" -w "sk-ant-..."
-   ```
+Agent defaults, model preferences, profiles, and related runtime settings live in `~/.scriptkit/config.ts`. Agent catalog recovery may also open `~/.scriptkit/acp/agents.json` when a local agent entry needs repair.
 
 ### Features
 
 - **Streaming responses** with real-time token display
 - **Markdown rendering** for formatted AI responses
-- **Model picker** to select AI models
+- **Model picker** to select agent-advertised models
 - **Chat history** with sidebar navigation
-- **Multi-provider support** (Anthropic Claude, OpenAI GPT)
+- **Multiple agent support** (Claude Code, OpenCode, Gemini CLI, Codex, and compatible adapters)
 - **Context injection** — the harness terminal captures desktop context automatically via Tab
 
-### ACP Chat SDK
+### Agent Chat SDK
 
-Scripts can programmatically create and manage ACP Chat conversations:
+Scripts can programmatically create and manage Agent Chat conversations:
 
 ```typescript
 // Start a new chat with context parts
@@ -1169,12 +1144,12 @@ await aiFocus();
 await aiDeleteChat(result.chatId);
 ```
 
-See the full function list in [ACP Chat SDK](#acp-chat-sdk-1) under SDK Quick Reference.
+See the full function list in [Agent Chat SDK](#agent-chat-sdk-1) under SDK Quick Reference.
 
 ### Configuring the Hotkey
 
 ```typescript
-// ~/.scriptkit/kit/config.ts
+// ~/.scriptkit/config.ts
 aiHotkey: {
   modifiers: ["meta", "shift"],
   key: "Space"
@@ -1189,7 +1164,7 @@ A floating notes window with Markdown support for quick note-taking.
 
 ### Opening the Notes Window
 
-- **Hotkey**: No default — set `notesHotkey` in `kit/config.ts` to enable
+- **Hotkey**: No default — set `notesHotkey` in `config.ts` to enable
 - **From script**: See [SDK Reference](#sdk-quick-reference)
 
 ### Features
@@ -1209,7 +1184,7 @@ A floating notes window with Markdown support for quick note-taking.
 ### Configuring the Hotkey
 
 ```typescript
-// ~/.scriptkit/kit/config.ts
+// ~/.scriptkit/config.ts
 notesHotkey: {
   modifiers: ["meta", "shift"],
   key: "KeyN"
@@ -1238,12 +1213,12 @@ Notes are currently exposed to scripts through the automation protocol rather th
 
 Use the semantic IDs `panel:notes-window` and `input:notes-editor`. Do not read or write `~/.scriptkit/db/notes.sqlite` directly from scripts.
 
-### ACP Handoffs
+## ACP Handoffs
 
 Use the Notes UI actions for cross-surface handoffs:
 
-- **Send to ACP Chat** — opens or focuses ACP Chat with the active note content
-- **Save as Note** — creates or updates a note from ACP-generated content
+- **Send to Agent Chat** — opens or focuses Agent Chat with the active note content
+- **Save as Note** — creates or updates a note from Agent Chat content
 
 These are UI actions, not JavaScript globals. The current public Notes script surface is the automation target (`kind: notes`) unless real Notes functions are added to `scripts/kit-sdk.ts`.
 
@@ -1257,11 +1232,11 @@ Script Kit automatically watches for changes and reloads:
 
 | Path | What Happens |
 |------|--------------|
-| `kit/main/scripts/*.ts` | Scripts reload in launcher |
-| `kit/main/scripts/*.js` | Scripts reload in launcher |
-| `kit/main/scriptlets/*.md` | Scriptlets reload in launcher |
-| `kit/config.ts` | Most settings reload live (hotkey needs restart) |
-| `kit/theme.json` | Theme reloads live (no restart) |
+| `plugins/main/scripts/*.ts` | Scripts reload in launcher |
+| `plugins/main/scripts/*.js` | Scripts reload in launcher |
+| `plugins/main/scriptlets/*.md` | Scriptlets reload in launcher |
+| `config.ts` | Most settings reload live (hotkey needs restart) |
+| `theme.json` | Theme reloads live (no restart) |
 
 ### Auto-Reload Behavior
 
@@ -1282,7 +1257,7 @@ export const metadata = {
 
 // This script runs when files change in ~/Downloads
 const changedFile = process.argv[2];  // Path of changed file
-await notify(`New download: ${changedFile}`);
+hud(`New download: ${changedFile}`);
 ```
 
 ---
@@ -1291,10 +1266,10 @@ await notify(`New download: ${changedFile}`);
 
 ### Adding Additional Kits
 
-Beyond the default `main/` kit, you can add additional kits under `~/.scriptkit/kit/`:
+Beyond the default `main/` kit, you can add additional kits under `~/.scriptkit/plugins/`:
 
 ```
-~/.scriptkit/kit/
+~/.scriptkit/plugins/
 ├── main/              # Default kit
 │   ├── scripts/
 │   ├── scriptlets/
@@ -1376,7 +1351,7 @@ export SK_PATH=~/Projects/my-app/.kit
 |----------|-------------|
 | `beep()` | Play system beep |
 | `say(text, voice?)` | Text-to-speech |
-| `notify(options)` | System notification |
+| `notify(options)` | OS-level system notification (Notification Center). Distinct from `hud(message)` — use `hud` for in-launcher feedback, `notify` when the message should persist outside the launcher. |
 | `hud(message, options?)` | Brief HUD notification |
 | `setStatus(options)` | Set app status |
 | `menu(icon, scripts?)` | Set system menu |
@@ -1471,20 +1446,20 @@ export SK_PATH=~/Projects/my-app/.kit
 | `resizeWindow(windowId, width, height)` | Resize a window |
 | `tileWindow(windowId, position)` | Tile a window |
 
-### ACP Chat SDK
+### Agent Chat SDK
 
 | Function | Description |
 |----------|-------------|
-| `aiIsOpen()` | Check if ACP Chat is open |
+| `aiIsOpen()` | Check if Agent Chat is open |
 | `aiGetActiveChat()` | Get the active chat info |
 | `aiListChats(limit?, includeDeleted?)` | List all chats |
 | `aiGetConversation(chatId?, limit?)` | Get messages from a chat |
-| `aiStartChat(message, options?)` | Start a new ACP Chat conversation (supports `parts` for context) |
+| `aiStartChat(message, options?)` | Start a new Agent Chat conversation (supports `parts` for context) |
 | `aiAppendMessage(chatId, content, role)` | Append a message without triggering a response |
 | `aiSendMessage(chatId, content, imagePath?, parts?)` | Send a follow-up message (supports `parts` for context) |
-| `aiOn(eventType, handler, chatId?)` | Subscribe to ACP Chat events |
+| `aiOn(eventType, handler, chatId?)` | Subscribe to Agent Chat events |
 | `aiSetSystemPrompt(chatId, prompt)` | Set the system prompt for a chat |
-| `aiFocus()` | Focus ACP Chat |
+| `aiFocus()` | Focus Agent Chat |
 | `aiGetStreamingStatus(chatId?)` | Check if a chat is currently streaming |
 | `aiDeleteChat(chatId, permanent?)` | Delete a chat |
 

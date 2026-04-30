@@ -69,7 +69,7 @@ impl ChatPrompt {
                     .items_center()
                     .gap(px(10.))
                     .mt(px(4.))
-                    // Configure Vercel AI Gateway (primary)
+                    // Configure direct provider API key (primary)
                     .child(
                         div()
                             .id("configure-button")
@@ -117,7 +117,7 @@ impl ChatPrompt {
                                     .text_sm()
                                     .font_weight(gpui::FontWeight::MEDIUM)
                                     .text_color(accent_text)
-                                    .child("Configure Vercel AI Gateway"),
+                                    .child("Configure API Key"),
                             ),
                     )
                     // "or" separator

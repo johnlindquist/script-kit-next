@@ -1,13 +1,13 @@
 use crate::theme::Theme;
 
-// Re-export shared overlay constants consumed by render.rs and render_helpers.rs
-pub(super) use crate::components::overlay_modal::{
-    overlay_color_with_alpha, BUTTON_GAP, MODAL_PADDING, MODAL_WIDTH,
-};
+// Re-export shared overlay constants consumed by render.rs.
+pub(super) use crate::components::overlay_modal::{overlay_color_with_alpha, BUTTON_GAP};
 
 /// Shortcut-recorder-specific layout constants
-pub(super) const KEY_DISPLAY_HEIGHT: f32 = 32.0;
-pub(super) const KEY_DISPLAY_PADDING: f32 = 0.0;
+pub(super) const RECORDER_MODAL_WIDTH: f32 = 320.0;
+pub(super) const RECORDER_MODAL_PADDING: f32 = 18.0;
+pub(super) const KEY_DISPLAY_HEIGHT: f32 = 44.0;
+pub(super) const KEY_DISPLAY_PADDING: f32 = 12.0;
 
 /// Backdrop alpha values specific to shortcut recorder
 pub(super) const OVERLAY_BACKDROP_ALPHA: u8 = 0x80;

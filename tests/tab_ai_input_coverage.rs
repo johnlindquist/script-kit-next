@@ -4,7 +4,7 @@
 //! meaningful data for each supported view type, and that degraded surfaces
 //! are explicitly handled rather than silently falling through.
 
-const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+const TAB_AI_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 
 // ---------------------------------------------------------------------------
 // current_input_text coverage — every AppView variant must be named

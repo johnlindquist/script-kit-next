@@ -1,16 +1,16 @@
-// Name: Test ACP Chat Features
-// Description: Test that ACP Chat features are accessible
+// Name: Test Agent Chat Features
+// Description: Test that Agent Chat features are accessible
 
 import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
 async function main() {
-  console.error('[TEST] ai-features - Testing ACP Chat features implementation');
+  console.error('[TEST] ai-features - Testing Agent Chat features implementation');
   
   // This test verifies that the main app window works correctly
-  // Detached ACP Chat is a separate window that can be tested manually with:
-  // - Cmd+Shift+Space to open ACP Chat
+  // Detached Agent Chat is a separate window that can be tested manually with:
+  // - Cmd+Shift+Space to open Agent Chat
   // - Cmd+K to open command bar
   // - Cmd+M to open model picker
   // - Cmd+Shift+N to open presets dropdown
@@ -33,8 +33,8 @@ async function main() {
   }
   
   // List the AI features that were implemented:
-  console.error('[INFO] ACP Chat Features Implemented:');
-  console.error('[INFO] 1. API Key Setup Flow - Vercel AI Gateway button (Cmd+Shift+Space -> see setup card)');
+  console.error('[INFO] Agent Chat Features Implemented:');
+  console.error('[INFO] 1. Agent setup flow - Agent Catalog button (Cmd+Shift+Space -> see setup card)');
   console.error('[INFO] 2. Command Bar - Cmd+K to access actions (copy, new chat, delete, etc.)');
   console.error('[INFO] 3. Model Picker - Cmd+M or click model button to select AI model');
   console.error('[INFO] 4. Presets Dropdown - Cmd+Shift+N or click chevron next to + button');

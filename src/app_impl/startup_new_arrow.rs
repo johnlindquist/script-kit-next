@@ -382,6 +382,70 @@
                                     }
                                     cx.stop_propagation();
                                 }
+                                AppView::BrowserHistoryView {
+                                    selected_index,
+                                    filter,
+                                } => {
+                                    let filtered_len =
+                                        crate::browser_history::fuzzy_search_browser_history(
+                                            &this.cached_browser_history,
+                                            filter,
+                                        )
+                                        .len();
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.browser_history_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.browser_history_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
+                                AppView::DictationHistoryView {
+                                    selected_index,
+                                    filter,
+                                } => {
+                                    let filtered_len =
+                                        crate::dictation::search_history(filter, 100).len();
+
+                                    if filtered_len == 0 {
+                                        *selected_index = 0;
+                                        cx.stop_propagation();
+                                        return;
+                                    }
+
+                                    if *selected_index >= filtered_len {
+                                        *selected_index = filtered_len - 1;
+                                    }
+
+                                    if is_up && *selected_index > 0 {
+                                        *selected_index -= 1;
+                                        this.dictation_history_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    } else if is_down && *selected_index + 1 < filtered_len {
+                                        *selected_index += 1;
+                                        this.dictation_history_scroll_handle
+                                            .scroll_to_item(*selected_index);
+                                        cx.notify();
+                                    }
+                                    cx.stop_propagation();
+                                }
                                 AppView::SearchAiPresetsView {
                                     selected_index,
                                     filter,
@@ -528,7 +592,7 @@
                                         // Ensure grouped cache is populated before reading cached boundaries.
                                         let _ = this.get_grouped_results_cached();
                                         let first_selectable_index =
-                                            this.cached_grouped_first_selectable_index;
+                                            this.main_menu_result_caches.first_selectable_index();
                                         let at_top_of_list = first_selectable_index
                                             .map(|position| this.selected_index <= position)
                                             .unwrap_or(true);
@@ -540,23 +604,7 @@
                                                     HISTORY,
                                                     &format!("Recalled: {}", text),
                                                 );
-                                                this.filter_text = text.clone();
-                                                let text_len = text.len();
-                                                this.gpui_input_state.update(
-                                                    cx,
-                                                    |state, input_cx| {
-                                                        state.set_value(
-                                                            text.clone(),
-                                                            window,
-                                                            input_cx,
-                                                        );
-                                                        state.set_selection(
-                                                            text_len, text_len, window, input_cx,
-                                                        );
-                                                    },
-                                                );
-                                                this.queue_filter_compute(text, cx);
-                                                cx.notify();
+                                                this.set_filter_text_immediate(text, window, cx);
                                             }
                                             cx.stop_propagation();
                                             return;
@@ -570,40 +618,10 @@
                                                     HISTORY,
                                                     &format!("Recalled: {}", text),
                                                 );
-                                                this.filter_text = text.clone();
-                                                let text_len = text.len();
-                                                this.gpui_input_state.update(
-                                                    cx,
-                                                    |state, input_cx| {
-                                                        state.set_value(
-                                                            text.clone(),
-                                                            window,
-                                                            input_cx,
-                                                        );
-                                                        state.set_selection(
-                                                            text_len, text_len, window, input_cx,
-                                                        );
-                                                    },
-                                                );
-                                                this.queue_filter_compute(text, cx);
-                                                cx.notify();
+                                                this.set_filter_text_immediate(text, window, cx);
                                             } else {
                                                 this.input_history.reset_navigation();
-                                                this.filter_text.clear();
-                                                this.gpui_input_state.update(
-                                                    cx,
-                                                    |state, input_cx| {
-                                                        state.set_value(
-                                                            String::new(),
-                                                            window,
-                                                            input_cx,
-                                                        );
-                                                        state
-                                                            .set_selection(0, 0, window, input_cx);
-                                                    },
-                                                );
-                                                this.queue_filter_compute(String::new(), cx);
-                                                cx.notify();
+                                                this.clear_filter(window, cx);
                                             }
                                             cx.stop_propagation();
                                             return;

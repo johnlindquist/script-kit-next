@@ -112,6 +112,12 @@ pub struct TermPrompt {
     /// Fractional line remainder from pixel-based scroll events (trackpad/momentum).
     /// Accumulated across events so small deltas aren't silently dropped.
     wheel_scroll_remainder: f32,
+    /// When true, render and size the terminal edge-to-edge without prompt padding.
+    pub edge_to_edge: bool,
+    /// Pixel inset applied on all four edges while `edge_to_edge` is true.
+    /// 0.0 keeps the original "cells touch the panel border" behavior.
+    /// QuickTerminalView sets this to a small value so cells get a tiny gutter.
+    pub edge_to_edge_inset_px: f32,
 }
 
 // --- merged from part_001.rs ---
@@ -127,7 +133,7 @@ impl TermPrompt {
         command: Option<String>,
         focus_handle: FocusHandle,
         on_submit: SubmitCallback,
-        _theme: Arc<Theme>,
+        theme: Arc<Theme>,
         config: Arc<Config>,
         content_height: Option<Pixels>,
     ) -> anyhow::Result<Self> {
@@ -136,8 +142,10 @@ impl TermPrompt {
         let initial_rows = 24;
 
         let terminal = match command {
-            Some(cmd) => TerminalHandle::with_command(&cmd, initial_cols, initial_rows)?,
-            None => TerminalHandle::new(initial_cols, initial_rows)?,
+            Some(cmd) => {
+                TerminalHandle::with_command_and_theme(&cmd, initial_cols, initial_rows, &theme)?
+            }
+            None => TerminalHandle::new_with_theme(initial_cols, initial_rows, &theme)?,
         };
 
         info!(
@@ -146,7 +154,56 @@ impl TermPrompt {
             "TermPrompt::with_height created"
         );
 
-        Ok(Self {
+        Ok(Self::from_terminal(
+            id,
+            terminal,
+            focus_handle,
+            on_submit,
+            config,
+            content_height,
+            (initial_cols, initial_rows),
+        ))
+    }
+
+    /// Create a terminal prompt around an already-spawned terminal handle.
+    pub fn with_existing_terminal(
+        id: String,
+        mut terminal: TerminalHandle,
+        focus_handle: FocusHandle,
+        on_submit: SubmitCallback,
+        theme: Arc<Theme>,
+        config: Arc<Config>,
+        content_height: Option<Pixels>,
+    ) -> anyhow::Result<Self> {
+        terminal.update_theme(&theme);
+
+        info!(
+            id = %id,
+            content_height = ?content_height,
+            "TermPrompt::with_existing_terminal created"
+        );
+
+        Ok(Self::from_terminal(
+            id,
+            terminal,
+            focus_handle,
+            on_submit,
+            config,
+            content_height,
+            (80, 24),
+        ))
+    }
+
+    fn from_terminal(
+        id: String,
+        terminal: TerminalHandle,
+        focus_handle: FocusHandle,
+        on_submit: SubmitCallback,
+        config: Arc<Config>,
+        content_height: Option<Pixels>,
+        last_size: (u16, u16),
+    ) -> Self {
+        Self {
             id,
             terminal,
             focus_handle,
@@ -155,7 +212,7 @@ impl TermPrompt {
             exited: false,
             exit_code: None,
             refresh_timer_active: false,
-            last_size: (initial_cols, initial_rows),
+            last_size,
             content_height,
             bell_flash_until: None,
             title: None,
@@ -169,7 +226,37 @@ impl TermPrompt {
             has_received_output: false,
             prefer_buffer_scroll_on_wheel: false,
             wheel_scroll_remainder: 0.0,
-        })
+            edge_to_edge: false,
+            edge_to_edge_inset_px: 0.0,
+        }
+    }
+
+    /// Shared terminal padding contract for rendering, resize math, and mouse
+    /// hit-testing. Tuple order is `(top, left, right)`. Render, cols/rows
+    /// resize, and pixel→cell hit-test ALL call this same helper, so the
+    /// rendered grid stays aligned with the mouse hit-test grid.
+    #[inline]
+    fn effective_padding(&self) -> (f32, f32, f32) {
+        if self.edge_to_edge {
+            let inset = self.edge_to_edge_inset_px;
+            (inset, inset, inset)
+        } else {
+            let padding = self.config.get_padding();
+            (padding.top, padding.left, padding.right)
+        }
+    }
+
+    /// Bottom padding for the terminal grid. Zero in edge_to_edge mode (e.g.
+    /// QuickTerminalView) so terminal cells run flush with the footer hint
+    /// strip instead of leaving a visible gap above the footer. SDK terminals
+    /// keep the existing symmetric `padding.top` for vertical balance.
+    #[inline]
+    fn effective_padding_bottom(&self) -> f32 {
+        if self.edge_to_edge {
+            0.0
+        } else {
+            self.config.get_padding().top
+        }
     }
 
     /// Whether the terminal process is still alive.
@@ -527,11 +614,11 @@ impl TermPrompt {
 
     /// Convert pixel position to terminal grid cell (col, row)
     fn pixel_to_cell(&self, position: gpui::Point<Pixels>) -> (usize, usize) {
-        let padding = self.config.get_padding();
+        let (padding_top, padding_left, _) = self.effective_padding();
         let pos_x: f32 = position.x.into();
         let pos_y: f32 = position.y.into();
-        let x = (pos_x - padding.left).max(0.0);
-        let y = (pos_y - padding.top).max(0.0);
+        let x = (pos_x - padding_left).max(0.0);
+        let y = (pos_y - padding_top).max(0.0);
 
         let col = (x / self.cell_width()) as usize;
         let row = (y / self.cell_height()) as usize;
@@ -607,17 +694,19 @@ impl TermPrompt {
 
     /// Resize terminal if needed based on new dimensions
     fn resize_if_needed(&mut self, width: Pixels, height: Pixels) {
-        let padding = self.config.get_padding();
+        let (padding_top, padding_left, padding_right) = self.effective_padding();
+        let padding_bottom = self.effective_padding_bottom();
         let cell_width = self.cell_width();
         let cell_height = self.cell_height();
-        // Note: We use padding.top for bottom padding as well (see render() which uses pb(px(padding.top)))
+        // Render and resize use the same padding_bottom (0 in edge_to_edge,
+        // padding_top otherwise) so the grid cell count matches the rendered area.
         let (new_cols, new_rows) = Self::calculate_terminal_size_with_cells(
             width,
             height,
-            padding.left,
-            padding.right,
-            padding.top,
-            padding.top,
+            padding_left,
+            padding_right,
+            padding_top,
+            padding_bottom,
             cell_width,
             cell_height,
         );
@@ -1329,7 +1418,8 @@ impl Render for TermPrompt {
         let terminal_content = self.render_content(&content, &theme);
 
         // Get padding from config
-        let padding = self.config.get_padding();
+        let (padding_top, padding_left, padding_right) = self.effective_padding();
+        let padding_bottom = self.effective_padding_bottom();
 
         // Check if bell is flashing and clear expired state
         // This ensures bell flash doesn't stick if timer has stopped (e.g., after terminal exit)
@@ -1359,10 +1449,10 @@ impl Render for TermPrompt {
             .flex()
             .flex_col()
             .w_full()
-            .pl(px(padding.left))
-            .pr(px(padding.right))
-            .pt(px(padding.top))
-            .pb(px(padding.top)) // Use same as top for consistent spacing
+            .pl(px(padding_left))
+            .pr(px(padding_right))
+            .pt(px(padding_top))
+            .pb(px(padding_bottom)) // 0 in edge_to_edge so cells run flush with footer; padding_top otherwise
             // No .bg() - vibrancy support
             .text_color(rgb(colors.text.primary))
             .overflow_hidden() // Clip any overflow

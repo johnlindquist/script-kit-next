@@ -49,7 +49,9 @@ pub use chat::{
 };
 pub use creation_feedback::CreationFeedbackPanel;
 pub use div::{ContainerOptions, ContainerPadding, DivPrompt};
-pub use naming::{NamingPrompt, NamingPromptConfig, NamingSubmitResult, NamingTarget};
+pub use naming::{
+    NamingPrompt, NamingPromptConfig, NamingSubmitResult, NamingTarget, TemplateSelection,
+};
 #[cfg(target_os = "macos")]
 pub use webcam::WebcamPrompt;
 #[cfg(not(target_os = "macos"))]

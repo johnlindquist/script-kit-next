@@ -1,7 +1,7 @@
 //! Script loading from file system
 //!
 //! This module provides functions for loading scripts from the
-//! ~/.scriptkit/*/scripts/ directories.
+//! ~/.scriptkit/plugins/*/scripts/ directories.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -14,6 +14,7 @@ use crate::setup::get_kit_path;
 use super::metadata::extract_metadata_full;
 use super::scriptlet_loader::extract_kit_from_path;
 use super::types::Script;
+use super::validation::{validate_script_catalog, ScriptCatalogReport};
 
 /// Reads scripts from all discovered plugin roots.
 ///
@@ -89,13 +90,28 @@ pub fn read_scripts() -> Vec<Arc<Script>> {
     scripts
 }
 
+/// Load scripts and run the startup-time validation pass, returning an
+/// immutable [`ScriptCatalogReport`] that pairs the kept catalog with a
+/// [`super::validation::ValidationReport`] for the MCP resource + menu-bar
+/// badge.
+///
+/// Oracle-Session `script-metadata-validation-fail-fast` PR1 foundation.
+/// This surface stays additive — `read_scripts()` keeps working unchanged
+/// for callers that don't yet care about validation state; the indexing
+/// and MCP wiring migrations ride in follow-up PRs.
+#[instrument(level = "debug", skip_all)]
+pub fn read_scripts_report() -> Arc<ScriptCatalogReport> {
+    let scripts = read_scripts();
+    Arc::new(validate_script_catalog(scripts))
+}
+
 /// Read scripts from a single directory.
 /// Returns a Vec of loaded scripts for parallel collection.
 ///
 /// H1 Optimization: Creates Arc-wrapped Scripts for cheap cloning.
 ///
 /// # Arguments
-/// * `scripts_dir` - Path to the scripts directory (e.g., ~/.scriptkit/kit/main/scripts)
+/// * `scripts_dir` - Path to the scripts directory (e.g., ~/.scriptkit/plugins/main/scripts)
 /// * `kit_path` - Root kit path for extracting kit name (e.g., ~/.scriptkit)
 pub(crate) fn read_scripts_from_dir(scripts_dir: &Path, kit_path: &Path) -> Vec<Arc<Script>> {
     let entries: Vec<std::fs::DirEntry> = match std::fs::read_dir(scripts_dir) {
@@ -190,7 +206,7 @@ mod tests {
     #[test]
     fn read_scripts_from_dir_reloads_updated_body_content() {
         let root = unique_test_dir("loader-body-reload");
-        let scripts_dir = root.join("kit").join("main").join("scripts");
+        let scripts_dir = root.join("plugins").join("main").join("scripts");
         fs::create_dir_all(&scripts_dir).expect("scripts dir should be created for test");
 
         let script_path = scripts_dir.join("demo.ts");

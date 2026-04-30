@@ -6,11 +6,11 @@ use gpui::{
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::components::overlay_modal::OverlayAnimation;
 use crate::logging;
-use crate::ui_foundation::{is_key_enter, is_key_escape};
+use crate::ui_foundation::{get_vibrancy_background, is_key_enter, is_key_escape};
 
 use super::types::{
-    overlay_color_with_alpha, BUTTON_GAP, MODAL_PADDING, MODAL_WIDTH, OVERLAY_BACKDROP_ALPHA,
-    OVERLAY_BACKDROP_HOVER_ALPHA,
+    overlay_color_with_alpha, BUTTON_GAP, OVERLAY_BACKDROP_ALPHA, OVERLAY_BACKDROP_HOVER_ALPHA,
+    RECORDER_MODAL_PADDING, RECORDER_MODAL_WIDTH,
 };
 use super::ShortcutRecorder;
 
@@ -24,7 +24,7 @@ impl Render for ShortcutRecorder {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         crate::components::hint_strip::emit_shortcut_chrome_audit(
             "shortcut_recorder",
-            "compact-inline-unboxed-preview",
+            "compact-modal",
         );
 
         let colors = self.colors;
@@ -44,78 +44,87 @@ impl Render for ShortcutRecorder {
         let can_save = self.shortcut.is_complete() && self.conflict.is_none();
         let can_clear = !self.shortcut.is_empty();
 
-        // Build header — single title line, command name folded in
-        let title = match self.command_name.as_deref() {
-            Some(name) => format!("Shortcut for \"{}\"", name),
-            None => "Record Shortcut".to_string(),
-        };
-        let header = div().w_full().child(
-            div()
-                .text_base()
-                .font_weight(gpui::FontWeight::SEMIBOLD)
-                .text_color(rgb(colors.text_primary))
-                .child(title),
-        );
+        let title = self
+            .command_name
+            .as_deref()
+            .filter(|name| !name.is_empty())
+            .unwrap_or("Shortcut")
+            .to_string();
+        let header = div()
+            .w_full()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.0))
+            .child(
+                div()
+                    .w(px(2.0))
+                    .h(px(14.0))
+                    .rounded(px(1.0))
+                    .bg(rgb(colors.accent)),
+            )
+            .child(
+                div()
+                    .min_w(px(0.0))
+                    .truncate()
+                    .text_sm()
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(rgb(colors.text_primary))
+                    .child(title),
+            );
 
         // Build button row
         let clear_handler = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
             this.clear(cx);
         });
 
-        let cancel_handler = cx.listener(|this, _: &gpui::ClickEvent, _window, _cx| {
+        let cancel_handler = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
             this.cancel();
+            cx.notify();
         });
 
-        let save_handler = cx.listener(|this, _: &gpui::ClickEvent, _window, _cx| {
+        let save_handler = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
             this.save();
+            cx.notify();
         });
 
-        let buttons = div()
+        let mut buttons = div()
             .w_full()
             .mt(px(12.))
             .flex()
             .flex_row()
             .items_center()
-            .justify_between()
-            .child(
-                // Left side: Clear button
+            .justify_end()
+            .gap(px(BUTTON_GAP));
+
+        if can_clear {
+            buttons = buttons.child(
                 Button::new("Clear", button_colors)
                     .variant(ButtonVariant::Ghost)
-                    .disabled(!can_clear)
                     .on_click(Box::new(move |event, window, cx| {
                         clear_handler(event, window, cx);
                     })),
+            );
+        }
+
+        let buttons = buttons
+            .child(
+                Button::new("Cancel", button_colors)
+                    .variant(ButtonVariant::Ghost)
+                    .shortcut("Esc")
+                    .on_click(Box::new(move |event, window, cx| {
+                        cancel_handler(event, window, cx);
+                    })),
             )
             .child(
-                // Right side: Cancel and Save
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap(px(BUTTON_GAP))
-                    .child(
-                        Button::new("Cancel", button_colors)
-                            .variant(ButtonVariant::Ghost)
-                            .on_click(Box::new(move |event, window, cx| {
-                                cancel_handler(event, window, cx);
-                            })),
-                    )
-                    .child(
-                        Button::new("Save", button_colors)
-                            .variant(ButtonVariant::Primary)
-                            .disabled(!can_save)
-                            .on_click(Box::new(move |event, window, cx| {
-                                save_handler(event, window, cx);
-                            })),
-                    ),
+                Button::new("Save", button_colors)
+                    .variant(ButtonVariant::Primary)
+                    .shortcut("↵")
+                    .disabled(!can_save)
+                    .on_click(Box::new(move |event, window, cx| {
+                        save_handler(event, window, cx);
+                    })),
             );
-
-        let instructions = div()
-            .w_full()
-            .mt(px(6.))
-            .text_xs()
-            .text_color(rgba((colors.text_muted << 8) | 0xC0))
-            .text_center()
-            .child("Esc cancels. Enter saves when the shortcut is valid.");
 
         // Key down event handler - captures modifiers and keys
         let handle_key_down = cx.listener(move |this, event: &gpui::KeyDownEvent, _window, cx| {
@@ -173,12 +182,12 @@ impl Render for ShortcutRecorder {
         // Modal content - with stop propagation to prevent backdrop dismiss
         let modal = div()
             .id("shortcut-modal-content")
-            .w(px(MODAL_WIDTH))
-            .p(px(MODAL_PADDING))
-            .bg(rgba((colors.modal_bg << 8) | 0xF0))
+            .w(px(RECORDER_MODAL_WIDTH))
+            .p(px(RECORDER_MODAL_PADDING))
+            .when_some(get_vibrancy_background(&self.theme), |d, bg| d.bg(bg))
             .border_1()
-            .border_color(rgba((colors.border << 8) | 0x80))
-            .rounded(px(12.))
+            .border_color(rgba((colors.text_primary << 8) | 0x22))
+            .rounded(px(8.))
             .flex()
             .flex_col()
             // Stop propagation - clicks inside modal shouldn't dismiss it
@@ -186,36 +195,21 @@ impl Render for ShortcutRecorder {
                 // Empty handler stops propagation to backdrop
             })
             .child(header)
-            .child(div().h(px(12.))) // Spacer
+            .child(div().h(px(10.)))
             .child(self.render_key_display())
             .child(self.render_conflict_warning())
-            .child(instructions)
-            .child(buttons)
-            .child(self.render_footer_shortcuts());
+            .child(buttons);
 
-        // Full-screen overlay with backdrop and centered modal
-        // The overlay captures ALL keyboard and modifier events while open
-        div()
+        let recorder_surface = div()
             .id("shortcut-recorder-overlay")
             .absolute()
             .inset_0()
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key_down)
-            .on_modifiers_changed(handle_modifiers_changed) // CRITICAL: Live modifier feedback
-            // Backdrop layer - semi-transparent, captures clicks to dismiss
-            .child(
-                div()
-                    .id("shortcut-backdrop")
-                    .absolute()
-                    .inset_0()
-                    .bg(backdrop_bg)
-                    .cursor_pointer()
-                    .hover(move |style| style.bg(backdrop_hover_bg))
-                    .opacity(overlay_appear.backdrop_opacity)
-                    .on_click(backdrop_cancel),
-            )
-            // Modal container - centered on top of backdrop
-            .child(
+            .on_modifiers_changed(handle_modifiers_changed); // CRITICAL: Live modifier feedback
+
+        if self.detached_window {
+            recorder_surface.child(
                 div()
                     .absolute()
                     .inset_0()
@@ -226,5 +220,31 @@ impl Render for ShortcutRecorder {
                     .opacity(overlay_appear.modal_opacity)
                     .child(modal),
             )
+        } else {
+            // Full-screen overlay with backdrop and centered modal.
+            recorder_surface
+                .child(
+                    div()
+                        .id("shortcut-backdrop")
+                        .absolute()
+                        .inset_0()
+                        .bg(backdrop_bg)
+                        .cursor_pointer()
+                        .hover(move |style| style.bg(backdrop_hover_bg))
+                        .opacity(overlay_appear.backdrop_opacity)
+                        .on_click(backdrop_cancel),
+                )
+                .child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .mt(px(overlay_appear.modal_offset_y))
+                        .opacity(overlay_appear.modal_opacity)
+                        .child(modal),
+                )
+        }
     }
 }

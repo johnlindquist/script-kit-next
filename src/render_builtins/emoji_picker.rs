@@ -1,10 +1,16 @@
 impl ScriptListApp {
-    #[allow(dead_code)] // Called from startup_new_arrow.rs interceptor
+    // Helper retained for callers that prefer a single-call row-aware
+    // navigator. The live `cx.intercept_keystrokes` Up/Down arm in
+    // `src/app_impl/startup.rs` now inlines the same layout + move_index
+    // sequence directly so the arm's shape is pinned by
+    // `tests/emoji_picker_arrow_up_down_contract.rs`.
+    #[allow(dead_code)]
     pub(crate) fn navigate_emoji_picker(
         &mut self,
         direction: crate::emoji::EmojiNavDirection,
         cx: &mut Context<Self>,
     ) -> bool {
+        let frequent_snapshot = self.emoji_frequent_snapshot.clone();
         let AppView::EmojiPickerView {
             filter,
             selected_index,
@@ -14,21 +20,21 @@ impl ScriptListApp {
             return false;
         };
 
-        let ordered_emojis = crate::emoji::filtered_ordered_emojis(filter, *selected_category);
-        if ordered_emojis.is_empty() {
+        let display = crate::emoji::display_ordered_emojis(
+            filter,
+            *selected_category,
+            &frequent_snapshot,
+        );
+        if display.emojis.is_empty() {
             *selected_index = 0;
             self.hovered_index = None;
             cx.notify();
             return false;
         }
 
-        *selected_index = (*selected_index).min(ordered_emojis.len() - 1);
+        *selected_index = (*selected_index).min(display.emojis.len() - 1);
 
-        let layout = crate::emoji::build_emoji_grid_layout(
-            &ordered_emojis,
-            crate::emoji::GRID_COLS,
-            |emoji| emoji.category,
-        );
+        let layout = crate::emoji::build_display_grid_layout(&display, crate::emoji::GRID_COLS);
 
         let old_index = *selected_index;
         *selected_index = layout.move_index(old_index, direction);
@@ -69,7 +75,13 @@ impl ScriptListApp {
         let text_dimmed = self.theme.colors.text.dimmed;
         let ui_border = self.theme.colors.ui.border;
 
-        let ordered_emojis = crate::emoji::filtered_ordered_emojis(&filter, selected_category);
+        let display = crate::emoji::display_ordered_emojis(
+            &filter,
+            selected_category,
+            &self.emoji_frequent_snapshot,
+        );
+        let frequent_count = display.frequent_count;
+        let ordered_emojis = display.emojis.clone();
         let cols = crate::emoji::GRID_COLS;
 
         #[derive(Clone)]
@@ -81,6 +93,25 @@ impl ScriptListApp {
         let mut rows: Vec<EmojiGridRow> = Vec::new();
         {
             let mut flat_offset = 0;
+
+            if frequent_count > 0 {
+                rows.push(EmojiGridRow::Header {
+                    title: crate::emoji::FREQUENTLY_USED_LABEL.to_string(),
+                    count: frequent_count,
+                });
+
+                let mut row_offset = 0;
+                while row_offset < frequent_count {
+                    let row_count = (frequent_count - row_offset).min(cols);
+                    rows.push(EmojiGridRow::Cells {
+                        start_index: row_offset,
+                        count: row_count,
+                    });
+                    row_offset += row_count;
+                }
+                flat_offset += frequent_count;
+            }
+
             for category in crate::emoji::all_categories() {
                 let category_count = ordered_emojis[flat_offset..]
                     .iter()
@@ -145,7 +176,12 @@ impl ScriptListApp {
                         return;
                     }
                     ActionsRoute::Execute { action_id } => {
-                        this.handle_action(action_id, window, cx);
+                        this.execute_action_for_actions_host(
+                            ActionsDialogHost::EmojiPicker,
+                            action_id,
+                            window,
+                            cx,
+                        );
                         return;
                     }
                 }
@@ -162,14 +198,19 @@ impl ScriptListApp {
                     return;
                 }
 
+                let frequent_snapshot = this.emoji_frequent_snapshot.clone();
                 if let AppView::EmojiPickerView {
                     filter,
                     selected_index,
                     selected_category,
                 } = &mut this.current_view
                 {
-                    let ordered_emojis =
-                        crate::emoji::filtered_ordered_emojis(filter, *selected_category);
+                    let display = crate::emoji::display_ordered_emojis(
+                        filter,
+                        *selected_category,
+                        &frequent_snapshot,
+                    );
+                    let ordered_emojis = display.emojis;
 
                     match key {
                         _ if is_key_enter(key) => {
@@ -177,7 +218,27 @@ impl ScriptListApp {
                                 cx.write_to_clipboard(gpui::ClipboardItem::new_string(
                                     emoji.emoji.to_string(),
                                 ));
-                                this.close_and_reset_window(cx);
+                                if let Err(error) =
+                                    crate::emoji_usage::record_emoji_use(emoji.emoji)
+                                {
+                                    tracing::debug!(
+                                        emoji = emoji.emoji,
+                                        %error,
+                                        "failed to record emoji usage"
+                                    );
+                                }
+                                this.hide_main_and_reset(cx);
+                                std::thread::spawn(|| {
+                                    std::thread::sleep(std::time::Duration::from_millis(100));
+                                    if let Err(e) =
+                                        crate::selected_text::simulate_paste_with_cg()
+                                    {
+                                        tracing::error!(
+                                            error = %e,
+                                            "failed to simulate emoji paste"
+                                        );
+                                    }
+                                });
                             }
                             cx.stop_propagation();
                         }
@@ -208,7 +269,7 @@ impl ScriptListApp {
         } else {
             let row_height = crate::emoji::GRID_ROW_HEIGHT;
             let selected_outline = rgba((self.theme.colors.accent.selected << 8) | 0x80);
-            let selected_bg = rgba((self.theme.colors.accent.selected_subtle << 8) | 0x2a);
+            let selected_bg = rgba((self.theme.colors.text.primary << 8) | 0x2a);
             let idle_bg = rgba((ui_border << 8) | 0x10);
             let click_entity_handle = cx.entity().downgrade();
 
@@ -250,6 +311,7 @@ impl ScriptListApp {
                                 .into_any_element(),
 
                             Some(EmojiGridRow::Cells { start_index, count }) => {
+                                let is_full_row = *count == cols;
                                 let mut row_div = div()
                                     .id(EMOJI_ROW_ID_OFFSET + row_index)
                                     .w_full()
@@ -257,7 +319,8 @@ impl ScriptListApp {
                                     .flex()
                                     .items_center()
                                     .px(px(design_spacing.padding_lg))
-                                    .gap(px(tile_gap));
+                                    .gap(px(tile_gap))
+                                    .when(is_full_row, |d| d.justify_between());
 
                                 for col in 0..*count {
                                     let flat_emoji_index = *start_index + col;
@@ -296,12 +359,31 @@ impl ScriptListApp {
                                                                     emoji_value.clone(),
                                                                 ),
                                                             );
-                                                            this.show_hud(
-                                                                format!("Copied {}", emoji_value),
-                                                                Some(HUD_FLASH_MS),
-                                                                cx,
-                                                            );
-                                                            this.close_and_reset_window(cx);
+                                                            if let Err(error) =
+                                                                crate::emoji_usage::record_emoji_use(
+                                                                    &emoji_value,
+                                                                )
+                                                            {
+                                                                tracing::debug!(
+                                                                    emoji = %emoji_value,
+                                                                    %error,
+                                                                    "failed to record emoji usage"
+                                                                );
+                                                            }
+                                                            this.hide_main_and_reset(cx);
+                                                            std::thread::spawn(|| {
+                                                                std::thread::sleep(
+                                                                    std::time::Duration::from_millis(100),
+                                                                );
+                                                                if let Err(e) =
+                                                                    crate::selected_text::simulate_paste_with_cg()
+                                                                {
+                                                                    tracing::error!(
+                                                                        error = %e,
+                                                                        "failed to simulate emoji paste"
+                                                                    );
+                                                                }
+                                                            });
                                                         });
                                                     }
                                                 },
@@ -326,7 +408,11 @@ impl ScriptListApp {
                                     );
                                 }
 
-                                row_div.child(div().flex_1()).into_any_element()
+                                if is_full_row {
+                                    row_div.into_any_element()
+                                } else {
+                                    row_div.child(div().flex_1()).into_any_element()
+                                }
                             }
 
                             None => div().w_full().h(px(row_height)).into_any_element(),
@@ -340,11 +426,8 @@ impl ScriptListApp {
             .into_any_element()
         };
 
-        let list_scrollbar = self.builtin_uniform_list_scrollbar(
-            &self.emoji_scroll_handle,
-            rows.len(),
-            8,
-        );
+        let list_scrollbar =
+            self.builtin_uniform_list_scrollbar(&self.emoji_scroll_handle, rows.len(), 8);
 
         let header = div()
             .w_full()
@@ -387,12 +470,10 @@ impl ScriptListApp {
                     .child(list_scrollbar),
             );
 
-        crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::grid(
-                "render_builtins::emoji_picker",
-                true,
-            ),
-        );
+        crate::components::emit_prompt_chrome_audit(&crate::components::PromptChromeAudit::grid(
+            "render_builtins::emoji_picker",
+            true,
+        ));
 
         let gpui_footer = crate::components::render_simple_hint_strip(
             crate::components::universal_prompt_hints(),
@@ -426,13 +507,13 @@ impl ScriptListApp {
                     .child(content),
             )
             .when_some(footer, |d, f| d.child(f))
-        .rounded(px(design_visual.radius_lg))
-        .text_color(rgb(text_primary))
-        .font_family(design_typography.font_family)
-        .key_context("emoji_picker")
-        .track_focus(&self.focus_handle)
-        .on_key_down(handle_key)
-        .into_any_element()
+            .rounded(px(design_visual.radius_lg))
+            .text_color(rgb(text_primary))
+            .font_family(design_typography.font_family)
+            .key_context("emoji_picker")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .into_any_element()
     }
 }
 

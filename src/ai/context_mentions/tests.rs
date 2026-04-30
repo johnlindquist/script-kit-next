@@ -193,7 +193,7 @@ fn previous_inline_token_range_wraps_when_cursor_is_before_first_token() {
     let range = previous_inline_token_range("a @note:\"One\" b @skill:\"Two\"", 1)
         .expect("Expected previous token");
 
-    assert_eq!(range, 17..29);
+    assert_eq!(range, 16..28);
 }
 
 #[test]
@@ -304,16 +304,16 @@ fn part_to_inline_token_uses_note_prefix_for_note_targets() {
         target: crate::ai::tab_context::TabAiTargetContext {
             source: "NotesBrowse".to_string(),
             kind: "note".to_string(),
-            semantic_id: "choice:0:acp-chat-conversation".to_string(),
-            label: "ACP Chat Conversation".to_string(),
+            semantic_id: "choice:0:agent-chat-conversation".to_string(),
+            label: "Agent Chat Conversation".to_string(),
             metadata: None,
         },
-        label: "Note: ACP Chat Conversation".to_string(),
+        label: "Note: Agent Chat Conversation".to_string(),
     };
 
     assert_eq!(
         part_to_inline_token(&part),
-        Some("@note:\"ACP Chat Conve…\"".to_string())
+        Some("@note:\"Agent Chat Con…\"".to_string())
     );
 }
 
@@ -323,7 +323,7 @@ fn part_to_inline_token_uses_skill_prefix_for_skill_files() {
         path: "/tmp/SKILL.md".to_string(),
         label: "/review".to_string(),
         skill_name: "Review Diff".to_string(),
-        owner_label: "Authoring".to_string(),
+        owner_label: "Script Kit".to_string(),
         slash_name: "review".to_string(),
     };
 
@@ -381,7 +381,7 @@ fn parse_inline_mentions_resolves_recent_scripts() {
 
 #[test]
 fn parse_inline_mentions_resolves_calendar() {
-    let prev = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    let _env = ProviderEnvGuard::new();
     std::env::set_var(
         "SCRIPT_KIT_CALENDAR_JSON",
         r#"{"ok":true,"available":true,"items":[{"title":"Demo"}]}"#,
@@ -390,10 +390,6 @@ fn parse_inline_mentions_resolves_calendar() {
     assert_eq!(mentions.len(), 1);
     assert_eq!(mentions[0].token, "@calendar");
     assert_eq!(mentions[0].part.source(), "kit://calendar");
-    match prev {
-        Some(v) => std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", v),
-        None => std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON"),
-    }
 }
 
 #[test]
@@ -422,10 +418,8 @@ fn parse_inline_mentions_resolves_system() {
 
 #[test]
 fn parse_context_mentions_handles_all_provider_backed_directives() {
+    let _env = ProviderEnvGuard::new();
     // Set provider env vars so the gated kinds resolve.
-    let prev_cal = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
-    let prev_dict = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
-    let prev_notif = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
     std::env::set_var(
         "SCRIPT_KIT_CALENDAR_JSON",
         r#"{"ok":true,"available":true,"items":[{"title":"Demo"}]}"#,
@@ -454,19 +448,6 @@ fn parse_context_mentions_handles_all_provider_backed_directives() {
     assert_eq!(parsed.parts[7].label(), "System Info");
     assert_eq!(parsed.parts[8].label(), "Notifications");
     assert_eq!(parsed.parts[9].label(), "Dictation");
-
-    match prev_cal {
-        Some(v) => std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", v),
-        None => std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON"),
-    }
-    match prev_dict {
-        Some(v) => std::env::set_var("SCRIPT_KIT_DICTATION_JSON", v),
-        None => std::env::remove_var("SCRIPT_KIT_DICTATION_JSON"),
-    }
-    match prev_notif {
-        Some(v) => std::env::set_var("SCRIPT_KIT_NOTIFICATIONS_JSON", v),
-        None => std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON"),
-    }
 }
 
 #[test]
@@ -481,10 +462,8 @@ fn parse_inline_mentions_multiple_provider_backed() {
 fn part_to_inline_token_roundtrips_all_provider_backed() {
     use crate::ai::context_contract::ContextAttachmentKind;
 
+    let _env = ProviderEnvGuard::new();
     // Set provider env vars so gated kinds resolve during round-trip.
-    let prev_cal = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
-    let prev_dict = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
-    let prev_notif = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
     std::env::set_var(
         "SCRIPT_KIT_CALENDAR_JSON",
         r#"{"ok":true,"available":true,"items":[{"title":"Demo"}]}"#,
@@ -526,19 +505,6 @@ fn part_to_inline_token_roundtrips_all_provider_backed() {
             token
         );
         assert_eq!(mentions[0].part, part, "round-trip mismatch for {kind:?}");
-    }
-
-    match prev_cal {
-        Some(v) => std::env::set_var("SCRIPT_KIT_CALENDAR_JSON", v),
-        None => std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON"),
-    }
-    match prev_dict {
-        Some(v) => std::env::set_var("SCRIPT_KIT_DICTATION_JSON", v),
-        None => std::env::remove_var("SCRIPT_KIT_DICTATION_JSON"),
-    }
-    match prev_notif {
-        Some(v) => std::env::set_var("SCRIPT_KIT_NOTIFICATIONS_JSON", v),
-        None => std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON"),
     }
 }
 
@@ -854,29 +820,58 @@ fn restore_env(key: &str, value: Option<std::ffi::OsString>) {
     }
 }
 
+struct ProviderEnvGuard {
+    _guard: std::sync::MutexGuard<'static, ()>,
+    prev_calendar: Option<std::ffi::OsString>,
+    prev_dictation: Option<std::ffi::OsString>,
+    prev_notifications: Option<std::ffi::OsString>,
+}
+
+impl ProviderEnvGuard {
+    fn new() -> Self {
+        let guard = crate::test_utils::lock_provider_json_test();
+        let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+        let prev_dictation = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
+        let prev_notifications = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
+        std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
+        std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
+        std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+        crate::mcp_resources::clear_provider_json_slots();
+        Self {
+            _guard: guard,
+            prev_calendar,
+            prev_dictation,
+            prev_notifications,
+        }
+    }
+}
+
+impl Drop for ProviderEnvGuard {
+    fn drop(&mut self) {
+        crate::mcp_resources::clear_provider_json_slots();
+        restore_env("SCRIPT_KIT_DICTATION_JSON", self.prev_dictation.take());
+        restore_env("SCRIPT_KIT_CALENDAR_JSON", self.prev_calendar.take());
+        restore_env(
+            "SCRIPT_KIT_NOTIFICATIONS_JSON",
+            self.prev_notifications.take(),
+        );
+    }
+}
+
 #[test]
 fn unavailable_provider_backed_mentions_do_not_resolve_inline() {
-    let prev_dictation = std::env::var_os("SCRIPT_KIT_DICTATION_JSON");
-    let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
-    let prev_notifications = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
-    std::env::remove_var("SCRIPT_KIT_DICTATION_JSON");
-    std::env::remove_var("SCRIPT_KIT_CALENDAR_JSON");
-    std::env::remove_var("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    let _env = ProviderEnvGuard::new();
 
     let mentions = parse_inline_context_mentions("Check @dictation @calendar @notifications");
     assert!(
         mentions.is_empty(),
         "manual inline mentions must not attach provider-backed fallback resources when no provider data exists"
     );
-
-    restore_env("SCRIPT_KIT_DICTATION_JSON", prev_dictation);
-    restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
-    restore_env("SCRIPT_KIT_NOTIFICATIONS_JSON", prev_notifications);
 }
 
 #[test]
 fn available_provider_backed_mentions_still_resolve_inline() {
-    let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    let _env = ProviderEnvGuard::new();
     std::env::set_var(
         "SCRIPT_KIT_CALENDAR_JSON",
         r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":true,"source":"env","items":[{"title":"Demo"}]}"#,
@@ -886,8 +881,6 @@ fn available_provider_backed_mentions_still_resolve_inline() {
     assert_eq!(mentions.len(), 1);
     assert_eq!(mentions[0].token, "@calendar");
     assert_eq!(mentions[0].part.source(), "kit://calendar");
-
-    restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
 }
 
 #[test]
@@ -911,7 +904,7 @@ fn quoted_file_token_with_spaces_round_trips_to_typed_format() {
 
 #[test]
 fn placeholder_provider_envelope_does_not_resolve_inline() {
-    let prev_calendar = std::env::var_os("SCRIPT_KIT_CALENDAR_JSON");
+    let _env = ProviderEnvGuard::new();
     std::env::set_var(
         "SCRIPT_KIT_CALENDAR_JSON",
         r#"{"schemaVersion":1,"type":"calendar","ok":true,"available":false,"source":"env","items":[]}"#,
@@ -922,13 +915,11 @@ fn placeholder_provider_envelope_does_not_resolve_inline() {
         mentions.is_empty(),
         "placeholder calendar envelope must not make @calendar attachable"
     );
-
-    restore_env("SCRIPT_KIT_CALENDAR_JSON", prev_calendar);
 }
 
 #[test]
 fn placeholder_provider_envelope_with_items_empty_stays_unavailable() {
-    let prev_notifications = std::env::var_os("SCRIPT_KIT_NOTIFICATIONS_JSON");
+    let _env = ProviderEnvGuard::new();
     std::env::set_var(
         "SCRIPT_KIT_NOTIFICATIONS_JSON",
         r#"{"schemaVersion":1,"type":"notifications","ok":true,"available":true,"source":"env","items":[]}"#,
@@ -939,8 +930,6 @@ fn placeholder_provider_envelope_with_items_empty_stays_unavailable() {
         mentions.is_empty(),
         "provider-backed mentions must stay unavailable when items is empty"
     );
-
-    restore_env("SCRIPT_KIT_NOTIFICATIONS_JSON", prev_notifications);
 }
 
 // =========================================================================

@@ -292,6 +292,7 @@ fn make_test_snapshot(
     app_name: &str,
 ) -> crate::menu_bar::current_app_commands::FrontmostMenuSnapshot {
     crate::menu_bar::current_app_commands::FrontmostMenuSnapshot {
+        pid: 42,
         app_name: app_name.to_string(),
         bundle_id: bundle_id.to_string(),
         items: vec![],

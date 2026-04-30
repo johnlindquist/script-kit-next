@@ -167,32 +167,11 @@ fn execute_script_normalize_notify_fields(
     }
 }
 
-fn execute_script_escape_applescript_string(value: &str) -> String {
-    format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
-}
-
 fn execute_script_build_beep_command_spec() -> ExecuteScriptFeedbackCommandSpec {
     ExecuteScriptFeedbackCommandSpec {
         program: "afplay",
         args: vec!["/System/Library/Sounds/Tink.aiff".to_string()],
     }
-}
-
-fn execute_script_build_notify_command_spec(
-    title: Option<String>,
-    body: Option<String>,
-) -> Option<ExecuteScriptFeedbackCommandSpec> {
-    let (title, body) = execute_script_normalize_notify_fields(title, body)?;
-    let script = format!(
-        "display notification {} with title {}",
-        execute_script_escape_applescript_string(&body),
-        execute_script_escape_applescript_string(&title)
-    );
-
-    Some(ExecuteScriptFeedbackCommandSpec {
-        program: "osascript",
-        args: vec!["-e".to_string(), script],
-    })
 }
 
 fn execute_script_build_say_command_spec(
@@ -255,12 +234,11 @@ fn execute_script_dispatch_beep_command() -> std::io::Result<()> {
     Ok(())
 }
 
-#[cfg(target_os = "macos")]
 fn execute_script_dispatch_notify_command(
     title: Option<String>,
     body: Option<String>,
 ) -> std::io::Result<()> {
-    let Some(spec) = execute_script_build_notify_command_spec(title, body) else {
+    let Some((title, body)) = execute_script_normalize_notify_fields(title, body) else {
         tracing::info!(
             category = "EXEC",
             effect = "notify",
@@ -269,21 +247,38 @@ fn execute_script_dispatch_notify_command(
         return Ok(());
     };
 
-    execute_script_spawn_feedback_command("notify", spec)
-}
-
-#[cfg(not(target_os = "macos"))]
-fn execute_script_dispatch_notify_command(
-    title: Option<String>,
-    body: Option<String>,
-) -> std::io::Result<()> {
-    let _ = (title, body);
     tracing::info!(
         category = "EXEC",
         effect = "notify",
-        platform = std::env::consts::OS,
-        "Skipping notify protocol feedback command on unsupported platform"
+        backend = "notify-rust",
+        title = %title,
+        body_len = body.chars().count(),
+        "Dispatching notify protocol feedback via notify-rust"
     );
+
+    // notify-rust's show() blocks waiting for the notification server to ack.
+    // The calling thread is the script-message reader, not the GPUI main thread,
+    // so blocking there is tolerable; we still spawn a dedicated thread so a
+    // stuck Notification Center never wedges subsequent script messages.
+    std::thread::Builder::new()
+        .name("notify-rust-dispatch".to_string())
+        .spawn(move || {
+            if let Err(error) = notify_rust::Notification::new()
+                .summary(&title)
+                .body(&body)
+                .show()
+            {
+                tracing::warn!(
+                    category = "EXEC",
+                    effect = "notify",
+                    backend = "notify-rust",
+                    error = %error,
+                    state = "show_failed",
+                    "notify-rust failed to deliver system notification"
+                );
+            }
+        })?;
+
     Ok(())
 }
 
@@ -315,18 +310,42 @@ fn execute_script_dispatch_say_command(text: String, voice: Option<String>) -> s
 // --- merged from part_001.rs ---
 impl ScriptListApp {
     fn execute_interactive(&mut self, script: &scripts::Script, cx: &mut Context<Self>) {
+        self.execute_interactive_with_args(script, Vec::new(), cx);
+    }
+
+    fn execute_interactive_with_args(
+        &mut self,
+        script: &scripts::Script,
+        argv: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.execute_interactive_with_env_and_args(script, Vec::new(), argv, cx);
+    }
+
+    fn execute_interactive_with_env_and_args(
+        &mut self,
+        script: &scripts::Script,
+        extra_env: Vec<(String, String)>,
+        argv: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
         // --- merged from part_001_body/execute_interactive_merged.rs ---
         {
             tracing::info!(
                 category = "EXEC",
                 script_name = %script.name,
+                argv = ?argv,
                 "Starting interactive execution"
             );
 
             // Store script path for error reporting in reader thread
             let script_path_for_errors = script.path.to_string_lossy().to_string();
 
-            match executor::execute_script_interactive(&script.path) {
+            match executor::execute_script_interactive_with_env_and_args(
+                &script.path,
+                extra_env,
+                argv,
+            ) {
                 Ok(session) => {
                     tracing::info!(
                         category = "EXEC",
@@ -2428,46 +2447,52 @@ mod execute_script_session_tests {
     }
 
     #[test]
-    fn test_execute_script_build_notify_command_spec_escapes_applescript_literals() {
-        let spec = execute_script_build_notify_command_spec(
-            Some(r#"Build "Done""#.to_string()),
-            Some(r#"Line 1 \ Line 2"#.to_string()),
+    fn test_execute_script_normalize_notify_fields_passes_through_title_and_body() {
+        let normalized = execute_script_normalize_notify_fields(
+            Some("Build \"Done\"".to_string()),
+            Some("Line 1 \\ Line 2".to_string()),
         )
-        .expect("notify command should be built when title or body is present");
+        .expect("notify payload should normalize when both fields are present");
 
-        assert_eq!(spec.program, "osascript");
         assert_eq!(
-            spec.args,
-            vec![
-                "-e".to_string(),
-                "display notification \"Line 1 \\\\ Line 2\" with title \"Build \\\"Done\\\"\""
-                    .to_string(),
-            ]
+            normalized,
+            ("Build \"Done\"".to_string(), "Line 1 \\ Line 2".to_string())
         );
     }
 
     #[test]
-    fn test_execute_script_build_notify_command_spec_defaults_missing_fields() {
-        let title_only_spec =
-            execute_script_build_notify_command_spec(Some("Build Finished".to_string()), None)
-                .expect("notify command should reuse the title as the body when body is missing");
+    fn test_execute_script_normalize_notify_fields_defaults_missing_fields() {
+        let title_only = execute_script_normalize_notify_fields(
+            Some("Build Finished".to_string()),
+            None,
+        )
+        .expect("title-only payload should fall back to reusing title as body");
         assert_eq!(
-            title_only_spec.args,
-            vec![
-                "-e".to_string(),
-                "display notification \"Build Finished\" with title \"Build Finished\"".to_string(),
-            ]
+            title_only,
+            ("Build Finished".to_string(), "Build Finished".to_string())
         );
 
-        let body_only_spec =
-            execute_script_build_notify_command_spec(None, Some("All green".to_string()))
-                .expect("notify command should default the title when body is present");
+        let body_only = execute_script_normalize_notify_fields(
+            None,
+            Some("All green".to_string()),
+        )
+        .expect("body-only payload should default to the Script Kit title");
         assert_eq!(
-            body_only_spec.args,
-            vec![
-                "-e".to_string(),
-                "display notification \"All green\" with title \"Script Kit\"".to_string(),
-            ]
+            body_only,
+            ("Script Kit".to_string(), "All green".to_string())
+        );
+
+        assert!(
+            execute_script_normalize_notify_fields(None, None).is_none(),
+            "notify dispatch should short-circuit when title and body are both empty"
+        );
+        assert!(
+            execute_script_normalize_notify_fields(
+                Some("   ".to_string()),
+                Some("\t\n".to_string()),
+            )
+            .is_none(),
+            "notify dispatch should short-circuit when title and body are whitespace-only"
         );
     }
 

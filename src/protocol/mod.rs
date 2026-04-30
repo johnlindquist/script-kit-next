@@ -57,12 +57,15 @@
 
 #![allow(dead_code)]
 
+pub mod deprecations;
+pub mod ingress;
 mod io;
 mod message;
 mod semantic_id;
 pub mod transaction_executor;
 pub mod transaction_trace;
 mod types;
+pub mod version;
 
 #[allow(unused_imports)]
 pub use io::{serialize_message, JsonlReader, ParseIssueKind};

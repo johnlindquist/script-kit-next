@@ -10,7 +10,7 @@
 
 const TAB_SOURCE: &str = include_str!("../src/app_impl/startup.rs");
 const TAB_NEW_SOURCE: &str = include_str!("../src/app_impl/startup_new_tab.rs");
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 const RENDER_IMPL_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
 const SCRIPT_LIST_SOURCE: &str = include_str!("../src/render_script_list/mod.rs");
 const APP_STATE_SOURCE: &str = include_str!("../src/main_sections/app_state.rs");
@@ -30,6 +30,79 @@ const AI_MOD_SOURCE_FOR_ACTIONS: &str = include_str!("../src/ai/mod.rs");
 // =========================================================================
 // Primary contract: Tab → harness terminal (QuickTerminalView)
 // =========================================================================
+
+#[test]
+fn plain_tab_and_global_cmd_enter_helpers_bail_when_attachment_portal_open() {
+    // Regression: when an attachment portal (e.g. `@` mention → file /
+    // script / scriptlet / skill search) is open, the visible surface
+    // reuses `AppView::ScriptList`. Tab and global Cmd+Enter must NOT be
+    // treated as "main menu launcher" submits in that state — they would
+    // re-enter ACP behind the portal and lose the user's context.
+    //
+    // The guard lives in the two central routing helpers so every call
+    // site (startup.rs, startup_new_tab.rs, runtime_stdin{,_match_simulate_key}.rs,
+    // app_run_setup.rs, file_search.rs, render_script_list) is covered at once.
+
+    let plain_tab_fn = TAB_AI_MODE_SOURCE
+        .find("fn try_route_plain_tab_to_acp_context_capture")
+        .expect("plain tab helper must exist");
+    let plain_tab_body = &TAB_AI_MODE_SOURCE
+        [plain_tab_fn..plain_tab_fn + 1500.min(TAB_AI_MODE_SOURCE.len() - plain_tab_fn)];
+    assert!(
+        plain_tab_body.contains("self.is_in_attachment_portal()")
+            && plain_tab_body.contains("return false"),
+        "Plain Tab ACP helper must early-return false when an attachment portal is active \
+         so Tab inside a portal never auto-submits to ACP"
+    );
+
+    let cmd_enter_fn = TAB_AI_MODE_SOURCE
+        .find("fn try_route_global_cmd_enter_to_acp_context_capture")
+        .expect("global cmd+enter helper must exist");
+    let cmd_enter_body = &TAB_AI_MODE_SOURCE
+        [cmd_enter_fn..cmd_enter_fn + 1500.min(TAB_AI_MODE_SOURCE.len() - cmd_enter_fn)];
+    assert!(
+        cmd_enter_body.contains("self.is_in_attachment_portal()")
+            && cmd_enter_body.contains("return false"),
+        "Global Cmd+Enter ACP helper must early-return false when an attachment portal is active"
+    );
+}
+
+#[test]
+fn empty_plain_tab_open_skips_script_authoring_slash_prime() {
+    let plain_tab_fn = TAB_AI_MODE_SOURCE
+        .find("fn try_route_plain_tab_to_acp_context_capture")
+        .expect("plain tab helper must exist");
+    let plain_tab_body = &TAB_AI_MODE_SOURCE
+        [plain_tab_fn..plain_tab_fn + 3500.min(TAB_AI_MODE_SOURCE.len() - plain_tab_fn)];
+    assert!(
+        plain_tab_body.contains("entry_intent,\n            true,\n            cx,"),
+        "plain Tab launches must set suppress_focused_part=true, including empty launcher input"
+    );
+
+    let prime_policy_fn = TAB_AI_MODE_SOURCE
+        .find("fn should_prime_script_authoring_slash(")
+        .expect("new-script prime policy helper must exist");
+    let prime_policy_body = &TAB_AI_MODE_SOURCE
+        [prime_policy_fn..prime_policy_fn + 900.min(TAB_AI_MODE_SOURCE.len() - prime_policy_fn)];
+    assert!(
+        prime_policy_body.contains("&& !suppress_focused_part"),
+        "new-script slash priming must be disabled for explicit empty-composer handoffs"
+    );
+
+    let acp_open_fn = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_view_from_request_impl(")
+        .expect("ACP open helper must exist");
+    let acp_open_body = &TAB_AI_MODE_SOURCE[acp_open_fn..];
+    let next_fn = acp_open_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(acp_open_body.len());
+    let acp_open_body = &acp_open_body[..next_fn];
+    assert!(
+        acp_open_body.contains("Self::should_prime_script_authoring_slash(")
+            && acp_open_body.contains("request.suppress_focused_part"),
+        "ACP open path must route slash priming through the policy helper with the launch suppression flag"
+    );
+}
 
 #[test]
 fn open_tab_ai_chat_routes_to_harness_terminal() {
@@ -2256,8 +2329,8 @@ fn builtin_ai_chat_does_not_open_legacy_ai_window() {
 #[test]
 fn builtin_ai_chat_entry_reflects_acp_label() {
     assert!(
-        BUILTINS_SOURCE.contains("\"ACP Chat\""),
-        "builtin/ai-chat entry must use the ACP Chat label, not the legacy AI Chat label"
+        BUILTINS_SOURCE.contains("\"Agent Chat\""),
+        "builtin/ai-chat entry must use the Agent Chat label, not the legacy AI Chat label"
     );
 }
 
@@ -2763,13 +2836,14 @@ fn script_list_branch_uses_grouped_results_cache() {
 
     // The ScriptList arm must read from the same grouped results cache
     // that the main list renderer uses, not from UI snapshot elements.
+    // Accessor names keep the cache intent visible without exposing storage.
     assert!(
-        fn_body.contains("cached_grouped_items"),
-        "ScriptList branch must resolve from cached_grouped_items"
+        fn_body.contains("grouped_items()"),
+        "ScriptList branch must resolve from grouped_items()"
     );
     assert!(
-        fn_body.contains("cached_grouped_flat_results"),
-        "ScriptList branch must resolve from cached_grouped_flat_results"
+        fn_body.contains("grouped_flat_results()"),
+        "ScriptList branch must resolve from grouped_flat_results()"
     );
 }
 
@@ -3096,7 +3170,7 @@ fn legacy_ai_window_entries_stay_removed_while_manual_paths_stay_present() {
 
 #[test]
 fn post_close_prewarm_feeds_the_next_explicit_tab_open() {
-    let source = include_str!("../src/app_impl/tab_ai_mode.rs");
+    let source = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 
     // Close path must schedule a silent prewarm.
     let close_start = source
@@ -3132,7 +3206,8 @@ fn post_close_prewarm_feeds_the_next_explicit_tab_open() {
 
 #[test]
 fn live_quick_submit_uses_structured_submission_helper() {
-    let src = std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+    let src =
+        std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab_ai_mode.rs");
 
     let fn_start = src
         .find("pub(crate) fn submit_to_current_or_new_tab_ai_harness_from_text(")
@@ -3151,7 +3226,8 @@ fn live_quick_submit_uses_structured_submission_helper() {
 
 #[test]
 fn live_quick_submit_helper_builds_full_harness_submission() {
-    let src = std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+    let src =
+        std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab_ai_mode.rs");
 
     let helper_start = src
         .find("fn submit_live_tab_ai_harness_from_plan(")
@@ -3392,6 +3468,7 @@ fn file_search_cmd_enter_passes_shift_for_plan_mode() {
 const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const ACP_THREAD_SOURCE: &str = include_str!("../src/ai/acp/thread.rs");
 const ACP_MOD_SOURCE: &str = include_str!("../src/ai/acp/mod.rs");
+const ACP_CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/acp/chat_window.rs");
 
 #[test]
 fn tab_ai_mode_opens_acp_chat_view_for_tab() {
@@ -3427,6 +3504,71 @@ fn tab_ai_mode_stages_context_on_acp_thread() {
     assert!(
         TAB_AI_MODE_SOURCE.contains("stage_context"),
         "tab_ai_mode must stage context on the AcpThread for first-turn injection"
+    );
+}
+
+#[test]
+fn detached_acp_reuse_preserves_entry_intent() {
+    let open_fn_start = TAB_AI_MODE_SOURCE
+        .find("fn open_tab_ai_acp_with_options(")
+        .expect("open_tab_ai_acp_with_options must exist");
+    let open_fn_body = &TAB_AI_MODE_SOURCE[open_fn_start..];
+    let next_fn = open_fn_body[1..]
+        .find("\n    fn ")
+        .unwrap_or(open_fn_body.len());
+    let open_fn_body = &open_fn_body[..next_fn];
+
+    let normalized_idx = open_fn_body
+        .find("let normalized_entry_intent = entry_intent")
+        .expect("entry intent must be normalized for detached ACP reuse");
+    let detached_idx = open_fn_body
+        .find("if crate::ai::acp::chat_window::is_chat_window_open()")
+        .expect("detached ACP reuse branch must exist");
+
+    assert!(
+        normalized_idx < detached_idx,
+        "entry intent must be normalized before detached ACP reuse is checked"
+    );
+    assert!(
+        open_fn_body.contains("submit_reused_entry_intent_in_detached_chat"),
+        "detached ACP reuse must route fresh entry intent into the live detached view"
+    );
+    assert!(
+        ACP_CHAT_WINDOW_SOURCE
+            .contains("event = \"tab_ai_reused_detached_window_with_entry_intent\""),
+        "detached ACP reuse helper must emit a dedicated structured log event"
+    );
+}
+
+#[test]
+fn detached_acp_reuse_with_host_context_submits_atomically() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("fn submit_reused_entry_intent_with_host_context("),
+        "AcpChatView must expose a combined reuse helper for host context plus fresh intent"
+    );
+    let fn_start = ACP_VIEW_SOURCE
+        .find("fn submit_reused_entry_intent_with_host_context(")
+        .expect("combined ACP reuse helper must exist");
+    let fn_body = &ACP_VIEW_SOURCE[fn_start..];
+    let next_fn = fn_body[1..].find("\n    fn ").unwrap_or(fn_body.len());
+    let fn_body = &fn_body[..next_fn];
+
+    assert!(
+        fn_body.contains("thread.replace_pending_context_parts(staged_parts, source, cx);"),
+        "combined ACP reuse helper must replace stale pending context"
+    );
+    assert!(
+        fn_body.contains("thread.submit_input(cx)"),
+        "combined ACP reuse helper must submit after staging fresh context and intent"
+    );
+    assert!(
+        ACP_CHAT_WINDOW_SOURCE
+            .contains("submit_reused_entry_intent_with_host_context_in_detached_chat"),
+        "detached chat window must expose a host-context-aware reuse wrapper"
+    );
+    assert!(
+        ACP_CHAT_WINDOW_SOURCE.contains("chat.submit_reused_entry_intent_with_host_context("),
+        "detached chat reuse must delegate into the shared AcpChatView helper"
     );
 }
 
@@ -4040,7 +4182,7 @@ fn acp_path_emits_initial_input_builder_telemetry() {
     );
     assert!(
         acp_fn_body.contains("includes_script_authoring_skill"),
-        "ACP telemetry must check whether guidance references the script-authoring skill"
+        "ACP telemetry must check whether guidance references the new-script skill"
     );
     assert!(
         acp_fn_body.contains("includes_bun_build_verification"),
@@ -4097,7 +4239,7 @@ fn harness_source_contains_launchpad_include() {
 }
 
 // =========================================================================
-// Regression: surface selection routes script-authoring to QuickTerminalView
+// Regression: surface selection routes new-script to QuickTerminalView
 // =========================================================================
 
 /// Helper: extract the inner `begin_tab_ai_harness_entry_from_source_view`
@@ -4247,7 +4389,7 @@ fn harness_guidance_contains_mandatory_script_verification_header() {
 fn harness_guidance_contains_bun_build_verification_marker() {
     assert!(
         HARNESS_SOURCE.contains(
-            r#"bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"#
+            r#"bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"#
         ),
         "harness must define the Bun build verification command"
     );
@@ -4256,7 +4398,7 @@ fn harness_guidance_contains_bun_build_verification_marker() {
 #[test]
 fn harness_guidance_contains_sk_verify_execution_marker() {
     assert!(
-        HARNESS_SOURCE.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+        HARNESS_SOURCE.contains("SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts"),
         "harness must define the SK_VERIFY=1 bun execution command"
     );
 }
@@ -4345,12 +4487,12 @@ fn harness_module_has_surface_preference_unit_tests() {
 }
 
 // =========================================================================
-// AC: Authoring flow (ScriptList + Submit) produces verification-bearing
+// AC: Script creation flow (ScriptList + Submit) produces verification-bearing
 //     guidance and selects the quick terminal path (runtime call)
 // =========================================================================
 
 #[test]
-fn script_list_submit_authoring_flow_selects_quick_terminal_with_all_markers() {
+fn script_list_submit_creation_flow_selects_quick_terminal_with_all_markers() {
     // Runtime call: ScriptList + Submit + non-empty intent must produce
     // verification-bearing guidance that selects the quick terminal surface.
     let pref = script_kit_gpui::ai::tab_ai_surface_preference_for_prompt(
@@ -4364,7 +4506,7 @@ fn script_list_submit_authoring_flow_selects_quick_terminal_with_all_markers() {
     );
     assert!(
         pref.includes_script_authoring_skill,
-        "authoring flow must include script_authoring_skill marker"
+        "script creation flow must include script_authoring_skill marker"
     );
     assert!(
         pref.includes_bun_build_verification,
@@ -4603,7 +4745,7 @@ fn authoring_harness_submission_contains_verification_guidance() {
     // All three verification markers must be present.
     assert!(
         output.contains(script_kit_gpui::ai::SCRIPT_AUTHORING_SKILL_MARKER),
-        "authoring submission must include script-authoring skill marker"
+        "authoring submission must include new-script skill marker"
     );
     assert!(
         output.contains(script_kit_gpui::ai::BUN_BUILD_VERIFICATION_MARKER),
@@ -4726,6 +4868,10 @@ fn tab_ai_mode_has_explicit_target_acp_open_method() {
     assert!(
         fn_body.contains("tab_ai_explicit_target_acp_open"),
         "open_tab_ai_acp_with_explicit_target must emit the explicit-target log event"
+    );
+    assert!(
+        fn_body.contains("submit_reused_entry_intent_with_host_context_in_detached_chat"),
+        "explicit-target ACP entry must reuse a live detached chat with staged host context"
     );
 }
 

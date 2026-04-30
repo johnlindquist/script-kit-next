@@ -98,7 +98,12 @@ impl ScriptListApp {
                         return;
                     }
                     ActionsRoute::Execute { action_id } => {
-                        this.handle_action(action_id, window, cx);
+                        this.execute_action_for_actions_host(
+                            ActionsDialogHost::ClipboardHistory,
+                            action_id,
+                            window,
+                            cx,
+                        );
                         return;
                     }
                 }
@@ -234,6 +239,17 @@ impl ScriptListApp {
                                 cx.notify();
                             }
                         }
+                        _ if has_cmd && is_key_enter(key) => {
+                            if filtered_entries.get(*selected_index).is_some() {
+                                drop(filtered_entries);
+                                this.handle_action(
+                                    "clipboard_attach_to_ai".to_string(),
+                                    window,
+                                    cx,
+                                );
+                            }
+                            return;
+                        }
                         _ if is_key_enter(key) => {
                             // Portal mode: attach the selected entry's content to ACP chat.
                             if in_portal {
@@ -243,10 +259,11 @@ impl ScriptListApp {
                                     } else {
                                         format!("Clipboard: {}", entry.text_preview)
                                     };
-                                    let part = crate::ai::message_parts::AiContextPart::ResourceUri {
-                                        uri: format!("kit://clipboard-history?id={}", entry.id),
-                                        label,
-                                    };
+                                    let part =
+                                        crate::ai::message_parts::AiContextPart::ResourceUri {
+                                            uri: format!("kit://clipboard-history?id={}", entry.id),
+                                            label,
+                                        };
                                     this.close_attachment_portal_with_part(part, cx);
                                 }
                                 cx.stop_propagation();
@@ -291,14 +308,12 @@ impl ScriptListApp {
             },
         );
 
-
         // Pre-compute colors - use theme for consistency with main menu
         let list_colors = ListItemColors::from_theme(&self.theme);
         let text_primary = self.theme.colors.text.primary;
         #[allow(unused_variables)]
         let text_muted = self.theme.colors.text.muted;
         let text_dimmed = self.theme.colors.text.dimmed;
-
 
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
@@ -531,6 +546,100 @@ impl ScriptListApp {
             .h_full()
             .min_h(px(0.))
             .py(px(design_spacing.padding_xs))
+            .on_scroll_wheel(cx.listener(
+                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                    let view_state = if let AppView::ClipboardHistoryView {
+                        filter,
+                        selected_index,
+                    } = &this.current_view
+                    {
+                        Some((filter.clone(), *selected_index))
+                    } else {
+                        None
+                    };
+
+                    let Some((current_filter, current_selected)) = view_state else {
+                        return;
+                    };
+
+                    let filter_lower = current_filter.to_lowercase();
+                    let entry_matches_filter = |entry: &clipboard_history::ClipboardEntryMeta| {
+                        current_filter.is_empty()
+                            || entry.text_preview.to_lowercase().contains(&filter_lower)
+                            || entry
+                                .ocr_text
+                                .as_deref()
+                                .unwrap_or("")
+                                .to_lowercase()
+                                .contains(&filter_lower)
+                    };
+                    let filtered_len = if current_filter.is_empty() {
+                        this.cached_clipboard_entries.len()
+                    } else {
+                        this.cached_clipboard_entries
+                            .iter()
+                            .filter(|entry| entry_matches_filter(entry))
+                            .count()
+                    };
+
+                    let Some(new_selected) = this.builtin_scroll_target_from_wheel(
+                        event,
+                        current_selected,
+                        filtered_len,
+                    ) else {
+                        if filtered_len > 0 {
+                            cx.stop_propagation();
+                        }
+                        return;
+                    };
+
+                    if let AppView::ClipboardHistoryView { selected_index, .. } =
+                        &mut this.current_view
+                    {
+                        *selected_index = new_selected;
+                    }
+
+                    this.clipboard_list_scroll_handle
+                        .scroll_to_item(new_selected, ScrollStrategy::Nearest);
+                    if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
+                        new_selected,
+                        &this.clipboard_list_scroll_handle,
+                        filtered_len,
+                        8,
+                    ) {
+                        if let AppView::ClipboardHistoryView { selected_index, .. } =
+                            &mut this.current_view
+                        {
+                            *selected_index = reanchored;
+                        }
+                        tracing::info!(
+                            target: "script_kit::scroll",
+                            event = "builtin_selection_resynced_from_scrollbar",
+                            view = "clipboard_history",
+                            selected_before = new_selected,
+                            selected_after = reanchored,
+                        );
+                    }
+                    this.focused_clipboard_entry_id = this
+                        .cached_clipboard_entries
+                        .iter()
+                        .filter(|entry| entry_matches_filter(entry))
+                        .nth(new_selected)
+                        .map(|entry| entry.id.clone());
+                    Self::log_builtin_scroll_event(
+                        "clipboard_history",
+                        "scroll_to_item",
+                        "wheel",
+                        filtered_len,
+                        Some(new_selected),
+                        Some(new_selected),
+                        Some(&current_filter),
+                        "mouse",
+                    );
+                    cx.notify();
+                    cx.stop_propagation();
+                },
+            ))
             .child(list_element)
             .child(list_scrollbar);
 
@@ -538,10 +647,10 @@ impl ScriptListApp {
             vec![
                 "\u{21b5} Attach".into(),
                 "Esc Cancel".into(),
-                "Attaching to ACP Chat".into(),
+                "Attaching to Agent Chat".into(),
             ]
         } else {
-            crate::components::universal_prompt_hints()
+            crate::components::universal_prompt_hints_with_primary_label("Paste")
         };
         crate::components::emit_prompt_hint_audit("clipboard_history", &hints);
 
@@ -560,13 +669,12 @@ impl ScriptListApp {
             hints,
             None,
         )
-            .text_color(rgb(text_primary))
-            .font_family(design_typography.font_family)
-            .key_context("clipboard_history")
-            .track_focus(&self.focus_handle)
-            .on_key_down(handle_key)
-            .into_any_element()
-
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("clipboard_history")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
+        .into_any_element()
     }
 }
 
@@ -620,6 +728,14 @@ mod clipboard_chrome_audit {
         assert!(
             source.contains("emit_prompt_hint_audit(\"clipboard_history\""),
             "clipboard must emit hint audit for observability"
+        );
+        assert!(
+            source.contains(".on_scroll_wheel(cx.listener("),
+            "clipboard should intercept wheel events on the list pane"
+        );
+        assert!(
+            source.contains("builtin_scroll_target_from_wheel"),
+            "clipboard wheel scrolling should use the shared builtin helper"
         );
     }
 }

@@ -1,0 +1,10 @@
+{"input":"builtin/design-gallery","expected":"ShowFilterableView::DesignGallery"}
+{"input":"builtin/clipboard-history","expected":"ShowFilterableView::ClipboardHistory"}
+{"input":"builtin/app-launcher","expected":"ShowFilterableView::AppLauncher"}
+{"input":"builtin/file-search","expected":"OpenFileSearch"}
+{"input":"builtin/browser-tabs","expected":"ShowFilterableView::BrowserTabs"}
+{"input":"builtin/emoji-picker","expected":"ShowFilterableView::EmojiPicker"}
+{"input":"builtin/window-switcher","expected":"ShowFilterableView::WindowSwitcher"}
+{"input":"builtin/ai-chat","expected":"OpenTabAi"}
+{"input":"builtin/process-manager","expected":"ShowFilterableView::ProcessManager"}
+{"input":"builtin/current-app-commands","expected":"OpenCurrentAppCommands"}

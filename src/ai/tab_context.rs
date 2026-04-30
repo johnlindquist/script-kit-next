@@ -4535,7 +4535,7 @@ mod tab_ai_source_type_tests {
 
     const TAB_AI_MODE_SRC: &str = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/src/app_impl/tab_ai_mode.rs"
+        "/src/app_impl/tab_ai_mode/mod.rs"
     ));
 
     #[test]
@@ -4565,10 +4565,14 @@ mod tab_ai_source_type_tests {
 
     #[test]
     fn deferred_capture_is_started_before_harness_open_call() {
-        let spawn_idx = TAB_AI_MODE_SRC
+        let scoped_start = TAB_AI_MODE_SRC
+            .find("let capture_rx = if use_ask_anything_fallback && explicit_ambient_chip_label.is_none() {")
+            .expect("capture staging block");
+        let scoped = &TAB_AI_MODE_SRC[scoped_start..];
+        let spawn_idx = scoped
             .find("self.spawn_tab_ai_pre_switch_capture(&request)")
             .expect("capture spawn");
-        let open_idx = TAB_AI_MODE_SRC
+        let open_idx = scoped
             .find("self.open_tab_ai_acp_view_from_request_impl(")
             .expect("harness open");
         assert!(
@@ -4714,8 +4718,8 @@ mod tab_ai_apply_back_route_tests {
 
     #[test]
     fn tab_ai_apply_back_uses_running_command_prompt_reinjection() {
-        let source =
-            std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+        let source = std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+            .expect("read tab_ai_mode.rs");
         assert!(
             source.contains("self.try_set_prompt_input(text.clone(), cx)"),
             "RunningCommand apply-back must reuse try_set_prompt_input"
@@ -4724,8 +4728,8 @@ mod tab_ai_apply_back_route_tests {
 
     #[test]
     fn tab_ai_frontmost_apply_back_hides_before_paste() {
-        let source =
-            std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+        let source = std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+            .expect("read tab_ai_mode.rs");
         let hide_pos = source
             .find("crate::platform::defer_hide_main_window(cx)")
             .expect("apply-back must defer-hide the main window");
@@ -4747,8 +4751,8 @@ mod tab_ai_apply_back_route_tests {
 
     #[test]
     fn tab_ai_apply_back_route_cleared_on_close() {
-        let source =
-            std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+        let source = std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs")
+            .expect("read tab_ai_mode.rs");
         let close_fn_pos = source
             .find("fn close_tab_ai_harness_terminal")
             .expect("close_tab_ai_harness_terminal must exist");

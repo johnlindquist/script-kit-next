@@ -236,7 +236,7 @@ fn submission_includes_prompt_type_from_context() {
 #[test]
 fn harness_guidance_includes_prompt_sequencing_rule() {
     let starter = include_str!("../kit-init/examples/START_HERE.md");
-    let skill = include_str!("../kit-init/skills/script-authoring/SKILL.md");
+    let skill = include_str!("../kit-init/skills/new-script/SKILL.md");
 
     assert!(
         starter.contains(
@@ -250,11 +250,11 @@ fn harness_guidance_includes_prompt_sequencing_rule() {
     );
     assert!(
         skill.contains("Never call them concurrently."),
-        "script-authoring skill must explain that prompt APIs are stateful"
+        "new-script skill must explain that prompt APIs are stateful"
     );
     assert!(
         skill.contains("const [url1, url2, url3] = await Promise.all(["),
-        "script-authoring skill should include the concrete anti-pattern example"
+        "new-script skill should include the concrete anti-pattern example"
     );
 }
 
@@ -310,7 +310,7 @@ fn config_validation_rejects_nonexistent_binary() {
 // Session reuse contract (source-text assertions)
 // =========================================================================
 
-const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 
 #[test]
 fn open_harness_terminal_saves_return_view_before_switching() {
@@ -769,9 +769,9 @@ fn submit_with_scriptlet_authoring_intent_includes_artifact_authoring_guidance()
     .expect("submission should build");
 
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
-    assert!(submission.contains("~/.scriptkit/kit/main/scriptlets/<name>.md"));
-    assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
-    assert!(submission.contains("~/.scriptkit/kit/examples/scriptlets/"));
+    assert!(submission.contains("~/.scriptkit/plugins/main/scriptlets/<name>.md"));
+    assert!(submission.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/plugins/examples/scriptlets/"));
     assert!(submission.contains("User intent:\nCreate a scriptlet bundle that copies today's date"));
 }
 
@@ -789,7 +789,7 @@ fn submit_with_agent_authoring_intent_includes_agent_destination() {
     .expect("submission should build");
 
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
-    assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"));
     assert!(submission.contains("User intent:\nCreate an mdflow agent that reviews staged changes"));
 }
 
@@ -840,7 +840,7 @@ fn artifact_authoring_block_appears_between_context_and_intent() {
         "authoring block must come before user intent"
     );
     assert!(!submission.contains("<scriptKitHints>"));
-    assert!(submission.contains("~/.scriptkit/kit/main/agents/<name>.<backend>.md"));
+    assert!(submission.contains("~/.scriptkit/plugins/main/agents/<name>.<backend>.md"));
     assert!(submission.contains("User intent:\nGenerate a Script Kit agent for PR review"));
 }
 
@@ -898,22 +898,22 @@ fn script_authoring_submission_includes_bun_verification_contract() {
     )
     .expect("submission should build");
 
-    assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"));
     assert!(submission.contains(
-        "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+        "bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
     ));
-    assert!(submission.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"));
+    assert!(submission.contains("SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts"));
     assert!(submission.contains("Do not report success until both commands pass"));
 }
 
 #[test]
 fn embedded_script_authoring_skill_requires_bun_fix_loop() {
-    let skill = include_str!("../kit-init/skills/script-authoring/SKILL.md");
+    let skill = include_str!("../kit-init/skills/new-script/SKILL.md");
     assert!(skill.contains("process.env.SK_VERIFY === \"1\""));
     assert!(skill.contains(
-        "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+        "bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
     ));
-    assert!(skill.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"));
+    assert!(skill.contains("SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts"));
     assert!(skill.contains("Never report success until both commands pass"));
 }
 
@@ -943,11 +943,11 @@ fn script_list_submit_with_bare_generation_query_includes_script_verification_co
     .expect("submission should build");
 
     assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
-    assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
+    assert!(submission.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"));
     assert!(submission.contains(
-        "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+        "bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
     ));
-    assert!(submission.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"));
+    assert!(submission.contains("SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts"));
 }
 
 #[test]

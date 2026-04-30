@@ -407,8 +407,9 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
             }
         }
 
-        WindowEvent::FinishDictation | WindowEvent::AbortDictation => {
+        WindowEvent::FinishDictation => {
             if let DictationSurfaceState::Visible {
+                target,
                 return_to,
                 restore_main_visibility,
                 ..
@@ -417,7 +418,81 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
                 cmds.push(WindowCommand::CloseDictationOverlay);
                 next.dictation = DictationSurfaceState::Hidden;
 
-                if restore_main_visibility {
+                if target == DictationTarget::TabAiHarness {
+                    next.main.visibility = MainVisibility::Visible;
+                    next.main.content = MainContentKind::AcpChat;
+                    next.main.return_focus = FocusToken::ChatComposer;
+                    next.key_surface = Some(SurfaceId::Main);
+                    cmds.push(WindowCommand::RevealMain {
+                        activate_app: false,
+                        make_key: true,
+                    });
+                    cmds.push(WindowCommand::FocusMain(FocusToken::ChatComposer));
+                } else {
+                    if restore_main_visibility {
+                        next.main.visibility = MainVisibility::Visible;
+                        let focus_main = matches!(
+                            return_to,
+                            FocusToken::MainFilter
+                                | FocusToken::PromptInput
+                                | FocusToken::ChatComposer
+                                | FocusToken::TermInput
+                        );
+                        cmds.push(WindowCommand::RevealMain {
+                            activate_app: false,
+                            make_key: focus_main,
+                        });
+                        if focus_main {
+                            next.key_surface = Some(SurfaceId::Main);
+                            cmds.push(WindowCommand::FocusMain(return_to));
+                        }
+                    }
+
+                    // If return focus is to an aux surface, focus it.
+                    match return_to {
+                        FocusToken::NotesEditor => {
+                            next.key_surface = Some(SurfaceId::Notes);
+                            cmds.push(WindowCommand::FocusSurface(SurfaceId::Notes));
+                        }
+                        FocusToken::DetachedAiComposer => {
+                            next.key_surface = Some(SurfaceId::DetachedAiChat);
+                            cmds.push(WindowCommand::FocusSurface(SurfaceId::DetachedAiChat));
+                        }
+                        _ => {
+                            // Already handled above for main-bound tokens,
+                            // or FocusToken::None — pick next visible.
+                            if !restore_main_visibility
+                                && !matches!(
+                                    return_to,
+                                    FocusToken::MainFilter
+                                        | FocusToken::PromptInput
+                                        | FocusToken::ChatComposer
+                                        | FocusToken::TermInput
+                                )
+                            {
+                                next.key_surface = next_visible_surface(&next);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        WindowEvent::AbortDictation => {
+            if let DictationSurfaceState::Visible {
+                target,
+                return_to,
+                restore_main_visibility,
+                ..
+            } = next.dictation
+            {
+                cmds.push(WindowCommand::CloseDictationOverlay);
+                next.dictation = DictationSurfaceState::Hidden;
+
+                let should_restore_main =
+                    restore_main_visibility && target != DictationTarget::TabAiHarness;
+
+                if should_restore_main {
                     next.main.visibility = MainVisibility::Visible;
                     let focus_main = matches!(
                         return_to,
@@ -436,7 +511,6 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
                     }
                 }
 
-                // If return focus is to an aux surface, focus it.
                 match return_to {
                     FocusToken::NotesEditor => {
                         next.key_surface = Some(SurfaceId::Notes);
@@ -447,17 +521,7 @@ pub fn reduce(state: &OrchestratorState, event: WindowEvent) -> Transition {
                         cmds.push(WindowCommand::FocusSurface(SurfaceId::DetachedAiChat));
                     }
                     _ => {
-                        // Already handled above for main-bound tokens,
-                        // or FocusToken::None — pick next visible.
-                        if !restore_main_visibility
-                            && !matches!(
-                                return_to,
-                                FocusToken::MainFilter
-                                    | FocusToken::PromptInput
-                                    | FocusToken::ChatComposer
-                                    | FocusToken::TermInput
-                            )
-                        {
+                        if !should_restore_main {
                             next.key_surface = next_visible_surface(&next);
                         }
                     }

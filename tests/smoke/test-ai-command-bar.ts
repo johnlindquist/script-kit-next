@@ -1,5 +1,5 @@
-// Name: Test ACP Chat Command Bar
-// Description: Test the Cmd+K command bar in ACP Chat
+// Name: Test Agent Chat Command Bar
+// Description: Test the Cmd+K command bar in Agent Chat
 
 import '../../scripts/kit-sdk';
 import { writeFileSync, mkdirSync } from 'fs';
@@ -10,10 +10,10 @@ async function main() {
   const testDir = join(process.cwd(), 'test-screenshots');
   mkdirSync(testDir, { recursive: true });
   
-  console.error(`[TEST] ${testName} - Testing ACP Chat command bar`);
+  console.error(`[TEST] ${testName} - Testing Agent Chat command bar`);
   
   // Note: This test runs inside the main window context
-  // Detached ACP Chat is a separate window, so we can't directly interact with it
+  // Detached Agent Chat is a separate window, so we can't directly interact with it
   // This test verifies the SDK screenshot capability works
   
   // Wait a moment for any pending UI updates

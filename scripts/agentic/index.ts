@@ -33,7 +33,12 @@
  */
 
 import { resolve } from "path";
-import { runDetachedAcpExactIdScenario } from "./scenario";
+import {
+  runActionsDialogExactIdScenario,
+  runDetachedAcpExactIdScenario,
+  runMainWindowExactIdScenario,
+  runPromptPopupExactIdScenario,
+} from "./scenario";
 
 const SCHEMA_VERSION = 1;
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
@@ -62,6 +67,8 @@ interface RecipeReceipt {
   /** When --vision is requested, the final verify-shot proof bundle is surfaced here unchanged. */
   proofBundle?: unknown;
 }
+
+type SurfaceProofKind = "main" | "actionsDialog" | "promptPopup" | "acpDetached";
 
 /** Input delivery method chosen by the routing logic. */
 type RoutedInputMethod = "batch" | "simulateGpuiEvent" | "native";
@@ -512,6 +519,86 @@ async function recipePreflight(session: string): Promise<RecipeReceipt> {
           .filter((s) => s.status !== "pass")
           .map((s) => s.name)
           .join(", ")}`,
+  };
+}
+
+function inferSurfaceClass(kind: SurfaceProofKind): "main" | "attachedPopup" | "detached" {
+  switch (kind) {
+    case "main":
+      return "main";
+    case "actionsDialog":
+    case "promptPopup":
+      return "attachedPopup";
+    case "acpDetached":
+      return "detached";
+  }
+}
+
+async function recipeSurfaceProof(
+  session: string,
+  opts: { kind?: SurfaceProofKind; index?: number } = {}
+): Promise<RecipeReceipt> {
+  const kind = opts.kind ?? "main";
+  const index = opts.index ?? 0;
+  const preflight = await recipePreflight(session);
+  let bundle;
+
+  if (preflight.status !== "pass") {
+    return {
+      schemaVersion: SCHEMA_VERSION,
+      recipe: "surface-proof",
+      status: "fail",
+      steps: preflight.steps,
+      summary: `Cannot proceed: ${preflight.summary}`,
+    };
+  }
+
+  switch (kind) {
+    case "main":
+      bundle = await runMainWindowExactIdScenario(session);
+      break;
+    case "actionsDialog":
+      bundle = await runActionsDialogExactIdScenario(session, index);
+      break;
+    case "promptPopup":
+      bundle = await runPromptPopupExactIdScenario(session, index);
+      break;
+    case "acpDetached":
+      bundle = await runDetachedAcpExactIdScenario(session, index);
+      break;
+  }
+
+  console.error(
+    JSON.stringify({
+      event: "surface_proof_complete",
+      recipe: "surface-proof",
+      kind,
+      scenario: bundle.scenario,
+      surfaceClass: inferSurfaceClass(kind),
+      warningCount: bundle.warnings.length,
+      resolvedWindowId: bundle.resolvedTarget.windowId,
+      surfaceId: bundle.resolvedTarget.surfaceId ?? null,
+    })
+  );
+
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    recipe: "surface-proof",
+    status: bundle.warnings.length === 0 ? "pass" : "fail",
+    steps: [
+      ...preflight.steps,
+      {
+        name: "scenario",
+        status: bundle.warnings.length === 0 ? "pass" : "fail",
+        output: bundle,
+        durationMs: 0,
+      },
+    ],
+    summary:
+      bundle.warnings.length === 0
+        ? `Deterministic ${inferSurfaceClass(kind)} proof succeeded for ${kind}`
+        : `Scenario warnings: ${bundle.warnings.join(", ")}`,
+    proofBundle: bundle,
   };
 }
 
@@ -1413,6 +1500,13 @@ switch (recipe) {
     result = await recipeAcpSetupRecovery(session, selectAgent);
     break;
 
+  case "surface-proof":
+    result = await recipeSurfaceProof(session, {
+      kind: (kind as SurfaceProofKind | undefined) ?? "main",
+      index: index ?? 0,
+    });
+    break;
+
   case "scenario": {
     const scenarioName = kind ?? "";
     // Also accept --scenario as an alias for --kind
@@ -1422,21 +1516,36 @@ switch (recipe) {
         ? process.argv[scenarioArg + 1]
         : scenarioName;
 
-    if (resolvedScenario === "detached-acp-exact-id") {
-      const bundle = await runDetachedAcpExactIdScenario(
-        session,
-        index ?? 0
-      );
-      console.log(JSON.stringify(bundle, null, 2));
-      process.exit(bundle.warnings.length > 0 ? 1 : 0);
-    } else {
-      result = {
-        schemaVersion: SCHEMA_VERSION,
-        recipe: "scenario",
-        status: "error",
-        steps: [],
-        summary: `Unknown scenario: ${resolvedScenario}. Available: detached-acp-exact-id`,
-      };
+    switch (resolvedScenario) {
+      case "main-window-exact-id": {
+        const bundle = await runMainWindowExactIdScenario(session);
+        console.log(JSON.stringify(bundle, null, 2));
+        process.exit(bundle.warnings.length > 0 ? 1 : 0);
+      }
+      case "actions-dialog-exact-id": {
+        const bundle = await runActionsDialogExactIdScenario(session, index ?? 0);
+        console.log(JSON.stringify(bundle, null, 2));
+        process.exit(bundle.warnings.length > 0 ? 1 : 0);
+      }
+      case "prompt-popup-exact-id": {
+        const bundle = await runPromptPopupExactIdScenario(session, index ?? 0);
+        console.log(JSON.stringify(bundle, null, 2));
+        process.exit(bundle.warnings.length > 0 ? 1 : 0);
+      }
+      case "detached-acp-exact-id": {
+        const bundle = await runDetachedAcpExactIdScenario(session, index ?? 0);
+        console.log(JSON.stringify(bundle, null, 2));
+        process.exit(bundle.warnings.length > 0 ? 1 : 0);
+      }
+      default:
+        result = {
+          schemaVersion: SCHEMA_VERSION,
+          recipe: "scenario",
+          status: "error",
+          steps: [],
+          summary:
+            `Unknown scenario: ${resolvedScenario}. Available: main-window-exact-id, actions-dialog-exact-id, prompt-popup-exact-id, detached-acp-exact-id`,
+        };
     }
     break;
   }
@@ -1473,11 +1582,13 @@ switch (recipe) {
           { name: "acp-tab-accept", description: "Compatibility alias for --key tab", flags: ["--session", "--vision", "--target-json", "--surface", "--json"] },
           { name: "acp-detached-accept", description: "One-command detached ACP proof: resolve, accept, identity check", flags: ["--session", "--kind", "--index", "--key", "--vision", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
+          { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
           { name: "scenario", description: "Run a replayable scenario with proof bundle", flags: ["--session", "--scenario", "--index", "--json"] },
           { name: "vision-loop", description: "Materialize visionCrops from receipt", flags: ["--receipt", "--out-dir"] },
           { name: "help", description: "Show help (--json for machine-readable)", flags: ["--json"] },
         ],
         contracts: [
+          "surface-proof-contract",
           "detached-proof-contract",
           "no-focus-input-ladder",
           "popup-capture-receipts",
@@ -1509,6 +1620,7 @@ Recipes:
   acp-tab-accept         Compatibility alias for --key tab
   acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
+  surface-proof          Seconds-first proof for main / attached popup / detached surfaces
   scenario               Run a replayable scenario with proof bundle output
   vision-loop            Materialize visionCrops from receipt (pass --receipt, --out-dir)
   help                   Show this help (--json for machine-readable output)
@@ -1525,14 +1637,23 @@ Input routing (non-main targets):
   main, focused, unspecified → native (macos-input.ts with OS focus enforcement)
 
 Available scenarios:
+  main-window-exact-id    Resolve exact main target, inspect, getElements
+  actions-dialog-exact-id Resolve exact attached ActionsDialog target, inspect, waitFor
+  prompt-popup-exact-id   Resolve exact attached PromptPopup target, inspect, waitFor
   detached-acp-exact-id  Resolve exact detached ACP target, inspect, GPUI event, inspect again
 
 Examples:
+  bun scripts/agentic/index.ts surface-proof --session default --kind main
+  bun scripts/agentic/index.ts surface-proof --session default --kind promptPopup --index 0
+  bun scripts/agentic/index.ts surface-proof --session default --kind acpDetached --index 0
   bun scripts/agentic/index.ts acp-accept --session default --key enter
   bun scripts/agentic/index.ts acp-accept --session default --key tab --vision
   bun scripts/agentic/index.ts acp-accept --session default --key enter \\
     --target-json '{"type":"kind","kind":"acpDetached","index":0}' --surface acp --vision
   bun scripts/agentic/index.ts acp-detached-accept --session default --kind acpDetached --index 0 --key enter --vision
+  bun scripts/agentic/index.ts scenario --session default --scenario main-window-exact-id
+  bun scripts/agentic/index.ts scenario --session default --scenario actions-dialog-exact-id --index 0
+  bun scripts/agentic/index.ts scenario --session default --scenario prompt-popup-exact-id --index 0
   bun scripts/agentic/index.ts scenario --session default --scenario detached-acp-exact-id --index 0
   bun scripts/agentic/index.ts acp-setup-recovery --session default --select-agent opencode --json
   bun scripts/agentic/index.ts help --json`);

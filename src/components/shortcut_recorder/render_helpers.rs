@@ -44,15 +44,15 @@ impl ShortcutRecorder {
             div()
                 .text_xs()
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgba((colors.text_muted << 8) | 0x9C))
-                .child("Press any key combination\u{2026}")
+                .text_color(rgba((colors.text_primary << 8) | 0x66))
+                .child("Press keys")
                 .into_any_element()
         } else {
             crate::components::hint_strip::render_inline_shortcut_keys(
                 keycaps.iter().map(String::as_str),
                 crate::components::hint_strip::whisper_inline_shortcut_colors(
-                    rgba((colors.text_primary << 8) | 0xB8).into(),
-                    rgba((colors.border << 8) | 0xFF).into(),
+                    rgba((colors.text_primary << 8) | 0xCC).into(),
+                    rgba((colors.text_primary << 8) | 0xFF).into(),
                     true,
                 ),
             )
@@ -62,61 +62,14 @@ impl ShortcutRecorder {
             .w_full()
             .h(px(KEY_DISPLAY_HEIGHT))
             .px(px(KEY_DISPLAY_PADDING))
+            .rounded(px(6.0))
+            .bg(rgba((colors.text_primary << 8) | 0x0C))
+            .border_1()
+            .border_color(rgba((colors.text_primary << 8) | 0x18))
             .flex()
             .items_center()
             .justify_center()
             .child(content)
-    }
-
-    /// Render a compact footer strip: ⎋ Cancel • ↵ Save
-    pub(super) fn render_footer_shortcuts(&self) -> gpui::AnyElement {
-        let colors = self.colors;
-
-        crate::components::hint_strip::emit_shortcut_chrome_audit(
-            "shortcut_recorder_footer",
-            "compact-inline",
-        );
-
-        let hint = |keys: &[&str], label: &'static str| -> gpui::AnyElement {
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .child(crate::components::hint_strip::render_inline_shortcut_keys(
-                    keys.iter().copied(),
-                    crate::components::hint_strip::whisper_inline_shortcut_colors(
-                        rgb(colors.text_muted).into(),
-                        rgba((colors.border << 8) | 0xFF).into(),
-                        true,
-                    ),
-                ))
-                .child(
-                    div()
-                        .text_xs()
-                        .text_color(rgb(colors.text_muted))
-                        .child(label),
-                )
-                .into_any_element()
-        };
-
-        div()
-            .w_full()
-            .mt(px(10.0))
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_center()
-            .gap(px(12.0))
-            .child(hint(&["⎋"], "Cancel"))
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgba((colors.text_muted << 8) | 0x72))
-                    .child("•"),
-            )
-            .child(hint(&["↵"], "Save"))
-            .into_any_element()
     }
 
     /// Render conflict warning if present

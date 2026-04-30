@@ -2,15 +2,16 @@ use super::*;
 use crate::components::inline_dropdown::{
     inline_dropdown_clamp_selected_index, inline_dropdown_visible_range,
     render_dense_monoline_picker_row_with_leading_visual, InlineDropdown, InlineDropdownColors,
-    InlineDropdownEmptyState, InlineDropdownSynopsis, GOLD, HINT,
+    InlineDropdownEmptyState, InlineDropdownSynopsis, HINT,
 };
 
 impl AiApp {
     pub(super) fn render_presets_dropdown(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = crate::theme::get_cached_theme();
         let colors = InlineDropdownColors::from_theme(&theme);
-        let fg = cx.theme().foreground;
-        let muted_fg = cx.theme().muted_foreground;
+        let fg = colors.foreground;
+        let muted_fg = colors.muted_foreground;
+        let accent = colors.accent;
 
         let selected_index =
             inline_dropdown_clamp_selected_index(self.presets_selected_index, self.presets.len());
@@ -68,7 +69,7 @@ impl AiApp {
                                     .external_path(preset.icon.external_path())
                                     .size(px(14.0))
                                     .text_color(if is_selected {
-                                        GOLD
+                                        accent
                                     } else {
                                         muted_fg.opacity(HINT)
                                     }),
@@ -84,6 +85,7 @@ impl AiApp {
                             is_selected,
                             fg,
                             muted_fg,
+                            accent,
                             leading_visual,
                         )
                         .cursor_pointer()

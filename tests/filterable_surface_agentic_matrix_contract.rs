@@ -1,0 +1,179 @@
+//! Source-level contract for the AURP-06 filterable surface proof matrix.
+//!
+//! The runtime matrix is the repeatable agent-facing version of the manual
+//! `getState`/`getElements` proof: migrated filterable surfaces must declare
+//! their entry command, prompt type, list id, and filter text in one place.
+
+const MATRIX: &str = include_str!("../scripts/agentic/filterable-surface-matrix.ts");
+
+fn function_body<'a>(source: &'a str, name: &str, next_name: &str) -> &'a str {
+    let start_pat = format!("function {name}(");
+    let start = source
+        .find(&start_pat)
+        .unwrap_or_else(|| panic!("missing function start: {start_pat}"));
+    let end_pat = format!("\nfunction {next_name}(");
+    let async_end_pat = format!("\nasync function {next_name}(");
+    let end_rel = source[start..]
+        .find(&end_pat)
+        .or_else(|| source[start..].find(&async_end_pat))
+        .unwrap_or_else(|| panic!("missing next function start: {end_pat}"));
+    &source[start..start + end_rel]
+}
+
+// @lat: [[lat.md/automation#Automation#Operational Rules]]
+#[test]
+fn matrix_declares_current_app_commands_visible_row_case() {
+    assert!(
+        MATRIX.contains("export const FILTERABLE_SURFACE_MATRIX"),
+        "The matrix must be data-first and importable."
+    );
+    assert!(
+        MATRIX.contains("id: \"current-app-commands-visible-rows\""),
+        "AURP-06 starts with the migrated Current App Commands surface."
+    );
+    assert!(
+        MATRIX.contains("promptType: \"currentAppCommands\""),
+        "The matrix must pin the state promptType expected after entry."
+    );
+    assert!(
+        MATRIX.contains("listSemanticId: \"list:menu-commands\""),
+        "The matrix must identify the getElements list whose item count must match state."
+    );
+    assert!(
+        MATRIX
+            .contains("entryCommand: { type: \"triggerBuiltin\", name: \"current-app-commands\" }"),
+        "The matrix must use the real runtime entry path."
+    );
+    assert!(
+        MATRIX.contains("filterText: \"workspace\""),
+        "The matrix must include a narrowing filter, not only the empty-filter case."
+    );
+    assert!(
+        MATRIX.contains("expectedElementChromeCount: 2"),
+        "Input plus list chrome must be explicit so totalCount parity is testable."
+    );
+}
+
+#[test]
+fn matrix_declares_expanded_filterable_surface_cases() {
+    assert!(
+        MATRIX.contains("id: \"clipboard-history-visible-rows\""),
+        "AURP-11 must add Clipboard History to the state-first proof matrix."
+    );
+    assert!(
+        MATRIX.contains("promptType: \"clipboardHistory\"")
+            && MATRIX.contains("listSemanticId: \"list:clipboard-history\"")
+            && MATRIX.contains("entryCommand: { type: \"triggerBuiltin\", name: \"clipboard-history\" }")
+            && MATRIX.contains("filterText: \"__aurp11_no_clipboard_match__\""),
+        "Clipboard History must declare promptType, list id, real entry path, and stable zero-match filter."
+    );
+    assert!(
+        MATRIX.contains("id: \"emoji-picker-visible-rows\""),
+        "AURP-11 must add Emoji Picker to the state-first proof matrix."
+    );
+    assert!(
+        MATRIX.contains("promptType: \"emojiPicker\"")
+            && MATRIX.contains("listSemanticId: \"list:emoji-results\"")
+            && MATRIX.contains("entryCommand: { type: \"triggerBuiltin\", name: \"emoji\" }")
+            && MATRIX.contains("filterText: \"heart\""),
+        "Emoji Picker must declare promptType, list id, real entry path, and deterministic narrowing filter."
+    );
+}
+
+#[test]
+fn matrix_declares_stable_sibling_filterable_surface_cases() {
+    for (id, prompt_type, list_id, entry_name, filter_text) in [
+        (
+            "app-launcher-visible-rows",
+            "appLauncher",
+            "list:apps",
+            "apps",
+            "__aurp16_no_app_match__",
+        ),
+        (
+            "design-gallery-visible-rows",
+            "designGallery",
+            "list:design-gallery",
+            "design-gallery",
+            "icon",
+        ),
+        (
+            "process-manager-visible-rows",
+            "processManager",
+            "list:processes",
+            "process-manager",
+            "__aurp16_no_process_match__",
+        ),
+    ] {
+        assert!(
+            MATRIX.contains(&format!("id: \"{id}\""))
+                && MATRIX.contains(&format!("promptType: \"{prompt_type}\""))
+                && MATRIX.contains(&format!("listSemanticId: \"{list_id}\""))
+                && MATRIX.contains(&format!(
+                    "entryCommand: {{ type: \"triggerBuiltin\", name: \"{entry_name}\" }}"
+                ))
+                && MATRIX.contains(&format!("filterText: \"{filter_text}\"")),
+            "AURP-16 case {id} must declare promptType, list id, real entry path, and stable filter text."
+        );
+    }
+}
+
+#[test]
+fn matrix_runner_checks_state_and_elements_count_parity() {
+    let body = function_body(MATRIX, "observeCounts", "runEntry");
+    assert!(
+        body.contains("visibleChoiceCount > choiceCount"),
+        "The matrix must preserve the state subset invariant."
+    );
+    assert!(
+        body.contains("listCount !== visibleChoiceCount"),
+        "The matrix must compare getElements list count against state visibleChoiceCount."
+    );
+    assert!(
+        body.contains(
+            "elementsTotalCount !== visibleChoiceCount + entry.expectedElementChromeCount"
+        ),
+        "The matrix must verify totalCount is visible rows plus input/list chrome."
+    );
+}
+
+#[test]
+fn matrix_runner_uses_parse_receipts_and_typed_rpcs() {
+    assert!(
+        MATRIX.contains("\"--await-parse\""),
+        "Fire-and-forget commands must wait for parse receipts."
+    );
+    assert!(
+        MATRIX.contains("await rpc(session, emptyStateCommand, \"stateResult\", timeoutMs)"),
+        "Empty state proof must use typed stateResult RPC."
+    );
+    assert!(
+        MATRIX.contains("emptyElementsCommand"),
+        "Empty elements proof must be an explicit matrix step."
+    );
+    assert!(
+        MATRIX.contains("\"elementsResult\""),
+        "Element proof must use typed elementsResult RPC."
+    );
+    assert!(
+        MATRIX
+            .contains("const setFilterCommand = { type: \"setFilter\", text: entry.filterText };"),
+        "Filtered proof must drive the real setFilter path."
+    );
+    assert!(
+        MATRIX.contains("await sendAndAwaitParse(session, { type: \"setFilter\", text: \"\" }, timeoutMs);"),
+        "Each case must reset the active filter after entry so multi-case runs do not inherit the prior case's filter."
+    );
+}
+
+#[test]
+fn matrix_runner_exposes_list_mode_for_agents() {
+    assert!(
+        MATRIX.contains("hasFlag(\"--list\")"),
+        "Agents must be able to inspect the matrix without launching the app."
+    );
+    assert!(
+        MATRIX.contains("matrix: FILTERABLE_SURFACE_MATRIX"),
+        "--list must return the same data the runner executes."
+    );
+}

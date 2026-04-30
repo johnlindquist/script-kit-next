@@ -75,6 +75,7 @@ mod arg_prompt_render_tests {
             border: 0,
             surface: 0x123456,
             background: 0x000000,
+            hover_alpha: 0,
             is_light_mode: true,
         };
 

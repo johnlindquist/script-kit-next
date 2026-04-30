@@ -1,0 +1,318 @@
+impl ScriptListApp {
+    /// Render the in-product starter-template catalog (list + preview).
+    ///
+    /// Data source is [`crate::mcp_resources::script_template_entries_for_ui`] —
+    /// the same Rust objects that power the `kit://script-templates` MCP
+    /// resource, so a script created from the launcher and a script created
+    /// from an MCP client are byte-identical.
+    ///
+    /// Enter transitions to the naming prompt via
+    /// [`ScriptListApp::show_naming_dialog_for_script_template`]; after the
+    /// user picks a filename, [`ScriptListApp::handle_naming_dialog_completion`]
+    /// overwrites the freshly-created file with
+    /// [`crate::mcp_resources::render_script_template_file`] before opening the
+    /// editor. Cmd+C copies the selected template's markdown card so authors
+    /// can paste it into a note or commit message.
+    fn render_script_template_catalog_view(
+        &mut self,
+        filter: &str,
+        selected_index: usize,
+        templates: std::sync::Arc<[crate::mcp_resources::ScriptTemplateRef]>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::expanded("script_template_catalog", false),
+        );
+
+        let tokens = get_tokens(self.current_design);
+        let design_spacing = tokens.spacing();
+        let design_typography = tokens.typography();
+
+        let text_primary = self.theme.colors.text.primary;
+        let text_dimmed = self.theme.colors.text.dimmed;
+        let text_muted = self.theme.colors.text.muted;
+
+        let visible_rows =
+            crate::mcp_resources::script_template_catalog_visible_rows(&templates, filter);
+        let filtered_len = visible_rows.len();
+
+        let effective_selected = if filtered_len == 0 {
+            0
+        } else {
+            selected_index.min(filtered_len.saturating_sub(1))
+        };
+        if effective_selected != selected_index {
+            if let AppView::ScriptTemplateCatalogView {
+                selected_index: stored,
+                ..
+            } = &mut self.current_view
+            {
+                *stored = effective_selected;
+            }
+        }
+
+        let preview_template = visible_rows
+            .get(effective_selected)
+            .map(|row| row.template.clone());
+
+        let templates_for_keys = templates.clone();
+        let handle_key = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyDownEvent,
+                  window: &mut Window,
+                  cx: &mut Context<Self>| {
+                this.hide_mouse_cursor(cx);
+
+                let key = event.keystroke.key.as_str();
+                let has_cmd = event.keystroke.modifiers.platform;
+
+                if crate::ui_foundation::is_key_escape(key) {
+                    if !this.clear_builtin_view_filter(cx) {
+                        this.go_back_or_close(window, cx);
+                    }
+                    cx.stop_propagation();
+                    return;
+                }
+
+                if has_cmd && key.eq_ignore_ascii_case("w") {
+                    this.close_and_reset_window(cx);
+                    cx.stop_propagation();
+                    return;
+                }
+
+                let (current_filter, current_selected) =
+                    if let AppView::ScriptTemplateCatalogView {
+                        filter,
+                        selected_index,
+                        ..
+                    } = &this.current_view
+                    {
+                        (filter.clone(), *selected_index)
+                    } else {
+                        return;
+                    };
+
+                let visible = crate::mcp_resources::script_template_catalog_visible_rows(
+                    &templates_for_keys,
+                    &current_filter,
+                );
+                let visible_len = visible.len();
+
+                if crate::ui_foundation::is_key_up(key) {
+                    if current_selected > 0 {
+                        if let AppView::ScriptTemplateCatalogView { selected_index, .. } =
+                            &mut this.current_view
+                        {
+                            *selected_index = current_selected - 1;
+                        }
+                        cx.notify();
+                    }
+                    cx.stop_propagation();
+                } else if crate::ui_foundation::is_key_down(key) {
+                    if current_selected + 1 < visible_len {
+                        if let AppView::ScriptTemplateCatalogView { selected_index, .. } =
+                            &mut this.current_view
+                        {
+                            *selected_index = current_selected + 1;
+                        }
+                        cx.notify();
+                    }
+                    cx.stop_propagation();
+                } else if has_cmd && key.eq_ignore_ascii_case("c") {
+                    if let Some(template) = visible.get(current_selected).map(|row| row.template) {
+                        let markdown =
+                            crate::mcp_resources::format_script_template_markdown(template);
+                        match crate::platform::copy_text_to_clipboard(&markdown) {
+                            Ok(()) => {
+                                this.show_hud(
+                                    format!("Copied {} template", template.title),
+                                    Some(2000),
+                                    cx,
+                                );
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    error = %e,
+                                    "script_template_catalog copy_text_to_clipboard failed"
+                                );
+                            }
+                        }
+                    }
+                    cx.stop_propagation();
+                } else if crate::ui_foundation::is_key_enter(key) {
+                    if let Some(template) = visible.get(current_selected).map(|row| row.template) {
+                        this.show_naming_dialog_for_script_template(template.clone(), window, cx);
+                    }
+                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
+                }
+            },
+        );
+
+        let list_colors = ListItemColors::from_theme(&self.theme);
+        let list_element: AnyElement = if filtered_len == 0 {
+            div()
+                .w_full()
+                .py(px(design_spacing.padding_xl))
+                .text_center()
+                .text_color(rgb(text_muted))
+                .font_family(design_typography.font_family)
+                .child(if filter.trim().is_empty() {
+                    "No starter templates available"
+                } else {
+                    "No templates match your filter"
+                })
+                .into_any_element()
+        } else {
+            let templates_for_list = templates.clone();
+            let visible_for_list: Vec<usize> =
+                visible_rows.iter().map(|row| row.source_index).collect();
+            let selected = effective_selected;
+
+            div()
+                .id("script-template-catalog-list")
+                .w_full()
+                .min_h(px(0.))
+                .flex()
+                .flex_col()
+                .overflow_y_scrollbar()
+                .children(visible_for_list.into_iter().enumerate().map(
+                    move |(display_ix, original_idx)| {
+                        let template = templates_for_list
+                            .get(original_idx)
+                            .expect("visible index within bounds");
+                        let is_selected = display_ix == selected;
+
+                        let description = if template.description.is_empty() {
+                            template.category.clone()
+                        } else {
+                            format!("{}  ·  {}", template.category, template.description)
+                        };
+
+                        let item = ListItem::new(template.title.clone(), list_colors)
+                            .description_opt(Some(description))
+                            .selected(is_selected)
+                            .with_accent_bar(true);
+
+                        div()
+                            .id(gpui::ElementId::Integer(display_ix as u64))
+                            .child(item)
+                    },
+                ))
+                .into_any_element()
+        };
+
+        let preview_panel: AnyElement = match &preview_template {
+            Some(template) => div()
+                .w_full()
+                .h_full()
+                .min_h(px(0.))
+                .overflow_y_scrollbar()
+                .px(px(design_spacing.padding_lg))
+                .py(px(design_spacing.padding_md))
+                .font_family(design_typography.font_family)
+                .flex()
+                .flex_col()
+                .gap(px(design_spacing.padding_sm))
+                .child(
+                    div()
+                        .text_size(px(design_typography.font_size_xl))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(rgb(text_primary))
+                        .child(template.title.clone()),
+                )
+                .child(
+                    div()
+                        .text_size(px(design_typography.font_size_xs))
+                        .text_color(rgb(text_muted))
+                        .child(template.category.clone()),
+                )
+                .child(
+                    div()
+                        .text_size(px(design_typography.font_size_md))
+                        .text_color(rgb(text_primary))
+                        .child(template.description.clone()),
+                )
+                .child(
+                    div()
+                        .text_size(px(design_typography.font_size_sm))
+                        .text_color(rgb(text_dimmed))
+                        .child(template.body_template.clone()),
+                )
+                .into_any_element(),
+            None => div()
+                .w_full()
+                .h_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(rgb(text_muted))
+                .font_family(design_typography.font_family)
+                .child("Select a template")
+                .into_any_element(),
+        };
+
+        let header_element = div()
+            .flex_1()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_3()
+            .child(
+                div().flex_1().flex().flex_row().items_center().child(
+                    Input::new(&self.gpui_input_state)
+                        .w_full()
+                        .h(px(28.))
+                        .px(px(0.))
+                        .py(px(0.))
+                        .with_size(Size::Size(px(design_typography.font_size_xl)))
+                        .appearance(false)
+                        .bordered(false)
+                        .focus_bordered(false),
+                ),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(rgb(text_dimmed))
+                    .child(format!(
+                        "{} template{}",
+                        templates.len(),
+                        if templates.len() == 1 { "" } else { "s" },
+                    )),
+            );
+
+        let list_pane = div()
+            .relative()
+            .w_full()
+            .h_full()
+            .min_h(px(0.))
+            .py(px(design_spacing.padding_xs))
+            .child(list_element);
+
+        let hints: Vec<SharedString> = vec![
+            "↵ Create".into(),
+            "⌘C Copy Markdown".into(),
+            "↑↓ Navigate".into(),
+            "Esc Back".into(),
+        ];
+        crate::components::emit_prompt_hint_audit("script_template_catalog", &hints);
+
+        let gpui_footer = crate::components::render_simple_hint_strip(hints, None);
+        let footer = self.main_window_footer_slot(gpui_footer);
+
+        crate::components::render_expanded_view_scaffold_with_footer(
+            header_element,
+            list_pane,
+            preview_panel,
+            footer,
+        )
+        .text_color(rgb(text_primary))
+        .font_family(design_typography.font_family)
+        .key_context("script_template_catalog")
+        .track_focus(&self.focus_handle)
+        .on_key_down(handle_key)
+        .into_any_element()
+    }
+}

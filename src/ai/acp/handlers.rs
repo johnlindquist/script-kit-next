@@ -98,6 +98,30 @@ fn summarize_tool_call_update(
     (title, status, body)
 }
 
+// ── Session update kind naming ────────────────────────────────────────
+
+// Stable, ops-greppable kind label for each `SessionUpdate` variant.
+// Recorded onto the `acp_session_update` span so per-notification log
+// lines inherit a `kind=<label>` field without re-stringifying inside
+// every match arm. The variant names are taken from the ACP protocol
+// crate verbatim (snake_case of the enum variant) — if the upstream
+// protocol adds a new variant, this returns "other" and the catch-all
+// arm handles it via `acp_session_update_unhandled`.
+fn session_update_kind_name(update: &SessionUpdate) -> &'static str {
+    match update {
+        SessionUpdate::UserMessageChunk(_) => "user_message_chunk",
+        SessionUpdate::AgentMessageChunk(_) => "agent_message_chunk",
+        SessionUpdate::AgentThoughtChunk(_) => "agent_thought_chunk",
+        SessionUpdate::ToolCall(_) => "tool_call",
+        SessionUpdate::ToolCallUpdate(_) => "tool_call_update",
+        SessionUpdate::Plan(_) => "plan",
+        SessionUpdate::CurrentModeUpdate(_) => "current_mode_update",
+        SessionUpdate::AvailableCommandsUpdate(_) => "available_commands_update",
+        SessionUpdate::UsageUpdate(_) => "usage_update",
+        _ => "other",
+    }
+}
+
 // ── Preview construction helpers ──────────────────────────────────────
 
 fn truncate_for_overlay(text: &str, max_chars: usize) -> String {
@@ -524,7 +548,33 @@ impl Client for ScriptKitAcpClient {
 
     // ── Session notifications ──────────────────────────────────────────
 
+    // `session_notification` runs in the ACP client crate's task context,
+    // NOT the turn-handler task that carries the `acp_turn` span. That
+    // task boundary is why per-notification spans here do NOT nest under
+    // `acp_turn` even though the notification IS part of the turn's
+    // logical lifecycle — `tracing::info_span!(...).entered()` would
+    // become a root span because the turn's span context is not set on
+    // this task. Proper cross-task nesting would require either (a)
+    // passing a `Span` clone through the event sink channel, or (b)
+    // wrapping the chunk-handling future on the turn-span side with
+    // `tracing::Instrument::instrument(...)`. Both are deferred (see
+    // `tool-acp-stream-chunk-span` in `audits/afk/stories.md`).
+    //
+    // The modest instrumentation here gives each notification its own
+    // span (`acp_session_update`) with `session_id` + `kind` fields, so
+    // per-notification timing is measurable and the existing per-kind
+    // events emitted inside the match arms become children of the span
+    // for correlation.
+    #[tracing::instrument(
+        skip_all,
+        name = "acp_session_update",
+        fields(
+            session_id = %args.session_id.0,
+            kind = tracing::field::Empty,
+        )
+    )]
     async fn session_notification(&self, args: SessionNotification) -> Result<()> {
+        tracing::Span::current().record("kind", session_update_kind_name(&args.update));
         match &args.update {
             SessionUpdate::UserMessageChunk(chunk) => {
                 if let agent_client_protocol::ContentBlock::Text(text) = &chunk.content {

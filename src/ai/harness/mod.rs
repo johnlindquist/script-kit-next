@@ -156,7 +156,7 @@ pub enum HarnessBackendKind {
 
 /// Persisted configuration for the Tab AI harness.
 ///
-/// Stored at `~/.scriptkit/kit/config.ts` under the `claudeCode` key.
+/// Stored at `~/.scriptkit/config.ts` under the `claudeCode` key.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct HarnessConfig {
@@ -270,7 +270,6 @@ pub fn tab_ai_harness_config_path() -> Result<std::path::PathBuf, String> {
         .map_err(|_| "tab_ai_harness_config_path: HOME is not set".to_string())?;
     Ok(std::path::Path::new(&home)
         .join(".scriptkit")
-        .join("kit")
         .join("config.ts"))
 }
 
@@ -327,7 +326,7 @@ pub fn read_tab_ai_harness_config() -> Result<HarnessConfig, String> {
 pub fn validate_tab_ai_harness_config(config: &HarnessConfig) -> Result<(), String> {
     if config.command.trim().is_empty() {
         return Err(
-            "Harness command is empty. Set claudeCode.path in ~/.scriptkit/kit/config.ts \
+            "Harness command is empty. Set claudeCode.path in ~/.scriptkit/config.ts \
              or leave it unset to use the default (claude)."
                 .to_string(),
         );
@@ -335,7 +334,7 @@ pub fn validate_tab_ai_harness_config(config: &HarnessConfig) -> Result<(), Stri
     if which::which(&config.command).is_err() {
         return Err(format!(
             "'{}' not found on PATH. Install the CLI or update \
-             claudeCode.path in ~/.scriptkit/kit/config.ts.",
+             claudeCode.path in ~/.scriptkit/config.ts.",
             config.command,
         ));
     }
@@ -904,15 +903,14 @@ fn should_force_artifact_guidance_for_script_list_submit(
 // ---------------------------------------------------------------------------
 
 pub const SCRIPT_AUTHORING_SKILL_MARKER: &str =
-    "~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md";
-pub const BUN_BUILD_VERIFICATION_MARKER: &str =
-    "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs";
+    "~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md";
+pub const BUN_BUILD_VERIFICATION_MARKER: &str = "bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs";
 pub const BUN_EXECUTE_VERIFICATION_MARKER: &str =
-    "SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts";
-pub(crate) const BUN_VERIFICATION_SUCCESS_CRITERIA: &str =
-    "Confirm the stdout, written file, or other observable result from the script in ~/.scriptkit/kit/main/scripts/ matches the user's request.";
-pub(crate) const BUN_VERIFICATION_FAILURE_POLICY: &str =
-    "If either Bun command fails, fix the script and rerun both commands inside the same Claude Code terminal session before reporting success.";
+    "SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts";
+pub(crate) const BUN_VERIFICATION_SUCCESS_CRITERIA: &str = "Confirm the stdout, written file, or other observable result from the script in ~/.scriptkit/plugins/main/scripts/ matches the user's request.";
+pub(crate) const BUN_VERIFICATION_FAILURE_POLICY: &str = "If either Bun command fails, fix the script and rerun both commands inside the same Claude Code terminal session before reporting success.";
+pub const SCRIPT_READY_RECEIPT_MARKER: &str =
+    "SCRIPT_READY path=~/.scriptkit/plugins/main/scripts/<name>.ts validated=true";
 
 /// Structured detection of which verification markers are present in a
 /// guidance block.  Used by both the ACP and PTY telemetry paths so marker
@@ -922,6 +920,7 @@ pub(crate) struct TabAiVerificationGuidanceMarkers {
     pub includes_script_authoring_skill: bool,
     pub includes_bun_build_verification: bool,
     pub includes_bun_execute_verification: bool,
+    pub includes_script_ready_receipt: bool,
 }
 
 impl TabAiVerificationGuidanceMarkers {
@@ -930,6 +929,7 @@ impl TabAiVerificationGuidanceMarkers {
             includes_script_authoring_skill: guidance.contains(SCRIPT_AUTHORING_SKILL_MARKER),
             includes_bun_build_verification: guidance.contains(BUN_BUILD_VERIFICATION_MARKER),
             includes_bun_execute_verification: guidance.contains(BUN_EXECUTE_VERIFICATION_MARKER),
+            includes_script_ready_receipt: guidance.contains(SCRIPT_READY_RECEIPT_MARKER),
         }
     }
 }
@@ -1041,7 +1041,7 @@ pub struct TabAiSurfacePreference {
 /// Derive the preferred Tab AI surface from the shared appendix builder.
 ///
 /// Returns `use_quick_terminal = true` only when the guidance includes the
-/// script-authoring marker AND both Bun verification markers.  When no
+/// new-script marker AND both Bun verification markers.  When no
 /// appendix is produced, all flags are `false`.
 pub fn tab_ai_surface_preference_for_prompt(
     prompt_type: &str,
@@ -1169,7 +1169,7 @@ fn build_tab_ai_script_verification_gate() -> String {
     format!(
         concat!(
             "{}\n",
-            "If the correct artifact is a `.ts` script under `~/.scriptkit/kit/main/scripts/`, ",
+            "If the correct artifact is a `.ts` script under `~/.scriptkit/plugins/main/scripts/`, ",
             "verify that final script inside this Claude Code terminal session before reporting success.\n",
             "Read: {}\n",
             "Build: {}\n",
@@ -1238,7 +1238,7 @@ pub fn build_tab_ai_harness_submission(
         effective_intent,
         mode,
     ) {
-        // Source-contract audit anchor: ~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md
+        // Source-contract audit anchor: ~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md
         tracing::info!(
             event = "tab_ai_artifact_authoring_guidance_appended",
             script_authoring_skill_path = SCRIPT_AUTHORING_SKILL_MARKER,
@@ -1724,24 +1724,28 @@ mod tests {
     }
 
     #[test]
-    fn claude_md_documents_quick_terminal_as_primary_tab_surface() {
-        let doc = include_str!("../../../CLAUDE.md");
+    fn root_claude_md_documents_acp_boundary_and_quick_terminal_pty_contract() {
+        let doc = include_str!("../../../kit-init/ROOT_CLAUDE.md");
         assert!(
-            doc.contains("Shift+Tab` in `AppView::ScriptList` with non-empty filter text"),
-            "CLAUDE.md must document Shift+Tab entry-intent routing"
+            doc.contains("Plain `Tab` in `AppView::ScriptList` routes through the ACP entry path"),
+            "ROOT_CLAUDE.md must document plain Tab as the ACP entry path"
         );
         assert!(
             doc.contains("`Tab` / `Shift+Tab` inside `AppView::QuickTerminalView`"),
-            "CLAUDE.md must document PTY-owned Tab handling inside QuickTerminalView"
+            "ROOT_CLAUDE.md must document PTY-owned Tab handling inside QuickTerminalView"
         );
         assert!(
-            doc.contains("Legacy compatibility only"),
-            "CLAUDE.md must describe TabAiChat as compatibility-only"
+            !doc.contains("Plain `Tab` opens the harness terminal"),
+            "ROOT_CLAUDE.md must not describe plain Tab as opening the harness terminal"
+        );
+        assert!(
+            !doc.contains("`Shift+Tab` in `AppView::ScriptList` with non-empty filter text"),
+            "ROOT_CLAUDE.md must not describe Shift+Tab in ScriptList as the default quick-submit path"
         );
     }
 
     #[test]
-    fn standard_startup_shift_tab_routes_into_harness_entry_intent() {
+    fn standard_startup_shift_tab_no_longer_routes_into_harness_entry_intent() {
         let source = include_str!("../../app_impl/startup.rs");
         // Split at the test module boundary so assertions only inspect
         // production code, not their own string literals.
@@ -1750,23 +1754,18 @@ mod tests {
             .next()
             .expect("file has content before #[cfg(test)]");
         assert!(
-            production.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
-            "Shift+Tab in ScriptList must route the filter text through the quick-submit planner"
-        );
-        let legacy_call = format!("{}(query, cx)", "dispatch_ai_script_generation_from_query");
-        assert!(
-            !production.contains(&legacy_call),
-            "Standard startup must not keep the legacy Shift+Tab script-generation path"
+            !production.contains("submit_to_current_or_new_tab_ai_harness_from_text"),
+            "Shift+Tab in ScriptList must no longer route the filter text through the quick-submit planner"
         );
     }
 
     fn extract_tab_ai_quick_terminal_section(doc: &str) -> &str {
         let start = doc
-            .find("### Tab AI — Quick Terminal with Flat Context Injection")
+            .find("## Tab AI — Quick Terminal with Flat Context Injection")
             .expect("doc must contain Tab AI quick terminal section");
         let rest = &doc[start..];
         let end = rest[1..]
-            .find("\n### ")
+            .find("\n## ")
             .map(|idx| idx + 1)
             .unwrap_or(rest.len());
         &rest[..end]
@@ -1774,20 +1773,23 @@ mod tests {
 
     #[test]
     fn agent_docs_keep_quick_terminal_section_identical() {
-        const CLAUDE_DOC: &str = include_str!("../../../CLAUDE.md");
-        const AGENTS_DOC: &str = include_str!("../../../AGENTS.md");
+        const CLAUDE_DOC: &str = include_str!("../../../kit-init/ROOT_CLAUDE.md");
+        const AGENTS_DOC: &str = include_str!("../../../kit-init/ROOT_AGENTS.md");
         assert_eq!(
             extract_tab_ai_quick_terminal_section(CLAUDE_DOC),
             extract_tab_ai_quick_terminal_section(AGENTS_DOC),
-            "CLAUDE.md and AGENTS.md must keep the Tab AI quick-terminal section byte-for-byte identical"
+            "ROOT_CLAUDE.md and ROOT_AGENTS.md must keep the Tab AI quick-terminal section byte-for-byte identical"
         );
     }
 
     #[test]
     fn agent_docs_match_actual_lifecycle_and_submit_semantics() {
-        const CLAUDE_DOC: &str = include_str!("../../../CLAUDE.md");
-        const AGENTS_DOC: &str = include_str!("../../../AGENTS.md");
-        for (label, text) in [("CLAUDE.md", CLAUDE_DOC), ("AGENTS.md", AGENTS_DOC)] {
+        const CLAUDE_DOC: &str = include_str!("../../../kit-init/ROOT_CLAUDE.md");
+        const AGENTS_DOC: &str = include_str!("../../../kit-init/ROOT_AGENTS.md");
+        for (label, text) in [
+            ("ROOT_CLAUDE.md", CLAUDE_DOC),
+            ("ROOT_AGENTS.md", AGENTS_DOC),
+        ] {
             let section = extract_tab_ai_quick_terminal_section(text);
             assert!(
                 section.contains("one-shot spawn"),
@@ -1802,20 +1804,26 @@ mod tests {
                 "{label} must not claim first-Tab spawn as the default lifecycle"
             );
             assert!(
-                !section.contains(
-                    "`Submit` — used when a non-empty entry intent is supplied. Appends a sentinel asking the harness to wait"
-                ),
-                "{label} must not claim Submit-with-intent appends the wait sentinel"
+                !section
+                    .contains("`Shift+Tab` in `AppView::ScriptList` with non-empty filter text"),
+                "{label} must not claim Shift+Tab in ScriptList is the default quick-submit entry"
+            );
+            assert!(
+                !section.contains("Plain `Tab` opens the harness terminal"),
+                "{label} must not claim plain Tab opens the harness terminal"
             );
         }
     }
 
     #[test]
     fn agent_docs_describe_quick_terminal_contract() {
-        const CLAUDE_DOC: &str = include_str!("../../../CLAUDE.md");
-        const AGENTS_DOC: &str = include_str!("../../../AGENTS.md");
+        const CLAUDE_DOC: &str = include_str!("../../../kit-init/ROOT_CLAUDE.md");
+        const AGENTS_DOC: &str = include_str!("../../../kit-init/ROOT_AGENTS.md");
 
-        for (label, text) in [("CLAUDE.md", CLAUDE_DOC), ("AGENTS.md", AGENTS_DOC)] {
+        for (label, text) in [
+            ("ROOT_CLAUDE.md", CLAUDE_DOC),
+            ("ROOT_AGENTS.md", AGENTS_DOC),
+        ] {
             assert!(
                 text.contains("QuickTerminalView"),
                 "{label} must mention QuickTerminalView"
@@ -1845,27 +1853,24 @@ mod tests {
                 "{label} must mention PTY escape passthrough"
             );
             assert!(
-                !text.contains(
-                    "AppView::TabAiChat` variant \u{2014} full-view replacement (primary path via `open_tab_ai_chat()`)"
-                ),
-                "{label} must not describe TabAiChat as the default Tab path"
+                text.contains("Agent Chat"),
+                "{label} must mention Agent Chat as the default AI chat surface"
             );
             assert!(
-                !text.contains("inline AI chat opens"),
-                "{label} must not describe inline chat as the default Tab destination"
-            );
-            assert!(
-                !text.contains("dispatch_ai_script_generation_from_query"),
-                "{label} must not advertise the legacy Shift+Tab generation bypass"
+                !text.contains("Plain `Tab` opens the harness terminal"),
+                "{label} must not describe plain Tab as the default quick terminal destination"
             );
         }
     }
 
     #[test]
     fn agent_docs_match_current_context_builder_contract() {
-        const CLAUDE_DOC: &str = include_str!("../../../CLAUDE.md");
-        const AGENTS_DOC: &str = include_str!("../../../AGENTS.md");
-        for (label, text) in [("CLAUDE.md", CLAUDE_DOC), ("AGENTS.md", AGENTS_DOC)] {
+        const CLAUDE_DOC: &str = include_str!("../../../kit-init/ROOT_CLAUDE.md");
+        const AGENTS_DOC: &str = include_str!("../../../kit-init/ROOT_AGENTS.md");
+        for (label, text) in [
+            ("ROOT_CLAUDE.md", CLAUDE_DOC),
+            ("ROOT_AGENTS.md", AGENTS_DOC),
+        ] {
             let section = extract_tab_ai_quick_terminal_section(text);
             assert!(
                 section.contains("`build_tab_ai_context_from()`"),
@@ -2318,9 +2323,9 @@ mod tests {
     fn start_here_includes_fast_pick_examples_with_concrete_paths() {
         let block = build_tab_ai_artifact_authoring_guidance_block();
         assert!(block.contains("Fast Picks"));
-        assert!(block.contains("~/.scriptkit/kit/main/scripts/clipboard-cleanup.ts"));
-        assert!(block.contains("~/.scriptkit/kit/main/scriptlets/snippets.md"));
-        assert!(block.contains("~/.scriptkit/kit/main/agents/review-pr.claude.md"));
+        assert!(block.contains("~/.scriptkit/plugins/main/scripts/clipboard-cleanup.ts"));
+        assert!(block.contains("~/.scriptkit/plugins/main/scriptlets/snippets.md"));
+        assert!(block.contains("~/.scriptkit/plugins/main/agents/review-pr.claude.md"));
     }
 
     // =========================================================================
@@ -2354,11 +2359,11 @@ mod tests {
         .expect("submission");
 
         assert!(submission.contains("--- Script Kit artifact authoring guidance ---"));
-        assert!(submission.contains("~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md"));
+        assert!(submission.contains("~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md"));
         assert!(submission.contains(
-            "bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
+            "bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs"
         ));
-        assert!(submission.contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"));
+        assert!(submission.contains("SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts"));
     }
 
     #[test]
@@ -2472,7 +2477,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn close_tab_ai_harness_terminal_clears_session_and_rewarms() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let start = source
             .find("fn close_tab_ai_harness_terminal_impl(")
             .expect("close_tab_ai_harness_terminal_impl should exist");
@@ -2547,7 +2552,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn explicit_tab_entry_reuses_fresh_prewarm_once_then_forces_fresh() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let start = source
             .find("fn open_tab_ai_harness_terminal_from_request")
             .expect("open_tab_ai_harness_terminal_from_request should exist");
@@ -2587,7 +2592,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn prewarm_tags_cold_start_sessions_as_fresh() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let start = source
             .find("fn warm_tab_ai_harness_silently")
             .expect("warm_tab_ai_harness_silently should exist");
@@ -2636,7 +2641,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn startup_prewarm_delegates_to_silent_helper_with_opt_out() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let start = source
             .find("pub(crate) fn warm_tab_ai_harness_on_startup")
             .expect("warm_tab_ai_harness_on_startup should exist");
@@ -2655,7 +2660,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn silent_prewarm_helper_uses_encapsulated_helpers_not_raw_field_writes() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let start = source
             .find("fn warm_tab_ai_harness_silently")
             .expect("warm_tab_ai_harness_silently should exist");
@@ -2678,7 +2683,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn close_path_tears_down_session_and_reprewarms() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
 
         // The close fn delegates PTY teardown to the extracted helper.
         let close_body = compact(&extract_fn_body(
@@ -2739,7 +2744,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn force_fresh_path_propagates_terminate_failures() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let start = source
             .find("fn ensure_tab_ai_harness_terminal")
             .expect("ensure_tab_ai_harness_terminal should exist");
@@ -2795,7 +2800,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn tab_ai_open_path_reuses_fresh_prewarm_once_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let body = compact(&extract_fn_body(
             source,
             "fn open_tab_ai_harness_terminal_from_request",
@@ -2819,7 +2824,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn force_fresh_path_clears_session_only_after_successful_terminate_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let body = compact(&extract_fn_body(
             source,
             "fn ensure_tab_ai_harness_terminal",
@@ -2843,7 +2848,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn tab_ai_silent_prewarm_is_marked_fresh_on_cold_start_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let body = compact(&extract_fn_body(source, "fn warm_tab_ai_harness_silently"));
         assert!(
             body.contains(&compact("if was_cold_start {")),
@@ -2861,7 +2866,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn tab_ai_close_path_reseeds_future_prewarm_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let body = compact(&extract_fn_body(
             source,
             "fn close_tab_ai_harness_terminal_impl(",
@@ -2886,7 +2891,7 @@ mod cleanup_contract_audits {
     #[test]
     fn tab_ai_open_path_switches_view_before_waiting_for_capture_contract() {
         let body = extract_fn_body(
-            include_str!("../../app_impl/tab_ai_mode.rs"),
+            include_str!("../../app_impl/tab_ai_mode/mod.rs"),
             "fn open_tab_ai_harness_terminal_from_request",
         );
 
@@ -2919,7 +2924,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn post_close_prewarm_uses_dedicated_helper_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let schedule_body = compact(&extract_fn_body(
             source,
             "fn schedule_tab_ai_harness_prewarm",
@@ -2937,7 +2942,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn startup_and_post_close_prewarm_split_opt_out_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
 
         let startup_body = compact(&extract_fn_body(
             source,
@@ -2960,7 +2965,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn silent_prewarm_helper_still_marks_cold_start_as_fresh_contract() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/mod.rs");
         let body = compact(&extract_fn_body(source, "fn warm_tab_ai_harness_silently"));
 
         assert!(
@@ -3073,7 +3078,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn detect_source_type_delegates_to_canonical_function() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/source_classification.rs");
         let body = compact(&extract_fn_body(source, "fn detect_tab_ai_source_type("));
 
         assert!(
@@ -3090,7 +3095,7 @@ mod cleanup_contract_audits {
 
     #[test]
     fn build_apply_back_hint_delegates_to_canonical_function() {
-        let source = include_str!("../../app_impl/tab_ai_mode.rs");
+        let source = include_str!("../../app_impl/tab_ai_mode/source_classification.rs");
         let body = compact(&extract_fn_body(source, "fn build_tab_ai_apply_back_hint("));
 
         assert!(
@@ -3117,7 +3122,7 @@ mod cleanup_contract_audits {
         let markers = super::TabAiVerificationGuidanceMarkers::from_guidance(guidance);
         assert!(
             markers.includes_script_authoring_skill,
-            "cached guidance must reference the script-authoring skill"
+            "cached guidance must reference the new-script skill"
         );
         assert!(
             markers.includes_bun_build_verification,
@@ -3289,7 +3294,7 @@ mod cleanup_contract_audits {
         assert!(
             appendix
                 .guidance
-                .contains("SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts"),
+                .contains("SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts"),
             "guidance must include the SK_VERIFY bun run command"
         );
     }
@@ -3325,16 +3330,16 @@ mod cleanup_contract_audits {
         );
         assert!(
             none_appendix.is_none(),
-            "FileSearch + non-authoring intent must not produce an appendix"
+            "FileSearch + non-script-creation intent must not produce an appendix"
         );
 
-        // Authoring prompt must produce appendix with all verification markers.
+        // Script creation prompts must produce appendix with all verification markers.
         let appendix = super::build_tab_ai_artifact_authoring_appendix_for_prompt(
             "ScriptList",
             Some("clipboard cleanup"),
             super::TabAiHarnessSubmissionMode::Submit,
         )
-        .expect("authoring appendix");
+        .expect("script creation appendix");
         assert!(appendix.markers.includes_script_authoring_skill);
         assert!(appendix.markers.includes_bun_build_verification);
         assert!(appendix.markers.includes_bun_execute_verification);

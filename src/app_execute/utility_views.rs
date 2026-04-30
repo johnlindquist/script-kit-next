@@ -64,11 +64,22 @@ impl ScriptListApp {
         let previous_cached_count = self.cached_file_results.len();
         self.cached_file_results = results;
 
-        let directory_sort_applied = matches!(
-            &self.current_view,
-            AppView::FileSearchView { query, .. }
-                if crate::file_search::parse_directory_path(query).is_some()
-        );
+        let parsed_directory = match &self.current_view {
+            AppView::FileSearchView { query, .. } => {
+                crate::file_search::parse_directory_path(query)
+            }
+            _ => None,
+        };
+
+        if let Some(parsed) = &parsed_directory {
+            self.file_search_current_dir = Some(parsed.directory.clone());
+            self.file_search_current_dir_show_hidden = parsed.show_hidden;
+        } else {
+            self.file_search_current_dir = None;
+            self.file_search_current_dir_show_hidden = false;
+        }
+
+        let directory_sort_applied = parsed_directory.is_some();
 
         if directory_sort_applied {
             self.sort_directory_results();
@@ -213,7 +224,7 @@ impl ScriptListApp {
     /// - Live search as user types (debounced)
     /// - File type icons (folder, document, image, audio, video, code, etc.)
     /// - File size and modified date display
-    /// - Enter: Open file in default application
+    /// - Enter: Open the selected item in the default application
     /// - Cmd+Enter: Reveal in Finder
     pub fn open_file_search(&mut self, query: String, cx: &mut Context<Self>) {
         self.open_file_search_view(query, FileSearchPresentation::Full, cx);
@@ -294,6 +305,42 @@ impl ScriptListApp {
             .file_search_result_at_display_index(display_index)?
             .clone();
         Some((display_index, entry))
+    }
+
+    /// Browse into the currently selected file-search directory.
+    ///
+    /// Returns false when the current selection is empty or is not a directory.
+    pub(crate) fn navigate_file_search_into_selected_directory(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some((_, file)) = self.selected_file_search_result_owned() else {
+            return false;
+        };
+
+        if file.file_type != crate::file_search::FileType::Directory {
+            return false;
+        }
+
+        let next_presentation = match &self.current_view {
+            AppView::FileSearchView { presentation, .. } => *presentation,
+            _ => FileSearchPresentation::Full,
+        };
+        let next_query = format!(
+            "{}/",
+            crate::file_search::shorten_path(&file.path).trim_end_matches('/')
+        );
+
+        tracing::info!(
+            category = "FILE_SEARCH",
+            event = "file_search_tab_enter_directory",
+            path = %file.path,
+            query = %next_query,
+            ?next_presentation,
+            "Tab navigated into selected file-search directory"
+        );
+        self.open_file_search_view_preserving_current_results(next_query, next_presentation, cx);
+        true
     }
 
     /// Cancel any in-flight file-search work and advance the generation
@@ -423,9 +470,27 @@ impl ScriptListApp {
         };
     }
 
-    /// Open the quick terminal
-    pub(crate) fn open_quick_terminal(&mut self, cx: &mut Context<Self>) {
-        tracing::info!(message = %"Opening Quick Terminal");
+    fn shell_quote_path_for_cd(path: &std::path::Path) -> String {
+        let value = path.to_string_lossy();
+        if value
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.' | '_' | '-' | ':' | '=' | '+'))
+        {
+            return value.to_string();
+        }
+        format!("'{}'", value.replace('\'', "'\"'\"'"))
+    }
+
+    /// Open the quick terminal, optionally changing to `cwd` before user input.
+    pub(crate) fn open_quick_terminal(
+        &mut self,
+        cwd: Option<std::path::PathBuf>,
+        cx: &mut Context<Self>,
+    ) {
+        tracing::info!(
+            message = %"Opening Quick Terminal",
+            cwd = cwd.as_ref().map(|path| path.display().to_string()).as_deref()
+        );
 
         // Create submit callback that just closes on exit/escape
         let submit_callback: std::sync::Arc<dyn Fn(String, Option<String>) + Send + Sync> =
@@ -433,32 +498,71 @@ impl ScriptListApp {
                 // Terminal exited - nothing special to do
             });
 
-        // Get the target height for terminal view (subtract footer height)
-        let term_height =
-            window_resize::layout::MAX_HEIGHT - px(window_resize::layout::FOOTER_HEIGHT);
+        // Get the target height for terminal view (clamped to mini main window
+        // height so opening Quick Terminal does not grow the launcher panel).
+        let term_height = window_resize::quick_terminal_content_height();
 
-        // Create terminal without a specific command (opens default shell)
-        match term_prompt::TermPrompt::with_height(
-            "quick-terminal".to_string(),
-            None, // No command - opens default shell
-            self.focus_handle.clone(),
-            submit_callback,
-            std::sync::Arc::clone(&self.theme),
-            std::sync::Arc::new(self.config.clone()),
-            Some(term_height),
-        ) {
+        let warm_terminal = self.take_quick_terminal_warm_pty(cx);
+        let term_prompt_result = if let Some(handle) = warm_terminal {
+            term_prompt::TermPrompt::with_existing_terminal(
+                "quick-terminal".to_string(),
+                handle,
+                self.focus_handle.clone(),
+                submit_callback,
+                std::sync::Arc::clone(&self.theme),
+                std::sync::Arc::new(self.config.clone()),
+                Some(term_height),
+            )
+        } else {
+            // Create terminal without a specific command (opens default shell)
+            term_prompt::TermPrompt::with_height(
+                "quick-terminal".to_string(),
+                None,
+                self.focus_handle.clone(),
+                submit_callback,
+                std::sync::Arc::clone(&self.theme),
+                std::sync::Arc::new(self.config.clone()),
+                Some(term_height),
+            )
+        };
+
+        match term_prompt_result {
             Ok(term_prompt) => {
                 let entity = cx.new(|_| term_prompt);
+                if let Some(cwd) = cwd.as_ref() {
+                    let cd_command = format!("cd {}\r", Self::shell_quote_path_for_cd(cwd));
+                    entity.update(cx, |term, _cx| {
+                        if !term.terminal.is_running() {
+                            tracing::warn!(
+                                event = "quick_terminal_cwd_pty_dead",
+                                cwd = %cwd.display(),
+                                "Quick Terminal opened with cwd but PTY is not running"
+                            );
+                            return;
+                        }
+                        match term.terminal.input(cd_command.as_bytes()) {
+                            Ok(()) => tracing::info!(
+                                event = "quick_terminal_cwd_sent",
+                                cwd = %cwd.display(),
+                                "Quick Terminal cwd command written to PTY"
+                            ),
+                            Err(error) => tracing::warn!(
+                                event = "quick_terminal_cwd_write_failed",
+                                cwd = %cwd.display(),
+                                error = %error,
+                                "Failed to write Quick Terminal cwd command"
+                            ),
+                        }
+                    });
+                }
                 self.current_view = AppView::QuickTerminalView { entity };
                 self.focused_input = FocusedInput::None;
                 self.pending_focus = Some(FocusTarget::TermPrompt);
-                // DEFERRED RESIZE: Avoid RefCell borrow error by deferring window resize
-                // to after the current GPUI update cycle completes. Synchronous Cocoa
-                // setFrame: calls during render can trigger events that re-borrow GPUI state.
-                cx.spawn(async move |_this, _cx| {
-                    resize_to_view_sync(ViewType::TermPrompt, 0);
-                })
-                .detach();
+                self.warm_quick_terminal_pty(cx);
+                // Intentionally NOT calling resize_to_view_sync(TermPrompt) here — Quick
+                // Terminal must keep the main window at its mini height instead of
+                // expanding to layout::MAX_HEIGHT. SDK-spawned terminals
+                // (open_terminal_with_command) still resize.
                 cx.notify();
             }
             Err(e) => {

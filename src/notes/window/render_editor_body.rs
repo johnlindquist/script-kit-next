@@ -90,12 +90,6 @@ impl NotesApp {
                                     .text_xs()
                                     .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
                                     .child("⌘⇧N  from clipboard"),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(cx.theme().muted_foreground.opacity(OPACITY_MUTED))
-                                    .child("⌘/  shortcuts"),
                             ),
                     ),
                 )

@@ -374,9 +374,9 @@ fn test_chat_id_equality() {
 
 #[test]
 fn test_setup_button_focus_index_wraps() {
-    assert_eq!(AiApp::next_setup_button_focus_index(0, 1), 1);
+    assert_eq!(AiApp::next_setup_button_focus_index(0, 1), 0);
+    assert_eq!(AiApp::next_setup_button_focus_index(0, -1), 0);
     assert_eq!(AiApp::next_setup_button_focus_index(1, 1), 0);
-    assert_eq!(AiApp::next_setup_button_focus_index(0, -1), 1);
     assert_eq!(AiApp::next_setup_button_focus_index(1, -1), 0);
 }
 
@@ -434,58 +434,43 @@ fn test_setup_mode_detection() {
 /// Test that setup button navigation covers all directions
 #[test]
 fn test_setup_button_navigation_directions() {
-    // Test Tab (forward)
+    // Single setup action: navigation keeps focus on the catalog button.
     assert_eq!(
         AiApp::next_setup_button_focus_index(0, 1),
-        1,
-        "Tab from 0 -> 1"
-    );
-    assert_eq!(
-        AiApp::next_setup_button_focus_index(1, 1),
         0,
-        "Tab from 1 -> 0 (wrap)"
+        "Tab keeps focus on 0"
     );
 
-    // Test Shift+Tab / Up (backward)
     assert_eq!(
         AiApp::next_setup_button_focus_index(0, -1),
-        1,
-        "Shift+Tab from 0 -> 1 (wrap)"
-    );
-    assert_eq!(
-        AiApp::next_setup_button_focus_index(1, -1),
         0,
-        "Shift+Tab from 1 -> 0"
+        "Shift+Tab keeps focus on 0"
     );
 
     // Test multiple steps
     let mut index = 0usize;
-    index = AiApp::next_setup_button_focus_index(index, 1); // 0 -> 1
-    index = AiApp::next_setup_button_focus_index(index, 1); // 1 -> 0
-    index = AiApp::next_setup_button_focus_index(index, 1); // 0 -> 1
-    assert_eq!(index, 1, "Multiple forward steps should cycle correctly");
+    index = AiApp::next_setup_button_focus_index(index, 1);
+    index = AiApp::next_setup_button_focus_index(index, 1);
+    index = AiApp::next_setup_button_focus_index(index, 1);
+    assert_eq!(index, 0, "Multiple forward steps should keep focus");
 
     let mut index = 0usize;
-    index = AiApp::next_setup_button_focus_index(index, -1); // 0 -> 1
-    index = AiApp::next_setup_button_focus_index(index, -1); // 1 -> 0
-    index = AiApp::next_setup_button_focus_index(index, -1); // 0 -> 1
-    assert_eq!(index, 1, "Multiple backward steps should cycle correctly");
+    index = AiApp::next_setup_button_focus_index(index, -1);
+    index = AiApp::next_setup_button_focus_index(index, -1);
+    index = AiApp::next_setup_button_focus_index(index, -1);
+    assert_eq!(index, 0, "Multiple backward steps should keep focus");
 }
 
 /// Test SETUP_BUTTON_COUNT constant is correct
 #[test]
 fn test_setup_button_count() {
-    // We have two buttons: "Configure Vercel AI Gateway" (index 0) and "Connect to Claude Code" (index 1)
     assert_eq!(
         AiApp::SETUP_BUTTON_COUNT,
-        2,
-        "Should have exactly 2 setup buttons"
+        1,
+        "Should have exactly 1 setup button"
     );
 
-    // Index 0 should map to "Configure Vercel AI Gateway"
-    // Index 1 should map to "Connect to Claude Code"
-    // These are documented in the code: setup_button_focus_index: usize,
-    // 0 = Configure Vercel AI Gateway, 1 = Connect to Claude Code
+    // Index 0 maps to "Open Agent Catalog".
 }
 
 #[test]
@@ -2151,6 +2136,9 @@ fn test_palette_slash_mention_produce_identical_parts() {
         build_picker_items,
         types::{ContextPickerItemKind, ContextPickerTrigger},
     };
+
+    let _guard = crate::test_utils::lock_provider_json_test();
+    crate::mcp_resources::clear_provider_json_slots();
 
     // Provider-gated items are hidden when no data exists; publish test data
     // so they appear in the picker for this parity test.

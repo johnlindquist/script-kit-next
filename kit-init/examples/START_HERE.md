@@ -1,12 +1,12 @@
 # Script Kit One-Shot Starters
 
-> Canonical one-shot authoring guide for harness mode.
+> Canonical one-shot creation guide for harness mode.
 > `ROOT_CLAUDE.md`, `ROOT_AGENTS.md`, and harness artifact guidance should route here instead of duplicating starter content.
 
 Use this file when the fastest harness answer is:
 1. pick exactly one artifact
 2. copy exactly one starter
-3. save it under `kit/main/`
+3. save it under `plugins/main/`
 4. stop at the smallest working version
 
 ## Choose Exactly One Artifact
@@ -16,9 +16,9 @@ Use this file when the fastest harness answer is:
 Use a script when the request needs Script Kit UI, Bun APIs, file work, HTTP work, or multi-step logic.
 
 Copy from: `scripts/hello-world.ts`
-Write to: `~/.scriptkit/kit/main/scripts/<name>.ts`
+Write to: `~/.scriptkit/plugins/main/scripts/<name>.ts`
 
-Then read `~/.scriptkit/kit/authoring/skills/script-authoring/SKILL.md`. For scripts, writing the file is not enough. You must syntax-check and run the script in the current Claude Code terminal before you report success.
+Then read `~/.scriptkit/plugins/scriptkit/skills/new-script/SKILL.md`. For scripts, writing the file is not enough. You must syntax-check and run the script in the current Claude Code terminal before you report success.
 
 Good matches:
 - `make a clipboard cleanup command`
@@ -30,7 +30,7 @@ Good matches:
 Use a bundle when the request is a snippet, text expansion, quick shell command, or a small grouped helper set.
 
 Copy from: `scriptlets/starter.md`
-Write to: `~/.scriptkit/kit/main/scriptlets/<name>.md`
+Write to: `~/.scriptkit/plugins/main/scriptlets/<name>.md`
 
 Good matches:
 - `make a bundle of text snippets`
@@ -39,14 +39,14 @@ Good matches:
 
 ### Skill (preferred reusable AI unit)
 
-Use a skill when the request is reusable AI instructions, a reviewer, a planner, or any model-backed automation that should appear in the main menu and open ACP Chat.
+Use a skill when the request is reusable AI instructions, a reviewer, a planner, or any model-backed automation that should appear in the main menu and open Agent Chat.
 
 Copy from a nearby example under `skills/`:
 - `skills/review-pr/`
 - `skills/plan-feature/`
 - `skills/explain-code/`
 
-Write to: `~/.scriptkit/kit/main/skills/<name>/SKILL.md`
+Write to: `~/.scriptkit/plugins/main/skills/<name>/SKILL.md`
 
 Good matches:
 - `make a skill for reviewing PRs`
@@ -60,7 +60,7 @@ Skills are the preferred way to package reusable AI behavior. Plugins are the pa
 Use an agent only when you need a specific backend suffix or legacy mdflow features. For new reusable AI work, prefer creating a skill instead.
 
 Copy from: `agents/review-pr.claude.md`
-Write to: `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
+Write to: `~/.scriptkit/plugins/main/agents/<name>.<backend>.md`
 
 Good matches:
 - `make an agent that reviews staged changes using a specific CLI backend`
@@ -85,21 +85,21 @@ Pick **mdflow agent** only if it requires a specific backend suffix or legacy md
 
 ## Fast Picks
 
-- `make a clipboard cleanup command` → `~/.scriptkit/kit/main/scripts/clipboard-cleanup.ts`
-- `make a bundle of text snippets` → `~/.scriptkit/kit/main/scriptlets/snippets.md`
-- `make a skill for reviewing PRs` → `~/.scriptkit/kit/main/skills/review-pr/SKILL.md`
-- `make an agent for a specific CLI backend` → `~/.scriptkit/kit/main/agents/review-pr.claude.md` (compatibility)
+- `make a clipboard cleanup command` → `~/.scriptkit/plugins/main/scripts/clipboard-cleanup.ts`
+- `make a bundle of text snippets` → `~/.scriptkit/plugins/main/scriptlets/snippets.md`
+- `make a skill for reviewing PRs` → `~/.scriptkit/plugins/main/skills/review-pr/SKILL.md`
+- `make an agent for a specific CLI backend` → `~/.scriptkit/plugins/main/agents/review-pr.claude.md` (compatibility)
 
 ## Mandatory Script Verification
 
 For every script created from the harness:
 
 ```bash
-bun build ~/.scriptkit/kit/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs
+bun build ~/.scriptkit/plugins/main/scripts/<name>.ts --target=bun --outfile ~/.scriptkit/tmp/test-scripts/<name>.verify.mjs
 ```
 
 ```bash
-SK_VERIFY=1 bun ~/.scriptkit/kit/main/scripts/<name>.ts
+SK_VERIFY=1 bun ~/.scriptkit/plugins/main/scripts/<name>.ts
 ```
 
 If the script normally needs UI or typed input, add an `SK_VERIFY=1` branch first so the Bun execution step is non-interactive. If either command fails, fix the script and rerun both commands. Do not report success until both commands pass and the observed output matches the request.
@@ -131,15 +131,15 @@ const url3 = await arg("URL 3");
 ## Copy Commands
 
 ```bash
-cp ~/.scriptkit/kit/examples/scripts/hello-world.ts ~/.scriptkit/kit/main/scripts/my-script.ts
-cp ~/.scriptkit/kit/examples/scriptlets/starter.md ~/.scriptkit/kit/main/scriptlets/my-bundle.md
-mkdir -p ~/.scriptkit/kit/main/skills && cp -R ~/.scriptkit/kit/examples/skills/review-pr ~/.scriptkit/kit/main/skills/review-pr
-cp ~/.scriptkit/kit/examples/agents/review-pr.claude.md ~/.scriptkit/kit/main/agents/my-agent.claude.md  # compatibility
+cp ~/.scriptkit/plugins/examples/scripts/hello-world.ts ~/.scriptkit/plugins/main/scripts/my-script.ts
+cp ~/.scriptkit/plugins/examples/scriptlets/starter.md ~/.scriptkit/plugins/main/scriptlets/my-bundle.md
+mkdir -p ~/.scriptkit/plugins/main/skills && cp -R ~/.scriptkit/plugins/examples/skills/review-pr ~/.scriptkit/plugins/main/skills/review-pr
+cp ~/.scriptkit/plugins/examples/agents/review-pr.claude.md ~/.scriptkit/plugins/main/agents/my-agent.claude.md  # compatibility
 ```
 
 ## Smallest Working Starters
 
-### Script → `~/.scriptkit/kit/main/scripts/<name>.ts`
+### Script → `~/.scriptkit/plugins/main/scripts/<name>.ts`
 
 ```typescript
 import "@scriptkit/sdk";
@@ -164,7 +164,7 @@ if (isVerify) {
 }
 ```
 
-### Scriptlet bundle → `~/.scriptkit/kit/main/scriptlets/<name>.md`
+### Scriptlet bundle → `~/.scriptkit/plugins/main/scriptlets/<name>.md`
 
 ~~~md
 ---
@@ -195,11 +195,13 @@ import "@scriptkit/sdk";
 
 const note = await arg("Note");
 await Bun.write(home("quick-note.txt"), note);
-await notify("Saved");
+await arg("Saved quick note", [
+  { name: "Done", description: home("quick-note.txt"), value: "done" },
+]);
 ```
 ~~~
 
-### Skill (preferred) → `~/.scriptkit/kit/main/skills/<name>/SKILL.md`
+### Skill (preferred) → `~/.scriptkit/plugins/main/skills/<name>/SKILL.md`
 
 ```markdown
 ---
@@ -217,7 +219,7 @@ Return:
 3. tests to add
 ```
 
-### mdflow agent (compatibility) → `~/.scriptkit/kit/main/agents/<name>.<backend>.md`
+### mdflow agent (compatibility) → `~/.scriptkit/plugins/main/agents/<name>.<backend>.md`
 
 ```markdown
 ---
@@ -238,7 +240,7 @@ Return:
 ## Rules
 
 - Pick the smallest artifact that fits.
-- Save only under `~/.scriptkit/kit/main/`.
+- Save only under `~/.scriptkit/plugins/main/`.
 - For scripts, start with `import "@scriptkit/sdk";`.
 - Prefer `home(...)` for user-relative paths instead of `env.HOME`.
 - For scriptlet bundles, prefer `metadata` code fences.

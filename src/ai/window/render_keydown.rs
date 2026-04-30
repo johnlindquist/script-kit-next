@@ -102,10 +102,8 @@ impl AiApp {
                     return;
                 }
                 k if is_key_enter(k) => {
-                    match self.setup_button_focus_index {
-                        0 => self.show_api_key_input(window, cx),
-                        1 => self.enable_claude_code(window, cx),
-                        _ => {}
+                    if self.setup_button_focus_index == 0 {
+                        self.open_acp_agents_catalog(window, cx);
                     }
                     window.activate_window();
                     cx.stop_propagation();

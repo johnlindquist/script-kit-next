@@ -902,7 +902,7 @@ fn with_deferred_capture_fields_preserves_existing_blob_data() {
 /// stronger Script Kit origin is present.
 #[test]
 fn source_type_detection_delegates_to_canonical_prompt_detector() {
-    let source = include_str!("../src/app_impl/tab_ai_mode.rs");
+    let source = include_str!("../src/app_impl/tab_ai_mode/source_classification.rs");
 
     // Find the detect function body
     let fn_start = source
@@ -1143,7 +1143,7 @@ fn apply_back_route_running_command_carries_focused_target() {
 #[test]
 fn production_route_carries_focused_target_from_resolved_context() {
     let source =
-        std::fs::read_to_string("src/app_impl/tab_ai_mode.rs").expect("read tab_ai_mode.rs");
+        std::fs::read_to_string("src/app_impl/tab_ai_mode/mod.rs").expect("read tab_ai_mode.rs");
 
     // Find the route construction site
     let route_site = source
@@ -1363,7 +1363,7 @@ fn screenshot_retention_cap_is_ten() {
 // File search AI intent structure regression tests
 // =========================================================================
 
-const TAB_AI_MODE_FOR_CONTEXT: &str = include_str!("../src/app_impl/tab_ai_mode.rs");
+const TAB_AI_MODE_FOR_CONTEXT: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 
 #[test]
 fn file_search_entry_intent_distinguishes_file_from_directory() {

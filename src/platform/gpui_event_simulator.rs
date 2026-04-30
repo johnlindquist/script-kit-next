@@ -212,20 +212,15 @@ pub(crate) struct GpuiEventDispatchResult {
     pub resolved_window_id: Option<String>,
 }
 
-/// Dispatch a simulated event through an [`AnyWindowHandle`] via the real GPUI
-/// input pipeline and return the result.
-fn dispatch_with_any_handle(
-    handle: gpui::AnyWindowHandle,
-    request_id: &str,
-    resolved_id: &str,
-    event_type: &str,
-    event: &crate::protocol::SimulatedGpuiEvent,
+/// Apply a [`SimulatedGpuiEvent`] to a live GPUI [`gpui::Window`] via the real input pipeline.
+fn apply_simulated_event(
+    window: &mut gpui::Window,
     cx: &mut gpui::App,
-    dispatch_path: &str,
-) -> GpuiEventDispatchResult {
+    event: &crate::protocol::SimulatedGpuiEvent,
+) {
     use crate::protocol::SimulatedGpuiEvent;
 
-    let dispatch_result = handle.update(cx, |_root, window, cx| match event {
+    match event {
         SimulatedGpuiEvent::KeyDown {
             key,
             modifiers,
@@ -270,6 +265,22 @@ fn dispatch_with_any_handle(
                 cx,
             );
         }
+    }
+}
+
+/// Dispatch a simulated event through an [`AnyWindowHandle`] via the real GPUI
+/// input pipeline and return the result.
+fn dispatch_with_any_handle(
+    handle: gpui::AnyWindowHandle,
+    request_id: &str,
+    resolved_id: &str,
+    event_type: &str,
+    event: &crate::protocol::SimulatedGpuiEvent,
+    cx: &mut gpui::App,
+    dispatch_path: &str,
+) -> GpuiEventDispatchResult {
+    let dispatch_result = handle.update(cx, |_root, window, cx| {
+        apply_simulated_event(window, cx, event);
     });
 
     match dispatch_result {
@@ -417,6 +428,90 @@ pub(crate) fn dispatch_gpui_event(
             cx,
             "exact_handle",
         );
+    }
+
+    // 2b. Main-window re-acquisition: the runtime handle registry only gets
+    //     upserted on show/hide transitions, and `handle.update()` returns
+    //     `Err` when the target is already on GPUI's update stack (reentrancy
+    //     when stdin commands run inside `window_for_stdin.update`). For the
+    //     Main window we always have a durable handle in the `MAIN_WINDOW_HANDLE`
+    //     global, so re-acquire it and dispatch — deferring via `cx.spawn`
+    //     when we detect reentrancy so the outer update can finish first.
+    if matches!(resolved.kind, crate::protocol::AutomationWindowKind::Main) {
+        if let Some(handle) = crate::get_main_window_handle() {
+            crate::windows::upsert_runtime_window_handle(resolved.id.clone(), handle);
+            match handle.update(cx, |_, _, _| {}) {
+                Ok(_) => {
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        window_id = %resolved.id,
+                        "gpui_event_simulation.main_reacquired_global"
+                    );
+                    return dispatch_with_any_handle(
+                        handle,
+                        request_id,
+                        &resolved.id,
+                        event_type,
+                        &event,
+                        cx,
+                        "main_reacquire_global",
+                    );
+                }
+                Err(_) => {
+                    // Reentrancy: we're inside a nested window update for Main
+                    // (stdin dispatcher holds `window_for_stdin.update`). Defer
+                    // so the outer update finishes, then dispatch against the
+                    // live handle. Report synchronous success with path
+                    // `main_deferred` so the caller can proceed.
+                    let request_id_owned = request_id.to_string();
+                    let resolved_id_owned = resolved.id.clone();
+                    let event_type_owned = event_type.to_string();
+                    let event_for_spawn = event.clone();
+                    cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+                        use gpui::AppContext;
+                        let update_result = cx.update_window(handle, |_root, window, cx| {
+                            apply_simulated_event(window, cx, &event_for_spawn);
+                        });
+                        match update_result {
+                            Ok(()) => {
+                                tracing::info!(
+                                    target: "script_kit::automation",
+                                    request_id = %request_id_owned,
+                                    window_id = %resolved_id_owned,
+                                    event_type = %event_type_owned,
+                                    "gpui_event_simulation.main_deferred_complete"
+                                );
+                            }
+                            Err(err) => {
+                                tracing::warn!(
+                                    target: "script_kit::automation",
+                                    request_id = %request_id_owned,
+                                    window_id = %resolved_id_owned,
+                                    error = %err,
+                                    "gpui_event_simulation.main_deferred_failed"
+                                );
+                            }
+                        }
+                    })
+                    .detach();
+
+                    tracing::info!(
+                        target: "script_kit::automation",
+                        request_id = %request_id,
+                        window_id = %resolved.id,
+                        "gpui_event_simulation.main_deferred_scheduled"
+                    );
+                    return GpuiEventDispatchResult {
+                        success: true,
+                        error_code: None,
+                        error: None,
+                        dispatch_path: Some("main_deferred".to_string()),
+                        resolved_window_id: Some(resolved.id.clone()),
+                    };
+                }
+            }
+        }
     }
 
     // 3. No exact handle — fall back to WindowRole-based dispatch.

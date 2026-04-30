@@ -94,6 +94,7 @@ impl ScriptListApp {
                         scripts::SearchResult::App(_) => None,
                         scripts::SearchResult::Window(_) => None,
                         scripts::SearchResult::Fallback(_) => None,
+                        scripts::SearchResult::ScriptIssue(_) => None,
                     };
 
                     if let Some(path) = path_opt {
@@ -276,7 +277,7 @@ impl ScriptListApp {
 
                 // Get editor from config
                 let editor = self.config.get_editor();
-                let config_dir = shellexpand::tilde("~/.scriptkit/kit").to_string();
+                let config_dir = shellexpand::tilde("~/.scriptkit").to_string();
                 let config_file = format!("{}/config.ts", config_dir);
 
                 let editor_for_hud = editor.clone();

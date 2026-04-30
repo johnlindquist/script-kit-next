@@ -1160,7 +1160,7 @@ mod command_bar_config_tests {
             SectionStyle::Headers
         ));
         assert!(config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
 
     #[test]
@@ -1175,7 +1175,7 @@ mod command_bar_config_tests {
             SectionStyle::Headers
         ));
         assert!(!config.dialog_config.show_icons);
-        assert!(config.dialog_config.show_footer);
+        assert!(!config.dialog_config.show_footer);
     }
 
     #[test]
@@ -1188,24 +1188,24 @@ mod command_bar_config_tests {
     }
 
     #[test]
-    fn command_bar_presets_keep_footer_enabled() {
+    fn command_bar_presets_keep_action_dialog_footer_disabled() {
         assert!(
-            CommandBarConfig::main_menu_style()
+            !CommandBarConfig::main_menu_style()
                 .dialog_config
                 .show_footer,
-            "main_menu_style must keep the shared footer visible"
+            "main_menu_style must keep action dialogs footerless"
         );
         assert!(
-            CommandBarConfig::no_search().dialog_config.show_footer,
-            "no_search must keep the shared footer visible"
+            !CommandBarConfig::no_search().dialog_config.show_footer,
+            "no_search must keep action dialogs footerless"
         );
         assert!(
-            CommandBarConfig::ai_style().dialog_config.show_footer,
-            "ai_style must keep the shared footer visible"
+            !CommandBarConfig::ai_style().dialog_config.show_footer,
+            "ai_style must keep action dialogs footerless"
         );
         assert!(
-            CommandBarConfig::notes_style().dialog_config.show_footer,
-            "notes_style must keep the shared footer visible"
+            !CommandBarConfig::notes_style().dialog_config.show_footer,
+            "notes_style must keep action dialogs footerless"
         );
     }
 

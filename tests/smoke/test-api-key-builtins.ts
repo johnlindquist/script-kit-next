@@ -1,4 +1,4 @@
-// Test that API key configuration built-in commands appear in search
+// Test that the settings hub remains searchable after API key commands moved out of built-ins
 import '../../scripts/kit-sdk';
 
 // Helper to output test results
@@ -6,20 +6,20 @@ function log(test: string, status: string, extra: Record<string, unknown> = {}) 
   console.log(JSON.stringify({ test, status, timestamp: new Date().toISOString(), ...extra }));
 }
 
-const testName = "api-key-builtins-visible";
+const testName = "settings-builtins-visible";
 log(testName, "running");
 
 try {
-  // Search for "vercel" - should show the Configure Vercel AI Gateway command
+  // Search for "theme" - should show the Theme Designer command
   const result = await arg({
-    placeholder: "Search for vercel...",
-    input: "vercel",
+    placeholder: "Search for theme...",
+    input: "theme",
     strict: false,
     // Timeout after 2 seconds if no interaction
     onInit: async () => {
       await new Promise(r => setTimeout(r, 2000));
       // Auto-submit with current filter to see what matches
-      submit("vercel");
+      submit("theme");
     }
   }, [
     // Empty choices - we're testing built-in commands appear

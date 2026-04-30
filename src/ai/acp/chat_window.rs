@@ -12,6 +12,7 @@ use gpui::{
 
 use super::thread::AcpThread;
 use super::view::AcpChatView;
+use crate::ai::window::context_picker::types::PortalKind;
 
 /// State for the detached ACP Chat window.
 struct ChatWindowState {
@@ -106,10 +107,8 @@ pub fn open_chat_window(cx: &mut App) -> anyhow::Result<()> {
         slot.lock().ok().and_then(|g| g.as_ref().map(|s| s.handle))
     };
 
-    if let Some(handle) = existing {
-        let _ = handle.update(cx, |_root, window, _cx| {
-            window.activate_window();
-        });
+    if existing.is_some() {
+        activate_chat_window(cx);
         return Ok(());
     }
 
@@ -179,21 +178,30 @@ pub fn open_chat_window_with_thread(
     let view_entity_slot: std::sync::Arc<Mutex<Option<WeakEntity<AcpChatView>>>> =
         std::sync::Arc::new(Mutex::new(None));
     let view_entity_slot_inner = view_entity_slot.clone();
+    let view_entity_slot_on_close = view_entity_slot.clone();
 
     let handle = cx.open_window(chat_window_options(inherit_bounds), |window, cx| {
         // Save bounds and clear handle when window closes
-        window.on_window_should_close(cx, |window, _cx| {
+        window.on_window_should_close(cx, move |window, cx| {
             let wb = window.window_bounds();
             crate::window_state::save_window_from_gpui(
                 crate::window_state::WindowRole::AcpChat,
                 wb,
             );
+            if let Ok(slot) = view_entity_slot_on_close.lock() {
+                if let Some(entity) = slot.as_ref().and_then(|weak| weak.upgrade()) {
+                    entity.update(cx, |view, cx| {
+                        view.prepare_for_host_hide(cx);
+                    });
+                }
+            }
             // Clear the global handle and remove the runtime automation handle
             let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
             if let Ok(mut g) = slot.lock() {
                 if let Some(state) = g.take() {
                     if let Some(ref id) = state.automation_id {
                         crate::windows::remove_runtime_window_handle(id);
+                        crate::windows::remove_automation_window(id);
                     }
                 }
             }
@@ -202,6 +210,7 @@ pub fn open_chat_window_with_thread(
 
         let view = cx.new(|cx| AcpChatView::new(thread, cx));
         view.update(cx, |view, _cx| {
+            view.set_allowed_portal_kinds(vec![PortalKind::AcpHistory]);
             view.set_on_toggle_actions(move |_window, cx| {
                 toggle_detached_actions(cx);
             });
@@ -215,6 +224,29 @@ pub fn open_chat_window_with_thread(
                     let display_id = window.display(cx).map(|display| display.id());
                     view.open_history_popup_from_host(parent_handle, parent_bounds, display_id, cx);
                 });
+            });
+            view.set_on_open_portal(move |kind, cx| match kind {
+                PortalKind::AcpHistory => {
+                    let opened = open_history_portal_in_detached_chat_window(cx);
+                    if !opened {
+                        let _ = cancel_portal_session_in_detached_chat_window(kind, cx);
+                    }
+                    tracing::info!(
+                        target: "script_kit::acp",
+                        event = "detached_acp_portal_requested",
+                        kind = "AcpHistory",
+                        opened,
+                    );
+                }
+                other => {
+                    tracing::info!(
+                        target: "script_kit::acp",
+                        event = "detached_acp_portal_requested",
+                        kind = ?other,
+                        opened = false,
+                        reason = "unsupported_in_detached_host",
+                    );
+                }
             });
         });
         // Capture weak reference to the view entity for action dispatch.
@@ -244,6 +276,29 @@ pub fn open_chat_window_with_thread(
     // Register the exact runtime handle so simulateGpuiEvent can target
     // this window by its automation ID without collapsing to WindowRole.
     crate::windows::upsert_runtime_window_handle(&automation_id, any_handle);
+
+    // Also register the window in the automation metadata registry so that
+    // `listAutomationWindows` and target-resolution by kind=acpDetached can
+    // find it. Runtime handle registry and metadata registry are separate —
+    // a missing metadata entry makes the window invisible to discovery even
+    // when the runtime handle exists.
+    let detached_bounds = inherit_bounds.map(|b| crate::protocol::AutomationWindowBounds {
+        x: f32::from(b.origin.x) as f64,
+        y: f32::from(b.origin.y) as f64,
+        width: f32::from(b.size.width) as f64,
+        height: f32::from(b.size.height) as f64,
+    });
+    crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+        id: automation_id.clone(),
+        kind: crate::protocol::AutomationWindowKind::AcpDetached,
+        title: Some("Script Kit".to_string()),
+        focused: true,
+        visible: true,
+        semantic_surface: Some("acpChat".to_string()),
+        bounds: detached_bounds,
+        parent_window_id: None,
+        parent_kind: None,
+    });
 
     // Activate the detached window so it gets keyboard focus immediately.
     activate_chat_window(cx);
@@ -301,6 +356,64 @@ fn open_picker_in_detached_chat_window(
         .is_ok()
 }
 
+fn open_history_portal_in_detached_chat_window(cx: &mut App) -> bool {
+    let (handle, entity) = {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        let guard = match slot.lock() {
+            Ok(guard) => guard,
+            Err(error) => error.into_inner(),
+        };
+        let Some(state) = guard.as_ref() else {
+            return false;
+        };
+        let Some(entity) = state.view_entity.as_ref().and_then(|weak| weak.upgrade()) else {
+            return false;
+        };
+        (state.handle, entity)
+    };
+
+    handle
+        .update(cx, |_root, window, cx| {
+            window.activate_window();
+            let parent_handle = window.window_handle();
+            let parent_bounds = window.bounds();
+            let display_id = window.display(cx).map(|display| display.id());
+            entity.update(cx, |view, cx| {
+                let query = view.take_pending_history_portal_query().unwrap_or_default();
+                tracing::info!(
+                    target: "script_kit::acp",
+                    event = "detached_acp_history_portal_query_seeded_from_contract",
+                    query = %query,
+                );
+                let hits = crate::ai::acp::history::search_history(&query, 12);
+                view.open_history_portal_with_entries(query, hits, cx);
+                view.open_history_popup_from_host(parent_handle, parent_bounds, display_id, cx);
+            });
+            let focus_handle = entity.read(cx).focus_handle(cx);
+            window.focus(&focus_handle, cx);
+        })
+        .is_ok()
+}
+
+fn cancel_portal_session_in_detached_chat_window(kind: PortalKind, cx: &mut App) -> bool {
+    let entity = {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        let guard = match slot.lock() {
+            Ok(guard) => guard,
+            Err(error) => error.into_inner(),
+        };
+        let Some(state) = guard.as_ref() else {
+            return false;
+        };
+        let Some(entity) = state.view_entity.as_ref().and_then(|weak| weak.upgrade()) else {
+            return false;
+        };
+        entity
+    };
+
+    entity.update(cx, |view, cx| view.cancel_pending_portal_session(kind, cx))
+}
+
 pub fn open_detached_slash_picker(cx: &mut App) -> bool {
     open_picker_in_detached_chat_window(cx, |view, window, cx| {
         view.open_slash_picker_in_window(window, cx);
@@ -313,6 +426,108 @@ pub fn open_detached_mention_picker(cx: &mut App) -> bool {
     })
 }
 
+pub fn submit_reused_entry_intent_in_detached_chat(
+    intent: String,
+    cx: &mut App,
+) -> anyhow::Result<bool> {
+    let state = {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+        guard.as_ref().map(|state| {
+            (
+                state.handle,
+                state.view_entity.as_ref().and_then(|weak| weak.upgrade()),
+            )
+        })
+    };
+
+    let Some((handle, Some(view_entity))) = state else {
+        return Ok(false);
+    };
+
+    let input_len = intent.len();
+    let reused = handle
+        .update(cx, |_root, window, cx| {
+            window.activate_window();
+            let reused = view_entity.update(cx, |chat, cx| {
+                if chat.is_setup_mode() {
+                    return false;
+                }
+
+                chat.submit_reused_entry_intent(intent.clone(), cx);
+                true
+            });
+            let focus_handle = view_entity.read(cx).focus_handle(cx);
+            window.focus(&focus_handle, cx);
+            Ok::<bool, anyhow::Error>(reused)
+        })
+        .map_err(|error| anyhow::anyhow!(error.to_string()))??;
+
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "tab_ai_reused_detached_window_with_entry_intent",
+        reused,
+        input_len,
+    );
+    Ok(reused)
+}
+
+pub fn submit_reused_entry_intent_with_host_context_in_detached_chat(
+    intent: String,
+    parts: Vec<crate::ai::message_parts::AiContextPart>,
+    source: &'static str,
+    cx: &mut App,
+) -> anyhow::Result<bool> {
+    let state = {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        let guard = slot.lock().unwrap_or_else(|e| e.into_inner());
+        guard.as_ref().map(|state| {
+            (
+                state.handle,
+                state.view_entity.as_ref().and_then(|weak| weak.upgrade()),
+            )
+        })
+    };
+
+    let Some((handle, Some(view_entity))) = state else {
+        return Ok(false);
+    };
+
+    let input_len = intent.len();
+    let part_count = parts.len();
+    let reused = handle
+        .update(cx, |_root, window, cx| {
+            window.activate_window();
+            let reused = view_entity.update(cx, |chat, cx| {
+                if chat.is_setup_mode() {
+                    return Ok(false);
+                }
+
+                chat.submit_reused_entry_intent_with_host_context(
+                    intent.clone(),
+                    parts.clone(),
+                    source,
+                    cx,
+                )?;
+                Ok::<bool, String>(true)
+            });
+            let focus_handle = view_entity.read(cx).focus_handle(cx);
+            window.focus(&focus_handle, cx);
+            reused.map_err(anyhow::Error::msg)
+        })
+        .map_err(|error| anyhow::anyhow!(error.to_string()))??;
+
+    tracing::info!(
+        target: "script_kit::tab_ai",
+        event = "tab_ai_reused_detached_window_with_host_context_entry_intent",
+        reused,
+        source,
+        input_len,
+        part_count,
+    );
+    Ok(reused)
+}
+
 /// Close the detached ACP Chat window.
 #[allow(dead_code)]
 pub fn close_chat_window(cx: &mut App) {
@@ -322,9 +537,25 @@ pub fn close_chat_window(cx: &mut App) {
     };
 
     if let Some(state) = existing {
-        // Remove the exact runtime handle before closing the window.
+        if let Some(entity) = state.view_entity.as_ref().and_then(|weak| weak.upgrade()) {
+            entity.update(cx, |view, cx| {
+                view.prepare_for_host_hide(cx);
+            });
+        }
+
+        // Remove both the runtime handle AND the automation registry
+        // entry before `window.remove_window()`. The on_close callback
+        // registered in `chat_window_options` would normally do both,
+        // but this helper has already taken CHAT_WINDOW.slot above so
+        // the callback's `g.take()` returns `None` and the
+        // registry-cleanup branch never runs. Doing it here keeps
+        // `listAutomationWindows` in sync with the window's actual
+        // lifetime regardless of whether close is initiated from the
+        // window's titlebar (on_close fires first) or from an outside
+        // TriggerAction / automation path (this helper fires first).
         if let Some(ref id) = state.automation_id {
             crate::windows::remove_runtime_window_handle(id);
+            crate::windows::remove_automation_window(id);
         }
 
         let _ = state.handle.update(cx, |_root, window, _cx| {
@@ -341,6 +572,38 @@ pub fn close_chat_window(cx: &mut App) {
 
 // Detached ACP action allowlist now lives in the ACP route builder layer:
 // `AcpActionsDialogHost::Detached` in src/actions/builders/script_context.rs.
+
+/// Dispatch an action to the detached ACP chat window from outside it.
+///
+/// Used by the automation substrate's `ExternalCommand::TriggerAction`
+/// dispatcher when `host="acpDetached"`: routes the supplied action id
+/// through the same `dispatch_detached_action` that the detached
+/// window's own actions popup uses, so closing / reattaching / model
+/// switching from automation is end-to-end identical to clicking the
+/// action in the detached popup.
+///
+/// Returns `false` if no detached window exists or its view entity has
+/// been deallocated, so callers can distinguish a dropped dispatch
+/// from a successful one.
+// @lat: [[lat.md/automation#Automation#Window metadata]]
+pub fn dispatch_action_to_detached(action_id: &str, cx: &mut App) -> bool {
+    let view_weak = {
+        let slot = CHAT_WINDOW.get_or_init(|| Mutex::new(None));
+        let guard = match slot.lock() {
+            Ok(g) => g,
+            Err(e) => e.into_inner(),
+        };
+        guard.as_ref().and_then(|state| state.view_entity.clone())
+    };
+    let Some(view_weak) = view_weak else {
+        tracing::warn!(
+            event = "detached_action_dispatch_no_window",
+            action = %action_id,
+        );
+        return false;
+    };
+    dispatch_detached_action_checked(&view_weak, action_id, cx)
+}
 
 /// Activate (bring to front) the detached chat window.
 pub(crate) fn activate_chat_window(cx: &mut App) {
@@ -828,7 +1091,7 @@ fn dispatch_detached_action(entity_weak: &WeakEntity<AcpChatView>, action_id: &s
 }
 
 /// Window title used internally for NSWindow matching (not displayed — titlebar is None).
-const ACP_CHAT_WINDOW_TITLE: &str = "Script Kit ACP Chat";
+const ACP_CHAT_WINDOW_TITLE: &str = "Script Kit Agent Chat";
 
 /// Configure vibrancy on the ACP chat window to match the main window appearance.
 ///
@@ -876,7 +1139,9 @@ fn configure_acp_chat_vibrancy(cx: &mut App) {
                         let theme = crate::theme::get_cached_theme();
                         let is_dark = theme.should_use_dark_vibrancy();
                         crate::platform::configure_secondary_window_vibrancy(
-                            window, "ACP Chat", is_dark,
+                            window,
+                            "Agent Chat",
+                            is_dark,
                         );
                         tracing::info!("acp_chat_vibrancy_configured");
                         return;
@@ -910,7 +1175,7 @@ impl gpui::Render for ChatWindowPlaceholder {
             .flex_col()
             .items_center()
             .justify_center()
-            .child(div().text_base().opacity(0.7).child("ACP Chat Window"))
+            .child(div().text_base().opacity(0.7).child("Agent Chat Window"))
             .child(
                 div()
                     .pt(px(8.0))

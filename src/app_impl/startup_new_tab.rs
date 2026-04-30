@@ -33,6 +33,11 @@
                 let key = event.keystroke.key.as_str();
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;
+                let is_plain_enter = crate::ui_foundation::is_key_enter(key)
+                    && !event.keystroke.modifiers.platform
+                    && !has_shift
+                    && !event.keystroke.modifiers.alt
+                    && !event.keystroke.modifiers.control;
                 let is_global_ai_chord = crate::ui_foundation::is_key_enter(key)
                     && event.keystroke.modifiers.platform
                     && !has_shift
@@ -84,16 +89,15 @@
                                 save_offer_open = this.tab_ai_save_offer_state.is_some(),
                             );
 
-                            // File search keeps Shift+Tab for parent-directory
-                            // navigation and leaves plain Tab local.
+                            // File search owns Tab locally: plain Tab browses
+                            // into the selected directory and Shift+Tab goes up.
                             if matches!(this.current_view, AppView::FileSearchView { .. }) {
+                                cx.stop_propagation();
                                 if this.show_actions_popup {
-                                    cx.stop_propagation();
                                     return;
                                 }
 
                                 if has_shift {
-                                    cx.stop_propagation();
                                     let current_query = match &this.current_view {
                                         AppView::FileSearchView { query, .. } => query.clone(),
                                         _ => String::new(),
@@ -134,6 +138,11 @@
                                             ),
                                         );
                                     }
+                                } else if !this.navigate_file_search_into_selected_directory(cx) {
+                                    crate::logging::log(
+                                        "KEY",
+                                        "Tab: no selected directory to navigate into",
+                                    );
                                 }
                                 return;
                             }
@@ -151,6 +160,26 @@
                                             return;
                                         }
                                     }
+                                }
+                            }
+
+                            // Menu-syntax trigger popup owns Tab when it is visible —
+                            // Tab applies the selected row (keep-open for open-value
+                            // qualifiers like `source:`, close-after-apply for bare
+                            // qualifiers or capture targets). Runs BEFORE the ACP
+                            // plain-Tab routing branch so menu-syntax keyboard stays
+                            // consistent with the ACP slash / @ pickers.
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
+                            {
+                                let intent = if has_shift {
+                                    crate::menu_syntax::InlinePickerKeyIntent::MoveUp
+                                } else {
+                                    crate::menu_syntax::InlinePickerKeyIntent::Apply
+                                };
+                                if this.apply_menu_syntax_trigger_popup_intent(intent, window, cx) {
+                                    cx.stop_propagation();
+                                    return;
                                 }
                             }
 
@@ -222,16 +251,47 @@
                         });
                     }
                 }
+
+                // Keep plain Enter routed to ACP mention acceptance in the
+                // embedded main-window host when the picker is open, and to
+                // the menu-syntax trigger popup when it is open on
+                // ScriptList (Accept the selected qualifier / capture
+                // target — same behavior as the ACP / and @ pickers).
+                if is_plain_enter {
+                    if let Some(app) = app_entity.upgrade() {
+                        app.update(cx, |this, cx| {
+                            if matches!(this.current_view, AppView::ScriptList)
+                                && crate::menu_syntax_trigger_popup_window::is_menu_syntax_trigger_popup_window_open()
+                            {
+                                if this.apply_menu_syntax_trigger_popup_intent(
+                                    crate::menu_syntax::InlinePickerKeyIntent::Accept,
+                                    window,
+                                    cx,
+                                ) {
+                                    cx.stop_propagation();
+                                    return;
+                                }
+                            }
+                            if let AppView::AcpChatView { entity, .. } = &this.current_view {
+                                let handled =
+                                    entity.update(cx, |chat, cx| chat.handle_enter_key(cx));
+                                if handled {
+                                    cx.stop_propagation();
+                                }
+                            }
+                        });
+                    }
+                }
             }
         });
         app.gpui_input_subscriptions.push(tab_interceptor);
 
         // Prewarm the ACP agent config on a background thread so AI-entry
-        // shortcuts do not block on bun transpile of ~/.scriptkit/kit/config.ts.
+        // shortcuts do not block on bun transpile of ~/.scriptkit/config.ts.
         crate::ai::acp::prewarm_agent_config();
 
-        // Prewarm the Tab AI harness asynchronously so the first AI-entry
-        // shortcut reuses a live PTY instead of paying spawn cost. Runs once, silently.
+        // Prewarm ACP Chat and the Tab AI harness asynchronously so AI-entry
+        // shortcuts do not pay subprocess/session startup cost on submit.
         let app_entity_for_tab_ai_warm = cx.entity().downgrade();
         cx.spawn(async move |_this, cx| {
             cx.background_executor()
@@ -242,6 +302,7 @@
                     return;
                 };
                 app.update(cx, |this, cx| {
+                    this.warm_acp_chat_on_startup(cx);
                     this.warm_tab_ai_harness_on_startup(cx);
                 });
             });

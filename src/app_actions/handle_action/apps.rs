@@ -291,8 +291,9 @@ impl ScriptListApp {
 
 /// Gracefully quit an application by name using AppleScript.
 fn quit_app_by_name(name: &str) -> Result<(), String> {
+    let escaped_name = crate::utils::escape_applescript_string(name);
     std::process::Command::new("osascript")
-        .args(["-e", &format!(r#"tell application "{}" to quit"#, name)])
+        .args(["-e", &format!(r#"tell application "{}" to quit"#, escaped_name)])
         .output()
         .map_err(|e| format!("Failed to run osascript: {}", e))
         .and_then(|output| {
@@ -308,10 +309,12 @@ fn quit_app_by_name(name: &str) -> Result<(), String> {
 /// Force quit an application using its bundle identifier or name.
 fn force_quit_app(name: &str, bundle_id: Option<&str>) -> Result<(), String> {
     // Try by bundle_id first (more reliable), fall back to name
+    let escaped_name = crate::utils::escape_applescript_string(name);
     let script = if let Some(bid) = bundle_id {
+        let escaped_bid = crate::utils::escape_applescript_string(bid);
         format!(
             r#"tell application "System Events"
-    set appProcesses to every process whose bundle identifier is "{bid}"
+    set appProcesses to every process whose bundle identifier is "{escaped_bid}"
     repeat with proc in appProcesses
         set appPID to unix id of proc
         do shell script "kill -9 " & appPID
@@ -321,7 +324,7 @@ end tell"#
     } else {
         format!(
             r#"tell application "System Events"
-    set appProcesses to every process whose name is "{name}"
+    set appProcesses to every process whose name is "{escaped_name}"
     repeat with proc in appProcesses
         set appPID to unix id of proc
         do shell script "kill -9 " & appPID

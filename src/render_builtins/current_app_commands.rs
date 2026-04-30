@@ -1,4 +1,38 @@
 impl ScriptListApp {
+    // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+    fn current_app_commands_filtered_entries<'a>(
+        entries: &'a [builtins::BuiltInEntry],
+        filter: &str,
+    ) -> Vec<(usize, &'a builtins::BuiltInEntry)> {
+        let (filtered, _) = builtins::filter_menu_bar_entries(entries, filter);
+        filtered
+    }
+
+    fn current_app_commands_visible_row_names(&self, filter: &str) -> Vec<String> {
+        Self::current_app_commands_filtered_entries(&self.cached_current_app_entries, filter)
+            .into_iter()
+            .map(|(_, entry)| entry.name.clone())
+            .collect()
+    }
+
+    fn current_app_commands_dataset_and_visible_counts(&self, filter: &str) -> (usize, usize) {
+        (
+            self.cached_current_app_entries.len(),
+            Self::current_app_commands_filtered_entries(&self.cached_current_app_entries, filter)
+                .len(),
+        )
+    }
+
+    fn current_app_commands_selected_visible_row_name(
+        &self,
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<String> {
+        Self::current_app_commands_filtered_entries(&self.cached_current_app_entries, filter)
+            .get(selected_index)
+            .map(|(_, entry)| entry.name.clone())
+    }
+
     /// Render the current app commands view showing menu bar commands from the frontmost app.
     fn render_current_app_commands(
         &mut self,
@@ -14,11 +48,30 @@ impl ScriptListApp {
         let text_primary = self.theme.colors.text.primary;
         let text_dimmed = self.theme.colors.text.dimmed;
 
-
-        // Filter entries from cached data
-        let (filtered_entries, _) =
-            builtins::filter_menu_bar_entries(&self.cached_current_app_entries, &filter);
+        let filtered_entries =
+            Self::current_app_commands_filtered_entries(&self.cached_current_app_entries, &filter);
         let filtered_len = filtered_entries.len();
+        let selected_index = if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
+            selected_index,
+            &self.current_app_commands_scroll_handle,
+            filtered_len,
+            8,
+        ) {
+            tracing::info!(
+                target: "script_kit::scroll",
+                event = "builtin_selection_resynced_from_scrollbar",
+                view = "current_app_commands",
+                reason = "render",
+                selected_before = selected_index,
+                selected_after = reanchored,
+            );
+            if let AppView::CurrentAppCommandsView { selected_index, .. } = &mut self.current_view {
+                *selected_index = reanchored;
+            }
+            reanchored
+        } else {
+            selected_index
+        };
 
         // Key handler
         let handle_key = cx.listener(
@@ -66,9 +119,10 @@ impl ScriptListApp {
                     return;
                 };
 
-                // Compute filtered list
-                let (filtered, _) =
-                    builtins::filter_menu_bar_entries(&this.cached_current_app_entries, &current_filter);
+                let filtered = Self::current_app_commands_filtered_entries(
+                    &this.cached_current_app_entries,
+                    &current_filter,
+                );
                 let current_filtered_len = filtered.len();
 
                 if is_key_up(key) {
@@ -98,13 +152,7 @@ impl ScriptListApp {
                 } else if is_key_enter(key) {
                     // Execute selected menu bar action
                     if let Some((orig_idx, _)) = filtered.get(current_selected) {
-                        let entry = this.cached_current_app_entries[*orig_idx].clone();
-                        tracing::info!(
-                            entry_id = %entry.id,
-                            entry_name = %entry.name,
-                            "current_app_commands.execute_selected"
-                        );
-                        this.execute_builtin(&entry, cx);
+                        this.execute_selected_current_app_command(*orig_idx, cx);
                     }
                     cx.stop_propagation();
                 } else {
@@ -144,7 +192,12 @@ impl ScriptListApp {
                 .py(px(design_spacing.padding_xl))
                 .text_center()
                 .font_family(design_typography.font_family)
-                .child(div().text_sm().text_color(rgb(text_primary)).child(empty_title))
+                .child(
+                    div()
+                        .text_sm()
+                        .text_color(rgb(text_primary))
+                        .child(empty_title),
+                )
                 .child(
                     div()
                         .text_sm()
@@ -167,38 +220,36 @@ impl ScriptListApp {
                 move |visible_range, _window, _cx| {
                     visible_range
                         .map(|ix| {
-                            if let Some((_, entry)) = entries_for_closure.get(ix) {
+                            if let Some((orig_idx, entry)) = entries_for_closure.get(ix) {
                                 let is_selected = ix == selected;
                                 let is_hovered = hovered == Some(ix);
 
                                 let name = entry.name.clone();
                                 let description = entry.description.clone();
+                                let original_entry_index = *orig_idx;
 
                                 let click_entity = click_entity_handle.clone();
-                                let clicked_entry = entry.clone();
-                                let click_handler = move |_event: &gpui::ClickEvent,
-                                                          _window: &mut Window,
-                                                          cx: &mut gpui::App| {
-                                    if let Some(app) = click_entity.upgrade() {
-                                        let entry = clicked_entry.clone();
-                                        app.update(cx, |this, cx| {
-                                            if let AppView::CurrentAppCommandsView {
-                                                selected_index,
-                                                ..
-                                            } = &mut this.current_view
-                                            {
-                                                *selected_index = ix;
-                                            }
-                                            tracing::info!(
-                                                entry_id = %entry.id,
-                                                entry_name = %entry.name,
-                                                "current_app_commands.execute_clicked"
-                                            );
-                                            this.execute_builtin(&entry, cx);
-                                            cx.notify();
-                                        });
-                                    }
-                                };
+                                let click_handler =
+                                    move |_event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = click_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if let AppView::CurrentAppCommandsView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
+                                                {
+                                                    *selected_index = ix;
+                                                }
+                                                this.execute_selected_current_app_command(
+                                                    original_entry_index,
+                                                    cx,
+                                                );
+                                                cx.notify();
+                                            });
+                                        }
+                                    };
 
                                 let hover_entity = hover_entity_handle.clone();
                                 let hover_handler =
@@ -266,16 +317,11 @@ impl ScriptListApp {
                         .focus_bordered(false),
                 ),
             )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child(format!(
-                        "{} command{}",
-                        total_count,
-                        if total_count == 1 { "" } else { "s" }
-                    )),
-            );
+            .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                "{} command{}",
+                total_count,
+                if total_count == 1 { "" } else { "s" }
+            )));
 
         let content = div()
             .flex_1()
@@ -283,7 +329,90 @@ impl ScriptListApp {
             .w_full()
             .overflow_hidden()
             .py(px(design_spacing.padding_xs))
-            .child(list_element);
+            .relative()
+            .on_scroll_wheel(cx.listener(
+                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                    let view_state = if let AppView::CurrentAppCommandsView {
+                        filter,
+                        selected_index,
+                    } = &this.current_view
+                    {
+                        Some((filter.clone(), *selected_index))
+                    } else {
+                        None
+                    };
+
+                    let Some((current_filter, current_selected)) = view_state else {
+                        return;
+                    };
+
+                    let filtered = Self::current_app_commands_filtered_entries(
+                        &this.cached_current_app_entries,
+                        &current_filter,
+                    );
+                    let filtered_len = filtered.len();
+
+                    let Some(new_selected) = this.builtin_scroll_target_from_wheel(
+                        event,
+                        current_selected,
+                        filtered_len,
+                    ) else {
+                        if filtered_len > 0 {
+                            cx.stop_propagation();
+                        }
+                        return;
+                    };
+
+                    if let AppView::CurrentAppCommandsView { selected_index, .. } =
+                        &mut this.current_view
+                    {
+                        *selected_index = new_selected;
+                    }
+
+                    this.current_app_commands_scroll_handle
+                        .scroll_to_item(new_selected, ScrollStrategy::Nearest);
+
+                    if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
+                        new_selected,
+                        &this.current_app_commands_scroll_handle,
+                        filtered_len,
+                        8,
+                    ) {
+                        if let AppView::CurrentAppCommandsView { selected_index, .. } =
+                            &mut this.current_view
+                        {
+                            *selected_index = reanchored;
+                        }
+                        tracing::info!(
+                            target: "script_kit::scroll",
+                            event = "builtin_selection_resynced_from_scrollbar",
+                            view = "current_app_commands",
+                            reason = "wheel",
+                            selected_before = new_selected,
+                            selected_after = reanchored,
+                        );
+                    }
+
+                    Self::log_builtin_scroll_event(
+                        "current_app_commands",
+                        "scroll_to_item",
+                        "wheel",
+                        filtered_len,
+                        Some(new_selected),
+                        Some(new_selected),
+                        Some(&current_filter),
+                        "mouse",
+                    );
+                    cx.notify();
+                    cx.stop_propagation();
+                },
+            ))
+            .child(list_element)
+            .child(self.builtin_uniform_list_scrollbar(
+                &self.current_app_commands_scroll_handle,
+                filtered_len,
+                8,
+            ));
 
         let footer = if matches!(
             crate::footer_popup::active_main_window_footer_surface(),
@@ -326,13 +455,13 @@ impl ScriptListApp {
                     .child(content),
             )
             .child(footer)
-        .rounded(px(design_visual.radius_lg))
-        .text_color(rgb(text_primary))
-        .font_family(design_typography.font_family)
-        .key_context("current_app_commands")
-        .track_focus(&self.focus_handle)
-        .on_key_down(handle_key)
-        .into_any_element()
+            .rounded(px(design_visual.radius_lg))
+            .text_color(rgb(text_primary))
+            .font_family(design_typography.font_family)
+            .key_context("current_app_commands")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .into_any_element()
     }
 }
 
@@ -350,6 +479,27 @@ mod current_app_commands_chrome_audit {
             source.matches(&legacy).count(),
             0,
             "current_app_commands should not use PromptFooter"
+        );
+    }
+
+    #[test]
+    fn current_app_commands_use_wheel_contract_and_vendor_scrollbar() {
+        let source = include_str!("current_app_commands.rs");
+        assert!(
+            source.contains(".on_scroll_wheel(cx.listener("),
+            "current_app_commands should intercept wheel scrolling on the list pane"
+        );
+        assert!(
+            source.contains("builtin_scroll_target_from_wheel("),
+            "current_app_commands should use shared wheel delta conversion"
+        );
+        assert!(
+            source.contains("builtin_reanchor_selection_from_scroll("),
+            "current_app_commands should reanchor selection after handle movement"
+        );
+        assert!(
+            source.contains("builtin_uniform_list_scrollbar("),
+            "current_app_commands should attach the shared vendor scrollbar helper"
         );
     }
 }

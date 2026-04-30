@@ -44,6 +44,7 @@ export interface PopupCaptureSummary {
 export interface ProofBundle {
   schemaVersion: 2;
   scenario: string;
+  surfaceClass?: "main" | "attachedPopup" | "detached";
   resolvedTarget: {
     windowId: string;
     windowKind: string;
@@ -146,38 +147,48 @@ interface ResolvedTarget {
   automationWindowId: string;
   title: string | null;
   surfaceId: string | null;
+  osWindowId?: number | null;
+  popupSemantics?: {
+    hasRealElements: boolean;
+    panelOnly: boolean;
+    warnings: string[];
+    batchMutationAvailable: boolean;
+  } | null;
+  inspect?: Record<string, unknown> | null;
 }
 
-async function resolveAutomationWindow(opts: {
+async function inspectAndPromoteTarget(opts: {
   session: string;
   kind: string;
   index: number;
+  probes?: Array<{ x: number; y: number }>;
 }): Promise<ResolvedTarget> {
-  const result = await runTool(
-    [
-      "bun",
-      "scripts/agentic/automation-window.ts",
-      "resolve",
-      "--session",
-      opts.session,
-      "--kind",
-      opts.kind,
-      "--index",
-      String(opts.index),
-    ],
-    "resolve-target"
-  );
+  const cmd = [
+    "bun",
+    "scripts/agentic/automation-window.ts",
+    "inspect",
+    "--session",
+    opts.session,
+    "--kind",
+    opts.kind,
+    "--index",
+    String(opts.index),
+  ];
+  for (const probe of opts.probes ?? []) {
+    cmd.push("--probe", `${probe.x},${probe.y}`);
+  }
+  const result = await runTool(cmd, "inspect-and-promote-target");
 
   if (result.exitCode !== 0) {
     throw new Error(
-      `Target resolution failed: ${result.stdout || result.stderr}`
+      `Target inspection failed: ${result.stdout || result.stderr}`
     );
   }
 
   const parsed = JSON.parse(result.stdout);
   if (parsed.status !== "ok") {
     throw new Error(
-      `Target resolution returned error: ${parsed.error?.message ?? "unknown"}`
+      `Target inspection returned error: ${parsed.error?.message ?? "unknown"}`
     );
   }
 
@@ -200,14 +211,18 @@ async function resolveAutomationWindow(opts: {
     promotedTargetJson: targetJson,
     automationWindowId,
     surfaceId: parsed.surfaceId ?? null,
+    osWindowId: parsed.osWindowId ?? null,
   });
 
   return {
     targetJson,
-    windowKind: parsed.windowKind ?? opts.kind,
+    windowKind: parsed.inspect?.windowKind ?? parsed.windowKind ?? opts.kind,
     automationWindowId,
-    title: parsed.title ?? null,
+    title: parsed.inspect?.title ?? parsed.title ?? null,
     surfaceId: parsed.surfaceId ?? null,
+    osWindowId: parsed.osWindowId ?? null,
+    popupSemantics: parsed.popupSemantics ?? null,
+    inspect: parsed.inspect ?? null,
   };
 }
 
@@ -226,15 +241,17 @@ export async function runDetachedAcpExactIdScenario(
   });
 
   // Step 1: Resolve the detached ACP target to an exact ID
-  const resolved = await resolveAutomationWindow({
+  const resolved = await inspectAndPromoteTarget({
     session,
     kind: "acpDetached",
     index,
+    probes: [{ x: 24, y: 24 }],
   });
 
   const bundle: ProofBundle = {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
     scenario: "detached-acp-exact-id",
+    surfaceClass: "detached",
     resolvedTarget: {
       windowId: resolved.automationWindowId,
       windowKind: resolved.windowKind,
@@ -390,15 +407,17 @@ export async function runPromptPopupExactIdScenario(
   });
 
   // Step 1: Resolve the prompt popup target to an exact ID
-  const resolved = await resolveAutomationWindow({
+  const resolved = await inspectAndPromoteTarget({
     session,
     kind: "promptPopup",
     index,
+    probes: [{ x: 12, y: 12 }],
   });
 
   const bundle: ProofBundle = {
     schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
     scenario: "prompt-popup-exact-id",
+    surfaceClass: "attachedPopup",
     resolvedTarget: {
       windowId: resolved.automationWindowId,
       windowKind: resolved.windowKind,
@@ -528,6 +547,276 @@ export async function runPromptPopupExactIdScenario(
   return bundle;
 }
 
+export async function runActionsDialogExactIdScenario(
+  session: string,
+  index: number
+): Promise<ProofBundle> {
+  stderrLog("scenario.start", {
+    scenario: "actions-dialog-exact-id",
+    session,
+    index,
+  });
+
+  const resolved = await inspectAndPromoteTarget({
+    session,
+    kind: "actionsDialog",
+    index,
+    probes: [{ x: 12, y: 12 }],
+  });
+
+  const bundle: ProofBundle = {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "actions-dialog-exact-id",
+    surfaceClass: "attachedPopup",
+    resolvedTarget: {
+      windowId: resolved.automationWindowId,
+      windowKind: resolved.windowKind,
+      title: resolved.title,
+      surfaceId: resolved.surfaceId,
+    },
+    inputMethod: "batch",
+    dispatchPath: "exact_handle",
+    resolvedWindowId: resolved.automationWindowId,
+    popupCapture: {
+      strategy: "parent_capture_with_crop",
+      targetBounds: null,
+      semanticReceiptsArePrimary: true,
+    },
+    steps: [],
+    warnings: [],
+  };
+
+  pushProofStep(bundle, {
+    type: "resolveTarget",
+    at: new Date().toISOString(),
+    request: { session, kind: "actionsDialog", index },
+    response: {
+      automationWindowId: resolved.automationWindowId,
+      windowKind: resolved.windowKind,
+      title: resolved.title,
+      surfaceId: resolved.surfaceId,
+      popupSemantics: resolved.popupSemantics,
+      targetJson: resolved.targetJson,
+    },
+  });
+
+  try {
+    const inspectResult = await rpc(
+      session,
+      {
+        type: "inspectAutomationWindow",
+        requestId: "inspect-actions-dialog",
+        target: resolved.targetJson,
+        probes: [{ x: 12, y: 12 }],
+      },
+      "automationInspectResult",
+      8000
+    );
+
+    pushProofStep(bundle, {
+      type: "inspect",
+      at: new Date().toISOString(),
+      request: {
+        type: "inspectAutomationWindow",
+        requestId: "inspect-actions-dialog",
+        target: resolved.targetJson,
+        probes: [{ x: 12, y: 12 }],
+      },
+      response: inspectResult,
+    });
+
+    const resp = inspectResult.response ?? inspectResult;
+    if (typeof (resp as Record<string, unknown>).osWindowId === "number") {
+      bundle.osWindowId = (resp as Record<string, unknown>).osWindowId as number;
+    }
+    bundle.inspect = {
+      screenshotWidth: (resp as Record<string, unknown>).screenshotWidth as number ?? null,
+      screenshotHeight: (resp as Record<string, unknown>).screenshotHeight as number ?? null,
+      warnings: ((resp as Record<string, unknown>).warnings as string[]) ?? [],
+    };
+    const tb = (resp as Record<string, unknown>).targetBoundsInScreenshot as
+      | { x: number; y: number; width: number; height: number }
+      | undefined;
+    if (tb && bundle.popupCapture) {
+      bundle.popupCapture.targetBounds = tb;
+    }
+    if (!resolved.popupSemantics?.batchMutationAvailable) {
+      bundle.warnings.push("actionsDialog_batch_unavailable");
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    bundle.warnings.push(`inspect_actions_dialog_failed: ${msg}`);
+    stderrLog("scenario.inspect_actions_dialog_failed", { error: msg });
+  }
+
+  try {
+    const waitResult = await rpc(
+      session,
+      {
+        type: "waitFor",
+        requestId: "wait-actions-dialog-visible",
+        target: resolved.targetJson,
+        condition: { type: "windowVisible" },
+        timeout: 3000,
+        pollInterval: 25,
+      },
+      "waitForResult",
+      5000
+    );
+
+    pushProofStep(bundle, {
+      type: "waitFor",
+      at: new Date().toISOString(),
+      request: {
+        type: "waitFor",
+        requestId: "wait-actions-dialog-visible",
+        target: resolved.targetJson,
+        condition: { type: "windowVisible" },
+      },
+      response: waitResult,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    bundle.warnings.push(`wait_actions_dialog_ready_failed: ${msg}`);
+    stderrLog("scenario.wait_actions_dialog_ready_failed", { error: msg });
+  }
+
+  stderrLog("scenario.complete", {
+    scenario: "actions-dialog-exact-id",
+    stepCount: bundle.steps.length,
+    warningCount: bundle.warnings.length,
+    hasTargetBounds: bundle.popupCapture?.targetBounds != null,
+  });
+
+  return bundle;
+}
+
+export async function runMainWindowExactIdScenario(
+  session: string
+): Promise<ProofBundle> {
+  stderrLog("scenario.start", {
+    scenario: "main-window-exact-id",
+    session,
+  });
+
+  const resolved = await inspectAndPromoteTarget({
+    session,
+    kind: "main",
+    index: 0,
+    probes: [{ x: 24, y: 24 }],
+  });
+
+  const bundle: ProofBundle = {
+    schemaVersion: PROOF_BUNDLE_SCHEMA_VERSION,
+    scenario: "main-window-exact-id",
+    surfaceClass: "main",
+    resolvedTarget: {
+      windowId: resolved.automationWindowId,
+      windowKind: resolved.windowKind,
+      title: resolved.title,
+      surfaceId: resolved.surfaceId,
+    },
+    inputMethod: "batch",
+    dispatchPath: "exact_handle",
+    resolvedWindowId: resolved.automationWindowId,
+    popupCapture: {
+      strategy: "not_applicable",
+      targetBounds: null,
+      semanticReceiptsArePrimary: true,
+    },
+    steps: [],
+    warnings: [],
+  };
+
+  pushProofStep(bundle, {
+    type: "resolveTarget",
+    at: new Date().toISOString(),
+    request: { session, kind: "main", index: 0 },
+    response: {
+      automationWindowId: resolved.automationWindowId,
+      windowKind: resolved.windowKind,
+      title: resolved.title,
+      surfaceId: resolved.surfaceId,
+      targetJson: resolved.targetJson,
+    },
+  });
+
+  try {
+    const inspectResult = await rpc(
+      session,
+      {
+        type: "inspectAutomationWindow",
+        requestId: "inspect-main",
+        target: resolved.targetJson,
+        probes: [{ x: 24, y: 24 }],
+      },
+      "automationInspectResult",
+      8000
+    );
+
+    pushProofStep(bundle, {
+      type: "inspect",
+      at: new Date().toISOString(),
+      request: {
+        type: "inspectAutomationWindow",
+        requestId: "inspect-main",
+        target: resolved.targetJson,
+        probes: [{ x: 24, y: 24 }],
+      },
+      response: inspectResult,
+    });
+
+    const elementsResult = await rpc(
+      session,
+      {
+        type: "getElements",
+        requestId: "elements-main",
+        target: resolved.targetJson,
+      },
+      "elementsResult",
+      3000
+    );
+
+    pushProofStep(bundle, {
+      type: "inspect",
+      at: new Date().toISOString(),
+      request: {
+        type: "getElements",
+        requestId: "elements-main",
+        target: resolved.targetJson,
+      },
+      response: elementsResult,
+    });
+
+    const resp = inspectResult.response ?? inspectResult;
+    if (typeof (resp as Record<string, unknown>).osWindowId === "number") {
+      bundle.osWindowId = (resp as Record<string, unknown>).osWindowId as number;
+    }
+    bundle.inspect = {
+      screenshotWidth: (resp as Record<string, unknown>).screenshotWidth as number ?? null,
+      screenshotHeight: (resp as Record<string, unknown>).screenshotHeight as number ?? null,
+      warnings: ((resp as Record<string, unknown>).warnings as string[]) ?? [],
+    };
+    const elementResponse = (elementsResult.response ?? elementsResult) as Record<string, unknown>;
+    const elements = Array.isArray(elementResponse.elements) ? elementResponse.elements : [];
+    if (elements.length === 0) {
+      bundle.warnings.push("main_elements_empty");
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    bundle.warnings.push(`inspect_main_failed: ${msg}`);
+    stderrLog("scenario.inspect_main_failed", { error: msg });
+  }
+
+  stderrLog("scenario.complete", {
+    scenario: "main-window-exact-id",
+    stepCount: bundle.steps.length,
+    warningCount: bundle.warnings.length,
+  });
+
+  return bundle;
+}
+
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
@@ -562,7 +851,12 @@ function parseArgs() {
 if (import.meta.main) {
   const { session, scenario, index } = parseArgs();
 
-  const AVAILABLE_SCENARIOS = ["detached-acp-exact-id", "prompt-popup-exact-id"];
+  const AVAILABLE_SCENARIOS = [
+    "main-window-exact-id",
+    "actions-dialog-exact-id",
+    "prompt-popup-exact-id",
+    "detached-acp-exact-id",
+  ];
 
   if (!scenario) {
     process.stderr.write(
@@ -576,6 +870,20 @@ if (import.meta.main) {
   }
 
   switch (scenario) {
+    case "main-window-exact-id": {
+      const bundle = await runMainWindowExactIdScenario(session);
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.warnings.length > 0 ? 1 : 0);
+      break;
+    }
+
+    case "actions-dialog-exact-id": {
+      const bundle = await runActionsDialogExactIdScenario(session, index);
+      process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");
+      process.exit(bundle.warnings.length > 0 ? 1 : 0);
+      break;
+    }
+
     case "detached-acp-exact-id": {
       const bundle = await runDetachedAcpExactIdScenario(session, index);
       process.stdout.write(JSON.stringify(bundle, null, 2) + "\n");

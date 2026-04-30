@@ -7,6 +7,43 @@
 use super::*;
 
 impl NotesApp {
+    pub(super) fn ensure_embedded_acp_view(
+        &mut self,
+        initial_input: Option<String>,
+        cx: &mut Context<Self>,
+    ) -> Result<gpui::Entity<crate::ai::acp::view::AcpChatView>, String> {
+        if let Some(entity) = self.embedded_acp_chat.as_ref().cloned() {
+            if let Some(input) = initial_input.clone().filter(|s| !s.trim().is_empty()) {
+                entity.update(cx, |chat, cx| {
+                    if !chat.is_setup_mode() {
+                        chat.set_input(input, cx);
+                    }
+                });
+            }
+
+            tracing::info!(
+                event = "notes_embedded_acp_view_ensured",
+                created = false,
+                has_input = initial_input.as_ref().is_some_and(|s| !s.trim().is_empty()),
+            );
+            return Ok(entity);
+        }
+
+        let requirements = crate::ai::acp::preflight::AcpLaunchRequirements::default();
+        let view =
+            crate::ai::acp::hosted::spawn_hosted_view(initial_input.clone(), requirements, cx)?;
+        self.wire_acp_host_callbacks(&view, cx);
+        self.embedded_acp_chat = Some(view.clone());
+
+        tracing::info!(
+            event = "notes_embedded_acp_view_ensured",
+            created = true,
+            has_input = initial_input.as_ref().is_some_and(|s| !s.trim().is_empty()),
+        );
+
+        Ok(view)
+    }
+
     /// Switch the Notes window to show an embedded ACP chat surface.
     ///
     /// If an ACP view is already cached, reuses it (sets input if provided).
@@ -25,24 +62,7 @@ impl NotesApp {
             has_input = initial_input.as_ref().is_some_and(|s| !s.trim().is_empty()),
         );
 
-        if let Some(entity) = self.embedded_acp_chat.as_ref().cloned() {
-            // Reuse existing view — just update input if provided.
-            if let Some(input) = initial_input.filter(|s| !s.trim().is_empty()) {
-                entity.update(cx, |chat, cx| {
-                    if !chat.is_setup_mode() {
-                        chat.set_input(input, cx);
-                    }
-                });
-            }
-        } else {
-            // Spawn a fresh view.
-            let requirements = crate::ai::acp::preflight::AcpLaunchRequirements::default();
-            let view = crate::ai::acp::hosted::spawn_hosted_view(initial_input, requirements, cx)?;
-
-            // Wire host callbacks before caching.
-            self.wire_acp_host_callbacks(&view, cx);
-            self.embedded_acp_chat = Some(view);
-        }
+        let _view = self.ensure_embedded_acp_view(initial_input, cx)?;
 
         self.surface_mode = NotesSurfaceMode::Acp;
         self.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);
@@ -59,18 +79,65 @@ impl NotesApp {
     /// and mention sessions are properly closed, then returns focus to
     /// the editor.
     pub(super) fn switch_to_notes_surface(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        // Hide ACP popups before switching.
+        self.close_embedded_acp_via_host("switch_to_notes_surface", Some(window), cx);
+    }
+
+    fn close_embedded_acp_via_host(
+        &mut self,
+        reason: &'static str,
+        window: Option<&mut Window>,
+        cx: &mut Context<Self>,
+    ) {
         if let Some(ref entity) = self.embedded_acp_chat {
             entity.update(cx, |chat, cx| {
                 chat.prepare_for_host_hide(cx);
             });
         }
 
-        self.surface_mode = NotesSurfaceMode::Notes;
-        self.request_focus_surface(focus::NotesFocusSurface::Editor, window, cx);
+        if crate::actions::is_actions_window_open() {
+            crate::actions::close_actions_window(cx);
+        }
 
-        tracing::info!(event = "notes_acp_surface_closed_to_notes");
-        cx.notify();
+        self.surface_mode = NotesSurfaceMode::Notes;
+        if let Some(window) = window {
+            self.request_focus_surface(focus::NotesFocusSurface::Editor, window, cx);
+        } else {
+            self.pending_focus_surface = Some(focus::NotesFocusSurface::Editor);
+            cx.notify();
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_embedded_acp_closed_via_host",
+            reason,
+        );
+    }
+
+    fn close_notes_acp_actions_via_host(
+        &mut self,
+        reason: &'static str,
+        window: Option<&mut Window>,
+        cx: &mut Context<Self>,
+    ) {
+        // When this runs from the dialog's on_close callback, the actions window
+        // is already in its close path. Only actively close it from call sites
+        // that still own a live parent window handle.
+        if window.is_some() && crate::actions::is_actions_window_open() {
+            crate::actions::close_actions_window(cx);
+        }
+
+        if let Some(window) = window {
+            self.request_focus_surface(focus::NotesFocusSurface::AcpChat, window, cx);
+        } else if self.surface_mode == NotesSurfaceMode::Acp {
+            self.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);
+            cx.notify();
+        }
+
+        tracing::info!(
+            target: "script_kit::tab_ai",
+            event = "notes_acp_actions_closed_via_host",
+            reason,
+        );
     }
 
     /// Open the ACP history popup anchored to the Notes window.
@@ -132,6 +199,11 @@ impl NotesApp {
                 let query = chat.update(cx, |view, _cx| {
                     view.take_pending_history_portal_query().unwrap_or_default()
                 });
+                tracing::info!(
+                    target: "script_kit::acp",
+                    event = "notes_acp_history_portal_query_seeded_from_contract",
+                    query = %query,
+                );
 
                 let hits = crate::ai::acp::history::search_history(&query, 12);
 
@@ -148,6 +220,8 @@ impl NotesApp {
                 });
             }
             PortalKind::FileSearch
+            | PortalKind::BrowserHistory
+            | PortalKind::DictationHistory
             | PortalKind::ScriptSearch
             | PortalKind::ScriptletSearch
             | PortalKind::SkillSearch
@@ -207,7 +281,7 @@ impl NotesApp {
             chat.set_on_close_requested(move |window, cx| {
                 if let Some(entity) = close_entity.upgrade() {
                     entity.update(cx, |app, cx| {
-                        app.switch_to_notes_surface(window, cx);
+                        app.close_embedded_acp_via_host("acp_close_requested", Some(window), cx);
                     });
                 }
             });
@@ -228,12 +302,11 @@ impl NotesApp {
         // Portal requests: only @history reaches here because the view's
         // allowed_portal_kinds filters @file and @clipboard from the picker.
         // The handler still logs rejected kinds as defense-in-depth.
-        let portal_entity = notes_entity;
+        let portal_view = view.downgrade();
         view.update(cx, |chat, _cx| {
             chat.set_on_open_portal(move |kind, cx| {
-                if let Some(entity) = portal_entity.upgrade() {
-                    let chat_entity = entity.read(cx).embedded_acp_chat.clone();
-                    Self::handle_acp_portal_static(chat_entity, kind, cx);
+                if let Some(chat) = portal_view.upgrade() {
+                    Self::handle_acp_portal_static(Some(chat), kind, cx);
                 }
             });
         });
@@ -249,9 +322,7 @@ impl NotesApp {
         let actions_open_before = actions::is_actions_window_open();
 
         if actions_open_before {
-            actions::close_actions_window(cx);
-            tracing::info!(event = "notes_acp_actions_closed");
-            cx.notify();
+            self.close_notes_acp_actions_via_host("toggle_existing_window", Some(window), cx);
             return;
         }
 
@@ -317,6 +388,7 @@ impl NotesApp {
         let activation_dialog = dialog.clone();
         let notes_entity = cx.entity().downgrade();
         dialog.update(cx, |dialog, _cx| {
+            let close_entity = notes_entity.clone();
             dialog.set_on_activation(std::sync::Arc::new(move |activation, _window, cx| {
                 match activation {
                     crate::actions::ActionsDialogActivation::DrillDownPushed { .. } => {
@@ -335,15 +407,11 @@ impl NotesApp {
                 }
             }));
             dialog.set_on_close(std::sync::Arc::new(move |cx| {
-                if let Some(entity) = notes_entity.upgrade() {
+                if let Some(entity) = close_entity.upgrade() {
                     entity.update(cx, |app, cx| {
-                        if app.surface_mode == NotesSurfaceMode::Acp {
-                            app.pending_focus_surface = Some(focus::NotesFocusSurface::AcpChat);
-                            cx.notify();
-                        }
+                        app.close_notes_acp_actions_via_host("dialog_on_close", None, cx);
                     });
                 }
-                tracing::info!(event = "notes_acp_actions_closed_restore_focus");
             }));
         });
 
@@ -379,10 +447,16 @@ impl NotesApp {
         // runs inside the Notes window and yields (&mut Window, &mut App).
         cx.spawn_in(window, async move |this, cx| {
             if let Ok(action_id) = action_rx.recv().await {
-                if action_id == "__cancel__" {
-                    return;
-                }
                 let _ = cx.update(|window, app_cx| {
+                    if action_id == "__cancel__" {
+                        // ActionsWindow request_close already ran the dialog on_close
+                        // callback, so the host focus restore has happened.
+                        tracing::info!(
+                            target: "script_kit::tab_ai",
+                            event = "notes_acp_action_cancel_consumed_after_on_close",
+                        );
+                        return;
+                    }
                     dispatch_notes_acp_action(this.upgrade(), &action_id, window, app_cx);
                 });
             }
@@ -467,17 +541,7 @@ fn dispatch_notes_acp_action(
     // For `acp_close`, route to the Notes host to switch surfaces.
     if action_id == "acp_close" {
         entity.update(cx, |app: &mut NotesApp, cx| {
-            // Need window for focus management — use update_in if available,
-            // otherwise defer to next frame.
-            app.surface_mode = NotesSurfaceMode::Notes;
-            if let Some(ref acp_entity) = app.embedded_acp_chat {
-                acp_entity.update(cx, |chat, cx| {
-                    chat.prepare_for_host_hide(cx);
-                });
-            }
-            app.pending_focus_surface = Some(focus::NotesFocusSurface::Editor);
-            tracing::info!(event = "notes_acp_surface_closed_to_notes");
-            cx.notify();
+            app.close_embedded_acp_via_host("acp_action_close", Some(window), cx);
         });
         return;
     }
@@ -746,15 +810,7 @@ pub fn close_notes_embedded_acp(cx: &mut gpui::App) -> anyhow::Result<()> {
 
     entity.update(cx, |app: &mut NotesApp, cx| {
         if app.surface_mode == NotesSurfaceMode::Acp {
-            if let Some(ref acp_entity) = app.embedded_acp_chat {
-                acp_entity.update(cx, |chat, cx| {
-                    chat.prepare_for_host_hide(cx);
-                });
-            }
-            app.surface_mode = NotesSurfaceMode::Notes;
-            app.pending_focus_surface = Some(focus::NotesFocusSurface::Editor);
-            tracing::info!(event = "notes_acp_surface_closed_to_notes");
-            cx.notify();
+            app.close_embedded_acp_via_host("external_close", None, cx);
         }
     });
 

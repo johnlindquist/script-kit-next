@@ -1,4 +1,275 @@
 impl ScriptListApp {
+    fn dictation_history_actions_dialog_config(
+        placeholder: String,
+    ) -> crate::actions::ActionsDialogConfig {
+        crate::actions::ActionsDialogConfig {
+            search_position: crate::actions::SearchPosition::Top,
+            section_style: crate::actions::SectionStyle::Headers,
+            anchor: crate::actions::AnchorPosition::Top,
+            show_icons: true,
+            search_placeholder: Some(placeholder),
+            show_context_header: false,
+            ..crate::actions::ActionsDialogConfig::default()
+        }
+    }
+
+    fn dictation_history_actions_for_dialog() -> Vec<crate::actions::Action> {
+        use crate::actions::{Action, ActionCategory};
+        use crate::designs::icon_variations::IconName;
+
+        vec![
+            Action::new(
+                "dictation_history_paste",
+                "Paste to Frontmost App",
+                Some("Hide Script Kit and paste this transcript into the active app".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵")
+            .with_section("Reuse")
+            .with_icon(IconName::ArrowRight),
+            Action::new(
+                "dictation_history_attach_to_ai",
+                "Attach to AI",
+                Some("Open Agent Chat and stage this transcript in the composer".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌃⌘A")
+            .with_section("Reuse")
+            .with_icon(IconName::MessageCircle),
+            Action::new(
+                "dictation_history_save_note",
+                "Save as Note",
+                Some("Create a new note pre-filled with this transcript".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Reuse")
+            .with_icon(IconName::Plus),
+            Action::new(
+                "dictation_history_copy",
+                "Copy Transcript",
+                Some("Copy this transcript to the clipboard".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘C")
+            .with_section("Reuse")
+            .with_icon(IconName::Copy),
+            Action::new(
+                "dictation_history_delete",
+                "Delete from History",
+                Some("Remove this saved transcript from dictation history".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘⌫")
+            .with_section("Manage")
+            .with_icon(IconName::Trash),
+        ]
+    }
+
+    fn favorites_actions_for_dialog() -> Vec<crate::actions::Action> {
+        use crate::actions::{Action, ActionCategory};
+        use crate::designs::icon_variations::IconName;
+
+        vec![
+            Action::new(
+                "favorites_run",
+                "Run",
+                Some("Run the selected favorite".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵")
+            .with_section("Actions")
+            .with_icon(IconName::PlayFilled),
+            Action::new(
+                "favorites_edit_script",
+                "Edit Script",
+                Some("Open the selected favorite in the configured editor".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Actions")
+            .with_icon(IconName::Pencil),
+            Action::new(
+                "favorites_copy_script_url",
+                "Copy Script URL",
+                Some("Copy the selected favorite's scriptkit://run URL".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Actions")
+            .with_icon(IconName::Copy),
+            Action::new(
+                "favorites_move_up",
+                "Move Up",
+                Some("Move the selected favorite up".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("U")
+            .with_section("Actions")
+            .with_icon(IconName::ArrowUp),
+            Action::new(
+                "favorites_move_down",
+                "Move Down",
+                Some("Move the selected favorite down".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("J")
+            .with_section("Actions")
+            .with_icon(IconName::ArrowDown),
+            Action::new(
+                "favorites_remove",
+                "Remove from Favorites",
+                Some("Remove the selected favorite".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("D")
+            .with_section("Manage")
+            .with_icon(IconName::Trash),
+        ]
+    }
+
+    fn toggle_favorites_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        logging::log("KEY", "Toggling favorites actions popup");
+
+        if self.show_actions_popup || is_actions_window_open() {
+            self.close_actions_popup(ActionsDialogHost::Favorites, window, cx);
+            return;
+        }
+
+        let Some(selected_id) = self.selected_favorite_id() else {
+            logging::log("ACTIONS", "Favorites actions ignored: no selected favorite");
+            return;
+        };
+
+        self.show_actions_popup = true;
+        self.actions_closed_at = None;
+        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+        self.focus_handle.focus(window, cx);
+        self.gpui_input_focused = false;
+        self.focused_input = FocusedInput::ActionsSearch;
+
+        let theme_arc = std::sync::Arc::clone(&self.theme);
+        let actions = Self::favorites_actions_for_dialog();
+        let dialog = cx.new(move |cx| {
+            let focus_handle = cx.focus_handle();
+            let mut dialog = ActionsDialog::with_config(
+                focus_handle,
+                std::sync::Arc::new(|_action_id| {}),
+                actions,
+                theme_arc,
+                crate::actions::ActionsDialogConfig {
+                    search_position: crate::actions::SearchPosition::Top,
+                    section_style: crate::actions::SectionStyle::Headers,
+                    anchor: crate::actions::AnchorPosition::Top,
+                    show_icons: true,
+                    search_placeholder: Some(selected_id),
+                    show_context_header: false,
+                    ..crate::actions::ActionsDialogConfig::default()
+                },
+            );
+            dialog.set_match_main_window_background(true);
+            dialog
+        });
+
+        self.actions_dialog = Some(dialog.clone());
+
+        let app_entity = cx.entity().clone();
+        dialog.update(cx, |d, _cx| {
+            d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                app_entity.clone(),
+                ActionsDialogHost::Favorites,
+            ));
+            d.set_on_close(Self::make_actions_window_on_close_callback(
+                app_entity,
+                ActionsDialogHost::Favorites,
+                "Favorites actions closed via escape, focus restored via coordinator",
+            ));
+        });
+
+        let parent_window_handle = window.window_handle();
+        let main_bounds = window.bounds();
+        let display_id = window.display(cx).map(|d| d.id());
+
+        Self::spawn_open_actions_window(
+            cx,
+            parent_window_handle,
+            main_bounds,
+            display_id,
+            dialog,
+            crate::actions::WindowPosition::TopCenter,
+            "Favorites actions popup window opened",
+            "Failed to open favorites actions window",
+        );
+
+        cx.notify();
+    }
+
+    fn toggle_dictation_history_actions(
+        &mut self,
+        entry: crate::dictation::DictationHistoryEntry,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log("KEY", "Toggling dictation history actions popup");
+
+        if self.show_actions_popup || is_actions_window_open() {
+            self.close_actions_popup(ActionsDialogHost::DictationHistory, window, cx);
+            return;
+        }
+
+        self.show_actions_popup = true;
+        self.actions_closed_at = None;
+        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+        self.focus_handle.focus(window, cx);
+        self.gpui_input_focused = false;
+        self.focused_input = FocusedInput::ActionsSearch;
+
+        let theme_arc = std::sync::Arc::clone(&self.theme);
+        let placeholder = entry.preview.clone();
+        let actions = Self::dictation_history_actions_for_dialog();
+        let dialog = cx.new(move |cx| {
+            let focus_handle = cx.focus_handle();
+            let mut dialog = ActionsDialog::with_config(
+                focus_handle,
+                std::sync::Arc::new(|_action_id| {}),
+                actions,
+                theme_arc,
+                Self::dictation_history_actions_dialog_config(placeholder),
+            );
+            dialog.set_match_main_window_background(true);
+            dialog
+        });
+
+        self.actions_dialog = Some(dialog.clone());
+
+        let app_entity = cx.entity().clone();
+        dialog.update(cx, |d, _cx| {
+            d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                app_entity.clone(),
+                ActionsDialogHost::DictationHistory,
+            ));
+            d.set_on_close(Self::make_actions_window_on_close_callback(
+                app_entity,
+                ActionsDialogHost::DictationHistory,
+                "Dictation history actions closed via escape, focus restored via coordinator",
+            ));
+        });
+
+        let parent_window_handle = window.window_handle();
+        let main_bounds = window.bounds();
+        let display_id = window.display(cx).map(|d| d.id());
+
+        Self::spawn_open_actions_window(
+            cx,
+            parent_window_handle,
+            main_bounds,
+            display_id,
+            dialog,
+            crate::actions::WindowPosition::TopCenter,
+            "Dictation history actions popup window opened",
+            "Failed to open dictation history actions window",
+        );
+
+        cx.notify();
+    }
+
     /// Toggle the actions dialog for file search results.
     ///
     /// When a row is selected, shows both row-scoped file actions and
@@ -15,6 +286,7 @@ impl ScriptListApp {
         if self.show_actions_popup || is_actions_window_open() {
             // Close the actions popup
             self.show_actions_popup = false;
+            self.actions_closed_at = Some(std::time::Instant::now()); // Record debounce on close
             self.actions_dialog = None;
             self.file_search_actions_path = None;
 
@@ -54,13 +326,16 @@ impl ScriptListApp {
             )
         });
 
-        // Need at least one context source to open the dialog
-        if selected_file.is_none() && dir_info.is_none() {
-            return;
-        }
+        // Run 14 Pass 1 — story `actions-debounce-builtins-cross-host-live`:
+        // when neither a file nor a directory context is available the
+        // dialog used to silently close. Now we always open the dialog —
+        // `with_file_search_context` will fall through to the global
+        // actions block (Pass 3 of Run 13) so the user sees that Cmd+K
+        // landed even when the file-search input is empty.
 
         // Open actions popup
         self.show_actions_popup = true;
+        self.actions_closed_at = None; // Clear debounce on open
 
         // Use coordinator to push overlay - saves current focus state for restore
         self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
@@ -154,13 +429,8 @@ impl ScriptListApp {
             "ACTIONS",
             &format!(
                 "Opening file search actions: file={}, dir={}",
-                selected_file
-                    .map(|f| f.name.as_str())
-                    .unwrap_or("none"),
-                dir_info
-                    .as_ref()
-                    .map(|d| d.name.as_str())
-                    .unwrap_or("none"),
+                selected_file.map(|f| f.name.as_str()).unwrap_or("none"),
+                dir_info.as_ref().map(|d| d.name.as_str()).unwrap_or("none"),
             ),
         );
 
@@ -203,6 +473,7 @@ impl ScriptListApp {
         if self.show_actions_popup || is_actions_window_open() {
             // Close the actions popup
             self.show_actions_popup = false;
+            self.actions_closed_at = Some(std::time::Instant::now()); // Record debounce on close
             self.actions_dialog = None;
 
             // Close the actions window via spawn
@@ -225,6 +496,7 @@ impl ScriptListApp {
         } else {
             // Open actions popup for the selected clipboard entry
             self.show_actions_popup = true;
+            self.actions_closed_at = None; // Clear debounce on open
             self.focused_clipboard_entry_id = Some(entry.id.clone());
 
             // Use coordinator to push overlay - saves current focus state for restore
@@ -353,7 +625,9 @@ mod on_close_reentrancy_tests {
         let source = fs::read_to_string("src/render_builtins/actions.rs")
             .expect("Failed to read src/render_builtins/actions.rs");
 
-        let set_on_close_count = source.matches("d.set_on_close(std::sync::Arc::new(move |cx| {").count();
+        let set_on_close_count = source
+            .matches("d.set_on_close(std::sync::Arc::new(move |cx| {")
+            .count();
         let defer_count = source.matches("cx.defer(move |cx| {").count();
 
         assert_eq!(
@@ -417,5 +691,4 @@ mod on_close_reentrancy_tests {
             "clipboard actions should not open in the bottom-right position"
         );
     }
-
 }

@@ -54,6 +54,8 @@ pub struct ShortcutRecorder {
     overlay_animation_started_at: Instant,
     /// Ensures we schedule at most one animation tick task at a time
     overlay_animation_tick_scheduled: bool,
+    /// Render as a native popup window surface instead of an in-window overlay.
+    pub detached_window: bool,
 }
 
 impl OverlayAnimation for ShortcutRecorder {
@@ -93,7 +95,15 @@ impl ShortcutRecorder {
             pending_action: None,
             overlay_animation_started_at: Instant::now(),
             overlay_animation_tick_scheduled: false,
+            detached_window: false,
         }
+    }
+
+    /// Render this recorder inside a detached popup window instead of dimming
+    /// the parent launcher surface.
+    pub fn with_detached_window(mut self, detached: bool) -> Self {
+        self.detached_window = detached;
+        self
     }
 
     /// Set the command name

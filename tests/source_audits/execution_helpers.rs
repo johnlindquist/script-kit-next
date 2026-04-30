@@ -1,7 +1,7 @@
 //! Tests for execution_helpers.rs — Scratch Pad CRUD, API key prompt logic,
-//! and Claude config helpers.
+//! legacy Claude config helpers, and Agent Chat setup copy.
 
-use super::{count_occurrences as count, read_source as read};
+use super::read_source as read;
 
 fn execution_helpers_content() -> String {
     read("src/app_execute/execution_helpers.rs")
@@ -193,7 +193,7 @@ fn handle_api_key_completion_uses_deferred_resize() {
 }
 
 // ---------------------------------------------------------------------------
-// Claude config
+// Legacy Claude config compatibility
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -235,6 +235,58 @@ fn enable_claude_code_in_config_shows_install_instructions_when_cli_missing() {
 }
 
 // ---------------------------------------------------------------------------
+// Agent Chat setup contract
+// ---------------------------------------------------------------------------
+
+#[test]
+fn agent_chat_setup_copy_points_to_catalog_and_config_ts_not_direct_provider_keys() {
+    let setup = read("src/ai/window/render_setup.rs");
+    let readme = read("README.md");
+    let agent_config_section = readme
+        .split("### Agent Chat Configuration")
+        .nth(1)
+        .and_then(|rest| rest.split("### Legacy Direct-Provider API Keys").next())
+        .expect("README must document Agent Chat Configuration before legacy API keys");
+
+    assert!(
+        setup.contains("Open Agent Catalog"),
+        "setup card must offer the Agent Catalog"
+    );
+    assert!(
+        setup.contains("config.ts"),
+        "setup card must point users to config.ts"
+    );
+    assert!(
+        agent_config_section.contains("Agent Catalog")
+            && agent_config_section.contains("selectedAcpAgentId")
+            && agent_config_section.contains("profiles"),
+        "README Agent Chat config section must document catalog-backed ai preferences"
+    );
+
+    for stale in [
+        "Configure OpenAI API Key",
+        "Configure Anthropic API Key",
+        "Configure Vercel",
+        "Vercel AI Gateway",
+        "ACP Chat",
+    ] {
+        assert!(
+            !setup.contains(stale),
+            "setup card must not expose stale copy: {stale}"
+        );
+        assert!(
+            !agent_config_section.contains(stale),
+            "README Agent Chat config section must not expose stale copy: {stale}"
+        );
+    }
+
+    assert!(
+        !agent_config_section.contains("claudeCode"),
+        "README must not present claudeCode as the primary Agent Chat setup path"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // AI command dispatch — all user-facing branches use deferred helper
 // ---------------------------------------------------------------------------
 
@@ -251,7 +303,7 @@ fn ai_open_and_new_conversation_use_deferred_helper() {
     );
     assert!(
         content.contains("self.open_tab_ai_acp_with_entry_intent(None, cx);"),
-        "Expected legacy AI window aliases to route to ACP Chat"
+        "Expected legacy AI window aliases to route to Agent Chat"
     );
 }
 
@@ -263,8 +315,8 @@ fn ai_clear_conversation_uses_deferred_helper() {
         "Expected ClearConversation to be classified as a legacy harness alias"
     );
     assert!(
-        content.contains("format!(\"ai_{cmd:?}_routed_to_acp_chat\")"),
-        "Expected legacy AI aliases to report a routed_to_acp_chat success outcome"
+        content.contains("format!(\"ai_{cmd:?}_routed_to_harness\")"),
+        "Expected legacy AI aliases to report a routed_to_harness success outcome"
     );
 }
 
@@ -272,8 +324,8 @@ fn ai_clear_conversation_uses_deferred_helper() {
 fn ai_clear_conversation_shows_hud_on_success() {
     let content = builtin_execution_content();
     assert!(
-        content.contains("format!(\"ai_{cmd:?}_routed_to_acp_chat\")"),
-        "Expected ClearConversation success to be reported through the routed_to_acp_chat outcome"
+        content.contains("format!(\"ai_{cmd:?}_routed_to_harness\")"),
+        "Expected ClearConversation success to be reported through the routed_to_harness outcome"
     );
 }
 
@@ -346,46 +398,19 @@ fn reset_window_positions_suppresses_save_before_reset() {
 }
 
 #[test]
-fn settings_api_key_prompts_use_show_api_key_prompt() {
+fn settings_api_key_commands_are_not_exposed_as_builtins() {
     let content = builtin_execution_content();
 
-    let settings_section_start = content
-        .find("SettingsCommandType::ConfigureOpenAiApiKey")
-        .expect("Expected ConfigureOpenAiApiKey match arm");
-    let block = &content[settings_section_start..settings_section_start + 200];
-
     assert!(
-        block.contains("self.show_api_key_prompt("),
-        "Expected ConfigureOpenAiApiKey to use show_api_key_prompt helper"
+        !content.contains("SettingsCommandType::ConfigureVercelApiKey"),
+        "Vercel API key setup should not be a settings command"
     );
     assert!(
-        block.contains("SCRIPT_KIT_OPENAI_API_KEY"),
-        "Expected ConfigureOpenAiApiKey to pass correct key name"
-    );
-}
-
-#[test]
-fn settings_api_key_prompts_cover_all_providers() {
-    let content = builtin_execution_content();
-
-    // All three API key configuration commands should exist
-    assert!(
-        content.contains("SettingsCommandType::ConfigureVercelApiKey"),
-        "Expected ConfigureVercelApiKey settings command"
+        !content.contains("SettingsCommandType::ConfigureOpenAiApiKey"),
+        "OpenAI API key setup should not be a settings command"
     );
     assert!(
-        content.contains("SettingsCommandType::ConfigureOpenAiApiKey"),
-        "Expected ConfigureOpenAiApiKey settings command"
-    );
-    assert!(
-        content.contains("SettingsCommandType::ConfigureAnthropicApiKey"),
-        "Expected ConfigureAnthropicApiKey settings command"
-    );
-
-    // Each should use show_api_key_prompt
-    let prompt_count = count(&content, "self.show_api_key_prompt(");
-    assert!(
-        prompt_count >= 3,
-        "Expected at least 3 API key prompt usages (found {prompt_count})"
+        !content.contains("SettingsCommandType::ConfigureAnthropicApiKey"),
+        "Anthropic API key setup should not be a settings command"
     );
 }

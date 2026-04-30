@@ -13,8 +13,12 @@ pub enum ContextPickerTrigger {
 pub enum PortalKind {
     /// Open the Spotlight-powered file search view.
     FileSearch,
+    /// Open the recent browser history browser.
+    BrowserHistory,
     /// Open the visual clipboard history browser.
     ClipboardHistory,
+    /// Open the saved dictation history browser.
+    DictationHistory,
     /// Open the main launcher filtered to scripts only.
     ScriptSearch,
     /// Open the main launcher filtered to scriptlets only.

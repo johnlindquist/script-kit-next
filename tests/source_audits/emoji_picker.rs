@@ -57,8 +57,11 @@ fn test_render_emoji_picker_delegates_arrow_navigation_to_navigate_emoji_picker(
         "navigate_emoji_picker should use EmojiNavDirection from emoji module"
     );
     assert!(
-        source.contains("crate::emoji::build_emoji_grid_layout"),
-        "navigate_emoji_picker should use row-aware build_emoji_grid_layout"
+        source.contains("crate::emoji::build_display_grid_layout"),
+        "navigate_emoji_picker should use row-aware build_display_grid_layout \
+         so it accounts for the Frequently Used head block AND category \
+         boundaries (the legacy build_emoji_grid_layout did not understand \
+         the head block)"
     );
     assert!(
         source.contains("scroll_row_for_index"),

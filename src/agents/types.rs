@@ -32,7 +32,7 @@ use std::path::PathBuf;
 
 /// Represents an mdflow agent parsed from a .md file
 ///
-/// Agents are markdown files in `~/.scriptkit/*/agents/` that can be executed
+/// Agents are markdown files in `~/.scriptkit/plugins/*/agents/` that can be executed
 /// via the mdflow CLI. The filename determines the AI backend to use:
 /// - `task.claude.md` → runs via `claude` CLI
 /// - `task.gemini.md` → runs via `gemini` CLI

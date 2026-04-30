@@ -264,7 +264,7 @@ fn matches_state_spec_is_exported() {
 
 #[test]
 fn notes_skill_documents_automation_only_surface_and_sdk_has_no_public_notes_globals() {
-    let skill = include_str!("../kit-init/skills/notes/SKILL.md");
+    let skill = include_str!("../kit-init/skills/manage-notes/SKILL.md");
     assert!(
         skill.contains(
             "The current public Notes script surface is the automation target (`kind: notes`)"
@@ -295,12 +295,12 @@ fn notes_send_to_acp_label_is_consistent_across_builder_and_panel() {
     let panel = include_str!("../src/notes/actions_panel.rs");
 
     assert!(
-        builder.contains("\"Send to ACP Chat\""),
-        "Notes builder must use 'Send to ACP Chat' label"
+        builder.contains("\"Send to Agent Chat\""),
+        "Notes builder must use 'Send to Agent Chat' label"
     );
     assert!(
-        panel.contains("\"Send to ACP Chat\""),
-        "Notes actions panel must use 'Send to ACP Chat' display name"
+        panel.contains("\"Send to Agent Chat\""),
+        "Notes actions panel must use 'Send to Agent Chat' display name"
     );
 }
 
@@ -368,7 +368,7 @@ fn notes_embedded_acp_switch_emits_structured_logs() {
 
 #[test]
 fn notes_acp_handoff_documented_in_skill_and_guide() {
-    let skill = include_str!("../kit-init/skills/notes/SKILL.md");
+    let skill = include_str!("../kit-init/skills/manage-notes/SKILL.md");
     let guide = include_str!("../kit-init/GUIDE.md");
 
     for doc in [skill, guide] {
@@ -377,8 +377,8 @@ fn notes_acp_handoff_documented_in_skill_and_guide() {
             "Notes docs must have ACP Handoffs section"
         );
         assert!(
-            doc.contains("**Send to ACP Chat**"),
-            "Notes docs must document Send to ACP Chat handoff"
+            doc.contains("**Send to Agent Chat**"),
+            "Notes docs must document Send to Agent Chat handoff"
         );
         assert!(
             doc.contains("**Save as Note**"),

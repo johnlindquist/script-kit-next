@@ -86,8 +86,18 @@ pub(crate) fn inline_dropdown_select_next(selected_index: usize, item_count: usi
     }
 }
 
-/// Compute the visible row range centered on `selected_index`.
+/// Compute the visible row range without scrolling the first page early.
 pub(crate) fn inline_dropdown_visible_range(
+    selected_index: usize,
+    item_count: usize,
+    max_visible_rows: usize,
+) -> std::ops::Range<usize> {
+    inline_dropdown_visible_range_from_start(0, selected_index, item_count, max_visible_rows)
+}
+
+/// Compute the visible row range from an existing window start.
+pub(crate) fn inline_dropdown_visible_range_from_start(
+    visible_start: usize,
     selected_index: usize,
     item_count: usize,
     max_visible_rows: usize,
@@ -95,8 +105,17 @@ pub(crate) fn inline_dropdown_visible_range(
     if item_count <= max_visible_rows {
         return 0..item_count;
     }
-    let half = max_visible_rows / 2;
-    let mut start = selected_index.saturating_sub(half);
+    let mut start = visible_start;
+    let visible_end = start.saturating_add(max_visible_rows);
+
+    if selected_index < start {
+        start = selected_index;
+    } else if selected_index >= visible_end {
+        start = selected_index
+            .saturating_add(1)
+            .saturating_sub(max_visible_rows);
+    }
+
     let max_start = item_count.saturating_sub(max_visible_rows);
     if start > max_start {
         start = max_start;

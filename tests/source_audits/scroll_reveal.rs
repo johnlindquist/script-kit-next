@@ -160,3 +160,94 @@ fn sync_list_state_regression_invalidates_reveal_even_when_count_unchanged() {
         "re-reveal must happen after cache invalidation"
     );
 }
+
+#[test]
+fn footer_safe_scroll_offset_uses_footer_reduced_viewport_for_trailing_scroll_budget() {
+    let content = read("src/app_navigation/impl_scroll.rs");
+
+    let fn_start = content
+        .find("fn footer_safe_scroll_offset_for_item(")
+        .expect("footer_safe_scroll_offset_for_item function not found");
+    let fn_body = &content[fn_start..content.len().min(fn_start + 1200)];
+
+    assert!(
+        fn_body.contains("let safe_viewport_height = viewport_height - footer_overlay_height;"),
+        "footer_safe_scroll_offset_for_item must compute a footer-reduced viewport height"
+    );
+    assert!(
+        fn_body.contains("script_list_content_height(items) - safe_viewport_height"),
+        "footer_safe_scroll_offset_for_item must allow the extra trailing scroll budget required to clear the footer overlay"
+    );
+    assert!(
+        fn_body.contains("let safe_bottom = current_scroll_top + safe_viewport_height;"),
+        "footer_safe_scroll_offset_for_item must compare against the footer-safe visible bottom edge"
+    );
+}
+
+#[test]
+fn script_list_scroll_wheel_handler_stops_native_list_propagation() {
+    let content = read("src/render_script_list/mod.rs");
+
+    let handler_start = content
+        .find(".on_scroll_wheel(cx.listener(")
+        .expect("script list scroll wheel handler not found");
+    let handler_body = &content[handler_start..content.len().min(handler_start + 3200)];
+
+    assert!(
+        handler_body.contains("if scroll_item_count == 0 {"),
+        "script list wheel handler should keep empty-list behavior explicit"
+    );
+    assert!(
+        handler_body.contains("cx.stop_propagation();"),
+        "script list wheel handler must stop propagation so GPUI native list scrolling cannot drift past selection"
+    );
+}
+
+#[test]
+fn script_list_scrollbar_overlay_uses_footer_safe_viewport_and_content_height() {
+    let content = read("src/render_script_list/mod.rs");
+
+    assert!(
+        content.contains(
+            "let safe_viewport_height = (viewport_height - footer_overlay_height).max(px(0.0));"
+        ),
+        "script list scrollbar overlay must clip itself to the footer-safe viewport height"
+    );
+    assert!(
+        content.contains(".map(|item| match item {")
+            && content.contains("GroupedListItem::SectionHeader(..)")
+            && content.contains("GroupedListItem::Item(..)"),
+        "script list scrollbar overlay must size against real grouped row heights"
+    );
+    assert!(
+        content.contains(".scroll_size(size(px(0.0), content_height))"),
+        "script list scrollbar overlay must override vendor scroll size with footer-aware content height"
+    );
+    assert!(
+        !content.contains(".scrollbar_show(ScrollbarShow::Always)"),
+        "script list scrollbar should not force always-visible mode"
+    );
+}
+
+#[test]
+fn browser_history_wheel_handler_intercepts_and_stops_native_scroll() {
+    let content = read("src/render_builtins/browser_history.rs");
+
+    let handler_start = content
+        .find(".on_scroll_wheel(cx.listener(")
+        .expect("browser history scroll wheel handler not found");
+    let handler_body = &content[handler_start..content.len().min(handler_start + 2600)];
+
+    assert!(
+        handler_body.contains("builtin_scroll_target_from_wheel"),
+        "browser history wheel handler should use the shared builtin wheel helper"
+    );
+    assert!(
+        handler_body.contains("this.browser_history_scroll_handle"),
+        "browser history wheel handler should drive the browser-history scroll handle"
+    );
+    assert!(
+        handler_body.contains("cx.stop_propagation();"),
+        "browser history wheel handler must stop propagation so GPUI native scrolling cannot fight selection"
+    );
+}

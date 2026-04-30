@@ -178,7 +178,7 @@ fn validate_agent_markdown_path_with_kit_root(path: &Path, kit_root: &Path) -> R
             kit_root.display()
         )
     })?;
-    let kit_agents_root = canonical_kit_root.join("kit");
+    let kit_agents_root = canonical_kit_root.join("plugins");
 
     if !canonical_path.starts_with(&kit_agents_root) {
         anyhow::bail!(
@@ -561,7 +561,7 @@ mod tests {
 
         let temp_dir = TempDir::new().expect("create temp dir");
         let kit_root = temp_dir.path().join("scriptkit");
-        let agents_dir = kit_root.join("kit/main/agents");
+        let agents_dir = kit_root.join("plugins/main/agents");
         fs::create_dir_all(&agents_dir).expect("create agents directory");
 
         let previous = std::env::var_os(crate::setup::SK_PATH_ENV);
@@ -664,7 +664,7 @@ mod tests {
     #[test]
     fn test_build_terminal_command_rejects_path_with_parent_segments() {
         with_temp_kit_agents_dir(|kit_root, _agents_dir| {
-            let kit_main = kit_root.join("kit/main");
+            let kit_main = kit_root.join("plugins/main");
             fs::write(kit_main.join("escape.claude.md"), "# test")
                 .expect("write outside agent file");
 
@@ -863,7 +863,7 @@ mod tests {
     fn test_validate_agent_markdown_path_accepts_file_inside_kit_agents_dir() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let kit_root = temp_dir.path().join("scriptkit");
-        let agent_dir = kit_root.join("kit/main/agents");
+        let agent_dir = kit_root.join("plugins/main/agents");
         fs::create_dir_all(&agent_dir).expect("create agents directory");
 
         let agent_file = agent_dir.join("review.claude.md");
@@ -879,7 +879,7 @@ mod tests {
     fn test_validate_agent_markdown_path_rejects_path_with_parent_segments() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let kit_root = temp_dir.path().join("scriptkit");
-        let kit_main = kit_root.join("kit/main");
+        let kit_main = kit_root.join("plugins/main");
         fs::create_dir_all(kit_main.join("agents")).expect("create agents directory");
         fs::write(kit_main.join("escape.claude.md"), "# test").expect("write outside agent file");
 
@@ -896,7 +896,7 @@ mod tests {
     fn test_validate_agent_markdown_path_rejects_file_outside_agents_directory() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let kit_root = temp_dir.path().join("scriptkit");
-        let script_dir = kit_root.join("kit/main/scripts");
+        let script_dir = kit_root.join("plugins/main/scripts");
         fs::create_dir_all(&script_dir).expect("create scripts directory");
 
         let script_file = script_dir.join("not-agent.md");
@@ -914,7 +914,7 @@ mod tests {
     fn test_validate_agent_markdown_path_rejects_non_markdown_extension() {
         let temp_dir = TempDir::new().expect("create temp dir");
         let kit_root = temp_dir.path().join("scriptkit");
-        let agent_dir = kit_root.join("kit/main/agents");
+        let agent_dir = kit_root.join("plugins/main/agents");
         fs::create_dir_all(&agent_dir).expect("create agents directory");
 
         let binary_file = agent_dir.join("review.claude.txt");

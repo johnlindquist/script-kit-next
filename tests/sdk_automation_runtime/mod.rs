@@ -2,6 +2,10 @@
 //! and `batch` automation APIs have correct protocol wire shapes, round-trip
 //! cleanly, and that the transaction executor produces the expected results.
 
+use script_kit_gpui::menu_syntax::{
+    MenuSyntaxMainHintChip, MenuSyntaxMainHintKind, MenuSyntaxMainHintSnapshot,
+    MenuSyntaxMainHintTone,
+};
 use script_kit_gpui::protocol::transaction_executor::{
     execute_batch, execute_wait_for, TransactionStateProvider,
 };
@@ -110,6 +114,29 @@ fn get_state_request_parses() {
 
 #[test]
 fn state_result_serializes_all_fields() {
+    let menu_syntax_main_hint = MenuSyntaxMainHintSnapshot {
+        kind: MenuSyntaxMainHintKind::CaptureComposer,
+        raw_filter_text: ";todo Buy milk #errands".to_string(),
+        title: "Capture todo".to_string(),
+        subtitle: Some("Enter saves this as structured local data.".to_string()),
+        mode_chip: Some(MenuSyntaxMainHintChip {
+            label: "; capture".to_string(),
+            tone: MenuSyntaxMainHintTone::Accent,
+        }),
+        status_chip: None,
+        status_chips: Vec::new(),
+        capture_validation: None,
+        unresolved_dates: Vec::new(),
+        menu_syntax_ai_proposal: None,
+        rows: Vec::new(),
+        fragment_preview: None,
+        primary_hint: Some("Press Enter to capture.".to_string()),
+        secondary_hint: None,
+        example: None,
+        examples: Vec::new(),
+        warning: None,
+        accessibility_label: "Capture todo. Press Enter to capture.".to_string(),
+    };
     let msg = Message::state_result(
         "gs-1".to_string(),
         "arg".to_string(),
@@ -122,6 +149,9 @@ fn state_result_serializes_all_fields() {
         Some("alpha".to_string()),
         true,
         true,
+        Some(menu_syntax_main_hint),
+        None,
+        Some("tab-ai-screenshot-20260418T063000.000Z-11474-42.png".to_string()),
     );
     let json = serde_json::to_value(&msg).expect("serialize stateResult");
     assert_eq!(json["type"], "stateResult");
@@ -134,6 +164,13 @@ fn state_result_serializes_all_fields() {
     assert_eq!(json["selectedValue"], "alpha");
     assert_eq!(json["isFocused"], true);
     assert_eq!(json["windowVisible"], true);
+    assert_eq!(json["menuSyntaxMainHint"]["kind"], "CaptureComposer");
+    assert_eq!(json["menuSyntaxMainHint"]["title"], "Capture todo");
+    assert_eq!(json["menuSyntaxMainHint"]["modeChip"]["label"], "; capture");
+    assert_eq!(
+        json["screenshotIdentity"],
+        "tab-ai-screenshot-20260418T063000.000Z-11474-42.png"
+    );
 }
 
 #[test]
@@ -150,8 +187,22 @@ fn state_result_round_trips() {
         None,
         false,
         true,
+        None,
+        None,
+        None,
     );
     let serialized = serde_json::to_string(&msg).expect("serialize");
+    assert!(
+        !serialized.contains("menuSyntaxMainHint"),
+        "`menuSyntaxMainHint` must be omitted from JSON when `None` \
+         so clients can treat absence as no grammar-owned state. Got: {serialized}"
+    );
+    assert!(
+        !serialized.contains("screenshotIdentity"),
+        "`screenshotIdentity` must be omitted from JSON when `None` \
+         (skip_serializing_if=Option::is_none) — presence with null value \
+         would widen the protocol surface. Got: {serialized}"
+    );
     let back: Message = serde_json::from_str(&serialized).expect("deserialize");
     match back {
         Message::StateResult {
@@ -160,6 +211,7 @@ fn state_result_round_trips() {
             input_value,
             selected_index,
             window_visible,
+            screenshot_identity,
             ..
         } => {
             assert_eq!(request_id, "gs-rt");
@@ -167,6 +219,7 @@ fn state_result_round_trips() {
             assert_eq!(input_value, "");
             assert_eq!(selected_index, -1);
             assert!(window_visible);
+            assert_eq!(screenshot_identity, None);
         }
         other => panic!("Expected StateResult, got: {other:?}"),
     }

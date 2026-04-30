@@ -1,0 +1,48 @@
+[package]
+name = "macos-ax-gpui"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["OpenAI"]
+license = "MIT OR Apache-2.0"
+description = "A GPUI-friendly Rust wrapper around macOS Accessibility (AXUIElement) for reading and controlling desktop apps."
+keywords = ["macos", "accessibility", "gpui", "automation", "axuielement"]
+categories = ["api-bindings", "gui", "os::macos-apis"]
+
+[features]
+default = []
+# Thin event-source adapter for Zed's GPUI. The core library does not require GPUI.
+gpui = ["dep:gpui"]
+
+[dependencies]
+gpui = { version = "0.2.2", optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+accessibility-sys = "0.2"
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
+libc = "0.2"
+
+[[example]]
+name = "focused_tree"
+path = "examples/focused_tree.rs"
+
+[[example]]
+name = "observe_focused_app"
+path = "examples/observe_focused_app.rs"
+
+[[example]]
+name = "window_list"
+path = "examples/window_list.rs"
+
+[[example]]
+name = "snap_focused_window"
+path = "examples/snap_focused_window.rs"
+
+[[example]]
+name = "press_menu_item"
+path = "examples/press_menu_item.rs"
+
+[[example]]
+name = "text_selection"
+path = "examples/text_selection.rs"

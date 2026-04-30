@@ -98,11 +98,15 @@ fn native_file_drag_uses_file_url_pasteboard_type() {
 // ──────────────────────────────────────────────────────────────────────
 
 const FILE_SEARCH_SOURCE: &str = include_str!("../../src/render_builtins/file_search.rs");
+const RENDER_IMPL_SOURCE: &str = include_str!("../../src/main_sections/render_impl.rs");
+const STARTUP_SOURCE: &str = include_str!("../../src/app_impl/startup.rs");
+const STARTUP_NEW_TAB_SOURCE: &str = include_str!("../../src/app_impl/startup_new_tab.rs");
+const UTILITY_VIEWS_SOURCE: &str = include_str!("../../src/app_execute/utility_views.rs");
 
 #[test]
 fn file_search_list_has_on_drag_handler() {
     assert!(
-        FILE_SEARCH_SOURCE.contains(".on_drag(drag_payload"),
+        FILE_SEARCH_SOURCE.contains(".on_drag(") && FILE_SEARCH_SOURCE.contains("drag_payload,"),
         "file search list rows must have an on_drag handler"
     );
 }
@@ -130,6 +134,138 @@ fn file_search_drag_creates_drag_preview_entity() {
     assert!(
         FILE_SEARCH_SOURCE.contains("cx.new(|_| file_search::FileDragPayload"),
         "on_drag constructor must create a FileDragPayload entity for preview"
+    );
+}
+
+#[test]
+fn file_search_reentry_click_after_native_drag_clears_active_drag_during_capture() {
+    let root_mouse_capture = RENDER_IMPL_SOURCE
+        .split(".capture_any_mouse_down(cx.listener(|this, _, window, cx| {")
+        .nth(1)
+        .expect("main window root must capture mouse down before child handlers")
+        .split("// Close popups when the user clicks anywhere on the main window.")
+        .next()
+        .expect("file-search capture block must end before popup close handling");
+
+    assert!(
+        root_mouse_capture.contains("take_file_search_native_drag_awaiting_app_reactivate()"),
+        "File Search native-drag re-entry must consume the pending app-reactivation marker during capture"
+    );
+    assert!(
+        root_mouse_capture.contains("cx.stop_active_drag(window)"),
+        "File Search native-drag re-entry must clear stale GPUI active_drag before child mouse handlers run"
+    );
+    assert!(
+        root_mouse_capture.contains("platform::activate_main_window();"),
+        "File Search native-drag re-entry must activate the app before restoring input focus"
+    );
+}
+
+#[test]
+fn file_search_reentry_click_after_native_drag_is_consumed() {
+    let root_mouse_capture = RENDER_IMPL_SOURCE
+        .split(".capture_any_mouse_down(cx.listener(|this, _, window, cx| {")
+        .nth(1)
+        .expect("main window root must capture mouse down before child handlers")
+        .split("// Close popups when the user clicks anywhere on the main window.")
+        .next()
+        .expect("file-search capture block must end before popup close handling");
+
+    assert!(
+        root_mouse_capture.contains("needs_app_reactivate || stopped_drag"),
+        "re-entry click should be consumed when a native drag marker or stale active_drag is present"
+    );
+    assert!(
+        root_mouse_capture.contains("cx.stop_propagation();"),
+        "re-entry click must not propagate to the stale drag preview or underlying row"
+    );
+}
+
+#[test]
+fn file_search_drag_move_clears_gpui_file_drag_payload() {
+    assert!(
+        RENDER_IMPL_SOURCE.contains(".on_drag_move::<file_search::FileDragPayload>"),
+        "File Search must clear GPUI's FileDragPayload active_drag during drag-move after native handoff"
+    );
+    let drag_move_cleanup = RENDER_IMPL_SOURCE
+        .split(".on_drag_move::<file_search::FileDragPayload>")
+        .nth(1)
+        .expect("File Search must install a FileDragPayload drag-move cleanup")
+        .split("// Close popups when the user clicks anywhere on the main window.")
+        .next()
+        .expect("drag-move cleanup must be near the root mouse handling");
+    assert!(
+        drag_move_cleanup.contains("cx.stop_active_drag(window)")
+            && drag_move_cleanup.contains("cx.stop_propagation();"),
+        "File Search drag-move cleanup must stop stale active_drag and consume that GPUI drag event"
+    );
+}
+
+#[test]
+fn file_search_header_input_click_restores_focus_even_when_occluding_root() {
+    let header = FILE_SEARCH_SOURCE
+        .split("let header_element = div()")
+        .nth(1)
+        .expect("File Search must render an explicit header element")
+        .split("// List pane: loading/empty/results with scrollbar overlay")
+        .next()
+        .expect("File Search header block must end before list pane");
+
+    assert!(
+        header.contains(".occlude()"),
+        "File Search header intentionally occludes mouse hit-testing behind the input"
+    );
+    assert!(
+        header.contains(".capture_any_mouse_down(cx.listener("),
+        "File Search header must capture input clicks because occlusion prevents the root refocus handler from seeing them"
+    );
+    assert!(
+        header.contains("take_file_search_native_drag_awaiting_app_reactivate()")
+            && header.contains("cx.stop_active_drag(window)")
+            && header.contains("this.focus_main_filter(window, cx)"),
+        "File Search header input clicks must clear stale drag state and restore the shared filter focus directly"
+    );
+    let header_capture = header
+        .split(".capture_any_mouse_down(cx.listener(")
+        .nth(1)
+        .expect("File Search header must install mouse-down capture")
+        .split(".on_mouse_move")
+        .next()
+        .expect("File Search header capture must precede mouse-move handling");
+    assert!(
+        !header_capture.contains("cx.stop_propagation();"),
+        "File Search header focus capture must not consume normal input clicks; the input still needs the click for caret placement"
+    );
+}
+
+#[test]
+fn file_search_rows_do_not_attach_hover_tooltips() {
+    assert!(
+        !FILE_SEARCH_SOURCE.contains("Open selected file")
+            && !FILE_SEARCH_SOURCE.contains("gpui_component::tooltip::Tooltip::new"),
+        "File Search rows must not attach row hover tooltips; GPUI visible tooltips can survive occlusion after native drag-out and make the dragged row look interactive"
+    );
+}
+
+#[test]
+fn file_search_rows_use_explicit_hover_state_cleared_by_header() {
+    assert!(
+        !FILE_SEARCH_SOURCE.contains(".when(!is_selected, |d| d.hover")
+            && !FILE_SEARCH_SOURCE.contains(".hover(move |s| s.bg("),
+        "File Search rows must not use direct GPUI hover styling; drag-out can leave GPUI hitbox hover state stale"
+    );
+    assert!(
+        FILE_SEARCH_SOURCE.contains(".on_hover(hover_handler)")
+            && FILE_SEARCH_SOURCE.contains("this.hovered_index = Some(ix)")
+            && FILE_SEARCH_SOURCE.contains("this.hovered_index = None")
+            && FILE_SEARCH_SOURCE.contains("file_hovered == Some(ix)"),
+        "File Search rows should paint hover from explicit app state so the header can clear stale hover"
+    );
+    assert!(
+        FILE_SEARCH_SOURCE.contains("if this.hovered_index.is_some()")
+            && FILE_SEARCH_SOURCE.contains("this.hovered_index = None;")
+            && FILE_SEARCH_SOURCE.contains("cx.stop_propagation();"),
+        "File Search header/input must clear explicit row hover and occlude mouse movement"
     );
 }
 
@@ -241,7 +377,7 @@ fn file_search_key_handler_reads_from_shared_contract() {
 fn file_search_footer_advertises_actions_with_selection_or_directory() {
     // Selected-file branch must advertise ⌘K Actions.
     let selected_branch = FILE_SEARCH_SOURCE
-        .split("if let Some(file) = selected_file.as_ref()")
+        .split("} else if selected_file.is_some()")
         .nth(1)
         .expect("selected file footer branch must exist");
     let selected_branch = selected_branch
@@ -346,6 +482,63 @@ fn file_search_native_drag_stops_gpui_drag_state() {
         FILE_SEARCH_SOURCE.contains("cx.stop_active_drag(window)"),
         "native file drag handoff must stop GPUI drag state so Escape keeps dismissing the view"
     );
+    assert!(
+        FILE_SEARCH_SOURCE.contains("window.defer(cx, move |window, cx|")
+            && FILE_SEARCH_SOURCE.contains("file_search_native_drag_gpui_state_cleared"),
+        "native file drag handoff must defer GPUI drag cleanup until after on_drag stores active_drag"
+    );
+}
+
+#[test]
+fn file_search_refocus_restores_keyboard_after_drag_out() {
+    assert!(
+        RENDER_IMPL_SOURCE.contains("file_search_refocus_restored_keyboard")
+            && RENDER_IMPL_SOURCE.contains("self.pending_focus = Some(FocusTarget::MainFilter);")
+            && RENDER_IMPL_SOURCE.contains("cx.stop_active_drag(window)"),
+        "FileSearchView refocus must restore main-filter focus and clear lingering drag state"
+    );
+    assert!(
+        RENDER_IMPL_SOURCE.contains("Cmd+W - closing FileSearchView from root capture")
+            && RENDER_IMPL_SOURCE.contains("this.go_back_or_close(window, cx);"),
+        "root key capture must keep Escape and Cmd+W working when FileSearchView focus was lost"
+    );
+    assert!(
+        RENDER_IMPL_SOURCE.contains("this.focus_main_filter(window, cx);")
+            && RENDER_IMPL_SOURCE.contains("restored_main_filter_focus=true"),
+        "FileSearchView root mouse down must explicitly restore main-filter focus"
+    );
+    assert!(
+        RENDER_IMPL_SOURCE.contains("window.activate_window();")
+            && RENDER_IMPL_SOURCE.contains("FileSearch deferred root refocus")
+            && RENDER_IMPL_SOURCE.contains(
+                "take_file_search_native_drag_awaiting_app_reactivate()"
+            )
+            && RENDER_IMPL_SOURCE.contains("platform::activate_main_window();"),
+        "FileSearchView root mouse down after native drag-out must activate the app and re-key the panel"
+    );
+    assert!(
+        FILE_SEARCH_SOURCE.contains("FILE_SEARCH_NATIVE_DRAG_AWAITING_APP_REACTIVATE")
+            && FILE_SEARCH_SOURCE
+                .contains("mark_file_search_native_drag_awaiting_app_reactivate();"),
+        "native file drag handoff must arm the next FileSearchView click to reactivate the app"
+    );
+}
+
+#[test]
+fn file_search_plain_tab_navigates_into_selected_directory() {
+    assert!(
+        UTILITY_VIEWS_SOURCE.contains("fn navigate_file_search_into_selected_directory("),
+        "file search must expose one shared helper for Tab directory navigation"
+    );
+    assert!(
+        STARTUP_SOURCE.contains("this.navigate_file_search_into_selected_directory(cx)")
+            && STARTUP_SOURCE.contains("cx.stop_propagation();"),
+        "live Tab interceptor must consume FileSearchView Tab and browse into the selected directory"
+    );
+    assert!(
+        STARTUP_NEW_TAB_SOURCE.contains("this.navigate_file_search_into_selected_directory(cx)"),
+        "startup_new_tab.rs parity source must keep FileSearchView Tab directory navigation"
+    );
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -428,6 +621,35 @@ fn sort_mode_resets_on_fresh_file_search_open() {
     );
 }
 
+#[test]
+fn modified_sort_compares_files_and_directories_together() {
+    let compare_start = FILES_ACTION_SOURCE
+        .find("fn compare_file_search_results_for_mode(")
+        .expect("compare_file_search_results_for_mode must exist");
+    let compare_section =
+        &FILES_ACTION_SOURCE[compare_start..(compare_start + 2400).min(FILES_ACTION_SOURCE.len())];
+    let modified_desc_start = compare_section
+        .find("FileSearchSortMode::ModifiedDesc")
+        .expect("ModifiedDesc arm must exist");
+    let modified_desc_section = &compare_section
+        [modified_desc_start..(modified_desc_start + 360).min(compare_section.len())];
+
+    assert!(
+        modified_desc_section.contains("b.modified")
+            && modified_desc_section.contains("cmp(&a.modified)"),
+        "newest sort must compare modified timestamps directly"
+    );
+    assert!(
+        !modified_desc_section.contains("FileType::Directory"),
+        "newest sort must not apply directory-first grouping"
+    );
+    assert!(
+        compare_section.contains("FileSearchSortMode::NameAsc")
+            && compare_section.contains("FileType::Directory"),
+        "name sort should still keep the directory-first grouping"
+    );
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Toggle function accepts optional file (directory-only mode)
 // ──────────────────────────────────────────────────────────────────────
@@ -456,6 +678,134 @@ fn sort_mode_preserved_on_internal_browse() {
     assert!(
         source.contains("if !preserve_sort_mode {"),
         "open_file_search_view must conditionally reset sort mode"
+    );
+}
+
+#[test]
+fn internal_directory_browse_preserves_current_results_until_first_batch() {
+    let source = include_str!("../../src/app_impl/filter_input_core.rs");
+    assert!(
+        source.contains("fn open_file_search_view_preserving_current_results("),
+        "file search must expose an internal browse path that preserves current rows"
+    );
+    assert!(
+        source.contains(
+            "open_file_search_view_with_result_transition(query, presentation, true, cx)"
+        ),
+        "the preserving browse helper must enable the stable transition path"
+    );
+
+    let transition_start = source
+        .find("fn open_file_search_view_with_result_transition(")
+        .expect("transition helper must exist");
+    let transition = &source[transition_start..(transition_start + 3600).min(source.len())];
+
+    assert!(
+        transition.contains("if !preserve_current_results_until_first_batch {")
+            && transition.contains("self.cached_file_results.clear();")
+            && transition.contains("self.file_search_display_indices.clear();"),
+        "preserving directory navigation must avoid clearing visible rows until the stream's first batch"
+    );
+    assert!(
+        transition.contains(
+            "let preserve_stream_results =\n            preserve_current_results_until_first_batch || seeded_initial_results;"
+        ) && transition.contains("preserve_stream_results,\n            cx,"),
+        "the preserving flag must flow into restart_file_search_stream_for_query, including the seeded mini-directory first-paint path"
+    );
+}
+
+#[test]
+fn tab_directory_navigation_uses_stable_result_transition() {
+    let source = include_str!("../../src/app_execute/utility_views.rs");
+    let browse_start = source
+        .find("fn navigate_file_search_into_selected_directory(")
+        .expect("tab directory browse helper must exist");
+    let browse_section = &source[browse_start..(browse_start + 1600).min(source.len())];
+
+    assert!(
+        browse_section.contains("open_file_search_view_preserving_current_results"),
+        "Tab directory navigation must keep the current directory visible while the next directory loads"
+    );
+}
+
+#[test]
+fn directory_stream_reveals_results_as_one_stable_batch() {
+    let source = include_str!("../../src/app_impl/filter_input_change.rs");
+    assert!(
+        source.contains("defer_batches_until_done"),
+        "directory streams need an explicit stable reveal mode"
+    );
+    assert!(
+        source.contains("if defer_batches_until_done && !done {\n                    continue;\n                }"),
+        "stable reveal mode must avoid applying intermediate stream batches"
+    );
+
+    let directory_start = source
+        .find("FileSearchStreamSource::Directory {\n                    dir: parsed.directory,")
+        .expect("directory stream restart call must exist");
+    let directory_section = &source[directory_start..(directory_start + 2600).min(source.len())];
+    assert!(
+        directory_section.contains("true,\n                true,\n                cx,"),
+        "directory streams must defer UI updates until the listing is complete"
+    );
+
+    let spotlight_start = source
+        .find("FileSearchStreamSource::Spotlight {\n                query: query.clone(),")
+        .expect("spotlight stream restart call must exist");
+    let spotlight_section = &source[spotlight_start..(spotlight_start + 2600).min(source.len())];
+    assert!(
+        spotlight_section
+            .contains("false,\n            false,\n            false,\n            cx,"),
+        "Spotlight search should keep progressive streaming behavior"
+    );
+}
+
+#[test]
+fn directory_dot_filter_restarts_stream_when_hidden_visibility_changes() {
+    let source = include_str!("../../src/app_impl/filter_input_change.rs");
+    let branch_start = source
+        .find("if let Some(parsed) = crate::file_search::parse_directory_path(&new_text)")
+        .expect("file-search filter branch must parse directory paths");
+    let branch = &source[branch_start..(branch_start + 2200).min(source.len())];
+
+    assert!(
+        branch.contains("hidden_visibility_changed"),
+        "same-directory file-search filtering must track hidden visibility changes"
+    );
+    assert!(
+        branch.contains("self.file_search_current_dir_show_hidden != parsed.show_hidden"),
+        "typing `.` must notice when the current directory cache was built without hidden rows"
+    );
+    assert!(
+        branch.contains("if dir_changed || hidden_visibility_changed"),
+        "hidden visibility changes must restart the directory stream instead of filtering the old cache"
+    );
+}
+
+#[test]
+fn file_search_current_directory_tracks_hidden_visibility() {
+    let state_source = include_str!("../../src/main_sections/app_state.rs");
+    let startup_source = include_str!("../../src/app_impl/startup.rs");
+    let startup_new_state_source = include_str!("../../src/app_impl/startup_new_state.rs");
+    let core_source = include_str!("../../src/app_impl/filter_input_core.rs");
+    let change_source = include_str!("../../src/app_impl/filter_input_change.rs");
+
+    assert!(
+        state_source.contains("file_search_current_dir_show_hidden: bool"),
+        "app state must remember whether the current directory cache includes hidden entries"
+    );
+    assert!(
+        startup_source.contains("file_search_current_dir_show_hidden: false")
+            && startup_new_state_source.contains("file_search_current_dir_show_hidden: false"),
+        "all ScriptListApp constructors must initialize hidden-directory cache state"
+    );
+    assert!(
+        core_source.contains("self.file_search_current_dir_show_hidden = parsed.show_hidden;"),
+        "first-paint seeded directory rows must record their hidden visibility"
+    );
+    assert!(
+        change_source.contains("self.file_search_current_dir_show_hidden = parsed.show_hidden;"),
+        "streamed directory rows must record their hidden visibility"
     );
 }
 

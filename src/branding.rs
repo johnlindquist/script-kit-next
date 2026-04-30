@@ -1,0 +1,13 @@
+//! Shared Script Kit branding constants used by tray and launcher surfaces.
+
+pub const APP_NAME: &str = "Script Kit";
+pub const TAGLINE: &str = "Automate your Mac with scripts, shortcuts, and AI-native workflows.";
+
+/// SVG logo for Script Kit (32x32, monochrome).
+pub const LOGO_SVG: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 32 32">
+  <path fill="currentColor" d="M14 25a2 2 0 0 1 2-2h14a2 2 0 1 1 0 4H16a2 2 0 0 1-2-2ZM0 7.381c0-1.796 1.983-2.884 3.498-1.92l13.728 8.736c1.406.895 1.406 2.946 0 3.84L3.498 26.775C1.983 27.738 0 26.649 0 24.854V7.38Z"/>
+</svg>"#;
+
+pub const URL_FOLLOW_US: &str = "https://x.com/scriptkitapp";
+pub const URL_GITHUB: &str = "https://github.com/johnlindquist/script-kit-next";
+pub const URL_DISCORD: &str = "https://discord.gg/qnUX4XqJQd";

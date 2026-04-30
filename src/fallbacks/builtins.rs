@@ -74,7 +74,7 @@ pub const SEND_TO_AI_FALLBACK_ID: &str = "send-to-ai";
 pub const SEND_TO_AI_FALLBACK_LABEL: &str = "Auto Submit";
 /// Description for the "Auto Submit" fallback.
 pub const SEND_TO_AI_FALLBACK_DESCRIPTION: &str =
-    "Open Tab AI and immediately submit the current input";
+    "Open Agent Chat and immediately submit the current input";
 /// Fallback ID for the current-app action.
 pub const DO_IN_CURRENT_APP_FALLBACK_ID: &str = "builtin/do-in-current-app";
 const DO_IN_CURRENT_APP_FALLBACK_LABEL: &str = "Do This in Current App";
@@ -118,7 +118,7 @@ pub enum FallbackAction {
     SearchFiles,
     /// Execute a Script Kit built-in command by ID
     ExecuteBuiltin { builtin_id: String },
-    /// Open Tab AI and immediately submit the current input
+    /// Open Agent Chat and immediately submit the current input
     SendToAiHarness,
 }
 
@@ -340,7 +340,7 @@ pub fn get_builtin_fallbacks() -> Vec<BuiltinFallback> {
             enabled: true,
             priority: 0,
         },
-        // Auto Submit — still available as an explicit escape hatch to ACP Chat,
+        // Auto Submit — still available as an explicit escape hatch to Agent Chat,
         // but no longer the first default fallback since Tab already does this.
         BuiltinFallback {
             id: SEND_TO_AI_FALLBACK_ID,

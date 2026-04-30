@@ -23,6 +23,25 @@ fn default_light_theme_passes_all_contrast_checks() {
 }
 
 #[test]
+fn default_light_theme_uses_light_ordered_row_state_opacity() {
+    let theme_json = serde_json::to_value(Theme::light_default())
+        .expect("light theme should serialize with opacity tokens");
+    let selected = theme_json["opacity"]["selected"]
+        .as_f64()
+        .expect("selected opacity should be numeric");
+    let hover = theme_json["opacity"]["hover"]
+        .as_f64()
+        .expect("hover opacity should be numeric");
+
+    assert!((selected - 0.08).abs() < 1e-6);
+    assert!((hover - 0.04).abs() < 1e-6);
+    assert!(
+        hover < selected,
+        "light theme hover should remain quieter than focused selection"
+    );
+}
+
+#[test]
 fn default_light_worst_sample_still_meets_minimum() {
     let theme = Theme::light_default();
     let worst = worst_theme_contrast(&theme);

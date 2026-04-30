@@ -36,7 +36,7 @@ pub(crate) fn spawn_hosted_thread(
         .selected_agent
         .as_ref()
         .and_then(|entry| entry.config.clone())
-        .ok_or_else(|| "Resolved ACP agent is missing configuration".to_string())?;
+        .ok_or_else(|| "Resolved agent is missing configuration".to_string())?;
     let agent_display_name = agent.display_name().to_string();
     let agent_models = agent.models.clone();
     let persisted_model = crate::config::load_user_preferences().ai.selected_model_id;

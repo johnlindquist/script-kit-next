@@ -52,7 +52,7 @@ fn command_bar_config_default_values() {
         AnchorPosition::Bottom
     ));
     assert!(!config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
     assert!(config.close_on_click_outside);
@@ -74,7 +74,7 @@ fn command_bar_config_main_menu_style() {
         AnchorPosition::Bottom
     ));
     assert!(!config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
     // Inherits default close behaviors
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
@@ -94,7 +94,7 @@ fn command_bar_config_ai_style() {
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
     assert!(config.close_on_click_outside);
@@ -116,7 +116,7 @@ fn command_bar_config_no_search() {
         AnchorPosition::Bottom
     ));
     assert!(!config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn command_bar_config_notes_style() {
     ));
     assert!(matches!(config.dialog_config.anchor, AnchorPosition::Top));
     assert!(config.dialog_config.show_icons);
-    assert!(config.dialog_config.show_footer);
+    assert!(!config.dialog_config.show_footer);
     assert!(config.close_on_select);
     assert!(config.close_on_escape);
     assert!(config.close_on_click_outside);
@@ -949,7 +949,7 @@ fn path_context_directory_has_all_expected_actions() {
     assert!(ids.contains(&"file:copy_path"));
     assert!(ids.contains(&"file:open_in_finder"));
     assert!(ids.contains(&"file:open_in_editor"));
-    assert!(ids.contains(&"file:open_in_terminal"));
+    assert!(ids.contains(&"file:open_in_quick_terminal"));
     assert!(ids.contains(&"file:copy_filename"));
     assert!(ids.contains(&"file:move_to_trash"));
     assert_eq!(actions.len(), 7);
@@ -970,7 +970,7 @@ fn path_context_file_has_all_expected_actions() {
     assert!(ids.contains(&"file:copy_path"));
     assert!(ids.contains(&"file:open_in_finder"));
     assert!(ids.contains(&"file:open_in_editor"));
-    assert!(ids.contains(&"file:open_in_terminal"));
+    assert!(ids.contains(&"file:open_in_quick_terminal"));
     assert!(ids.contains(&"file:copy_filename"));
     assert!(ids.contains(&"file:move_to_trash"));
     assert_eq!(actions.len(), 7);
@@ -1030,7 +1030,7 @@ fn file_directory_excludes_quick_look_includes_editor_terminal_trash() {
         "Dir should NOT have Quick Look"
     );
     assert!(ids.contains(&"file:open_in_editor"), "Dir should have Open in Editor");
-    assert!(ids.contains(&"file:open_in_terminal"), "Dir should have Open in Terminal");
+    assert!(ids.contains(&"file:open_in_quick_terminal"), "Dir should have Open in Quick Terminal");
     assert!(ids.contains(&"file:move_to_trash"), "Dir should have Move to Trash");
     assert!(ids.contains(&"file:show_info"), "Dir should have Show Info");
 }

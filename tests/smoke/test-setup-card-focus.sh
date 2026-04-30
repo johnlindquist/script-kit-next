@@ -1,6 +1,6 @@
 #!/bin/bash
-# Visual test: ACP Chat setup card focus indicators and Tab navigation
-# Tests that Tab cycles between buttons with visible focus rings
+# Visual test: Agent Chat setup card focus indicator and keyboard navigation
+# Tests that Tab/arrow keys keep the single setup action focused
 #
 # Usage: ./tests/smoke/test-setup-card-focus.sh
 # Screenshots saved to: test-screenshots/setup-focus-*.png
@@ -17,7 +17,7 @@ rm -f "$SCREENSHOT_DIR"/setup-focus-*.png
 echo "[TEST] Building app..."
 cargo build 2>&1 | tail -3
 
-echo "[TEST] Starting ACP Chat setup card focus test..."
+echo "[TEST] Starting Agent Chat setup card focus test..."
 
 # Create a pipe for sending commands
 PIPE=$(mktemp -u)
@@ -44,53 +44,53 @@ echo "[TEST] Showing window..."
 echo '{"type":"show"}' >&3
 sleep 1
 
-# Step 1: Set filter text (needed for Tab to trigger ACP Chat)
+# Step 1: Set filter text (needed for Tab to trigger Agent Chat)
 echo "[TEST] Step 1: Setting filter text..."
 echo '{"type":"setFilter","text":"test query"}' >&3
 sleep 1
 
-# Step 2: Tab to open ACP Chat -> shows setup card (no providers configured)
+# Step 2: Tab to open Agent Chat -> shows setup card (no providers configured)
 echo "[TEST] Step 2: Tab to open AI setup card..."
 echo '{"type":"simulateKey","key":"tab","modifiers":[]}' >&3
 sleep 1.5
 
-# Step 3: Capture initial state (focus on "Configure Vercel AI Gateway" button, index 0)
+# Step 3: Capture initial state (focus on "Open Agent Catalog" button, index 0)
 echo "[TEST] Step 3: Capturing initial focus state (button 0)..."
-echo '{"type":"captureWindow","title":"","path":"'"$(pwd)/$SCREENSHOT_DIR"'/setup-focus-0-configure.png"}' >&3
+echo '{"type":"captureWindow","title":"","path":"'"$(pwd)/$SCREENSHOT_DIR"'/setup-focus-0-agent-catalog.png"}' >&3
 sleep 1
 
-# Step 4: Tab to move focus to "Connect to Claude Code" button
-echo "[TEST] Step 4: Tab to Claude Code button..."
+# Step 4: Tab keeps focus on the catalog button
+echo "[TEST] Step 4: Tab with single setup button..."
 echo '{"type":"simulateKey","key":"tab","modifiers":[]}' >&3
 sleep 0.5
 
-# Step 5: Capture focus on Claude Code button (index 1)
-echo "[TEST] Step 5: Capturing Claude Code focus state (button 1)..."
-echo '{"type":"captureWindow","title":"","path":"'"$(pwd)/$SCREENSHOT_DIR"'/setup-focus-1-claude-code.png"}' >&3
+# Step 5: Capture focus still on catalog button
+echo "[TEST] Step 5: Capturing focus after Tab (button 0)..."
+echo '{"type":"captureWindow","title":"","path":"'"$(pwd)/$SCREENSHOT_DIR"'/setup-focus-1-tab.png"}' >&3
 sleep 1
 
-# Step 6: Tab again to cycle back to Configure button
-echo "[TEST] Step 6: Tab back to Configure button..."
+# Step 6: Another Tab also keeps focus on catalog button
+echo "[TEST] Step 6: Second Tab with single setup button..."
 echo '{"type":"simulateKey","key":"tab","modifiers":[]}' >&3
 sleep 0.5
 
-# Step 7: Capture focus back on Configure button
-echo "[TEST] Step 7: Capturing focus cycled back (button 0)..."
-echo '{"type":"captureWindow","title":"","path":"'"$(pwd)/$SCREENSHOT_DIR"'/setup-focus-2-cycled-back.png"}' >&3
+# Step 7: Capture focus after second Tab
+echo "[TEST] Step 7: Capturing focus after second Tab (button 0)..."
+echo '{"type":"captureWindow","title":"","path":"'"$(pwd)/$SCREENSHOT_DIR"'/setup-focus-2-second-tab.png"}' >&3
 sleep 1
 
-# Step 8: Arrow down to Claude Code
-echo "[TEST] Step 8: Arrow down to Claude Code..."
+# Step 8: Arrow down stays on catalog
+echo "[TEST] Step 8: Arrow down..."
 echo '{"type":"simulateKey","key":"down","modifiers":[]}' >&3
 sleep 0.5
 
 # Step 9: Capture arrow navigation state
-echo "[TEST] Step 9: Capturing arrow-down state (button 1)..."
+echo "[TEST] Step 9: Capturing arrow-down state (button 0)..."
 echo '{"type":"captureWindow","title":"","path":"'"$(pwd)/$SCREENSHOT_DIR"'/setup-focus-3-arrow-down.png"}' >&3
 sleep 1
 
 # Step 10: Shift+Tab back
-echo "[TEST] Step 10: Shift+Tab back to Configure..."
+echo "[TEST] Step 10: Shift+Tab..."
 echo '{"type":"simulateKey","key":"tab","modifiers":["shift"]}' >&3
 sleep 0.5
 
@@ -111,8 +111,8 @@ echo "[TEST] Screenshots saved to $SCREENSHOT_DIR/:"
 ls -la "$SCREENSHOT_DIR"/setup-focus-*.png 2>/dev/null || echo "  (no screenshots found)"
 echo ""
 echo "[TEST] Test complete! Review the screenshots to verify:"
-echo "  - setup-focus-0-configure.png: Initial state, Configure button should have focus ring"
-echo "  - setup-focus-1-claude-code.png: Claude Code button should have focus ring"
-echo "  - setup-focus-2-cycled-back.png: Configure button should have focus ring again"
-echo "  - setup-focus-3-arrow-down.png: Claude Code button (via arrow key)"
-echo "  - setup-focus-4-shift-tab.png: Configure button (via Shift+Tab)"
+echo "  - setup-focus-0-agent-catalog.png: Initial state, Open Agent Catalog should have focus ring"
+echo "  - setup-focus-1-tab.png: Catalog button should still have focus ring"
+echo "  - setup-focus-2-second-tab.png: Catalog button should still have focus ring"
+echo "  - setup-focus-3-arrow-down.png: Catalog button should still have focus ring"
+echo "  - setup-focus-4-shift-tab.png: Catalog button should still have focus ring"

@@ -6,7 +6,7 @@ use gpui::{
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::components::overlay_modal::OverlayAnimation;
 use crate::logging;
-use crate::ui_foundation::{is_key_enter, is_key_escape};
+use crate::ui_foundation::{get_vibrancy_background, is_key_enter, is_key_escape};
 
 use super::super::types::{
     is_clear_alias_shortcut, is_command_modifier, BUTTON_GAP, MODAL_PADDING, MODAL_WIDTH,
@@ -173,7 +173,7 @@ impl Render for AliasInput {
             .id("alias-input-modal-content")
             .w(px(MODAL_WIDTH))
             .p(px(MODAL_PADDING))
-            .bg(rgba((colors.modal_bg << 8) | 0xF0))
+            .when_some(get_vibrancy_background(&self.theme), |d, bg| d.bg(bg))
             .border_1()
             .border_color(rgba((colors.border << 8) | 0x80))
             .rounded(px(12.))

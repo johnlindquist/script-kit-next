@@ -263,6 +263,132 @@ fn remove_context_part_preserves_order_of_remaining_parts() {
     );
 }
 
+#[test]
+fn replace_pending_context_parts_clears_previous_parts_and_resets_consumption() {
+    #[derive(Default)]
+    struct PendingContextState {
+        pending_context_parts: Vec<AiContextPart>,
+        pending_context_blocks: Vec<&'static str>,
+        pending_context_consumed: bool,
+        pending_ambient_context_enabled: bool,
+    }
+
+    impl PendingContextState {
+        fn clear_all_pending_context(&mut self) {
+            self.pending_context_parts.clear();
+            self.pending_context_blocks.clear();
+            self.pending_context_consumed = false;
+            self.pending_ambient_context_enabled = false;
+        }
+
+        fn replace_pending_context_parts(&mut self, parts: Vec<AiContextPart>) {
+            self.clear_all_pending_context();
+            self.pending_context_parts = parts;
+            self.pending_context_consumed = false;
+            self.pending_ambient_context_enabled = self
+                .pending_context_parts
+                .iter()
+                .any(|part| matches!(part, AiContextPart::AmbientContext { .. }));
+        }
+    }
+
+    let mut state = PendingContextState {
+        pending_context_parts: vec![AiContextPart::FilePath {
+            path: "/tmp/old-note.md".to_string(),
+            label: "old-note.md".to_string(),
+        }],
+        pending_context_blocks: vec!["hidden-block"],
+        pending_context_consumed: true,
+        pending_ambient_context_enabled: true,
+    };
+
+    let replacement = vec![AiContextPart::TextBlock {
+        label: "Selected Text".to_string(),
+        source: "notes://note-2#selection=0-4".to_string(),
+        text: "next".to_string(),
+        mime_type: None,
+    }];
+
+    state.replace_pending_context_parts(replacement.clone());
+
+    assert_eq!(state.pending_context_parts, replacement);
+    assert!(
+        state.pending_context_blocks.is_empty(),
+        "replacing staged parts should clear hidden staged blocks"
+    );
+    assert!(
+        !state.pending_context_consumed,
+        "replacing staged parts should re-arm first-submit consumption"
+    );
+    assert!(
+        !state.pending_ambient_context_enabled,
+        "non-ambient replacement should clear stale ambient state"
+    );
+}
+
+/// Regression test for the Notes-hosted ACP staging-replacement story: when
+/// a user opens note A and portals it to ACP, then opens note B and portals
+/// *it* to the same reused ACP surface, the pending context must contain
+/// exactly note B's parts — never both. This models the production two-call
+/// sequence through `stage_inline_context_parts_from_host` ->
+/// `replace_pending_context_parts` on the shared host-reuse path.
+///
+/// Pairs with `tests/notes_ai_routing.rs::notes_cart_reopen_replaces_previous_pending_parts`
+/// (source-level pin) and `tests/notes_ai_routing.rs::notes_target_staging_uses_shared_host_replacement_path`
+/// (ensures the note-target code path does not regress to `add_context_part`).
+#[test]
+fn two_sequential_note_handoffs_leave_only_the_second_notes_parts() {
+    #[derive(Default)]
+    struct PendingContextState {
+        pending_context_parts: Vec<AiContextPart>,
+        pending_context_consumed: bool,
+    }
+
+    impl PendingContextState {
+        fn replace_pending_context_parts(&mut self, parts: Vec<AiContextPart>) {
+            self.pending_context_parts.clear();
+            self.pending_context_parts = parts;
+            self.pending_context_consumed = false;
+        }
+    }
+
+    let note_a_part = AiContextPart::FilePath {
+        path: "/tmp/note-a.md".to_string(),
+        label: "note-a.md".to_string(),
+    };
+    let note_b_part = AiContextPart::FilePath {
+        path: "/tmp/note-b.md".to_string(),
+        label: "note-b.md".to_string(),
+    };
+
+    let mut state = PendingContextState::default();
+
+    state.replace_pending_context_parts(vec![note_a_part.clone()]);
+    assert_eq!(
+        state.pending_context_parts,
+        vec![note_a_part.clone()],
+        "first note handoff should stage exactly note A"
+    );
+
+    state.replace_pending_context_parts(vec![note_b_part.clone()]);
+    assert_eq!(
+        state.pending_context_parts,
+        vec![note_b_part.clone()],
+        "second note handoff must replace note A — pendingInlineContext must not accumulate stale chips across host transitions"
+    );
+    assert!(
+        !state
+            .pending_context_parts
+            .iter()
+            .any(|p| matches!(p, AiContextPart::FilePath { path, .. } if path == "/tmp/note-a.md")),
+        "note A must not survive a subsequent host-transition stage call"
+    );
+    assert!(
+        !state.pending_context_consumed,
+        "second handoff must re-arm consumption so the next submit picks up note B"
+    );
+}
+
 // ---------- Dedup contract ----------
 
 /// Mirrors the dedup logic from `AiApp::add_attachment`.

@@ -1,11 +1,35 @@
 use std::rc::Rc;
+use std::sync::Mutex;
 
-use gpui::{px, App, AppContext as _, Pixels, SharedString, WeakEntity, Window};
+use gpui::{px, AnyView, App, AppContext as _, Pixels, SharedString, WeakEntity, Window};
 use gpui_component::button::ButtonVariant;
 
 use super::window::{open_confirm_popup_window, ConfirmPopupParentWindow, ConfirmWindowOptions};
 
 type ConfirmCallback = Rc<dyn Fn(&mut Window, &mut App)>;
+
+/// Routing hook for in-window confirm. The binary registers a closure during
+/// startup that knows how to push `AppView::ConfirmPrompt` onto the
+/// `ScriptListApp` entity. Returns `true` when it accepted the route.
+type InWindowRouter = Box<
+    dyn Fn(AnyView, ParentConfirmOptions, async_channel::Sender<bool>, &mut App) -> bool
+        + Send
+        + Sync,
+>;
+
+static IN_WINDOW_ROUTER: Mutex<Option<InWindowRouter>> = Mutex::new(None);
+
+#[allow(dead_code)]
+pub(crate) fn register_in_window_router(router: InWindowRouter) {
+    if let Ok(mut guard) = IN_WINDOW_ROUTER.lock() {
+        *guard = Some(router);
+        tracing::info!(
+            target: "script_kit::confirm",
+            event = "in_window_confirm_router_registered",
+            "Registered in-window confirm router"
+        );
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct ParentConfirmOptions {
@@ -15,6 +39,20 @@ pub(crate) struct ParentConfirmOptions {
     pub cancel_text: SharedString,
     pub confirm_variant: ButtonVariant,
     pub width: Pixels,
+}
+
+impl std::fmt::Debug for ParentConfirmOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ParentConfirmOptions")
+            .field("title", &self.title)
+            .field("confirm_text", &self.confirm_text)
+            .field("cancel_text", &self.cancel_text)
+            .field(
+                "is_danger",
+                &matches!(self.confirm_variant, ButtonVariant::Danger),
+            )
+            .finish()
+    }
 }
 
 impl Default for ParentConfirmOptions {
@@ -236,10 +274,57 @@ pub(crate) async fn confirm_with_parent_dialog(
     let window_handle = crate::get_main_window_handle()
         .ok_or_else(|| anyhow::anyhow!("Main window handle not available"))?;
 
+    let main_window_active = crate::is_main_window_visible();
+
     let sender_ok = confirm_tx.clone();
     let sender_cancel = confirm_tx.clone();
+    let sender_in_window = confirm_tx.clone();
+    let options_for_route = options.clone();
 
-    cx.update_window(window_handle, move |_, window, cx| {
+    cx.update_window(window_handle, move |any_view, window, cx| {
+        tracing::info!(
+            target: "script_kit::confirm",
+            event = "confirm_route_decision",
+            main_window_active,
+            "Choosing in-window vs popup confirm route"
+        );
+        if main_window_active {
+            let routed = {
+                let guard = IN_WINDOW_ROUTER.lock().ok();
+                let has_router = guard.as_ref().and_then(|g| g.as_ref()).is_some();
+                tracing::info!(
+                    target: "script_kit::confirm",
+                    event = "confirm_router_lookup",
+                    has_router,
+                    "Looked up in-window confirm router"
+                );
+                if let Some(guard) = guard {
+                    if let Some(router) = guard.as_ref() {
+                        let accepted = router(
+                            any_view.clone(),
+                            options_for_route.clone(),
+                            sender_in_window,
+                            cx,
+                        );
+                        tracing::info!(
+                            target: "script_kit::confirm",
+                            event = "confirm_router_returned",
+                            accepted,
+                            "In-window confirm router returned"
+                        );
+                        accepted
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            };
+            if routed {
+                return;
+            }
+        }
+
         open_parent_confirm_dialog(
             window,
             cx,

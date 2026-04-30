@@ -209,9 +209,11 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
 
     // List/sidebar colors - TRANSPARENT when vibrancy enabled to prevent stacking
     theme_color.list = main_bg; // transparent when vibrancy enabled
-    theme_color.list_active = subtle_overlay(colors.accent.selected_subtle, opacity.selected);
+                                // Interaction state ladder: selected = text.primary (strong neutral),
+                                // hover = accent.selected_subtle (subtle tint)
+    theme_color.list_active = subtle_overlay(colors.text.primary, opacity.selected);
     theme_color.list_active_border = hex_to_hsla(colors.accent.selected);
-    theme_color.list_hover = subtle_overlay(colors.accent.selected_subtle, opacity.hover);
+    theme_color.list_hover = subtle_overlay(colors.text.primary, opacity.hover);
     theme_color.list_even = main_bg; // transparent when vibrancy enabled
     theme_color.list_head = main_bg; // transparent when vibrancy enabled
 
@@ -219,7 +221,7 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     theme_color.sidebar = main_bg;
     theme_color.sidebar_foreground = hex_to_hsla(colors.text.primary);
     theme_color.sidebar_border = hex_to_hsla(colors.ui.border);
-    theme_color.sidebar_accent = subtle_overlay(colors.accent.selected_subtle, opacity.selected);
+    theme_color.sidebar_accent = subtle_overlay(colors.text.primary, opacity.selected);
     theme_color.sidebar_accent_foreground = hex_to_hsla(colors.text.primary);
     theme_color.sidebar_primary = hex_to_hsla(colors.accent.selected);
     theme_color.sidebar_primary_foreground = hex_to_hsla(accent_foreground_hex);
@@ -260,7 +262,13 @@ pub fn map_scriptkit_to_gpui_theme(sk_theme: &Theme, is_dark: bool) -> ThemeColo
     } else {
         with_vibrancy(colors.background.search_box, 0.1)
     };
-    theme_color.muted_foreground = hex_to_hsla(colors.text.muted);
+    // Route `muted_foreground` through the semantic placeholder ladder so the
+    // vendor input component renders its empty-state placeholder ("Script Kit")
+    // with the same `text_primary + opacity.text_placeholder` recipe that the
+    // actions dialog and launcher ask-ai hint use. Widgets that previously read
+    // a distinct `colors.text.muted` hex now land on the shared alpha tier,
+    // per the design contract in `lat.md/design.md#Chrome style`.
+    theme_color.muted_foreground = subtle_overlay(colors.text.primary, opacity.text_placeholder);
 
     // Title bar - transparent when vibrancy enabled
     theme_color.title_bar = main_bg;
@@ -680,14 +688,9 @@ mod tests {
         });
 
         let mapped = map_scriptkit_to_gpui_theme(&theme, true);
-        let expected_selected = subtle_overlay(
-            theme.colors.accent.selected_subtle,
-            theme.get_opacity().selected,
-        );
-        let expected_hover = subtle_overlay(
-            theme.colors.accent.selected_subtle,
-            theme.get_opacity().hover,
-        );
+        let expected_selected =
+            subtle_overlay(theme.colors.text.primary, theme.get_opacity().selected);
+        let expected_hover = subtle_overlay(theme.colors.text.primary, theme.get_opacity().hover);
         assert_hsla_close(mapped.list_active, expected_selected);
         assert_hsla_close(mapped.sidebar_accent, expected_selected);
         assert_hsla_close(mapped.list_hover, expected_hover);
@@ -763,6 +766,15 @@ mod tests {
         assert!((mapped.secondary_hover.a - 1.0).abs() < 1e-6);
         assert!((mapped.secondary_active.a - 1.0).abs() < 1e-6);
         assert!((mapped.secondary_hover.l - mapped.secondary_active.l).abs() > 1e-6);
+    }
+
+    #[test]
+    fn test_map_scriptkit_to_gpui_theme_muted_foreground_follows_text_placeholder_ladder() {
+        let theme = Theme::dark_default();
+        let mapped = map_scriptkit_to_gpui_theme(&theme, true);
+        let opacity = theme.get_opacity();
+        let expected = subtle_overlay(theme.colors.text.primary, opacity.text_placeholder);
+        assert_hsla_close(mapped.muted_foreground, expected);
     }
 
     #[test]

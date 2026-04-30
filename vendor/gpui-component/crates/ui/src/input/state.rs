@@ -6,9 +6,10 @@ use anyhow::Result;
 use gpui::{
     Action, App, AppContext, Bounds, ClipboardItem, Context, Entity, EntityInputHandler,
     EventEmitter, FocusHandle, Focusable, InteractiveElement as _, IntoElement, KeyBinding,
-    KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement as _,
-    Pixels, Point, Render, ScrollHandle, ScrollWheelEvent, SharedString, Styled as _, Subscription,
-    Task, UTF16Selection, Window, actions, div, point, prelude::FluentBuilder as _, px,
+    Hsla, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
+    ParentElement as _, Pixels, Point, Render, ScrollHandle, ScrollWheelEvent, SharedString,
+    Styled as _, Subscription, Task, UTF16Selection, Window, actions, div, point,
+    prelude::FluentBuilder as _, px,
 };
 use gpui::{Half, TextAlign};
 use ropey::{Rope, RopeSlice};
@@ -315,6 +316,7 @@ pub struct InputState {
     /// The size of the scrollable content.
     pub(crate) scroll_size: gpui::Size<Pixels>,
     pub(super) text_align: TextAlign,
+    pub(super) highlight_ranges: Vec<(Range<usize>, Hsla)>,
 
     /// The mask pattern for formatting the input text
     pub(crate) mask_pattern: MaskPattern,
@@ -425,6 +427,7 @@ impl InputState {
             placeholder: SharedString::default(),
             mask_pattern: MaskPattern::default(),
             text_align: TextAlign::Left,
+            highlight_ranges: Vec::new(),
             lsp: Lsp::default(),
             diagnostic_popover: None,
             context_menu: None,
@@ -526,6 +529,11 @@ impl InputState {
     pub fn placeholder(mut self, placeholder: impl Into<SharedString>) -> Self {
         self.placeholder = placeholder.into();
         self
+    }
+
+    /// Set byte ranges that should render in custom colors for plain inputs.
+    pub fn set_highlight_ranges(&mut self, ranges: Vec<(Range<usize>, Hsla)>) {
+        self.highlight_ranges = ranges;
     }
 
     /// Set enable/disable line number, only for [`InputMode::CodeEditor`] mode.

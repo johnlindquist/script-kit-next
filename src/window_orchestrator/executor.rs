@@ -51,8 +51,14 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
             if *activate_app {
                 crate::platform::activate_main_window();
             } else if *make_key {
+                crate::platform::ensure_main_panel_configured(
+                    "window_orchestrator::executor::RevealMain/make_key",
+                );
                 crate::platform::show_main_window_without_activation();
             } else {
+                crate::platform::ensure_main_panel_configured(
+                    "window_orchestrator::executor::RevealMain/background",
+                );
                 crate::platform::show_main_window_background();
             }
         }
@@ -121,6 +127,9 @@ fn execute_single(command: &WindowCommand, cx: &mut gpui::App) {
                     );
                 }
                 SurfaceId::Main => {
+                    crate::platform::ensure_main_panel_configured(
+                        "window_orchestrator::executor::FocusSurface/Main",
+                    );
                     crate::platform::show_main_window_without_activation();
                 }
             }

@@ -17,6 +17,8 @@ In-app design explorer for comparing, selecting, and adopting UI variations acro
 | **Adoption** | Persisting a selected variant so live prompt surfaces use it at runtime |
 | **Chrome Audit** | Structured log that validates minimal chrome compliance per surface |
 
+Primary Storybook registration is for canonical app states and adoptable live surfaces. Keep archived design experiments out of `ALL_STORIES` until they are replaced by live or presenter-backed state coverage.
+
 ## File Map
 
 | Path | Role |
@@ -120,9 +122,16 @@ Use this map before claiming that a Storybook edit changes the real app.
 | Main Menu | Storybook-specific preview in `src/storybook/main_menu_variations/mod.rs` plus feature-gated live-spec overrides in `src/render_script_list/mod.rs` | Shared components/tokens affect both. Preview-only layout/data changes do not update the real app by themselves. |
 | Footer Variations | Adopted live surface | Changing variation specs/config mapping affects live prompt footers when that selection is adopted. |
 | Input Variations | Adopted live surface | Changing variation specs/config mapping affects live prompt inputs when that selection is adopted. |
-| Actions Dialog | Shared presenter in `src/storybook/actions_dialog_presenter.rs` | Presenter changes affect both Storybook and the live dialog. |
-| Mini AI Chat | Shared presenter in `src/storybook/mini_ai_chat_presenter.rs` | Presenter changes affect both Storybook and the live mini AI chat. |
-| Notes Window | Runtime fixture preview | Fixture or preview-host changes affect Storybook only unless shared notes-window code also changes. |
+| Actions Dialog | Shared presenter in `src/storybook/actions_dialog_presenter.rs`; canonical states in `src/storybook/actions_dialog_states.rs` | Presenter changes affect both Storybook and the live dialog. State fixtures affect Storybook coverage. |
+| Mini AI Chat | Shared presenter in `src/storybook/mini_ai_chat_presenter.rs`; canonical states in `src/storybook/mini_ai_chat_states.rs` | Presenter changes affect both Storybook and the live mini AI chat. State fixtures affect Storybook coverage. |
+| ACP Chat | Presenter-backed canonical states in `src/storybook/acp_chat_states.rs`; old weight studies stay archived | Presenter changes affect Storybook coverage. Live ACP behavior remains in `src/ai/acp/view.rs`. |
+| Confirm Popup | Storybook integrated shell in `src/storybook/confirm_popup_playground/mod.rs` registered through canonical state wrappers | Wrapper changes affect Storybook coverage. Shared footer/theme changes affect both. |
+| Context Picker Popup | Storybook integrated shell in `src/storybook/context_picker_popup_playground/mod.rs` registered through canonical state wrappers | Wrapper changes affect Storybook coverage. Shared inline dropdown/theme changes affect both. |
+| Shortcut Recorder | Presenter-backed states in `src/storybook/shortcut_recorder_states.rs` using shared shortcut/button chrome | Storybook presenter changes affect coverage. Shared shortcut recorder/button/hint strip changes affect both. |
+| Notes Window | Presenter-backed canonical states in `src/storybook/notes_window_states.rs`; style adoption remains in `src/storybook/notes_window_variations/mod.rs` | Presenter changes affect Storybook coverage. Style resolver changes affect the live notes window. PNG fixture previews are legacy experiments and should not be registered. |
+| Built-In Browser | Presenter-backed canonical states in `src/storybook/built_in_browser_states.rs` using shared scaffold/list/footer chrome | Storybook presenter changes affect coverage. Live built-in behavior remains in `src/render_builtins/`. |
+| Component Primitives | Shared component fixtures in `src/storybook/component_primitives_states.rs` | Storybook coverage uses real `ListItem`, `Button`, `HintStrip`, `Toast`, `SectionDivider`, and prompt shell components. Shared component changes affect live UI. |
+| Utility Built-Ins | Presenter-backed utility shells in `src/storybook/utility_builtin_states.rs` | Storybook coverage uses shared rows, buttons, grid cards, dividers, and footer chrome for emoji picker, app launcher, process manager, settings, theme chooser, and design gallery states. |
 
 Rule of thumb:
 - `src/storybook/...` only: usually Storybook-only

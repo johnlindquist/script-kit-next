@@ -5,8 +5,10 @@ const ACTION_HANDLER_SOURCE: &str = include_str!("../src/app_actions/handle_acti
 const ACTION_BUILDER_SOURCE: &str = include_str!("../src/actions/builders/script_context.rs");
 const DIALOG_SOURCE: &str = include_str!("../src/actions/dialog.rs");
 const CHAT_WINDOW_SOURCE: &str = include_str!("../src/ai/acp/chat_window.rs");
+const ACP_VIEW_SOURCE: &str = include_str!("../src/ai/acp/view.rs");
 const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/app_impl/actions_dialog.rs");
 const ACTIONS_WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
+const TAB_AI_MODE_SOURCE: &str = include_str!("../src/app_impl/tab_ai_mode/mod.rs");
 
 #[test]
 fn acp_actions_popup_uses_dynamic_agent_actions() {
@@ -61,6 +63,30 @@ fn acp_action_handler_stages_retry_payload_before_reopen() {
     assert!(
         stage_pos < close_pos,
         "retry payload must be staged before closing the harness terminal"
+    );
+}
+
+#[test]
+fn acp_agent_switch_relaunch_preserves_existing_draft_state() {
+    assert!(
+        ACP_VIEW_SOURCE.contains("pub(crate) struct AcpRetryDraftState"),
+        "ACP retry payload must define AcpRetryDraftState for live draft restoration"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("let draft_state = self.current_retry_draft_state(cx);"),
+        "ACP agent switch retry staging must capture the current draft state"
+    );
+    assert!(
+        ACP_VIEW_SOURCE.contains("event = \"acp_switch_agent_retry_draft_restored\""),
+        "ACP view must emit tracing when a switch-agent relaunch restores draft state"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("let focused_part = if retry_draft_state.is_some()"),
+        "ACP relaunch must suppress fresh focused-part staging when restoring a retry draft"
+    );
+    assert!(
+        TAB_AI_MODE_SOURCE.contains("view.restore_retry_draft_state(draft_state, cx);"),
+        "ACP relaunch must restore the captured draft state onto the new view"
     );
 }
 

@@ -194,7 +194,7 @@ pub struct WindowMatch {
 }
 
 /// Represents a scored match result for a plugin-owned skill.
-/// Skills always open ACP Chat when selected from the main menu.
+/// Skills always open Agent Chat when selected from the main menu.
 #[derive(Clone, Debug)]
 pub struct SkillMatch {
     pub skill: Arc<crate::plugins::PluginSkill>,
@@ -215,6 +215,21 @@ pub struct AgentMatch {
     pub match_indices: MatchIndices,
 }
 
+/// Synthetic launcher row summarizing script validation failures.
+///
+/// Pinned to the top of the launcher when one or more scripts are excluded
+/// from the catalog due to binding collisions or other fatal validation
+/// issues. Opening it routes to a read-only diagnostic view.
+#[derive(Clone, Debug)]
+pub struct ScriptIssueMatch {
+    pub title: String,
+    pub description: Option<String>,
+    pub failed_count: usize,
+    pub fatal_count: usize,
+    pub warning_count: usize,
+    pub score: i32,
+}
+
 /// Represents a fallback command match for the "Use with..." section
 ///
 /// Fallbacks are always shown at the bottom of search results when there's a filter query.
@@ -233,7 +248,7 @@ pub struct FallbackMatch {
 pub enum SearchResult {
     Script(ScriptMatch),
     Scriptlet(ScriptletMatch),
-    /// Plugin-owned skill that always opens ACP Chat when selected
+    /// Plugin-owned skill that always opens Agent Chat when selected
     Skill(SkillMatch),
     BuiltIn(BuiltInMatch),
     App(AppMatch),
@@ -245,6 +260,9 @@ pub enum SearchResult {
     Agent(AgentMatch),
     /// Fallback command from "Use with..." section (shown at bottom of search results)
     Fallback(FallbackMatch),
+    /// Synthetic row summarizing script validation failures, pinned at the top
+    /// of the launcher so authors see "my script vanished" repairs inline.
+    ScriptIssue(ScriptIssueMatch),
 }
 
 impl SearchResult {
@@ -267,6 +285,7 @@ impl SearchResult {
             SearchResult::Window(wm) => &wm.window.title,
             SearchResult::Agent(am) => &am.agent.name,
             SearchResult::Fallback(fm) => fm.fallback.name(),
+            SearchResult::ScriptIssue(issue) => &issue.title,
         }
     }
 
@@ -287,6 +306,7 @@ impl SearchResult {
             SearchResult::Window(wm) => Some(&wm.window.app),
             SearchResult::Agent(am) => am.agent.description.as_deref(),
             SearchResult::Fallback(fm) => Some(fm.fallback.description()),
+            SearchResult::ScriptIssue(issue) => issue.description.as_deref(),
         }
     }
 
@@ -301,6 +321,7 @@ impl SearchResult {
             SearchResult::Window(wm) => wm.score,
             SearchResult::Agent(am) => am.score,
             SearchResult::Fallback(fm) => fm.score,
+            SearchResult::ScriptIssue(issue) => issue.score,
         }
     }
 
@@ -315,6 +336,7 @@ impl SearchResult {
             SearchResult::Window(_) => "Window",
             SearchResult::Agent(_) => "Agent",
             SearchResult::Fallback(_) => "Fallback",
+            SearchResult::ScriptIssue(_) => "Issues",
         }
     }
 
@@ -354,6 +376,26 @@ impl SearchResult {
             ),
             SearchResult::Window(_) | SearchResult::Skill(_) | SearchResult::Agent(_) => None,
             SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
+            SearchResult::ScriptIssue(_) => None,
+        }
+    }
+
+    /// Returns the stable key used by exact-query launcher memory.
+    ///
+    /// This is broader than `launcher_command_id()` because query memory also
+    /// needs to remember non-bindable items like skills and windows.
+    pub fn history_result_key(&self) -> Option<String> {
+        match self {
+            SearchResult::Skill(sm) => Some(format!(
+                "skill:{}:{}",
+                sm.skill.plugin_id, sm.skill.skill_id
+            )),
+            SearchResult::Window(wm) => {
+                Some(format!("window:{}:{}", wm.window.app, wm.window.title))
+            }
+            SearchResult::Fallback(_) | SearchResult::Agent(_) => None,
+            SearchResult::ScriptIssue(_) => None,
+            _ => self.launcher_command_id(),
         }
     }
 
@@ -376,6 +418,7 @@ impl SearchResult {
             SearchResult::Window(_) => ("Window", 0xEC4899), // Pink-500
             SearchResult::Agent(_) => ("Agent", 0x0EA5E9),   // Sky-500
             SearchResult::Fallback(_) => ("Fallback", 0x6B7280), // Gray-500
+            SearchResult::ScriptIssue(_) => ("Issues", 0xEF4444), // Red-500
         }
     }
 
@@ -413,6 +456,7 @@ impl SearchResult {
                 }
             }
             SearchResult::Agent(am) => am.agent.kit.as_deref(),
+            SearchResult::ScriptIssue(_) => None,
             _ => None,
         }
     }
@@ -468,6 +512,7 @@ impl SearchResult {
                     "Run Script"
                 }
             }
+            SearchResult::ScriptIssue(_) => "Inspect Issues",
         }
     }
 }

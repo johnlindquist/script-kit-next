@@ -241,7 +241,7 @@ const w = await widget(`<h1>Floating Widget</h1>`, {
 
 ## Scriptlet Format
 
-Scriptlets are markdown files with embedded commands. They live in `~/.scriptkit/kit/main/scriptlets/`.
+Scriptlets are markdown files with embedded commands. They live in `~/.scriptkit/plugins/main/scriptlets/`.
 
 ### Basic Scriptlet
 
@@ -296,7 +296,7 @@ Best regards
 
 ## Configuration (config.ts)
 
-The `~/.scriptkit/kit/config.ts` file configures Script Kit:
+The `~/.scriptkit/config.ts` file configures Script Kit:
 
 ```typescript
 import type { Config } from "@scriptkit/sdk";
@@ -344,7 +344,7 @@ export default {
 
 ```bash
 # Using bun directly
-bun run ~/.scriptkit/kit/main/scripts/my-script.ts
+bun run ~/.scriptkit/plugins/main/scripts/my-script.ts
 
 # With the kit CLI (if installed)
 kit run my-script

@@ -55,12 +55,15 @@ impl NotesApp {
             crate::ai::context_mentions::typed_mention_token_parts(&span.token)
         {
             if value.trim().is_empty() {
-                format!("@{prefix} token • open in ACP to replace")
+                format!("@{prefix} token • open in Agent Chat to replace")
             } else {
-                format!("@{prefix} \"{}\" • open in ACP to replace", value.trim())
+                format!(
+                    "@{prefix} \"{}\" • open in Agent Chat to replace",
+                    value.trim()
+                )
             }
         } else {
-            "ACP token • open in ACP to replace".to_string()
+            "Agent token • open in Agent Chat to replace".to_string()
         };
 
         Some((span.token, detail))
@@ -469,30 +472,45 @@ impl NotesApp {
         [
             "# Welcome to Notes",
             "",
-            "A fast, keyboard-first notes app with markdown support.",
+            "## What Notes is",
             "",
-            "## Formatting",
+            "Notes is a fast, keyboard-first place for ideas, drafts, and working context. It stores Markdown notes, supports fast switching, and can hand note context to AI.",
             "",
-            "- **Bold** with ⌘B",
-            "- *Italic* with ⌘I",
-            "- `Code` with ⌘E",
-            "- ~~Strikethrough~~ with ⌘⇧X",
+            "> Start with messy thoughts. Use the actions menu as your command center (Cmd+K).",
             "",
-            "## Lists",
+            "---",
             "",
-            "- [ ] Checklist item (⌘⇧L)",
-            "- Bullet point (⌘⇧8)",
-            "1. Numbered list (⌘⇧7)",
+            "## Write fast",
             "",
-            "## Quick shortcuts",
+            "Use Markdown for structure without leaving the editor:",
             "",
-            "- ⌘N  new note",
-            "- ⌘P  switch notes",
-            "- ⌘K  actions",
-            "- ⌘.  focus mode",
-            "- ⌘/  all shortcuts",
+            "### A tiny example",
             "",
-            "Start typing to make this note your own!",
+            "- [x] Capture one useful idea",
+            "- [ ] Turn it into a script, plan, or checklist",
+            "- Use inline `code` for commands, names, and snippets",
+            "",
+            "Format as you type, then preview the result when you want to read instead of edit (Cmd+Shift+P). Smart paste can clean up copied text into useful Markdown when possible (Cmd+V). Focus mode hides the chrome so the note can take over (Cmd+.).",
+            "",
+            "## Navigate",
+            "",
+            "Create a note whenever the thought arrives (Cmd+N). Create one from the clipboard when the clipboard is the thought (Cmd+Shift+N). Switch notes quickly from the note switcher (Cmd+P), jump through history (Cmd+[ and Cmd+]), and pin important notes so they stay at the top (Cmd+Shift+I).",
+            "",
+            "Jump to pinned notes by number (Cmd+1 through Cmd+9). Cycle sorting between updated, created, and alphabetical when the list needs a different shape (Cmd+Shift+S).",
+            "",
+            "## Find things",
+            "",
+            "Find text inside the current note (Cmd+F). Search across notes with the notes search field (Cmd+Shift+F). Open Trash when something should be out of the way but not gone forever (Cmd+Shift+T).",
+            "",
+            "Delete carefully; Notes uses Trash first, then permanent delete from Trash. Restore a trashed note while viewing Trash (Cmd+Z).",
+            "",
+            "## Extend",
+            "",
+            "The actions menu is the source of truth for commands, shortcuts, and anything added later (Cmd+K). Use it when you are unsure what Notes can do.",
+            "",
+            "Send note context into ACP/AI when you want help rewriting, summarizing, planning, or turning notes into next actions (Cmd+Enter). Reference other notes with `@note` mentions from the notes portal when you are building context across notes (Cmd+Shift+O).",
+            "",
+            "Make this your own: replace this tour with the first note you actually need.",
         ]
         .join("\n")
     }
@@ -512,11 +530,5 @@ impl NotesApp {
                 None
             }
         })
-    }
-
-    /// Toggle keyboard shortcuts help overlay (Cmd+/)
-    pub(super) fn toggle_shortcuts_help(&mut self, cx: &mut Context<Self>) {
-        self.show_shortcuts_help = !self.show_shortcuts_help;
-        cx.notify();
     }
 }

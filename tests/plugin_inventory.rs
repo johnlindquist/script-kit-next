@@ -7,7 +7,7 @@ use script_kit_gpui::plugins::{
 
 /// Helper: create a temp dir tree and return the container path.
 fn make_container(tmp: &std::path::Path, plugins: &[(&str, Option<&str>)]) -> std::path::PathBuf {
-    let container = tmp.join("kit");
+    let container = tmp.join("plugins");
     for (id, manifest_json) in plugins {
         let plugin_root = container.join(id);
         fs::create_dir_all(plugin_root.join("scripts")).expect("create scripts dir");
@@ -127,18 +127,18 @@ fn synthesize_from_package_json_string_author() {
 #[test]
 fn skills_found_under_plugin_roots() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let container = tmp.path().join("kit");
+    let container = tmp.path().join("plugins");
 
-    // Plugin "authoring" with two skills
-    let authoring = container.join("authoring");
-    let skill_a = authoring.join("skills").join("scriptlets");
-    let skill_b = authoring.join("skills").join("config");
+    // Plugin "scriptkit" with two skills
+    let scriptkit = container.join("scriptkit");
+    let skill_a = scriptkit.join("skills").join("new-scriptlet");
+    let skill_b = scriptkit.join("skills").join("update-config");
     fs::create_dir_all(&skill_a).expect("mkdir");
     fs::create_dir_all(&skill_b).expect("mkdir");
     fs::write(skill_a.join("SKILL.md"), "# Scriptlets skill").expect("write");
     fs::write(skill_b.join("SKILL.md"), "# Config skill").expect("write");
-    let manifest = r#"{"id":"authoring","title":"Authoring"}"#;
-    fs::write(authoring.join("plugin.json"), manifest).expect("write");
+    let manifest = r#"{"id":"scriptkit","title":"Script Kit"}"#;
+    fs::write(scriptkit.join("plugin.json"), manifest).expect("write");
 
     // Plugin "tools" with no skills dir
     let tools = container.join("tools");
@@ -153,16 +153,16 @@ fn skills_found_under_plugin_roots() {
     assert_eq!(skills.len(), 2, "should find exactly two skills");
 
     // Sorted by (plugin_id, skill_id)
-    assert_eq!(skills[0].plugin_id, "authoring");
-    assert_eq!(skills[0].skill_id, "config");
-    assert_eq!(skills[1].plugin_id, "authoring");
-    assert_eq!(skills[1].skill_id, "scriptlets");
+    assert_eq!(skills[0].plugin_id, "scriptkit");
+    assert_eq!(skills[0].skill_id, "new-scriptlet");
+    assert_eq!(skills[1].plugin_id, "scriptkit");
+    assert_eq!(skills[1].skill_id, "update-config");
 }
 
 #[test]
 fn skills_ignores_dirs_without_skill_md() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let container = tmp.path().join("kit");
+    let container = tmp.path().join("plugins");
     let plugin = container.join("main");
     let skill_dir = plugin.join("skills").join("draft");
     fs::create_dir_all(&skill_dir).expect("mkdir");
@@ -179,7 +179,7 @@ fn skills_ignores_dirs_without_skill_md() {
 #[test]
 fn skills_records_plugin_id_on_every_skill() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let container = tmp.path().join("kit");
+    let container = tmp.path().join("plugins");
 
     // Two plugins each with one skill
     for (pid, sid) in &[("alpha", "s1"), ("beta", "s2")] {
@@ -205,31 +205,31 @@ fn skills_records_plugin_id_on_every_skill() {
 #[test]
 fn skills_parse_title_from_frontmatter() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let container = tmp.path().join("kit");
-    let plugin = container.join("authoring");
-    let skill = plugin.join("skills").join("scriptlets");
+    let container = tmp.path().join("plugins");
+    let plugin = container.join("scriptkit");
+    let skill = plugin.join("skills").join("new-scriptlet");
     fs::create_dir_all(&skill).expect("mkdir");
     fs::write(
         skill.join("SKILL.md"),
-        "---\ntitle: Scriptlet Authoring\ndescription: Create markdown scriptlet bundles\n---\n# Body",
+        "---\ntitle: New Scriptlet\ndescription: Create markdown scriptlet bundles\n---\n# Body",
     )
     .expect("write");
-    let manifest = r#"{"id":"authoring","title":"Authoring"}"#;
+    let manifest = r#"{"id":"scriptkit","title":"Script Kit"}"#;
     fs::write(plugin.join("plugin.json"), manifest).expect("write");
 
     let index = discover_plugins_in(&container).expect("discover");
     let skills = discover_plugin_skills(&index).expect("skills");
     assert_eq!(skills.len(), 1);
-    assert_eq!(skills[0].title, "Scriptlet Authoring");
+    assert_eq!(skills[0].title, "New Scriptlet");
     assert_eq!(skills[0].description, "Create markdown scriptlet bundles");
-    assert_eq!(skills[0].plugin_title, "Authoring");
-    assert_eq!(skills[0].plugin_id, "authoring");
+    assert_eq!(skills[0].plugin_title, "Script Kit");
+    assert_eq!(skills[0].plugin_id, "scriptkit");
 }
 
 #[test]
 fn skills_title_falls_back_to_h1_then_slug() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let container = tmp.path().join("kit");
+    let container = tmp.path().join("plugins");
 
     // Skill with H1 but no frontmatter title
     let plugin_a = container.join("alpha");
@@ -263,7 +263,7 @@ fn skills_title_falls_back_to_h1_then_slug() {
 #[test]
 fn skills_duplicate_slugs_across_plugins_preserved() {
     let tmp = tempfile::tempdir().expect("tempdir");
-    let container = tmp.path().join("kit");
+    let container = tmp.path().join("plugins");
 
     // Two plugins both define a "review" skill
     for pid in &["alpha", "beta"] {

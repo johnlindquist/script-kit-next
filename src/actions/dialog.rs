@@ -9,14 +9,19 @@
 use crate::components::scrollbar::{Scrollbar, ScrollbarColors};
 use crate::designs::{get_tokens, DesignColors, DesignVariant};
 use crate::logging;
+use crate::menu_syntax_actions::{
+    power_syntax_section_to_actions, PowerSyntaxActionSection, SectionMode,
+};
 use crate::protocol::ProtocolAction;
 use crate::theme;
+use crate::theme::types::BackgroundOpacity;
 use gpui::{
     div, list, prelude::*, px, rgb, rgba, svg, App, BoxShadow, Context, ElementId, FocusHandle,
     Focusable, ListAlignment, ListState, Render, SharedString, Window,
 };
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use super::builders::{
     format_shortcut_hint as format_shortcut_hint_shared, get_clipboard_history_context_actions,
@@ -137,6 +142,47 @@ pub(crate) fn matching_action_id_for_keystroke(
             None
         }
     })
+}
+
+pub(crate) fn matching_filtered_action_id_for_keystroke(
+    actions: &[Action],
+    filtered_actions: &[usize],
+    key: &str,
+    modifiers: &gpui::Modifiers,
+) -> Option<String> {
+    let keystroke_shortcut = crate::shortcuts::keystroke_to_shortcut(key, modifiers);
+    filtered_actions.iter().find_map(|&action_idx| {
+        actions.get(action_idx).and_then(|action| {
+            if action_matches_keystroke_shortcut(action, &keystroke_shortcut) {
+                Some(action.id.clone())
+            } else {
+                None
+            }
+        })
+    })
+}
+
+fn clear_action_shortcut(action: &mut Action) {
+    action.shortcut = None;
+    action.shortcut_tokens = None;
+    action.shortcut_lower = None;
+}
+
+pub(super) fn clear_duplicate_action_shortcuts(actions: &mut [Action]) {
+    let mut seen = HashSet::new();
+
+    for action in actions {
+        let Some(shortcut) = action.shortcut.as_deref() else {
+            continue;
+        };
+        let canonical = crate::components::hint_strip::canonical_shortcut_hint(shortcut);
+        if canonical.is_empty() {
+            continue;
+        }
+        if !seen.insert(canonical) {
+            clear_action_shortcut(action);
+        }
+    }
 }
 
 pub(crate) fn is_destructive_action(action: &Action) -> bool {
@@ -303,6 +349,20 @@ pub(super) fn should_render_section_separator(
 }
 
 const ACTIONS_DIALOG_FOOTER_HEIGHT: f32 = 32.0;
+const ACTIONS_DIALOG_SCROLLBAR_IDLE_DELAY: Duration = Duration::from_millis(900);
+const ACTIONS_DIALOG_SCROLLBAR_FADE_TICK: Duration = Duration::from_millis(16);
+
+#[inline]
+fn actions_dialog_scrollbar_fade_duration() -> Duration {
+    crate::transitions::DURATION_MEDIUM + Duration::from_millis(50)
+}
+
+#[inline]
+fn actions_dialog_scrollbar_fade_opacity(progress: f32) -> crate::transitions::Opacity {
+    use crate::transitions::Lerp;
+    let eased = crate::transitions::ease_in_quad(progress.clamp(0.0, 1.0));
+    crate::transitions::Opacity::VISIBLE.lerp(&crate::transitions::Opacity::INVISIBLE, eased)
+}
 
 /// Calculate the list viewport height used for scrollbar geometry.
 ///
@@ -419,7 +479,7 @@ pub struct AcpActionsDialogContext<'a> {
 /// - `section_style`: Headers (text labels) or Separators (subtle lines)
 /// - `anchor`: Top (list grows down) or Bottom (list grows up)
 /// - `show_icons`: Display icons next to actions
-/// - `show_footer`: Show keyboard hint footer
+/// - `show_footer`: Legacy flag; action dialogs keep shortcuts inline and omit a footer
 pub struct ActionsDialog {
     pub actions: Vec<Action>,
     pub filtered_actions: Vec<usize>, // Indices into actions
@@ -431,6 +491,7 @@ pub struct ActionsDialog {
     pub focused_script: Option<ScriptInfo>,
     /// Currently focused scriptlet (for H3-defined custom actions)
     pub focused_scriptlet: Option<Scriptlet>,
+    pub menu_syntax_section: Option<PowerSyntaxActionSection>,
     /// List state for variable-height list (section headers 22px, items 36px)
     pub list_state: ListState,
     /// Grouped items for list rendering (includes section headers)
@@ -473,6 +534,12 @@ pub struct ActionsDialog {
     /// Tracks the last row armed by a mouse click so actions require an explicit
     /// second click, while native double-click still submits immediately.
     mouse_armed_row: Option<usize>,
+    /// Current animated scrollbar visibility (0.0 hidden .. 1.0 visible).
+    scrollbar_visibility: crate::transitions::Opacity,
+    /// Generation counter used to cancel stale scrollbar fade tasks.
+    scrollbar_fade_gen: u64,
+    /// Last scroll activity time used by the idle fade timer.
+    last_scroll_time: Option<Instant>,
 }
 
 #[cfg(test)]
@@ -572,7 +639,7 @@ impl ActionsDialog {
             cursor_visible: self.cursor_visible,
             show_search,
             search_at_top,
-            show_footer: self.config.show_footer,
+            show_footer: false,
             items,
             selected_index: self.selected_index,
             hovered_index: None,
@@ -612,6 +679,17 @@ impl ActionsDialog {
         Self::with_script_and_design(focus_handle, on_select, None, theme, design_variant)
     }
 
+    pub(crate) fn acp_chat_dialog_config() -> ActionsDialogConfig {
+        ActionsDialogConfig {
+            search_position: SearchPosition::Top,
+            section_style: SectionStyle::Headers,
+            anchor: AnchorPosition::Top,
+            show_icons: true,
+            show_context_header: false,
+            ..ActionsDialogConfig::default()
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn from_actions_with_context(
         focus_handle: FocusHandle,
@@ -643,6 +721,7 @@ impl ActionsDialog {
             on_select,
             focused_script,
             focused_scriptlet,
+            menu_syntax_section: None,
             list_state,
             grouped_items,
             theme,
@@ -661,6 +740,9 @@ impl ActionsDialog {
             route_stack: Vec::new(),
             drill_down_routes: HashMap::new(),
             mouse_armed_row: None,
+            scrollbar_visibility: crate::transitions::Opacity::INVISIBLE,
+            scrollbar_fade_gen: 0,
+            last_scroll_time: None,
         }
     }
 
@@ -751,6 +833,13 @@ impl ActionsDialog {
                 dir_info,
             ));
         }
+        // Run 14 Pass 1 — global actions (Reload Scripts / Open Settings /
+        // Show Logs from Run 13 Pass 3) are appended here so that the
+        // file-search Cmd+K dialog never opens empty, even when the user
+        // has not yet selected a file or browsed into a directory. Story
+        // `actions-debounce-builtins-cross-host-live`.
+        actions.extend(crate::actions::builders::get_global_actions());
+        clear_duplicate_action_shortcuts(&mut actions);
 
         let context_title = match (file_info, dir_info) {
             (Some(file), Some(dir)) => Some(format!("{} · in {}", file.name, dir.name)),
@@ -917,7 +1006,7 @@ impl ActionsDialog {
         theme: Arc<theme::Theme>,
         design_variant: DesignVariant,
     ) -> Self {
-        let actions = Self::build_actions(&focused_script, &None);
+        let actions = Self::build_actions(&focused_script, &None, &None);
         let config = ActionsDialogConfig::default();
 
         logging::log(
@@ -1323,7 +1412,7 @@ impl ActionsDialog {
             context.selected_model_id,
             host,
         );
-        let config = ActionsDialogConfig::default();
+        let config = Self::acp_chat_dialog_config();
 
         let mut dialog = Self::from_actions_with_context(
             focus_handle,
@@ -1560,7 +1649,11 @@ impl ActionsDialog {
             );
             self.sdk_actions = None;
             self.sdk_action_indices.clear();
-            self.actions = Self::build_actions(&self.focused_script, &self.focused_scriptlet);
+            self.actions = Self::build_actions(
+                &self.focused_script,
+                &self.focused_scriptlet,
+                &self.menu_syntax_section,
+            );
             self.filtered_actions = (0..self.actions.len()).collect();
             self.search_text.clear();
             // Rebuild grouped items and reset selection
@@ -1612,7 +1705,19 @@ impl ActionsDialog {
     fn build_actions(
         focused_script: &Option<ScriptInfo>,
         focused_scriptlet: &Option<Scriptlet>,
+        menu_syntax_section: &Option<PowerSyntaxActionSection>,
     ) -> Vec<Action> {
+        if let Some(section) = menu_syntax_section {
+            let mut power_syntax_actions = power_syntax_section_to_actions(section);
+            if section.mode == SectionMode::Replace {
+                return power_syntax_actions;
+            }
+
+            let mut actions = Self::build_actions(focused_script, focused_scriptlet, &None);
+            power_syntax_actions.append(&mut actions);
+            return power_syntax_actions;
+        }
+
         let mut actions = Vec::new();
 
         // Add script-specific actions first if a script is focused
@@ -1639,7 +1744,11 @@ impl ActionsDialog {
     pub fn set_focused_script(&mut self, script: Option<ScriptInfo>) {
         self.focused_script = script;
         self.focused_scriptlet = None; // Clear scriptlet when only setting script
-        self.actions = Self::build_actions(&self.focused_script, &self.focused_scriptlet);
+        self.actions = Self::build_actions(
+            &self.focused_script,
+            &self.focused_scriptlet,
+            &self.menu_syntax_section,
+        );
         self.refilter();
     }
 
@@ -1654,7 +1763,11 @@ impl ActionsDialog {
     ) {
         self.focused_script = script;
         self.focused_scriptlet = scriptlet;
-        self.actions = Self::build_actions(&self.focused_script, &self.focused_scriptlet);
+        self.actions = Self::build_actions(
+            &self.focused_script,
+            &self.focused_scriptlet,
+            &self.menu_syntax_section,
+        );
         self.refilter();
 
         logging::log(
@@ -1667,6 +1780,20 @@ impl ActionsDialog {
                     .unwrap_or(0)
             ),
         );
+    }
+
+    /// Push the live Power Syntax action section. The App computes the
+    /// live `MenuSyntaxActionState` from filter parse + active mode and pushes
+    /// the owned section here when Cmd+K opens (Run 12 Pass 7 wiring at
+    /// `src/app_impl/actions_toggle.rs`'s dialog construction site).
+    pub fn set_menu_syntax_section(&mut self, section: Option<PowerSyntaxActionSection>) {
+        self.menu_syntax_section = section;
+        self.actions = Self::build_actions(
+            &self.focused_script,
+            &self.focused_scriptlet,
+            &self.menu_syntax_section,
+        );
+        self.refilter();
     }
 
     /// Update the theme when hot-reloading
@@ -2005,6 +2132,34 @@ fn actions_dialog_rgba_with_alpha(hex: u32, alpha: u8) -> gpui::Rgba {
     rgba(hex_with_alpha(hex, alpha))
 }
 
+#[inline]
+fn semantic_text_rgba(text_primary: u32, opacity: f32) -> gpui::Rgba {
+    rgba(hex_with_alpha(
+        text_primary,
+        actions_dialog_alpha_u8(opacity.clamp(0.0, 1.0)),
+    ))
+}
+
+#[inline]
+fn actions_dialog_search_text_colors(
+    text_primary: u32,
+    opacity: &BackgroundOpacity,
+) -> (gpui::Rgba, gpui::Rgba, gpui::Rgba) {
+    (
+        semantic_text_rgba(text_primary, opacity.text_muted_alpha),
+        semantic_text_rgba(text_primary, opacity.text_placeholder),
+        semantic_text_rgba(text_primary, opacity.text_strong),
+    )
+}
+
+#[inline]
+fn actions_dialog_container_text_color(
+    text_primary: u32,
+    opacity: &BackgroundOpacity,
+) -> gpui::Rgba {
+    semantic_text_rgba(text_primary, opacity.text_muted_alpha)
+}
+
 fn actions_dialog_main_window_background_alpha(theme: &theme::Theme) -> u8 {
     let opacity = theme.get_opacity();
     let resolved_opacity = if theme.has_dark_colors() {
@@ -2025,6 +2180,84 @@ impl ActionsDialog {
         self.mouse_armed_row = None;
     }
 
+    // @lat: [[automation#Actions dialog scrollbar visibility]]
+    fn trigger_scrollbar_activity(&mut self, cx: &mut Context<Self>) {
+        let now = Instant::now();
+        self.last_scroll_time = Some(now);
+        self.scrollbar_visibility = crate::transitions::Opacity::VISIBLE;
+        self.scrollbar_fade_gen = self.scrollbar_fade_gen.wrapping_add(1);
+        let fade_gen = self.scrollbar_fade_gen;
+
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(ACTIONS_DIALOG_SCROLLBAR_IDLE_DELAY)
+                .await;
+
+            let should_start_fade = cx
+                .update(|cx| {
+                    this.update(cx, |dialog, _cx| {
+                        if dialog.scrollbar_fade_gen != fade_gen {
+                            return false;
+                        }
+
+                        dialog
+                            .last_scroll_time
+                            .map(|last_time| {
+                                last_time.elapsed() >= ACTIONS_DIALOG_SCROLLBAR_IDLE_DELAY
+                            })
+                            .unwrap_or(false)
+                    })
+                })
+                .unwrap_or(false);
+
+            if !should_start_fade {
+                return;
+            }
+
+            let fade_duration = actions_dialog_scrollbar_fade_duration();
+            let fade_start = Instant::now();
+
+            loop {
+                let elapsed = fade_start.elapsed();
+                let progress =
+                    (elapsed.as_secs_f32() / fade_duration.as_secs_f32()).clamp(0.0, 1.0);
+                let opacity = actions_dialog_scrollbar_fade_opacity(progress);
+
+                let continue_fade = cx
+                    .update(|cx| {
+                        this.update(cx, |dialog, cx| {
+                            if dialog.scrollbar_fade_gen != fade_gen {
+                                return false;
+                            }
+
+                            dialog.scrollbar_visibility = opacity;
+                            cx.notify();
+                            progress < 1.0
+                        })
+                    })
+                    .unwrap_or(false);
+
+                if !continue_fade {
+                    break;
+                }
+
+                cx.background_executor()
+                    .timer(ACTIONS_DIALOG_SCROLLBAR_FADE_TICK)
+                    .await;
+            }
+        })
+        .detach();
+
+        cx.notify();
+    }
+
+    pub(crate) fn reveal_selection_after_navigation(&mut self, cx: &mut Context<Self>) {
+        self.clear_mouse_submit_arm();
+        self.list_state.scroll_to_reveal_item(self.selected_index);
+        self.trigger_scrollbar_activity(cx);
+        cx.notify();
+    }
+
     /// Move selection up, skipping section headers
     ///
     /// When moving up and landing on a section header, we must search UPWARD
@@ -2040,13 +2273,11 @@ impl ActionsDialog {
         for i in (0..self.selected_index).rev() {
             if matches!(self.grouped_items.get(i), Some(GroupedActionItem::Item(_))) {
                 self.selected_index = i;
-                self.clear_mouse_submit_arm();
-                self.list_state.scroll_to_reveal_item(self.selected_index);
+                self.reveal_selection_after_navigation(cx);
                 logging::log_debug(
                     "ACTIONS_SCROLL",
                     &format!("Up: selected_index={}", self.selected_index),
                 );
-                cx.notify();
                 return;
             }
         }
@@ -2060,13 +2291,11 @@ impl ActionsDialog {
             for i in new_index..self.grouped_items.len() {
                 if matches!(self.grouped_items.get(i), Some(GroupedActionItem::Item(_))) {
                     self.selected_index = i;
-                    self.clear_mouse_submit_arm();
-                    self.list_state.scroll_to_reveal_item(self.selected_index);
+                    self.reveal_selection_after_navigation(cx);
                     logging::log_debug(
                         "ACTIONS_SCROLL",
                         &format!("Down: selected_index={}", self.selected_index),
                     );
-                    cx.notify();
                     break;
                 }
             }
@@ -2200,7 +2429,7 @@ impl ActionsDialog {
     }
 
     /// Get colors for the search box based on design variant
-    /// Returns: (search_box_bg, border_color, muted_text, dimmed_text, secondary_text)
+    /// Returns: (search_box_bg, border_color, muted_text, hint_text, strong_text)
     pub(super) fn get_search_colors(
         &self,
         colors: &crate::designs::DesignColors,
@@ -2210,31 +2439,30 @@ impl ActionsDialog {
         let input_alpha = actions_dialog_alpha_u8(opacity.input);
         // Keep search and container borders on the same opacity scaling path.
         let border_alpha = actions_dialog_search_border_alpha(opacity.border_inactive);
-        let (search_box_background, search_box_border, muted_text, dimmed_text, secondary_text) =
+        let (search_box_background, search_box_border, text_primary) =
             if self.design_variant == DesignVariant::Default {
                 (
                     self.theme.colors.background.search_box,
                     self.theme.colors.ui.border,
-                    self.theme.colors.text.muted,
-                    self.theme.colors.text.dimmed,
-                    self.theme.colors.text.secondary,
+                    self.theme.colors.text.primary,
                 )
             } else {
                 (
                     colors.background_secondary,
                     colors.border,
-                    colors.text_muted,
-                    colors.text_dimmed,
-                    colors.text_secondary,
+                    colors.text_primary,
                 )
             };
+
+        let (muted_text, hint_text, strong_text) =
+            actions_dialog_search_text_colors(text_primary, &opacity);
 
         (
             actions_dialog_rgba_with_alpha(search_box_background, input_alpha),
             actions_dialog_rgba_with_alpha(search_box_border, border_alpha),
-            rgb(muted_text),
-            rgb(dimmed_text),
-            rgb(secondary_text),
+            muted_text,
+            hint_text,
+            strong_text,
         )
     }
 
@@ -2254,21 +2482,21 @@ impl ActionsDialog {
             actions_dialog_container_background_alpha(opacity.dialog, use_vibrancy)
         };
         let border_alpha = actions_dialog_container_border_alpha(opacity.border_inactive);
-        let (main_background, container_border, container_text) =
+        let (main_background, container_border, text_primary) =
             if self.design_variant == DesignVariant::Default {
                 (
                     self.theme.colors.background.main,
                     self.theme.colors.ui.border,
-                    self.theme.colors.text.secondary,
+                    self.theme.colors.text.primary,
                 )
             } else {
-                (colors.background, colors.border, colors.text_secondary)
+                (colors.background, colors.border, colors.text_primary)
             };
 
         (
             actions_dialog_rgba_with_alpha(main_background, dialog_alpha),
             actions_dialog_rgba_with_alpha(container_border, border_alpha),
-            rgb(container_text),
+            actions_dialog_container_text_color(text_primary, &opacity),
         )
     }
 }
@@ -2277,8 +2505,10 @@ impl ActionsDialog {
 mod actions_dialog_opacity_consistency_tests {
     use super::{
         actions_dialog_container_background_alpha, actions_dialog_container_border_alpha,
-        actions_dialog_main_window_background_alpha, actions_dialog_rgba_with_alpha,
-        actions_dialog_search_border_alpha, ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA,
+        actions_dialog_container_text_color, actions_dialog_main_window_background_alpha,
+        actions_dialog_rgba_with_alpha, actions_dialog_search_border_alpha,
+        actions_dialog_search_text_colors, semantic_text_rgba,
+        ACTIONS_DIALOG_CONTAINER_BORDER_MIN_ALPHA,
     };
     use crate::theme::Theme;
     use gpui::rgba;
@@ -2345,6 +2575,37 @@ mod actions_dialog_opacity_consistency_tests {
             rgba((background << 8) | 0x44)
         );
     }
+
+    #[test]
+    fn test_actions_dialog_search_and_container_text_follow_shared_theme_opacity_ladder() {
+        let theme = Theme::dark_default();
+        let opacity = theme.get_opacity();
+        let (muted_text, hint_text, strong_text) =
+            actions_dialog_search_text_colors(theme.colors.text.primary, &opacity);
+        let container_text =
+            actions_dialog_container_text_color(theme.colors.text.primary, &opacity);
+
+        assert_eq!(
+            muted_text,
+            semantic_text_rgba(theme.colors.text.primary, opacity.text_muted_alpha),
+            "search muted text must use primary text plus shared muted alpha"
+        );
+        assert_eq!(
+            hint_text,
+            semantic_text_rgba(theme.colors.text.primary, opacity.text_placeholder),
+            "search hint text must use primary text plus shared placeholder alpha"
+        );
+        assert_eq!(
+            strong_text,
+            semantic_text_rgba(theme.colors.text.primary, opacity.text_strong),
+            "search strong text must use primary text plus shared strong alpha"
+        );
+        assert_eq!(
+            container_text,
+            semantic_text_rgba(theme.colors.text.primary, opacity.text_muted_alpha),
+            "container text must use primary text plus shared muted alpha"
+        );
+    }
 }
 
 // --- merged from part_03.rs ---
@@ -2382,7 +2643,7 @@ impl Render for ActionsDialog {
         };
 
         // Use helper method for design/theme color extraction
-        let (_search_box_bg, border_color, _muted_text, dimmed_text, _secondary_text) =
+        let (_search_box_bg, border_color, _muted_text, hint_text, _strong_text) =
             self.get_search_colors(&colors);
 
         // Get primary text color for cursor (matches main list styling)
@@ -2411,7 +2672,7 @@ impl Render for ActionsDialog {
         // Use theme colors for both light and dark mode
         // Light mode derives from the same theme tokens as dark mode
         let separator_color = border_color;
-        let hint_text_color = dimmed_text;
+        let hint_text_color = hint_text;
         let input_text_color = primary_text;
 
         let mut input_container = div()
@@ -2569,7 +2830,8 @@ impl Render for ActionsDialog {
                 scroll_offset,
                 scrollbar_colors,
             )
-            .container_height(container_height);
+            .container_height(container_height)
+            .visibility_opacity(self.scrollbar_visibility.value());
 
             // Capture entity handle for use in the render closure
             let entity = cx.entity();
@@ -2583,12 +2845,20 @@ impl Render for ActionsDialog {
                         match grouped_item {
                             GroupedActionItem::SectionHeader(label) => {
                                 // Section header at 22px height
-                                let header_text = if this.design_variant == DesignVariant::Default {
-                                    rgb(this.theme.colors.text.dimmed)
-                                } else {
-                                    let tokens = get_tokens(this.design_variant);
-                                    rgb(tokens.colors().text_dimmed)
-                                };
+                                let theme_opacity = this.theme.get_opacity();
+                                let header_text =
+                                    if this.design_variant == DesignVariant::Default {
+                                        semantic_text_rgba(
+                                            this.theme.colors.text.primary,
+                                            theme_opacity.text_muted_alpha,
+                                        )
+                                    } else {
+                                        let tokens = get_tokens(this.design_variant);
+                                        semantic_text_rgba(
+                                            tokens.colors().text_primary,
+                                            theme_opacity.text_muted_alpha,
+                                        )
+                                    };
                                 let section_header = div()
                                     .id(ElementId::NamedInteger("section-header".into(), ix as u64))
                                     .h(px(SECTION_HEADER_HEIGHT))
@@ -2628,10 +2898,12 @@ impl Render for ActionsDialog {
                                             selected_bg,
                                             hover_bg,
                                             primary_text,
-                                            secondary_text,
-                                            dimmed_text,
+                                            strong_text,
+                                            muted_text,
+                                            hint_text,
                                         ) = if design_variant == DesignVariant::Default {
-                                            // Whisper: halve selection/hover alpha for ultra-subtle highlight
+                                            // Luminance ladder: both use text.primary at
+                                            // different opacities for clear differentiation
                                             let theme_opacity = this.theme.get_opacity();
                                             let selected_alpha = ((theme_opacity.selected
                                                 * style.selection_opacity)
@@ -2645,19 +2917,30 @@ impl Render for ActionsDialog {
                                                 as u32;
                                             (
                                                 rgba(
-                                                    (this.theme.colors.accent.selected_subtle << 8)
+                                                    (this.theme.colors.text.primary << 8)
                                                         | selected_alpha,
                                                 ),
                                                 rgba(
-                                                    (this.theme.colors.accent.selected_subtle << 8)
+                                                    (this.theme.colors.text.primary << 8)
                                                         | hover_alpha,
                                                 ),
                                                 rgb(this.theme.colors.text.primary),
-                                                rgb(this.theme.colors.text.secondary),
-                                                rgb(this.theme.colors.text.dimmed),
+                                                semantic_text_rgba(
+                                                    this.theme.colors.text.primary,
+                                                    theme_opacity.text_strong,
+                                                ),
+                                                semantic_text_rgba(
+                                                    this.theme.colors.text.primary,
+                                                    theme_opacity.text_muted_alpha,
+                                                ),
+                                                semantic_text_rgba(
+                                                    this.theme.colors.text.primary,
+                                                    theme_opacity.text_hint,
+                                                ),
                                             )
                                         } else {
-                                            // Whisper: halve selection/hover alpha
+                                            // Luminance ladder (design variant):
+                                            // Both use text_primary at different opacities
                                             let theme_opacity = this.theme.get_opacity();
                                             let selected_alpha = ((theme_opacity.selected
                                                 * style.selection_opacity)
@@ -2671,16 +2954,26 @@ impl Render for ActionsDialog {
                                                 as u32;
                                             (
                                                 rgba(
-                                                    (item_colors.background_selected << 8)
+                                                    (item_colors.text_primary << 8)
                                                         | selected_alpha,
                                                 ),
                                                 rgba(
-                                                    (item_colors.background_selected << 8)
+                                                    (item_colors.text_primary << 8)
                                                         | hover_alpha,
                                                 ),
                                                 rgb(item_colors.text_primary),
-                                                rgb(item_colors.text_secondary),
-                                                rgb(item_colors.text_dimmed),
+                                                semantic_text_rgba(
+                                                    item_colors.text_primary,
+                                                    theme_opacity.text_strong,
+                                                ),
+                                                semantic_text_rgba(
+                                                    item_colors.text_primary,
+                                                    theme_opacity.text_muted_alpha,
+                                                ),
+                                                semantic_text_rgba(
+                                                    item_colors.text_primary,
+                                                    theme_opacity.text_hint,
+                                                ),
                                             )
                                         };
 
@@ -2719,16 +3012,16 @@ impl Render for ActionsDialog {
                                         let title_color = if is_selected {
                                             primary_text
                                         } else {
-                                            secondary_text
+                                            strong_text
                                         };
                                         // Shortcut chrome stays whisper-muted even on destructive rows.
                                         // The destructive signal belongs on the action label/icon, not the shortcut.
                                         let shortcut_glyph_color = if is_selected {
-                                            secondary_text
+                                            muted_text
                                         } else {
-                                            dimmed_text
+                                            hint_text
                                         };
-                                        let shortcut_chrome_color = dimmed_text;
+                                        let shortcut_chrome_color = hint_text;
 
                                         let title_color = if is_destructive {
                                             destructive_text
@@ -2807,7 +3100,7 @@ impl Render for ActionsDialog {
                                                     .text_color(if is_selected {
                                                         primary_text
                                                     } else {
-                                                        dimmed_text
+                                                        hint_text
                                                     })
                                                     .font_family(crate::list_item::FONT_MONO)
                                                     .child(prefix_marker),
@@ -2826,7 +3119,7 @@ impl Render for ActionsDialog {
                                                         } else if is_selected {
                                                             primary_text
                                                         } else {
-                                                            dimmed_text
+                                                            hint_text
                                                         }),
                                                 );
                                             }
@@ -2855,9 +3148,9 @@ impl Render for ActionsDialog {
                                             let mut subtitle = div()
                                                 .text_xs()
                                                 .text_color(if is_selected {
-                                                    secondary_text
+                                                    muted_text
                                                 } else {
-                                                    dimmed_text
+                                                    hint_text
                                                 })
                                                 .text_ellipsis();
                                             if style.mono_font {
@@ -2976,6 +3269,10 @@ impl Render for ActionsDialog {
                 .flex_1()
                 .w_full()
                 .overflow_hidden()
+                .on_scroll_wheel(cx.listener(|this, _event, _window, cx| {
+                    this.trigger_scrollbar_activity(cx);
+                    cx.propagate();
+                }))
                 // Always render the list to keep ListState in the render tree
                 .child(variable_height_list)
                 .child(scrollbar)
@@ -2991,7 +3288,7 @@ impl Render for ActionsDialog {
                             .flex()
                             .items_center()
                             .px(px(spacing.item_padding_x))
-                            .text_color(dimmed_text)
+                            .text_color(hint_text_color)
                             .text_sm()
                             .child(empty_message),
                     )
@@ -3016,7 +3313,7 @@ impl Render for ActionsDialog {
         } else {
             0.0
         };
-        let footer_height = if self.config.show_footer { 32.0 } else { 0.0 };
+        let footer_height = 0.0;
         let border_height = visual.border_thin * 2.0; // top + bottom border
 
         // Count items and section headers separately for accurate height calculation
@@ -3053,9 +3350,15 @@ impl Render for ActionsDialog {
         let header_container = if self.shows_context_header() && style.show_header {
             self.context_title.as_ref().map(|title| {
                 let header_text = if self.design_variant == DesignVariant::Default {
-                    rgb(self.theme.colors.text.dimmed)
+                    semantic_text_rgba(
+                        self.theme.colors.text.primary,
+                        self.theme.get_opacity().text_muted_alpha,
+                    )
                 } else {
-                    rgb(colors.text_dimmed)
+                    semantic_text_rgba(
+                        colors.text_primary,
+                        self.theme.get_opacity().text_muted_alpha,
+                    )
                 };
 
                 let header = div()
@@ -3092,17 +3395,6 @@ impl Render for ActionsDialog {
             &self.config,
             &style,
         ));
-
-        // Build footer with keyboard hints (if enabled)
-        let footer_container = if self.config.show_footer {
-            Some(div().w_full().child(crate::components::HintStrip::new(vec![
-                "↵ Run".into(),
-                "⌘↩ Ask AI".into(),
-                self.route_hint_label().into(),
-            ])))
-        } else {
-            None
-        };
 
         // Top-positioned search input - clean Raycast-style matching the bottom search
         // No boxed input field, no ⌘K prefix - just text on a clean background with bottom separator
@@ -3228,9 +3520,6 @@ impl Render for ActionsDialog {
         if show_search && !search_at_top {
             container = container.child(input_container);
         }
-        if let Some(footer) = footer_container {
-            container = container.child(footer);
-        }
         container
     }
 }
@@ -3256,7 +3545,7 @@ pub(crate) struct ActionsDialogChromeAudit {
     pub section_mode: &'static str,
     /// Corner radius for row selection background (0 = sharp).
     pub row_radius: u16,
-    /// Number of items in the footer hint strip (spec: exactly 2).
+    /// Number of items in the footer hint strip (spec: none for actions dialogs).
     pub footer_hint_count: u8,
 }
 
@@ -3352,6 +3641,7 @@ pub(crate) struct ActionsDialogExpectedContract {
     pub search_position: &'static str,
     pub shows_search_divider: bool,
     pub show_container_border: bool,
+    pub show_footer: bool,
     pub footer_hint_count: u8,
 }
 
@@ -3361,6 +3651,7 @@ impl ActionsDialogExpectedContract {
             search_position: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_POSITION,
             shows_search_divider: super::constants::ACTIONS_DIALOG_EXPECT_SEARCH_DIVIDER,
             show_container_border: super::constants::ACTIONS_DIALOG_EXPECT_CONTAINER_BORDER,
+            show_footer: false,
             footer_hint_count: super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT,
         }
     }
@@ -3390,11 +3681,7 @@ impl ActionsDialogRuntimeAudit {
             show_footer: config.show_footer,
             show_icons: config.show_icons,
             show_container_border: style.show_container_border,
-            footer_hint_count: if config.show_footer {
-                super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT
-            } else {
-                0
-            },
+            footer_hint_count: if config.show_footer { 2 } else { 0 },
         }
     }
 
@@ -3412,11 +3699,7 @@ impl ActionsDialogRuntimeAudit {
             show_footer: config.show_footer,
             show_icons: config.show_icons,
             show_container_border: style.show_container_border,
-            footer_hint_count: if config.show_footer {
-                super::constants::ACTIONS_DIALOG_EXPECT_FOOTER_HINT_COUNT
-            } else {
-                0
-            },
+            footer_hint_count: if config.show_footer { 2 } else { 0 },
         }
     }
 
@@ -3457,12 +3740,28 @@ impl ActionsDialogRuntimeAudit {
                 actual: actions_dialog_bool_name(self.show_container_border),
             });
         }
-        if self.show_footer && self.footer_hint_count != expected.footer_hint_count {
+        if self.show_footer != expected.show_footer {
+            violations.push(ActionsDialogRuntimeViolation {
+                surface: self.surface,
+                field: "show_footer",
+                expected: actions_dialog_bool_name(expected.show_footer),
+                actual: actions_dialog_bool_name(self.show_footer),
+            });
+        }
+        if self.footer_hint_count != expected.footer_hint_count {
             violations.push(ActionsDialogRuntimeViolation {
                 surface: self.surface,
                 field: "footer_hint_count",
-                expected: "2",
-                actual: "not_2",
+                expected: if expected.footer_hint_count == 0 {
+                    "0"
+                } else {
+                    "not_0"
+                },
+                actual: if self.footer_hint_count == 0 {
+                    "0"
+                } else {
+                    "not_0"
+                },
             });
         }
         violations
@@ -3524,11 +3823,15 @@ fn emit_actions_dialog_runtime_audit(audit: &ActionsDialogRuntimeAudit) {
 #[cfg(test)]
 mod tests {
     use super::{
-        action_subtitle_for_display, actions_dialog_scrollbar_viewport_height,
-        is_destructive_action, matching_action_id_for_keystroke, should_render_section_separator,
-        ActionsDialog, ActionsDialogChromeAudit, ActionsDialogRuntimeAudit,
+        action_subtitle_for_display, actions_dialog_scrollbar_fade_duration,
+        actions_dialog_scrollbar_fade_opacity, actions_dialog_scrollbar_viewport_height,
+        clear_duplicate_action_shortcuts, is_destructive_action, matching_action_id_for_keystroke,
+        matching_filtered_action_id_for_keystroke, should_render_section_separator, ActionsDialog,
+        ActionsDialogChromeAudit, ActionsDialogRuntimeAudit,
     };
-    use crate::actions::types::{Action, ActionCategory, SectionStyle};
+    use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
+    use crate::menu_syntax::{MenuSyntaxAction, MenuSyntaxActionKind};
+    use crate::menu_syntax_actions::{PowerSyntaxActionSection, SectionMode};
 
     #[test]
     fn destructive_detection_matches_known_ids() {
@@ -3566,6 +3869,65 @@ mod tests {
             ActionCategory::ScriptContext,
         );
         assert!(!is_destructive_action(&safe_action));
+    }
+
+    #[test]
+    fn build_actions_applies_power_syntax_replace_and_prepend_modes() {
+        fn focused_script() -> ScriptInfo {
+            ScriptInfo {
+                name: "Demo Script".to_string(),
+                path: "/tmp/demo-script.ts".to_string(),
+                is_script: true,
+                action_verb: "Run".to_string(),
+                ..ScriptInfo::default()
+            }
+        }
+
+        fn power_syntax_section(mode: SectionMode) -> PowerSyntaxActionSection {
+            PowerSyntaxActionSection {
+                title: "Power Syntax".to_string(),
+                mode,
+                actions: vec![MenuSyntaxAction {
+                    id: "capture.cancel".to_string(),
+                    label: "Cancel without saving".to_string(),
+                    kind: MenuSyntaxActionKind::Cancel,
+                    enabled: true,
+                }],
+            }
+        }
+
+        let focused_script = Some(focused_script());
+        let normal_actions = ActionsDialog::build_actions(&focused_script, &None, &None);
+        assert!(
+            normal_actions
+                .iter()
+                .any(|action| action.id == "run_script"),
+            "fixture must include normal selected-row actions"
+        );
+
+        let replace_section = Some(power_syntax_section(SectionMode::Replace));
+        let replace_actions =
+            ActionsDialog::build_actions(&focused_script, &None, &replace_section);
+        assert_eq!(replace_actions.len(), 1);
+        assert_eq!(replace_actions[0].id, "menu_syntax:capture.cancel");
+        assert!(
+            !replace_actions
+                .iter()
+                .any(|action| action.id == "run_script"),
+            "replace mode must wipe normal selected-row actions"
+        );
+
+        let prepend_section = Some(power_syntax_section(SectionMode::Prepend));
+        let prepend_actions =
+            ActionsDialog::build_actions(&focused_script, &None, &prepend_section);
+        assert_eq!(prepend_actions[0].id, "menu_syntax:capture.cancel");
+        assert_eq!(&prepend_actions[1..], normal_actions.as_slice());
+        assert!(
+            prepend_actions[1..]
+                .iter()
+                .any(|action| action.id == "run_script"),
+            "prepend mode must keep normal selected-row actions after Power Syntax"
+        );
     }
 
     #[test]
@@ -3644,6 +4006,26 @@ mod tests {
     }
 
     #[test]
+    fn test_scrollbar_fade_duration_matches_shared_scroll_feel() {
+        assert_eq!(
+            actions_dialog_scrollbar_fade_duration(),
+            crate::transitions::DURATION_MEDIUM + std::time::Duration::from_millis(50)
+        );
+    }
+
+    #[test]
+    fn test_scrollbar_fade_opacity_starts_visible_and_ends_hidden() {
+        assert_eq!(
+            actions_dialog_scrollbar_fade_opacity(0.0),
+            crate::transitions::Opacity::VISIBLE
+        );
+        assert_eq!(
+            actions_dialog_scrollbar_fade_opacity(1.0),
+            crate::transitions::Opacity::INVISIBLE
+        );
+    }
+
+    #[test]
     fn test_action_subtitle_for_display_always_returns_none() {
         let action_with_description = Action::new(
             "copy_path",
@@ -3706,6 +4088,58 @@ mod tests {
     }
 
     #[test]
+    fn test_matching_filtered_action_id_for_keystroke_ignores_hidden_actions() {
+        let actions = vec![
+            Action::new("rename_path", "Rename", None, ActionCategory::ScriptContext)
+                .with_shortcut("⌘R"),
+            Action::new(
+                "file:refresh_directory",
+                "Refresh Directory",
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘R"),
+        ];
+
+        let mut cmd_only = gpui::Modifiers::default();
+        cmd_only.platform = true;
+
+        assert_eq!(
+            matching_filtered_action_id_for_keystroke(&actions, &[1], "r", &cmd_only),
+            Some("file:refresh_directory".to_string())
+        );
+    }
+
+    #[test]
+    fn test_clear_duplicate_action_shortcuts_keeps_first_visible_binding() {
+        let mut actions = vec![
+            Action::new("rename_path", "Rename", None, ActionCategory::ScriptContext)
+                .with_shortcut("⌘R"),
+            Action::new(
+                "file:refresh_directory",
+                "Refresh Directory",
+                None,
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("cmd+r"),
+            Action::new(
+                "file:sort_name_asc",
+                "Sort by Name",
+                None,
+                ActionCategory::ScriptContext,
+            ),
+        ];
+
+        clear_duplicate_action_shortcuts(&mut actions);
+
+        assert_eq!(actions[0].shortcut.as_deref(), Some("⌘R"));
+        assert_eq!(actions[1].shortcut, None);
+        assert_eq!(actions[1].shortcut_tokens, None);
+        assert_eq!(actions[1].shortcut_lower, None);
+        assert_eq!(actions[2].shortcut, None);
+    }
+
+    #[test]
     fn test_create_popup_shadow_returns_visible_shadow() {
         let shadows = ActionsDialog::create_popup_shadow();
 
@@ -3714,14 +4148,13 @@ mod tests {
 
     // ── Chrome contract tests (.impeccable.md) ──────────────────────────
 
-    /// The live dialog footer must render exactly two hint-strip keys:
-    /// `↵ Run`, `⌘K Actions`.
+    /// The live dialog omits a footer so shortcuts stay inline with rows.
     #[test]
-    fn actions_dialog_footer_matches_two_key_contract() {
+    fn actions_dialog_omits_footer_hints() {
         let audit = ActionsDialogChromeAudit::from_live_defaults();
         assert_eq!(
-            audit.footer_hint_count, 2,
-            "footer must show exactly 2 hints per .impeccable.md two-key rule"
+            audit.footer_hint_count, 0,
+            "actions dialog must not show footer hints; shortcuts live in rows"
         );
     }
 
@@ -3863,7 +4296,7 @@ mod actions_dialog_spec_tests {
         assert_eq!(audit.search_position, "top");
         assert!(!audit.shows_search_divider);
         assert_eq!(audit.section_mode, "headers");
-        assert_eq!(audit.footer_hint_count, 2);
+        assert_eq!(audit.footer_hint_count, 0);
     }
 
     #[test]
@@ -3873,10 +4306,10 @@ mod actions_dialog_spec_tests {
             search_position: "bottom",
             section_mode: "headers",
             shows_search_divider: false,
-            show_footer: true,
+            show_footer: false,
             show_icons: true,
             show_container_border: false,
-            footer_hint_count: 2,
+            footer_hint_count: 0,
         };
         assert!(
             audit
@@ -3894,10 +4327,10 @@ mod actions_dialog_spec_tests {
             search_position: "top",
             section_mode: "headers",
             shows_search_divider: true,
-            show_footer: true,
+            show_footer: false,
             show_icons: true,
             show_container_border: false,
-            footer_hint_count: 2,
+            footer_hint_count: 0,
         };
         assert!(
             audit
@@ -3915,10 +4348,10 @@ mod actions_dialog_spec_tests {
             search_position: "top",
             section_mode: "separators",
             shows_search_divider: false,
-            show_footer: true,
+            show_footer: false,
             show_icons: true,
             show_container_border: false,
-            footer_hint_count: 2,
+            footer_hint_count: 0,
         };
         assert!(
             audit.validate().iter().any(|v| v.field == "section_mode"),
@@ -3933,10 +4366,10 @@ mod actions_dialog_spec_tests {
             search_position: "top",
             section_mode: "headers",
             shows_search_divider: false,
-            show_footer: true,
+            show_footer: false,
             show_icons: true,
             show_container_border: true,
-            footer_hint_count: 2,
+            footer_hint_count: 0,
         };
         assert!(
             audit
@@ -3948,7 +4381,7 @@ mod actions_dialog_spec_tests {
     }
 
     #[test]
-    fn runtime_audit_flags_wrong_footer_hint_count() {
+    fn runtime_audit_flags_any_footer_presence() {
         let audit = ActionsDialogRuntimeAudit {
             surface: "test_surface",
             search_position: "top",
@@ -3957,14 +4390,18 @@ mod actions_dialog_spec_tests {
             show_footer: true,
             show_icons: true,
             show_container_border: false,
-            footer_hint_count: 5,
+            footer_hint_count: 2,
         };
+        assert!(
+            audit.validate().iter().any(|v| v.field == "show_footer"),
+            "any footer should fail verification"
+        );
         assert!(
             audit
                 .validate()
                 .iter()
                 .any(|v| v.field == "footer_hint_count"),
-            "footer hint count != 2 should fail verification"
+            "non-zero footer hint count should fail verification"
         );
     }
 
@@ -3975,10 +4412,10 @@ mod actions_dialog_spec_tests {
             search_position: "top",
             section_mode: "headers",
             shows_search_divider: false,
-            show_footer: true,
+            show_footer: false,
             show_icons: true,
             show_container_border: false,
-            footer_hint_count: 2,
+            footer_hint_count: 0,
         };
         assert!(
             audit.validate().is_empty(),
@@ -4017,7 +4454,8 @@ mod actions_dialog_spec_tests {
         assert_eq!(contract.search_position, "top");
         assert!(!contract.shows_search_divider);
         assert!(!contract.show_container_border);
-        assert_eq!(contract.footer_hint_count, 2);
+        assert!(!contract.show_footer);
+        assert_eq!(contract.footer_hint_count, 0);
     }
 
     #[test]

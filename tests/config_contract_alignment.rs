@@ -4,14 +4,14 @@
 
 #[test]
 fn config_skill_mentions_authoring_skills_and_runtime_preference_groups() {
-    let content = include_str!("../kit-init/skills/config/SKILL.md");
+    let content = include_str!("../kit-init/skills/update-config/SKILL.md");
     assert!(
-        content.contains("~/.scriptkit/kit/authoring/skills/"),
-        "SKILL.md must reference authoring plugin skills path"
+        content.contains("~/.scriptkit/plugins/scriptkit/skills/"),
+        "SKILL.md must reference Script Kit plugin skills path"
     );
     assert!(
-        content.contains("~/.scriptkit/kit/config.ts"),
-        "SKILL.md must reference kit/config.ts"
+        content.contains("~/.scriptkit/config.ts"),
+        "SKILL.md must reference config.ts"
     );
     assert!(
         content.contains("dictationHotkey"),
@@ -29,17 +29,39 @@ fn config_skill_mentions_authoring_skills_and_runtime_preference_groups() {
         content.contains("windowManagement"),
         "SKILL.md must mention windowManagement"
     );
+    assert!(content.contains("mcp"), "SKILL.md must mention mcp");
+}
+
+#[test]
+fn mcp_skill_mentions_shared_config_contract() {
+    let content = include_str!("../kit-init/skills/configure-mcp/SKILL.md");
+    assert!(
+        content.contains("~/.scriptkit/config.ts"),
+        "MCP skill must reference config.ts"
+    );
+    assert!(
+        content.contains("mcp"),
+        "MCP skill must mention the mcp key"
+    );
+    assert!(
+        content.contains("scripts and Agent Chat"),
+        "MCP skill must describe the shared scripts/Agent Chat contract"
+    );
+    assert!(
+        content.contains("mcp.call"),
+        "MCP skill must mention script SDK usage"
+    );
 }
 
 #[test]
 fn kit_sdk_mentions_current_public_config_fields() {
     let sdk = include_str!("../scripts/kit-sdk.ts");
     assert!(
-        sdk.contains("~/.scriptkit/kit/config.ts"),
+        sdk.contains("~/.scriptkit/config.ts"),
         "kit-sdk.ts must reference the authoritative config path"
     );
     assert!(
-        !sdk.contains("~/.scriptkit/config.ts"),
+        !sdk.contains("~/.scriptkit/kit/config.ts"),
         "kit-sdk.ts must not reference the legacy config path"
     );
     for field in [
@@ -61,6 +83,7 @@ fn kit_sdk_mentions_current_public_config_fields() {
         "windowManagement",
         "commands",
         "claudeCode",
+        "mcp",
     ] {
         assert!(sdk.contains(field), "kit-sdk.ts missing {field}");
     }
@@ -116,6 +139,7 @@ fn config_cli_known_top_level_is_current() {
         "windowManagement",
         "commands",
         "claudeCode",
+        "mcp",
     ] {
         assert!(cli.contains(field), "config-cli.ts missing {field}");
     }

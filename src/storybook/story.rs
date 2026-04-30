@@ -9,6 +9,9 @@ pub trait Story: Send + Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;
     fn category(&self) -> &'static str;
+    fn catalog_role(&self) -> StoryCatalogRole {
+        StoryCatalogRole::DesignExperiment
+    }
     fn surface(&self) -> StorySurface {
         StorySurface::Component
     }
@@ -16,6 +19,19 @@ pub trait Story: Send + Sync {
     /// Note: Window and App are provided for compatibility but stories should
     /// render stateless elements that don't depend on app state.
     fn render(&self) -> AnyElement;
+    /// Optionally build a persistent live view for a specific variant.
+    ///
+    /// Single-preview mode can host this cached view directly, which allows
+    /// Storybook to render stateful GPUI entities without recreating them every
+    /// frame. Compare mode continues to use `render_compare_variant()`.
+    fn render_live_variant(
+        &self,
+        _variant: &StoryVariant,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Option<AnyView> {
+        None
+    }
     fn render_variant(&self, _variant: &StoryVariant) -> AnyElement {
         self.render()
     }
@@ -27,6 +43,25 @@ pub trait Story: Send + Sync {
     }
     fn variants(&self) -> Vec<StoryVariant> {
         vec![StoryVariant::default_named("default", "Default")]
+    }
+}
+
+// @lat: [[storybook#Catalog Roles]]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum StoryCatalogRole {
+    CanonicalState,
+    AdoptableVariation,
+    #[default]
+    DesignExperiment,
+}
+
+impl StoryCatalogRole {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::CanonicalState => "canonicalState",
+            Self::AdoptableVariation => "adoptableVariation",
+            Self::DesignExperiment => "designExperiment",
+        }
     }
 }
 
@@ -42,8 +77,15 @@ pub enum StorySurface {
     TurnCard,
     FullPrompt,
     MainMenu,
+    DictationOverlay,
     MiniAiChat,
     NotesWindow,
+    ConfirmPopup,
+    ContextPickerPopup,
+    ShortcutRecorder,
+    AcpChat,
+    BuiltInBrowser,
+    AboutSurface,
 }
 
 impl StorySurface {
@@ -58,8 +100,15 @@ impl StorySurface {
             Self::TurnCard => "Turn Card",
             Self::FullPrompt => "Full Prompt",
             Self::MainMenu => "Main Menu",
-            Self::MiniAiChat => "Mini ACP Chat",
+            Self::DictationOverlay => "Dictation Overlay",
+            Self::MiniAiChat => "Mini Agent Chat",
             Self::NotesWindow => "Notes Window",
+            Self::ConfirmPopup => "Confirm Popup",
+            Self::ContextPickerPopup => "Context Picker Popup",
+            Self::ShortcutRecorder => "Shortcut Recorder",
+            Self::AcpChat => "Agent Chat",
+            Self::BuiltInBrowser => "Built-In Browser",
+            Self::AboutSurface => "About Surface",
         }
     }
 }

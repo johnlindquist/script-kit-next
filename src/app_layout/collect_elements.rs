@@ -118,11 +118,17 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                let rows: Vec<String> = self
-                    .cached_clipboard_entries
-                    .iter()
-                    .map(|entry| entry.text_preview.clone())
-                    .collect();
+                let entries = &self.cached_clipboard_entries;
+                let rows: Vec<String> = if filter.is_empty() {
+                    entries.iter().map(|e| e.text_preview.clone()).collect()
+                } else {
+                    let filter_lower = filter.to_lowercase();
+                    entries
+                        .iter()
+                        .filter(|e| e.text_preview.to_lowercase().contains(&filter_lower))
+                        .map(|e| e.text_preview.clone())
+                        .collect()
+                };
                 self.collect_named_rows(
                     "clipboard-filter",
                     filter.clone(),
@@ -137,8 +143,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                let rows: Vec<String> =
-                    self.apps.iter().map(|app| app.name.clone()).collect();
+                let rows = self.app_launcher_visible_row_names(filter);
                 self.collect_named_rows(
                     "app-filter",
                     filter.clone(),
@@ -153,15 +158,104 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                let rows: Vec<String> = self
-                    .cached_windows
-                    .iter()
-                    .map(|w| format!("{} — {}", w.app, w.title))
-                    .collect();
+                let rows: Vec<String> = if filter.is_empty() {
+                    self.cached_windows
+                        .iter()
+                        .map(|w| format!("{} — {}", w.app, w.title))
+                        .collect()
+                } else {
+                    let filter_lower = filter.to_lowercase();
+                    self.cached_windows
+                        .iter()
+                        .map(|w| format!("{} — {}", w.app, w.title))
+                        .filter(|row| row.to_lowercase().contains(&filter_lower))
+                        .collect()
+                };
                 self.collect_named_rows(
                     "window-filter",
                     filter.clone(),
                     "windows",
+                    &rows,
+                    *selected_index,
+                    limit,
+                ).into()
+            }
+
+            AppView::BrowserTabsView {
+                filter,
+                selected_index,
+            } => {
+                let rows: Vec<String> = if filter.is_empty() {
+                    self.cached_browser_tabs
+                        .iter()
+                        .map(|tab| tab.display_title().to_string())
+                        .collect()
+                } else {
+                    crate::browser_tabs::fuzzy_search_browser_tabs(
+                        &self.cached_browser_tabs,
+                        filter,
+                    )
+                    .into_iter()
+                    .map(|entry| entry.tab.display_title().to_string())
+                    .collect()
+                };
+                self.collect_named_rows(
+                    "browser-tabs-filter",
+                    filter.clone(),
+                    "browser-tabs",
+                    &rows,
+                    *selected_index,
+                    limit,
+                ).into()
+            }
+
+            AppView::BrowserHistoryView {
+                filter,
+                selected_index,
+            } => {
+                let rows: Vec<String> = if filter.is_empty() {
+                    self.cached_browser_history
+                        .iter()
+                        .map(|entry| entry.display_title().to_string())
+                        .collect()
+                } else {
+                    crate::browser_history::fuzzy_search_browser_history(
+                        &self.cached_browser_history,
+                        filter,
+                    )
+                    .into_iter()
+                    .map(|hit| hit.entry.display_title().to_string())
+                    .collect()
+                };
+                self.collect_named_rows(
+                    "browser-history-filter",
+                    filter.clone(),
+                    "browser-history",
+                    &rows,
+                    *selected_index,
+                    limit,
+                ).into()
+            }
+
+            AppView::DesignGalleryView {
+                filter,
+                selected_index,
+            } => {
+                let items = crate::build_gallery_items();
+                let rows: Vec<String> = if filter.is_empty() {
+                    items.iter().map(crate::design_gallery_item_label).collect()
+                } else {
+                    let filter_lower = filter.to_lowercase();
+                    items
+                        .iter()
+                        .filter(|item| crate::gallery_item_matches(item, &filter_lower))
+                        .map(crate::design_gallery_item_label)
+                        .collect()
+                };
+                self.collect_named_rows(
+                    "design-gallery-filter",
+                    filter.clone(),
+                    "design-gallery",
                     &rows,
                     *selected_index,
                     limit,
@@ -193,11 +287,7 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                let rows: Vec<String> = self
-                    .cached_processes
-                    .iter()
-                    .map(|p| p.script_path.clone())
-                    .collect();
+                let rows = self.process_manager_visible_row_names(filter);
                 self.collect_named_rows(
                     "process-filter",
                     filter.clone(),
@@ -212,15 +302,46 @@ impl ScriptListApp {
                 filter,
                 selected_index,
             } => {
-                let rows: Vec<String> = self
-                    .cached_current_app_entries
-                    .iter()
-                    .map(|e| e.name.clone())
-                    .collect();
+                let rows = self.current_app_commands_visible_row_names(filter);
                 self.collect_named_rows(
                     "current-app-commands-filter",
                     filter.clone(),
                     "menu-commands",
+                    &rows,
+                    *selected_index,
+                    limit,
+                ).into()
+            }
+
+            AppView::SdkReferenceView {
+                filter,
+                selected_index,
+                entries,
+            } => {
+                let rows = crate::mcp_resources::sdk_reference_visible_row_names(entries, filter);
+                self.collect_named_rows(
+                    "sdk-reference-filter",
+                    filter.clone(),
+                    "sdk-functions",
+                    &rows,
+                    *selected_index,
+                    limit,
+                ).into()
+            }
+
+            AppView::ScriptTemplateCatalogView {
+                filter,
+                selected_index,
+                templates,
+            } => {
+                let rows = crate::mcp_resources::script_template_catalog_visible_row_names(
+                    templates,
+                    filter,
+                );
+                self.collect_named_rows(
+                    "script-template-filter",
+                    filter.clone(),
+                    "script-templates",
                     &rows,
                     *selected_index,
                     limit,
@@ -1208,6 +1329,7 @@ impl ScriptListApp {
                 scripts::SearchResult::Agent(m) => m.agent.name.clone(),
                 scripts::SearchResult::Skill(m) => m.skill.title.clone(),
                 scripts::SearchResult::Fallback(m) => m.fallback.display_label(),
+                scripts::SearchResult::ScriptIssue(m) => m.title.clone(),
             })
             .collect();
 

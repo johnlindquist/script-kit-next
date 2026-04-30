@@ -185,7 +185,22 @@ pub(crate) fn remove_inline_mention_at_cursor(
     cursor: usize,
     delete_forward: bool,
 ) -> Option<(String, usize)> {
-    let range = super::mention_range_for_atomic_delete(text, cursor, delete_forward)?;
+    remove_inline_mention_at_cursor_with_aliases(
+        text,
+        cursor,
+        delete_forward,
+        &std::collections::HashMap::new(),
+    )
+}
+
+pub(crate) fn remove_inline_mention_at_cursor_with_aliases(
+    text: &str,
+    cursor: usize,
+    delete_forward: bool,
+    aliases: &std::collections::HashMap<String, AiContextPart>,
+) -> Option<(String, usize)> {
+    let range =
+        super::mention_range_for_atomic_delete_with_aliases(text, cursor, delete_forward, aliases)?;
 
     let chars: Vec<char> = text.chars().collect();
     let mut end_char = range.end;

@@ -21,6 +21,7 @@ node_modules/
 *.local.md
 .swarmmail.db
 .test-screenshots/
+.test-output/
 .mocks/
 
 # AI-generated bundles (ephemeral)
@@ -37,7 +38,9 @@ node_modules/
 *.db-*
 
 # Codex audit build artifacts
+target-codex/
 target-codex-*/
+target-agent-prompt-container/
 
 # External repos / proof-of-concept clones
 gpui-vibrancy-poc/
@@ -58,5 +61,18 @@ TODOS.md
 # Scratch / ephemeral working dirs
 .tmp/
 
+# AFK audit loop kill switch (presence aborts loop)
+.audit-pause
+.codex/hooks/stop-runs/*.active.json
+.codex/hooks/stop-runs/*.state.json
+.codex/hooks/stop-runs/*.events.jsonl
+.codex/hooks/stop-runs/*.pause
+
+# Personal Claude Code hook scripts + scheduler lockfile
+.claude/hooks/
+.claude/scheduled_tasks.lock
+
 # Vendored build caches
 vendor/**/.cache/
+.mcp.json
+.loop/

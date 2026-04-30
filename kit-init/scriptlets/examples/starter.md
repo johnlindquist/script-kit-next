@@ -7,7 +7,7 @@ icon: sparkles
 ## Hello Snippet
 
 ```metadata
-keyword: !hello
+keyword: !hi
 description: Quick greeting
 ```
 
@@ -26,5 +26,7 @@ import "@scriptkit/sdk";
 
 const note = await arg("Note");
 await Bun.write(`${env.HOME}/quick-note.txt`, note);
-await notify("Saved");
+await arg("Saved quick note", [
+  { name: "Done", description: `${env.HOME}/quick-note.txt`, value: "done" },
+]);
 ```

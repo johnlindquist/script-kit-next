@@ -5,7 +5,7 @@
 //! - SDK action routing
 //! - pbcopy helper with proper stdin handling
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::SyncSender;
 
 use gpui::SharedString;
@@ -57,6 +57,9 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot reveal fallback commands in Finder"),
         )),
+        Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Script Issues row has no path"),
+        )),
     }
 }
 
@@ -82,7 +85,70 @@ pub fn extract_path_for_copy(
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot copy fallback command path"),
         )),
+        Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Script Issues row has no path"),
+        )),
     }
+}
+
+/// Extract a candidate filesystem path for opening Quick Terminal.
+///
+/// Canonicalization happens later at dispatch, so pseudo paths are cheap to
+/// reject and symlinks resolve before choosing file parent vs directory.
+pub fn extract_path_for_quick_terminal(
+    result: Option<&SearchResult>,
+) -> Result<PathBuf, PathExtractionError> {
+    match result {
+        None => Err(PathExtractionError::NoSelection),
+        Some(SearchResult::Script(m)) => Ok(m.script.path.clone()),
+        Some(SearchResult::App(m)) => Ok(m.app.path.clone()),
+        Some(SearchResult::Agent(m)) => Ok(m.agent.path.clone()),
+        Some(SearchResult::Skill(m)) => Ok(m.skill.path.clone()),
+        Some(SearchResult::Scriptlet(m)) => m
+            .scriptlet
+            .file_path
+            .as_ref()
+            .map(|path| PathBuf::from(path.split('#').next().unwrap_or(path)))
+            .ok_or_else(|| {
+                PathExtractionError::UnsupportedType(SharedString::from(
+                    "Scriptlet has no source file path",
+                ))
+            }),
+        Some(SearchResult::BuiltIn(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot open built-in features in Quick Terminal"),
+        )),
+        Some(SearchResult::Window(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot open windows in Quick Terminal"),
+        )),
+        Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot open fallback commands in Quick Terminal"),
+        )),
+        Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Script Issues row has no path"),
+        )),
+    }
+}
+
+/// Resolve a path-bearing action target to the cwd Quick Terminal should use.
+pub fn resolve_quick_terminal_cwd(path: &Path) -> Result<PathBuf, String> {
+    let resolved = std::fs::canonicalize(path).map_err(|error| {
+        format!(
+            "Failed to resolve Quick Terminal path {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+
+    if resolved.is_dir() {
+        return Ok(resolved);
+    }
+
+    resolved.parent().map(Path::to_path_buf).ok_or_else(|| {
+        format!(
+            "Failed to resolve Quick Terminal directory for {}",
+            resolved.display()
+        )
+    })
 }
 
 /// Extract the filesystem path from a SearchResult for edit operations.
@@ -111,6 +177,9 @@ pub fn extract_path_for_edit(
         )),
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit fallback commands"),
+        )),
+        Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Script Issues row cannot be edited"),
         )),
     }
 }
@@ -516,6 +585,7 @@ pub const RESERVED_ACTION_IDS: &[&str] = &[
     "view_logs",
     "reveal_in_finder",
     "copy_path",
+    "open_in_quick_terminal",
     "edit_script",
     "edit_scriptlet",
     "reveal_scriptlet_in_finder",
@@ -545,7 +615,6 @@ pub const RESERVED_ACTION_IDS: &[&str] = &[
     "select_file",
     "open_in_finder",
     "open_in_editor",
-    "open_in_terminal",
     "move_to_trash",
     // Internal
     "__cancel__",

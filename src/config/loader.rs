@@ -17,7 +17,7 @@ use tracing::{info, instrument, warn};
 use super::types::{Config, ScriptKitUserPreferences};
 
 fn config_ts_path() -> PathBuf {
-    crate::setup::get_kit_path().join("kit").join("config.ts")
+    crate::setup::config_ts_path()
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +60,43 @@ fn fingerprint_config_file(path: &Path) -> Option<ConfigSourceFingerprint> {
     Some(ConfigSourceFingerprint {
         len: metadata.len(),
         modified_ms,
+    })
+}
+
+/// Automation-visible fingerprint of the active `config.ts` file.
+///
+/// Mirrors the internal [`ConfigSourceFingerprint`] pair `(len,
+/// modified_ms)` plus the absolute path so automation can verify that
+/// a write to `~/.scriptkit/config.ts` has changed the source without
+/// shelling out to `bun` or `stat`. `fingerprint_hash` is intentionally
+/// kept as `None` for now — a content hash requires reading the whole
+/// file on every call, which is more work than a cache-check
+/// fingerprint needs. Adding it is a follow-up story gated on a real
+/// consumer need.
+#[derive(Debug, Clone, Serialize)]
+pub struct ConfigFingerprintReceipt {
+    pub path: String,
+    pub len: u64,
+    pub modified_ms: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fingerprint_hash: Option<String>,
+}
+
+/// Returns the current fingerprint of `~/.scriptkit/config.ts`, or `None`
+/// when the file is missing or stat fails.
+///
+/// The returned `len` and `modified_ms` are the same values the config
+/// loader uses for its cache-hit check in [`try_load_cached_config`],
+/// so automation comparing two snapshots can confirm "the next `bun`
+/// invocation will re-read the file" without touching the loader.
+pub fn current_config_fingerprint_receipt() -> Option<ConfigFingerprintReceipt> {
+    let path = config_ts_path();
+    let fingerprint = fingerprint_config_file(&path)?;
+    Some(ConfigFingerprintReceipt {
+        path: path.to_string_lossy().into_owned(),
+        len: fingerprint.len,
+        modified_ms: fingerprint.modified_ms,
+        fingerprint_hash: None,
     })
 }
 
@@ -225,9 +262,7 @@ fn write_config_cache(
 }
 
 fn settings_json_path() -> PathBuf {
-    crate::setup::get_kit_path()
-        .join("kit")
-        .join("settings.json")
+    crate::setup::get_kit_path().join("settings.json")
 }
 
 static CONFIG_PREFERENCE_WRITE_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
@@ -344,6 +379,8 @@ fn recover_config_fields(value: Value, correlation_id: &str) -> Config {
         window_management: parse_optional_field(object, "windowManagement", correlation_id),
         commands: parse_optional_field(object, "commands", correlation_id),
         claude_code: parse_optional_field(object, "claudeCode", correlation_id),
+        mcp: parse_optional_field(object, "mcp", correlation_id),
+        hidden_commands: parse_optional_field(object, "hiddenCommands", correlation_id),
     }
 }
 
@@ -573,7 +610,7 @@ fn write_preference_group<T: Serialize + PartialEq>(
 pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result<()> {
     let _write_guard = CONFIG_PREFERENCE_WRITE_LOCK
         .lock()
-        .expect("config preference write lock poisoned");
+        .map_err(|_| anyhow::anyhow!("config preference write lock poisoned"))?;
     let config_path = config_ts_path();
     let current = load_config();
 
@@ -618,7 +655,7 @@ pub fn save_user_preferences(prefs: &ScriptKitUserPreferences) -> anyhow::Result
     Ok(())
 }
 
-/// Load configuration from `<SK_PATH>/kit/config.ts` (or `~/.scriptkit/kit/config.ts`)
+/// Load configuration from `<SK_PATH>/config.ts` (or `~/.scriptkit/config.ts`)
 ///
 /// Cache path: checks a fingerprinted JSON cache keyed by config path, size, and mtime.
 /// Fast path: imports config.ts directly with a single Bun process.
@@ -812,12 +849,12 @@ mod tests {
 
     /// Code audit test: Verify all config.ts path references use the authoritative path.
     ///
-    /// AUTHORITATIVE PATH: ~/.scriptkit/kit/config.ts
+    /// AUTHORITATIVE PATH: ~/.scriptkit/config.ts
     ///
     /// This test ensures no code accidentally references the wrong path like:
     /// - ~/.scriptkit/config.ts (missing /kit/)
     ///
-    /// The correct pattern is always: ~/.scriptkit/kit/config.ts
+    /// The correct pattern is always: ~/.scriptkit/config.ts
     #[test]
     fn test_config_path_consistency() {
         // Files to audit for config path references
@@ -849,12 +886,12 @@ mod tests {
                     continue;
                 }
 
-                // Detect WRONG pattern: .scriptkit/config.ts (missing /kit/)
-                // This catches: "~/.scriptkit/config.ts" or ".scriptkit/config.ts"
-                // But NOT: "~/.scriptkit/kit/config.ts" (the correct path)
+                // Detect WRONG pattern: .scriptconfig.ts (missing /kit/)
+                // This catches: "~/.scriptkit/config.ts" or ".scriptconfig.ts"
+                // But NOT: "~/.scriptkit/config.ts" (the correct path)
                 if line.contains(&wrong_pattern) {
                     violations.push(format!(
-                        "{}:{}: {}\n  Found: {} (missing /kit/)\n  Expected: .scriptkit/kit/config.ts",
+                        "{}:{}: {}\n  Found: {} (missing /kit/)\n  Expected: .scriptkit/config.ts",
                         file,
                         line_num + 1,
                         line.trim(),
@@ -867,7 +904,7 @@ mod tests {
         if !violations.is_empty() {
             panic!(
                 "Found {} inconsistent config path reference(s):\n\n{}\n\n\
-                AUTHORITATIVE PATH: ~/.scriptkit/kit/config.ts",
+                AUTHORITATIVE PATH: ~/.scriptkit/config.ts",
                 violations.len(),
                 violations.join("\n\n")
             );
@@ -1014,8 +1051,8 @@ mod tests {
             .unwrap_or_else(|error| error.into_inner());
 
         let temp_dir = tempfile::tempdir().expect("create temp Script Kit dir");
-        let kit_dir = temp_dir.path().join("kit");
-        fs::create_dir_all(&kit_dir).expect("create kit dir");
+        let kit_dir = temp_dir.path().to_path_buf();
+        fs::create_dir_all(&kit_dir).expect("create Script Kit dir");
 
         let settings_path = kit_dir.join("settings.json");
         fs::write(
