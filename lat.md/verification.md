@@ -38,6 +38,8 @@ The default nextest profile is the CI fast lane; it excludes system-dependent an
 
 The filter lives in [.config/nextest.toml](../.config/nextest.toml). Keep newly stale generated contract suites out of the default profile only when they are already failing on main or block unrelated build health; prefer updating the contract tests when the behavior itself changed.
 
+The CI Rust test job installs the repo-pinned Bun version before `nextest` because config-backed preference tests read the generated `config.ts` through the same Bun loader used by the app.
+
 ## Legacy sources
 
 These docs and commands seeded the verification summary and remain in place while the lattice absorbs the durable rules.
