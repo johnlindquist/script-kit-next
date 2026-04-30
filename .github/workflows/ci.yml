@@ -144,6 +144,9 @@ jobs:
           shared-key: "macos-debug"
           cache-targets: false
           save-if: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.21
       - uses: taiki-e/install-action@nextest
       - name: Run tests with nextest (parallel)
         run: cargo nextest run --no-fail-fast
