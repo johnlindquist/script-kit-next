@@ -418,7 +418,7 @@ fn capture_picker_companion_hint(
         ),
         example: selected
             .and_then(|row| row.example.clone())
-            .or_else(|| target.map(|t| target_examples(t).into_iter().next().unwrap()))
+            .or_else(|| target.and_then(|t| target_examples(t).into_iter().next()))
             .or_else(|| Some(";todo Buy milk #errands p2 due:tomorrow".to_string())),
         examples: target
             .map(target_examples)
@@ -504,7 +504,7 @@ fn capture_composer_hint(
             .chain(schema.required.iter())
             .any(|field| matches!(field, FieldRequirement::Priority))
     });
-    let priority_unset = invocation.map_or(true, |invocation| invocation.priority.is_none());
+    let priority_unset = invocation.is_none_or(|invocation| invocation.priority.is_none());
     if priority_allowed && priority_unset && raw_last_token_is_priority_prefix(ctx.raw_filter_text)
     {
         rows.push(MenuSyntaxMainHintRow {
@@ -599,7 +599,12 @@ fn capture_composer_hint(
             "Tags group the saved item. p1-p4 sets priority; due:/at:/start: adds dates; key=value adds fields."
                 .to_string()
         }),
-        example: Some(target_examples(target).into_iter().next().unwrap()),
+        example: Some(
+            target_examples(target)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| format!(";{target} Example")),
+        ),
         examples: target_examples(target),
         warning: None,
         accessibility_label: String::new(),

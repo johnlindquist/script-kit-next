@@ -284,6 +284,7 @@ pub fn inline_popup_ns_window(window: &mut Window) -> Option<cocoa::base::id> {
 /// Attach the popup NSWindow as a child of the parent launcher/composer
 /// window so it follows focus, space moves, and parent closes.
 #[cfg(target_os = "macos")]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub fn attach_inline_popup_to_parent_window(
     cx: &mut App,
     parent_window_handle: AnyWindowHandle,

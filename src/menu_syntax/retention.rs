@@ -80,7 +80,7 @@ impl RetentionPlan {
 /// 2. For files at rank `>= cfg.keep_newest`:
 ///    a. Deletes if rank `>= cfg.hard_cap`.
 ///    b. Otherwise deletes if `now_unix - created_at_unix` exceeds
-///       `cfg.age_cutoff_days * SECONDS_PER_DAY`.
+///    `cfg.age_cutoff_days * SECONDS_PER_DAY`.
 ///    c. Keeps the file otherwise.
 ///
 /// `now_unix` is supplied by the caller so tests can run with a fixed clock.

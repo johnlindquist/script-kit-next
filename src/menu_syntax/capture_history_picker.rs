@@ -78,7 +78,7 @@ pub fn detect_history_picker_context(input: &str, cursor: usize) -> Option<Histo
     // mid-word, prefix ends in `o` not `#`, so naturally falls through.
     if let Some(rest) = prefix.strip_suffix('#') {
         let prev = rest.chars().next_back();
-        if prev.map_or(true, |ch| ch.is_whitespace()) {
+        if prev.is_none_or(|ch| ch.is_whitespace()) {
             return Some(HistoryPickerKind::TagSlot);
         }
     }
@@ -86,8 +86,7 @@ pub fn detect_history_picker_context(input: &str, cursor: usize) -> Option<Histo
     // Key slot: prefix must end in `key:` where `key` is one ASCII word
     // since the last whitespace and `key:` is followed by NOTHING (the
     // value slot is empty).
-    if prefix.ends_with(':') {
-        let without_colon = &prefix[..prefix.len() - 1];
+    if let Some(without_colon) = prefix.strip_suffix(':') {
         // The char before `:` must be a key char — block `::` and ` :`.
         let last = without_colon.chars().next_back()?;
         if !is_key_char(last) {

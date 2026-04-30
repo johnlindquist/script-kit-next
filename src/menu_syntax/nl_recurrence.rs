@@ -623,7 +623,9 @@ fn join_weekday_labels(weekdays: &[RecurrenceWeekday]) -> String {
         [one] => (*one).to_string(),
         [first, second] => format!("{first} and {second}"),
         _ => {
-            let (last, rest) = labels.split_last().expect("non-empty labels");
+            let Some((last, rest)) = labels.split_last() else {
+                return String::new();
+            };
             format!("{}, and {last}", rest.join(", ")).replace(", and", " and")
         }
     }

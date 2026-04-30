@@ -333,7 +333,7 @@ fn resolve_shorthand_phrase(source: &str, clock: &MenuSyntaxClock) -> Option<Res
             let last_day = next_month_first.pred_opt()?;
             build_local_time_resolved(last_day, 23, 59, source, clock, 0.95)
         }
-        _ => return None,
+        _ => None,
     }
 }
 
@@ -777,8 +777,9 @@ fn looks_like_time(tok: &str) -> bool {
 /// - Numeric offsets `±HH:MM`, `±HHMM`, `±HH` mapped to `Etc/GMT±N` (the IANA
 ///   sign convention is inverted, so `-08:00` → `Etc/GMT+8`). Sub-hour offsets
 ///   are rejected because `Etc/GMT*` zones only carry hour granularity.
+///
 /// The leading head must itself resolve via [`resolve_date_phrase`] in the
-/// override timezone — empty heads or heads that fail to resolve cause this
+/// override timezone; empty heads or heads that fail to resolve cause this
 /// helper to return None so the chrono_english fallback still gets a shot.
 fn resolve_timezone_suffix(source: &str, clock: &MenuSyntaxClock) -> Option<ResolvedDate> {
     let trimmed = source.trim();

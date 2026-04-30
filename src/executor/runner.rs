@@ -733,6 +733,7 @@ fn with_script_argv(mut args: Vec<String>, argv: &[String]) -> Vec<String> {
 
 /// Spawn a script as an interactive process with piped stdin/stdout
 #[instrument(skip_all, fields(cmd = %cmd))]
+#[allow(dead_code)]
 pub fn spawn_script(cmd: &str, args: &[&str], script_path: &str) -> Result<ScriptSession, String> {
     spawn_script_with_extra_env(cmd, args, script_path, &[])
 }

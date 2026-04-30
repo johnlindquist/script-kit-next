@@ -318,13 +318,11 @@ fn truncate_snippet(text: &str) -> String {
         return collapsed;
     }
     let mut out = String::with_capacity(MAX_SNIPPET_CHARS + 1);
-    let mut taken = 0usize;
-    for ch in collapsed.chars() {
+    for (taken, ch) in collapsed.chars().enumerate() {
         if taken >= MAX_SNIPPET_CHARS.saturating_sub(1) {
             break;
         }
         out.push(ch);
-        taken += 1;
     }
     out.push('…');
     out

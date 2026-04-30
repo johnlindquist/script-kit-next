@@ -80,7 +80,7 @@ pub(super) struct ParseHit<T> {
     pub consumed: Vec<usize>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct NlParseOptions {
     pub anchor: bool,
     pub relative_date: bool,
@@ -92,23 +92,6 @@ pub struct NlParseOptions {
     pub multi_weekday: bool,
     pub monthly: bool,
     pub yearly: bool,
-}
-
-impl Default for NlParseOptions {
-    fn default() -> Self {
-        Self {
-            anchor: false,
-            relative_date: false,
-            time: false,
-            date_range: false,
-            duration: false,
-            recurrence: false,
-            daily: false,
-            multi_weekday: false,
-            monthly: false,
-            yearly: false,
-        }
-    }
 }
 
 impl NlParseOptions {
