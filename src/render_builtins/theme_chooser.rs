@@ -409,8 +409,211 @@ impl ScriptListApp {
         vec![
             gpui::SharedString::from("↵ Done"),
             gpui::SharedString::from("⌘J Remix"),
+            gpui::SharedString::from("⌘K Actions"),
             gpui::SharedString::from("Esc Undo"),
         ]
+    }
+
+    fn current_theme_chooser_selection(&self) -> Option<(String, usize)> {
+        if let AppView::ThemeChooserView {
+            filter,
+            selected_index,
+        } = &self.current_view
+        {
+            Some((filter.clone(), *selected_index))
+        } else {
+            None
+        }
+    }
+
+    fn preview_current_theme_chooser_preset(
+        &mut self,
+        reason: &'static str,
+        persist: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let Some((filter, selected_index)) = self.current_theme_chooser_selection() else {
+            return;
+        };
+        let filtered = Self::theme_chooser_filtered_indices(&filter);
+        if persist {
+            self.preview_and_persist_theme_chooser_preset(&filtered, selected_index, reason, cx);
+        } else {
+            self.preview_theme_chooser_preset(&filtered, selected_index, reason, cx);
+        }
+    }
+
+    fn cycle_theme_chooser_accent(
+        &mut self,
+        direction: isize,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let current = self.theme.colors.accent.selected;
+        let idx = Self::find_accent_palette_index(current).unwrap_or(0);
+        let len = Self::ACCENT_PALETTE.len();
+        let new_idx = if direction < 0 {
+            (idx + len - 1) % len
+        } else {
+            (idx + 1) % len
+        };
+        let (new_accent, _) = Self::ACCENT_PALETTE[new_idx];
+        let mut modified = (*self.theme).clone();
+        modified.colors.accent.selected = new_accent;
+        modified.colors.text.on_accent =
+            best_contrast_of_two(new_accent, 0xFFFFFF, modified.colors.background.main);
+        self.apply_theme_chooser_theme(modified, reason, cx);
+    }
+
+    fn adjust_theme_chooser_opacity(
+        &mut self,
+        direction: isize,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let idx = Self::find_opacity_preset_index(self.theme.get_opacity().main);
+        let next_idx = if direction < 0 {
+            idx.checked_sub(1)
+        } else {
+            (idx + 1 < Self::OPACITY_PRESETS.len()).then_some(idx + 1)
+        };
+        if let Some(next_idx) = next_idx {
+            let target = Self::OPACITY_PRESETS[next_idx].0;
+            let modified = Self::apply_surface_opacity_preset(self.theme.as_ref(), target);
+            self.apply_theme_chooser_theme(modified, reason, cx);
+        }
+    }
+
+    fn toggle_theme_chooser_vibrancy(&mut self, reason: &'static str, cx: &mut Context<Self>) {
+        let mut modified = (*self.theme).clone();
+        if let Some(ref mut vibrancy) = modified.vibrancy {
+            vibrancy.enabled = !vibrancy.enabled;
+        }
+        self.apply_theme_chooser_theme(modified, reason, cx);
+    }
+
+    fn cycle_theme_chooser_material(&mut self, reason: &'static str, cx: &mut Context<Self>) {
+        let current_material = self
+            .theme
+            .vibrancy
+            .as_ref()
+            .map(|v| v.material)
+            .unwrap_or_default();
+        let idx = Self::find_vibrancy_material_index(current_material);
+        let new_idx = (idx + 1) % Self::VIBRANCY_MATERIALS.len();
+        let (new_material, _) = Self::VIBRANCY_MATERIALS[new_idx];
+        let mut modified = (*self.theme).clone();
+        if let Some(ref mut vibrancy) = modified.vibrancy {
+            vibrancy.material = new_material;
+        }
+        self.apply_theme_chooser_theme(modified, reason, cx);
+    }
+
+    fn adjust_theme_chooser_font_size(
+        &mut self,
+        direction: isize,
+        reason: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        let current = self.theme.get_fonts().ui_size;
+        let idx = Self::FONT_SIZE_PRESETS
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| {
+                (a.0 - current)
+                    .abs()
+                    .partial_cmp(&(b.0 - current).abs())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        let next_idx = if direction < 0 {
+            idx.checked_sub(1)
+        } else {
+            (idx + 1 < Self::FONT_SIZE_PRESETS.len()).then_some(idx + 1)
+        };
+        if let Some(next_idx) = next_idx {
+            let (size, _) = Self::FONT_SIZE_PRESETS[next_idx];
+            let mut modified = (*self.theme).clone();
+            if let Some(ref mut fonts) = modified.fonts {
+                fonts.ui_size = size;
+            } else {
+                modified.fonts = Some(theme::FontConfig {
+                    ui_size: size,
+                    ..Default::default()
+                });
+            }
+            self.apply_theme_chooser_theme(modified, reason, cx);
+        }
+    }
+
+    pub(crate) fn execute_theme_chooser_action(
+        &mut self,
+        action_id: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match action_id {
+            "theme_chooser_done" => self.submit_theme_chooser_from_input_enter(window, cx),
+            "theme_chooser_undo_close" => {
+                if let Some(original) = self.theme_before_chooser.take() {
+                    self.restore_theme_chooser_theme(original, "theme_chooser_action_undo", cx);
+                    let _ = crate::theme::service::persist_theme_and_sync_all_windows(
+                        cx,
+                        self.theme.as_ref(),
+                        "theme_chooser_action_undo_persist",
+                    );
+                }
+                self.go_back_or_close(window, cx);
+            }
+            "theme_chooser_remix" => {
+                let remixed =
+                    Self::build_theme_chooser_remix(self.theme.as_ref(), theme_chooser_remix_seed());
+                self.apply_theme_chooser_theme(remixed, "theme_chooser_action_remix", cx);
+            }
+            "theme_chooser_reset" => {
+                self.preview_current_theme_chooser_preset("theme_chooser_action_reset", false, cx);
+            }
+            "theme_chooser_accent_previous" => {
+                self.cycle_theme_chooser_accent(-1, "theme_chooser_action_accent_previous", cx);
+            }
+            "theme_chooser_accent_next" => {
+                self.cycle_theme_chooser_accent(1, "theme_chooser_action_accent_next", cx);
+            }
+            "theme_chooser_opacity_decrease" => {
+                self.adjust_theme_chooser_opacity(-1, "theme_chooser_action_opacity_decrease", cx);
+            }
+            "theme_chooser_opacity_increase" => {
+                self.adjust_theme_chooser_opacity(1, "theme_chooser_action_opacity_increase", cx);
+            }
+            "theme_chooser_vibrancy_toggle" => {
+                self.toggle_theme_chooser_vibrancy("theme_chooser_action_vibrancy_toggle", cx);
+            }
+            "theme_chooser_material_cycle" => {
+                self.cycle_theme_chooser_material("theme_chooser_action_material_cycle", cx);
+            }
+            "theme_chooser_font_size_decrease" => {
+                self.adjust_theme_chooser_font_size(
+                    -1,
+                    "theme_chooser_action_font_size_decrease",
+                    cx,
+                );
+            }
+            "theme_chooser_font_size_increase" => {
+                self.adjust_theme_chooser_font_size(
+                    1,
+                    "theme_chooser_action_font_size_increase",
+                    cx,
+                );
+            }
+            _ => {
+                tracing::warn!(
+                    target: "script_kit::actions",
+                    action_id,
+                    "Unknown Theme Chooser action"
+                );
+            }
+        }
     }
 
     /// Apply a surface opacity preset to all shell surfaces together,
@@ -609,7 +812,7 @@ impl ScriptListApp {
                     key,
                     key_char,
                     modifiers,
-                    ActionsDialogHost::BuiltinList,
+                    ActionsDialogHost::ThemeChooser,
                     window,
                     cx,
                 ) {
@@ -626,7 +829,7 @@ impl ScriptListApp {
                     }
                     ActionsRoute::Execute { action_id } => {
                         this.execute_action_for_actions_host(
-                            ActionsDialogHost::BuiltinList,
+                            ActionsDialogHost::ThemeChooser,
                             action_id,
                             window,
                             cx,
@@ -1695,11 +1898,11 @@ impl ScriptListApp {
 #[cfg(test)]
 mod theme_chooser_chrome_audit {
     #[test]
-    fn theme_chooser_uses_truthful_three_item_footer() {
+    fn theme_chooser_uses_truthful_actions_footer() {
         let source = include_str!("theme_chooser.rs");
         assert!(
             !source.contains("universal_prompt_hints()"),
-            "theme_chooser should not use universal hints (no actions dialog wired)"
+            "theme_chooser should use its own truthful hint set"
         );
         assert!(
             source.contains("render_simple_hint_strip("),
@@ -1718,8 +1921,8 @@ mod theme_chooser_chrome_audit {
             "theme_chooser should use '⌘J Remix' footer label"
         );
         assert!(
-            !source.contains("⌘K Actions"),
-            "theme_chooser should not advertise ⌘K Actions without a working dialog"
+            source.contains(r#"SharedString::from("⌘K Actions")"#),
+            "theme_chooser should advertise its dedicated actions catalog"
         );
     }
 

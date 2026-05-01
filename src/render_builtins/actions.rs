@@ -125,6 +125,191 @@ impl ScriptListApp {
         ]
     }
 
+    fn theme_chooser_actions_for_dialog() -> Vec<crate::actions::Action> {
+        use crate::actions::{Action, ActionCategory};
+        use crate::designs::icon_variations::IconName;
+
+        vec![
+            Action::new(
+                "theme_chooser_done",
+                "Done",
+                Some("Persist the current theme and return to the launcher".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("↵")
+            .with_section("Theme")
+            .with_icon(IconName::Check),
+            Action::new(
+                "theme_chooser_undo_close",
+                "Undo Changes and Close",
+                Some("Restore the theme from when Theme Designer opened".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("Esc")
+            .with_section("Theme")
+            .with_icon(IconName::Close),
+            Action::new(
+                "theme_chooser_remix",
+                "Surprise Me",
+                Some("Remix accent, opacity, and material from the current theme".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘J")
+            .with_section("Customize")
+            .with_icon(IconName::BoltFilled),
+            Action::new(
+                "theme_chooser_reset",
+                "Reset to Defaults",
+                Some("Reset customization controls to the selected preset".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘R")
+            .with_section("Customize")
+            .with_icon(IconName::Refresh),
+            Action::new(
+                "theme_chooser_accent_previous",
+                "Previous Accent Color",
+                Some("Move to the previous accent swatch".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘[")
+            .with_section("Customize")
+            .with_icon(IconName::ChevronRight),
+            Action::new(
+                "theme_chooser_accent_next",
+                "Next Accent Color",
+                Some("Move to the next accent swatch".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘]")
+            .with_section("Customize")
+            .with_icon(IconName::ArrowRight),
+            Action::new(
+                "theme_chooser_opacity_decrease",
+                "Decrease Surface Opacity",
+                Some("Use the next lower opacity preset".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘-")
+            .with_section("Customize")
+            .with_icon(IconName::ArrowDown),
+            Action::new(
+                "theme_chooser_opacity_increase",
+                "Increase Surface Opacity",
+                Some("Use the next higher opacity preset".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘=")
+            .with_section("Customize")
+            .with_icon(IconName::ArrowUp),
+            Action::new(
+                "theme_chooser_vibrancy_toggle",
+                "Toggle Vibrancy Blur",
+                Some("Turn vibrancy blur on or off".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘B")
+            .with_section("Customize")
+            .with_icon(IconName::EyeOff),
+            Action::new(
+                "theme_chooser_material_cycle",
+                "Cycle Vibrancy Material",
+                Some("Switch to the next AppKit vibrancy material".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_shortcut("⌘M")
+            .with_section("Customize")
+            .with_icon(IconName::Sidebar),
+            Action::new(
+                "theme_chooser_font_size_decrease",
+                "Decrease UI Font Size",
+                Some("Use the next smaller UI font preset".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Typography")
+            .with_icon(IconName::ArrowDown),
+            Action::new(
+                "theme_chooser_font_size_increase",
+                "Increase UI Font Size",
+                Some("Use the next larger UI font preset".to_string()),
+                ActionCategory::ScriptContext,
+            )
+            .with_section("Typography")
+            .with_icon(IconName::ArrowUp),
+        ]
+    }
+
+    fn toggle_theme_chooser_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        logging::log("KEY", "Toggling theme chooser actions popup");
+
+        if self.show_actions_popup || is_actions_window_open() {
+            self.close_actions_popup(ActionsDialogHost::ThemeChooser, window, cx);
+            return;
+        }
+
+        self.show_actions_popup = true;
+        self.actions_closed_at = None;
+        self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
+        self.focus_handle.focus(window, cx);
+        self.gpui_input_focused = false;
+        self.focused_input = FocusedInput::ActionsSearch;
+
+        let theme_arc = std::sync::Arc::clone(&self.theme);
+        let actions = Self::theme_chooser_actions_for_dialog();
+        let dialog = cx.new(move |cx| {
+            let focus_handle = cx.focus_handle();
+            let mut dialog = ActionsDialog::with_config(
+                focus_handle,
+                std::sync::Arc::new(|_action_id| {}),
+                actions,
+                theme_arc,
+                crate::actions::ActionsDialogConfig {
+                    search_position: crate::actions::SearchPosition::Top,
+                    section_style: crate::actions::SectionStyle::Headers,
+                    anchor: crate::actions::AnchorPosition::Top,
+                    show_icons: true,
+                    search_placeholder: Some("Theme Designer actions".to_string()),
+                    show_context_header: false,
+                    ..crate::actions::ActionsDialogConfig::default()
+                },
+            );
+            dialog.set_match_main_window_background(true);
+            dialog
+        });
+
+        self.actions_dialog = Some(dialog.clone());
+
+        let app_entity = cx.entity().clone();
+        dialog.update(cx, |d, _cx| {
+            d.set_on_activation(Self::make_actions_dialog_activation_callback(
+                app_entity.clone(),
+                ActionsDialogHost::ThemeChooser,
+            ));
+            d.set_on_close(Self::make_actions_window_on_close_callback(
+                app_entity,
+                ActionsDialogHost::ThemeChooser,
+                "Theme chooser actions closed via escape, focus restored via coordinator",
+            ));
+        });
+
+        let parent_window_handle = window.window_handle();
+        let main_bounds = window.bounds();
+        let display_id = window.display(cx).map(|d| d.id());
+
+        Self::spawn_open_actions_window(
+            cx,
+            parent_window_handle,
+            main_bounds,
+            display_id,
+            dialog,
+            crate::actions::WindowPosition::TopCenter,
+            "Theme chooser actions popup window opened",
+            "Failed to open theme chooser actions window",
+        );
+
+        cx.notify();
+    }
+
     fn toggle_favorites_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         logging::log("KEY", "Toggling favorites actions popup");
 

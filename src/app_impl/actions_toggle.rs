@@ -140,6 +140,7 @@ fn actions_dialog_host_label(host: &ActionsDialogHost) -> &'static str {
         ActionsDialogHost::ClipboardHistory => "ClipboardHistory",
         ActionsDialogHost::DictationHistory => "DictationHistory",
         ActionsDialogHost::Favorites => "Favorites",
+        ActionsDialogHost::ThemeChooser => "ThemeChooser",
         ActionsDialogHost::EmojiPicker => "EmojiPicker",
         ActionsDialogHost::FileSearch => "FileSearch",
         ActionsDialogHost::ChatPrompt => "ChatPrompt",
@@ -406,6 +407,11 @@ impl ScriptListApp {
                 "Ignored shared actions toggle because favorites has no selected item"
             );
             return false;
+        }
+
+        if matches!(&self.current_view, AppView::ThemeChooserView { .. }) {
+            self.toggle_theme_chooser_actions(window, cx);
+            return true;
         }
 
         if matches!(&self.current_view, AppView::AcpChatView { .. }) {

@@ -932,6 +932,8 @@ enum ActionsDialogHost {
     DictationHistory,
     /// Actions in favorites browser (restore focus to favorites search input)
     Favorites,
+    /// Actions in theme chooser / theme designer (restore focus to theme search input)
+    ThemeChooser,
     /// Actions in emoji picker (restore focus to emoji search input)
     EmojiPicker,
     /// Actions in app launcher (restore focus to app launcher input)
