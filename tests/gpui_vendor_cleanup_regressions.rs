@@ -9,6 +9,7 @@ const AI_MESSAGES_SOURCE: &str = include_str!("../src/ai/window/render_messages.
 const CHAT_STATE_SOURCE: &str = include_str!("../src/prompts/chat/state.rs");
 const CHAT_RENDER_CORE_SOURCE: &str = include_str!("../src/prompts/chat/render_core.rs");
 const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/actions/dialog.rs");
+const ACTIONS_WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
 const LIST_ITEM_SOURCE: &str = include_str!("../src/list_item/mod.rs");
 const FILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
 const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_chooser.rs");
@@ -113,6 +114,29 @@ fn actions_dialog_rows_use_direct_gpui_hover() {
         ACTIONS_DIALOG_SOURCE.contains("row.hover("),
         "actions dialog rows should use GPUI hover styling directly"
     );
+    assert!(
+        ACTIONS_DIALOG_SOURCE.contains("AppChromeColors::from_theme(&this.theme)")
+            && ACTIONS_DIALOG_SOURCE.contains("rgba(chrome.selection_rgba)")
+            && ACTIONS_DIALOG_SOURCE.contains("rgba(chrome.hover_rgba)"),
+        "default actions dialog rows should resolve selected/hover chrome through AppChromeColors"
+    );
+    assert!(
+        ACTIONS_DIALOG_SOURCE.contains("show_container_border: false"),
+        "default actions dialog chrome should stay borderless"
+    );
+    let default_branch_start = ACTIONS_DIALOG_SOURCE
+        .find("if design_variant == DesignVariant::Default")
+        .expect("actions dialog default design branch should exist");
+    let default_branch = &ACTIONS_DIALOG_SOURCE[default_branch_start
+        ..ACTIONS_DIALOG_SOURCE[default_branch_start..]
+            .find("} else {")
+            .map(|offset| default_branch_start + offset)
+            .expect("actions dialog default branch else should exist")];
+    assert!(
+        !default_branch.contains("style.selection_opacity")
+            && !default_branch.contains("style.hover_opacity"),
+        "default actions dialog rows should not repack selected/hover opacity locally"
+    );
 }
 
 #[test]
@@ -129,6 +153,22 @@ fn actions_dialog_does_not_gate_hover_through_local_state() {
             "unexpected legacy hover-state pattern still present: {needle}"
         );
     }
+}
+
+#[test]
+fn actions_window_consumes_handled_popup_keys() {
+    assert!(
+        ACTIONS_WINDOW_SOURCE.contains("let handled = match actions_window_key_intent")
+            && ACTIONS_WINDOW_SOURCE
+                .contains("if handled {\n                cx.stop_propagation();\n            }"),
+        "detached actions window should stop propagation after handling popup-owned keys"
+    );
+    assert!(
+        ACTIONS_WINDOW_SOURCE.contains("actions_window_shortcut_matched")
+            && ACTIONS_WINDOW_SOURCE
+                .contains("true\n                    } else {\n                        false"),
+        "matched action shortcuts should count as handled so they do not leak to the parent"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -156,25 +196,24 @@ fn list_item_relies_on_gpui_hover_without_custom_toggle() {
 }
 
 // ---------------------------------------------------------------------------
-// File search: direct GPUI hover without manual hover bookkeeping
+// File search: explicit hover state because AppKit drag-out can stale native hover
 // ---------------------------------------------------------------------------
 
 #[test]
-fn file_search_rows_use_direct_gpui_hover() {
+fn file_search_rows_keep_drag_safe_explicit_hover_state() {
     assert!(
-        FILE_SEARCH_SOURCE.contains(".when(!is_selected, |d| d.hover(move |s| s.bg(hover_bg)))"),
-        "file search rows should use direct GPUI hover styling"
+        FILE_SEARCH_SOURCE.contains("let file_hovered = self.hovered_index;"),
+        "file search should keep explicit hover state for drag-safe row chrome"
     );
-    for needle in [
-        "file_input_mode == InputMode::Mouse",
-        "let hover_entity_handle = cx.entity().downgrade();",
-        ".on_hover(hover_handler)",
-    ] {
-        assert!(
-            !FILE_SEARCH_SOURCE.contains(needle),
-            "unexpected legacy file-search hover pattern still present: {needle}"
-        );
-    }
+    assert!(
+        FILE_SEARCH_SOURCE.contains("this.hovered_index = Some(ix);")
+            && FILE_SEARCH_SOURCE.contains("this.hovered_index = None;"),
+        "file search rows should set and clear explicit hover state"
+    );
+    assert!(
+        !FILE_SEARCH_SOURCE.contains(".when(!is_selected, |d| d.hover(move |s| s.bg(hover_bg)))"),
+        "file search deliberately avoids direct GPUI hover because drag-out can leave stale row hover"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -226,12 +265,25 @@ fn theme_chooser_header_rows_use_direct_gpui_hover() {
 fn kit_store_rows_use_direct_gpui_hover() {
     assert!(
         KIT_STORE_SOURCE
-            .contains(".when(!is_selected, |row| row.hover(move |style| style.bg(row_bg)))"),
+            .contains(".when(!is_selected, |row| row.hover(move |style| style.bg(hover_row_bg)))"),
         "kit store rows should use direct GPUI hover styling"
     );
+    assert!(
+        KIT_STORE_SOURCE.contains("AppChromeColors::from_theme(&self.theme)"),
+        "kit store rows should resolve selection/hover/badge chrome through AppChromeColors"
+    );
+    assert!(
+        KIT_STORE_SOURCE.contains("rgba(chrome.selection_rgba)")
+            && KIT_STORE_SOURCE.contains("rgba(chrome.hover_rgba)")
+            && KIT_STORE_SOURCE.contains("rgba(chrome.accent_badge_bg_rgba)"),
+        "kit store row state and action chips should consume shared chrome tokens"
+    );
     for needle in [
+        "hovered_index",
         "hovered_row == Some(ix) && input_mode == InputMode::Mouse",
         ".on_hover(move |is_hovered, _window, cx|",
+        "opacity.selected * 255.0",
+        "opacity.hover * 255.0",
     ] {
         assert!(
             !KIT_STORE_SOURCE.contains(needle),

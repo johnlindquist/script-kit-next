@@ -27,8 +27,26 @@ fn shortcut_recorder_opens_as_native_blurred_popup() {
         "shortcut recorder popup must use the shared AppKit popup vibrancy path"
     );
     assert!(
+        body.contains("attach_shortcut_recorder_to_parent_window"),
+        "shortcut recorder popup should stay parent-attached for ordering"
+    );
+    assert!(
+        source.contains("orderFrontRegardless"),
+        "shortcut recorder popup should resurface without overriding GPUI popup level"
+    );
+    assert!(
+        !source.contains("setLevel:"),
+        "shortcut recorder popup must not override WindowKind::PopUp level"
+    );
+    assert!(
         body.contains("register_attached_popup"),
         "shortcut recorder popup must register as an attached popup for automation"
+    );
+
+    let secondary_source = repo_file("src/platform/secondary_window_config.rs");
+    assert!(
+        secondary_source.contains("setBecomesKeyOnlyIfNeeded: true"),
+        "shared popup config should preserve no-eager-key behavior for child popups"
     );
 }
 
@@ -71,6 +89,20 @@ fn shortcut_recorder_uses_compact_modal_copy_and_bounds() {
     );
 
     let render_source = repo_file("src/components/shortcut_recorder/render.rs");
+    assert!(
+        render_source.contains("AppChromeColors::from_theme(&self.theme)")
+            && render_source.contains("chrome.popup_surface_rgba")
+            && render_source.contains("chrome.border_rgba"),
+        "shortcut recorder popup chrome should use shared AppChromeColors tokens"
+    );
+    assert!(
+        render_source.contains("mods.platform && key.eq_ignore_ascii_case(\"w\")"),
+        "shortcut recorder must treat Cmd+W as explicit cancel, not a captured shortcut"
+    );
+    assert!(
+        render_source.contains("cx.stop_propagation()"),
+        "shortcut recorder key handler should consume captured modal keys"
+    );
     assert!(
         render_source.contains("RECORDER_MODAL_WIDTH"),
         "shortcut recorder should use its own compact modal width"

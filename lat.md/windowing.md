@@ -65,6 +65,7 @@ These rules describe the behavior constraints new windows and overlays should fo
 - The footer host is not interchangeable with detached popups; its `WithinWindow` blending and `hitTest:` passthrough are part of the behavior contract.
 - Detached actions popups stay footerless; shortcuts belong in the rows, not duplicated in popup chrome.
 - Shortcut recorder modals belong on the detached popup path, should not dim the launcher with the old full-window backdrop, and should stay narrower than the launcher.
+- The shortcut recorder popup stays child-attached to the parent, resurfaces with `orderFrontRegardless`, and must not override GPUI's `WindowKind::PopUp` level.
 - When a detached actions popup is open over the main window, the GPUI content behind it should be interaction-shielded so background hover/click/scroll state does not mutate; only the native actions toggle and click-anywhere dismissal path stay live.
 - HUD messages are standalone feedback and must not reveal the launcher. `PromptMessage::ShowHud` clears script-requested hide restore intent before delegating to the HUD manager, pinned by `tests/hud_visibility_decoupled_contract.rs`.
 

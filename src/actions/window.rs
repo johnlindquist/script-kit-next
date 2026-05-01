@@ -490,17 +490,19 @@ impl Render for ActionsWindow {
                 ),
             );
 
-            match actions_window_key_intent(key, modifiers) {
+            let handled = match actions_window_key_intent(key, modifiers) {
                 Some(ActionsWindowKeyIntent::MoveUp) => {
                     crate::logging::log("ACTIONS", "ActionsWindow: handling UP arrow");
 
                     this.dialog.update(cx, |d, cx| d.move_up(cx));
                     cx.notify();
+                    true
                 }
                 Some(ActionsWindowKeyIntent::MoveDown) => {
                     crate::logging::log("ACTIONS", "ActionsWindow: handling DOWN arrow");
                     this.dialog.update(cx, |d, cx| d.move_down(cx));
                     cx.notify();
+                    true
                 }
                 Some(ActionsWindowKeyIntent::MoveHome) => {
                     this.dialog.update(cx, |d, cx| {
@@ -509,6 +511,7 @@ impl Render for ActionsWindow {
                             d.reveal_selection_after_navigation(cx);
                         }
                     });
+                    true
                 }
                 Some(ActionsWindowKeyIntent::MoveEnd) => {
                     this.dialog.update(cx, |d, cx| {
@@ -517,6 +520,7 @@ impl Render for ActionsWindow {
                             d.reveal_selection_after_navigation(cx);
                         }
                     });
+                    true
                 }
                 Some(ActionsWindowKeyIntent::MovePageUp) => {
                     this.dialog.update(cx, |d, cx| {
@@ -533,6 +537,7 @@ impl Render for ActionsWindow {
                             d.reveal_selection_after_navigation(cx);
                         }
                     });
+                    true
                 }
                 Some(ActionsWindowKeyIntent::MovePageDown) => {
                     this.dialog.update(cx, |d, cx| {
@@ -550,6 +555,7 @@ impl Render for ActionsWindow {
                             d.reveal_selection_after_navigation(cx);
                         }
                     });
+                    true
                 }
                 Some(ActionsWindowKeyIntent::SendToAcp) => {
                     if let Some(action) = this.dialog.read(cx).get_selected_action().cloned() {
@@ -572,10 +578,12 @@ impl Render for ActionsWindow {
                         );
                         this.request_close(window, cx, "send_to_acp", true);
                     }
+                    true
                 }
                 Some(ActionsWindowKeyIntent::ExecuteSelected) => {
                     let activation = this.dialog.update(cx, |d, cx| d.activate_selected(cx));
                     this.handle_dialog_activation(activation, window, cx, "execute_selected");
+                    true
                 }
                 Some(ActionsWindowKeyIntent::Close) => {
                     let outcome = this.dialog.update(cx, |d, cx| d.handle_escape(cx));
@@ -611,6 +619,7 @@ impl Render for ActionsWindow {
                             this.request_close(window, cx, "escape", true);
                         }
                     }
+                    true
                 }
                 Some(ActionsWindowKeyIntent::Backspace) => {
                     crate::logging::log("ACTIONS", "ActionsWindow: backspace pressed");
@@ -622,6 +631,7 @@ impl Render for ActionsWindow {
                         resize_actions_window_direct(window, cx, &dialog);
                     });
                     cx.notify();
+                    true
                 }
                 Some(ActionsWindowKeyIntent::TypeChar(ch)) => {
                     crate::logging::log(
@@ -636,6 +646,7 @@ impl Render for ActionsWindow {
                         resize_actions_window_direct(window, cx, &dialog);
                     });
                     cx.notify();
+                    true
                 }
                 None => {
                     let matched_action_id = {
@@ -661,8 +672,14 @@ impl Render for ActionsWindow {
                             .dialog
                             .update(cx, |d, cx| d.activate_action_id(action_id, cx));
                         this.handle_dialog_activation(activation, window, cx, "shortcut_execute");
+                        true
+                    } else {
+                        false
                     }
                 }
+            };
+            if handled {
+                cx.stop_propagation();
             }
         });
 

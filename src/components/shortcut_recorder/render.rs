@@ -6,7 +6,7 @@ use gpui::{
 use crate::components::button::{Button, ButtonColors, ButtonVariant};
 use crate::components::overlay_modal::OverlayAnimation;
 use crate::logging;
-use crate::ui_foundation::{get_vibrancy_background, is_key_enter, is_key_escape};
+use crate::ui_foundation::{is_key_enter, is_key_escape};
 
 use super::types::{
     overlay_color_with_alpha, BUTTON_GAP, OVERLAY_BACKDROP_ALPHA, OVERLAY_BACKDROP_HOVER_ALPHA,
@@ -28,6 +28,7 @@ impl Render for ShortcutRecorder {
         );
 
         let colors = self.colors;
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let button_colors = ButtonColors::from_theme(&self.theme);
         let overlay_appear = self.overlay_appear_style();
         let backdrop_bg = rgba(overlay_color_with_alpha(
@@ -61,7 +62,7 @@ impl Render for ShortcutRecorder {
                     .w(px(2.0))
                     .h(px(14.0))
                     .rounded(px(1.0))
-                    .bg(rgb(colors.accent)),
+                    .bg(rgb(chrome.accent_hex)),
             )
             .child(
                 div()
@@ -69,7 +70,7 @@ impl Render for ShortcutRecorder {
                     .truncate()
                     .text_sm()
                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .text_color(rgb(colors.text_primary))
+                    .text_color(rgb(chrome.text_primary_hex))
                     .child(title),
             );
 
@@ -140,7 +141,10 @@ impl Render for ShortcutRecorder {
             );
 
             // Handle special keys
-            if is_key_escape(key) {
+            if mods.platform && key.eq_ignore_ascii_case("w") {
+                this.cancel();
+                cx.notify();
+            } else if is_key_escape(key) {
                 this.handle_escape(cx);
             } else if is_key_enter(key) && this.shortcut.is_complete() && this.conflict.is_none() {
                 this.save();
@@ -148,6 +152,7 @@ impl Render for ShortcutRecorder {
             } else {
                 this.handle_key_down(key, mods, cx);
             }
+            cx.stop_propagation();
         });
 
         // Modifiers changed handler - CRITICAL for live modifier feedback
@@ -184,9 +189,9 @@ impl Render for ShortcutRecorder {
             .id("shortcut-modal-content")
             .w(px(RECORDER_MODAL_WIDTH))
             .p(px(RECORDER_MODAL_PADDING))
-            .when_some(get_vibrancy_background(&self.theme), |d, bg| d.bg(bg))
+            .bg(rgba(chrome.popup_surface_rgba))
             .border_1()
-            .border_color(rgba((colors.text_primary << 8) | 0x22))
+            .border_color(rgba(chrome.border_rgba))
             .rounded(px(8.))
             .flex()
             .flex_col()
