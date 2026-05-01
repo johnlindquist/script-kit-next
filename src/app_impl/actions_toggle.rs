@@ -538,17 +538,11 @@ impl ScriptListApp {
                 "Suppressed actions reopen because the dialog was just closed"
             );
         } else {
-            // Run 14 Pass 1 — any view that passed the
-            // `actions_dialog_host_for_current_view` check at the top of
-            // this function explicitly participates in the shared actions
-            // dialog. Suppressing the keystroke when that host has no
-            // contextual actions leaves the user with no signal that
-            // Cmd+K landed (story `actions-debounce-builtins-cross-host-live`:
-            // Cmd+K silently swallowed on file-search). Always open the
-            // dialog when a host claims the view; the dialog itself can
-            // render the empty / global-only section. The original
-            // `has_actions` gate is preserved at the host-resolution layer
-            // (line 486) which short-circuits views that don't participate.
+            // Any view that reaches this point has passed the live-host
+            // resolver. Selection-specific hosts such as File Search may still
+            // open with only global rows, but generic BuiltinList surfaces are
+            // filtered out before this path so Theme Chooser cannot advertise
+            // misleading launcher actions.
             let _ = self.has_actions();
 
             let position = self.main_list_actions_window_position();
@@ -625,15 +619,9 @@ impl ScriptListApp {
             } else {
                 None
             };
-            // Run 14 Pass 3 — story
-            // `actions-cmdk-builtin-list-views-empty-state`: when the
-            // current view is a BuiltinList host (browser-tabs,
-            // window-switcher, theme-chooser, etc.) the live `selected_index`
-            // pertains to that view's own list, NOT the script list cache
-            // that `get_focused_script_info` reads from. Forcing both
-            // script + scriptlet context to None here ensures the dialog
-            // only renders the Pass-3-of-Run-13 global actions, not stale
-            // main-list rows from a previously-focused script.
+            // Defensive guard for any explicit BuiltinList host path: its
+            // selected_index belongs to that built-in list, not the script list
+            // cache read by `get_focused_script_info`.
             let on_builtin_list = matches!(host, ActionsDialogHost::BuiltinList);
             let script_info = if on_builtin_list {
                 None

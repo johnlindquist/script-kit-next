@@ -27,6 +27,16 @@ User-authored themes live at `~/.scriptkit/themes/<slug>.json`.
 
 The directory is seeded at startup via [[src/setup/mod.rs]] and read through [[src/theme/user_themes.rs#list_user_themes]]. `save_user_theme` slugifies the display name into the file stem, writes the payload atomically (tmp file + rename), and refuses the save if `hover >= selected` so the row-state opacity contract in this page's top sections cannot be broken by a user file.
 
+## Theme chooser key handling
+
+The theme chooser owns its handled key events so selection, undo, and preview shortcuts cannot fall through into the focused main filter.
+
+`[[src/render_builtins/theme_chooser.rs#ScriptListApp#render_theme_chooser]]` calls `cx.stop_propagation()` after handling actions routing, Escape, Cmd+W, preset mutation shortcuts, keyboard preview navigation, preset row clicks, and customizer control clicks. This prevents handled view keys from falling through to parent handlers. `[[tests/theme_chooser_key_propagation_contract.rs#handled_theme_chooser_keys_stop_propagation]]` and `[[tests/theme_chooser_key_propagation_contract.rs#handled_theme_chooser_clicks_stop_propagation]]` pin that handled-input contract.
+
+Theme selection can transiently churn native focus as AppKit updates window appearance, vibrancy, or activation state. `[[src/main_sections/app_view_state.rs#AppView#surface_contract]]` therefore gives `ThemeChooserView` the explicit dismiss policy instead of the standard blur-dismiss policy, so window blur cannot reset to the launcher during a theme click while Escape and Cmd+W remain explicit exits. `[[tests/app_view_policy_contract.rs#theme_chooser_ignores_window_blur_dismissal]]` pins this policy.
+
+The shared input component owns semantic Enter submission for views that use the main filter. `InputEvent::PressEnter` dispatches to ThemeChooser while `ThemeChooserView` is active, so committing a theme and returning to ScriptList cannot reinterpret the same input event as a launcher submit. `[[tests/theme_chooser_key_propagation_contract.rs#theme_chooser_enter_is_owned_by_shared_input_press_enter]]` pins that ownership model.
+
 ## Related Pages
 
 This page extends the visual contract described in the broader design notes.

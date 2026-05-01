@@ -66,15 +66,15 @@ impl ScriptListApp {
 
     /// Live routing host for main-window popup handling.
     ///
-    /// Run 14 Pass 3 — BuiltinList views are now included so Cmd+K opens
-    /// the dialog with global-only actions on browser-tabs, window-switcher,
-    /// theme-chooser, etc. The "stale main-list context" concern that
-    /// originally excluded these views is addressed in `toggle_actions`
-    /// (story `actions-cmdk-builtin-list-views-empty-state`): when the
-    /// resolved host is `BuiltinList`, both `script_info` and
-    /// `focused_scriptlet` are forced to `None` before the dialog is
-    /// constructed, so only the Pass-3-of-Run-13 global rows render.
+    /// Generic BuiltinList views remain in `actions_host_for_view` so static
+    /// routing and focus-restore code can identify them, but they are not live
+    /// Cmd+K hosts until each view provides selection-specific actions.
+    /// Otherwise views like Theme Chooser open a misleading global-only menu.
     pub(crate) fn live_actions_host_for_view(view: &AppView) -> Option<ActionsDialogHost> {
+        if Self::is_builtin_list_actions_view(view) {
+            return None;
+        }
+
         Self::actions_host_for_view(view)
     }
 
@@ -1151,6 +1151,15 @@ mod actions_host_mapping_tests {
         };
         assert_eq!(
             ScriptListApp::live_actions_host_for_view(&settings),
+            None
+        );
+
+        let theme_chooser = AppView::ThemeChooserView {
+            filter: String::new(),
+            selected_index: 0,
+        };
+        assert_eq!(
+            ScriptListApp::live_actions_host_for_view(&theme_chooser),
             None
         );
 

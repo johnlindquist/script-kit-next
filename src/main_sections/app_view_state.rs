@@ -737,7 +737,7 @@ impl AppView {
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
-                standard,
+                explicit,
                 "scriptList",
             ),
             AppView::EmojiPickerView { .. } => LauncherSurfaceContract::new(

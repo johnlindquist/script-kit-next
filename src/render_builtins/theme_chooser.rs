@@ -115,6 +115,23 @@ fn cached_theme_chooser_contrast_snapshot(
 }
 
 impl ScriptListApp {
+    pub(crate) fn submit_theme_chooser_from_input_enter(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log("KEY", "PressEnter routed to ThemeChooser");
+        if let Err(e) = crate::theme::service::persist_theme_and_sync_all_windows(
+            cx,
+            self.theme.as_ref(),
+            "theme_chooser_done",
+        ) {
+            tracing::warn!(error = %e, "theme_chooser_done_persist_failed");
+        }
+        self.theme_before_chooser = None;
+        self.go_back_or_close(window, cx);
+    }
+
     fn theme_chooser_match_summary(
         filtered_indices: &[usize],
         presets: &[theme::presets::ThemePreset],
@@ -604,6 +621,7 @@ impl ScriptListApp {
                             surface = "theme_chooser",
                             key = %key,
                         );
+                        cx.stop_propagation();
                         return;
                     }
                     ActionsRoute::Execute { action_id } => {
@@ -613,6 +631,7 @@ impl ScriptListApp {
                             window,
                             cx,
                         );
+                        cx.stop_propagation();
                         return;
                     }
                 }
@@ -636,6 +655,7 @@ impl ScriptListApp {
                         }
                         this.go_back_or_close(window, cx);
                     }
+                    cx.stop_propagation();
                     return;
                 }
                 // Cmd+W: undo all changes and close window
@@ -649,6 +669,7 @@ impl ScriptListApp {
                         );
                     }
                     this.close_and_reset_window(cx);
+                    cx.stop_propagation();
                     return;
                 }
                 // Cmd+[ / Cmd+]: cycle accent colors
@@ -666,6 +687,7 @@ impl ScriptListApp {
                     modified.colors.text.on_accent =
                         best_contrast_of_two(new_accent, 0xFFFFFF, modified.colors.background.main);
                     this.apply_theme_chooser_theme(modified, "theme_chooser_accent_cycle", cx);
+                    cx.stop_propagation();
                     return;
                 }
                 if has_cmd && (key == "]" || key.eq_ignore_ascii_case("bracketright")) {
@@ -678,6 +700,7 @@ impl ScriptListApp {
                     modified.colors.text.on_accent =
                         best_contrast_of_two(new_accent, 0xFFFFFF, modified.colors.background.main);
                     this.apply_theme_chooser_theme(modified, "theme_chooser_accent_cycle", cx);
+                    cx.stop_propagation();
                     return;
                 }
                 // Cmd+- / Cmd+=: adjust surface opacity (all shell surfaces together)
@@ -694,6 +717,7 @@ impl ScriptListApp {
                             cx,
                         );
                     }
+                    cx.stop_propagation();
                     return;
                 }
                 if has_cmd && (key == "=" || key == "+") {
@@ -709,6 +733,7 @@ impl ScriptListApp {
                             cx,
                         );
                     }
+                    cx.stop_propagation();
                     return;
                 }
                 // Cmd+B: toggle vibrancy
@@ -718,6 +743,7 @@ impl ScriptListApp {
                         vibrancy.enabled = !vibrancy.enabled;
                     }
                     this.apply_theme_chooser_theme(modified, "theme_chooser_vibrancy_toggle", cx);
+                    cx.stop_propagation();
                     return;
                 }
                 // Cmd+M: cycle vibrancy material
@@ -740,6 +766,7 @@ impl ScriptListApp {
                         "theme_chooser_vibrancy_material_cycle",
                         cx,
                     );
+                    cx.stop_propagation();
                     return;
                 }
                 // Cmd+J: surprise me / remix
@@ -749,6 +776,7 @@ impl ScriptListApp {
                         theme_chooser_remix_seed(),
                     );
                     this.apply_theme_chooser_theme(remixed, "theme_chooser_surprise_me", cx);
+                    cx.stop_propagation();
                     return;
                 }
                 // Cmd+R: reset customizations to selected preset defaults
@@ -771,23 +799,9 @@ impl ScriptListApp {
                             cx,
                         );
                     }
+                    cx.stop_propagation();
                     return;
                 }
-                // Enter: apply (persist) the current theme but stay in the chooser
-                // Enter: persist current theme and close the chooser
-                if is_key_enter(key) {
-                    if let Err(e) = crate::theme::service::persist_theme_and_sync_all_windows(
-                        cx,
-                        this.theme.as_ref(),
-                        "theme_chooser_done",
-                    ) {
-                        tracing::warn!(error = %e, "theme_chooser_done_persist_failed");
-                    }
-                    this.theme_before_chooser = None;
-                    this.go_back_or_close(window, cx);
-                    return;
-                }
-
                 // Compute filtered indices from current filter
                 let current_filter =
                     if let AppView::ThemeChooserView { ref filter, .. } = this.current_view {
@@ -798,6 +812,15 @@ impl ScriptListApp {
                 let filtered = Self::theme_chooser_filtered_indices(&current_filter);
                 let count = filtered.len();
                 if count == 0 {
+                    if is_key_up(key)
+                        || is_key_down(key)
+                        || key.eq_ignore_ascii_case("home")
+                        || key.eq_ignore_ascii_case("end")
+                        || key.eq_ignore_ascii_case("pageup")
+                        || key.eq_ignore_ascii_case("pagedown")
+                    {
+                        cx.stop_propagation();
+                    }
                     return;
                 }
 
@@ -841,6 +864,7 @@ impl ScriptListApp {
                         "theme_chooser_keyboard_preview",
                         cx,
                     );
+                    cx.stop_propagation();
                 }
             },
         );
@@ -924,6 +948,7 @@ impl ScriptListApp {
                 let click_indices = std::sync::Arc::clone(&filtered_indices_for_list);
                 let click_handler =
                     move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
+                        cx.stop_propagation();
                         if let Some(app) = click_entity.upgrade() {
                             let indices = std::sync::Arc::clone(&click_indices);
                             app.update(cx, |this, cx| {
@@ -1060,6 +1085,7 @@ impl ScriptListApp {
                         move |_event: &gpui::ClickEvent,
                               _window: &mut Window,
                               cx: &mut gpui::App| {
+                            cx.stop_propagation();
                             if let Some(app) = click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     let mut modified = (*this.theme).clone();
@@ -1113,6 +1139,7 @@ impl ScriptListApp {
                         move |_event: &gpui::ClickEvent,
                               _window: &mut Window,
                               cx: &mut gpui::App| {
+                            cx.stop_propagation();
                             if let Some(app) = click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     let modified = Self::apply_surface_opacity_preset(
@@ -1151,6 +1178,7 @@ impl ScriptListApp {
             })
             .on_click(
                 move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
+                    cx.stop_propagation();
                     if let Some(app) = vibrancy_entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let mut modified = (*this.theme).clone();
@@ -1233,6 +1261,7 @@ impl ScriptListApp {
                         move |_event: &gpui::ClickEvent,
                               _window: &mut Window,
                               cx: &mut gpui::App| {
+                            cx.stop_propagation();
                             if let Some(app) = click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     let mut modified = (*this.theme).clone();
@@ -1288,6 +1317,7 @@ impl ScriptListApp {
                         move |_event: &gpui::ClickEvent,
                               _window: &mut Window,
                               cx: &mut gpui::App| {
+                            cx.stop_propagation();
                             if let Some(app) = click_entity.upgrade() {
                                 app.update(cx, |this, cx| {
                                     let mut modified = (*this.theme).clone();
@@ -1332,6 +1362,7 @@ impl ScriptListApp {
             })
             .on_click(
                 move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
+                    cx.stop_propagation();
                     if let Some(app) = reset_entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let current_filter =
@@ -1381,6 +1412,7 @@ impl ScriptListApp {
             })
             .on_click(
                 move |_event: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
+                    cx.stop_propagation();
                     if let Some(app) = surprise_entity.upgrade() {
                         app.update(cx, |this, cx| {
                             let remixed = Self::build_theme_chooser_remix(

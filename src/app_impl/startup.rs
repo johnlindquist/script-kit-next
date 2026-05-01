@@ -498,6 +498,18 @@ impl ScriptListApp {
                         return;
                     }
 
+                    if matches!(this.current_view, AppView::ThemeChooserView { .. }) {
+                        if !this.show_actions_popup && !actions::is_actions_window_open() {
+                            this.submit_theme_chooser_from_input_enter(window, cx);
+                        } else {
+                            logging::log(
+                                "KEY",
+                                "Ignoring ThemeChooser PressEnter: actions popup is open",
+                            );
+                        }
+                        return;
+                    }
+
                     // Handle Enter for mini/arg prompts — submit the arg value
                     let prompt_id = match &this.current_view {
                         AppView::MiniPrompt { id, .. } | AppView::ArgPrompt { id, .. } => {

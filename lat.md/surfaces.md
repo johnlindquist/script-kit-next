@@ -58,7 +58,7 @@ The About surface is a full-window launcher route for brand, version, update, an
 Shared actions-dialog routing now resolves from one view-to-host map and closes through one host-aware path.
 
 - `src/app_impl/actions_dialog.rs` owns the canonical surface map through `actions_host_for_view(...)` and keeps live popup routing on `live_actions_host_for_view(...)`.
-- Generic `BuiltinList` surfaces remain in the static host map, but stay out of `live_actions_host_for_view(...)` until they provide selection-specific actions, so `Cmd+K` cannot open stale launcher actions for a built-in row.
+- Generic `BuiltinList` surfaces remain in the static host map, but stay out of `live_actions_host_for_view(...)` until they provide selection-specific actions, so `Cmd+K` cannot open stale or global-only launcher actions for a built-in row such as Theme Chooser.
 - `src/app_impl/startup.rs`, `src/render_builtins/theme_chooser.rs`, and `src/render_builtins/settings.rs` must route popup-owned keys through `route_key_to_actions_dialog(...)` before local shortcuts such as `Cmd+K`, `Escape`, `Cmd+W`, or theme tweaking chords.
 - Actions-dialog shortcut dispatch resolves only against the current filtered action rows, so a hidden action cannot win a shortcut while the user is filtering toward another visible action.
 - File search can combine selected-row file actions with current-directory actions; duplicate shortcut badges are removed from later actions so displayed shortcuts always match the action that will execute.
@@ -91,7 +91,7 @@ Per-view dismiss behavior is declared by `AppView::surface_contract()` in [src/m
 
 `is_dismissable_view()` in `src/app_impl/shortcuts_hud_grid.rs` is now a three-line delegate to `self.current_view.dismiss_policy().closes_main_window_on(DismissTrigger::WindowBlur)`. The focus-lost block in `render_impl.rs` keeps every runtime coexistence guard (pinned, focus grace, actions popup, confirm popup, shortcut recorder popup, detached ACP, dictation, Tab AI) — those are not per-view policy and should stay on their own paths.
 
-Source-level audits in [tests/app_view_policy_contract.rs](/Users/johnlindquist/dev/script-kit-gpui/tests/app_view_policy_contract.rs) pin the guarantees that rustc alone cannot: no wildcard arm in the registry, no semantic-surface fallback map, and no `Default` escape hatch on `DismissPolicy`. Confirm / actions / dictation popup dismissal remains runtime overlay state and keeps its own close paths.
+Source-level audits in [tests/app_view_policy_contract.rs](/Users/johnlindquist/dev/script-kit-gpui/tests/app_view_policy_contract.rs) pin the guarantees that rustc alone cannot: no wildcard arm in the registry, no semantic-surface fallback map, no `Default` escape hatch on `DismissPolicy`, and sticky blur behavior for ThemeChooser. Confirm / actions / dictation popup dismissal remains runtime overlay state and keeps its own close paths.
 
 ## Key Files
 
