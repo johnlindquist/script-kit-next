@@ -187,6 +187,8 @@ fn open_shortcut_recorder_window(
     let bounds = shortcut_recorder_window_bounds(parent_bounds);
 
     let window_theme = std::sync::Arc::clone(&theme);
+    // Intentionally not Root-wrapped: this popup is fixed compact capture chrome.
+    // Keep focus/root behavior unchanged unless capture dismissal is retested.
     let handle = cx.open_window(
         WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
@@ -286,7 +288,7 @@ impl ScriptListApp {
     /// Creates the file with documentation if it doesn't exist
     ///
     /// NOTE: This is the legacy approach. For new code, use `show_shortcut_recorder()` instead
-    /// which provides an inline modal UI for recording shortcuts.
+    /// which opens the detached shortcut recorder popup.
     #[allow(dead_code)]
     pub(crate) fn open_config_for_shortcut(&mut self, command_id: &str) {
         let config_path = shellexpand::tilde("~/.scriptkit/config.ts").to_string();
@@ -420,7 +422,7 @@ export default {
         Ok(())
     }
 
-    /// Show the inline shortcut recorder for a command.
+    /// Show the detached shortcut recorder popup for a command.
     ///
     /// This replaces `open_config_for_shortcut` for non-script commands.
     /// For scripts, we still open the script file directly to edit the // Shortcut: comment.
@@ -517,12 +519,13 @@ export default {
         }
     }
 
-    /// Render the shortcut recorder overlay if state is set.
+    /// Legacy inline overlay path for the shortcut recorder.
     ///
     /// Returns None if no recorder is active.
     ///
-    /// The recorder is created once and persisted to maintain keyboard focus.
-    /// Callbacks use cx.entity() to communicate back to the parent app.
+    /// The current native popup path returns None while shortcut_recorder_state
+    /// is set so the parent is not dimmed. The remaining inline path is kept for
+    /// legacy state/entity handling.
     pub(crate) fn render_shortcut_recorder_overlay(
         &mut self,
         window: &mut Window,

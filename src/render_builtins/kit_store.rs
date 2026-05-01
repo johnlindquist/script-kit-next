@@ -456,14 +456,20 @@ impl ScriptListApp {
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
 
-        let text_primary = self.theme.colors.text.primary;
-        let text_muted = self.theme.colors.text.muted;
-        let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
-        let accent_subtle = self.theme.colors.accent.selected_subtle;
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let opacity = self.theme.get_opacity();
-        let selected_alpha = (opacity.selected * 255.0) as u32;
-        let hover_alpha = (opacity.hover * 255.0) as u32;
+        let text_primary = chrome.text_primary_hex;
+        let text_name = rgba((chrome.text_primary_hex << 8) | 0xff);
+        let text_muted = rgba((chrome.text_primary_hex << 8)
+            | ((opacity.text_muted_alpha * 255.0) as u32));
+        let text_hint = rgba((chrome.text_primary_hex << 8)
+            | ((opacity.text_hint * 255.0) as u32));
+        let text_placeholder = rgba(chrome.placeholder_text_rgba);
+        let divider_bg = rgba(chrome.divider_rgba);
+        let selected_row_bg = rgba(chrome.selection_rgba);
+        let hover_row_bg = rgba(chrome.hover_rgba);
+        let accent_badge_bg = rgba(chrome.accent_badge_bg_rgba);
+        let accent_badge_text = rgba((chrome.accent_badge_text_hex << 8) | 0xff);
 
         let query_owned = query.to_string();
         let input_display = if query_owned.is_empty() {
@@ -619,12 +625,12 @@ impl ScriptListApp {
                 .items_center()
                 .justify_center()
                 .gap(px(8.0))
-                .text_color(rgb(text_muted))
+                .text_color(text_muted)
                 .child("No kits found")
                 .child(
                     div()
                         .text_xs()
-                        .text_color(rgb(text_dimmed))
+                        .text_color(text_hint)
                         .child("Try a different search query"),
                 )
                 .into_any_element()
@@ -637,9 +643,6 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some(result) = results_for_list.get(ix) {
                                 let is_selected = ix == selected_row;
-                                // Luminance ladder: both text.primary at different opacities
-                                let selected_row_bg = rgba((text_primary << 8) | selected_alpha);
-                                let row_bg = rgba((text_primary << 8) | hover_alpha);
 
                                 let row_entity = click_entity.clone();
                                 let install_btn_entity = install_entity.clone();
@@ -657,7 +660,7 @@ impl ScriptListApp {
                                     .justify_between()
                                     .gap(px(12.0))
                                     .when(is_selected, |row| row.bg(selected_row_bg))
-                                    .when(!is_selected, |row| row.hover(move |style| style.bg(row_bg)))
+                                    .when(!is_selected, |row| row.hover(move |style| style.bg(hover_row_bg)))
                                     .cursor_pointer()
                                     .on_click(move |_event, _window, cx| {
                                         if let Some(entity) = row_entity.upgrade() {
@@ -674,6 +677,8 @@ impl ScriptListApp {
                                     .child(
                                         div()
                                             .flex_1()
+                                            .min_w(px(0.0))
+                                            .overflow_hidden()
                                             .flex()
                                             .flex_col()
                                             .gap(px(2.0))
@@ -681,7 +686,9 @@ impl ScriptListApp {
                                                 div()
                                                     .text_sm()
                                                     .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(rgb(text_primary))
+                                                    .text_color(text_name)
+                                                    .overflow_hidden()
+                                                    .text_ellipsis()
                                                     .child(format!(
                                                         "{}  •  ★ {}",
                                                         result.name, result.stars
@@ -690,13 +697,17 @@ impl ScriptListApp {
                                             .child(
                                                 div()
                                                     .text_xs()
-                                                    .text_color(rgb(text_dimmed))
+                                                    .text_color(text_hint)
+                                                    .overflow_hidden()
+                                                    .text_ellipsis()
                                                     .child(result.full_name.clone()),
                                             )
                                             .child(
                                                 div()
                                                     .text_xs()
-                                                    .text_color(rgb(text_muted))
+                                                    .text_color(text_muted)
+                                                    .overflow_hidden()
+                                                    .text_ellipsis()
                                                     .child(if result.description.is_empty() {
                                                         "No description".to_string()
                                                     } else {
@@ -710,10 +721,10 @@ impl ScriptListApp {
                                             .px(px(10.0))
                                             .py(px(6.0))
                                             .rounded(px(6.0))
-                                            .bg(rgba((accent_subtle << 8) | 0x80))
+                                            .bg(accent_badge_bg)
                                             .text_xs()
                                             .font_weight(FontWeight::MEDIUM)
-                                            .text_color(rgb(text_primary))
+                                            .text_color(accent_badge_text)
                                             .cursor_pointer()
                                             .on_click(move |_event, _window, cx| {
                                                 if let Some(entity) = install_btn_entity.upgrade() {
@@ -750,7 +761,7 @@ impl ScriptListApp {
             .flex_col()
             .rounded(px(design_visual.radius_lg))
             .font_family(design_typography.font_family)
-            .text_color(rgb(text_primary))
+            .text_color(text_name)
             .key_context("kit_store_browse")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
@@ -766,7 +777,7 @@ impl ScriptListApp {
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(text_dimmed))
+                            .text_color(text_hint)
                             .child("🧰 Browse Kit Store"),
                     )
                     .child(
@@ -777,9 +788,9 @@ impl ScriptListApp {
                             .items_center()
                             .text_lg()
                             .text_color(if input_is_empty {
-                                rgb(text_muted)
+                                text_placeholder
                             } else {
-                                rgb(text_primary)
+                                text_name
                             })
                             .when(input_is_empty, |d| {
                                 d.child(
@@ -813,7 +824,7 @@ impl ScriptListApp {
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(text_dimmed))
+                            .text_color(text_hint)
                             .child(format!("{} kits", total_results)),
                     ),
             )
@@ -821,7 +832,7 @@ impl ScriptListApp {
                 div()
                     .mx(px(design_spacing.padding_lg))
                     .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
+                    .bg(divider_bg),
             )
             .child(
                 div()
@@ -877,14 +888,20 @@ impl ScriptListApp {
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
 
-        let text_primary = self.theme.colors.text.primary;
-        let text_muted = self.theme.colors.text.muted;
-        let text_dimmed = self.theme.colors.text.dimmed;
-        let ui_border = self.theme.colors.ui.border;
-        let accent_subtle = self.theme.colors.accent.selected_subtle;
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let opacity = self.theme.get_opacity();
-        let selected_alpha = (opacity.selected * 255.0) as u32;
-        let hover_alpha = (opacity.hover * 255.0) as u32;
+        let text_name = rgba((chrome.text_primary_hex << 8) | 0xff);
+        let text_muted = rgba((chrome.text_primary_hex << 8)
+            | ((opacity.text_muted_alpha * 255.0) as u32));
+        let text_hint = rgba((chrome.text_primary_hex << 8)
+            | ((opacity.text_hint * 255.0) as u32));
+        let divider_bg = rgba(chrome.divider_rgba);
+        let selected_row_bg = rgba(chrome.selection_rgba);
+        let hover_row_bg = rgba(chrome.hover_rgba);
+        let accent_badge_bg = rgba(chrome.accent_badge_bg_rgba);
+        let accent_badge_text = rgba((chrome.accent_badge_text_hex << 8) | 0xff);
+        let badge_bg = rgba(chrome.badge_bg_rgba);
+        let badge_text = rgba((chrome.badge_text_hex << 8) | 0xff);
         let total_kits = kits.len();
 
         let handle_key = cx.listener(
@@ -960,12 +977,12 @@ impl ScriptListApp {
                 .items_center()
                 .justify_center()
                 .gap(px(8.0))
-                .text_color(rgb(text_muted))
+                .text_color(text_muted)
                 .child("No installed kits")
                 .child(
                     div()
                         .text_xs()
-                        .text_color(rgb(text_dimmed))
+                        .text_color(text_hint)
                         .child("Use \"Browse Kit Store\" to install one"),
                 )
                 .into_any_element()
@@ -978,9 +995,6 @@ impl ScriptListApp {
                         .map(|ix| {
                             if let Some(kit) = kits_for_list.get(ix) {
                                 let is_selected = ix == selected_row;
-                                // Luminance ladder: both text.primary at different opacities
-                                let selected_row_bg = rgba((text_primary << 8) | selected_alpha);
-                                let row_bg = rgba((text_primary << 8) | hover_alpha);
 
                                 let row_entity = click_entity.clone();
                                 let update_btn_entity = update_entity.clone();
@@ -1000,7 +1014,7 @@ impl ScriptListApp {
                                     .justify_between()
                                     .gap(px(12.0))
                                     .when(is_selected, |row| row.bg(selected_row_bg))
-                                    .when(!is_selected, |row| row.hover(move |style| style.bg(row_bg)))
+                                    .when(!is_selected, |row| row.hover(move |style| style.bg(hover_row_bg)))
                                     .cursor_pointer()
                                     .on_click(move |_event, _window, cx| {
                                         if let Some(entity) = row_entity.upgrade() {
@@ -1017,6 +1031,8 @@ impl ScriptListApp {
                                     .child(
                                         div()
                                             .flex_1()
+                                            .min_w(px(0.0))
+                                            .overflow_hidden()
                                             .flex()
                                             .flex_col()
                                             .gap(px(2.0))
@@ -1024,19 +1040,25 @@ impl ScriptListApp {
                                                 div()
                                                     .text_sm()
                                                     .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(rgb(text_primary))
+                                                    .text_color(text_name)
+                                                    .overflow_hidden()
+                                                    .text_ellipsis()
                                                     .child(kit.name.clone()),
                                             )
                                             .child(
                                                 div()
                                                     .text_xs()
-                                                    .text_color(rgb(text_dimmed))
+                                                    .text_color(text_hint)
+                                                    .overflow_hidden()
+                                                    .text_ellipsis()
                                                     .child(kit.repo_url.clone()),
                                             )
                                             .child(
                                                 div()
                                                     .text_xs()
-                                                    .text_color(rgb(text_muted))
+                                                    .text_color(text_muted)
+                                                    .overflow_hidden()
+                                                    .text_ellipsis()
                                                     .child(format!("commit {}", kit.git_hash)),
                                             ),
                                     )
@@ -1052,10 +1074,10 @@ impl ScriptListApp {
                                                     .px(px(10.0))
                                                     .py(px(6.0))
                                                     .rounded(px(6.0))
-                                                    .bg(rgba((accent_subtle << 8) | 0x80))
+                                                    .bg(accent_badge_bg)
                                                     .text_xs()
                                                     .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(rgb(text_primary))
+                                                    .text_color(accent_badge_text)
                                                     .cursor_pointer()
                                                     .on_click(move |_event, _window, cx| {
                                                         if let Some(entity) = update_btn_entity.upgrade() {
@@ -1076,10 +1098,10 @@ impl ScriptListApp {
                                                     .px(px(10.0))
                                                     .py(px(6.0))
                                                     .rounded(px(6.0))
-                                                    .bg(rgba((ui_border << 8) | 0xA0))
+                                                    .bg(badge_bg)
                                                     .text_xs()
                                                     .font_weight(FontWeight::MEDIUM)
-                                                    .text_color(rgb(text_primary))
+                                                    .text_color(badge_text)
                                                     .cursor_pointer()
                                                     .on_click(move |_event, _window, cx| {
                                                         if let Some(entity) = remove_btn_entity.upgrade() {
@@ -1116,7 +1138,7 @@ impl ScriptListApp {
             .flex_col()
             .rounded(px(design_visual.radius_lg))
             .font_family(design_typography.font_family)
-            .text_color(rgb(text_primary))
+            .text_color(text_name)
             .key_context("kit_store_installed")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
@@ -1132,13 +1154,13 @@ impl ScriptListApp {
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(text_dimmed))
+                            .text_color(text_hint)
                             .child("📦 Installed Kits"),
                     )
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(text_dimmed))
+                            .text_color(text_hint)
                             .child(format!("{} installed", total_kits)),
                     ),
             )
@@ -1146,7 +1168,7 @@ impl ScriptListApp {
                 div()
                     .mx(px(design_spacing.padding_lg))
                     .h(px(design_visual.border_thin))
-                    .bg(rgba((ui_border << 8) | 0x60)),
+                    .bg(divider_bg),
             )
             .child(
                 div()

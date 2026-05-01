@@ -75,7 +75,7 @@ pub(super) struct ActionsDialogStyleFallback {
 #[cfg(not(feature = "storybook"))]
 fn actions_dialog_default_style() -> ActionsDialogStyleFallback {
     ActionsDialogStyleFallback {
-        show_container_border: true,
+        show_container_border: false,
         show_header: true,
         show_search_divider: false,
         show_icons: false,
@@ -2902,39 +2902,23 @@ impl Render for ActionsDialog {
                                             muted_text,
                                             hint_text,
                                         ) = if design_variant == DesignVariant::Default {
-                                            // Luminance ladder: both use text.primary at
-                                            // different opacities for clear differentiation
+                                            let chrome =
+                                                theme::AppChromeColors::from_theme(&this.theme);
                                             let theme_opacity = this.theme.get_opacity();
-                                            let selected_alpha = ((theme_opacity.selected
-                                                * style.selection_opacity)
-                                                .clamp(0.0, 1.0)
-                                                * 255.0)
-                                                as u32;
-                                            let hover_alpha = ((theme_opacity.hover
-                                                * style.hover_opacity)
-                                                .clamp(0.0, 1.0)
-                                                * 255.0)
-                                                as u32;
                                             (
-                                                rgba(
-                                                    (this.theme.colors.text.primary << 8)
-                                                        | selected_alpha,
-                                                ),
-                                                rgba(
-                                                    (this.theme.colors.text.primary << 8)
-                                                        | hover_alpha,
-                                                ),
-                                                rgb(this.theme.colors.text.primary),
+                                                rgba(chrome.selection_rgba),
+                                                rgba(chrome.hover_rgba),
+                                                rgb(chrome.text_primary_hex),
                                                 semantic_text_rgba(
-                                                    this.theme.colors.text.primary,
+                                                    chrome.text_primary_hex,
                                                     theme_opacity.text_strong,
                                                 ),
                                                 semantic_text_rgba(
-                                                    this.theme.colors.text.primary,
+                                                    chrome.text_primary_hex,
                                                     theme_opacity.text_muted_alpha,
                                                 ),
                                                 semantic_text_rgba(
-                                                    this.theme.colors.text.primary,
+                                                    chrome.text_primary_hex,
                                                     theme_opacity.text_hint,
                                                 ),
                                             )
@@ -3038,7 +3022,9 @@ impl Render for ActionsDialog {
 
                                         let selection_dot_color =
                                             if design_variant == DesignVariant::Default {
-                                                rgb(this.theme.colors.accent.selected)
+                                                let chrome =
+                                                    theme::AppChromeColors::from_theme(&this.theme);
+                                                rgb(chrome.accent_hex)
                                             } else {
                                                 rgb(item_colors.accent)
                                             };
@@ -4259,7 +4245,7 @@ mod tests {
         use crate::actions::types::{ActionsDialogConfig, AnchorPosition, SearchPosition};
         let mut style = super::actions_dialog_default_style();
         style.show_search_divider = true;
-        // Default style has show_container_border: true which is also off-spec.
+        style.show_container_border = true;
         let audit = ActionsDialogRuntimeAudit::from_parts(
             "test_actions_dialog",
             &ActionsDialogConfig {
@@ -4436,15 +4422,16 @@ mod actions_dialog_spec_tests {
     }
 
     #[test]
-    fn actions_dialog_live_defaults_expose_container_border() {
+    fn actions_dialog_live_defaults_hide_container_border() {
         let audit = ActionsDialogChromeAudit::from_live_defaults();
-        // The audit struct must expose the field so runtime validation can check it.
-        // The non-storybook fallback currently has show_container_border: true,
-        // which is off-spec — validate() will flag this as a violation.
         let style = super::actions_dialog_default_style();
         assert_eq!(
             audit.show_container_border, style.show_container_border,
             "chrome audit must reflect the actual live style value"
+        );
+        assert!(
+            !audit.show_container_border,
+            "live actions dialog defaults should stay footerless and borderless"
         );
     }
 

@@ -48,6 +48,8 @@ That natural casing rule starts at the label source, not just the renderer. Laun
 
 Actions dialogs should inherit that same semantic text ladder instead of using separate secondary or dimmed base colors. Titles, section labels, search placeholder text, and shortcut chrome should all resolve from `text_primary` plus the shared opacity tiers so the popup hierarchy matches the launcher hierarchy.
 
+Default actions-dialog row selection and hover backgrounds resolve through `AppChromeColors`, and the live fallback keeps the container border off so detached popups stay material-first.
+
 ## Shortcut recorder modal
 
 The shortcut recorder is a compact popup modal for capture, not an instructional overlay.
@@ -55,6 +57,8 @@ The shortcut recorder is a compact popup modal for capture, not an instructional
 It uses the command name as the title, a short `Press keys` placeholder, visible action buttons, and no footer or long instruction copy. Its shell stays narrower than the launcher so the parent remains visually behind it.
 
 It dismisses on explicit cancel shortcuts (Esc, Cmd+W) and on any focus loss, including backdrop clicks and clicks back into launcher surfaces such as the main filter input.
+
+The detached popup consumes handled key events, treats Cmd+W as cancel rather than a captured shortcut, and resolves its surface and border through `AppChromeColors`.
 
 ## Quit modal
 
@@ -114,6 +118,8 @@ Row rendering for those popups is owned by [[src/components/inline_dropdown/mod.
 
 The detached actions dialog is intentionally footerless. Action rows already expose their shortcuts inline, so extra footer chrome would duplicate information and compete with the list.
 
+Detached actions-window key handlers consume handled navigation, execution, filter, close, and matched-shortcut keys so popup-owned input cannot leak back into parent launcher surfaces.
+
 Selection-owned popup lists should keep wheel behavior index-based even when their scrollbar becomes handle-driven. Free-scroll transcript surfaces can use pixel offsets, but selection-owned browsers still need a visible active row after scrolling.
 
 Inline dropdown lists keep the current visible page fixed until keyboard selection leaves its top or bottom edge. This avoids premature centered scrolling while preserving the invariant that the selected row remains visible.
@@ -149,6 +155,8 @@ The same handle-owned contract now covers the launcher-family uniform-list built
 Kit store rows follow the shared row-state ladder: selected rows keep the stronger selected fill, and unselected rows rely on direct GPUI hover styling instead of local hover bookkeeping.
 
 This keeps the built-in browser aligned with the same hover contract used by other popup lists after the GPUI vendor cleanup work.
+
+The row backgrounds, action chips, and long text constraints resolve through `AppChromeColors` and fixed-height ellipsis rules, so theme changes and repository metadata cannot break the 72px list rhythm.
 
 ## Current sources
 
