@@ -1,7 +1,7 @@
 //! Source-level contract for generic BuiltinList actions routing.
 //!
-//! BuiltinList surfaces such as Settings, Theme Chooser, Browser History, and
-//! Process Manager do not yet build selection-specific action catalogs. They
+//! BuiltinList surfaces such as Settings, Browser History, and Process Manager
+//! do not yet build selection-specific action catalogs. They
 //! must not advertise a live Cmd+K host or explicit host toggle that falls back
 //! to stale main-list actions.
 
@@ -21,7 +21,6 @@ fn builtin_list_views_are_filtered_out_of_live_actions_host() {
         "AppView::WindowSwitcherView",
         "AppView::CurrentAppCommandsView",
         "AppView::ProcessManagerView",
-        "AppView::ThemeChooserView",
         "AppView::SettingsView",
         "AppView::FavoritesBrowseView",
         "AppView::DesignGalleryView",

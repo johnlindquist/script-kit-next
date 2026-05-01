@@ -262,13 +262,17 @@ fn no_actions_surfaces_must_not_advertise_universal_hints() {
     }
 }
 
-/// ThemeChooser stays truthful: no universal actions hints, custom footer only.
+/// ThemeChooser stays truthful: dedicated actions hints, custom footer only.
 #[test]
-fn theme_chooser_stays_truthful_and_does_not_advertise_actions() {
+fn theme_chooser_stays_truthful_and_advertises_dedicated_actions() {
     let source = production_source(THEME_CHOOSER_SOURCE);
     assert!(
         !source.contains("universal_prompt_hints()"),
-        "theme_chooser should not use universal actions hints without shared actions support"
+        "theme_chooser should not use universal actions hints"
+    );
+    assert!(
+        source.contains(r#"SharedString::from("⌘K Actions")"#),
+        "theme_chooser should advertise its dedicated actions catalog"
     );
     assert!(
         source.contains("render_simple_hint_strip(")
@@ -291,17 +295,18 @@ fn app_launcher_excluded_from_shared_actions_resolver() {
     );
 }
 
-/// ThemeChooser must NOT be in the SharedDialog path.
+/// ThemeChooser must be in the canonical host path through its dedicated host.
 #[test]
-fn theme_chooser_excluded_from_shared_actions_resolver() {
+fn theme_chooser_included_in_shared_actions_resolver() {
     let resolver_start = ACTIONS_DIALOG_SOURCE
-        .find("fn actions_support_for_view")
-        .expect("canonical resolver not found");
+        .find("fn actions_host_for_view")
+        .expect("canonical host resolver not found");
     let resolver_fn = &ACTIONS_DIALOG_SOURCE[resolver_start..];
 
     assert!(
-        !resolver_fn.contains("ActionsSupport::SharedDialog(ActionsDialogHost::ThemeChooser)"),
-        "theme_chooser should not be mapped to SharedDialog"
+        resolver_fn
+            .contains("AppView::ThemeChooserView { .. } => Some(ActionsDialogHost::ThemeChooser)"),
+        "theme_chooser should be mapped to its dedicated host"
     );
 }
 
@@ -565,6 +570,7 @@ fn canonical_resolver_covers_all_focus_restore_hosts() {
         "ActionsDialogHost::ClipboardHistory",
         "ActionsDialogHost::EmojiPicker",
         "ActionsDialogHost::FileSearch",
+        "ActionsDialogHost::ThemeChooser",
         "ActionsDialogHost::ChatPrompt",
         "ActionsDialogHost::ArgPrompt",
         "ActionsDialogHost::WebcamPrompt",

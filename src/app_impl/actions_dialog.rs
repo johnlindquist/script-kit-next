@@ -19,7 +19,6 @@ impl ScriptListApp {
                 | AppView::WindowSwitcherView { .. }
                 | AppView::CurrentAppCommandsView { .. }
                 | AppView::ProcessManagerView { .. }
-                | AppView::ThemeChooserView { .. }
                 | AppView::SearchAiPresetsView { .. }
                 | AppView::CreateAiPresetView { .. }
                 | AppView::SettingsView { .. }
@@ -36,6 +35,7 @@ impl ScriptListApp {
             AppView::ClipboardHistoryView { .. } => Some(ActionsDialogHost::ClipboardHistory),
             AppView::DictationHistoryView { .. } => Some(ActionsDialogHost::DictationHistory),
             AppView::FavoritesBrowseView { .. } => Some(ActionsDialogHost::Favorites),
+            AppView::ThemeChooserView { .. } => Some(ActionsDialogHost::ThemeChooser),
             AppView::EmojiPickerView { .. } => Some(ActionsDialogHost::EmojiPicker),
             AppView::FileSearchView { .. } => Some(ActionsDialogHost::FileSearch),
             AppView::ChatPrompt { .. } => Some(ActionsDialogHost::ChatPrompt),
@@ -53,7 +53,6 @@ impl ScriptListApp {
             | AppView::WindowSwitcherView { .. }
             | AppView::CurrentAppCommandsView { .. }
             | AppView::ProcessManagerView { .. }
-            | AppView::ThemeChooserView { .. }
             | AppView::SearchAiPresetsView { .. }
             | AppView::CreateAiPresetView { .. }
             | AppView::SettingsView { .. }
@@ -69,7 +68,6 @@ impl ScriptListApp {
     /// Generic BuiltinList views remain in `actions_host_for_view` so static
     /// routing and focus-restore code can identify them, but they are not live
     /// Cmd+K hosts until each view provides selection-specific actions.
-    /// Otherwise views like Theme Chooser open a misleading global-only menu.
     pub(crate) fn live_actions_host_for_view(view: &AppView) -> Option<ActionsDialogHost> {
         if Self::is_builtin_list_actions_view(view) {
             return None;
@@ -211,6 +209,9 @@ impl ScriptListApp {
                     action_id = %action_id,
                     dispatched,
                 );
+            }
+            ActionsDialogHost::ThemeChooser => {
+                self.execute_theme_chooser_action(&action_id, window, cx);
             }
             _ => {
                 self.handle_action(action_id, window, cx);
@@ -367,6 +368,10 @@ impl ScriptListApp {
                 } else {
                     false
                 }
+            }
+            ActionsDialogHost::ThemeChooser => {
+                self.toggle_theme_chooser_actions(window, cx);
+                true
             }
             ActionsDialogHost::ArgPrompt => {
                 self.toggle_arg_actions(cx, window);
@@ -747,6 +752,7 @@ impl ScriptListApp {
             | ActionsDialogHost::ClipboardHistory
             | ActionsDialogHost::DictationHistory
             | ActionsDialogHost::Favorites
+            | ActionsDialogHost::ThemeChooser
             | ActionsDialogHost::EmojiPicker
             | ActionsDialogHost::AppLauncher
             | ActionsDialogHost::BuiltinList
@@ -1081,7 +1087,7 @@ mod actions_host_mapping_tests {
                     filter: String::new(),
                     selected_index: 0,
                 },
-                Some(ActionsDialogHost::BuiltinList),
+                Some(ActionsDialogHost::ThemeChooser),
             ),
             (
                 AppView::SettingsView {
@@ -1160,7 +1166,7 @@ mod actions_host_mapping_tests {
         };
         assert_eq!(
             ScriptListApp::live_actions_host_for_view(&theme_chooser),
-            None
+            Some(ActionsDialogHost::ThemeChooser)
         );
 
         let current_app_commands = AppView::CurrentAppCommandsView {
