@@ -216,6 +216,121 @@ fn load_file_search_thumbnail_preview(
     })
 }
 
+fn render_file_search_loading_skeleton(
+    ui_border: u32,
+    accent_color: u32,
+    text_dimmed: u32,
+    compact: bool,
+) -> AnyElement {
+    let rail_bg = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+        accent_color,
+        crate::theme::opacity::OPACITY_CARD_BG,
+    ));
+    let skeleton_bg = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+        ui_border,
+        crate::theme::opacity::OPACITY_GHOST,
+    ));
+    let skeleton_strong = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+        ui_border,
+        crate::theme::opacity::OPACITY_SUBTLE,
+    ));
+    let row_height = if compact { 46.0 } else { 52.0 };
+    let row_specs = [
+        (156.0, 246.0, 52.0, 70.0),
+        (214.0, 302.0, 44.0, 62.0),
+        (182.0, 274.0, 58.0, 78.0),
+        (238.0, 326.0, 48.0, 66.0),
+        (168.0, 256.0, 56.0, 72.0),
+        (206.0, 288.0, 42.0, 60.0),
+    ];
+
+    div()
+        .w_full()
+        .h_full()
+        .flex()
+        .flex_col()
+        .py(px(6.0))
+        .children(row_specs.into_iter().enumerate().map(
+            |(ix, (title_w, path_w, size_w, age_w))| {
+                div()
+                    .id(ix)
+                    .w_full()
+                    .h(px(row_height))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .px(px(12.0))
+                    .gap(px(12.0))
+                    .when(ix == 0, |row| {
+                        row.bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                            ui_border,
+                            crate::theme::opacity::OPACITY_GHOST_SOFT,
+                        )))
+                    })
+                    .child(div().w(px(3.0)).h(px(28.0)).rounded(px(2.0)).bg(rail_bg))
+                    .child(
+                        div()
+                            .w(px(26.0))
+                            .h(px(26.0))
+                            .rounded(px(6.0))
+                            .border_1()
+                            .border_color(skeleton_strong)
+                            .bg(skeleton_bg),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .flex()
+                            .flex_col()
+                            .gap(px(7.0))
+                            .child(
+                                div()
+                                    .w(px(title_w))
+                                    .max_w_full()
+                                    .h(px(11.0))
+                                    .rounded(px(5.5))
+                                    .bg(skeleton_strong),
+                            )
+                            .child(
+                                div()
+                                    .w(px(path_w))
+                                    .max_w_full()
+                                    .h(px(8.0))
+                                    .rounded(px(4.0))
+                                    .bg(skeleton_bg),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .w(px(if compact { 76.0 } else { 104.0 }))
+                            .flex()
+                            .flex_col()
+                            .items_end()
+                            .gap(px(7.0))
+                            .child(
+                                div()
+                                    .w(px(size_w))
+                                    .h(px(8.0))
+                                    .rounded(px(4.0))
+                                    .bg(skeleton_bg),
+                            )
+                            .child(
+                                div()
+                                    .w(px(age_w))
+                                    .h(px(8.0))
+                                    .rounded(px(4.0))
+                                    .bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                                        text_dimmed,
+                                        crate::theme::opacity::OPACITY_GHOST,
+                                    ))),
+                            ),
+                    )
+            },
+        ))
+        .into_any_element()
+}
+
 impl ScriptListApp {
     fn ensure_file_search_preview_thumbnail(
         &mut self,
@@ -694,54 +809,9 @@ impl ScriptListApp {
             "file_search_state_audit"
         );
         let list_element = if is_loading && filtered_len == 0 {
-            // Loading with no results yet - show static skeleton rows
-            let skeleton_bg = rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-                ui_border,
-                crate::theme::opacity::OPACITY_SUBTLE,
-            ));
-
-            // Render 6 skeleton rows
-            div()
-                .w_full()
-                .h_full()
-                .flex()
-                .flex_col()
-                .children((0..6).map(|ix| {
-                    div()
-                        .id(ix)
-                        .w_full()
-                        .h(px(52.))
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .px(px(12.))
-                        .gap(px(12.))
-                        // Icon placeholder
-                        .child(div().w(px(24.)).h(px(24.)).rounded(px(6.)).bg(skeleton_bg))
-                        // Text placeholders
-                        .child(
-                            div()
-                                .flex_1()
-                                .flex()
-                                .flex_col()
-                                .gap(px(6.))
-                                .child(div().w(px(160.)).h(px(12.)).rounded(px(4.)).bg(skeleton_bg))
-                                .child(
-                                    div().w(px(240.)).h(px(10.)).rounded(px(4.)).bg(skeleton_bg),
-                                ),
-                        )
-                        // Right side placeholders (size/time)
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_end()
-                                .gap(px(6.))
-                                .child(div().w(px(56.)).h(px(10.)).rounded(px(4.)).bg(skeleton_bg))
-                                .child(div().w(px(72.)).h(px(10.)).rounded(px(4.)).bg(skeleton_bg)),
-                        )
-                }))
-                .into_any_element()
+            // Loading with no results yet - show static skeleton rows.
+            // Render 6 skeleton rows so the list pane stays stable while choices load.
+            render_file_search_loading_skeleton(ui_border, accent_color, text_dimmed, is_mini)
         } else if filtered_len == 0 {
             // No results and not loading - show empty state message
             div()
@@ -1394,19 +1464,22 @@ impl ScriptListApp {
 
         // List pane: loading/empty/results with scrollbar overlay
         let loading_badge = div()
-            .absolute()
-            .top(px(12.))
-            .right(px(12.))
-            .px(px(10.))
-            .py(px(6.))
-            .rounded(px(999.))
-            .bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
-                ui_border,
+            .px(px(9.0))
+            .py(px(4.0))
+            .rounded(px(999.0))
+            .border_1()
+            .border_color(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                accent_color,
                 crate::theme::opacity::OPACITY_SUBTLE,
             )))
+            .bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                accent_color,
+                crate::theme::opacity::OPACITY_GHOST,
+            )))
             .text_xs()
+            .font_weight(FontWeight::MEDIUM)
             .text_color(rgb(text_dimmed))
-            .child("Searching\u{2026}");
+            .child("Indexing files");
 
         let list_pane = if is_loading && filtered_len == 0 {
             tracing::info!(
@@ -1417,11 +1490,21 @@ impl ScriptListApp {
                 "file_search_state_rendered"
             );
             div()
-                .relative()
                 .w_full()
                 .h_full()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .w_full()
+                        .px(px(12.0))
+                        .pt(px(8.0))
+                        .pb(px(2.0))
+                        .flex()
+                        .justify_end()
+                        .child(loading_badge),
+                )
                 .child(list_element)
-                .child(loading_badge)
         } else if filtered_len == 0 {
             tracing::info!(
                 target: "script_kit::prompt_chrome",

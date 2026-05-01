@@ -22,6 +22,7 @@ const ESC: &str = "Esc";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BuiltInBrowserStateId {
     FileSearch,
+    FileSearchLoading,
     ClipboardHistory,
     BrowserTabs,
     BrowserHistoryPortal,
@@ -34,8 +35,9 @@ pub enum BuiltInBrowserStateId {
 }
 
 impl BuiltInBrowserStateId {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::FileSearch,
+        Self::FileSearchLoading,
         Self::ClipboardHistory,
         Self::BrowserTabs,
         Self::BrowserHistoryPortal,
@@ -50,6 +52,7 @@ impl BuiltInBrowserStateId {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::FileSearch => "file-search",
+            Self::FileSearchLoading => "file-search-loading",
             Self::ClipboardHistory => "clipboard-history",
             Self::BrowserTabs => "browser-tabs",
             Self::BrowserHistoryPortal => "browser-history-portal",
@@ -65,6 +68,7 @@ impl BuiltInBrowserStateId {
     pub fn name(self) -> &'static str {
         match self {
             Self::FileSearch => "File Search",
+            Self::FileSearchLoading => "File Search Loading",
             Self::ClipboardHistory => "Clipboard History",
             Self::BrowserTabs => "Browser Tabs",
             Self::BrowserHistoryPortal => "Browser History Portal",
@@ -80,6 +84,9 @@ impl BuiltInBrowserStateId {
     pub fn description(self) -> &'static str {
         match self {
             Self::FileSearch => "Expanded file search with list, preview, and footer actions.",
+            Self::FileSearchLoading => {
+                "File search while choices are still loading, with stable skeleton rows."
+            }
             Self::ClipboardHistory => "Expanded clipboard history with selected-entry preview.",
             Self::BrowserTabs => "Compact browser tab switcher list without preview pane.",
             Self::BrowserHistoryPortal => {
@@ -97,6 +104,7 @@ impl BuiltInBrowserStateId {
     pub fn from_stable_id(value: &str) -> Option<Self> {
         match value {
             "file-search" => Some(Self::FileSearch),
+            "file-search-loading" => Some(Self::FileSearchLoading),
             "clipboard-history" => Some(Self::ClipboardHistory),
             "browser-tabs" => Some(Self::BrowserTabs),
             "browser-history-portal" => Some(Self::BrowserHistoryPortal),
@@ -213,6 +221,26 @@ fn fixture_for(id: BuiltInBrowserStateId) -> BrowserFixture {
                 (CMD_ENTER, "Attach"),
                 (CMD_K, "Actions"),
             ]),
+        },
+        BuiltInBrowserStateId::FileSearchLoading => BrowserFixture {
+            title: "File Search",
+            filter_text: "story",
+            placeholder: "Search files...",
+            count_label: "Indexing files",
+            rows: Vec::new(),
+            selected_index: 0,
+            preview: PreviewPane {
+                eyebrow: "FILE SEARCH",
+                title: "Loading choices",
+                subtitle: Some("The list holds its row rhythm while file results stream in."),
+                body: vec![
+                    "Skeleton rows reserve the same icon, path, and metadata columns as real file results.",
+                    "The preview pane stays quiet until a result can be selected.",
+                ],
+                badges: vec!["loading", "skeleton"],
+                code_lines: Vec::new(),
+            },
+            hints: hints(&[(CMD_ENTER, "Explain with AI"), (CMD_K, "Actions"), (ESC, "Back")]),
         },
         BuiltInBrowserStateId::ClipboardHistory => BrowserFixture {
             title: "Clipboard History",
@@ -594,6 +622,27 @@ fn render_list_pane(fixture: &BrowserFixture, compact: bool) -> AnyElement {
     let colors = ListItemColors::from_theme(&theme);
     let selected_index = fixture.selected_index;
     let rows: Vec<AnyElement> = if fixture.rows.is_empty() {
+        if fixture.count_label == "Indexing files" {
+            return div()
+                .w_full()
+                .h_full()
+                .min_h(px(0.0))
+                .overflow_hidden()
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .w_full()
+                        .px(px(12.0))
+                        .pt(px(8.0))
+                        .pb(px(2.0))
+                        .flex()
+                        .justify_end()
+                        .child(render_loading_badge()),
+                )
+                .child(render_loading_skeleton_rows(compact))
+                .into_any_element();
+        }
         vec![render_empty_row(fixture.filter_text, compact)]
     } else {
         fixture
@@ -613,6 +662,114 @@ fn render_list_pane(fixture: &BrowserFixture, compact: bool) -> AnyElement {
         .flex()
         .flex_col()
         .children(rows)
+        .into_any_element()
+}
+
+fn render_loading_badge() -> AnyElement {
+    let theme = get_cached_theme();
+
+    div()
+        .px(px(9.0))
+        .py(px(4.0))
+        .rounded(px(999.0))
+        .border_1()
+        .border_color(rgba((theme.colors.accent.selected << 8) | 0x24))
+        .bg(rgba((theme.colors.accent.selected << 8) | 0x10))
+        .text_xs()
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(theme.colors.text.dimmed.to_rgb())
+        .child("Indexing files")
+        .into_any_element()
+}
+
+fn render_loading_skeleton_rows(compact: bool) -> AnyElement {
+    let theme = get_cached_theme();
+    let rail_bg = rgba((theme.colors.accent.selected << 8) | 0x22);
+    let skeleton_bg = rgba((theme.colors.ui.border << 8) | 0x12);
+    let skeleton_strong = rgba((theme.colors.ui.border << 8) | 0x26);
+    let muted_bg = rgba((theme.colors.text.dimmed << 8) | 0x10);
+    let row_height = if compact { 46.0 } else { 52.0 };
+    let row_specs = [
+        (156.0, 246.0, 52.0, 70.0),
+        (214.0, 302.0, 44.0, 62.0),
+        (182.0, 274.0, 58.0, 78.0),
+        (238.0, 326.0, 48.0, 66.0),
+        (168.0, 256.0, 56.0, 72.0),
+        (206.0, 288.0, 42.0, 60.0),
+    ];
+
+    div()
+        .w_full()
+        .h_full()
+        .flex()
+        .flex_col()
+        .py(px(6.0))
+        .children(row_specs.into_iter().enumerate().map(
+            |(ix, (title_w, path_w, size_w, age_w))| {
+                div()
+                    .id(ix)
+                    .w_full()
+                    .h(px(row_height))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .px(px(12.0))
+                    .gap(px(12.0))
+                    .when(ix == 0, |row| {
+                        row.bg(rgba((theme.colors.ui.border << 8) | 0x08))
+                    })
+                    .child(div().w(px(3.0)).h(px(28.0)).rounded(px(2.0)).bg(rail_bg))
+                    .child(
+                        div()
+                            .w(px(26.0))
+                            .h(px(26.0))
+                            .rounded(px(6.0))
+                            .border_1()
+                            .border_color(skeleton_strong)
+                            .bg(skeleton_bg),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .flex()
+                            .flex_col()
+                            .gap(px(7.0))
+                            .child(
+                                div()
+                                    .w(px(title_w))
+                                    .max_w_full()
+                                    .h(px(11.0))
+                                    .rounded(px(5.5))
+                                    .bg(skeleton_strong),
+                            )
+                            .child(
+                                div()
+                                    .w(px(path_w))
+                                    .max_w_full()
+                                    .h(px(8.0))
+                                    .rounded(px(4.0))
+                                    .bg(skeleton_bg),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .w(px(if compact { 76.0 } else { 104.0 }))
+                            .flex()
+                            .flex_col()
+                            .items_end()
+                            .gap(px(7.0))
+                            .child(
+                                div()
+                                    .w(px(size_w))
+                                    .h(px(8.0))
+                                    .rounded(px(4.0))
+                                    .bg(skeleton_bg),
+                            )
+                            .child(div().w(px(age_w)).h(px(8.0)).rounded(px(4.0)).bg(muted_bg)),
+                    )
+            },
+        ))
         .into_any_element()
 }
 

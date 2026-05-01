@@ -259,6 +259,17 @@
                     this.handle_filter_input_change(window, cx);
                 }
                 InputEvent::PressEnter { .. } => {
+                    if matches!(this.current_view, AppView::ThemeChooserView { .. }) {
+                        if !this.show_actions_popup && !actions::is_actions_window_open() {
+                            this.submit_theme_chooser_from_input_enter(window, cx);
+                        } else {
+                            logging::log(
+                                "KEY",
+                                "Ignoring ThemeChooser PressEnter: actions popup is open",
+                            );
+                        }
+                        return;
+                    }
                     if matches!(this.current_view, AppView::ScriptList) && !this.show_actions_popup
                     {
                         // Check if we're in fallback mode first

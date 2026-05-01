@@ -124,6 +124,25 @@ fn is_dismissable_view_delegates_to_policy() {
 }
 
 #[test]
+fn theme_chooser_ignores_window_blur_dismissal() {
+    let theme_chooser_arm = source_between(
+        APP_VIEW_STATE,
+        "AppView::ThemeChooserView { .. } => LauncherSurfaceContract::new(",
+        "AppView::EmojiPickerView { .. }",
+    );
+    assert!(
+        theme_chooser_arm.contains("explicit,"),
+        "ThemeChooser must ignore WindowBlur dismissal; native theme/window \
+         interactions can transiently move focus while the user is selecting \
+         a theme"
+    );
+    assert!(
+        !theme_chooser_arm.contains("standard,"),
+        "ThemeChooser must not use the standard blur-dismiss policy"
+    );
+}
+
+#[test]
 fn dismiss_policy_surface_exports_are_wired() {
     // Keep the public shape stable: a silent rename that drops the trigger
     // enum, the policy struct, or the inherent method is caught here.
