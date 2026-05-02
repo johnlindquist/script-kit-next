@@ -13,6 +13,9 @@ const APP_LAUNCHER_SOURCE: &str = include_str!("../../src/render_builtins/app_la
 const CURRENT_APP_COMMANDS_SOURCE: &str =
     include_str!("../../src/render_builtins/current_app_commands.rs");
 const PROCESS_MANAGER_SOURCE: &str = include_str!("../../src/render_builtins/process_manager.rs");
+const SELECT_PROMPT_SOURCE: &str = include_str!("../../src/prompts/select/render.rs");
+const PATH_PROMPT_SOURCE: &str = include_str!("../../src/prompts/path/render.rs");
+const CHAT_PROMPT_SOURCE: &str = include_str!("../../src/prompts/chat/render_core.rs");
 
 /// Assert that a minimal-list builtin surface uses shared chrome infrastructure.
 ///
@@ -493,6 +496,64 @@ fn builtin_renderers_delegate_native_footer_policy_to_slot_helper() {
         assert!(
             !source.contains("active_main_window_footer_surface()"),
             "{name} must not duplicate native-footer surface checks in render code"
+        );
+    }
+}
+
+#[test]
+fn prompt_renderers_delegate_native_footer_policy_to_prompt_slot_helper() {
+    let renderers: &[(&str, &str, &str)] = &[
+        ("select_prompt", SELECT_PROMPT_SOURCE, "select_prompt"),
+        ("path_prompt", PATH_PROMPT_SOURCE, "path_prompt"),
+        ("chat_prompt", CHAT_PROMPT_SOURCE, "chat_prompt"),
+    ];
+
+    for (name, source, surface) in renderers {
+        let render_code = source.split("#[cfg(test)]").next().unwrap_or(source);
+        assert!(
+            render_code.contains("main_window_footer_slot_for_prompt_surface(")
+                || render_code.contains("render_main_window_footer_slot_for_prompt_surface("),
+            "{name} must route footer ownership through the prompt surface slot helper"
+        );
+        assert!(
+            render_code.contains(&format!("\"{surface}\"")),
+            "{name} must pass its registered native footer surface string to the helper"
+        );
+        assert!(
+            !render_code.contains("active_main_window_footer_surface()"),
+            "{name} must not call active_main_window_footer_surface directly"
+        );
+    }
+}
+
+#[test]
+fn prompt_entity_footer_surface_strings_match_ui_window_map() {
+    let cases = [
+        (
+            "select_prompt",
+            "AppView::SelectPrompt { .. } => Some(\"select_prompt\")",
+            SELECT_PROMPT_SOURCE,
+        ),
+        (
+            "path_prompt",
+            "AppView::PathPrompt { .. } => Some(\"path_prompt\")",
+            PATH_PROMPT_SOURCE,
+        ),
+        (
+            "chat_prompt",
+            "AppView::ChatPrompt { .. } => Some(\"chat_prompt\")",
+            CHAT_PROMPT_SOURCE,
+        ),
+    ];
+
+    for (surface, ui_window_mapping, renderer_source) in cases {
+        assert!(
+            UI_WINDOW_SOURCE.contains(ui_window_mapping),
+            "{surface} must be registered in main_window_footer_surface"
+        );
+        assert!(
+            renderer_source.contains(&format!("\"{surface}\"")),
+            "{surface} renderer must use the same native footer surface string"
         );
     }
 }

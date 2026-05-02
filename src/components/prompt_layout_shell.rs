@@ -743,6 +743,48 @@ pub(crate) fn render_native_main_window_footer_spacer() -> AnyElement {
         .into_any_element()
 }
 
+/// Return a GPUI fallback footer or the native-footer spacer for prompt entities.
+///
+/// Prompt entities cannot call `ScriptListApp::main_window_footer_slot`, but
+/// they still need one shared policy for native footer fallback ownership.
+#[allow(dead_code)]
+pub(crate) fn render_main_window_footer_slot_for_prompt_surface(
+    expected_surface: &'static str,
+    render_gpui_footer: impl FnOnce() -> AnyElement,
+) -> AnyElement {
+    if !crate::is_main_window_visible() {
+        return render_gpui_footer();
+    }
+
+    match crate::footer_popup::active_main_window_footer_surface() {
+        Some(active_surface) if active_surface == expected_surface => {
+            render_native_main_window_footer_spacer()
+        }
+        Some(active_surface) => {
+            tracing::warn!(
+                target: "script_kit::prompt_chrome",
+                event = "native_footer_surface_mismatch",
+                expected_surface,
+                active_surface,
+                "Prompt renderer saw a different active native footer surface; reserving native footer space to avoid double footer"
+            );
+            render_native_main_window_footer_spacer()
+        }
+        None => render_gpui_footer(),
+    }
+}
+
+#[allow(dead_code)]
+pub(crate) fn main_window_footer_slot_for_prompt_surface(
+    expected_surface: &'static str,
+    render_gpui_footer: impl FnOnce() -> AnyElement,
+) -> Option<AnyElement> {
+    Some(render_main_window_footer_slot_for_prompt_surface(
+        expected_surface,
+        render_gpui_footer,
+    ))
+}
+
 /// Renderer for the canonical three-key footer with click handlers.
 ///
 /// `on_run` fires for "↵ Run", `on_ai` for "⌘↵ AI", `on_actions` for "⌘K Actions".

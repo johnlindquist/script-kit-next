@@ -20,7 +20,7 @@ Keyboard routing is classified through [[src/prompts/select/render.rs#classify_s
 
 Select rows still render through [[src/components/unified_list_item/render.rs#UnifiedListItem]], but pass `.with_direct_hover(false)` so the prompt's modality-adjusted row state owns hover paint. This avoids a double-hover path where GPUI hover styling could contradict keyboard modality.
 
-Footer ownership stays single-source. When the native main-window footer reports the `select_prompt` surface, select renders the shared native-footer spacer instead of the GPUI hint strip so the prompt cannot stack two footer rows.
+Footer ownership stays single-source. Prompt entities route native-footer fallback through `main_window_footer_slot_for_prompt_surface`, so only the layout shell reads the active native surface and stale native state fails closed to a spacer instead of drawing a second footer row.
 
 Built-in renderers delegate native footer ownership through `main_window_footer_slot` rather than checking `active_main_window_footer_surface()` directly. Domain-specific built-ins register native footer buttons before replacing their GPUI fallback strip with the spacer; explicit footerless exceptions must stay off the native footer map.
 
@@ -36,7 +36,7 @@ Create-flow prompts share the same text ladder through `prompt_text_palette` and
 
 Env prompts own submit footer semantics instead of inheriting launcher chrome. Their footer action is `Submit`, footer Run dispatches to `EnvPrompt::submit`, launcher AI is omitted, and sizing follows the form-like `DivPrompt` surface.
 
-Path prompts own native footer submission: `Run` is labeled `Select`, dispatches to `PathPrompt::handle_enter`, and never falls through to launcher selection. Their native footer keeps `⌘K Actions` but omits launcher AI unless a future path-specific route is designed.
+Path prompts own footer submission: `Run` is labeled `Select`, dispatches to `PathPrompt::handle_enter`, and never falls through to launcher selection. Both native and GPUI fallback footers keep `⌘K Actions` but omit launcher AI unless a future path-specific route is designed.
 
 Template prompts follow that create-flow contract while owning their tab-through behavior. Their placeholder field list scrolls within the prompt body, click targets move the current field, plain `{{name}}` accepts human-readable text, and both GPUI and native footer paths advertise `Submit`, `Next Field`, and `Actions` through a surface-specific hint audit.
 

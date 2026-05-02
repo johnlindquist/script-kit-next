@@ -386,16 +386,11 @@ impl Render for SelectPrompt {
         let hints = crate::components::universal_prompt_hints();
         crate::components::emit_prompt_hint_audit("prompts::select", &hints);
 
-        let native_footer_active = matches!(
-            crate::footer_popup::active_main_window_footer_surface(),
-            Some("select_prompt")
-        );
-
-        let footer = if native_footer_active {
-            Some(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
-        } else {
-            Some(crate::components::render_simple_hint_strip(hints, None))
-        };
+        let footer =
+            crate::components::prompt_layout_shell::main_window_footer_slot_for_prompt_surface(
+                "select_prompt",
+                || crate::components::render_simple_hint_strip(hints, None),
+            );
 
         let container = crate::components::render_minimal_list_prompt_shell_with_footer(
             0.0, None, header, content, footer,
@@ -502,9 +497,15 @@ mod tests {
             "select prompt should use the footer-aware minimal list prompt shell"
         );
         assert!(
-            source.contains("active_main_window_footer_surface()")
-                && source.contains("render_native_main_window_footer_spacer()"),
-            "select prompt should suppress the GPUI hint strip when the native footer is active"
+            source.contains("main_window_footer_slot_for_prompt_surface(")
+                && source.contains("\"select_prompt\""),
+            "select prompt should route footer ownership through the prompt surface slot helper"
+        );
+        let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+        let render_code = &source[..render_fn_end];
+        assert!(
+            !render_code.contains("active_main_window_footer_surface()"),
+            "select prompt render code should not call the global native footer state directly"
         );
     }
 
