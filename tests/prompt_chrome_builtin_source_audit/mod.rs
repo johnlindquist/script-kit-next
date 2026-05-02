@@ -328,6 +328,11 @@ fn emoji_picker_advertises_and_wires_shared_actions() {
 
 const UI_WINDOW_SOURCE: &str = include_str!("../../src/app_impl/ui_window.rs");
 const FOOTER_POPUP_SOURCE: &str = include_str!("../../src/footer_popup.rs");
+const PROMPT_LAYOUT_SHELL_SOURCE: &str =
+    include_str!("../../src/components/prompt_layout_shell.rs");
+const RENDER_SCRIPT_LIST_SOURCE: &str = include_str!("../../src/render_script_list/mod.rs");
+const APP_NAVIGATION_SCROLL_SOURCE: &str = include_str!("../../src/app_navigation/impl_scroll.rs");
+const WINDOW_RESIZE_SOURCE: &str = include_str!("../../src/window_resize/mod.rs");
 const AI_PRESETS_SOURCE: &str = include_str!("../../src/render_builtins/ai_presets.rs");
 
 #[test]
@@ -371,6 +376,36 @@ fn footer_popup_accepts_config_driven_refresh() {
 
     eprintln!(
         "{{\"audit\":\"native_footer_popup_contract\",\"button_config\":true,\"footer_config\":true,\"config_param\":true}}"
+    );
+}
+
+#[test]
+fn native_footer_height_uses_shared_token() {
+    // @lat: [[lat.md/windowing#Windowing#Operational Rules]]
+    assert!(
+        WINDOW_RESIZE_SOURCE
+            .contains("pub const NATIVE_MAIN_WINDOW_FOOTER_HEIGHT: f32 = HINT_STRIP_HEIGHT;"),
+        "window_resize.rs must name the native main-window footer height contract"
+    );
+    assert!(
+        FOOTER_POPUP_SOURCE
+            .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT as f64"),
+        "AppKit native footer host height must use the shared native footer token"
+    );
+    assert!(
+        PROMPT_LAYOUT_SHELL_SOURCE
+            .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"),
+        "GPUI native footer spacer must reserve the shared native footer height"
+    );
+    assert!(
+        RENDER_SCRIPT_LIST_SOURCE
+            .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"),
+        "main list footer hover blocker must use the shared native footer height"
+    );
+    assert!(
+        APP_NAVIGATION_SCROLL_SOURCE
+            .contains("crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT"),
+        "footer-safe scroll reveal math must use the shared native footer height"
     );
 }
 

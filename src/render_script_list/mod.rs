@@ -1485,7 +1485,9 @@ impl ScriptListApp {
                     .bottom_0()
                     .left_0()
                     .w_full()
-                    .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+                    .h(px(
+                        crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+                    ))
                     .block_mouse_except_scroll(),
             ));
 
