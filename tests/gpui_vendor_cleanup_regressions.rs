@@ -4,12 +4,18 @@
 //! migrations (hover suppression removal, native follow-tail adoption) remain
 //! in place and do not regress.
 
+use script_kit_gpui::{
+    theme::{contrast_ratio, Theme},
+    warning_banner::WarningBannerColors,
+};
+
 const AI_ACTIONS_SOURCE: &str = include_str!("../src/ai/window/render_message_actions.rs");
 const AI_MESSAGES_SOURCE: &str = include_str!("../src/ai/window/render_messages.rs");
 const CHAT_STATE_SOURCE: &str = include_str!("../src/prompts/chat/state.rs");
 const CHAT_RENDER_CORE_SOURCE: &str = include_str!("../src/prompts/chat/render_core.rs");
 const ACTIONS_DIALOG_SOURCE: &str = include_str!("../src/actions/dialog.rs");
 const ACTIONS_WINDOW_SOURCE: &str = include_str!("../src/actions/window.rs");
+const MAIN_RENDER_SOURCE: &str = include_str!("../src/main_sections/render_impl.rs");
 const LIST_ITEM_SOURCE: &str = include_str!("../src/list_item/mod.rs");
 const FILE_SEARCH_SOURCE: &str = include_str!("../src/render_builtins/file_search.rs");
 const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_chooser.rs");
@@ -17,6 +23,7 @@ const THEME_CHOOSER_HEADER_SOURCE: &str =
     include_str!("../src/render_builtins/theme_chooser_list_header.rs");
 const KIT_STORE_SOURCE: &str = include_str!("../src/render_builtins/kit_store.rs");
 const SELECT_RENDER_SOURCE: &str = include_str!("../src/prompts/select/render.rs");
+const WARNING_BANNER_SOURCE: &str = include_str!("../src/warning_banner.rs");
 
 // ---------------------------------------------------------------------------
 // AI action strip: unconditional GPUI hover
@@ -338,4 +345,98 @@ fn select_prompt_masks_stateful_hover_with_window_input_modality() {
         SELECT_RENDER_SOURCE.contains("let is_hovered = visual_row_state.is_hovered;"),
         "SelectPrompt should drive UnifiedListItem hover state from modality-adjusted row state"
     );
+}
+
+// ---------------------------------------------------------------------------
+// WarningBanner: compact launcher chrome with isolated dismiss action
+// ---------------------------------------------------------------------------
+
+#[test]
+fn warning_banner_uses_shared_chrome_tokens_and_safe_dismiss() {
+    let dismiss_start = WARNING_BANNER_SOURCE
+        .find("let dismiss_btn = {")
+        .expect("warning banner dismiss button should exist");
+    let dismiss_block = &WARNING_BANNER_SOURCE[dismiss_start
+        ..WARNING_BANNER_SOURCE[dismiss_start..]
+            .find("// Main banner container")
+            .map(|offset| dismiss_start + offset)
+            .expect("dismiss block should end before main banner")];
+
+    assert!(
+        dismiss_block.contains("cx.stop_propagation();"),
+        "dismiss button clicks should not bubble into the parent banner action"
+    );
+    assert!(
+        WARNING_BANNER_SOURCE.contains("best_readable_text_hex(colors.ui.warning)")
+            && WARNING_BANNER_SOURCE.contains("let foreground ="),
+        "warning banner foreground should be derived from the warning surface"
+    );
+    assert!(
+        !WARNING_BANNER_SOURCE.contains("text: colors.background.main")
+            && !WARNING_BANNER_SOURCE.contains("icon: colors.background.main")
+            && !WARNING_BANNER_SOURCE.contains("dismiss: colors.background.main"),
+        "warning banner should not use the window background as foreground on warning chrome"
+    );
+    assert!(
+        WARNING_BANNER_SOURCE.contains("OPACITY_WARNING_BANNER_HOVER")
+            && !WARNING_BANNER_SOURCE.contains("ALPHA_HOVER_WARNING"),
+        "warning banner hover opacity should live in theme opacity tokens"
+    );
+    assert!(
+        WARNING_BANNER_SOURCE.contains("TRANSPARENT")
+            && WARNING_BANNER_SOURCE.contains("OPACITY_SUBTLE")
+            && WARNING_BANNER_SOURCE
+                .contains("hex_to_rgba_with_opacity(\n                    0x000000,\n                    OPACITY_SUBTLE"),
+        "dismiss button colors should reuse shared transparent and subtle hover tokens"
+    );
+    assert!(
+        !WARNING_BANNER_SOURCE.contains("0x00000026"),
+        "warning banner should not hand-encode the subtle hover alpha"
+    );
+}
+
+#[test]
+fn warning_banner_text_is_contained_and_copy_is_mouse_neutral() {
+    let message_start = WARNING_BANNER_SOURCE
+        .find("let message_text = div()")
+        .expect("warning banner message text should exist");
+    let message_block = &WARNING_BANNER_SOURCE[message_start
+        ..WARNING_BANNER_SOURCE[message_start..]
+            .find("// Dismiss button")
+            .map(|offset| message_start + offset)
+            .expect("message block should end before dismiss button")];
+
+    for needle in [
+        ".flex_1()",
+        ".min_w(px(0.0))",
+        ".overflow_hidden()",
+        ".text_ellipsis()",
+    ] {
+        assert!(
+            message_block.contains(needle),
+            "warning banner message should keep one-line bounded chrome: {needle}"
+        );
+    }
+    assert!(
+        MAIN_RENDER_SOURCE.contains("\"bun is not installed. Install from bun.sh\""),
+        "bun warning copy should avoid presenting mouse click as the only path"
+    );
+    assert!(
+        !MAIN_RENDER_SOURCE.contains("Click to download from bun.sh"),
+        "bun warning copy should not use mouse-only wording"
+    );
+}
+
+#[test]
+fn warning_banner_theme_foreground_has_default_contrast() {
+    for theme in [Theme::dark_default(), Theme::light_default()] {
+        let colors = WarningBannerColors::from_theme(&theme);
+        assert_eq!(colors.text, colors.icon);
+        assert_eq!(colors.text, colors.dismiss);
+        assert_eq!(colors.dismiss, colors.dismiss_hover);
+        assert!(
+            contrast_ratio(colors.text, colors.background) >= 4.5,
+            "warning banner foreground should remain readable on warning background"
+        );
+    }
 }

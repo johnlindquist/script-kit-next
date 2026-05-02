@@ -617,24 +617,21 @@ impl Render for ScriptListApp {
 
             Some(
                 div().w_full().px(px(12.)).pt(px(8.)).child(
-                    WarningBanner::new(
-                        "bun is not installed. Click to download from bun.sh",
-                        banner_colors,
-                    )
-                    .on_click(Box::new(move |_event, _window, cx| {
-                        if let Some(app) = entity.upgrade() {
-                            app.update(cx, |this, _cx| {
-                                this.open_bun_website();
-                            });
-                        }
-                    }))
-                    .on_dismiss(Box::new(move |_event, _window, cx| {
-                        if let Some(app) = entity_for_dismiss.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.dismiss_bun_warning(cx);
-                            });
-                        }
-                    })),
+                    WarningBanner::new("bun is not installed. Install from bun.sh", banner_colors)
+                        .on_click(Box::new(move |_event, _window, cx| {
+                            if let Some(app) = entity.upgrade() {
+                                app.update(cx, |this, _cx| {
+                                    this.open_bun_website();
+                                });
+                            }
+                        }))
+                        .on_dismiss(Box::new(move |_event, _window, cx| {
+                            if let Some(app) = entity_for_dismiss.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.dismiss_bun_warning(cx);
+                                });
+                            }
+                        })),
                 ),
             )
         } else {
