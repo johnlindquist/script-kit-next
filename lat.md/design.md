@@ -146,13 +146,15 @@ Row rendering for those popups is owned by [[src/components/inline_dropdown/mod.
 
 ACP popup files should source shared row renderers and row-height constants directly from `inline_dropdown`. The ACP-local `context_picker_row` module must not become the owner of popup row mechanics again.
 
-Menu-syntax popup rows keep footer actions explicit but clickable. Keyboard default selection skips footer rows, while mouse clicks on enabled footer rows still route through the same accept outcome as keyboard activation.
+Menu-syntax popup rows keep footer actions explicit but clickable. Keyboard default selection skips footer rows via [[src/app_impl/menu_syntax_trigger_popup.rs#trigger_popup_row_is_default_selectable]], while mouse clicks on enabled footer rows still route through the same accept outcome as keyboard activation.
+
+Menu-syntax trigger popup footers are pinned below the paged normal row body. [[src/app_impl/menu_syntax_trigger_popup_window.rs#trigger_popup_normal_row_capacity]] subtracts footer rows from the shared visible-row budget so long `:` / `;` / `!` lists cannot hide the footer or create duplicate footer chrome. When footer rows are present, the menu-syntax popup suppresses the shared synopsis strip so the action footer remains the only bottom chrome.
 
 Menu-syntax popup updates preserve the current visible page before handing the new snapshot back to `inline_dropdown_visible_range_from_start`. This keeps arrow navigation from shifting the window on every row movement once the selection has left the first page.
 
 Menu-syntax popup window height reserves the shared synopsis strip when the selected row has detail or example text. The row window and synopsis chrome should size together instead of clipping the lower strip.
 
-Menu-syntax trigger popups register as attached automation windows with the `menuSyntaxTriggerPopup` surface. Runtime screenshot and layout probes should target that child window rather than the suppressed main surface behind it.
+Menu-syntax trigger popups register as attached automation windows with the `menuSyntaxTriggerPopup` surface. Runtime screenshot and layout probes should target that child window rather than the suppressed main surface behind it. Popup sync discard paths clear the attached automation registration before dropping the singleton slot, keeping screenshot targets from resolving stale child bounds.
 
 The detached actions dialog is intentionally footerless. Action rows already expose their shortcuts inline, so extra footer chrome would duplicate information and compete with the list.
 
