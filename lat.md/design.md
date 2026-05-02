@@ -20,6 +20,8 @@ Keyboard routing is classified through [[src/prompts/select/render.rs#classify_s
 
 Select rows still render through [[src/components/unified_list_item/render.rs#UnifiedListItem]], but pass `.with_direct_hover(false)` so the prompt's modality-adjusted row state owns hover paint. This avoids a double-hover path where GPUI hover styling could contradict keyboard modality.
 
+Footer ownership stays single-source. When the native main-window footer reports the `select_prompt` surface, select renders the shared native-footer spacer instead of the GPUI hint strip so the prompt cannot stack two footer rows.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.

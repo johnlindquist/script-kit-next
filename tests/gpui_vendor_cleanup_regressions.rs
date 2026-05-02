@@ -369,6 +369,12 @@ fn select_prompt_uses_shared_semantic_ids_and_chrome_contract() {
         SELECT_PROMPT_SOURCE.contains("PromptChromeAudit::minimal_list(\"prompts::select\", true)"),
         "SelectPrompt should emit the shared minimal-list chrome audit contract"
     );
+    assert!(
+        SELECT_RENDER_SOURCE.contains("render_minimal_list_prompt_shell_with_footer(")
+            && SELECT_RENDER_SOURCE.contains("active_main_window_footer_surface()")
+            && SELECT_RENDER_SOURCE.contains("render_native_main_window_footer_spacer()"),
+        "SelectPrompt should use the footer-aware shell so native and GPUI footers cannot stack"
+    );
 }
 
 #[test]

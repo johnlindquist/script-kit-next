@@ -361,10 +361,22 @@ impl Render for SelectPrompt {
         let hints = crate::components::universal_prompt_hints();
         crate::components::emit_prompt_hint_audit("prompts::select", &hints);
 
-        let container =
-            crate::components::render_minimal_list_prompt_scaffold(header, content, hints, None)
-                .id(gpui::ElementId::Name("window:select".into()))
-                .text_color(text_color);
+        let native_footer_active = matches!(
+            crate::footer_popup::active_main_window_footer_surface(),
+            Some("select_prompt")
+        );
+
+        let footer = if native_footer_active {
+            Some(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
+        } else {
+            Some(crate::components::render_simple_hint_strip(hints, None))
+        };
+
+        let container = crate::components::render_minimal_list_prompt_shell_with_footer(
+            0.0, None, header, content, footer,
+        )
+        .id(gpui::ElementId::Name("window:select".into()))
+        .text_color(text_color);
 
         FocusablePrompt::new(container)
             .key_context("select_prompt")
@@ -458,11 +470,16 @@ mod tests {
     }
 
     #[test]
-    fn select_prompt_uses_shared_minimal_list_prompt_scaffold() {
+    fn select_prompt_uses_footer_aware_minimal_list_prompt_shell() {
         let source = include_str!("render.rs");
         assert!(
-            source.contains("render_minimal_list_prompt_scaffold("),
-            "select prompt should use the shared minimal list prompt scaffold"
+            source.contains("render_minimal_list_prompt_shell_with_footer("),
+            "select prompt should use the footer-aware minimal list prompt shell"
+        );
+        assert!(
+            source.contains("active_main_window_footer_surface()")
+                && source.contains("render_native_main_window_footer_spacer()"),
+            "select prompt should suppress the GPUI hint strip when the native footer is active"
         );
     }
 
