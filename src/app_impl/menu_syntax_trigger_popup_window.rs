@@ -22,9 +22,9 @@ use std::path::Path;
 use std::sync::{Mutex, OnceLock};
 
 use gpui::{
-    div, AnyWindowHandle, App, AppContext, Bounds, Context, DisplayId, FocusHandle, Focusable,
-    InteractiveElement, IntoElement, ParentElement, Pixels, Render, SharedString,
-    StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
+    div, prelude::FluentBuilder, AnyWindowHandle, App, AppContext, Bounds, Context, DisplayId,
+    FocusHandle, Focusable, InteractiveElement, IntoElement, ParentElement, Pixels, Render,
+    SharedString, StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
 };
 
 use crate::components::inline_dropdown::{
@@ -40,7 +40,7 @@ use crate::components::inline_popup_window::{
 use crate::components::inline_popup_window::{
     INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
 };
-use crate::menu_syntax::{TriggerPickerRow, TriggerPickerSnapshot};
+use crate::menu_syntax::{TriggerPickerRow, TriggerPickerRowKind, TriggerPickerSnapshot};
 use crate::menu_syntax_trigger_popup::{
     adapt_trigger_picker_row, trigger_popup_row_highlight_indices,
 };
@@ -92,11 +92,10 @@ pub(crate) struct MenuSyntaxTriggerPopupSnapshot {
 }
 
 impl MenuSyntaxTriggerPopupSnapshot {
-    fn selected_index(&self) -> usize {
+    fn selected_index(&self) -> Option<usize> {
         self.selected_row_id
             .as_deref()
             .and_then(|id| self.snapshot.rows.iter().position(|row| row.id == id))
-            .unwrap_or(0)
     }
 
     fn selectable_rows(&self) -> impl Iterator<Item = (usize, &TriggerPickerRow)> {
@@ -127,6 +126,31 @@ static MENU_SYNTAX_TRIGGER_POPUP_WINDOW: OnceLock<Mutex<Option<MenuSyntaxTrigger
     OnceLock::new();
 
 const MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID: &str = "menu-syntax-trigger-popup";
+
+fn is_trigger_popup_footer_row(row: &TriggerPickerRow) -> bool {
+    row.kind == TriggerPickerRowKind::FooterAction
+}
+
+fn trigger_popup_footer_count(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> usize {
+    snapshot
+        .snapshot
+        .rows
+        .iter()
+        .filter(|row| is_trigger_popup_footer_row(row))
+        .count()
+}
+
+fn trigger_popup_normal_row_capacity(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> usize {
+    INLINE_POPUP_MAX_VISIBLE_ROWS
+        .saturating_sub(trigger_popup_footer_count(snapshot))
+        .max(1)
+}
+
+fn trigger_popup_visible_row_count(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> usize {
+    let footer_count = trigger_popup_footer_count(snapshot);
+    let normal_count = snapshot.snapshot.rows.len().saturating_sub(footer_count);
+    normal_count.min(trigger_popup_normal_row_capacity(snapshot)) + footer_count
+}
 
 fn clear_menu_syntax_trigger_popup_slot() {
     if let Some(storage) = MENU_SYNTAX_TRIGGER_POPUP_WINDOW.get() {
@@ -168,15 +192,13 @@ fn popup_height(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> f32 {
         return inline_popup_height_for_row_height(0, SOFT_COMPACT_PICKER_ROW_HEIGHT);
     }
 
-    let row_height = inline_popup_height_for_row_height(
-        snapshot.snapshot.rows.len(),
-        SOFT_COMPACT_PICKER_ROW_HEIGHT,
-    );
-    let selected_row_has_synopsis = snapshot
-        .snapshot
-        .rows
-        .get(snapshot.selected_index())
-        .is_some_and(|row| row.detail.is_some() || row.example.is_some());
+    let row_count = trigger_popup_visible_row_count(snapshot);
+    let row_height = inline_popup_height_for_row_height(row_count, SOFT_COMPACT_PICKER_ROW_HEIGHT);
+    let selected_row_has_synopsis = trigger_popup_footer_count(snapshot) == 0
+        && snapshot
+            .selected_index()
+            .and_then(|idx| snapshot.snapshot.rows.get(idx))
+            .is_some_and(|row| row.detail.is_some() || row.example.is_some());
 
     row_height
         + if selected_row_has_synopsis {
@@ -232,11 +254,13 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
                     return Ok(());
                 }
 
+                crate::windows::remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID);
                 *guard = None;
             } else {
                 let _ = slot.handle.update(cx, |_popup, window, _cx| {
                     window.remove_window();
                 });
+                crate::windows::remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID);
                 *guard = None;
             }
         }
@@ -324,12 +348,42 @@ impl MenuSyntaxTriggerPopupWindow {
     }
 
     fn visible_range(&self) -> std::ops::Range<usize> {
+        let normal_count = self
+            .snapshot
+            .snapshot
+            .rows
+            .iter()
+            .filter(|row| !is_trigger_popup_footer_row(row))
+            .count();
+        if normal_count == 0 {
+            return 0..0;
+        }
+        let selected_index = self.selected_normal_index().unwrap_or_else(|| {
+            self.snapshot
+                .visible_start
+                .min(normal_count.saturating_sub(1))
+        });
         inline_dropdown_visible_range_from_start(
             self.snapshot.visible_start,
-            self.snapshot.selected_index(),
-            self.snapshot.snapshot.rows.len(),
-            INLINE_POPUP_MAX_VISIBLE_ROWS,
+            selected_index,
+            normal_count,
+            trigger_popup_normal_row_capacity(&self.snapshot),
         )
+    }
+
+    fn selected_normal_index(&self) -> Option<usize> {
+        let selected_id = self.snapshot.selected_row_id.as_deref()?;
+        let mut normal_index = 0usize;
+        for row in &self.snapshot.snapshot.rows {
+            if is_trigger_popup_footer_row(row) {
+                continue;
+            }
+            if row.id == selected_id {
+                return Some(normal_index);
+            }
+            normal_index += 1;
+        }
+        None
     }
 
     fn accept_row(&self, row_index: usize, cx: &mut App) {
@@ -433,39 +487,53 @@ impl MenuSyntaxTriggerPopupWindow {
         let colors = InlineDropdownColors::popup_from_theme(&theme);
         let visible = self.visible_range();
         let selected_index = self.snapshot.selected_index();
-        let selected_row = self.snapshot.snapshot.rows.get(selected_index).cloned();
+        let selected_row =
+            selected_index.and_then(|idx| self.snapshot.snapshot.rows.get(idx).cloned());
+        let normal_rows: Vec<_> = self
+            .snapshot
+            .selectable_rows()
+            .filter(|(_, row)| !is_trigger_popup_footer_row(row))
+            .collect();
+        let footer_rows: Vec<_> = self
+            .snapshot
+            .selectable_rows()
+            .filter(|(_, row)| is_trigger_popup_footer_row(row))
+            .collect();
+        let visible_rows: Vec<_> = normal_rows
+            .iter()
+            .skip(visible.start)
+            .take(visible.len())
+            .copied()
+            .chain(footer_rows.iter().copied())
+            .collect();
 
         let body = div()
             .size_full()
             .flex()
             .flex_col()
-            .children(
-                self.snapshot
-                    .selectable_rows()
-                    .skip(visible.start)
-                    .take(visible.len())
-                    .map(|(idx, row)| {
-                        let is_selected = idx == selected_index;
-                        let source_view = self.source_view.clone();
-                        let enabled = row.enabled;
-                        self.render_picker_row(idx, row, is_selected, colors)
-                            .cursor_pointer()
-                            .on_click(cx.listener(move |this, event, window, cx| {
-                                if source_view.upgrade().is_none() {
-                                    close_menu_syntax_trigger_popup_window(cx);
-                                    return;
-                                }
-                                if !enabled {
-                                    return;
-                                }
-                                this.handle_row_click(idx, event, window, cx);
-                            }))
-                            .into_any_element()
-                    }),
-            )
+            .children(visible_rows.into_iter().map(|(idx, row)| {
+                let is_selected = selected_index == Some(idx);
+                let source_view = self.source_view.clone();
+                let enabled = row.enabled;
+                self.render_picker_row(idx, row, is_selected, colors)
+                    .when(enabled, |row| row.cursor_pointer())
+                    .when(!enabled, |row| row.opacity(0.55).cursor_default())
+                    .on_click(cx.listener(move |this, event, window, cx| {
+                        if source_view.upgrade().is_none() {
+                            close_menu_syntax_trigger_popup_window(cx);
+                            return;
+                        }
+                        if !enabled {
+                            return;
+                        }
+                        this.handle_row_click(idx, event, window, cx);
+                    }))
+                    .into_any_element()
+            }))
             .into_any_element();
 
-        let synopsis = selected_row.as_ref().and_then(|row| {
+        let synopsis = (footer_rows.is_empty()).then_some(()).and_then(|_| {
+            let row = selected_row.as_ref()?;
             let detail: String = row
                 .detail
                 .clone()
@@ -486,7 +554,7 @@ impl MenuSyntaxTriggerPopupWindow {
             target: "script_kit::menu_syntax_popup",
             event = "menu_syntax_trigger_popup_render",
             row_count = self.snapshot.snapshot.rows.len(),
-            selected_index,
+            ?selected_index,
         );
 
         InlineDropdown::new(

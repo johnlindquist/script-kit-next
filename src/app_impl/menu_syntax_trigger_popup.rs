@@ -250,9 +250,18 @@ fn partial_trigger_snapshot(
     Some(snapshot)
 }
 
+/// Whether a trigger-popup row may become the keyboard/default selection.
+///
+/// Footer rows stay explicit and clickable, but should not be highlighted as
+/// the default keyboard target.
+#[allow(dead_code)] // Lib-crate copy has no consumer; see plan_trigger_popup_transition comment.
+pub(crate) fn trigger_popup_row_is_default_selectable(row: &TriggerPickerRow) -> bool {
+    row.enabled && row.kind != TriggerPickerRowKind::FooterAction
+}
+
 /// Try to keep `previous_id` selected if the row still exists in
-/// `snapshot` and is enabled. Otherwise fall back to the first enabled row.
-/// Returns `None` when the snapshot has no enabled rows at all.
+/// `snapshot` and is keyboard-selectable. Otherwise fall back to the first
+/// selectable row. Returns `None` when the snapshot has no selectable rows.
 #[allow(dead_code)] // Lib-crate copy has no consumer; see plan_trigger_popup_transition comment.
 fn preserve_or_pick_first_enabled(
     snapshot: &TriggerPickerSnapshot,
@@ -262,7 +271,7 @@ fn preserve_or_pick_first_enabled(
         if let Some(row) = snapshot
             .rows
             .iter()
-            .find(|row| row.id == prev && row.enabled)
+            .find(|row| row.id == prev && trigger_popup_row_is_default_selectable(row))
         {
             return Some(row.id.clone());
         }
@@ -270,7 +279,7 @@ fn preserve_or_pick_first_enabled(
     snapshot
         .rows
         .iter()
-        .find(|row| row.enabled)
+        .find(|row| trigger_popup_row_is_default_selectable(row))
         .map(|row| row.id.clone())
 }
 
@@ -662,6 +671,33 @@ mod tests {
         ]);
         let selected = preserve_or_pick_first_enabled(&next, Some("type"));
         assert_eq!(selected, None);
+    }
+
+    #[test]
+    fn preserve_skips_footer_actions_for_default_selection() {
+        let footer = TriggerPickerRow {
+            id: "footer:help".to_string(),
+            mode: TriggerPickerMode::AdvancedQuery,
+            kind: TriggerPickerRowKind::FooterAction,
+            title: "Open Menu Syntax help".to_string(),
+            token: None,
+            subtitle: None,
+            detail: None,
+            example: None,
+            badges: Vec::new(),
+            action: TriggerPickerAction::OpenHelp,
+            enabled: true,
+        };
+        let next = snapshot(vec![footer.clone(), qualifier_row("type", true)]);
+
+        assert_eq!(
+            preserve_or_pick_first_enabled(&next, Some("footer:help")),
+            Some("type".to_string()),
+            "enabled footer rows stay clickable but cannot become the default keyboard selection"
+        );
+
+        let footer_only = snapshot(vec![footer]);
+        assert_eq!(preserve_or_pick_first_enabled(&footer_only, None), None);
     }
 
     #[test]
