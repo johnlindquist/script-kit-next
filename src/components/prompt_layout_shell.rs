@@ -821,6 +821,52 @@ pub(crate) fn emit_prompt_hint_audit(surface: &'static str, hints: &[SharedStrin
     }
 }
 
+/// Emit a structured log line for an intentional surface-specific prompt footer.
+///
+/// These footers stay capped at the same three-affordance budget as the
+/// universal prompt hints, but their labels reflect surface-owned actions.
+#[allow(dead_code)]
+pub(crate) fn emit_surface_prompt_hint_audit(
+    surface: &'static str,
+    hints: &[SharedString],
+    reason: &'static str,
+) {
+    let actual: Vec<String> = hints.iter().map(|h| h.to_string()).collect();
+    let audit = PromptHintAudit {
+        surface,
+        hint_count: actual.len(),
+        hints_joined: actual.join(" | "),
+        is_universal: is_universal_prompt_hints(hints),
+    };
+
+    if !mark_prompt_hint_audit_seen(&audit) {
+        return;
+    }
+
+    tracing::info!(
+        target: "script_kit::prompt_chrome",
+        event = "surface_prompt_hint_audit",
+        surface = audit.surface,
+        hint_count = audit.hint_count,
+        hints = %audit.hints_joined,
+        is_universal = audit.is_universal,
+        reason,
+        "surface-specific prompt hint audit"
+    );
+
+    if audit.hint_count == 0 || audit.hint_count > UNIVERSAL_PROMPT_HINT_COUNT {
+        tracing::warn!(
+            target: "script_kit::prompt_chrome",
+            event = "prompt_hint_contract_violation",
+            surface = audit.surface,
+            max_hint_count = UNIVERSAL_PROMPT_HINT_COUNT,
+            actual = %audit.hints_joined,
+            reason,
+            "surface-specific prompt footer violated the three-affordance budget"
+        );
+    }
+}
+
 /// Machine-readable contract describing how a prompt surface resolves its chrome.
 ///
 /// Emitted via [`emit_prompt_chrome_audit`] at surface-activation time (not per-frame)
@@ -1330,6 +1376,76 @@ mod prompt_layout_shell_tests {
         assert_eq!(hints[0].as_ref(), "↵ Run");
         assert_eq!(hints[1].as_ref(), "⌘↵ AI");
         assert_eq!(hints[2].as_ref(), "⌘K Actions");
+    }
+
+    #[test]
+    fn surface_prompt_hint_audit_allows_three_non_universal_hints() {
+        let hints: Vec<SharedString> = vec![
+            "↵ Copy Markdown".into(),
+            "⌘C Copy".into(),
+            "Esc Back".into(),
+        ];
+        let audit = super::PromptHintAudit {
+            surface: "sdk_reference_test_surface",
+            hint_count: hints.len(),
+            hints_joined: hints
+                .iter()
+                .map(|hint| hint.to_string())
+                .collect::<Vec<_>>()
+                .join(" | "),
+            is_universal: super::is_universal_prompt_hints(&hints),
+        };
+
+        assert_eq!(audit.hint_count, super::UNIVERSAL_PROMPT_HINT_COUNT);
+        assert!(!audit.is_universal);
+        super::emit_surface_prompt_hint_audit(
+            "sdk_reference_test_surface",
+            &hints,
+            "test_surface_footer",
+        );
+    }
+
+    #[test]
+    fn sdk_facing_builtins_use_three_surface_specific_footer_hints() {
+        for (source, surface) in [
+            (
+                include_str!("../render_builtins/sdk_reference.rs"),
+                "sdk_reference",
+            ),
+            (
+                include_str!("../render_builtins/script_templates.rs"),
+                "script_template_catalog",
+            ),
+        ] {
+            assert!(
+                source.contains("main_window_footer_slot("),
+                "{surface} should route footer ownership through main_window_footer_slot"
+            );
+            assert!(
+                source.contains("emit_surface_prompt_hint_audit("),
+                "{surface} should use intentional surface hint auditing"
+            );
+            assert!(
+                !source.contains("\"↑↓ Navigate\""),
+                "{surface} should not spend footer chrome on baseline list navigation"
+            );
+            assert!(
+                !source.contains("emit_prompt_hint_audit(\""),
+                "{surface} should not warn as a universal footer mismatch"
+            );
+            assert!(
+                source.contains("AppChromeColors::from_theme"),
+                "{surface} should resolve secondary text through AppChromeColors"
+            );
+            assert!(
+                !source.contains("self.theme.colors.text.dimmed"),
+                "{surface} should not double-dim text with raw dimmed colors"
+            );
+            assert!(
+                !source.contains("self.theme.colors.text.muted"),
+                "{surface} should not double-dim text with raw muted colors"
+            );
+        }
     }
 
     #[test]

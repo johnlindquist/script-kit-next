@@ -19,9 +19,10 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
 
-        let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
-        let text_muted = self.theme.colors.text.muted;
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        let text_primary = rgb(chrome.text_primary_hex);
+        let text_secondary = rgba(chrome.text_muted_rgba);
+        let text_hint = rgba(chrome.text_hint_rgba);
 
         let visible_rows = crate::mcp_resources::sdk_reference_visible_rows(&entries, filter);
         let filtered_len = visible_rows.len();
@@ -155,7 +156,7 @@ impl ScriptListApp {
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
-                .text_color(rgb(text_muted))
+                .text_color(text_hint)
                 .font_family(design_typography.font_family)
                 .child(if filter.trim().is_empty() {
                     "No SDK functions available"
@@ -214,7 +215,7 @@ impl ScriptListApp {
                                     .px(px(design_spacing.padding_sm))
                                     .py(px(2.))
                                     .text_size(px(design_typography.font_size_xs))
-                                    .text_color(rgb(text_muted))
+                                    .text_color(text_hint)
                                     .child("Unsupported in GPUI"),
                             )
                         } else {
@@ -228,8 +229,7 @@ impl ScriptListApp {
         // Preview panel.
         let preview_panel: AnyElement = match &preview_entry {
             Some(entry) => {
-                let is_unsupported =
-                    entry.support == crate::mcp_resources::SdkSupport::Unsupported;
+                let is_unsupported = entry.support == crate::mcp_resources::SdkSupport::Unsupported;
                 let unsupported_note = entry.unsupported_note.clone();
 
                 let base = div()
@@ -248,11 +248,11 @@ impl ScriptListApp {
                     let banner_title = div()
                         .text_size(px(design_typography.font_size_sm))
                         .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .text_color(rgb(text_dimmed))
+                        .text_color(text_secondary)
                         .child("⚠ Unsupported in GPUI");
                     let banner_body = div()
                         .text_size(px(design_typography.font_size_xs))
-                        .text_color(rgb(text_muted))
+                        .text_color(text_hint)
                         .child(
                             unsupported_note.clone().unwrap_or_else(|| {
                                 "This API is defined in scripts/kit-sdk.ts, but the GPUI app does not currently handle it. It will log a warning and may no-op or throw at runtime.".to_string()
@@ -276,25 +276,25 @@ impl ScriptListApp {
                     div()
                         .text_size(px(design_typography.font_size_xl))
                         .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .text_color(rgb(text_primary))
+                        .text_color(text_primary)
                         .child(entry.name.clone()),
                 )
                 .child(
                     div()
                         .text_size(px(design_typography.font_size_sm))
-                        .text_color(rgb(text_dimmed))
+                        .text_color(text_secondary)
                         .child(entry.signature.clone()),
                 )
                 .child(
                     div()
                         .text_size(px(design_typography.font_size_xs))
-                        .text_color(rgb(text_muted))
+                        .text_color(text_hint)
                         .child(entry.category.clone()),
                 )
                 .child(
                     div()
                         .text_size(px(design_typography.font_size_md))
-                        .text_color(rgb(text_primary))
+                        .text_color(text_primary)
                         .child(entry.description.clone()),
                 )
                 .into_any_element()
@@ -305,7 +305,7 @@ impl ScriptListApp {
                 .flex()
                 .items_center()
                 .justify_center()
-                .text_color(rgb(text_muted))
+                .text_color(text_hint)
                 .font_family(design_typography.font_family)
                 .child("Select an SDK function")
                 .into_any_element(),
@@ -330,16 +330,11 @@ impl ScriptListApp {
                         .focus_bordered(false),
                 ),
             )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child(format!(
-                        "{} function{}",
-                        entries.len(),
-                        if entries.len() == 1 { "" } else { "s" },
-                    )),
-            );
+            .child(div().text_sm().text_color(text_secondary).child(format!(
+                "{} function{}",
+                entries.len(),
+                if entries.len() == 1 { "" } else { "s" },
+            )));
 
         let list_pane = div()
             .relative()
@@ -351,11 +346,14 @@ impl ScriptListApp {
 
         let hints: Vec<SharedString> = vec![
             "↵ Copy Markdown".into(),
-            "⌘C Copy Markdown".into(),
-            "↑↓ Navigate".into(),
+            "⌘C Copy".into(),
             "Esc Back".into(),
         ];
-        crate::components::emit_prompt_hint_audit("sdk_reference", &hints);
+        crate::components::emit_surface_prompt_hint_audit(
+            "sdk_reference",
+            &hints,
+            "sdk_reference_copy_browser",
+        );
 
         let gpui_footer = crate::components::render_simple_hint_strip(hints, None);
         let footer = self.main_window_footer_slot(gpui_footer);
@@ -366,7 +364,7 @@ impl ScriptListApp {
             preview_panel,
             footer,
         )
-        .text_color(rgb(text_primary))
+        .text_color(text_primary)
         .font_family(design_typography.font_family)
         .key_context("sdk_reference")
         .track_focus(&self.focus_handle)

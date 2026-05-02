@@ -24,6 +24,10 @@ Footer ownership stays single-source. When the native main-window footer reports
 
 Built-in renderers delegate native footer ownership through `main_window_footer_slot` rather than checking `active_main_window_footer_surface()` directly. PromptFooter exceptions such as Design Gallery and Kit Store stay off the native footer map until their domain-specific actions have native footer buttons.
 
+SDK-facing expanded browser surfaces may use surface-specific footer labels, but they still keep the three-affordance budget and audit through `emit_surface_prompt_hint_audit` so intentional custom copy does not look like universal-footer drift.
+
+Those SDK-facing browser surfaces also route secondary labels, counts, empty states, and preview metadata through `AppChromeColors` rather than raw muted or dimmed theme colors so custom themes keep the same semantic text ladder as launcher chrome.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.
@@ -224,6 +228,9 @@ This page is justified by the live chrome, popup, and portal code plus the root 
 - [src/prompts/select/render.rs](../src/prompts/select/render.rs)
 - [src/prompts/select/types.rs](../src/prompts/select/types.rs)
 - [src/components/unified_list_item/render.rs](../src/components/unified_list_item/render.rs)
+- [src/render_builtins/sdk_reference.rs](../src/render_builtins/sdk_reference.rs)
+- [src/render_builtins/script_templates.rs](../src/render_builtins/script_templates.rs)
+- [src/components/prompt_layout_shell.rs](../src/components/prompt_layout_shell.rs)
 - [src/stories/ask_tab_glyph_options.rs](../src/stories/ask_tab_glyph_options.rs)
 - [src/storybook/dictation_ui_variations.rs](../src/storybook/dictation_ui_variations.rs)
 - [src/storybook/browser.rs](../src/storybook/browser.rs)
