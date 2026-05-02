@@ -145,7 +145,8 @@ impl Render for ShortcutRecorder {
                 this.cancel();
                 cx.notify();
             } else if is_key_escape(key) {
-                this.handle_escape(cx);
+                this.cancel();
+                cx.notify();
             } else if is_key_enter(key) && this.shortcut.is_complete() && this.conflict.is_none() {
                 this.save();
                 cx.notify();
@@ -179,9 +180,19 @@ impl Render for ShortcutRecorder {
         );
 
         // Cancel handler for backdrop clicks
-        let backdrop_cancel = cx.listener(|this, _: &gpui::ClickEvent, _window, _cx| {
+        let backdrop_cancel = cx.listener(|this, _: &gpui::ClickEvent, _window, cx| {
             logging::log("SHORTCUT", "Backdrop clicked - cancelling");
             this.cancel();
+            cx.notify();
+        });
+        let detached_surface_cancel = cx.listener(|this, _: &gpui::MouseDownEvent, _window, cx| {
+            logging::log(
+                "SHORTCUT",
+                "Shortcut recorder popup margin clicked - cancelling",
+            );
+            this.cancel();
+            cx.notify();
+            cx.stop_propagation();
         });
 
         // Modal content - with stop propagation to prevent backdrop dismiss
@@ -223,6 +234,7 @@ impl Render for ShortcutRecorder {
                     .justify_center()
                     .mt(px(overlay_appear.modal_offset_y))
                     .opacity(overlay_appear.modal_opacity)
+                    .on_mouse_down(gpui::MouseButton::Left, detached_surface_cancel)
                     .child(modal),
             )
         } else {

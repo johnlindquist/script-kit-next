@@ -84,7 +84,7 @@ It uses the command name as the title, a short `Press keys` placeholder, visible
 
 It dismisses on explicit cancel shortcuts (Esc, Cmd+W) and on any focus loss, including backdrop clicks and clicks back into launcher surfaces such as the main filter input.
 
-The detached popup consumes handled key events, treats Cmd+W as cancel rather than a captured shortcut, and resolves its surface and border through `AppChromeColors`.
+The detached popup consumes handled key events, treats Esc and Cmd+W as cancel rather than captured shortcuts, and resolves its surface and border through `AppChromeColors`. Its detached margin is an invisible click-to-cancel target while the modal body stops propagation so inside clicks stay local.
 
 ## Quit modal
 

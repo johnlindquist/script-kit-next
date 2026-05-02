@@ -267,13 +267,8 @@ impl ShortcutRecorder {
 
     /// Handle escape key
     pub fn handle_escape(&mut self, cx: &mut Context<Self>) {
-        if self.shortcut.is_empty() {
-            // If nothing recorded, cancel
-            self.cancel();
-        } else {
-            // Otherwise, clear the recording
-            self.clear(cx);
-        }
+        self.cancel();
+        cx.notify();
     }
 
     /// Check for shortcut conflicts
