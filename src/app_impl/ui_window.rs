@@ -198,7 +198,9 @@ impl ScriptListApp {
 
         match action {
             crate::footer_popup::FooterAction::Run => {
-                if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
+                if self.dispatch_kit_store_primary_footer_action(cx) {
+                    return;
+                } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, cx| prompt.submit(cx));
                 } else if matches!(self.current_view, AppView::WebcamView { .. }) {
@@ -240,7 +242,9 @@ impl ScriptListApp {
                 }
             }
             crate::footer_popup::FooterAction::Apply => {
-                if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
+                if self.dispatch_kit_store_remove_footer_action(cx) {
+                    return;
+                } else if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
                     tracing::info!(
                         target: "script_kit::footer_popup",
                         event = "confirm_prompt_footer_apply",
@@ -265,7 +269,9 @@ impl ScriptListApp {
                 }
             }
             crate::footer_popup::FooterAction::Close => {
-                if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
+                if self.dispatch_kit_store_browse_back_footer_action(window, cx) {
+                    return;
+                } else if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
                     tracing::info!(
                         target: "script_kit::footer_popup",
                         event = "confirm_prompt_footer_close",
@@ -400,6 +406,8 @@ impl ScriptListApp {
             AppView::CurrentAppCommandsView { .. } => Some("current_app_commands"),
             AppView::SearchAiPresetsView { .. } => Some("search_ai_presets"),
             AppView::SettingsView { .. } => Some("settings"),
+            AppView::BrowseKitsView { .. } => Some("kit_store_browse"),
+            AppView::InstalledKitsView { .. } => Some("kit_store_installed"),
             AppView::FavoritesBrowseView { .. } => Some("favorites"),
             AppView::ConfirmPrompt { .. } => Some("confirm_prompt"),
             _ => None,
@@ -617,6 +625,61 @@ impl ScriptListApp {
                 view = ?self.current_view,
                 button_count = buttons.len(),
                 "Resolved DropPrompt footer buttons"
+            );
+            return buttons;
+        }
+
+        if let AppView::BrowseKitsView {
+            selected_index,
+            results,
+            query,
+            ..
+        } = &self.current_view
+        {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let enabled = !footer_disabled && results.get(*selected_index).is_some();
+            let secondary_label = if query.is_empty() {
+                "Back"
+            } else {
+                "Clear Search"
+            };
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Install").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Close, "Esc", secondary_label)
+                    .enabled(!footer_disabled),
+            ];
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved Kit Store browse footer buttons"
+            );
+            return buttons;
+        }
+
+        if let AppView::InstalledKitsView {
+            selected_index,
+            kits,
+            ..
+        } = &self.current_view
+        {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let enabled = !footer_disabled && kits.get(*selected_index).is_some();
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Update").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Apply, "⌫", "Remove").enabled(enabled),
+            ];
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved Kit Store installed footer buttons"
             );
             return buttons;
         }

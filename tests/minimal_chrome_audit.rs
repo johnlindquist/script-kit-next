@@ -788,6 +788,59 @@ fn micro_prompt_stays_footerless_and_off_native_footer_surface_map() {
 }
 
 #[test]
+fn kit_store_footer_uses_single_native_slot_owner() {
+    let source = include_str!("../src/render_builtins/kit_store.rs");
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let app_run_setup = include_str!("../src/main_entry/app_run_setup.rs");
+    let runtime_stdin = include_str!("../src/main_entry/runtime_stdin.rs");
+
+    assert!(
+        !source.contains("PromptFooter::new("),
+        "Kit Store should not render an in-content PromptFooter that can stack with the native footer"
+    );
+    assert!(
+        source.contains("main_window_footer_slot(")
+            && source.contains("\"↵ Install\"")
+            && source.contains("\"⌫ Remove\""),
+        "Kit Store should route fallback hints through the native footer slot"
+    );
+    assert!(
+        !source.contains("PromptChromeAudit::exception(")
+            && source.contains("PromptChromeAudit::minimal(")
+            && source.contains("emit_surface_prompt_hint_audit("),
+        "Kit Store should audit as a native-slot list with surface-specific footer hints"
+    );
+    assert!(
+        ui_window.contains("AppView::BrowseKitsView { .. } => Some(\"kit_store_browse\")")
+            && ui_window
+                .contains("AppView::InstalledKitsView { .. } => Some(\"kit_store_installed\")"),
+        "Kit Store views should register native footer surfaces so the fallback strip becomes a spacer"
+    );
+    assert!(
+        ui_window.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Install\")")
+            && ui_window.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Update\")")
+            && ui_window.contains("FooterButtonConfig::new(FooterAction::Close, \"Esc\", secondary_label)")
+            && ui_window.contains("\"Back\"")
+            && ui_window.contains("\"Clear Search\"")
+            && ui_window.contains("FooterButtonConfig::new(FooterAction::Apply, \"⌫\", \"Remove\")"),
+        "Kit Store native footer buttons should preserve Install, Back/Clear Search, Update, and Remove semantics"
+    );
+    assert!(
+        ui_window.contains("dispatch_kit_store_primary_footer_action(cx)")
+            && ui_window.contains("dispatch_kit_store_browse_back_footer_action(window, cx)")
+            && ui_window.contains("dispatch_kit_store_remove_footer_action(cx)"),
+        "Kit Store native footer dispatch should call the same selected-row operations as keyboard activation"
+    );
+    assert!(
+        app_run_setup.contains("view.sync_main_footer_popup(window, ctx);\n                    ctx.notify();")
+            && runtime_stdin
+                .contains("view.sync_main_footer_popup(window, ctx);\n                    ctx.notify();"),
+        "stdin-driven view transitions should immediately refresh the native footer before notifying"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"kit_store\",\"single_footer_owner\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn naming_prompt_render_has_tracing_and_uses_shared_helpers() {
     let source = include_str!("../src/prompts/naming/render.rs");
     let outer_source = include_str!("../src/render_prompts/other.rs");

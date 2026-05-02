@@ -450,6 +450,159 @@ impl ScriptListApp {
                 }
             });
         })
+            .detach();
+    }
+
+    pub(crate) fn kit_store_install_current_selection(&mut self, cx: &mut Context<Self>) -> bool {
+        let selected = if let AppView::BrowseKitsView {
+            selected_index,
+            results,
+            ..
+        } = &self.current_view
+        {
+            results.get(*selected_index).cloned()
+        } else {
+            None
+        };
+
+        if let Some(selected) = selected {
+            self.kit_store_install_selected_result(&selected, cx);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn kit_store_update_current_selection(&mut self, cx: &mut Context<Self>) -> bool {
+        let selected = if let AppView::InstalledKitsView {
+            selected_index,
+            kits,
+            ..
+        } = &self.current_view
+        {
+            kits.get(*selected_index).cloned()
+        } else {
+            None
+        };
+
+        if let Some(selected) = selected {
+            self.kit_store_update_selected_kit(&selected, cx);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn kit_store_remove_current_selection(&mut self, cx: &mut Context<Self>) -> bool {
+        let selected = if let AppView::InstalledKitsView {
+            selected_index,
+            kits,
+            ..
+        } = &self.current_view
+        {
+            kits.get(*selected_index).cloned()
+        } else {
+            None
+        };
+
+        if let Some(selected) = selected {
+            self.kit_store_remove_selected_kit(&selected, cx);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn dispatch_kit_store_primary_footer_action(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match &self.current_view {
+            AppView::BrowseKitsView { .. } => {
+                self.kit_store_install_current_selection(cx);
+                true
+            }
+            AppView::InstalledKitsView { .. } => {
+                self.kit_store_update_current_selection(cx);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub(crate) fn dispatch_kit_store_remove_footer_action(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if matches!(self.current_view, AppView::InstalledKitsView { .. }) {
+            self.kit_store_remove_current_selection(cx);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub(crate) fn dispatch_kit_store_browse_back_footer_action(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let query = if let AppView::BrowseKitsView { query, .. } = &self.current_view {
+            Some(query.clone())
+        } else {
+            None
+        };
+
+        let Some(query) = query else {
+            return false;
+        };
+
+        if query.is_empty() {
+            self.go_back_or_close(window, cx);
+        } else {
+            self.kit_store_set_browse_query(String::new(), cx);
+        }
+        true
+    }
+
+    fn kit_store_set_browse_query(&mut self, next_query: String, cx: &mut Context<Self>) {
+        if let AppView::BrowseKitsView {
+            query,
+            selected_index,
+            ..
+        } = &mut self.current_view
+        {
+            *query = next_query.clone();
+            *selected_index = 0;
+            self.list_scroll_handle
+                .scroll_to_item(0, ScrollStrategy::Nearest);
+            cx.notify();
+        }
+
+        let query_for_fetch = next_query.clone();
+        let query_for_guard = next_query;
+        cx.spawn(async move |this, cx| {
+            let results = cx
+                .background_executor()
+                .spawn(async move { Self::kit_store_search_results(&query_for_fetch) })
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if let AppView::BrowseKitsView {
+                    query,
+                    selected_index,
+                    results: view_results,
+                } = &mut this.current_view
+                {
+                    if *query == query_for_guard {
+                        *view_results = results;
+                        *selected_index = 0;
+                        this.list_scroll_handle
+                            .scroll_to_item(0, ScrollStrategy::Nearest);
+                        cx.notify();
+                    }
+                }
+            });
+        })
         .detach();
     }
 
@@ -461,9 +614,11 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::exception(
+            &crate::components::PromptChromeAudit::minimal(
                 "kit_store_browse",
-                "store_browse_with_install_actions",
+                2,
+                false,
+                false,
             ),
         );
         let tokens = get_tokens(self.current_design);
@@ -577,46 +732,7 @@ impl ScriptListApp {
                 }
 
                 if let Some(next_query) = next_query {
-                    // Update query immediately for responsive UI, fetch results async
-                    if let AppView::BrowseKitsView {
-                        query,
-                        selected_index,
-                        ..
-                    } = &mut this.current_view
-                    {
-                        *query = next_query.clone();
-                        *selected_index = 0;
-                        this.list_scroll_handle
-                            .scroll_to_item(0, ScrollStrategy::Nearest);
-                        cx.notify();
-                    }
-
-                    let query_for_fetch = next_query.clone();
-                    let query_for_guard = next_query;
-                    cx.spawn(async move |this, cx| {
-                        let results = cx
-                            .background_executor()
-                            .spawn(async move { Self::kit_store_search_results(&query_for_fetch) })
-                            .await;
-                        let _ = this.update(cx, |this, cx| {
-                            // Guard: only apply if query still matches (stale check)
-                            if let AppView::BrowseKitsView {
-                                query,
-                                selected_index,
-                                results: view_results,
-                            } = &mut this.current_view
-                            {
-                                if *query == query_for_guard {
-                                    *view_results = results;
-                                    *selected_index = 0;
-                                    this.list_scroll_handle
-                                        .scroll_to_item(0, ScrollStrategy::Nearest);
-                                    cx.notify();
-                                }
-                            }
-                        });
-                    })
-                    .detach();
+                    this.kit_store_set_browse_query(next_query, cx);
                 } else if install_selected {
                     let selected = if let AppView::BrowseKitsView {
                         selected_index,
@@ -797,7 +913,25 @@ impl ScriptListApp {
         let list_scrollbar =
             self.builtin_uniform_list_scrollbar(&self.list_scroll_handle, total_results, 8);
 
-        div()
+        let footer_hints: Vec<gpui::SharedString> = vec![
+            "↵ Install".into(),
+            if input_is_empty {
+                "Esc Back".into()
+            } else {
+                "Esc Clear Search".into()
+            },
+        ];
+        crate::components::emit_surface_prompt_hint_audit(
+            "kit_store_browse",
+            &footer_hints,
+            "kit_store_browse_footer",
+        );
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            footer_hints,
+            None,
+        ));
+
+        let surface = div()
             .w_full()
             .h_full()
             .flex()
@@ -949,20 +1083,14 @@ impl ScriptListApp {
                             .child(list)
                             .child(list_scrollbar),
                     ),
-            )
-            .child(
-                PromptFooter::new(
-                    PromptFooterConfig::new()
-                        .primary_label("Install")
-                        .primary_shortcut("↵")
-                        .show_secondary(true)
-                        .secondary_label("Back")
-                        .secondary_shortcut("esc"),
-                    PromptFooterColors::from_theme(&self.theme),
-                )
-                .into_any_element(),
-            )
-            .into_any_element()
+            );
+
+        if let Some(footer) = footer {
+            surface.child(footer)
+        } else {
+            surface
+        }
+        .into_any_element()
     }
 
     fn render_installed_kits(
@@ -972,9 +1100,11 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::exception(
+            &crate::components::PromptChromeAudit::minimal(
                 "kit_store_installed",
-                "store_management_with_uninstall_actions",
+                2,
+                false,
+                false,
             ),
         );
         let tokens = get_tokens(self.current_design);
@@ -1268,7 +1398,18 @@ impl ScriptListApp {
         let list_scrollbar =
             self.builtin_uniform_list_scrollbar(&self.list_scroll_handle, total_kits, 8);
 
-        div()
+        let footer_hints: Vec<gpui::SharedString> = vec!["↵ Update".into(), "⌫ Remove".into()];
+        crate::components::emit_surface_prompt_hint_audit(
+            "kit_store_installed",
+            &footer_hints,
+            "kit_store_installed_footer",
+        );
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            footer_hints,
+            None,
+        ));
+
+        let surface = div()
             .w_full()
             .h_full()
             .flex()
@@ -1377,19 +1518,13 @@ impl ScriptListApp {
                             .child(list)
                             .child(list_scrollbar),
                     ),
-            )
-            .child(
-                PromptFooter::new(
-                    PromptFooterConfig::new()
-                        .primary_label("Update")
-                        .primary_shortcut("↵")
-                        .show_secondary(true)
-                        .secondary_label("Remove")
-                        .secondary_shortcut("⌫"),
-                    PromptFooterColors::from_theme(&self.theme),
-                )
-                .into_any_element(),
-            )
-            .into_any_element()
+            );
+
+        if let Some(footer) = footer {
+            surface.child(footer)
+        } else {
+            surface
+        }
+        .into_any_element()
     }
 }
