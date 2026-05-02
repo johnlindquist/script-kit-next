@@ -134,9 +134,10 @@ impl ScriptListApp {
             _ => return "Run".to_string(),
         }
 
-        let Some(selected_index) =
-            crate::list_item::coerce_selection(&self.main_menu_result_caches.grouped_items(), self.selected_index)
-        else {
+        let Some(selected_index) = crate::list_item::coerce_selection(
+            &self.main_menu_result_caches.grouped_items(),
+            self.selected_index,
+        ) else {
             return "Run".to_string();
         };
 
@@ -370,7 +371,6 @@ impl ScriptListApp {
             AppView::AcpChatView { .. } => Some("acp_chat"),
             AppView::ChatPrompt { .. } => Some("chat_prompt"),
             AppView::QuickTerminalView { .. } => Some("quick_terminal"),
-            AppView::TermPrompt { .. } => Some("term_prompt"),
             AppView::PathPrompt { .. } => Some("path_prompt"),
             AppView::AppLauncherView { .. } => Some("app_launcher"),
             AppView::WindowSwitcherView { .. } => Some("window_switcher"),
