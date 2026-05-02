@@ -24,7 +24,9 @@ The update card mirrors the tray update state so users can check and open releas
 
 The surface owns focus without exposing the launcher filter input, so keyboard navigation stays on About controls.
 
-Escape dismisses back to the previous route, Tab walks the close, link, update, and acknowledgements controls, and Enter or Space activates the focused control through GPUI button semantics.
+[[src/app_impl/about_route.rs#focus_for_about_restore]] restores the prior route's focus from the route contract, so filter-owned routes regain the launcher filter after Escape instead of only `ScriptList`.
+
+[[src/about/render.rs#render_about_surface]] captures Escape at the About surface before child controls can swallow it. Tab walks the close, link, update, and acknowledgements controls, and Enter or Space activates the focused control through shared activation-key handling. Keyboard tab stops use a quiet focus-visible paint that matches hover chrome.
 
 ## Branding constants
 
@@ -34,6 +36,6 @@ Brand copy and URLs are shared so the tray and launcher-native About surface do 
 
 ## Storybook coverage
 
-Storybook covers the About surface as a canonical launcher state with update-state variants.
+Storybook covers the About surface as a canonical launcher state with update-state and disclosure variants.
 
-The `about_surface/default` story renders the 750x500 route for Idle, Checking, UpToDate, Available, and Error states so the route can be inspected without opening the tray menu.
+The `about_surface/default` story renders the 750x500 route for Idle, Checking, UpToDate, Available, Error, and Acknowledgements Open states so the route can be inspected without opening the tray menu.

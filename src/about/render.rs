@@ -76,7 +76,7 @@ fn render_about_surface_inner(
         .flex()
         .flex_col()
         .bg(rgba(chrome.surface_rgba))
-        .on_key_down(move |event, window, cx| key_down(event, window, cx))
+        .capture_key_down(move |event, window, cx| key_down(event, window, cx))
         .child(render_header(chrome, actions.dismiss.clone()))
         .child(
             div()
@@ -136,6 +136,7 @@ fn render_header(chrome: theme::AppChromeColors, dismiss: AboutClickHandler) -> 
                 .text_color(rgba(chrome.text_icon_rgba))
                 .cursor_pointer()
                 .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+                .focus_visible(|style| style.bg(rgba(chrome.hover_rgba)))
                 .child("×")
                 .on_click({
                     let dismiss = dismiss.clone();
@@ -397,6 +398,7 @@ fn render_acknowledgements(
                 .text_color(rgb(chrome.text_primary_hex))
                 .cursor_pointer()
                 .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+                .focus_visible(|style| style.bg(rgba(chrome.hover_rgba)))
                 .child("Acknowledgements")
                 .child(if state.acks_open { "−" } else { "+" })
                 .on_click({
@@ -488,6 +490,7 @@ fn action_button(
             .tab_index(0)
             .cursor_pointer()
             .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+            .focus_visible(|style| style.bg(rgba(chrome.hover_rgba)))
             .on_click({
                 let handler = handler.clone();
                 move |event, window, cx| handler(event, window, cx)

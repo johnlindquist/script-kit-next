@@ -39,7 +39,8 @@ impl Story for AboutSurfaceStory {
     }
 
     fn render_variant(&self, variant: &StoryVariant) -> AnyElement {
-        let update_state = match variant.stable_id().as_str() {
+        let stable_id = variant.stable_id();
+        let update_state = match stable_id.as_str() {
             "checking" => UpdateState::Checking,
             "up-to-date" => UpdateState::UpToDate,
             "available" => UpdateState::Available {
@@ -49,8 +50,11 @@ impl Story for AboutSurfaceStory {
             "error" => UpdateState::Error("network unavailable".to_string()),
             _ => UpdateState::Idle,
         };
+        let state = AboutState {
+            acks_open: stable_id == "acknowledgements-open",
+        };
         crate::about::render::render_about_surface_preview(
-            &AboutState::new(),
+            &state,
             Arc::new(RwLock::new(update_state)),
             noop_actions(),
         )
@@ -63,6 +67,7 @@ impl Story for AboutSurfaceStory {
             StoryVariant::default_named("up-to-date", "Up To Date"),
             StoryVariant::default_named("available", "Available"),
             StoryVariant::default_named("error", "Error"),
+            StoryVariant::default_named("acknowledgements-open", "Acknowledgements Open"),
         ]
     }
 }

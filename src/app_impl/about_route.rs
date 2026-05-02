@@ -1,5 +1,19 @@
 use super::*;
 
+fn focus_for_about_restore(view: &AppView) -> (FocusTarget, FocusedInput) {
+    match view {
+        AppView::ActionsDialog => (FocusTarget::ActionsDialog, FocusedInput::ActionsSearch),
+        view if matches!(
+            view.surface_contract().vocabulary.input_ownership,
+            LauncherSurfaceInputOwnership::LauncherFilter
+        ) =>
+        {
+            (FocusTarget::MainFilter, FocusedInput::MainFilter)
+        }
+        _ => (FocusTarget::AppRoot, FocusedInput::None),
+    }
+}
+
 impl ScriptListApp {
     pub(crate) fn open_about_surface(
         &mut self,
@@ -32,15 +46,9 @@ impl ScriptListApp {
         };
 
         self.current_view = previous;
-        self.pending_focus = Some(match &self.current_view {
-            AppView::ScriptList => FocusTarget::MainFilter,
-            _ => FocusTarget::AppRoot,
-        });
-        self.focused_input = if matches!(self.current_view, AppView::ScriptList) {
-            FocusedInput::MainFilter
-        } else {
-            FocusedInput::None
-        };
+        let (focus_target, focused_input) = focus_for_about_restore(&self.current_view);
+        self.pending_focus = Some(focus_target);
+        self.focused_input = focused_input;
         let semantic = semantic_surface_for_main_view(&self.current_view);
         crate::windows::update_automation_semantic_surface("main", semantic);
         cx.notify();
