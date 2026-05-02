@@ -61,6 +61,7 @@ These rules describe the behavior constraints that automation changes should pre
 - Keep automation target identity stable across a proof run.
 - Treat focus-stealing native input as a last resort, especially for attached popups that expose state snapshots but may not expose an independent GPUI key handle.
 - Treat screenshot ambiguity as a hard failure, not a best-effort capture.
+- Treat blank or black screenshots as infrastructure failures, not visual proof.
 
 ## Filterable Surface Matrix
 
@@ -109,6 +110,14 @@ Agentic-testing runs generate one bounded improvement pass with `$agentic-testin
 ### Non-obvious constraints
 
 Attached popups must preserve parent identity and `parent_capture_with_crop`. Detached surfaces must preserve exact-id stability. Main should stay state-first unless a visual assertion explicitly requires capture.
+
+## Screenshot pixel audit
+
+Screenshot proof must include content-level validation before a PNG can count as reviewable evidence.
+
+The Rust capture path in [[src/platform/screenshots_window_open.rs]] runs a macOS Screen Recording preflight before xcap capture, then audits the RGBA buffer before PNG encoding. Captures with no sampled pixels, no non-transparent pixels, no non-black pixels, or a near-black low-variety buffer fail with `automation.capture_screenshot.permission_failed` or `automation.capture_screenshot.blank_image_rejected` instead of writing misleading proof.
+
+The Bun proof helper in [[scripts/agentic/verify-shot.ts]] independently audits generated PNGs and records `screenshotReceipt.contentAudit`. Its default output root is `.test-screenshots/`, and a blank audit flips the screenshot receipt to an infrastructure failure even when the capture command wrote a file.
 
 ## Window metadata
 

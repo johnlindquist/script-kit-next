@@ -6,11 +6,133 @@ use image::codecs::png::PngEncoder;
 use image::ImageEncoder;
 use xcap::Window;
 
+#[derive(Debug, Clone, PartialEq)]
+struct PixelAudit {
+    sampled: u64,
+    non_black: u64,
+    non_transparent: u64,
+    unique_bucket_count: usize,
+    mean_luma: f64,
+}
+
+impl PixelAudit {
+    fn is_blank_like(&self) -> bool {
+        self.sampled == 0
+            || self.non_transparent == 0
+            || self.non_black == 0
+            || (self.unique_bucket_count <= 2 && self.mean_luma < 5.0)
+    }
+}
+
+fn audit_screenshot_pixels(image: &image::RgbaImage) -> PixelAudit {
+    let mut sampled = 0_u64;
+    let mut non_black = 0_u64;
+    let mut non_transparent = 0_u64;
+    let mut luma_sum = 0_f64;
+    let mut buckets = std::collections::HashSet::new();
+
+    for pixel in image.pixels() {
+        let [r, g, b, a] = pixel.0;
+        sampled += 1;
+
+        if a > 0 {
+            non_transparent += 1;
+        }
+
+        if a > 0 && (r > 8 || g > 8 || b > 8) {
+            non_black += 1;
+        }
+
+        luma_sum += 0.2126 * f64::from(r) + 0.7152 * f64::from(g) + 0.0722 * f64::from(b);
+
+        let bucket = (
+            r / 32,
+            g / 32,
+            b / 32,
+            if a == 0 { 0 } else { 1 },
+        );
+        buckets.insert(bucket);
+    }
+
+    PixelAudit {
+        sampled,
+        non_black,
+        non_transparent,
+        unique_bucket_count: buckets.len(),
+        mean_luma: if sampled == 0 {
+            0.0
+        } else {
+            luma_sum / sampled as f64
+        },
+    }
+}
+
+fn reject_blank_screenshot_if_needed(
+    audit: &PixelAudit,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    tracing::info!(
+        target: "script_kit::automation",
+        sampled = audit.sampled,
+        non_black = audit.non_black,
+        non_transparent = audit.non_transparent,
+        unique_bucket_count = audit.unique_bucket_count,
+        mean_luma = audit.mean_luma,
+        blank_like = audit.is_blank_like(),
+        "automation.capture_screenshot.pixel_audit"
+    );
+
+    if audit.is_blank_like() {
+        tracing::error!(
+            target: "script_kit::automation",
+            sampled = audit.sampled,
+            non_black = audit.non_black,
+            non_transparent = audit.non_transparent,
+            unique_bucket_count = audit.unique_bucket_count,
+            mean_luma = audit.mean_luma,
+            "automation.capture_screenshot.blank_image_rejected"
+        );
+        return Err(
+            "Screenshot capture returned a blank/black image. Check macOS Screen Recording permission for this binary and retry with a reviewable capture."
+                .to_string()
+                .into(),
+        );
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn screen_capture_access_preflight() -> Option<bool> {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGPreflightScreenCaptureAccess() -> bool;
+    }
+
+    Some(unsafe { CGPreflightScreenCaptureAccess() })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn screen_capture_access_preflight() -> Option<bool> {
+    None
+}
+
 fn capture_and_encode_png(
     window: &xcap::Window,
     hi_dpi: bool,
 ) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
     const DOWNSCALE_DIVISOR: u32 = 2;
+
+    if matches!(screen_capture_access_preflight(), Some(false)) {
+        tracing::error!(
+            target: "script_kit::automation",
+            "automation.capture_screenshot.permission_failed"
+        );
+        return Err(
+            "Screen capture permission is not granted. Enable macOS Screen Recording permission for this binary before collecting screenshot proof."
+                .to_string()
+                .into(),
+        );
+    }
 
     let image = window.capture_image()?;
     let original_width = image.width();
@@ -37,6 +159,9 @@ fn capture_and_encode_png(
         );
         (resized, new_width, new_height)
     };
+
+    let audit = audit_screenshot_pixels(&final_image);
+    reject_blank_screenshot_if_needed(&audit)?;
 
     let mut png_data = Vec::new();
     let encoder = PngEncoder::new(&mut png_data);
@@ -688,4 +813,45 @@ pub fn resolve_targeted_os_window_id(
     let candidates = list_script_kit_candidates().ok()?;
     let best = select_best_candidate(&resolved, &candidates, "resolve_os_window_id").ok()?;
     best.window.id().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{ImageBuffer, Rgba};
+
+    #[test]
+    fn pixel_audit_rejects_opaque_black_image() {
+        let image = ImageBuffer::from_pixel(8, 8, Rgba([0, 0, 0, 255]));
+        let audit = audit_screenshot_pixels(&image);
+
+        assert_eq!(audit.sampled, 64);
+        assert_eq!(audit.non_transparent, 64);
+        assert_eq!(audit.non_black, 0);
+        assert!(audit.is_blank_like());
+    }
+
+    #[test]
+    fn pixel_audit_rejects_transparent_image() {
+        let image = ImageBuffer::from_pixel(8, 8, Rgba([0, 0, 0, 0]));
+        let audit = audit_screenshot_pixels(&image);
+
+        assert_eq!(audit.non_transparent, 0);
+        assert!(audit.is_blank_like());
+    }
+
+    #[test]
+    fn pixel_audit_accepts_visible_ui_pixels() {
+        let mut image = ImageBuffer::from_pixel(8, 8, Rgba([0, 0, 0, 255]));
+        for x in 2..6 {
+            for y in 2..6 {
+                image.put_pixel(x, y, Rgba([240, 240, 240, 255]));
+            }
+        }
+
+        let audit = audit_screenshot_pixels(&image);
+
+        assert!(audit.non_black > 0);
+        assert!(!audit.is_blank_like());
+    }
 }
