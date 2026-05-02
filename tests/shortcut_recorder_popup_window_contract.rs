@@ -74,6 +74,16 @@ fn shortcut_recorder_detached_render_removes_parent_backdrop() {
         !detached_branch.contains("shortcut-backdrop"),
         "detached popup rendering must not dim the parent launcher with the old backdrop"
     );
+    assert!(
+        detached_branch.contains("detached_surface_cancel")
+            && detached_branch.contains(".on_mouse_down(gpui::MouseButton::Left"),
+        "detached popup margin should be an invisible click-to-cancel target"
+    );
+    assert!(
+        source.contains(".id(\"shortcut-modal-content\")")
+            && source.contains(".on_mouse_down(gpui::MouseButton::Left, |_, _, _|"),
+        "modal content should still stop mouse-down propagation so inside clicks do not cancel"
+    );
 }
 
 #[test]
@@ -100,6 +110,10 @@ fn shortcut_recorder_uses_compact_modal_copy_and_bounds() {
         "shortcut recorder must treat Cmd+W as explicit cancel, not a captured shortcut"
     );
     assert!(
+        render_source.contains("} else if is_key_escape(key) {\n                this.cancel();\n                cx.notify();"),
+        "shortcut recorder Esc should cancel and notify like Cmd+W instead of clearing a captured shortcut"
+    );
+    assert!(
         render_source.contains("cx.stop_propagation()"),
         "shortcut recorder key handler should consume captured modal keys"
     );
@@ -124,6 +138,36 @@ fn shortcut_recorder_uses_compact_modal_copy_and_bounds() {
     assert!(
         !helper_source.contains("Press any key combination"),
         "empty shortcut recorder prompt should not use verbose instructional copy"
+    );
+
+    let component_source = repo_file("src/components/shortcut_recorder/component.rs");
+    let handle_escape_start = component_source
+        .find("pub fn handle_escape")
+        .expect("ShortcutRecorder::handle_escape not found");
+    let handle_escape_body = &component_source[handle_escape_start..];
+    assert!(
+        handle_escape_body.contains("self.cancel();")
+            && handle_escape_body.contains("cx.notify();")
+            && !handle_escape_body.contains("self.clear(cx)"),
+        "ShortcutRecorder::handle_escape should remain a cancel path, not a clear path"
+    );
+}
+
+#[test]
+fn shortcut_recorder_storybook_uses_live_popup_chrome_tokens() {
+    let source = repo_file("src/storybook/shortcut_recorder_states.rs");
+    assert!(
+        source.contains("AppChromeColors::from_theme(&theme)")
+            && source.contains("chrome.popup_surface_rgba")
+            && source.contains("chrome.border_rgba")
+            && source.contains("chrome.text_primary_hex")
+            && source.contains("chrome.accent_hex"),
+        "shortcut recorder Storybook states should use the same popup chrome tokens as the live recorder"
+    );
+    assert!(
+        !source.contains("get_vibrancy_background(&theme)")
+            && !source.contains("border_color(rgba((colors.text_primary << 8) | 0x22))"),
+        "shortcut recorder Storybook should not use a separate vibrancy/background and hand-packed border path"
     );
 }
 

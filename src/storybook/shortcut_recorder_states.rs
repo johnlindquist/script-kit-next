@@ -10,8 +10,7 @@ use crate::components::hint_strip::{render_inline_shortcut_keys, whisper_inline_
 use crate::components::shortcut_recorder::{
     RecordedShortcut, ShortcutConflict, ShortcutRecorderColors,
 };
-use crate::theme::get_cached_theme;
-use crate::ui_foundation::get_vibrancy_background;
+use crate::theme::{get_cached_theme, AppChromeColors};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ShortcutRecorderStateId {
@@ -164,6 +163,7 @@ pub fn render_shortcut_recorder_state_compare_thumbnail(stable_id: &str) -> AnyE
 fn render_shortcut_recorder_state(spec: ShortcutRecorderStateSpec, compact: bool) -> AnyElement {
     let theme = get_cached_theme();
     let colors = ShortcutRecorderColors::from_theme(&theme);
+    let chrome = AppChromeColors::from_theme(&theme);
     let button_colors = ButtonColors::from_theme(&theme);
     let width = if compact { 292.0 } else { 320.0 };
 
@@ -177,13 +177,13 @@ fn render_shortcut_recorder_state(spec: ShortcutRecorderStateSpec, compact: bool
             div()
                 .w(px(width))
                 .p(px(18.0))
-                .when_some(get_vibrancy_background(&theme), |d, bg| d.bg(bg))
+                .bg(rgba(chrome.popup_surface_rgba))
                 .border_1()
-                .border_color(rgba((colors.text_primary << 8) | 0x22))
+                .border_color(rgba(chrome.border_rgba))
                 .rounded(px(8.0))
                 .flex()
                 .flex_col()
-                .child(render_header(&spec, colors))
+                .child(render_header(&spec, chrome))
                 .child(div().h(px(10.0)))
                 .child(render_key_display(&spec, colors))
                 .child(render_conflict_warning(&spec, colors))
@@ -192,7 +192,7 @@ fn render_shortcut_recorder_state(spec: ShortcutRecorderStateSpec, compact: bool
         .into_any_element()
 }
 
-fn render_header(spec: &ShortcutRecorderStateSpec, colors: ShortcutRecorderColors) -> AnyElement {
+fn render_header(spec: &ShortcutRecorderStateSpec, chrome: AppChromeColors) -> AnyElement {
     div()
         .w_full()
         .flex()
@@ -204,7 +204,7 @@ fn render_header(spec: &ShortcutRecorderStateSpec, colors: ShortcutRecorderColor
                 .w(px(2.0))
                 .h(px(14.0))
                 .rounded(px(1.0))
-                .bg(rgb(colors.accent)),
+                .bg(rgb(chrome.accent_hex)),
         )
         .child(
             div()
@@ -212,7 +212,7 @@ fn render_header(spec: &ShortcutRecorderStateSpec, colors: ShortcutRecorderColor
                 .truncate()
                 .text_sm()
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(colors.text_primary))
+                .text_color(rgb(chrome.text_primary_hex))
                 .child(spec.command_name),
         )
         .into_any_element()
