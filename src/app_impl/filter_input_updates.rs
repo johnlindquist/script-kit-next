@@ -31,7 +31,6 @@ impl ScriptListApp {
 
         // Preflight depends on filter + selection and must stay out of render().
         self.rebuild_main_window_preflight_if_needed();
-
     }
 
     pub(crate) fn queue_filter_compute(&mut self, value: String, cx: &mut Context<Self>) {
@@ -61,7 +60,10 @@ impl ScriptListApp {
                                     ),
                                 );
                                 app.computed_filter_text = latest.clone();
-                                app.reconcile_script_list_after_filter_change("filter_coalesced", cx);
+                                app.reconcile_script_list_after_filter_change(
+                                    "filter_coalesced",
+                                    cx,
+                                );
                                 app.update_window_size();
                                 let coalesce_elapsed = coalesce_start.elapsed();
                                 logging::log(
@@ -142,9 +144,9 @@ impl ScriptListApp {
             // Menu syntax owns the result list entirely — clear any stale
             // fallback items so pressing Enter routes to execute_selected,
             // not execute_selected_fallback. Also clear when the trigger
-            // popup is open for a partial trigger like `+t` (where
+            // popup is open for a partial trigger like `;t` (where
             // `is_menu_syntax_for` still returns false because the parser
-            // doesn't yet recognize `+t` as a full target).
+            // doesn't yet recognize `;t` as a full target).
             self.main_menu_fallback_state.clear();
         }
 
@@ -310,7 +312,11 @@ impl ScriptListApp {
         self.set_filter_text_immediate(String::new(), window, cx);
     }
 
-    pub(crate) fn sync_filter_input_if_needed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn sync_filter_input_if_needed(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         // Sync placeholder if pending
         if let Some(placeholder) = self.pending_placeholder.take() {
             self.gpui_input_state.update(cx, |state, cx| {
@@ -339,5 +345,4 @@ impl ScriptListApp {
         self.suppress_filter_events = false;
         self.pending_filter_sync = false;
     }
-
 }

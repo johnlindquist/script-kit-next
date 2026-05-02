@@ -298,9 +298,10 @@ fn rewrite_token_substring(raw_filter_text: &str, bad: &str, good: &str) -> Stri
 }
 
 /// Produce the new filter text after a picker row's `InsertToken` action.
-/// Capture (`+`) and command (`!`) rows replace the command head. Refine (`:`)
-/// rows replace only the active qualifier token so multi-qualifier composition
-/// keeps the rest of the query intact.
+/// Capture (`;`, with legacy `+` input still accepted) and command (`!`) rows
+/// replace the command head. Refine (`:`) rows replace only the active
+/// qualifier token so multi-qualifier composition keeps the rest of the query
+/// intact.
 fn apply_token_insertion(raw_filter_text: &str, token: &str) -> String {
     let trimmed = raw_filter_text.trim_start();
     if trimmed.starts_with(':') && token.starts_with(':') {

@@ -59,6 +59,9 @@ pub(crate) struct MenuSyntaxTriggerPopupState {
     /// Row id currently highlighted. None when the popup is closed or no
     /// enabled row exists in the current snapshot.
     pub(crate) selected_row_id: Option<String>,
+    /// Start index of the visible page. Preserved across selection updates so
+    /// shared inline-dropdown range math can keep the page stable.
+    pub(crate) visible_start: usize,
 }
 
 impl MenuSyntaxTriggerPopupState {
@@ -99,7 +102,7 @@ pub(crate) enum TriggerPopupTransition {
 /// Character-index highlights for the compact row renderer.
 ///
 /// This mirrors ACP's `/` and `@` picker contract: query matches are
-/// expressed as visible character positions, and trigger prefixes like `+`
+/// expressed as visible character positions, and trigger prefixes like `;`
 /// are not highlighted.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -176,21 +179,21 @@ pub(crate) fn plan_trigger_popup_transition(
     }
 }
 
-/// Fallback snapshot when the raw parser rejects `+<partial>`, `:<partial>`,
-/// or `!<partial>`. Without this, typing the first character after a trigger
+/// Fallback snapshot when the raw parser rejects `;<partial>` or `:<partial>`.
+/// Without this, typing the first character after a trigger
 /// would close the popup (because the parser only claims
 /// known capture targets and whitespace-qualified queries), which makes
 /// the popup unusable for power users who don't remember the full
 /// target / qualifier name.
 ///
 /// Policy:
-/// - Only kicks in for `+`, `:`, and `!` heads (legacy triggers are handled
+/// - Only kicks in for `;` and `:` heads (legacy triggers are handled
 ///   earlier in `plan_trigger_popup_transition`).
 /// - Only kicks in when the text AFTER the trigger is non-empty and
 ///   contains no whitespace. As soon as the user types a space, it's
 ///   body text, not a partial target / qualifier — the parser takes
 ///   over.
-/// - Builds the bare snapshot (`+`, `:`, or `!`) and retains rows whose
+/// - Builds the bare snapshot (`;` or `:`) and retains rows whose
 ///   `title` or `token` substring-matches the partial text
 ///   case-insensitively. Footer action rows are always kept so the
 ///   "Create capture handler…" / "Open help" affordances remain
@@ -207,7 +210,6 @@ fn partial_trigger_snapshot(
     let bare = match trigger_char {
         ';' => ";",
         ':' => ":",
-        '>' => ">",
         _ => return None,
     };
     let after_trigger = &raw_filter[trigger_char.len_utf8()..];
@@ -224,8 +226,8 @@ fn partial_trigger_snapshot(
         ) {
             return true;
         }
-        // Prefix match against the token slug (e.g. ";todo" → "todo").
-        // Loose `contains` was too permissive — typing `+t` matched
+        // Prefix match against the token slug (e.g. ";todo" -> "todo").
+        // Loose `contains` was too permissive: typing `+t` matched
         // "Daily note" ('t' inside "note"), "Social draft" ('t' inside
         // "draft"), "Tagged link" ('t' in "tagged"). Users typing the
         // start of a target name expect slug-prefix semantics.
@@ -272,6 +274,21 @@ fn preserve_or_pick_first_enabled(
         .map(|row| row.id.clone())
 }
 
+#[allow(dead_code)]
+pub(crate) fn trigger_popup_visible_start_for_selection(
+    visible_start: usize,
+    selected_index: usize,
+    item_count: usize,
+) -> usize {
+    crate::components::inline_dropdown::inline_dropdown_visible_range_from_start(
+        visible_start,
+        selected_index,
+        item_count,
+        crate::components::inline_popup_window::INLINE_POPUP_MAX_VISIBLE_ROWS,
+    )
+    .start
+}
+
 /// Convert a [`TriggerPickerRow`] into the neutral [`InlinePickerRow`] shape
 /// consumed by the shared renderer. Menu-syntax rows all carry the
 /// [`InlinePickerRowKind::TextTrigger`] kind except for the "Open Menu
@@ -315,7 +332,7 @@ pub(crate) fn adapt_trigger_picker_row(row: &TriggerPickerRow) -> InlinePickerRo
 ///
 /// The renderer shows the row title on the left and either `token` or
 /// `subtitle` on the right. This helper uses the same ordered-character match
-/// behavior as the ACP `/` and `@` pickers, offsetting `+` / `:` token matches
+/// behavior as the ACP `/` and `@` pickers, offsetting `;` / `:` token matches
 /// past the trigger prefix so the typed trigger itself stays neutral.
 #[allow(dead_code)]
 pub(crate) fn trigger_popup_row_highlight_indices(
@@ -349,7 +366,7 @@ pub(crate) fn trigger_popup_row_highlight_indices(
 fn trigger_popup_highlight_query(raw_filter: &str) -> Option<(char, String)> {
     let trimmed = raw_filter.trim_start();
     let trigger = trimmed.chars().next()?;
-    if trigger != ';' && trigger != ':' && trigger != '>' {
+    if trigger != ';' && trigger != ':' {
         return None;
     }
 
@@ -481,6 +498,7 @@ mod tests {
         let state = MenuSyntaxTriggerPopupState {
             snapshot: Some(snapshot(vec![qualifier_row("type", true)])),
             selected_row_id: Some("type".to_string()),
+            visible_start: 0,
         };
         for trigger in ["~home", "/scripts", "@file", ">shortcut", "?help"] {
             let transition = plan_trigger_popup_transition(&state, trigger, &ctx());
@@ -517,6 +535,7 @@ mod tests {
         let state = MenuSyntaxTriggerPopupState {
             snapshot: Some(prev),
             selected_row_id: Some("type".to_string()),
+            visible_start: 0,
         };
         assert_eq!(
             plan_trigger_popup_transition(&state, "plain text", &ctx()),
@@ -556,11 +575,27 @@ mod tests {
     }
 
     #[test]
+    fn semicolon_prefix_opens_canonical_capture_popup_when_closed() {
+        let state = MenuSyntaxTriggerPopupState::default();
+        let transition = plan_trigger_popup_transition(&state, ";", &ctx());
+        match transition {
+            TriggerPopupTransition::Open { snapshot, .. } => {
+                assert!(snapshot
+                    .rows
+                    .iter()
+                    .any(|row| row.kind == TriggerPickerRowKind::CaptureTarget));
+            }
+            other => panic!("expected Open for `;`, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn capture_body_composer_closes_open_popup() {
         let prev = build_trigger_picker_snapshot(";todo", &ctx()).expect("todo target snapshot");
         let state = MenuSyntaxTriggerPopupState {
             snapshot: Some(prev),
             selected_row_id: Some("target:todo".to_string()),
+            visible_start: 0,
         };
 
         assert_eq!(
@@ -588,6 +623,7 @@ mod tests {
         let state = MenuSyntaxTriggerPopupState {
             snapshot: Some(prev),
             selected_row_id: Some("shortcut".to_string()),
+            visible_start: 0,
         };
         let next = snapshot(vec![
             qualifier_row("shortcut", true),
@@ -629,6 +665,14 @@ mod tests {
     }
 
     #[test]
+    fn visible_start_preserves_page_until_selection_leaves_it() {
+        assert_eq!(trigger_popup_visible_start_for_selection(6, 9, 20), 6);
+        assert_eq!(trigger_popup_visible_start_for_selection(6, 13, 20), 6);
+        assert_eq!(trigger_popup_visible_start_for_selection(6, 14, 20), 7);
+        assert_eq!(trigger_popup_visible_start_for_selection(6, 5, 20), 5);
+    }
+
+    #[test]
     fn update_preserves_selection_across_rebuild() {
         let prev = snapshot(vec![
             qualifier_row("type", true),
@@ -637,6 +681,7 @@ mod tests {
         let state = MenuSyntaxTriggerPopupState {
             snapshot: Some(prev),
             selected_row_id: Some("type".to_string()),
+            visible_start: 0,
         };
         // Same two rows, same state → NoChange.
         let transition = plan_trigger_popup_transition(&state, ":type:", &ctx());
@@ -891,6 +936,7 @@ mod tests {
         let state = MenuSyntaxTriggerPopupState {
             snapshot: Some(snapshot(vec![qualifier_row("todo", true)])),
             selected_row_id: Some("todo".to_string()),
+            visible_start: 0,
         };
         let transition = plan_trigger_popup_transition(&state, "+t", &ctx());
         match transition {

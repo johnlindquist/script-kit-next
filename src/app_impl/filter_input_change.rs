@@ -303,7 +303,8 @@ impl ScriptListApp {
             } => {
                 self.filter_text = new_text.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
-                    self.dictation_history_scroll_handle.scroll_to_top_of_item(0);
+                    self.dictation_history_scroll_handle
+                        .scroll_to_top_of_item(0);
                     cx.notify();
                 }
                 return; // Don't run main menu filter logic
@@ -565,7 +566,9 @@ impl ScriptListApp {
                         );
                     }
                     self.menu_syntax_trigger_popup_state = Default::default();
-                    crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(cx);
+                    crate::menu_syntax_trigger_popup_window::close_menu_syntax_trigger_popup_window(
+                        cx,
+                    );
                 }
                 crate::menu_syntax_trigger_popup::TriggerPopupTransition::Open {
                     snapshot,
@@ -582,6 +585,7 @@ impl ScriptListApp {
                         crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
                             snapshot: Some(snapshot.clone()),
                             selected_row_id: selected_row_id.clone(),
+                            visible_start: 0,
                         };
                     needs_popup_sync = true;
                 }
@@ -589,6 +593,16 @@ impl ScriptListApp {
                     snapshot,
                     selected_row_id,
                 } => {
+                    let selected_index = selected_row_id
+                        .as_deref()
+                        .and_then(|id| snapshot.rows.iter().position(|row| row.id == id))
+                        .unwrap_or(0);
+                    let visible_start =
+                        crate::menu_syntax_trigger_popup::trigger_popup_visible_start_for_selection(
+                            self.menu_syntax_trigger_popup_state.visible_start,
+                            selected_index,
+                            snapshot.rows.len(),
+                        );
                     tracing::info!(
                         target: "script_kit::menu_syntax_popup",
                         event = "menu_syntax_trigger_popup_update",
@@ -600,16 +614,13 @@ impl ScriptListApp {
                         crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
                             snapshot: Some(snapshot.clone()),
                             selected_row_id: selected_row_id.clone(),
+                            visible_start,
                         };
                     needs_popup_sync = true;
                 }
             }
             if needs_popup_sync {
-                self.sync_menu_syntax_trigger_popup_window_for_filter(
-                    new_text.clone(),
-                    window,
-                    cx,
-                );
+                self.sync_menu_syntax_trigger_popup_window_for_filter(new_text.clone(), window, cx);
                 // Popup ownership just flipped — invalidate the grouped
                 // results cache so the main launcher list is rebuilt with
                 // the popup-aware gate in `get_grouped_results_cached`.

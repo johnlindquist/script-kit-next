@@ -2,7 +2,7 @@
 //!
 //! These helpers own the detached child-window mechanics used by any inline
 //! popup surface (ACP slash/@ pickers, ACP history popup, ACP model selector,
-//! and the upcoming menu-syntax `:`/`+` trigger popup). They are intentionally
+//! and the menu-syntax `:`, `;`, and `!` trigger popups). They are intentionally
 //! neutral: no ACP types, no menu-syntax types, no domain callbacks. Callers
 //! layer their own row models and accept behavior on top.
 //!

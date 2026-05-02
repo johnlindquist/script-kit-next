@@ -9,8 +9,8 @@
 //! ACP's slash/@ mention popup and the ACP model selector both consume that
 //! renderer today.
 //!
-//! What this module adds is the neutral **data shape** that future callers —
-//! the menu-syntax `:`/`+` trigger popup and cross-surface automation tooling
+//! What this module adds is the neutral **data shape** that callers like
+//! the menu-syntax `:`, `;`, and `!` trigger popups and cross-surface automation tooling
 //! that inspects picker state — can hold independent of ACP's
 //! `ContextPickerItem` or menu-syntax's `TriggerPickerRow`. Both owners map
 //! their domain row into `InlinePickerRow` via a small adapter function kept in
@@ -50,8 +50,7 @@ pub enum InlinePickerRowKind {
     Context,
     /// ACP `/` slash-command rows.
     SlashCommand,
-    /// Menu-syntax `:`/`+` trigger rows (qualifiers, capture targets,
-    /// capture handler rows).
+    /// Menu-syntax `:`, `;`, and `!` trigger rows.
     TextTrigger,
     /// Non-trigger action rows (footer "Create capture handler…",
     /// "Open Menu Syntax help").

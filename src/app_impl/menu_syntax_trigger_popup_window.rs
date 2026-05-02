@@ -15,8 +15,7 @@
 //!
 //! Mirrors `src/ai/acp/picker_popup.rs::AcpMentionPopupWindow` line-by-line
 //! so the menu-syntax popup feels identical to the ACP `@` / `/` pickers
-//! the user already knows — Oracle iter 015 Option C: "shared components,
-//! consistent behavior."
+//! the user already knows: shared components, consistent behavior.
 
 use std::io;
 use std::path::Path;
@@ -30,7 +29,8 @@ use gpui::{
 
 use crate::components::inline_dropdown::{
     inline_dropdown_visible_range_from_start, render_soft_compact_picker_row, InlineDropdown,
-    InlineDropdownColors, InlineDropdownSynopsis, SOFT_COMPACT_PICKER_ROW_HEIGHT,
+    InlineDropdownColors, InlineDropdownSynopsis, CONTEXT_PICKER_SYNOPSIS_HEIGHT,
+    SOFT_COMPACT_PICKER_ROW_HEIGHT,
 };
 use crate::components::inline_popup_window::{
     configure_inline_popup_window, inline_popup_bounds, inline_popup_height_for_row_height,
@@ -40,7 +40,7 @@ use crate::components::inline_popup_window::{
 use crate::components::inline_popup_window::{
     INLINE_POPUP_MAX_VISIBLE_ROWS, INLINE_POPUP_VERTICAL_PADDING,
 };
-use crate::menu_syntax::{TriggerPickerRow, TriggerPickerRowKind, TriggerPickerSnapshot};
+use crate::menu_syntax::{TriggerPickerRow, TriggerPickerSnapshot};
 use crate::menu_syntax_trigger_popup::{
     adapt_trigger_picker_row, trigger_popup_row_highlight_indices,
 };
@@ -126,6 +126,8 @@ struct MenuSyntaxTriggerPopupSlot {
 static MENU_SYNTAX_TRIGGER_POPUP_WINDOW: OnceLock<Mutex<Option<MenuSyntaxTriggerPopupSlot>>> =
     OnceLock::new();
 
+const MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID: &str = "menu-syntax-trigger-popup";
+
 fn clear_menu_syntax_trigger_popup_slot() {
     if let Some(storage) = MENU_SYNTAX_TRIGGER_POPUP_WINDOW.get() {
         if let Ok(mut guard) = storage.lock() {
@@ -137,6 +139,7 @@ fn clear_menu_syntax_trigger_popup_slot() {
 /// Close the popup NSWindow if it is open and clear the singleton slot.
 /// Idempotent — safe to call when nothing is open.
 pub(crate) fn close_menu_syntax_trigger_popup_window(cx: &mut App) {
+    crate::windows::remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID);
     if let Some(storage) = MENU_SYNTAX_TRIGGER_POPUP_WINDOW.get() {
         if let Ok(mut guard) = storage.lock() {
             if let Some(slot) = guard.take() {
@@ -165,7 +168,22 @@ fn popup_height(snapshot: &MenuSyntaxTriggerPopupSnapshot) -> f32 {
         return inline_popup_height_for_row_height(0, SOFT_COMPACT_PICKER_ROW_HEIGHT);
     }
 
-    inline_popup_height_for_row_height(snapshot.snapshot.rows.len(), SOFT_COMPACT_PICKER_ROW_HEIGHT)
+    let row_height = inline_popup_height_for_row_height(
+        snapshot.snapshot.rows.len(),
+        SOFT_COMPACT_PICKER_ROW_HEIGHT,
+    );
+    let selected_row_has_synopsis = snapshot
+        .snapshot
+        .rows
+        .get(snapshot.selected_index())
+        .is_some_and(|row| row.detail.is_some() || row.example.is_some());
+
+    row_height
+        + if selected_row_has_synopsis {
+            CONTEXT_PICKER_SYNOPSIS_HEIGHT
+        } else {
+            0.0
+        }
 }
 
 /// Open or update the menu-syntax trigger popup window.
@@ -198,6 +216,15 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
                 let update_result = slot.handle.update(cx, |popup, window, cx| {
                     popup.set_snapshot(snapshot.clone());
                     set_inline_popup_window_bounds(window, bounds, cx);
+                    crate::windows::set_automation_bounds(
+                        MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID,
+                        Some(crate::protocol::AutomationWindowBounds {
+                            x: f32::from(bounds.origin.x) as f64,
+                            y: f32::from(bounds.origin.y) as f64,
+                            width: f32::from(bounds.size.width) as f64,
+                            height: f32::from(bounds.size.height) as f64,
+                        }),
+                    );
                     cx.notify();
                 });
 
@@ -226,6 +253,27 @@ pub(crate) fn sync_menu_syntax_trigger_popup_window(
             window.remove_window();
         });
         return Err(error.context("failed to configure menu-syntax trigger popup window"));
+    }
+
+    let parent_automation_id =
+        crate::windows::focused_automation_window_id().unwrap_or_else(|| "main".to_string());
+    if let Err(error) = crate::windows::register_attached_popup(
+        MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID.to_string(),
+        crate::protocol::AutomationWindowKind::PromptPopup,
+        Some("Menu Syntax".to_string()),
+        Some("menuSyntaxTriggerPopup".to_string()),
+        Some(crate::protocol::AutomationWindowBounds {
+            x: f32::from(bounds.origin.x) as f64,
+            y: f32::from(bounds.origin.y) as f64,
+            width: f32::from(bounds.size.width) as f64,
+            height: f32::from(bounds.size.height) as f64,
+        }),
+        Some(parent_automation_id.as_str()),
+    ) {
+        let _ = handle.update(cx, |_popup, window, _cx| {
+            window.remove_window();
+        });
+        return Err(error.context("failed to register menu-syntax trigger popup window"));
     }
 
     if let Ok(mut guard) = storage.lock() {
@@ -260,7 +308,8 @@ impl MenuSyntaxTriggerPopupWindow {
         }
     }
 
-    fn set_snapshot(&mut self, snapshot: MenuSyntaxTriggerPopupSnapshot) {
+    fn set_snapshot(&mut self, mut snapshot: MenuSyntaxTriggerPopupSnapshot) {
+        snapshot.visible_start = self.visible_range().start;
         if let Some((armed_index, armed_id)) = self.mouse_armed_row.as_ref() {
             let still_same_row = snapshot
                 .snapshot
@@ -349,6 +398,7 @@ impl MenuSyntaxTriggerPopupWindow {
             self.mouse_armed_row = None;
             self.accept_row(index, cx);
             clear_menu_syntax_trigger_popup_slot();
+            crate::windows::remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID);
             window.remove_window();
         } else {
             self.mouse_armed_row = Some((index, row_id));
@@ -398,7 +448,6 @@ impl MenuSyntaxTriggerPopupWindow {
                         let is_selected = idx == selected_index;
                         let source_view = self.source_view.clone();
                         let enabled = row.enabled;
-                        let is_footer = matches!(row.kind, TriggerPickerRowKind::FooterAction);
                         self.render_picker_row(idx, row, is_selected, colors)
                             .cursor_pointer()
                             .on_click(cx.listener(move |this, event, window, cx| {
@@ -406,7 +455,7 @@ impl MenuSyntaxTriggerPopupWindow {
                                     close_menu_syntax_trigger_popup_window(cx);
                                     return;
                                 }
-                                if !enabled || is_footer {
+                                if !enabled {
                                     return;
                                 }
                                 this.handle_row_click(idx, event, window, cx);
@@ -508,7 +557,7 @@ impl ScriptListApp {
             snapshot,
             selected_row_id: self.menu_syntax_trigger_popup_state.selected_row_id.clone(),
             raw_filter_text,
-            visible_start: 0,
+            visible_start: self.menu_syntax_trigger_popup_state.visible_start,
             width,
         };
 
@@ -596,8 +645,8 @@ impl ScriptListApp {
                 if keep_open {
                     // Re-run the popup state machine against the new filter
                     // so the popup shows a snapshot matching the replaced
-                    // text (e.g. Tab on `+` → replace filter with `+todo `
-                    // → popup should now show todo's capture-handler rows,
+                    // text (e.g. Tab on `;` -> replace filter with `;todo `
+                    // -> popup should now show todo's capture-handler rows,
                     // not the bare target list).
                     if let Some(window) = window {
                         self.run_menu_syntax_trigger_popup_state_machine(&text, window, cx);
@@ -607,12 +656,12 @@ impl ScriptListApp {
                     close_menu_syntax_trigger_popup_window(cx);
                     // Mark this exact filter text as "user just accepted,
                     // do not re-open the popup". Without this, pressing
-                    // Enter on `+` selects `+todo`, sets the filter to
-                    // `+todo ` which parses to
+                    // Enter on `;` selects `;todo`, sets the filter to
+                    // `;todo ` which parses to
                     // `Incomplete(MissingCaptureBody)`, and the next
                     // `handle_filter_input_change` re-runs
-                    // `plan_trigger_popup_transition` → `Open` with the
-                    // handler snapshot — the popup flickers back open
+                    // `plan_trigger_popup_transition` -> `Open` with the
+                    // handler snapshot - the popup flickers back open
                     // immediately after the user dismissed it. The
                     // suppression is cleared as soon as the filter text
                     // changes (user types a body character or deletes).
@@ -724,15 +773,38 @@ impl ScriptListApp {
             TriggerPopupTransition::Open {
                 snapshot,
                 selected_row_id,
-            }
-            | TriggerPopupTransition::Update {
-                snapshot,
-                selected_row_id,
             } => {
                 self.menu_syntax_trigger_popup_state =
                     crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
                         snapshot: Some(snapshot),
                         selected_row_id,
+                        visible_start: 0,
+                    };
+                self.sync_menu_syntax_trigger_popup_window_for_filter(
+                    raw_filter.to_string(),
+                    window,
+                    cx,
+                );
+            }
+            TriggerPopupTransition::Update {
+                snapshot,
+                selected_row_id,
+            } => {
+                let selected_index = selected_row_id
+                    .as_deref()
+                    .and_then(|id| snapshot.rows.iter().position(|row| row.id == id))
+                    .unwrap_or(0);
+                let visible_start =
+                    crate::menu_syntax_trigger_popup::trigger_popup_visible_start_for_selection(
+                        self.menu_syntax_trigger_popup_state.visible_start,
+                        selected_index,
+                        snapshot.rows.len(),
+                    );
+                self.menu_syntax_trigger_popup_state =
+                    crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState {
+                        snapshot: Some(snapshot),
+                        selected_row_id,
+                        visible_start,
                     };
                 self.sync_menu_syntax_trigger_popup_window_for_filter(
                     raw_filter.to_string(),
@@ -776,6 +848,12 @@ impl ScriptListApp {
         match outcome {
             crate::menu_syntax::TriggerPickerIntentOutcome::SelectionChanged { new_index } => {
                 let next_row_id = snapshot.rows.get(new_index).map(|row| row.id.clone());
+                self.menu_syntax_trigger_popup_state.visible_start =
+                    crate::menu_syntax_trigger_popup::trigger_popup_visible_start_for_selection(
+                        self.menu_syntax_trigger_popup_state.visible_start,
+                        new_index,
+                        snapshot.rows.len(),
+                    );
                 self.menu_syntax_trigger_popup_state.selected_row_id = next_row_id;
                 // Re-sync so the popup re-renders with the new selection.
                 self.sync_menu_syntax_trigger_popup_window(window, cx);

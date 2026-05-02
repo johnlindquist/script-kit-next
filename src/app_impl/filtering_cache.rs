@@ -85,12 +85,12 @@ impl ScriptListApp {
     /// P1: Now uses caching - invalidates only when filter_text changes
     pub(crate) fn filtered_results(&self) -> Vec<scripts::SearchResult> {
         let filter_text = self.filter_text();
-        // When a composer-style menu-syntax popup owns the input (e.g. `+t`
+        // When a composer-style menu-syntax popup owns the input (e.g. `;t`
         // or `!dep`), the main launcher should not report or render fuzzy
         // matches — the popup is the sole surface for the typed characters.
         // Without this gate, `getState.visibleChoiceCount`, automation
         // `getElements`, and selection-coercion code would keep iterating
-        // over stale fuzzy results (e.g. 8 "+"-ish script matches) behind
+        // over stale fuzzy results (e.g. 8 semicolon-ish script matches) behind
         // the popup.
         if self.menu_syntax_trigger_popup_state.owns_main_list()
             || self
@@ -130,7 +130,9 @@ impl ScriptListApp {
             || self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(&self.filter_text)
-            || self.menu_syntax_mode.command_owns_input_for(&self.filter_text)
+            || self
+                .menu_syntax_mode
+                .command_owns_input_for(&self.filter_text)
         {
             self.main_menu_result_caches
                 .store_filtered_results(self.filter_text.clone(), Vec::new());
@@ -256,7 +258,9 @@ impl ScriptListApp {
             || self
                 .menu_syntax_mode
                 .capture_composer_owns_input_for(live_filter_text)
-            || self.menu_syntax_mode.command_owns_input_for(live_filter_text);
+            || self
+                .menu_syntax_mode
+                .command_owns_input_for(live_filter_text);
         if live_menu_syntax_owns_main_list && live_filter_text != computed_filter_text {
             return (
                 Arc::<[GroupedListItem]>::from(Vec::new()),
@@ -323,7 +327,7 @@ impl ScriptListApp {
             // A composer-style menu-syntax surface owns the input. Suppress
             // the main launcher list so fuzzy search, capture-handler rows,
             // and the "Use X with…" fallback section do not leak through the
-            // transparent popup (e.g. typing `+todo` should not also render
+            // transparent popup (e.g. typing `;todo` should not also render
             // capture-mode rows behind the picker). Refine (`:`) remains
             // structured launcher search and is handled below.
             (Vec::new(), Vec::new())
@@ -450,7 +454,10 @@ impl ScriptListApp {
         let result_idx = self
             .main_menu_result_caches
             .flat_result_index_for_grouped_item(selected_index)?;
-        if self.inline_calculator_for_result_index(result_idx).is_some() {
+        if self
+            .inline_calculator_for_result_index(result_idx)
+            .is_some()
+        {
             None
         } else {
             self.main_menu_result_caches

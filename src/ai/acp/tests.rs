@@ -335,6 +335,7 @@ const ACP_MOD_SOURCE: &str = include_str!("mod.rs");
 const ACP_HISTORY_POPUP_SOURCE: &str = include_str!("history_popup.rs");
 const ACP_MODEL_SELECTOR_POPUP_SOURCE: &str = include_str!("model_selector_popup.rs");
 const ACP_PICKER_POPUP_SOURCE: &str = include_str!("picker_popup.rs");
+const ACP_POPUP_WINDOW_SOURCE: &str = include_str!("popup_window.rs");
 const ACP_CHAT_WINDOW_SOURCE: &str = include_str!("chat_window.rs");
 const ACP_VIEW_SOURCE: &str = include_str!("view.rs");
 const ACP_CLIENT_SOURCE: &str = include_str!("client.rs");
@@ -747,6 +748,11 @@ fn acp_model_selector_migration_uses_popup_window_instead_of_inline_layer() {
                 .contains("super::popup_window::dense_picker_width_for_labels"),
         "ACP model selector popup must share the dense picker row and sizing contract with slash/@ pickers"
     );
+    assert!(
+        !ACP_MODEL_SELECTOR_POPUP_SOURCE
+            .contains("crate::ai::context_picker_row::render_dense_monoline_picker_row"),
+        "ACP model selector popup should import row renderers from shared inline_dropdown"
+    );
 }
 
 #[test]
@@ -756,9 +762,34 @@ fn acp_history_migration_uses_popup_window_instead_of_inline_layer() {
         "ACP chat view should no longer render the history picker inline"
     );
     assert!(
-        ACP_HISTORY_POPUP_SOURCE.contains("WindowKind::PopUp")
-            && ACP_HISTORY_POPUP_SOURCE.contains("AcpHistoryPopupWindow"),
-        "ACP history picker should render through a popup window entity"
+        ACP_HISTORY_POPUP_SOURCE.contains("AcpHistoryPopupWindow")
+            && ACP_HISTORY_POPUP_SOURCE.contains("super::popup_window::popup_window_options")
+            && ACP_HISTORY_POPUP_SOURCE.contains("super::popup_window::configure_popup_window")
+            && ACP_HISTORY_POPUP_SOURCE
+                .contains("super::popup_window::set_popup_window_bounds"),
+        "ACP history picker should render through a popup window entity using shared popup mechanics"
+    );
+    assert!(
+        !ACP_HISTORY_POPUP_SOURCE.contains("fn popup_ns_window")
+            && !ACP_HISTORY_POPUP_SOURCE.contains("fn attach_popup_to_parent_window")
+            && !ACP_HISTORY_POPUP_SOURCE.contains("fn flipped_ns_window_y"),
+        "ACP history popup must not copy AppKit popup plumbing that is owned by popup_window"
+    );
+}
+
+#[test]
+fn acp_picker_popup_row_rendering_comes_from_shared_inline_dropdown() {
+    assert!(
+        ACP_PICKER_POPUP_SOURCE.contains("crate::components::inline_dropdown")
+            && !ACP_PICKER_POPUP_SOURCE
+                .contains("crate::ai::context_picker_row::{\n    render_soft_compact_picker_row"),
+        "ACP slash/@ picker popup should source shared inline-dropdown row rendering directly"
+    );
+    assert!(
+        ACP_POPUP_WINDOW_SOURCE.contains("crate::components::inline_dropdown::CONTEXT_PICKER_ROW_HEIGHT")
+            && !ACP_POPUP_WINDOW_SOURCE
+                .contains("crate::ai::context_picker_row::CONTEXT_PICKER_ROW_HEIGHT"),
+        "ACP popup facade should derive dense picker height from the shared inline-dropdown row contract"
     );
 }
 

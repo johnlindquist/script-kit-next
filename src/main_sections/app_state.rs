@@ -181,7 +181,10 @@ impl MainMenuResultCacheState {
         Some((grouped_index, result_idx))
     }
 
-    fn search_result_for_flat_index(&self, flat_result_index: usize) -> Option<&scripts::SearchResult> {
+    fn search_result_for_flat_index(
+        &self,
+        flat_result_index: usize,
+    ) -> Option<&scripts::SearchResult> {
         self.cached_grouped_flat_results.get(flat_result_index)
     }
 
@@ -189,10 +192,14 @@ impl MainMenuResultCacheState {
         &self,
         flat_result_index: usize,
     ) -> Option<scripts::SearchResult> {
-        self.search_result_for_flat_index(flat_result_index).cloned()
+        self.search_result_for_flat_index(flat_result_index)
+            .cloned()
     }
 
-    fn search_result_for_grouped_item(&self, grouped_index: usize) -> Option<&scripts::SearchResult> {
+    fn search_result_for_grouped_item(
+        &self,
+        grouped_index: usize,
+    ) -> Option<&scripts::SearchResult> {
         let result_idx = self.flat_result_index_for_grouped_item(grouped_index)?;
         self.search_result_for_flat_index(result_idx)
     }
@@ -221,10 +228,12 @@ impl MainMenuResultCacheState {
     }
 
     fn grouped_search_results(&self) -> impl Iterator<Item = &scripts::SearchResult> {
-        self.cached_grouped_items.iter().filter_map(|item| match item {
-            GroupedListItem::Item(result_idx) => self.search_result_for_flat_index(*result_idx),
-            GroupedListItem::SectionHeader(..) => None,
-        })
+        self.cached_grouped_items
+            .iter()
+            .filter_map(|item| match item {
+                GroupedListItem::Item(result_idx) => self.search_result_for_flat_index(*result_idx),
+                GroupedListItem::SectionHeader(..) => None,
+            })
     }
 
     fn selectable_bounds(&self) -> (Option<usize>, Option<usize>) {
@@ -470,14 +479,11 @@ struct ScriptListApp {
     /// `set_filter_text_immediate` so result grouping and execution can consume
     /// a stable snapshot without racing the filter coalescer.
     menu_syntax_mode: crate::menu_syntax::MenuSyntaxMode,
-    /// Cached state for the menu-syntax trigger popup (iter 019 commit D1 +
-    /// iter 020 commit D2a). `filter_input_change` runs
+    /// Cached state for the menu-syntax trigger popup. `filter_input_change` runs
     /// `plan_trigger_popup_transition` on every filter update and keeps this
-    /// field in sync. The GPUI window consuming this state ships in a
-    /// follow-up commit; today we only maintain the snapshot + selected row id
-    /// and emit tracing so the state machine is observable in production.
-    menu_syntax_trigger_popup_state:
-        crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState,
+    /// field in sync while the detached popup window renders from the snapshot
+    /// plus selected row id.
+    menu_syntax_trigger_popup_state: crate::menu_syntax_trigger_popup::MenuSyntaxTriggerPopupState,
     /// Run 12 Pass 11 — pending Cmd+Enter inline AI proposal for
     /// `cmd-enter-inline-ai-proposal`. Set by the Cmd+Enter handler when the
     /// user is composing power syntax; threaded into the snapshot so the hint
@@ -485,8 +491,7 @@ struct ScriptListApp {
     /// filter change or Esc/Tab dismissal. Pass 11 ships a deterministic stub
     /// proposal so the receipt is observable without an LLM round-trip; the
     /// real ACP/LLM call wiring is a follow-up.
-    pub(crate) pending_menu_syntax_ai_proposal:
-        Option<crate::menu_syntax_ai::MenuSyntaxAiProposal>,
+    pub(crate) pending_menu_syntax_ai_proposal: Option<crate::menu_syntax_ai::MenuSyntaxAiProposal>,
     /// When `Some(filter)`, the menu-syntax trigger popup must NOT
     /// automatically re-open for that exact filter text. Set by the
     /// keyboard-apply dispatcher after an Accept (Enter) outcome so the

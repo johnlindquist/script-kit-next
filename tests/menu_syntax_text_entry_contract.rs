@@ -151,6 +151,40 @@ fn popup_highlights_use_live_filter_snapshot_text() {
 }
 
 #[test]
+fn popup_footer_rows_and_visible_page_follow_inline_picker_contracts() {
+    let popup_window = fs::read_to_string("src/app_impl/menu_syntax_trigger_popup_window.rs")
+        .expect("Failed to read src/app_impl/menu_syntax_trigger_popup_window.rs");
+
+    assert!(
+        popup_window.contains("fn set_snapshot(&mut self, mut snapshot:")
+            && popup_window.contains("snapshot.visible_start = self.visible_range().start;")
+            && popup_window.contains("visible_start: self.menu_syntax_trigger_popup_state.visible_start")
+            && popup_window.contains("trigger_popup_visible_start_for_selection(")
+            && popup_window.contains("inline_dropdown_visible_range_from_start("),
+        "menu-syntax popup updates should preserve the current visible page through the shared inline-dropdown range helper"
+    );
+    assert!(
+        !popup_window.contains("|| is_footer")
+            && !popup_window.contains("let is_footer = matches!(row.kind"),
+        "enabled footer action rows should use the same click-to-accept path as other menu-syntax popup rows"
+    );
+    assert!(
+        popup_window.contains("CONTEXT_PICKER_SYNOPSIS_HEIGHT")
+            && popup_window.contains("selected_row_has_synopsis")
+            && popup_window.contains("row.detail.is_some() || row.example.is_some()"),
+        "menu-syntax popup window height should reserve shared inline-dropdown synopsis space when the selected row renders synopsis"
+    );
+    assert!(
+        popup_window.contains("MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID")
+            && popup_window.contains("register_attached_popup(")
+            && popup_window.contains("menuSyntaxTriggerPopup")
+            && popup_window.contains("set_automation_bounds(")
+            && popup_window.contains("remove_automation_window(MENU_SYNTAX_TRIGGER_POPUP_AUTOMATION_ID)"),
+        "menu-syntax popup should register as an attached automation popup so screenshots and layout probes can target it directly"
+    );
+}
+
+#[test]
 fn stdin_setfilter_runs_menu_syntax_popup_state_machine() {
     let updates = fs::read_to_string("src/app_impl/filter_input_updates.rs")
         .expect("Failed to read src/app_impl/filter_input_updates.rs");
@@ -178,7 +212,7 @@ fn launcher_input_accents_power_syntax_prefixes() {
         .expect("Failed to read vendored input element");
 
     assert!(
-        render.contains("prefix_span_for_input_with_targets(")
+        render.contains("input_spans_for_input_with_targets(")
             && render.contains("state.set_highlight_ranges(input_highlight_ranges)"),
         "ScriptList input should accent the parsed power-syntax prefix span"
     );
@@ -299,9 +333,9 @@ fn power_syntax_tags_and_command_picker_are_first_class() {
         "`!` should have a real trigger-picker mode backed by registered commands"
     );
     assert!(
-        popup.contains("'!' => \"!\"")
-            && popup.contains("trigger != '+' && trigger != ':' && trigger != '!'"),
-        "popup partial filtering and highlights should include the ! command trigger"
+        trigger_picker.contains("bang_command_snapshot(input, ctx)")
+            && popup.contains("trigger != ';' && trigger != ':'"),
+        "command trigger rows should be handled by the trigger picker while popup partial filtering stays scoped to text-composer triggers"
     );
 }
 
@@ -328,7 +362,7 @@ fn registered_capture_targets_extend_parser_popup_and_input_highlight() {
     );
     assert!(
         trigger_picker.contains("registered_capture_targets(ctx)")
-            && trigger_picker.contains("capture_target_rows(ctx)"),
+            && trigger_picker.contains("capture_target_catalog(ctx)"),
         "the popup should show registered capture target rows"
     );
     assert!(
