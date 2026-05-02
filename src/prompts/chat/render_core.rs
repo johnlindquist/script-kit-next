@@ -32,21 +32,7 @@ impl ChatPrompt {
         crate::components::render_simple_hint_strip(hints, None)
     }
 
-    fn render_footer(&self, _cx: &mut Context<Self>) -> AnyElement {
-        if matches!(
-            crate::footer_popup::active_main_window_footer_surface(),
-            Some("chat_prompt")
-        ) {
-            tracing::info!(
-                target: "script_kit::prompt_chrome",
-                event = "chat_footer_suppressed_for_native_footer",
-                mini_mode = self.mini_mode,
-                "Suppressed internal GPUI chat footer because native main-window footer is active"
-            );
-            return crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(
-            );
-        }
-
+    fn render_gpui_footer(&self) -> AnyElement {
         if self.mini_mode {
             return self.render_mini_hint_strip().into_any_element();
         }
@@ -74,6 +60,13 @@ impl ChatPrompt {
             )),
         )
         .into_any_element()
+    }
+
+    fn render_footer(&self, _cx: &mut Context<Self>) -> AnyElement {
+        crate::components::prompt_layout_shell::render_main_window_footer_slot_for_prompt_surface(
+            "chat_prompt",
+            || self.render_gpui_footer(),
+        )
     }
 }
 
@@ -521,16 +514,17 @@ mod chat_footer_hint_strip_tests {
     #[test]
     fn test_chat_footer_uses_hint_strip_for_both_modes() {
         assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("active_main_window_footer_surface()"),
-            "Chat footer should check for active native footer surface"
-        );
-        assert!(
-            CHAT_RENDER_CORE_SOURCE.contains("chat_footer_suppressed_for_native_footer"),
-            "Chat footer should log when suppressed for native footer"
+            CHAT_RENDER_CORE_SOURCE.contains("render_main_window_footer_slot_for_prompt_surface(")
+                && CHAT_RENDER_CORE_SOURCE.contains("\"chat_prompt\""),
+            "Chat footer should route native-footer policy through the prompt surface helper"
         );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("render_mini_hint_strip"),
             "Chat should have a mini hint strip renderer"
+        );
+        assert!(
+            CHAT_RENDER_CORE_SOURCE.contains("render_gpui_footer"),
+            "Chat should keep GPUI fallback footer rendering separate from native slot policy"
         );
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("if self.mini_mode"),
@@ -559,6 +553,13 @@ mod chat_footer_hint_strip_tests {
         assert!(
             CHAT_RENDER_CORE_SOURCE.contains("footer_status_text()"),
             "Full-mode footer should use the status text helper"
+        );
+        let render_code = &CHAT_RENDER_CORE_SOURCE[..CHAT_RENDER_CORE_SOURCE
+            .find("#[cfg(test)]")
+            .unwrap_or(CHAT_RENDER_CORE_SOURCE.len())];
+        assert!(
+            !render_code.contains("active_main_window_footer_surface()"),
+            "Chat render code should not call the global native footer state directly"
         );
         // Split the needle to avoid self-matching via include_str!
         let needle = format!("{}::new", "PromptFooter");

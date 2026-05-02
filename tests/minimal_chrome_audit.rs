@@ -380,10 +380,16 @@ fn path_native_footer_submits_path_prompt_without_launcher_ai() {
         "PathPrompt native footer should expose Select and Actions, not launcher AI"
     );
     assert!(
-        path_render.contains("render_native_main_window_footer_spacer()")
-            && path_render.contains("active_main_window_footer_surface()")
+        path_render.contains("main_window_footer_slot_for_prompt_surface(")
+            && path_render.contains("\"path_prompt\"")
             && !path_render.contains("PromptFooter::new("),
-        "PathPrompt entity should keep its native-footer spacer exception and avoid PromptFooter"
+        "PathPrompt entity should route fallback/native footer ownership through the prompt surface slot helper"
+    );
+    assert!(
+        path_render.contains("\"↵ Select\"")
+            && path_render.contains("\"⌘K Actions\"")
+            && !path_render.contains("universal_prompt_hints()"),
+        "PathPrompt GPUI fallback should match native Select/Actions semantics and omit launcher AI"
     );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"path_footer\",\"run_routes_to_path\":true,\"ai_absent\":true,\"status\":\"pass\"}}");
 }

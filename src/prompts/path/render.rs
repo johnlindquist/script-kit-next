@@ -5,6 +5,10 @@ use crate::ui_foundation::{
     printable_char,
 };
 
+fn path_prompt_hints() -> Vec<gpui::SharedString> {
+    vec!["↵ Select".into(), "⌘K Actions".into()]
+}
+
 impl Focusable for PathPrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
         self.focus_handle.clone()
@@ -120,7 +124,7 @@ impl Render for PathPrompt {
             &crate::components::PromptChromeAudit::minimal_list("prompts::path", true),
         );
 
-        let hints = crate::components::universal_prompt_hints();
+        let hints = path_prompt_hints();
         crate::components::emit_prompt_hint_audit("prompts::path", &hints);
 
         tracing::info!(
@@ -133,16 +137,11 @@ impl Render for PathPrompt {
             "path_prompt_chrome_checkpoint"
         );
 
-        let native_footer_active = matches!(
-            crate::footer_popup::active_main_window_footer_surface(),
-            Some("path_prompt")
-        );
-
-        let footer = if native_footer_active {
-            Some(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
-        } else {
-            Some(crate::components::render_simple_hint_strip(hints, None))
-        };
+        let footer =
+            crate::components::prompt_layout_shell::main_window_footer_slot_for_prompt_surface(
+                "path_prompt",
+                || crate::components::render_simple_hint_strip(hints, None),
+            );
 
         let container = crate::components::render_minimal_list_prompt_shell_with_footer(
             0.0, None, header, content, footer,
