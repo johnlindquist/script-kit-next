@@ -106,11 +106,11 @@ impl ScriptListApp {
                     // Tab navigation between fields
                     if has_shift {
                         entity_for_shift_tab.update(cx, |form, cx| {
-                            form.focus_previous(cx);
+                            form.focus_previous(window, cx);
                         });
                     } else {
                         entity_for_tab.update(cx, |form, cx| {
-                            form.focus_next(cx);
+                            form.focus_next(window, cx);
                         });
                     }
                     return;

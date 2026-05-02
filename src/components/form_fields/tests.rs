@@ -235,5 +235,5 @@ fn test_form_field_colors_from_design_uses_design_accent_for_cursor() {
     };
 
     let colors = FormFieldColors::from_design(&design);
-    assert_eq!(colors.cursor, 0x123456);
+    assert_eq!(colors.cursor, gpui::rgb(0x123456));
 }

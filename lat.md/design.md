@@ -30,6 +30,8 @@ Those SDK-facing browser surfaces also route secondary labels, counts, empty sta
 
 Create-flow prompts share the same text ladder through `prompt_text_palette` and `prompt_field_style`: primary values use `text_primary`, empty field values use `placeholder_text_rgba`, and help/count/path-prefix text uses hint or muted opacity tokens instead of local packed-alpha math. Path and Env prompts also use the shared form intro/section/help helpers so secret entry, path filtering, and starter creation keep one compact GPUI surface contract.
 
+Native `form()` fields resolve text, placeholder, label, cursor, and checkbox mark colors before render through shared chrome tokens rather than wrapping muted/secondary base colors in renderer code. Text fields and text areas both show a cursor plus placeholder while focused and empty, and the form prompt synchronizes parent focus state when fields are clicked so key routing follows the visible focus target.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.
@@ -237,6 +239,11 @@ This page is justified by the live chrome, popup, and portal code plus the root 
 - [src/components/prompt_layout_shell.rs](../src/components/prompt_layout_shell.rs)
 - [src/prompts/path/render.rs](../src/prompts/path/render.rs)
 - [src/prompts/env/render.rs](../src/prompts/env/render.rs)
+- [src/form_prompt.rs](../src/form_prompt.rs)
+- [src/components/form_fields/colors.rs](../src/components/form_fields/colors.rs)
+- [src/components/form_fields/text_field/render.rs](../src/components/form_fields/text_field/render.rs)
+- [src/components/form_fields/text_area/render.rs](../src/components/form_fields/text_area/render.rs)
+- [src/components/form_fields/checkbox.rs](../src/components/form_fields/checkbox.rs)
 - [src/stories/ask_tab_glyph_options.rs](../src/stories/ask_tab_glyph_options.rs)
 - [src/storybook/dictation_ui_variations.rs](../src/storybook/dictation_ui_variations.rs)
 - [src/storybook/browser.rs](../src/storybook/browser.rs)

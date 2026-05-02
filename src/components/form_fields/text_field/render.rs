@@ -68,7 +68,7 @@ impl Render for FormTextField {
         );
 
         // Build cursor element (2px width is fixed for crisp rendering)
-        let cursor_element = div().w(px(2.)).h(rems(1.125)).bg(rgb(colors.cursor));
+        let cursor_element = div().w(px(2.)).h(rems(1.125)).bg(colors.cursor);
 
         // Build text content based on value and focus state
         // IMPORTANT: cursor_pos is a CHAR index, not byte index.
@@ -87,7 +87,7 @@ impl Render for FormTextField {
                 .child(
                     div()
                         .text_size(px(colors.input_font_size))
-                        .text_color(rgb(colors.text))
+                        .text_color(colors.text)
                         .child(text_before.to_string()),
                 );
 
@@ -100,7 +100,7 @@ impl Render for FormTextField {
             content.child(
                 div()
                     .text_size(px(colors.input_font_size))
-                    .text_color(rgb(colors.text))
+                    .text_color(colors.text)
                     .child(text_after.to_string()),
             )
         } else {
@@ -109,16 +109,13 @@ impl Render for FormTextField {
             if is_focused {
                 // Cursor when focused and empty
                 content = content.child(cursor_element);
-            } else {
-                // Placeholder when not focused
-                content = content.child(
-                    div()
-                        .text_size(px(colors.input_font_size))
-                        .text_color(rgb(colors.placeholder))
-                        .child(placeholder),
-                );
             }
-            content
+            content.child(
+                div()
+                    .text_size(px(colors.input_font_size))
+                    .text_color(colors.placeholder)
+                    .child(placeholder),
+            )
         };
 
         // Handle click to focus this field
@@ -166,7 +163,7 @@ impl Render for FormTextField {
             container = container.child(
                 div()
                     .text_size(px(colors.label_font_size))
-                    .text_color(rgb(colors.label))
+                    .text_color(colors.label)
                     .font_weight(FontWeight::MEDIUM)
                     .child(label_text),
             );

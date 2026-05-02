@@ -30,7 +30,10 @@ impl FormTextField {
     /// Create a new text field from a Field definition
     pub fn new(field: Field, colors: FormFieldColors, cx: &mut App) -> Self {
         let initial_value = field.value.clone().unwrap_or_default();
-        let is_password = field.field_type.as_deref() == Some("password");
+        let is_password = field
+            .field_type
+            .as_deref()
+            .is_some_and(|field_type| field_type.eq_ignore_ascii_case("password"));
         let state = FormFieldState::new(initial_value.clone());
 
         Self {
@@ -70,59 +73,6 @@ impl FormTextField {
     /// the child's focus handle instead of its own, preventing focus stealing.
     pub fn get_focus_handle(&self) -> FocusHandle {
         self.focus_handle.clone()
-    }
-
-    /// Handle text input
-    fn handle_input(&mut self, text: &str, cx: &mut Context<Self>) {
-        // Insert text at cursor position
-        self.value.insert_str(self.cursor_position, text);
-        self.cursor_position += text.len();
-        self.state.set_value(self.value.clone());
-        cx.notify();
-    }
-
-    /// Handle key down events
-    fn handle_key_down(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
-        let key = event.keystroke.key.as_str();
-
-        match key {
-            "backspace" => {
-                if self.cursor_position > 0 {
-                    self.cursor_position -= 1;
-                    self.value.remove(self.cursor_position);
-                    self.state.set_value(self.value.clone());
-                    cx.notify();
-                }
-            }
-            "delete" => {
-                if self.cursor_position < self.value.len() {
-                    self.value.remove(self.cursor_position);
-                    self.state.set_value(self.value.clone());
-                    cx.notify();
-                }
-            }
-            "left" | "arrowleft" => {
-                if self.cursor_position > 0 {
-                    self.cursor_position -= 1;
-                    cx.notify();
-                }
-            }
-            "right" | "arrowright" => {
-                if self.cursor_position < self.value.len() {
-                    self.cursor_position += 1;
-                    cx.notify();
-                }
-            }
-            "home" => {
-                self.cursor_position = 0;
-                cx.notify();
-            }
-            "end" => {
-                self.cursor_position = self.value.len();
-                cx.notify();
-            }
-            _ => {}
-        }
     }
 
     /// Get the display text (masked for password fields)

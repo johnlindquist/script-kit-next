@@ -172,6 +172,58 @@ fn form_prompt_wrapper_has_no_prompt_footer_or_hardcoded_hex() {
 }
 
 #[test]
+fn form_prompt_fields_use_shared_chrome_and_focus_contracts() {
+    let form_source = include_str!("../src/form_prompt.rs");
+    let colors_source = include_str!("../src/components/form_fields/colors.rs");
+    let text_field_source = include_str!("../src/components/form_fields/text_field/render.rs");
+    let text_area_source = include_str!("../src/components/form_fields/text_area/render.rs");
+    let text_field_model = include_str!("../src/components/form_fields/text_field/mod.rs");
+
+    assert!(
+        colors_source.contains("AppChromeColors::from_theme")
+            && colors_source.contains("placeholder_text_rgba"),
+        "form field colors should resolve text through shared chrome tokens"
+    );
+    assert!(
+        !colors_source.contains("theme.colors.text.muted")
+            && !colors_source.contains("theme.colors.text.secondary"),
+        "form fields should not double-dim from muted/secondary base text colors"
+    );
+    assert!(
+        !text_field_source.contains("rgb(colors.text")
+            && !text_field_source.contains("rgb(colors.placeholder")
+            && !text_field_source.contains("rgb(colors.label")
+            && !text_area_source.contains("rgb(colors.text")
+            && !text_area_source.contains("rgb(colors.placeholder")
+            && !text_area_source.contains("rgb(colors.label"),
+        "form field renderers should consume resolved Rgba text colors directly"
+    );
+    assert!(
+        text_area_source.contains("cursor_element")
+            && text_area_source.contains("self.cursor_position")
+            && text_area_source.contains("slice_by_char_range"),
+        "textarea should render a visible char-safe cursor"
+    );
+    assert!(
+        form_source.contains("to_ascii_lowercase()")
+            && text_field_model.contains("eq_ignore_ascii_case(\"password\")"),
+        "form field type dispatch and password masking should be case-insensitive"
+    );
+    assert!(
+        form_source.contains("focus_field_at")
+            && form_source.contains("form-field-slot-")
+            && form_source.contains("self.focused_index = index.min"),
+        "form prompt field clicks should synchronize parent focused_index"
+    );
+    assert!(
+        !text_field_model.contains("self.value.insert_str(self.cursor_position")
+            && !text_field_model.contains("self.value.remove(self.cursor_position)"),
+        "text field code must not treat char indices as byte indices"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"form_fields\",\"chrome_tokens\":true,\"cursor_visible\":true,\"focus_sync\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn path_prompt_render_has_tracing_and_no_hardcoded_hex() {
     let outer_source = include_str!("../src/render_prompts/path.rs");
     let inner_source = include_str!("../src/prompts/path/render.rs");
