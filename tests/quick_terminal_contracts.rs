@@ -120,3 +120,24 @@ fn quick_terminal_native_footer_does_not_capture_sdk_term_prompt_footer() {
         "Quick Terminal must reserve space for the native AppKit footer"
     );
 }
+
+#[test]
+fn quick_terminal_apply_keyboard_and_footer_share_visibility_predicate() {
+    // @lat: [[lat.md/acp-chat#ACP Chat#Boundary with #Quick Terminal native footer]]
+    assert!(
+        UI_WINDOW_SOURCE.contains("pub(crate) fn quick_terminal_can_apply_back(&self) -> bool"),
+        "Quick Terminal must expose one apply-back predicate"
+    );
+    assert!(
+        UI_WINDOW_SOURCE.contains("let can_apply = self.quick_terminal_can_apply_back();"),
+        "Quick Terminal footer buttons must use the shared apply-back predicate"
+    );
+    assert!(
+        RENDER_TERM_PROMPT_SOURCE.contains("if !this.quick_terminal_can_apply_back()"),
+        "Quick Terminal Cmd+Enter must guard apply-back through the shared predicate"
+    );
+    assert!(
+        RENDER_TERM_PROMPT_SOURCE.contains("return false;"),
+        "Quick Terminal Cmd+Enter should fall through when Apply is not available"
+    );
+}
