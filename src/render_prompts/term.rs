@@ -290,6 +290,9 @@ impl ScriptListApp {
                             && !has_shift
                             && crate::ui_foundation::is_key_enter(key)
                         {
+                            if !this.quick_terminal_can_apply_back() {
+                                return false;
+                            }
                             // Use the de-raced helper that primes clipboard
                             // then waits a tick before applying, so the
                             // clipboard write completes before the read.

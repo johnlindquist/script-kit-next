@@ -392,13 +392,16 @@ impl ScriptListApp {
     /// when a tab-AI apply-back route AND its return view are both present.
     /// Run/AI/Actions are intentionally omitted — Quick Terminal shares the
     /// main menu's native footer chrome but not its main-menu-specific actions.
+    pub(crate) fn quick_terminal_can_apply_back(&self) -> bool {
+        self.tab_ai_harness_apply_back_route.is_some() && self.tab_ai_harness_return_view.is_some()
+    }
+
     fn quick_terminal_footer_buttons(&self) -> Vec<crate::footer_popup::FooterButtonConfig> {
         use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
         let footer_disabled = self.main_window_footer_buttons_blocked();
         let enabled = !footer_disabled;
-        let can_apply = self.tab_ai_harness_apply_back_route.is_some()
-            && self.tab_ai_harness_return_view.is_some();
+        let can_apply = self.quick_terminal_can_apply_back();
 
         let mut buttons = Vec::with_capacity(if can_apply { 2 } else { 1 });
         if can_apply {
