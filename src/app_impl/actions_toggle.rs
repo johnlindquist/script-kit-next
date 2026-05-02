@@ -195,6 +195,10 @@ impl ScriptListApp {
         opened_log: &'static str,
         failed_prefix: &'static str,
     ) {
+        dialog.update(cx, |dialog, _cx| {
+            dialog.set_skip_track_focus(true);
+        });
+
         let parent_automation_id = crate::windows::focused_automation_window_id();
         cx.spawn(async move |this, cx| {
             cx.update(|cx| {
@@ -571,14 +575,13 @@ impl ScriptListApp {
                 // Change Model drill-down. Fire-and-forget: this dialog opening
                 // uses whatever the thread has right now; subsequent openings pick
                 // up whatever the agent just advertised.
-                let thread_for_refresh =
-                    if let crate::ai::acp::AcpChatSession::Live(ref thread) =
-                        entity.read(cx).session
-                    {
-                        Some(thread.clone())
-                    } else {
-                        None
-                    };
+                let thread_for_refresh = if let crate::ai::acp::AcpChatSession::Live(ref thread) =
+                    entity.read(cx).session
+                {
+                    Some(thread.clone())
+                } else {
+                    None
+                };
                 if let Some(thread) = thread_for_refresh {
                     thread.update(cx, |thread, cx| thread.refresh_models(cx));
                 }
@@ -647,10 +650,10 @@ impl ScriptListApp {
             // (can't borrow `self` inside `cx.new`). Returns None when not
             // composing a Power Syntax expression so the dialog falls back to
             // the legacy script_context + global rows.
-            let power_syntax_section_for_dialog: Option<crate::menu_syntax_actions::PowerSyntaxActionSection> = {
-                use crate::menu_syntax::{
-                    builtin_schema, MenuSyntaxActionState,
-                };
+            let power_syntax_section_for_dialog: Option<
+                crate::menu_syntax_actions::PowerSyntaxActionSection,
+            > = {
+                use crate::menu_syntax::{builtin_schema, MenuSyntaxActionState};
                 let raw = self.filter_text().to_string();
                 let mode = &self.menu_syntax_mode;
                 if let Some(invocation) = mode.capture_for(&raw) {
@@ -661,16 +664,22 @@ impl ScriptListApp {
                         payload: invocation,
                         schema: schema.as_ref(),
                     };
-                    Some(crate::menu_syntax_actions::power_syntax_action_section(&state))
+                    Some(crate::menu_syntax_actions::power_syntax_action_section(
+                        &state,
+                    ))
                 } else if let Some(argv) = mode.command_for(&raw) {
                     let state = MenuSyntaxActionState::CommandComposer {
                         head: &argv.head,
                         argv: &argv.argv,
                     };
-                    Some(crate::menu_syntax_actions::power_syntax_action_section(&state))
+                    Some(crate::menu_syntax_actions::power_syntax_action_section(
+                        &state,
+                    ))
                 } else if let Some(query) = mode.advanced_query_for(&raw) {
                     let state = MenuSyntaxActionState::RefineQuery { query };
-                    Some(crate::menu_syntax_actions::power_syntax_action_section(&state))
+                    Some(crate::menu_syntax_actions::power_syntax_action_section(
+                        &state,
+                    ))
                 } else {
                     None
                 }
@@ -739,8 +748,7 @@ impl ScriptListApp {
                 // actions.
                 if !is_acp_actions_dialog {
                     if let Some(ref scriptlet) = focused_scriptlet {
-                        dialog
-                            .set_focused_scriptlet(script_info.clone(), Some(scriptlet.clone()));
+                        dialog.set_focused_scriptlet(script_info.clone(), Some(scriptlet.clone()));
                     }
                 }
 
@@ -1215,8 +1223,8 @@ mod on_close_reentrancy_tests {
         let defer_count = impl_source.matches("cx.defer(move |cx| {").count();
 
         assert_eq!(
-            set_on_close_count, 3,
-            "actions_toggle should use the shared on_close callback factory at three popup-window call sites"
+            set_on_close_count, 4,
+            "actions_toggle should use the shared on_close callback factory at four popup-window call sites"
         );
         assert!(
             defer_count >= 1,
@@ -1275,6 +1283,19 @@ mod on_close_reentrancy_tests {
         assert_eq!(
             open_call_count, 1,
             "open_actions_window match block should live only in spawn_open_actions_window helper"
+        );
+
+        let helper_start = impl_source
+            .find("pub(crate) fn spawn_open_actions_window(")
+            .expect("spawn_open_actions_window helper should exist");
+        let helper_body = &impl_source[helper_start..];
+        let helper_end = helper_body
+            .find("/// Resolve the actions popup window position")
+            .expect("helper should end before the next function");
+        let helper_body = &helper_body[..helper_end];
+        assert!(
+            helper_body.contains("dialog.set_skip_track_focus(true);"),
+            "spawn_open_actions_window should centralize detached popup focus ownership"
         );
     }
 
@@ -1458,8 +1479,8 @@ mod terminal_command_shortcut_tests {
         assert_eq!(config.anchor, AnchorPosition::Top);
         assert!(config.show_icons);
         assert!(
-            config.show_footer,
-            "Mini mode actions should show the shared footer"
+            !config.show_footer,
+            "Terminal actions should stay footerless because shortcuts are rendered inline"
         );
     }
 

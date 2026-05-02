@@ -542,6 +542,12 @@ pub struct ActionsDialog {
     last_scroll_time: Option<Instant>,
 }
 
+#[inline]
+fn actions_dialog_footerless_config(mut config: ActionsDialogConfig) -> ActionsDialogConfig {
+    config.show_footer = false;
+    config
+}
+
 #[cfg(test)]
 mod empty_state_message_tests {
     use super::actions_dialog_empty_state_message;
@@ -702,6 +708,7 @@ impl ActionsDialog {
         context_title: Option<String>,
         config: ActionsDialogConfig,
     ) -> Self {
+        let config = actions_dialog_footerless_config(config);
         let filtered_actions: Vec<usize> = (0..actions.len()).collect();
         let grouped_items =
             build_grouped_items_static(&actions, &filtered_actions, config.section_style);
@@ -1064,6 +1071,7 @@ impl ActionsDialog {
     /// When a route is active, route-owned `context_title` and `search_placeholder`
     /// are preserved so host config updates don't clobber them.
     pub fn set_config(&mut self, config: ActionsDialogConfig) {
+        let config = actions_dialog_footerless_config(config);
         let should_rebuild = should_rebuild_grouped_items_for_config_change(&self.config, &config);
         let previously_selected_action_id = self.get_selected_action_id();
 
@@ -3053,6 +3061,7 @@ impl Render for ActionsDialog {
                                             .flex_row()
                                             .items_center()
                                             .px(px(item_spacing.item_padding_x))
+                                            .rounded(px(style.row_radius))
                                             .bg(if is_selected {
                                                 selected_row_bg
                                             } else {
@@ -3665,7 +3674,7 @@ impl ActionsDialogRuntimeAudit {
             section_mode: actions_dialog_section_mode_name(&config.section_style),
             shows_search_divider: style.show_search_divider,
             show_footer: config.show_footer,
-            show_icons: config.show_icons,
+            show_icons: config.show_icons && style.show_icons,
             show_container_border: style.show_container_border,
             footer_hint_count: if config.show_footer { 2 } else { 0 },
         }
@@ -3683,7 +3692,7 @@ impl ActionsDialogRuntimeAudit {
             section_mode: actions_dialog_section_mode_name(&config.section_style),
             shows_search_divider: style.show_search_divider,
             show_footer: config.show_footer,
-            show_icons: config.show_icons,
+            show_icons: config.show_icons && style.show_icons,
             show_container_border: style.show_container_border,
             footer_hint_count: if config.show_footer { 2 } else { 0 },
         }
@@ -4220,6 +4229,7 @@ mod tests {
         let mut style = super::actions_dialog_default_style();
         // Use spec-compliant style for a clean validation pass.
         style.show_container_border = false;
+        style.show_icons = true;
         let audit = ActionsDialogRuntimeAudit::from_parts(
             "test_actions_dialog",
             &ActionsDialogConfig {
@@ -4238,6 +4248,42 @@ mod tests {
         assert!(!audit.show_footer);
         assert!(!audit.shows_search_divider);
         assert!(audit.validate().is_empty());
+    }
+
+    #[test]
+    fn actions_dialog_footerless_config_normalizes_legacy_footer_flag() {
+        use crate::actions::types::ActionsDialogConfig;
+
+        let config = super::actions_dialog_footerless_config(ActionsDialogConfig {
+            show_footer: true,
+            ..ActionsDialogConfig::default()
+        });
+
+        assert!(
+            !config.show_footer,
+            "actions dialogs should normalize legacy footer state to match the footerless render path"
+        );
+    }
+
+    #[test]
+    fn actions_dialog_runtime_audit_reports_resolved_icon_visibility() {
+        use crate::actions::types::ActionsDialogConfig;
+        let mut style = super::actions_dialog_default_style();
+        style.show_icons = false;
+
+        let audit = ActionsDialogRuntimeAudit::from_parts(
+            "test_actions_dialog",
+            &ActionsDialogConfig {
+                show_icons: true,
+                ..ActionsDialogConfig::default()
+            },
+            &style,
+        );
+
+        assert!(
+            !audit.show_icons,
+            "runtime audit should report rendered icon visibility, not only requested config"
+        );
     }
 
     #[test]
