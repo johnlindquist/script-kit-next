@@ -290,6 +290,8 @@ impl ScriptListApp {
                 *selected_index = 0;
             } else {
                 *selected_index = (*selected_index).min(kits.len().saturating_sub(1));
+                self.list_scroll_handle
+                    .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
             }
             cx.notify();
         }
@@ -470,12 +472,10 @@ impl ScriptListApp {
         let design_visual = tokens.visual();
 
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-        let opacity = self.theme.get_opacity();
         let text_primary = chrome.text_primary_hex;
         let text_name = rgba((chrome.text_primary_hex << 8) | 0xff);
-        let text_muted =
-            rgba((chrome.text_primary_hex << 8) | ((opacity.text_muted_alpha * 255.0) as u32));
-        let text_hint = rgba((chrome.text_primary_hex << 8) | ((opacity.text_hint * 255.0) as u32));
+        let text_muted = rgba(chrome.text_muted_rgba);
+        let text_hint = rgba(chrome.text_hint_rgba);
         let text_placeholder = rgba(chrome.placeholder_text_rgba);
         let divider_bg = rgba(chrome.divider_rgba);
         let selected_row_bg = rgba(chrome.selection_rgba);
@@ -504,6 +504,7 @@ impl ScriptListApp {
 
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     this.close_and_reset_window(cx);
+                    cx.stop_propagation();
                     return;
                 }
 
@@ -517,6 +518,7 @@ impl ScriptListApp {
                     results,
                 } = &mut this.current_view
                 {
+                    let mut handled = true;
                     match key {
                         _ if is_key_escape(key) => {
                             if query.is_empty() {
@@ -549,9 +551,12 @@ impl ScriptListApp {
                             if !updated.is_empty() {
                                 updated.pop();
                                 next_query = Some(updated);
+                            } else {
+                                handled = false;
                             }
                         }
                         _ => {
+                            handled = false;
                             if !has_cmd {
                                 if let Some(key_char) = &event.keystroke.key_char {
                                     if let Some(ch) = key_char.chars().next() {
@@ -559,11 +564,15 @@ impl ScriptListApp {
                                             let mut updated = query.clone();
                                             updated.push(ch);
                                             next_query = Some(updated);
+                                            handled = true;
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+                    if handled {
+                        cx.stop_propagation();
                     }
                 }
 
@@ -577,6 +586,8 @@ impl ScriptListApp {
                     {
                         *query = next_query.clone();
                         *selected_index = 0;
+                        this.list_scroll_handle
+                            .scroll_to_item(0, ScrollStrategy::Nearest);
                         cx.notify();
                     }
 
@@ -598,6 +609,8 @@ impl ScriptListApp {
                                 if *query == query_for_guard {
                                     *view_results = results;
                                     *selected_index = 0;
+                                    this.list_scroll_handle
+                                        .scroll_to_item(0, ScrollStrategy::Nearest);
                                     cx.notify();
                                 }
                             }
@@ -630,6 +643,7 @@ impl ScriptListApp {
         let list: AnyElement = if results_for_list.is_empty() {
             div()
                 .w_full()
+                .h_full()
                 .flex()
                 .flex_col()
                 .items_center()
@@ -678,6 +692,7 @@ impl ScriptListApp {
                                     })
                                     .cursor_pointer()
                                     .on_click(move |_event, _window, cx| {
+                                        cx.stop_propagation();
                                         if let Some(entity) = row_entity.upgrade() {
                                             entity.update(cx, |this, cx| {
                                                 if let AppView::BrowseKitsView {
@@ -747,10 +762,18 @@ impl ScriptListApp {
                                             .text_color(accent_badge_text)
                                             .cursor_pointer()
                                             .on_click(move |_event, _window, cx| {
+                                                cx.stop_propagation();
                                                 if let Some(entity) = install_btn_entity.upgrade() {
                                                     let result_for_install =
                                                         result_for_install.clone();
                                                     entity.update(cx, |this, cx| {
+                                                        if let AppView::BrowseKitsView {
+                                                            selected_index,
+                                                            ..
+                                                        } = &mut this.current_view
+                                                        {
+                                                            *selected_index = ix;
+                                                        }
                                                         this.kit_store_install_selected_result(
                                                             &result_for_install,
                                                             cx,
@@ -798,11 +821,15 @@ impl ScriptListApp {
                         div()
                             .text_sm()
                             .text_color(text_hint)
+                            .flex_none()
+                            .whitespace_nowrap()
                             .child("🧰 Browse Kit Store"),
                     )
                     .child(
                         div()
                             .flex_1()
+                            .min_w(px(0.0))
+                            .overflow_hidden()
                             .flex()
                             .flex_row()
                             .items_center()
@@ -845,6 +872,8 @@ impl ScriptListApp {
                         div()
                             .text_sm()
                             .text_color(text_hint)
+                            .flex_none()
+                            .whitespace_nowrap()
                             .child(format!("{} kits", total_results)),
                     ),
             )
@@ -867,6 +896,56 @@ impl ScriptListApp {
                             .relative()
                             .w_full()
                             .h_full()
+                            .on_scroll_wheel(cx.listener(
+                                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                                    let view_state = if let AppView::BrowseKitsView {
+                                        selected_index,
+                                        results,
+                                        ..
+                                    } = &this.current_view
+                                    {
+                                        Some((*selected_index, results.len()))
+                                    } else {
+                                        None
+                                    };
+                                    let Some((current_selected, total_results)) = view_state else {
+                                        return;
+                                    };
+                                    let Some(new_selected) = this.builtin_scroll_target_from_wheel(
+                                        event,
+                                        current_selected,
+                                        total_results,
+                                    ) else {
+                                        if total_results > 0 {
+                                            cx.stop_propagation();
+                                        }
+                                        return;
+                                    };
+                                    if let AppView::BrowseKitsView { selected_index, .. } =
+                                        &mut this.current_view
+                                    {
+                                        *selected_index = new_selected;
+                                    }
+                                    this.list_scroll_handle
+                                        .scroll_to_item(new_selected, ScrollStrategy::Nearest);
+                                    if let Some(reanchored) =
+                                        Self::builtin_reanchor_selection_from_scroll(
+                                            new_selected,
+                                            &this.list_scroll_handle,
+                                            total_results,
+                                            8,
+                                        )
+                                    {
+                                        if let AppView::BrowseKitsView { selected_index, .. } =
+                                            &mut this.current_view
+                                        {
+                                            *selected_index = reanchored;
+                                        }
+                                    }
+                                    cx.notify();
+                                    cx.stop_propagation();
+                                },
+                            ))
                             .child(list)
                             .child(list_scrollbar),
                     ),
@@ -904,11 +983,9 @@ impl ScriptListApp {
         let design_visual = tokens.visual();
 
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
-        let opacity = self.theme.get_opacity();
         let text_name = rgba((chrome.text_primary_hex << 8) | 0xff);
-        let text_muted =
-            rgba((chrome.text_primary_hex << 8) | ((opacity.text_muted_alpha * 255.0) as u32));
-        let text_hint = rgba((chrome.text_primary_hex << 8) | ((opacity.text_hint * 255.0) as u32));
+        let text_muted = rgba(chrome.text_muted_rgba);
+        let text_hint = rgba(chrome.text_hint_rgba);
         let divider_bg = rgba(chrome.divider_rgba);
         let selected_row_bg = rgba(chrome.selection_rgba);
         let hover_row_bg = rgba(chrome.hover_rgba);
@@ -930,10 +1007,12 @@ impl ScriptListApp {
 
                 if is_key_escape(key) {
                     this.go_back_or_close(window, cx);
+                    cx.stop_propagation();
                     return;
                 }
                 if has_cmd && key.eq_ignore_ascii_case("w") {
                     this.close_and_reset_window(cx);
+                    cx.stop_propagation();
                     return;
                 }
 
@@ -942,6 +1021,7 @@ impl ScriptListApp {
                     kits,
                 } = &mut this.current_view
                 {
+                    let mut handled = true;
                     match key {
                         _ if is_key_up(key) => {
                             if *selected_index > 0 {
@@ -971,7 +1051,12 @@ impl ScriptListApp {
                                 this.kit_store_remove_selected_kit(&selected, cx);
                             }
                         }
-                        _ => {}
+                        _ => {
+                            handled = false;
+                        }
+                    }
+                    if handled {
+                        cx.stop_propagation();
                     }
                 }
             },
@@ -986,6 +1071,7 @@ impl ScriptListApp {
         let list: AnyElement = if kits_for_list.is_empty() {
             div()
                 .w_full()
+                .h_full()
                 .flex()
                 .flex_col()
                 .items_center()
@@ -1036,6 +1122,7 @@ impl ScriptListApp {
                                     })
                                     .cursor_pointer()
                                     .on_click(move |_event, _window, cx| {
+                                        cx.stop_propagation();
                                         if let Some(entity) = row_entity.upgrade() {
                                             entity.update(cx, |this, cx| {
                                                 if let AppView::InstalledKitsView {
@@ -1085,6 +1172,7 @@ impl ScriptListApp {
                                     )
                                     .child(
                                         div()
+                                            .flex_none()
                                             .flex()
                                             .flex_row()
                                             .items_center()
@@ -1104,12 +1192,20 @@ impl ScriptListApp {
                                                     .text_color(accent_badge_text)
                                                     .cursor_pointer()
                                                     .on_click(move |_event, _window, cx| {
+                                                        cx.stop_propagation();
                                                         if let Some(entity) =
                                                             update_btn_entity.upgrade()
                                                         {
                                                             let kit_for_update =
                                                                 kit_for_update.clone();
                                                             entity.update(cx, |this, cx| {
+                                                                if let AppView::InstalledKitsView {
+                                                                    selected_index,
+                                                                    ..
+                                                                } = &mut this.current_view
+                                                                {
+                                                                    *selected_index = ix;
+                                                                }
                                                                 this.kit_store_update_selected_kit(
                                                                     &kit_for_update,
                                                                     cx,
@@ -1134,12 +1230,20 @@ impl ScriptListApp {
                                                     .text_color(badge_text)
                                                     .cursor_pointer()
                                                     .on_click(move |_event, _window, cx| {
+                                                        cx.stop_propagation();
                                                         if let Some(entity) =
                                                             remove_btn_entity.upgrade()
                                                         {
                                                             let kit_for_remove =
                                                                 kit_for_remove.clone();
                                                             entity.update(cx, |this, cx| {
+                                                                if let AppView::InstalledKitsView {
+                                                                    selected_index,
+                                                                    ..
+                                                                } = &mut this.current_view
+                                                                {
+                                                                    *selected_index = ix;
+                                                                }
                                                                 this.kit_store_remove_selected_kit(
                                                                     &kit_for_remove,
                                                                     cx,
@@ -1188,12 +1292,16 @@ impl ScriptListApp {
                         div()
                             .text_sm()
                             .text_color(text_hint)
+                            .flex_none()
+                            .whitespace_nowrap()
                             .child("📦 Installed Kits"),
                     )
                     .child(
                         div()
                             .text_sm()
                             .text_color(text_hint)
+                            .flex_none()
+                            .whitespace_nowrap()
                             .child(format!("{} installed", total_kits)),
                     ),
             )
@@ -1216,6 +1324,56 @@ impl ScriptListApp {
                             .relative()
                             .w_full()
                             .h_full()
+                            .on_scroll_wheel(cx.listener(
+                                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                                    let view_state = if let AppView::InstalledKitsView {
+                                        selected_index,
+                                        kits,
+                                    } = &this.current_view
+                                    {
+                                        Some((*selected_index, kits.len()))
+                                    } else {
+                                        None
+                                    };
+                                    let Some((current_selected, total_kits)) = view_state else {
+                                        return;
+                                    };
+                                    let Some(new_selected) = this.builtin_scroll_target_from_wheel(
+                                        event,
+                                        current_selected,
+                                        total_kits,
+                                    ) else {
+                                        if total_kits > 0 {
+                                            cx.stop_propagation();
+                                        }
+                                        return;
+                                    };
+                                    if let AppView::InstalledKitsView { selected_index, .. } =
+                                        &mut this.current_view
+                                    {
+                                        *selected_index = new_selected;
+                                    }
+                                    this.list_scroll_handle
+                                        .scroll_to_item(new_selected, ScrollStrategy::Nearest);
+                                    if let Some(reanchored) =
+                                        Self::builtin_reanchor_selection_from_scroll(
+                                            new_selected,
+                                            &this.list_scroll_handle,
+                                            total_kits,
+                                            8,
+                                        )
+                                    {
+                                        if let AppView::InstalledKitsView {
+                                            selected_index, ..
+                                        } = &mut this.current_view
+                                        {
+                                            *selected_index = reanchored;
+                                        }
+                                    }
+                                    cx.notify();
+                                    cx.stop_propagation();
+                                },
+                            ))
                             .child(list)
                             .child(list_scrollbar),
                     ),

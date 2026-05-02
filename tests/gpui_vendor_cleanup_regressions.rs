@@ -275,8 +275,8 @@ fn theme_chooser_header_rows_use_direct_gpui_hover() {
 #[test]
 fn kit_store_rows_use_direct_gpui_hover() {
     assert!(
-        KIT_STORE_SOURCE
-            .contains(".when(!is_selected, |row| row.hover(move |style| style.bg(hover_row_bg)))"),
+        KIT_STORE_SOURCE.contains(".when(!is_selected,")
+            && KIT_STORE_SOURCE.contains("row.hover(move |style| style.bg(hover_row_bg))"),
         "kit store rows should use direct GPUI hover styling"
     );
     assert!(
@@ -299,6 +299,102 @@ fn kit_store_rows_use_direct_gpui_hover() {
         assert!(
             !KIT_STORE_SOURCE.contains(needle),
             "unexpected legacy kit-store hover pattern still present: {needle}"
+        );
+    }
+}
+
+#[test]
+fn kit_store_consumes_owned_keyboard_events() {
+    for needle in [
+        ".key_context(\"kit_store_browse\")",
+        ".key_context(\"kit_store_installed\")",
+        "is_key_escape(key)",
+        "is_key_up(key)",
+        "is_key_down(key)",
+        "is_key_enter(key)",
+        "\"backspace\"",
+        "\"delete\"",
+        "event.keystroke.key_char",
+        "cx.stop_propagation();",
+    ] {
+        assert!(
+            KIT_STORE_SOURCE.contains(needle),
+            "Kit Store owned keyboard handling should consume handled keys and retain branch: {needle}"
+        );
+    }
+}
+
+#[test]
+fn kit_store_uniform_lists_use_selection_owned_wheel_contract() {
+    for needle in [
+        ".on_scroll_wheel(cx.listener(",
+        "builtin_scroll_target_from_wheel(",
+        "Self::builtin_reanchor_selection_from_scroll(",
+        "this.list_scroll_handle\n                                        .scroll_to_item(new_selected, ScrollStrategy::Nearest);",
+        "this.list_scroll_handle\n                            .scroll_to_item(0, ScrollStrategy::Nearest);",
+        "self.builtin_uniform_list_scrollbar(&self.list_scroll_handle",
+        "cx.stop_propagation();",
+    ] {
+        assert!(
+            KIT_STORE_SOURCE.contains(needle),
+            "Kit Store uniform lists should keep wheel scrolling selection-owned: {needle}"
+        );
+    }
+}
+
+#[test]
+fn kit_store_uses_resolved_chrome_text_tokens() {
+    for needle in [
+        "rgba(chrome.text_muted_rgba)",
+        "rgba(chrome.text_hint_rgba)",
+        "rgba(chrome.placeholder_text_rgba)",
+    ] {
+        assert!(
+            KIT_STORE_SOURCE.contains(needle),
+            "Kit Store text colors should use resolved AppChromeColors token: {needle}"
+        );
+    }
+    for needle in [
+        "opacity.text_muted_alpha * 255.0",
+        "opacity.text_hint * 255.0",
+    ] {
+        assert!(
+            !KIT_STORE_SOURCE.contains(needle),
+            "Kit Store should not repack text opacity locally: {needle}"
+        );
+    }
+}
+
+#[test]
+fn kit_store_row_and_action_clicks_are_isolated() {
+    for needle in [
+        "\"kit-store-browse-row\"",
+        "\"kit-store-installed-row\"",
+        "\"kit-store-install-btn\"",
+        "\"kit-store-update-btn\"",
+        "\"kit-store-remove-btn\"",
+        "cx.stop_propagation();",
+        "this.kit_store_install_selected_result(",
+        "this.kit_store_update_selected_kit(",
+        "this.kit_store_remove_selected_kit(",
+    ] {
+        assert!(
+            KIT_STORE_SOURCE.contains(needle),
+            "Kit Store row/action click propagation contract should include: {needle}"
+        );
+    }
+}
+
+#[test]
+fn kit_store_header_and_empty_states_are_bounded() {
+    for needle in [
+        ".h_full()\n                .flex()\n                .flex_col()\n                .items_center()\n                .justify_center()",
+        ".flex_1()\n                            .min_w(px(0.0))\n                            .overflow_hidden()",
+        ".flex_none()\n                            .whitespace_nowrap()",
+    ] {
+        assert!(
+            KIT_STORE_SOURCE.contains(needle),
+            "Kit Store surrounding chrome should keep bounded layout constraints: {needle}"
         );
     }
 }

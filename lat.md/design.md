@@ -204,6 +204,8 @@ This keeps the built-in browser aligned with the same hover contract used by oth
 
 The row backgrounds, action chips, and long text constraints resolve through `AppChromeColors` and fixed-height ellipsis rules, so theme changes and repository metadata cannot break the 72px list rhythm.
 
+Kit Store consumes the keyboard, wheel, row-click, and action-chip events it owns. Browse and Installed views keep wheel movement selection-owned through the shared builtin scroll helpers, reanchor scroll after query/registry refresh, and stop propagation after install/update/remove chip clicks so parent row handlers cannot double-handle the action.
+
 ## Current sources
 
 This page is justified by the live chrome, popup, and portal code plus the root repo contract:
