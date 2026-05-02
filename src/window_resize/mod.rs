@@ -92,6 +92,8 @@ pub(crate) mod mini_layout {
     pub const HINT_STRIP_PADDING_Y: f32 = 8.0;
     /// Height of the hint strip area (matches resize contract).
     pub const HINT_STRIP_HEIGHT: f32 = super::MINI_MAIN_WINDOW_HINT_STRIP_HEIGHT;
+    /// Height reserved for the native AppKit main-window footer host.
+    pub const NATIVE_MAIN_WINDOW_FOOTER_HEIGHT: f32 = HINT_STRIP_HEIGHT;
     /// Height of the divider between header and list content.
     pub const DIVIDER_HEIGHT: f32 = super::MINI_MAIN_WINDOW_DIVIDER_HEIGHT;
     /// Opacity for hint strip shortcut text (uses OPACITY_TEXT_MUTED from theme/opacity).

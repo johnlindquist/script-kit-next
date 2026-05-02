@@ -712,7 +712,9 @@ pub(crate) fn render_native_main_window_footer_spacer() -> AnyElement {
     div()
         .id("native-main-window-footer-spacer")
         .w_full()
-        .h(px(crate::window_resize::mini_layout::HINT_STRIP_HEIGHT))
+        .h(px(
+            crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT,
+        ))
         .into_any_element()
 }
 

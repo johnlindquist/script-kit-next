@@ -597,7 +597,7 @@ unsafe fn find_subview_by_identifier(parent: id, identifier: &str) -> id {
 
 #[cfg(target_os = "macos")]
 fn footer_height() -> f64 {
-    crate::window_resize::mini_layout::HINT_STRIP_HEIGHT as f64
+    crate::window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT as f64
 }
 
 #[cfg(target_os = "macos")]
