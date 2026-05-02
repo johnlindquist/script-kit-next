@@ -78,7 +78,7 @@ impl DropPrompt {
     }
 
     /// Submit dropped files as JSON array
-    fn submit(&mut self) {
+    pub(crate) fn submit(&mut self) {
         if !self.dropped_files.is_empty() {
             // Serialize dropped files to JSON
             let files_json: Vec<serde_json::Value> = self

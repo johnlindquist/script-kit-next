@@ -216,6 +216,30 @@ impl ScriptListApp {
             .into_any_element()
     }
 
+    fn clickable_drop_hint_strip(&self, cx: &mut Context<Self>) -> AnyElement {
+        let on_submit = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Run,
+                window,
+                cx,
+                "gpui_footer",
+            );
+        });
+        let on_actions = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Actions,
+                window,
+                cx,
+                "gpui_footer",
+            );
+        });
+
+        crate::components::HintStrip::new(vec!["↵ Submit".into(), "⌘K Actions".into()])
+            .on_hint_click(0, on_submit)
+            .on_hint_click(1, on_actions)
+            .into_any_element()
+    }
+
     fn render_wrapped_prompt_entity(
         &mut self,
         entity: impl IntoElement,
@@ -310,9 +334,19 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
-        let hints = crate::components::universal_prompt_hints();
-        crate::components::emit_prompt_hint_audit("render_prompts::drop", &hints);
-        self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
+        let hints = vec!["↵ Submit".into(), "⌘K Actions".into()];
+        crate::components::emit_surface_prompt_hint_audit(
+            "render_prompts::drop",
+            &hints,
+            "drop_submit_footer",
+        );
+        let footer = self.clickable_drop_hint_strip(cx);
+        self.render_wrapped_prompt_entity_with_footer(
+            entity,
+            footer,
+            Self::other_prompt_shell_handle_key_default,
+            cx,
+        )
     }
 
     fn render_template_prompt(
