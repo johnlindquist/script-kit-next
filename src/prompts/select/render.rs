@@ -316,6 +316,31 @@ impl Render for SelectPrompt {
                                             .w_full()
                                             .cursor_pointer()
                                             .on_hover(hover_handler)
+                                            .on_mouse_down(
+                                                MouseButton::Left,
+                                                cx.listener(
+                                                    move |this: &mut SelectPrompt,
+                                                          _event,
+                                                          _window,
+                                                          cx| {
+                                                        if this
+                                                            .filtered_choices
+                                                            .get(display_idx)
+                                                            .is_none()
+                                                        {
+                                                            return;
+                                                        }
+
+                                                        this.focused_index = display_idx;
+                                                        this.hovered_index = Some(display_idx);
+                                                        if this.multiple {
+                                                            this.toggle_selection(cx);
+                                                        } else {
+                                                            this.submit();
+                                                        }
+                                                    },
+                                                ),
+                                            )
                                             .child(
                                                 UnifiedListItem::new(
                                                     gpui::ElementId::Name(semantic_id.into()),
@@ -600,6 +625,21 @@ mod tests {
         assert_eq!(
             classify_select_key("x", Some("x"), false, true),
             SelectKeyIntent::Append('x')
+        );
+    }
+
+    #[test]
+    fn select_rows_pair_pointer_chrome_with_mouse_activation() {
+        const SOURCE: &str = include_str!("render.rs");
+        let render_fn_end = SOURCE.find("#[cfg(test)]").unwrap_or(SOURCE.len());
+        let render_code = &SOURCE[..render_fn_end];
+        assert!(
+            render_code.contains(".cursor_pointer()") && render_code.contains(".on_mouse_down("),
+            "select rows should only use pointer chrome when they handle mouse activation"
+        );
+        assert!(
+            render_code.contains("this.toggle_selection(cx)") && render_code.contains("this.submit()"),
+            "select row mouse activation should toggle multi-select rows and submit single-select rows"
         );
     }
 

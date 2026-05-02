@@ -36,6 +36,8 @@ Editor prompt chrome keeps the code editor body separate from wrapper-owned foot
 
 Terminal prompt chrome distinguishes SDK `term()` from Quick Terminal without changing their footer contracts. SDK terminals keep the GPUI hint strip, Quick Terminal reserves native-footer space, and layout probes report `TerminalContent` instead of launcher list/preview components.
 
+Select and drop prompts keep ownership of their prompt surfaces in layout metadata rather than falling back to launcher list/preview probes. Select rows pair pointer chrome with mouse activation so keyboard and mouse selection ownership stay aligned.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.

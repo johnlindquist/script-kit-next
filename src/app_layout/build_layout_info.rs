@@ -166,6 +166,42 @@ impl ScriptListApp {
             };
         }
 
+        if matches!(
+            self.current_view,
+            AppView::SelectPrompt { .. } | AppView::DropPrompt { .. }
+        ) {
+            let (component_name, component_type, explanation) = match &self.current_view {
+                AppView::SelectPrompt { .. } => (
+                    "SelectChoices",
+                    LayoutComponentType::List,
+                    "SelectPrompt fills the content area with a keyboard-owned minimal list and footer-aware hint strip.",
+                ),
+                _ => (
+                    "DropContent",
+                    LayoutComponentType::Prompt,
+                    "DropPrompt fills the content area with a focused drop target and prompt-owned keyboard handling.",
+                ),
+            };
+
+            components.push(
+                LayoutComponentInfo::new(component_name, component_type)
+                    .with_bounds(0.0, content_top, window_width, content_height)
+                    .with_flex_column()
+                    .with_flex_grow(1.0)
+                    .with_depth(2)
+                    .with_parent("ContentArea")
+                    .with_explanation(explanation.to_string()),
+            );
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
+
         // Script list (left panel) - 50% width
         components.push(
             LayoutComponentInfo::new("ScriptList", LayoutComponentType::List)
