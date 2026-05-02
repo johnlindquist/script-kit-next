@@ -348,9 +348,7 @@ impl ScriptListApp {
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
 
-        let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
-        let text_muted = self.theme.colors.text.muted;
+        let chrome = theme::AppChromeColors::from_theme(&self.theme);
 
         let items = get_settings_items();
         let filtered_items = filtered_settings_items(&items, &filter);
@@ -389,6 +387,7 @@ impl ScriptListApp {
                             surface = "settings",
                             key = %key,
                         );
+                        cx.stop_propagation();
                         return;
                     }
                     ActionsRoute::Execute { action_id } => {
@@ -398,6 +397,7 @@ impl ScriptListApp {
                             window,
                             cx,
                         );
+                        cx.stop_propagation();
                         return;
                     }
                 }
@@ -477,12 +477,31 @@ impl ScriptListApp {
                 div()
                     .id(ix)
                     .cursor_pointer()
-                    .on_click(move |_event, window, cx| {
+                    .on_click(move |event, window, cx| {
                         if let Some(app) = entity_click.upgrade() {
                             app.update(cx, |this, cx| {
-                                this.execute_settings_action(&action, window, cx);
+                                let was_selected =
+                                    if let AppView::SettingsView { selected_index, .. } =
+                                        &mut this.current_view
+                                    {
+                                        let was_selected = *selected_index == ix;
+                                        *selected_index = ix;
+                                        was_selected
+                                    } else {
+                                        false
+                                    };
+                                let click_count = event.click_count();
+                                if crate::ui_foundation::should_submit_selected_row_click(
+                                    was_selected,
+                                    click_count,
+                                ) {
+                                    this.execute_settings_action(&action, window, cx);
+                                } else {
+                                    cx.notify();
+                                }
                             });
                         }
+                        cx.stop_propagation();
                     })
                     .on_hover({
                         let entity_h = entity_hover;
@@ -520,7 +539,7 @@ impl ScriptListApp {
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
-                .text_color(rgb(text_muted))
+                .text_color(rgba(chrome.text_muted_rgba))
                 .font_family(design_typography.font_family)
                 .child(if filter.is_empty() {
                     "No settings available"
@@ -545,23 +564,36 @@ impl ScriptListApp {
             .items_center()
             .gap_3()
             .child(
-                div().flex_1().flex().flex_row().items_center().child(
-                    Input::new(&self.gpui_input_state)
-                        .w_full()
-                        .h(px(28.))
-                        .px(px(0.))
-                        .py(px(0.))
-                        .with_size(Size::Size(px(design_typography.font_size_xl)))
-                        .appearance(false)
-                        .bordered(false)
-                        .focus_bordered(false),
-                ),
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(
+                        Input::new(&self.gpui_input_state)
+                            .w_full()
+                            .h(px(28.))
+                            .px(px(0.))
+                            .py(px(0.))
+                            .with_size(Size::Size(px(design_typography.font_size_xl)))
+                            .appearance(false)
+                            .bordered(false)
+                            .focus_bordered(false),
+                    ),
             )
-            .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
-                "{} setting{}",
-                item_count,
-                if item_count == 1 { "" } else { "s" }
-            )));
+            .child(
+                div()
+                    .flex_none()
+                    .whitespace_nowrap()
+                    .text_sm()
+                    .text_color(rgba(chrome.text_hint_rgba))
+                    .child(format!(
+                        "{} setting{}",
+                        item_count,
+                        if item_count == 1 { "" } else { "s" }
+                    )),
+            );
 
         let content = div()
             .flex_1()
@@ -593,7 +625,7 @@ impl ScriptListApp {
             content,
             footer,
         )
-        .text_color(rgb(text_primary))
+        .text_color(rgb(chrome.text_primary_hex))
         .font_family(design_typography.font_family)
         .key_context("settings")
         .track_focus(&self.focus_handle)
