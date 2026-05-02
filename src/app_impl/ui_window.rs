@@ -208,6 +208,9 @@ impl ScriptListApp {
                 } else if let AppView::PathPrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
                     entity.update(cx, |prompt, cx| prompt.handle_enter(cx));
+                } else if let AppView::EnvPrompt { entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |prompt, cx| prompt.submit(cx));
                 } else if !self.try_run_ready_acp_script(cx) {
                     self.execute_selected(cx);
                 }
@@ -532,6 +535,23 @@ impl ScriptListApp {
             return buttons;
         }
 
+        if matches!(self.current_view, AppView::EnvPrompt { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let enabled = !footer_disabled;
+            let buttons =
+                vec![FooterButtonConfig::new(FooterAction::Run, "↵", "Submit").enabled(enabled)];
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved EnvPrompt footer buttons"
+            );
+            return buttons;
+        }
+
         if matches!(self.current_view, AppView::WebcamView { .. }) {
             use crate::footer_popup::{FooterAction, FooterButtonConfig};
 
@@ -808,7 +828,7 @@ impl ScriptListApp {
             AppView::EditorPrompt { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::SelectPrompt { .. } => Some((ViewType::ArgPromptWithChoices, 0)),
             AppView::PathPrompt { .. } => Some((ViewType::DivPrompt, 0)),
-            AppView::EnvPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)), // Compact: header + footer only
+            AppView::EnvPrompt { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::DropPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Drop prompt uses div size for drop zone
             AppView::TemplatePrompt { .. } => Some((ViewType::DivPrompt, 0)), // Template prompt uses div size
             AppView::ChatPrompt { .. } => Some((ViewType::DivPrompt, 0)), // Chat prompt uses div size

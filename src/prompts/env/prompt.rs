@@ -130,7 +130,7 @@ impl EnvPrompt {
     }
 
     /// Submit the entered value
-    pub(super) fn submit(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn submit(&mut self, cx: &mut Context<Self>) {
         let text = self.input.text();
         if let Some(validation_error) = env_submit_validation_error(text) {
             self.validation_error = Some(validation_error.to_string());
