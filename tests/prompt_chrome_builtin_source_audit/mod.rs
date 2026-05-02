@@ -479,6 +479,10 @@ fn builtin_renderers_delegate_native_footer_policy_to_slot_helper() {
             "favorites",
             include_str!("../../src/render_builtins/favorites.rs"),
         ),
+        (
+            "design_gallery",
+            include_str!("../../src/render_builtins/design_gallery.rs"),
+        ),
     ];
 
     for (name, source) in renderers {
@@ -513,17 +517,30 @@ fn create_ai_preset_form_does_not_inherit_launcher_native_footer() {
 
 #[test]
 fn prompt_footer_exception_builtins_do_not_register_native_footer() {
-    for surface in ["design_gallery"] {
+    let surfaces: [&str; 0] = [];
+    for surface in surfaces {
         assert!(
             !UI_WINDOW_SOURCE.contains(&format!("Some(\"{surface}\")")),
             "{surface} must not register a native footer while it owns PromptFooter actions"
         );
     }
+}
 
+#[test]
+fn design_gallery_routes_footer_through_native_slot() {
     let design_gallery = include_str!("../../src/render_builtins/design_gallery.rs");
     assert!(
-        design_gallery.contains("PromptFooter::new("),
-        "design gallery keeps its GPUI PromptFooter exception"
+        !design_gallery.contains("PromptFooter::new("),
+        "design gallery should not keep an in-content PromptFooter once it registers a native footer surface"
+    );
+    assert!(
+        design_gallery.contains("main_window_footer_slot(")
+            && design_gallery.contains("render_simple_hint_strip(")
+            && design_gallery.contains("emit_surface_prompt_hint_audit(")
+            && design_gallery.contains("\"↵ Select\"")
+            && !design_gallery.contains("active_main_window_footer_surface()")
+            && UI_WINDOW_SOURCE.contains("Some(\"design_gallery\")"),
+        "design gallery should register a native footer surface and route fallback hints through the shared slot"
     );
 }
 

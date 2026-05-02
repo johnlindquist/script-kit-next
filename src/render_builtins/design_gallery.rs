@@ -419,8 +419,32 @@ impl ScriptListApp {
             .into_any_element()
         };
 
+        let footer_hints: Vec<SharedString> = vec!["↵ Select".into()];
+        crate::components::emit_surface_prompt_hint_audit(
+            "design_gallery",
+            &footer_hints,
+            "design_gallery_footer",
+        );
+        let footer = div()
+            .id("design-gallery-footer-tooltip")
+            .tooltip(|window, cx| {
+                gpui_component::tooltip::Tooltip::new("Select highlighted design")
+                    .key_binding(
+                        gpui::Keystroke::parse("enter")
+                            .ok()
+                            .map(gpui_component::kbd::Kbd::new),
+                    )
+                    .build(window, cx)
+            })
+            .child(crate::components::render_simple_hint_strip(
+                footer_hints,
+                None,
+            ))
+            .into_any_element();
+        let footer = self.main_window_footer_slot(footer);
+
         // Build the full view
-        div()
+        let surface = div()
             .flex()
             .flex_col()
             // Removed: .bg(rgba(bg_with_alpha)) - let vibrancy show through from Root
@@ -512,29 +536,13 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .py(px(design_spacing.padding_xs))
                     .child(list_element),
-            )
-            // Footer
-            .child(
-                div()
-                    .id("design-gallery-footer-tooltip")
-                    .tooltip(|window, cx| {
-                        gpui_component::tooltip::Tooltip::new("Select highlighted design")
-                            .key_binding(
-                                gpui::Keystroke::parse("enter")
-                                    .ok()
-                                    .map(gpui_component::kbd::Kbd::new),
-                            )
-                            .build(window, cx)
-                    })
-                    .child(PromptFooter::new(
-                        PromptFooterConfig::new()
-                            .primary_label("Select")
-                            .primary_shortcut("↵")
-                            .show_secondary(false),
-                        PromptFooterColors::from_theme(&self.theme),
-                    ))
-                    .into_any_element(),
-            )
-            .into_any_element()
+            );
+
+        if let Some(footer) = footer {
+            surface.child(footer)
+        } else {
+            surface
+        }
+        .into_any_element()
     }
 }
