@@ -143,14 +143,24 @@ impl ScriptListApp {
 
                                 app.cached_processes = new_processes;
 
-                                // Clamp selection index if list shrank
-                                if let AppView::ProcessManagerView { selected_index, .. } =
-                                    &mut app.current_view
+                                // Clamp selection index against the visible filtered rows.
+                                if let AppView::ProcessManagerView {
+                                    filter,
+                                    selected_index,
+                                } = &mut app.current_view
                                 {
-                                    let len = app.cached_processes.len();
-                                    if *selected_index >= len && len > 0 {
-                                        *selected_index = len - 1;
+                                    let visible_len = Self::process_manager_filtered_entries(
+                                        &app.cached_processes,
+                                        filter,
+                                    )
+                                    .len();
+                                    if visible_len == 0 {
+                                        *selected_index = 0;
+                                    } else if *selected_index >= visible_len {
+                                        *selected_index = visible_len - 1;
                                     }
+                                    app.process_list_scroll_handle
+                                        .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
                                 }
 
                                 cx.notify();
@@ -206,8 +216,9 @@ impl ScriptListApp {
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
 
-        let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        let text_primary = chrome.text_primary_hex;
+        let text_hint = rgba(chrome.text_hint_rgba);
 
         // Filter processes from cached data
         let filtered_processes =
@@ -325,7 +336,7 @@ impl ScriptListApp {
                                     cx,
                                 );
 
-                                // Clamp selection if list got shorter
+                                // Clamp selection if the visible filtered list got shorter.
                                 let new_len = this.cached_processes.len();
                                 if let AppView::ProcessManagerView { selected_index, .. } =
                                     &mut this.current_view
@@ -333,6 +344,18 @@ impl ScriptListApp {
                                     if *selected_index >= new_len && new_len > 0 {
                                         *selected_index = new_len - 1;
                                     }
+                                    let visible_len = Self::process_manager_filtered_entries(
+                                        &this.cached_processes,
+                                        &current_filter,
+                                    )
+                                    .len();
+                                    if visible_len == 0 {
+                                        *selected_index = 0;
+                                    } else if *selected_index >= visible_len {
+                                        *selected_index = visible_len - 1;
+                                    }
+                                    this.process_list_scroll_handle
+                                        .scroll_to_item(*selected_index, ScrollStrategy::Nearest);
                                 }
 
                                 if new_len == 0 {
@@ -369,9 +392,14 @@ impl ScriptListApp {
         let list_element: AnyElement = if filtered_len == 0 {
             div()
                 .w_full()
+                .h_full()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
-                .text_color(rgb(self.theme.colors.text.muted))
+                .text_color(text_hint)
                 .font_family(design_typography.font_family)
                 .child(if filter.is_empty() {
                     "No running scripts"
@@ -432,6 +460,7 @@ impl ScriptListApp {
                                     move |_event: &gpui::ClickEvent,
                                           _window: &mut Window,
                                           cx: &mut gpui::App| {
+                                        cx.stop_propagation();
                                         if let Some(app) = click_entity.upgrade() {
                                             app.update(cx, |this, cx| {
                                                 if let AppView::ProcessManagerView {
@@ -501,6 +530,8 @@ impl ScriptListApp {
         };
 
         let total_count = self.cached_processes.len();
+        let list_scrollbar =
+            self.builtin_uniform_list_scrollbar(&self.process_list_scroll_handle, filtered_len, 8);
         let stop_all_button_colors = crate::components::ButtonColors::from_theme(&self.theme);
         let stop_all_button_entity = cx.entity().downgrade();
 
@@ -538,7 +569,7 @@ impl ScriptListApp {
                                 .focus_bordered(false),
                         ),
                     )
-                    .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
+                    .child(div().text_sm().text_color(text_hint).child(format!(
                         "{} process{}",
                         total_count,
                         if total_count == 1 { "" } else { "es" }
@@ -550,6 +581,7 @@ impl ScriptListApp {
                                 .variant(crate::components::ButtonVariant::Ghost)
                                 .shortcut("⌘↵")
                                 .on_click(Box::new(move |_event, _window, cx| {
+                                    cx.stop_propagation();
                                     if let Some(app) = stop_all_button_entity.upgrade() {
                                         app.update(cx, |this, cx| {
                                             this.trigger_process_manager_stop_all(cx);
@@ -569,7 +601,70 @@ impl ScriptListApp {
                     .w_full()
                     .overflow_hidden()
                     .py(px(design_spacing.padding_xs))
-                    .child(list_element),
+                    .child(
+                        div()
+                            .relative()
+                            .w_full()
+                            .h_full()
+                            .on_scroll_wheel(cx.listener(
+                                move |this, event: &gpui::ScrollWheelEvent, _window, cx| {
+                                    let view_state = if let AppView::ProcessManagerView {
+                                        filter,
+                                        selected_index,
+                                    } = &this.current_view
+                                    {
+                                        Some((filter.clone(), *selected_index))
+                                    } else {
+                                        None
+                                    };
+                                    let Some((current_filter, current_selected)) = view_state
+                                    else {
+                                        return;
+                                    };
+                                    let filtered_len = Self::process_manager_filtered_entries(
+                                        &this.cached_processes,
+                                        &current_filter,
+                                    )
+                                    .len();
+                                    let Some(new_selected) = this.builtin_scroll_target_from_wheel(
+                                        event,
+                                        current_selected,
+                                        filtered_len,
+                                    ) else {
+                                        if filtered_len > 0 {
+                                            cx.stop_propagation();
+                                        }
+                                        return;
+                                    };
+                                    if let AppView::ProcessManagerView { selected_index, .. } =
+                                        &mut this.current_view
+                                    {
+                                        *selected_index = new_selected;
+                                    }
+                                    this.process_list_scroll_handle
+                                        .scroll_to_item(new_selected, ScrollStrategy::Nearest);
+                                    if let Some(reanchored) =
+                                        Self::builtin_reanchor_selection_from_scroll(
+                                            new_selected,
+                                            &this.process_list_scroll_handle,
+                                            filtered_len,
+                                            8,
+                                        )
+                                    {
+                                        if let AppView::ProcessManagerView {
+                                            selected_index, ..
+                                        } = &mut this.current_view
+                                        {
+                                            *selected_index = reanchored;
+                                        }
+                                    }
+                                    cx.notify();
+                                    cx.stop_propagation();
+                                },
+                            ))
+                            .child(list_element)
+                            .child(list_scrollbar),
+                    ),
             )
             .when_some(
                 self.main_window_footer_slot(crate::components::render_simple_hint_strip(
