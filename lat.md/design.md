@@ -138,6 +138,10 @@ Row rendering for those popups is owned by [[src/components/inline_dropdown/mod.
 
 The detached actions dialog is intentionally footerless. Action rows already expose their shortcuts inline, so extra footer chrome would duplicate information and compete with the list.
 
+Actions dialog configuration is normalized to that footerless contract at construction and config-update boundaries. Runtime audits should report resolved chrome, such as rendered icon visibility, rather than raw requested flags.
+
+Detached actions popups let the wrapper own focus tracking. The shared spawn helper sets the dialog's skip-track-focus flag so generic, chat, webcam, and terminal popup hosts follow the same keyboard ownership contract.
+
 Detached actions-window key handlers consume handled navigation, execution, filter, close, and matched-shortcut keys so popup-owned input cannot leak back into parent launcher surfaces.
 
 Selection-owned popup lists should keep wheel behavior index-based even when their scrollbar becomes handle-driven. Free-scroll transcript surfaces can use pixel offsets, but selection-owned browsers still need a visible active row after scrolling.
