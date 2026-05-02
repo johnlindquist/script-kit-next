@@ -452,6 +452,67 @@ fn env_footer_submits_env_prompt_without_launcher_ai() {
 }
 
 #[test]
+fn drop_footer_submits_drop_prompt_without_launcher_ai() {
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let outer_source = include_str!("../src/render_prompts/other.rs");
+    let prompt_source = include_str!("../src/prompts/drop.rs");
+
+    let run_start = ui_window
+        .find("FooterAction::Run =>")
+        .expect("footer Run branch exists");
+    let run_branch = &ui_window[run_start..run_start + 1900];
+    let footer_branch_start = ui_window
+        .find("Resolved DropPrompt footer buttons")
+        .expect("DropPrompt native footer branch exists");
+    let footer_branch = &ui_window[footer_branch_start.saturating_sub(700)..footer_branch_start];
+    let sizing_start = ui_window
+        .find("pub(crate) fn calculate_window_size_params")
+        .expect("calculate_window_size_params exists");
+    let sizing = &ui_window[sizing_start..];
+    let render_body = outer_source
+        .split("fn render_drop_prompt(")
+        .nth(1)
+        .and_then(|section| section.split("fn render_template_prompt(").next())
+        .unwrap_or_default();
+
+    assert!(
+        prompt_source.contains("pub(crate) fn submit("),
+        "DropPrompt submit should be callable by wrapper/native footer routing"
+    );
+    assert!(
+        run_branch.contains("AppView::DropPrompt")
+            && run_branch.contains("prompt.submit()")
+            && run_branch.find("prompt.submit()") < run_branch.find("execute_selected(cx)"),
+        "DropPrompt native/footer Run should submit dropped files before launcher execute_selected fallback"
+    );
+    assert!(
+        footer_branch.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Submit\")")
+            && footer_branch
+                .contains("FooterButtonConfig::new(FooterAction::Actions, \"⌘K\", \"Actions\")")
+            && !footer_branch.contains("FooterAction::Ai"),
+        "DropPrompt native footer should expose Submit and Actions, not launcher AI"
+    );
+    assert!(
+        outer_source.contains("clickable_drop_hint_strip(")
+            && outer_source.contains("emit_surface_prompt_hint_audit(")
+            && outer_source.contains("drop_submit_footer")
+            && !render_body.contains("universal_prompt_hints()"),
+        "DropPrompt should use truthful surface-specific footer hints, not launcher AI"
+    );
+    assert!(
+        render_body.contains("render_wrapped_prompt_entity_with_footer(")
+            && outer_source.contains("main_window_footer_slot(")
+            && !render_body.contains("PromptFooter::new("),
+        "DropPrompt should keep the shared footer slot and avoid prompt-local footers"
+    );
+    assert!(
+        sizing.contains("AppView::DropPrompt { .. } => Some((ViewType::DivPrompt, 0))"),
+        "DropPrompt should remain a prompt-owned DivPrompt surface"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"drop_footer\",\"run_routes_to_drop\":true,\"ai_absent\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn template_prompt_render_has_tracing_and_uses_shared_helpers() {
     let source = include_str!("../src/prompts/template/render.rs");
     let outer_source = include_str!("../src/render_prompts/other.rs");
@@ -511,8 +572,14 @@ fn drop_prompt_uses_whisper_chrome_not_heavy_borders() {
         "drop prompt should not use rounded_md chrome"
     );
     assert!(
-        source.contains("OPACITY_GHOST"),
-        "drop prompt should use ghost opacity constants for whisper chrome"
+        source.contains("AppChromeColors::from_theme(&self.theme)")
+            && source.contains("drop_target_bg_rgba")
+            && source.contains("drop_target_border_rgba"),
+        "drop prompt should use shared AppChromeColors drop-target whisper chrome"
+    );
+    assert!(
+        !source.contains("rgba(0x") && !source.contains("rgb(0x"),
+        "drop prompt should not contain hardcoded hex color literals"
     );
     let outer_source = include_str!("../src/render_prompts/other.rs");
     assert!(

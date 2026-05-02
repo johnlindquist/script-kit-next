@@ -50,6 +50,8 @@ SDK `mic()` is still a media stub, not a rendered prompt surface. It must remain
 
 `mini()` is an arg-like compact list prompt: Enter submits the current prompt state, the shared minimal-list shell owns header padding, and footer hints route through the native footer slot. `micro()` stays footerless and off native-footer routing so the main window does not reserve space the renderer never draws around.
 
+Drop prompts own file-submit semantics in both GPUI and native footer chrome. Their primary footer action is `Submit`, the actions footer remains `⌘K Actions`, launcher AI is omitted, and footer Run routes to `DropPrompt::submit` before any launcher execution fallback.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.
