@@ -34,6 +34,8 @@ Native `form()` fields resolve text, placeholder, label, cursor, and checkbox ma
 
 Editor prompt chrome keeps the code editor body separate from wrapper-owned footer and layout metadata. Snippet choice popups use inline dropdown chrome tokens, and editor layout probes report an `EditorContent` prompt branch instead of main-menu list/preview components.
 
+Terminal prompt chrome distinguishes SDK `term()` from Quick Terminal without changing their footer contracts. SDK terminals keep the GPUI hint strip, Quick Terminal reserves native-footer space, and layout probes report `TerminalContent` instead of launcher list/preview components.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.

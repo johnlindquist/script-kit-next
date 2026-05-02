@@ -31,5 +31,12 @@ setTimeout(async () => {
   }
 }, 2500); // More time for terminal to render
 
-// Display terminal with a simple command
-await term("echo 'Terminal Visual Audit Test' && ls -la");
+// Display deterministic output that makes terminal padding, full-height fill,
+// and the footer hint strip easy to inspect in the captured frame.
+await term(`printf 'Terminal chrome audit\\n'
+printf 'body fills the prompt above the shared footer slot\\n'
+printf 'no card border wraps the terminal grid\\n'
+printf '\\n'
+for i in 01 02 03 04 05 06 07 08 09 10 11 12; do
+  printf 'row %s: predictable terminal output for visual audit\\n' "$i"
+done`);

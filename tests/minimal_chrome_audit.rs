@@ -214,6 +214,27 @@ fn editor_layout_info_has_editor_content_branch() {
 }
 
 #[test]
+fn terminal_layout_info_has_terminal_content_branch() {
+    let source = include_str!("../src/app_layout/build_layout_info.rs");
+    let branch_start = source
+        .find("AppView::EditorPrompt")
+        .expect("prompt layout branch exists");
+    let prompt_branch = &source[branch_start..];
+    assert!(
+        prompt_branch.contains("AppView::TermPrompt")
+            && prompt_branch.contains("AppView::QuickTerminalView")
+            && prompt_branch.contains("TerminalContent")
+            && prompt_branch.contains("LayoutComponentType::Prompt"),
+        "terminal layout info should expose TerminalContent for SDK and quick terminal views"
+    );
+    assert!(
+        prompt_branch.contains("return LayoutInfo"),
+        "terminal layout branch should return before adding launcher list/preview components"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"terminal_layout_info\",\"terminal_content_branch\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn form_prompt_wrapper_has_no_prompt_footer_or_hardcoded_hex() {
     let source = include_str!("../src/render_prompts/form/render.rs");
     assert!(
@@ -381,6 +402,13 @@ fn term_prompt_uses_chrome_audit_and_no_hardcoded_wrapper_colors() {
     assert!(
         source.contains("render_terminal_prompt_hint_strip("),
         "term prompt should use terminal-specific hint strip"
+    );
+    assert!(
+        source.contains("\"native_footer_spacer\"")
+            && source.contains("\"custom_hint_strip\"")
+            && source.contains("\"quick_terminal_uses_native_footer\"")
+            && source.contains("\"terminal_owns_contextual_footer\""),
+        "term prompt chrome audit should distinguish SDK terminal and Quick Terminal footer ownership"
     );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"term\",\"chrome_audit_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
 }
