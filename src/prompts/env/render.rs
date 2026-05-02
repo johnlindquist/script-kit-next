@@ -11,9 +11,8 @@ impl Focusable for EnvPrompt {
 impl Render for EnvPrompt {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let chrome = AppChromeColors::from_theme(&self.theme);
+        let text = crate::components::prompt_text_palette(&self.theme);
 
-        let text_primary = chrome.text_primary_hex;
-        let text_muted = chrome.text_muted_hex;
         let accent_color = chrome.accent_hex;
 
         // Error/success from theme UI colors
@@ -40,9 +39,13 @@ impl Render for EnvPrompt {
             .unwrap_or_else(|| env_default_description(&self.key, self.exists_in_keyring))
             .into();
 
-        // Whisper-chrome field surface — use shared chrome tokens, not hand-packed alpha
-        let field_bg = rgba(chrome.input_surface_rgba);
-        let field_border = rgba(chrome.badge_border_rgba);
+        let field_state = if self.validation_error.is_some() {
+            crate::components::PromptFieldState::Error
+        } else {
+            crate::components::PromptFieldState::Active
+        };
+        let field_style =
+            crate::components::prompt_field_style(&self.theme, field_state, input_is_empty);
 
         // Input body: cursor + placeholder when empty, masked/text with cursor when filled
         let input_body = if input_is_empty {
@@ -58,14 +61,14 @@ impl Render for EnvPrompt {
                         .h(px(CURSOR_HEIGHT_LG))
                         .bg(rgb(accent_color)),
                 )
-                .child(div().text_color(rgb(text_muted)).child(SharedString::from(
+                .child(div().text_color(text.placeholder).child(SharedString::from(
                     env_input_placeholder(&self.key, self.exists_in_keyring),
                 )))
         } else {
             div()
                 .w_full()
-                .text_color(rgb(text_primary))
-                .child(self.render_input_text(text_primary, accent_color))
+                .text_color(text.primary)
+                .child(self.render_input_text(chrome.text_primary_hex, accent_color))
         };
 
         // Stacked minimal body — no hero icon, no centered card
@@ -75,65 +78,34 @@ impl Render for EnvPrompt {
             .flex_col()
             .gap(px(16.0))
             // Title + description intro
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .text_color(rgb(text_primary))
-                            .child(title),
-                    )
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(rgb(text_muted))
-                            .child(description),
-                    ),
-            )
+            .child(crate::components::prompt_form_intro(
+                title,
+                description,
+                text.primary,
+                text.help,
+                6.0,
+            ))
             // Labeled input section
-            .child(
-                div()
+            .child(crate::components::prompt_form_section(
+                env_input_label(self.secret),
+                text.label,
+                6.0,
+                crate::components::prompt_surface(field_style.background, field_style.border)
+                    .min_h(px(38.0))
                     .flex()
-                    .flex_col()
-                    .gap(px(6.0))
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(gpui::FontWeight::MEDIUM)
-                            .text_color(rgb(text_muted))
-                            .child(env_input_label(self.secret)),
-                    )
-                    .child(
-                        div()
-                            .w_full()
-                            .px(px(12.0))
-                            .py(px(8.0))
-                            .rounded(px(6.0))
-                            .border_1()
-                            .border_color(field_border)
-                            .bg(field_bg)
-                            .min_h(px(38.0))
-                            .child(input_body),
-                    ),
-            )
+                    .items_center()
+                    .child(input_body),
+            ))
             // Storage hint
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(text_muted))
-                    .child(env_storage_hint_text(self.secret)),
-            )
+            .child(crate::components::prompt_form_help(
+                env_storage_hint_text(self.secret),
+                text.help,
+            ))
             // Running status
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(text_muted))
-                    .child(env_running_status(&self.key)),
-            );
+            .child(crate::components::prompt_form_help(
+                env_running_status(&self.key),
+                text.help,
+            ));
 
         // Validation error
         if let Some(error) = self.validation_error.clone() {
@@ -179,7 +151,7 @@ impl Render for EnvPrompt {
             .flex_col()
             .w_full()
             .h_full()
-            .text_color(rgb(text_primary))
+            .text_color(text.primary)
             .font_family(crate::list_item::FONT_MONO)
             .child(
                 div()
@@ -280,6 +252,21 @@ mod tests {
         assert!(
             render_code.contains("prompt_surface_rendered"),
             "env render should emit prompt_surface_rendered tracing"
+        );
+        assert!(
+            render_code.contains("prompt_form_intro(")
+                && render_code.contains("prompt_form_section(")
+                && render_code.contains("prompt_form_help("),
+            "env render should use the shared create-flow form helpers"
+        );
+        assert!(
+            render_code.contains("prompt_field_style(")
+                && render_code.contains("prompt_text_palette("),
+            "env render should use shared create-flow color helpers"
+        );
+        assert!(
+            !render_code.contains("text_muted_hex"),
+            "env render should not keep a local muted text ladder"
         );
     }
 }

@@ -2,8 +2,6 @@ use gpui::{div, prelude::*, px, rems, rgb, rgba, AnyElement, Div, FontWeight, Rg
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
-use crate::ui_foundation::hex_to_rgba_with_opacity;
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct PromptFrameConfig {
     pub relative: bool,
@@ -145,6 +143,26 @@ pub(crate) fn prompt_form_help(text: impl Into<SharedString>, color: Rgba) -> Di
     div().text_xs().text_color(color).child(text.into())
 }
 
+/// Shared text color ladder for prompt chrome.
+#[derive(Clone, Copy)]
+pub(crate) struct PromptTextPalette {
+    pub primary: Rgba,
+    #[allow(dead_code)]
+    pub label: Rgba,
+    pub help: Rgba,
+    pub placeholder: Rgba,
+}
+
+pub(crate) fn prompt_text_palette(theme: &crate::theme::Theme) -> PromptTextPalette {
+    let chrome = crate::theme::AppChromeColors::from_theme(theme);
+    PromptTextPalette {
+        primary: rgb(chrome.text_primary_hex),
+        label: rgba(chrome.text_muted_rgba),
+        help: rgba(chrome.text_hint_rgba),
+        placeholder: rgba(chrome.placeholder_text_rgba),
+    }
+}
+
 /// State of a form field within a create-flow prompt.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum PromptFieldState {
@@ -172,12 +190,8 @@ pub(crate) fn prompt_field_style(
     empty: bool,
 ) -> PromptFieldStyle {
     let chrome = crate::theme::AppChromeColors::from_theme(theme);
-    let muted_value = rgba(hex_to_rgba_with_opacity(
-        theme.colors.text.muted,
-        theme.get_opacity().input_inactive,
-    ));
     let value = if empty {
-        muted_value
+        rgba(chrome.placeholder_text_rgba)
     } else {
         rgb(chrome.text_primary_hex)
     };
@@ -1106,6 +1120,10 @@ mod prompt_layout_shell_tests {
             gpui::rgba(chrome.input_surface_rgba)
         );
         assert_eq!(default_style.border, gpui::rgba(chrome.badge_border_rgba));
+        assert_eq!(
+            default_style.value,
+            gpui::rgba(chrome.placeholder_text_rgba)
+        );
         assert_eq!(active_style.background, gpui::rgba(chrome.selection_rgba));
         assert_eq!(active_style.border, gpui::rgb(chrome.accent_hex));
     }
@@ -1911,6 +1929,14 @@ mod prompt_layout_shell_tests {
         assert!(
             source.contains("universal_prompt_hints()"),
             "path prompt entity should use canonical three-key footer"
+        );
+        assert!(
+            source.contains("prompt_text_palette("),
+            "path prompt entity should use the shared prompt text palette"
+        );
+        assert!(
+            !source.contains("<< 8") && !source.contains("0x99") && !source.contains("0xCC"),
+            "path prompt entity should not build local packed-alpha text colors"
         );
         let legacy = ["PromptFooter", "::new("].concat();
         assert!(

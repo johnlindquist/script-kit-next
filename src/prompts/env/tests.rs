@@ -96,12 +96,22 @@ mod tests {
             "env render should not have a 64px hero icon tile"
         );
         assert!(
-            render_code.contains("field_bg"),
-            "env render should use a whisper-chrome field background"
+            render_code.contains("prompt_field_style("),
+            "env render should use the shared prompt field surface"
         );
         assert!(
-            render_code.contains("field_border"),
-            "env render should use a whisper-chrome field border"
+            render_code.contains("prompt_text_palette("),
+            "env render should use the shared create-flow text palette"
+        );
+        assert!(
+            render_code.contains("prompt_form_intro(")
+                && render_code.contains("prompt_form_section(")
+                && render_code.contains("prompt_form_help("),
+            "env render should use the shared create-flow form helpers"
+        );
+        assert!(
+            !render_code.contains("text_muted_hex"),
+            "env render should not keep its own muted text ladder"
         );
     }
 
