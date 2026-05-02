@@ -32,6 +32,8 @@ Create-flow prompts share the same text ladder through `prompt_text_palette` and
 
 Native `form()` fields resolve text, placeholder, label, cursor, and checkbox mark colors before render through shared chrome tokens rather than wrapping muted/secondary base colors in renderer code. Text fields and text areas both show a cursor plus placeholder while focused and empty, and the form prompt synchronizes parent focus state when fields are clicked so key routing follows the visible focus target.
 
+Editor prompt chrome keeps the code editor body separate from wrapper-owned footer and layout metadata. Snippet choice popups use inline dropdown chrome tokens, and editor layout probes report an `EditorContent` prompt branch instead of main-menu list/preview components.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.
@@ -246,6 +248,9 @@ This page is justified by the live chrome, popup, and portal code plus the root 
 - [src/components/form_fields/text_field/render.rs](../src/components/form_fields/text_field/render.rs)
 - [src/components/form_fields/text_area/render.rs](../src/components/form_fields/text_area/render.rs)
 - [src/components/form_fields/checkbox.rs](../src/components/form_fields/checkbox.rs)
+- [src/editor/mod.rs](../src/editor/mod.rs)
+- [src/render_prompts/editor.rs](../src/render_prompts/editor.rs)
+- [src/app_layout/build_layout_info.rs](../src/app_layout/build_layout_info.rs)
 - [src/stories/ask_tab_glyph_options.rs](../src/stories/ask_tab_glyph_options.rs)
 - [src/storybook/dictation_ui_variations.rs](../src/storybook/dictation_ui_variations.rs)
 - [src/storybook/browser.rs](../src/storybook/browser.rs)
