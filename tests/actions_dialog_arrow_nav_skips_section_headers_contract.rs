@@ -19,12 +19,12 @@
 //!     "down down (no visible change) down down …").
 //!
 //! That's a classic user-visible regression a "DRY cleanup" refactor
-//! could easily ship. The current implementations of `move_up` / `move_down`
-//! at `src/actions/dialog.rs` inline an explicit
-//! `matches!(_, GroupedActionItem::Item(_))` skip loop rather than
-//! delegate to the shared `selectable_index_*` helpers in
-//! `src/actions/window.rs` (which MoveHome / MoveEnd / MovePageUp /
-//! MovePageDown DO use). A contributor noticing that asymmetry might
+//! could easily ship. The `move_up` / `move_down` implementations
+//! at `src/actions/dialog.rs` delegate to the shared directional
+//! `selectable_index_*` helpers owned beside `GroupedActionItem` in
+//! `src/actions/dialog.rs`, matching the MoveHome / MoveEnd /
+//! MovePageUp / MovePageDown paths. A contributor touching that
+//! shared selection path might
 //! "simplify" both to:
 //!
 //! ```ignore
@@ -46,14 +46,14 @@
 //! This file pins the invariant two ways so the contract is robust
 //! against either a body-level refactor or an enum-level refactor:
 //!
-//!   (1) `move_up` body contains either `GroupedActionItem::Item(`
-//!       OR a call to one of the `selectable_index_*` /
-//!       `first_selectable_index` / `last_selectable_index`
-//!       helpers — i.e., SOMETHING in the body filters for
+//!   (1) `move_up` body delegates to
+//!       `selectable_index_at_or_before`, so it searches in the
+//!       same direction as the key movement while filtering for
 //!       selectable rows. A `selected_index -= 1; return;`
-//!       reduction contains none of these anchors.
+//!       reduction does not satisfy this anchor.
 //!
-//!   (2) `move_down` body has the same shape.
+//!   (2) `move_down` body delegates to
+//!       `selectable_index_at_or_after`, the downward companion.
 //!
 //!   (3) `GroupedActionItem` enum declares both `SectionHeader(...)`
 //!       and `Item(...)` variants. Flattening the enum to a single
@@ -61,7 +61,7 @@
 //!       type level; the test catches it even if body anchors are
 //!       preserved via some trivial wrapper.
 //!
-//!   (4) The shared helpers in `src/actions/window.rs`
+//!   (4) The shared helpers in `src/actions/dialog.rs`
 //!       (`first_selectable_index`, `last_selectable_index`,
 //!       `selectable_index_at_or_before`, `selectable_index_at_or_after`)
 //!       still filter via `is_selectable_row` which checks
@@ -122,6 +122,7 @@ fn body_filters_for_selectable_rows(body: &str) -> bool {
 
 #[test]
 fn move_up_skips_section_headers() {
+    // @lat: [[lat.md/automation#Automation#Arrow navigation skips section headers]]
     let body = extract_fn_body(DIALOG_SOURCE, "pub fn move_up(");
     assert!(
         body_filters_for_selectable_rows(body),
@@ -135,10 +136,17 @@ fn move_up_skips_section_headers() {
          visibly-skipped rhythm and a silent no-op on Enter. \
          Body was:\n{body}"
     );
+    assert!(
+        body.contains("selectable_index_at_or_before("),
+        "ActionsDialog::move_up should delegate to the shared directional \
+         selectable-row helper instead of carrying a bespoke skip loop. \
+         Body was:\n{body}"
+    );
 }
 
 #[test]
 fn move_down_skips_section_headers() {
+    // @lat: [[lat.md/automation#Automation#Arrow navigation skips section headers]]
     let body = extract_fn_body(DIALOG_SOURCE, "pub fn move_down(");
     assert!(
         body_filters_for_selectable_rows(body),
@@ -147,6 +155,12 @@ fn move_down_skips_section_headers() {
          `selectable_index_*` helpers. Same regression class as \
          `move_up` — a `self.selected_index += 1` reduction would \
          land the cursor on section headers. Body was:\n{body}"
+    );
+    assert!(
+        body.contains("selectable_index_at_or_after("),
+        "ActionsDialog::move_down should delegate to the shared directional \
+         selectable-row helper instead of carrying a bespoke skip loop. \
+         Body was:\n{body}"
     );
 }
 
@@ -181,17 +195,22 @@ fn grouped_action_item_enum_declares_both_variants() {
 fn shared_selectable_helpers_filter_on_item_variant() {
     // The `is_selectable_row` helper is the single source of truth
     // for "is this row selectable?" across MoveHome, MoveEnd,
-    // MovePageUp, MovePageDown. If it stops checking for
-    // `GroupedActionItem::Item(_)`, all four page intents regress
-    // in one commit — and Up/Down's inline loops would be the only
-    // remaining skip-checkers.
-    let body = extract_fn_body(WINDOW_SOURCE, "fn is_selectable_row(");
+    // MovePageUp, MovePageDown, and Up/Down. If it stops checking for
+    // `GroupedActionItem::Item(_)`, the whole helper family regresses
+    // in one commit.
+    let body = extract_fn_body(DIALOG_SOURCE, "pub(super) fn is_selectable_row(");
     assert!(
         body.contains("GroupedActionItem::Item(_)"),
-        "is_selectable_row in src/actions/window.rs MUST match on \
+        "is_selectable_row in src/actions/dialog.rs MUST match on \
          `GroupedActionItem::Item(_)`. Relaxing the pattern would \
-         let MoveHome / MoveEnd / MovePageUp / MovePageDown land \
+         let MoveHome / MoveEnd / MovePageUp / MovePageDown / Up / Down land \
          on section headers in one commit. Body was:\n{body}"
+    );
+    assert!(
+        !WINDOW_SOURCE.contains("fn selectable_index_at_or_before(")
+            && !WINDOW_SOURCE.contains("fn selectable_index_at_or_after("),
+        "selectable-row helpers should be owned beside GroupedActionItem in \
+         src/actions/dialog.rs, not redeclared in src/actions/window.rs"
     );
 
     // Confirm the page-intent paths actually delegate to the filtered

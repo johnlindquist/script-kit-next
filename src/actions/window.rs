@@ -24,7 +24,10 @@ use super::constants::{
     ACTION_ITEM_HEIGHT, HEADER_HEIGHT, POPUP_MAX_HEIGHT, POPUP_WIDTH, SEARCH_INPUT_HEIGHT,
     SECTION_HEADER_HEIGHT,
 };
-use super::dialog::{ActionsDialog, GroupedActionItem};
+use super::dialog::{
+    first_selectable_index, last_selectable_index, selectable_index_at_or_after,
+    selectable_index_at_or_before, ActionsDialog,
+};
 use super::types::{Action, SectionStyle};
 
 /// Count the number of section headers in the filtered action list
@@ -124,35 +127,6 @@ enum ActionsWindowKeyIntent {
     Close,
     Backspace,
     TypeChar(char),
-}
-
-#[inline]
-fn is_selectable_row(row: &GroupedActionItem) -> bool {
-    matches!(row, GroupedActionItem::Item(_))
-}
-
-fn first_selectable_index(rows: &[GroupedActionItem]) -> Option<usize> {
-    rows.iter().position(is_selectable_row)
-}
-
-fn last_selectable_index(rows: &[GroupedActionItem]) -> Option<usize> {
-    rows.iter().rposition(is_selectable_row)
-}
-
-fn selectable_index_at_or_before(rows: &[GroupedActionItem], start: usize) -> Option<usize> {
-    if rows.is_empty() {
-        return None;
-    }
-    let clamped = start.min(rows.len() - 1);
-    (0..=clamped).rev().find(|&ix| is_selectable_row(&rows[ix]))
-}
-
-fn selectable_index_at_or_after(rows: &[GroupedActionItem], start: usize) -> Option<usize> {
-    if rows.is_empty() {
-        return None;
-    }
-    let clamped = start.min(rows.len() - 1);
-    (clamped..rows.len()).find(|&ix| is_selectable_row(&rows[ix]))
 }
 
 #[inline]
@@ -849,21 +823,6 @@ mod tests {
             actions_window_key_intent("pagedown", &no_mods),
             Some(ActionsWindowKeyIntent::MovePageDown)
         );
-    }
-
-    #[test]
-    fn test_actions_window_selectable_index_helpers_skip_section_headers() {
-        let rows = vec![
-            GroupedActionItem::SectionHeader("One".to_string()),
-            GroupedActionItem::Item(0),
-            GroupedActionItem::SectionHeader("Two".to_string()),
-            GroupedActionItem::Item(1),
-        ];
-
-        assert_eq!(first_selectable_index(&rows), Some(1));
-        assert_eq!(last_selectable_index(&rows), Some(3));
-        assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
-        assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
     }
 
     #[test]
