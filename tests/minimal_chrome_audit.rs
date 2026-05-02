@@ -235,6 +235,24 @@ fn terminal_layout_info_has_terminal_content_branch() {
 }
 
 #[test]
+fn select_drop_layout_info_has_prompt_owned_branches() {
+    let source = include_str!("../src/app_layout/build_layout_info.rs");
+    assert!(
+        source.contains("AppView::SelectPrompt")
+            && source.contains("SelectChoices")
+            && source.contains("LayoutComponentType::List"),
+        "select layout info should report its prompt-owned list instead of launcher list/preview"
+    );
+    assert!(
+        source.contains("AppView::DropPrompt")
+            && source.contains("DropContent")
+            && source.contains("LayoutComponentType::Prompt"),
+        "drop layout info should report prompt-owned drop content instead of launcher list/preview"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"select_drop_layout_info\",\"prompt_owned_branches\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn form_prompt_wrapper_has_no_prompt_footer_or_hardcoded_hex() {
     let source = include_str!("../src/render_prompts/form/render.rs");
     assert!(

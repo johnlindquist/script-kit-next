@@ -8,7 +8,7 @@
 
 use gpui::{
     div, prelude::*, px, rgb, rgba, uniform_list, AnyElement, Context, FocusHandle, Focusable,
-    Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
+    MouseButton, Render, ScrollStrategy, SharedString, UniformListScrollHandle, Window,
 };
 use std::collections::HashSet;
 use std::ops::Range;
