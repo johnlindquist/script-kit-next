@@ -239,13 +239,17 @@ impl TemplatePrompt {
             || normalized.contains("slug")
     }
 
-    pub(super) fn is_name_field(name: &str) -> bool {
+    pub(super) fn is_slug_field(name: &str) -> bool {
         let normalized = name.to_lowercase();
         normalized == "script_name"
             || normalized == "extension_name"
-            || normalized == "name"
             || normalized.contains("slug")
-            || normalized.ends_with("_name")
+            || normalized.ends_with("_slug")
+    }
+
+    pub(super) fn is_name_field(name: &str) -> bool {
+        let normalized = name.to_lowercase();
+        Self::is_slug_field(name) || normalized == "name" || normalized.ends_with("_name")
     }
 
     pub(super) fn is_slug_like(value: &str) -> bool {
@@ -283,7 +287,7 @@ impl TemplatePrompt {
             return Ok(());
         }
 
-        if Self::is_name_field(&input.name) && !Self::is_slug_like(value) {
+        if Self::is_slug_field(&input.name) && !Self::is_slug_like(value) {
             return Err(format!(
                 "{} must use lowercase letters, numbers, and hyphens",
                 input.label
@@ -367,7 +371,7 @@ impl TemplatePrompt {
     }
 
     /// Submit the filled template
-    pub(super) fn submit(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn submit(&mut self, cx: &mut Context<Self>) {
         if !self.validate_all_inputs() {
             if let Some(first_invalid) = self.validation_errors.iter().position(Option::is_some) {
                 self.current_input = first_invalid;
@@ -398,7 +402,7 @@ impl TemplatePrompt {
     }
 
     /// Move to next input (Tab)
-    pub(super) fn next_input(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn next_input(&mut self, cx: &mut Context<Self>) {
         if !self.inputs.is_empty() {
             self.current_input = (self.current_input + 1) % self.inputs.len();
             cx.notify();

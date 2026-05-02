@@ -144,6 +144,19 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_plain_name_accepts_human_readable_values() {
+        let input = TemplateInput {
+            name: "name".to_string(),
+            label: "Name".to_string(),
+            placeholder: "My Bundle".to_string(),
+            group: "Naming".to_string(),
+            required: true,
+        };
+
+        assert!(TemplatePrompt::validate_input_value(&input, "My Cool Bundle").is_ok());
+    }
+
+    #[test]
     fn test_validate_required_inputs_reject_empty_trimmed_values() {
         let input = TemplateInput {
             name: "script_name".to_string(),

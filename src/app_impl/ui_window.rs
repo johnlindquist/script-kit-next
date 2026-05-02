@@ -198,7 +198,10 @@ impl ScriptListApp {
 
         match action {
             crate::footer_popup::FooterAction::Run => {
-                if !self.try_run_ready_acp_script(cx) {
+                if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |prompt, cx| prompt.submit(cx));
+                } else if !self.try_run_ready_acp_script(cx) {
                     self.execute_selected(cx);
                 }
             }
@@ -216,7 +219,12 @@ impl ScriptListApp {
                 );
             }
             crate::footer_popup::FooterAction::Ai => {
-                self.open_tab_ai_acp_with_entry_intent(None, cx);
+                if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |prompt, cx| prompt.next_input(cx));
+                } else {
+                    self.open_tab_ai_acp_with_entry_intent(None, cx);
+                }
             }
             crate::footer_popup::FooterAction::Apply => {
                 if matches!(self.current_view, AppView::ConfirmPrompt { .. }) {
@@ -492,6 +500,29 @@ impl ScriptListApp {
                 button_count = buttons.len(),
                 acp_ready = ready,
                 "Resolved ACP footer buttons"
+            );
+            return buttons;
+        }
+
+        if matches!(self.current_view, AppView::TemplatePrompt { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let enabled = !footer_disabled;
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Submit").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Ai, "⇥", "Next Field").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                    .selected(actions_open)
+                    .enabled(enabled),
+            ];
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved TemplatePrompt footer buttons"
             );
             return buttons;
         }

@@ -2,6 +2,7 @@ use super::*;
 use crate::components::{FocusablePrompt, FocusablePromptInterceptedKey};
 use crate::ui_foundation::{is_key_backspace, is_key_enter, is_key_tab, printable_char};
 use gpui::FontWeight;
+use gpui_component::scroll::ScrollableElement;
 
 impl Focusable for TemplatePrompt {
     fn focus_handle(&self, _cx: &gpui::App) -> FocusHandle {
@@ -14,9 +15,10 @@ impl Render for TemplatePrompt {
         let tokens = get_tokens(self.design_variant);
         let spacing = tokens.spacing();
 
-        let text_primary = rgb(self.theme.colors.text.primary);
-        let text_secondary = rgb(self.theme.colors.text.secondary);
-        let text_muted = rgb(self.theme.colors.text.muted);
+        let text = crate::components::prompt_text_palette(&self.theme);
+        let text_primary = text.primary;
+        let text_secondary = text.label;
+        let text_muted = text.help;
         let error_color = rgb(self.theme.colors.ui.error);
 
         let description = if self.inputs.is_empty() {
@@ -68,7 +70,15 @@ impl Render for TemplatePrompt {
                 text_secondary,
             ));
         } else {
-            let mut fields = div().w_full().flex().flex_col().gap(px(spacing.gap_lg));
+            let mut fields = div()
+                .id("template-fields-scroll")
+                .w_full()
+                .flex()
+                .flex_1()
+                .min_h(px(0.))
+                .flex_col()
+                .gap(px(spacing.gap_lg))
+                .overflow_y_scrollbar();
             let mut previous_group: Option<String> = None;
 
             for (idx, input) in self.inputs.iter().enumerate() {
@@ -113,6 +123,7 @@ impl Render for TemplatePrompt {
                     value.is_empty(),
                 );
 
+                let handle_select = cx.entity().downgrade();
                 let field_section = crate::components::prompt_form_section(
                     label,
                     text_secondary,
@@ -128,6 +139,18 @@ impl Render for TemplatePrompt {
                         message.clone(),
                         error_color,
                     ))
+                })
+                .id(SharedString::from(format!("template-field-{idx}")))
+                .cursor_pointer()
+                .on_click(move |_event, _window, cx| {
+                    if let Some(entity) = handle_select.upgrade() {
+                        entity.update(cx, |this, cx| {
+                            if this.current_input != idx {
+                                this.current_input = idx;
+                                cx.notify();
+                            }
+                        });
+                    }
                 });
 
                 fields = fields.child(field_section);
@@ -206,6 +229,26 @@ mod tests {
         assert!(
             SOURCE.contains("prompt_field_style("),
             "render.rs should use prompt_field_style"
+        );
+        assert!(
+            SOURCE.contains("prompt_text_palette("),
+            "render.rs should use the shared text palette"
+        );
+    }
+
+    #[test]
+    fn template_render_exposes_scrollable_clickable_field_region() {
+        assert!(
+            SOURCE.contains("template-fields-scroll"),
+            "template fields should have a stable scroll region id"
+        );
+        assert!(
+            SOURCE.contains(".overflow_y_scrollbar()"),
+            "template fields should scroll when placeholders exceed available height"
+        );
+        assert!(
+            SOURCE.contains(".on_click(") && SOURCE.contains("current_input = idx"),
+            "template fields should be clickable and move the current input"
         );
     }
 

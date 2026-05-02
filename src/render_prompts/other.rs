@@ -143,6 +143,38 @@ impl ScriptListApp {
         crate::components::render_universal_prompt_hint_strip_clickable(on_run, on_actions, on_ai)
     }
 
+    fn clickable_template_hint_strip(
+        &self,
+        entity: Entity<TemplatePrompt>,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let on_submit = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Run,
+                window,
+                cx,
+                "gpui_footer",
+            );
+        });
+        let on_next_field = move |_: &gpui::ClickEvent, _window: &mut Window, cx: &mut gpui::App| {
+            entity.update(cx, |prompt, cx| prompt.next_input(cx));
+        };
+        let on_actions = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Actions,
+                window,
+                cx,
+                "gpui_footer",
+            );
+        });
+
+        crate::components::HintStrip::new(crate::components::template_prompt_hints())
+            .on_hint_click(0, on_submit)
+            .on_hint_click(1, on_next_field)
+            .on_hint_click(2, on_actions)
+            .into_any_element()
+    }
+
     fn render_wrapped_prompt_entity(
         &mut self,
         entity: impl IntoElement,
@@ -153,6 +185,23 @@ impl ScriptListApp {
         let handle_key = cx.listener(key_handler);
         let vibrancy_bg = get_vibrancy_background(&self.theme);
         let footer = self.main_window_footer_slot(self.clickable_universal_hint_strip(cx));
+
+        crate::components::render_simple_prompt_shell(shell_radius, vibrancy_bg, entity, footer)
+            .on_key_down(handle_key)
+            .into_any_element()
+    }
+
+    fn render_wrapped_prompt_entity_with_footer(
+        &mut self,
+        entity: impl IntoElement,
+        footer_element: AnyElement,
+        key_handler: impl Fn(&mut Self, &gpui::KeyDownEvent, &mut Window, &mut Context<Self>) + 'static,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let shell_radius = self.other_prompt_shell_radius();
+        let handle_key = cx.listener(key_handler);
+        let vibrancy_bg = get_vibrancy_background(&self.theme);
+        let footer = self.main_window_footer_slot(footer_element);
 
         crate::components::render_simple_prompt_shell(shell_radius, vibrancy_bg, entity, footer)
             .on_key_down(handle_key)
@@ -231,9 +280,19 @@ impl ScriptListApp {
                 self.has_nonempty_sdk_actions(),
             ),
         );
-        let hints = crate::components::universal_prompt_hints();
-        crate::components::emit_prompt_hint_audit("render_prompts::template", &hints);
-        self.render_wrapped_prompt_entity(entity, Self::other_prompt_shell_handle_key_default, cx)
+        let hints = crate::components::template_prompt_hints();
+        crate::components::emit_surface_prompt_hint_audit(
+            "render_prompts::template",
+            &hints,
+            "template_submit_next_actions_footer",
+        );
+        let footer = self.clickable_template_hint_strip(entity.clone(), cx);
+        self.render_wrapped_prompt_entity_with_footer(
+            entity,
+            footer,
+            Self::other_prompt_shell_handle_key_default,
+            cx,
+        )
     }
 
     fn render_chat_prompt(
@@ -808,7 +867,6 @@ mod other_prompt_render_wrapper_tests {
             "render_select_prompt",
             "render_env_prompt",
             "render_drop_prompt",
-            "render_template_prompt",
             "render_naming_prompt",
         ] {
             let body = fn_source(fn_name);
@@ -851,7 +909,6 @@ mod other_prompt_render_wrapper_tests {
             ("render_select_prompt", "render_prompts::select"),
             ("render_env_prompt", "render_prompts::env"),
             ("render_drop_prompt", "render_prompts::drop"),
-            ("render_template_prompt", "render_prompts::template"),
             ("render_naming_prompt", "render_prompts::naming"),
             ("render_webcam_prompt", "render_prompts::webcam"),
             (
@@ -876,6 +933,23 @@ mod other_prompt_render_wrapper_tests {
     }
 
     #[test]
+    fn template_prompt_emits_surface_specific_truthful_hints() {
+        let body = fn_source("render_template_prompt");
+        assert!(
+            body.contains("emit_surface_prompt_hint_audit("),
+            "template prompt should emit a surface-specific hint audit"
+        );
+        assert!(
+            body.contains("template_prompt_hints()"),
+            "template prompt should use its truthful submit/next/actions hints"
+        );
+        assert!(
+            !body.contains("universal_prompt_hints()"),
+            "template prompt should not advertise the universal AI hint"
+        );
+    }
+
+    #[test]
     fn render_wrapped_prompt_entity_calls_shared_shell_helper() {
         let body = fn_source("render_wrapped_prompt_entity");
         assert!(
@@ -896,8 +970,8 @@ mod other_prompt_render_wrapper_tests {
             "render_template_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_wrapped_prompt_entity("),
-            "render_template_prompt should delegate to render_wrapped_prompt_entity"
+            body.contains("render_wrapped_prompt_entity_with_footer("),
+            "render_template_prompt should delegate to the footer-aware shared wrapper"
         );
     }
 

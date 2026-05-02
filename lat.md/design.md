@@ -30,6 +30,8 @@ Those SDK-facing browser surfaces also route secondary labels, counts, empty sta
 
 Create-flow prompts share the same text ladder through `prompt_text_palette` and `prompt_field_style`: primary values use `text_primary`, empty field values use `placeholder_text_rgba`, and help/count/path-prefix text uses hint or muted opacity tokens instead of local packed-alpha math. Path and Env prompts also use the shared form intro/section/help helpers so secret entry, path filtering, and starter creation keep one compact GPUI surface contract.
 
+Template prompts follow that create-flow contract while owning their tab-through behavior. Their placeholder field list scrolls within the prompt body, click targets move the current field, plain `{{name}}` accepts human-readable text, and both GPUI and native footer paths advertise `Submit`, `Next Field`, and `Actions` through a surface-specific hint audit.
+
 Native `form()` fields resolve text, placeholder, label, cursor, and checkbox mark colors before render through shared chrome tokens rather than wrapping muted/secondary base colors in renderer code. Text fields and text areas both show a cursor plus placeholder while focused and empty, and the form prompt synchronizes parent focus state when fields are clicked so key routing follows the visible focus target.
 
 Editor prompt chrome keeps the code editor body separate from wrapper-owned footer and layout metadata. Snippet choice popups use inline dropdown chrome tokens, and editor layout probes report an `EditorContent` prompt branch instead of main-menu list/preview components.

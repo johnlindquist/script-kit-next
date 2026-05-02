@@ -710,6 +710,17 @@ pub(crate) fn universal_prompt_hints_with_primary_label(
     ]
 }
 
+/// Surface-specific footer hints for the tab-through template prompt.
+#[allow(dead_code)]
+#[inline]
+pub(crate) fn template_prompt_hints() -> Vec<SharedString> {
+    vec![
+        "↵ Submit".into(),
+        "⇥ Next Field".into(),
+        "⌘K Actions".into(),
+    ]
+}
+
 /// Zero-argument renderer for the canonical three-key footer.
 #[allow(dead_code)]
 #[inline]
@@ -1199,8 +1210,8 @@ mod prompt_layout_shell_tests {
             "render_template_prompt should not use PromptFooter"
         );
         assert!(
-            body.contains("render_wrapped_prompt_entity("),
-            "render_template_prompt should delegate to render_wrapped_prompt_entity"
+            body.contains("render_wrapped_prompt_entity_with_footer("),
+            "render_template_prompt should delegate to the footer-aware shared wrapper"
         );
     }
 
@@ -1394,6 +1405,16 @@ mod prompt_layout_shell_tests {
         assert_eq!(hints[0].as_ref(), "↵ Run");
         assert_eq!(hints[1].as_ref(), "⌘↵ AI");
         assert_eq!(hints[2].as_ref(), "⌘K Actions");
+    }
+
+    #[test]
+    fn template_prompt_hints_are_truthful_and_non_universal() {
+        let hints = super::template_prompt_hints();
+        assert_eq!(hints.len(), super::UNIVERSAL_PROMPT_HINT_COUNT);
+        assert_eq!(hints[0].as_ref(), "↵ Submit");
+        assert_eq!(hints[1].as_ref(), "⇥ Next Field");
+        assert_eq!(hints[2].as_ref(), "⌘K Actions");
+        assert!(!super::is_universal_prompt_hints(&hints));
     }
 
     #[test]
