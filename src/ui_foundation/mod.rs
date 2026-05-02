@@ -99,8 +99,6 @@ pub(crate) const ALPHA_DIVIDER: u8 = 0x60;
 pub(crate) const ALPHA_BORDER_SUBTLE: u8 = 0x30;
 /// 12% opacity - faint tint for secondary badges.
 pub(crate) const ALPHA_TINT_SUBTLE: u8 = 0x20;
-/// 88% opacity - warning banner hover darken overlay.
-pub(crate) const ALPHA_HOVER_WARNING: u8 = 0xE0;
 /// Get the vibrancy background for window root containers.
 ///
 /// Canonical helper used by AI/Notes window root containers to tint macOS blur.

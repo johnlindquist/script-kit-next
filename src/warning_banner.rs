@@ -9,8 +9,12 @@
 use gpui::*;
 use std::rc::Rc;
 
-use crate::components::button::{Button, ButtonColors, ButtonVariant};
-use crate::theme::Theme;
+use crate::components::button::{Button, ButtonColors, ButtonVariant, TRANSPARENT};
+use crate::theme::{
+    best_readable_text_hex,
+    opacity::{OPACITY_SUBTLE, OPACITY_WARNING_BANNER_HOVER},
+    Theme,
+};
 
 /// Pre-computed colors for WarningBanner rendering
 ///
@@ -34,13 +38,14 @@ impl WarningBannerColors {
     /// Create WarningBannerColors from theme reference
     pub fn from_theme(theme: &Theme) -> Self {
         let colors = &theme.colors;
+        let foreground = best_readable_text_hex(colors.ui.warning);
 
         Self {
             background: colors.ui.warning,
-            text: colors.background.main, // Dark text on warning background
-            icon: colors.background.main,
-            dismiss: colors.background.main,
-            dismiss_hover: colors.text.primary,
+            text: foreground,
+            icon: foreground,
+            dismiss: foreground,
+            dismiss_hover: foreground,
         }
     }
 }
@@ -133,10 +138,12 @@ impl RenderOnce for WarningBanner {
             .font_weight(FontWeight::BOLD)
             .child("⚠");
 
-        // Message text - flex-1 to take available space
         let message_text = div()
             .flex_1()
+            .min_w(px(0.0))
+            .overflow_hidden()
             .text_sm()
+            .text_ellipsis()
             .text_color(rgb(colors.text))
             .font_weight(FontWeight::MEDIUM)
             .child(self.message.clone());
@@ -148,17 +155,21 @@ impl RenderOnce for WarningBanner {
             let dismiss_colors = ButtonColors {
                 text_color: colors.dismiss,
                 text_hover: colors.dismiss_hover,
-                background: 0x00000000, // Transparent
+                background: TRANSPARENT,
                 background_hover: 0x000000,
                 accent: colors.dismiss,
-                border: 0x00000000, // No border
+                border: TRANSPARENT,
                 focus_ring: colors.dismiss_hover,
-                focus_tint: 0x00000000,
-                hover_overlay: 0x00000026, // Black at ~15% alpha (warning banner on accent bg)
+                focus_tint: TRANSPARENT,
+                hover_overlay: crate::ui_foundation::hex_to_rgba_with_opacity(
+                    0x000000,
+                    OPACITY_SUBTLE,
+                ),
             };
             Button::new("×", dismiss_colors)
                 .variant(ButtonVariant::Icon)
                 .on_click(Box::new(move |event, window, cx| {
+                    cx.stop_propagation();
                     tracing::debug!("Warning banner dismiss clicked");
                     if let Some(ref cb) = callback {
                         cb(event, window, cx);
@@ -187,10 +198,10 @@ impl RenderOnce for WarningBanner {
             banner = banner
                 .cursor_pointer()
                 .hover(|s| {
-                    s.bg(rgba(
-                        (colors.background << 8)
-                            | u32::from(crate::ui_foundation::ALPHA_HOVER_WARNING),
-                    ))
+                    s.bg(rgba(crate::ui_foundation::hex_to_rgba_with_opacity(
+                        colors.background,
+                        OPACITY_WARNING_BANNER_HOVER,
+                    )))
                 }) // Slightly darker on hover
                 .on_click(move |event, window, cx| {
                     tracing::debug!(message = %message_for_log, "Warning banner clicked");

@@ -50,6 +50,8 @@ pub const OPACITY_PREVIEW_TEXT: f32 = 0.75;
 pub const OPACITY_PROMINENT: f32 = 0.80;
 /// Near-full emphasis.
 pub const OPACITY_NEAR_FULL: f32 = 0.85;
+/// Warning banner hover overlay.
+pub const OPACITY_WARNING_BANNER_HOVER: f32 = 0.88;
 /// Active/pressed state (button hover, focused chrome).
 pub const OPACITY_ACTIVE: f32 = 0.90;
 
@@ -92,5 +94,6 @@ mod tests {
         assert_opacity_eq(OPACITY_PREVIEW_TEXT, 0.75);
         assert_opacity_eq(OPACITY_PROMINENT, 0.80);
         assert_opacity_eq(OPACITY_ACTIVE, 0.90);
+        assert_opacity_eq(OPACITY_WARNING_BANNER_HOVER, 0.88);
     }
 }

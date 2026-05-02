@@ -34,6 +34,8 @@ The footer-safe reveal should also keep a small visual gap above the blur instea
 
 The visual system uses whisper-thin borders, low-opacity fills, and stable spacing instead of card-heavy composition. Theme work should route through the shared opacity and chrome tokens in `src/theme/opacity.rs` and `src/theme/chrome.rs`.
 
+Warning banners are compact one-line launcher chrome. They resolve warning background and readable foreground through shared theme helpers, keep hover opacity tokenized, and dismiss clicks must not trigger the banner action.
+
 All text elements use `text_primary` (white on dark) as the base color; brightness is controlled purely via semantic opacity tiers defined on `BackgroundOpacity`: `text_name` (1.0), `text_strong` (0.80), `text_muted_alpha` (0.65), `text_hint` (0.45), `text_placeholder` (0.40), `text_icon` (0.50). Dark row backgrounds use `hover` (0.06) and `selected` (0.23) opacity on `text_primary`; light row backgrounds use `hover` (0.04) and `selected` (0.08). No double-dimming from secondary/muted/dimmed base colors.
 
 Theme validation should also treat `hover >= selected` as a warning because equal row opacities erase the focus hierarchy and make hovered rows compete visually with the focused item.
