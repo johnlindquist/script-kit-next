@@ -28,9 +28,10 @@ impl ScriptListApp {
         let design_spacing = tokens.spacing();
         let design_typography = tokens.typography();
 
-        let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
-        let text_muted = self.theme.colors.text.muted;
+        let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
+        let text_primary = rgb(chrome.text_primary_hex);
+        let text_secondary = rgba(chrome.text_muted_rgba);
+        let text_hint = rgba(chrome.text_hint_rgba);
 
         let visible_rows =
             crate::mcp_resources::script_template_catalog_visible_rows(&templates, filter);
@@ -156,7 +157,7 @@ impl ScriptListApp {
                 .w_full()
                 .py(px(design_spacing.padding_xl))
                 .text_center()
-                .text_color(rgb(text_muted))
+                .text_color(text_hint)
                 .font_family(design_typography.font_family)
                 .child(if filter.trim().is_empty() {
                     "No starter templates available"
@@ -219,25 +220,25 @@ impl ScriptListApp {
                     div()
                         .text_size(px(design_typography.font_size_xl))
                         .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .text_color(rgb(text_primary))
+                        .text_color(text_primary)
                         .child(template.title.clone()),
                 )
                 .child(
                     div()
                         .text_size(px(design_typography.font_size_xs))
-                        .text_color(rgb(text_muted))
+                        .text_color(text_hint)
                         .child(template.category.clone()),
                 )
                 .child(
                     div()
                         .text_size(px(design_typography.font_size_md))
-                        .text_color(rgb(text_primary))
+                        .text_color(text_primary)
                         .child(template.description.clone()),
                 )
                 .child(
                     div()
                         .text_size(px(design_typography.font_size_sm))
-                        .text_color(rgb(text_dimmed))
+                        .text_color(text_secondary)
                         .child(template.body_template.clone()),
                 )
                 .into_any_element(),
@@ -247,7 +248,7 @@ impl ScriptListApp {
                 .flex()
                 .items_center()
                 .justify_center()
-                .text_color(rgb(text_muted))
+                .text_color(text_hint)
                 .font_family(design_typography.font_family)
                 .child("Select a template")
                 .into_any_element(),
@@ -272,16 +273,11 @@ impl ScriptListApp {
                         .focus_bordered(false),
                 ),
             )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(text_dimmed))
-                    .child(format!(
-                        "{} template{}",
-                        templates.len(),
-                        if templates.len() == 1 { "" } else { "s" },
-                    )),
-            );
+            .child(div().text_sm().text_color(text_secondary).child(format!(
+                "{} template{}",
+                templates.len(),
+                if templates.len() == 1 { "" } else { "s" },
+            )));
 
         let list_pane = div()
             .relative()
@@ -291,13 +287,12 @@ impl ScriptListApp {
             .py(px(design_spacing.padding_xs))
             .child(list_element);
 
-        let hints: Vec<SharedString> = vec![
-            "↵ Create".into(),
-            "⌘C Copy Markdown".into(),
-            "↑↓ Navigate".into(),
-            "Esc Back".into(),
-        ];
-        crate::components::emit_prompt_hint_audit("script_template_catalog", &hints);
+        let hints: Vec<SharedString> = vec!["↵ Create".into(), "⌘C Copy".into(), "Esc Back".into()];
+        crate::components::emit_surface_prompt_hint_audit(
+            "script_template_catalog",
+            &hints,
+            "script_template_create_browser",
+        );
 
         let gpui_footer = crate::components::render_simple_hint_strip(hints, None);
         let footer = self.main_window_footer_slot(gpui_footer);
@@ -308,7 +303,7 @@ impl ScriptListApp {
             preview_panel,
             footer,
         )
-        .text_color(rgb(text_primary))
+        .text_color(text_primary)
         .font_family(design_typography.font_family)
         .key_context("script_template_catalog")
         .track_focus(&self.focus_handle)
