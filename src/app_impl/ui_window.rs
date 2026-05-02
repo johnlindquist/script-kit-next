@@ -205,6 +205,9 @@ impl ScriptListApp {
                     if self.capture_webcam_photo(cx) {
                         self.hide_main_and_reset(cx);
                     }
+                } else if let AppView::PathPrompt { entity, .. } = &self.current_view {
+                    let entity = entity.clone();
+                    entity.update(cx, |prompt, cx| prompt.handle_enter(cx));
                 } else if !self.try_run_ready_acp_script(cx) {
                     self.execute_selected(cx);
                 }
@@ -343,9 +346,7 @@ impl ScriptListApp {
             FooterButtonConfig::new(FooterAction::Ai, "⌘↵", "AI").enabled(!footer_disabled),
         ];
 
-        if self.current_view_supports_shared_actions()
-            || matches!(self.current_view, AppView::PathPrompt { .. })
-        {
+        if self.current_view_supports_shared_actions() {
             buttons.push(
                 FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
                     .selected(actions_open)
@@ -549,6 +550,28 @@ impl ScriptListApp {
                 view = ?self.current_view,
                 button_count = buttons.len(),
                 "Resolved Webcam footer buttons"
+            );
+            return buttons;
+        }
+
+        if matches!(self.current_view, AppView::PathPrompt { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let actions_open = self.show_actions_popup || crate::actions::is_actions_window_open();
+            let enabled = !footer_disabled;
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Select").enabled(enabled),
+                FooterButtonConfig::new(FooterAction::Actions, "⌘K", "Actions")
+                    .selected(actions_open)
+                    .enabled(enabled),
+            ];
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved PathPrompt footer buttons"
             );
             return buttons;
         }
