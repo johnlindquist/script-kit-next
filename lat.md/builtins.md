@@ -109,6 +109,12 @@ The renderer filters through one helper family, so keyboard navigation, `getStat
 
 Process Manager routes secondary text through `AppChromeColors`, centers empty states in the available list pane, and stops propagation for row and Stop All clicks so parent surfaces cannot double-handle destructive actions.
 
+## Settings Hub
+
+Settings is a mini built-in list for operational configuration actions, with renderer, automation, and state receipts sharing the same filtered-row projection.
+
+The Settings renderer owns typed filtering, keyboard selection, row activation, and actions-popup routing while keeping footer ownership behind `main_window_footer_slot`. `getElements` and `getState` read the same helper family as render, so automation sees the same setting rows and selected value that the user sees on screen.
+
 ## Trigger-builtin registry
 
 The stdin `triggerBuiltin` verb resolves through a single canonical registry instead of three hand-kept match arms. Duplicate aliases or typoed canonical ids fail loudly at startup, not silently at runtime.

@@ -25,6 +25,36 @@ fn settings_uses_shared_chrome_text_tokens() {
 }
 
 #[test]
+fn settings_exposes_visible_rows_to_state_and_elements() {
+    let collect_elements = include_str!("../src/app_layout/collect_elements.rs");
+    let prompt_handler = include_str!("../src/prompt_handler/mod.rs");
+
+    for needle in [
+        "fn settings_visible_row_names(&self, filter: &str) -> Vec<String>",
+        "fn settings_dataset_and_visible_counts(&self, filter: &str) -> (usize, usize)",
+        "fn settings_selected_visible_row_name(",
+    ] {
+        assert!(
+            SETTINGS_SOURCE.contains(needle),
+            "Settings should declare shared visible-row helper: {needle}"
+        );
+    }
+
+    assert!(
+        collect_elements.contains("let rows = self.settings_visible_row_names(filter);"),
+        "getElements should collect Settings rows through the shared helper"
+    );
+    assert!(
+        prompt_handler.contains("self.settings_dataset_and_visible_counts(filter)"),
+        "getState should report Settings total and visible counts"
+    );
+    assert!(
+        prompt_handler.contains("self.settings_selected_visible_row_name(filter, *selected_index)"),
+        "getState should report the selected Settings row value"
+    );
+}
+
+#[test]
 fn settings_routes_actions_before_local_keys_and_consumes_handled_routes() {
     let route = SETTINGS_SOURCE
         .find("route_key_to_actions_dialog")

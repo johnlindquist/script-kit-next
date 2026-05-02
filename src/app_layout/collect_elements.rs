@@ -90,29 +90,35 @@ impl ScriptListApp {
                 ElementCollectionOutcome::new(elements, total_count)
             }
 
-            AppView::ArgPrompt { choices, .. } => self.collect_choice_view_elements(
-                "filter",
-                self.arg_input.text().to_string(),
-                choices,
-                self.arg_selected_index,
-                limit,
-            ).into(),
+            AppView::ArgPrompt { choices, .. } => self
+                .collect_choice_view_elements(
+                    "filter",
+                    self.arg_input.text().to_string(),
+                    choices,
+                    self.arg_selected_index,
+                    limit,
+                )
+                .into(),
 
-            AppView::MiniPrompt { choices, .. } => self.collect_choice_view_elements(
-                "filter",
-                self.arg_input.text().to_string(),
-                choices,
-                self.arg_selected_index,
-                limit,
-            ).into(),
+            AppView::MiniPrompt { choices, .. } => self
+                .collect_choice_view_elements(
+                    "filter",
+                    self.arg_input.text().to_string(),
+                    choices,
+                    self.arg_selected_index,
+                    limit,
+                )
+                .into(),
 
-            AppView::MicroPrompt { choices, .. } => self.collect_choice_view_elements(
-                "filter",
-                self.arg_input.text().to_string(),
-                choices,
-                self.arg_selected_index,
-                limit,
-            ).into(),
+            AppView::MicroPrompt { choices, .. } => self
+                .collect_choice_view_elements(
+                    "filter",
+                    self.arg_input.text().to_string(),
+                    choices,
+                    self.arg_selected_index,
+                    limit,
+                )
+                .into(),
 
             AppView::ClipboardHistoryView {
                 filter,
@@ -136,7 +142,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::AppLauncherView {
@@ -151,7 +158,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::WindowSwitcherView {
@@ -178,7 +186,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::BrowserTabsView {
@@ -206,7 +215,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::BrowserHistoryView {
@@ -234,7 +244,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::DesignGalleryView {
@@ -259,7 +270,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::FileSearchView {
@@ -280,7 +292,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::ProcessManagerView {
@@ -295,7 +308,24 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
+            }
+
+            AppView::SettingsView {
+                filter,
+                selected_index,
+            } => {
+                let rows = self.settings_visible_row_names(filter);
+                self.collect_named_rows(
+                    "settings-filter",
+                    filter.clone(),
+                    "settings",
+                    &rows,
+                    *selected_index,
+                    limit,
+                )
+                .into()
             }
 
             AppView::CurrentAppCommandsView {
@@ -310,7 +340,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::SdkReferenceView {
@@ -326,7 +357,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::ScriptTemplateCatalogView {
@@ -335,8 +367,7 @@ impl ScriptListApp {
                 templates,
             } => {
                 let rows = crate::mcp_resources::script_template_catalog_visible_row_names(
-                    templates,
-                    filter,
+                    templates, filter,
                 );
                 self.collect_named_rows(
                     "script-template-filter",
@@ -345,7 +376,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::EmojiPickerView {
@@ -369,7 +401,8 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::BrowseKitsView {
@@ -377,8 +410,7 @@ impl ScriptListApp {
                 selected_index,
                 results,
             } => {
-                let rows: Vec<String> =
-                    results.iter().map(|r| r.full_name.clone()).collect();
+                let rows: Vec<String> = results.iter().map(|r| r.full_name.clone()).collect();
                 self.collect_named_rows(
                     "kit-search",
                     query.clone(),
@@ -386,17 +418,14 @@ impl ScriptListApp {
                     &rows,
                     *selected_index,
                     limit,
-                ).into()
+                )
+                .into()
             }
 
             AppView::ThemeChooserView { filter, .. } => {
                 let total_count = 2;
                 let elements: Vec<protocol::ElementInfo> = vec![
-                    protocol::ElementInfo::input(
-                        "theme-filter",
-                        Some(filter.as_str()),
-                        true,
-                    ),
+                    protocol::ElementInfo::input("theme-filter", Some(filter.as_str()), true),
                     protocol::ElementInfo::panel("theme-chooser"),
                 ]
                 .into_iter()
@@ -418,18 +447,13 @@ impl ScriptListApp {
                     ));
 
                     let action_count = dialog.filtered_actions.len();
-                    elements.push(protocol::ElementInfo::list(
-                        "actions",
-                        action_count,
-                    ));
+                    elements.push(protocol::ElementInfo::list("actions", action_count));
 
                     let selected_action_idx = dialog
                         .get_selected_filtered_index()
                         .and_then(|fi| dialog.filtered_actions.get(fi).copied());
 
-                    for (filter_pos, &action_idx) in
-                        dialog.filtered_actions.iter().enumerate()
-                    {
+                    for (filter_pos, &action_idx) in dialog.filtered_actions.iter().enumerate() {
                         if let Some(action) = dialog.actions.get(action_idx) {
                             let is_selected = selected_action_idx == Some(action_idx);
                             elements.push(protocol::ElementInfo::choice(
@@ -471,8 +495,7 @@ impl ScriptListApp {
 
             AppView::FormPrompt { entity, .. } => {
                 let form = entity.read(cx);
-                let (elements, total_count) =
-                    self.collect_form_prompt_elements(form, limit, cx);
+                let (elements, total_count) = self.collect_form_prompt_elements(form, limit, cx);
                 Self::finalize_surface_outcome(
                     "form-prompt",
                     "form-prompt",
@@ -511,14 +534,11 @@ impl ScriptListApp {
                 )
             }
 
-            AppView::SelectPrompt { entity, .. } => {
-                entity.read(cx).collect_elements(limit).into()
-            }
+            AppView::SelectPrompt { entity, .. } => entity.read(cx).collect_elements(limit).into(),
 
             AppView::PathPrompt { entity, .. } => {
                 let path_prompt = entity.read(cx);
-                let (elements, total_count) =
-                    self.collect_path_prompt_elements(path_prompt, limit);
+                let (elements, total_count) = self.collect_path_prompt_elements(path_prompt, limit);
                 Self::finalize_surface_outcome(
                     "path-prompt",
                     "path-prompt",
@@ -531,8 +551,7 @@ impl ScriptListApp {
 
             AppView::ChatPrompt { entity, .. } => {
                 let chat = entity.read(cx);
-                let (elements, total_count) =
-                    self.collect_chat_prompt_elements(chat, limit);
+                let (elements, total_count) = self.collect_chat_prompt_elements(chat, limit);
                 Self::finalize_surface_outcome(
                     "chat-prompt",
                     "chat-prompt",
@@ -545,8 +564,7 @@ impl ScriptListApp {
 
             AppView::EnvPrompt { entity, .. } => {
                 let env_prompt = entity.read(cx);
-                let (elements, total_count) =
-                    self.collect_env_prompt_elements(env_prompt, limit);
+                let (elements, total_count) = self.collect_env_prompt_elements(env_prompt, limit);
                 Self::finalize_surface_outcome(
                     "env-prompt",
                     "env-prompt",
@@ -559,8 +577,7 @@ impl ScriptListApp {
 
             AppView::DropPrompt { entity, .. } => {
                 let drop_prompt = entity.read(cx);
-                let (elements, total_count) =
-                    self.collect_drop_prompt_elements(drop_prompt, limit);
+                let (elements, total_count) = self.collect_drop_prompt_elements(drop_prompt, limit);
                 Self::finalize_surface_outcome(
                     "drop-prompt",
                     "drop-prompt",
@@ -761,8 +778,7 @@ impl ScriptListApp {
         total_count: usize,
     ) -> ElementCollectionOutcome {
         if !elements.is_empty() {
-            let elements: Vec<protocol::ElementInfo> =
-                elements.into_iter().take(limit).collect();
+            let elements: Vec<protocol::ElementInfo> = elements.into_iter().take(limit).collect();
             tracing::info!(
                 surface = surface,
                 element_count = elements.len(),
@@ -774,11 +790,10 @@ impl ScriptListApp {
         }
 
         let total_count = 1;
-        let elements: Vec<protocol::ElementInfo> =
-            vec![protocol::ElementInfo::panel(panel_name)]
-                .into_iter()
-                .take(limit)
-                .collect();
+        let elements: Vec<protocol::ElementInfo> = vec![protocol::ElementInfo::panel(panel_name)]
+            .into_iter()
+            .take(limit)
+            .collect();
         tracing::info!(
             surface = surface,
             element_count = elements.len(),
@@ -856,10 +871,7 @@ impl ScriptListApp {
             }
 
             let field_name = format!("form-{}", field.name);
-            let field_label = field
-                .label
-                .clone()
-                .unwrap_or_else(|| field.name.clone());
+            let field_label = field.label.clone().unwrap_or_else(|| field.name.clone());
             let focused = index == form.focused_index;
 
             let element = match entity {
@@ -1090,7 +1102,10 @@ impl ScriptListApp {
             limit,
             Self::input_element(
                 "env-key",
-                env_prompt.title.clone().unwrap_or_else(|| env_prompt.key.clone()),
+                env_prompt
+                    .title
+                    .clone()
+                    .unwrap_or_else(|| env_prompt.key.clone()),
                 Some(env_prompt.key.clone()),
                 false,
                 Some(0),
@@ -1295,7 +1310,11 @@ impl ScriptListApp {
             if elements.len() >= limit {
                 break;
             }
-            let sender = if message.is_user() { "User" } else { "Assistant" };
+            let sender = if message.is_user() {
+                "User"
+            } else {
+                "Assistant"
+            };
             let content = message.get_content();
             let text = if content.is_empty() {
                 sender.to_string()
@@ -1313,10 +1332,7 @@ impl ScriptListApp {
         (elements, total_count)
     }
 
-    fn collect_script_list_elements(
-        &self,
-        limit: usize,
-    ) -> (Vec<protocol::ElementInfo>, usize) {
+    fn collect_script_list_elements(&self, limit: usize) -> (Vec<protocol::ElementInfo>, usize) {
         let row_names: Vec<String> = self
             .filtered_results()
             .into_iter()
@@ -1343,10 +1359,7 @@ impl ScriptListApp {
         );
 
         // Emit JSON snapshot of all collected semantic IDs for agent introspection
-        let semantic_ids: Vec<&str> = elements
-            .iter()
-            .map(|e| e.semantic_id.as_str())
-            .collect();
+        let semantic_ids: Vec<&str> = elements.iter().map(|e| e.semantic_id.as_str()).collect();
         tracing::debug!(
             event = "collect_script_list_elements",
             total_count,
