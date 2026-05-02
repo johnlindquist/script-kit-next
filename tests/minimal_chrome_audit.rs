@@ -389,6 +389,69 @@ fn path_native_footer_submits_path_prompt_without_launcher_ai() {
 }
 
 #[test]
+fn env_footer_submits_env_prompt_without_launcher_ai() {
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let outer_source = include_str!("../src/render_prompts/other.rs");
+    let render_source = include_str!("../src/prompts/env/render.rs");
+    let render_code = &render_source[..render_source
+        .find("#[cfg(test)]")
+        .unwrap_or(render_source.len())];
+    let prompt_source = include_str!("../src/prompts/env/prompt.rs");
+
+    let run_start = ui_window
+        .find("FooterAction::Run =>")
+        .expect("footer Run branch exists");
+    let run_branch = &ui_window[run_start..run_start + 1700];
+    let footer_branch_start = ui_window
+        .find("Resolved EnvPrompt footer buttons")
+        .expect("EnvPrompt native footer branch exists");
+    let footer_branch = &ui_window[footer_branch_start.saturating_sub(500)..footer_branch_start];
+    let sizing_start = ui_window
+        .find("pub(crate) fn calculate_window_size_params")
+        .expect("calculate_window_size_params exists");
+    let sizing = &ui_window[sizing_start..];
+
+    assert!(
+        prompt_source.contains("pub(crate) fn submit("),
+        "EnvPrompt submit should be callable by wrapper/native footer routing"
+    );
+    assert!(
+        run_branch.contains("AppView::EnvPrompt")
+            && run_branch.contains("prompt.submit(cx)")
+            && run_branch.find("prompt.submit(cx)") < run_branch.find("execute_selected(cx)"),
+        "EnvPrompt native footer Run should submit env before launcher execute_selected fallback"
+    );
+    assert!(
+        footer_branch.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Submit\")")
+            && !footer_branch.contains("FooterAction::Ai"),
+        "EnvPrompt native footer should expose Submit without launcher AI"
+    );
+    assert!(
+        outer_source.contains("clickable_env_hint_strip(")
+            && outer_source.contains("emit_surface_prompt_hint_audit(")
+            && outer_source.contains("env_submit_footer")
+            && !outer_source
+                .split("fn render_env_prompt(")
+                .nth(1)
+                .and_then(|section| section.split("fn render_drop_prompt(").next())
+                .unwrap_or_default()
+                .contains("render_wrapped_prompt_entity("),
+        "EnvPrompt wrapper should use a surface-specific Submit footer instead of the universal AI footer"
+    );
+    assert!(
+        sizing.contains("AppView::EnvPrompt { .. } => Some((ViewType::DivPrompt, 0))"),
+        "EnvPrompt should size as a form-like DivPrompt surface"
+    );
+    assert!(
+        render_code.contains("prompt_text_palette(")
+            && render_code.contains("prompt_field_style(")
+            && !render_code.contains("PromptFooter::new("),
+        "EnvPrompt render should keep shared create-flow chrome and avoid PromptFooter"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"env_footer\",\"run_routes_to_env\":true,\"ai_absent\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn template_prompt_render_has_tracing_and_uses_shared_helpers() {
     let source = include_str!("../src/prompts/template/render.rs");
     let outer_source = include_str!("../src/render_prompts/other.rs");

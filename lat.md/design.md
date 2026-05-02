@@ -30,6 +30,8 @@ Those SDK-facing browser surfaces also route secondary labels, counts, empty sta
 
 Create-flow prompts share the same text ladder through `prompt_text_palette` and `prompt_field_style`: primary values use `text_primary`, empty field values use `placeholder_text_rgba`, and help/count/path-prefix text uses hint or muted opacity tokens instead of local packed-alpha math. Path and Env prompts also use the shared form intro/section/help helpers so secret entry, path filtering, and starter creation keep one compact GPUI surface contract.
 
+Env prompts own submit footer semantics instead of inheriting launcher chrome. Their footer action is `Submit`, footer Run dispatches to `EnvPrompt::submit`, launcher AI is omitted, and sizing follows the form-like `DivPrompt` surface.
+
 Path prompts own native footer submission: `Run` is labeled `Select`, dispatches to `PathPrompt::handle_enter`, and never falls through to launcher selection. Their native footer keeps `⌘K Actions` but omits launcher AI unless a future path-specific route is designed.
 
 Template prompts follow that create-flow contract while owning their tab-through behavior. Their placeholder field list scrolls within the prompt body, click targets move the current field, plain `{{name}}` accepts human-readable text, and both GPUI and native footer paths advertise `Submit`, `Next Field`, and `Actions` through a surface-specific hint audit.
