@@ -45,8 +45,7 @@ impl ScriptListApp {
         let design_typography = tokens.typography();
         let design_visual = tokens.visual();
 
-        let text_primary = self.theme.colors.text.primary;
-        let text_dimmed = self.theme.colors.text.dimmed;
+        let chrome = theme::AppChromeColors::from_theme(&self.theme);
 
         let filtered_entries =
             Self::current_app_commands_filtered_entries(&self.cached_current_app_entries, &filter);
@@ -86,10 +85,43 @@ impl ScriptListApp {
                 }
 
                 let key = event.keystroke.key.as_str();
+                let key_char = event.keystroke.key_char.as_deref();
                 let has_cmd = event.keystroke.modifiers.platform;
+                let modifiers = &event.keystroke.modifiers;
+
+                match this.route_key_to_actions_dialog(
+                    key,
+                    key_char,
+                    modifiers,
+                    ActionsDialogHost::BuiltinList,
+                    window,
+                    cx,
+                ) {
+                    ActionsRoute::NotHandled => {}
+                    ActionsRoute::Handled => {
+                        tracing::debug!(
+                            target: "script_kit::actions",
+                            event = "builtin_view_actions_key_routed",
+                            surface = "current_app_commands",
+                            key = %key,
+                        );
+                        cx.stop_propagation();
+                        return;
+                    }
+                    ActionsRoute::Execute { action_id } => {
+                        this.execute_action_for_actions_host(
+                            ActionsDialogHost::BuiltinList,
+                            action_id,
+                            window,
+                            cx,
+                        );
+                        cx.stop_propagation();
+                        return;
+                    }
+                }
 
                 // ESC: Clear filter first if present, otherwise go back/close
-                if is_key_escape(key) && !this.show_actions_popup {
+                if is_key_escape(key) {
                     if !this.clear_builtin_view_filter(cx) {
                         this.go_back_or_close(window, cx);
                     }
@@ -195,13 +227,13 @@ impl ScriptListApp {
                 .child(
                     div()
                         .text_sm()
-                        .text_color(rgb(text_primary))
+                        .text_color(rgb(chrome.text_primary_hex))
                         .child(empty_title),
                 )
                 .child(
                     div()
                         .text_sm()
-                        .text_color(rgb(text_dimmed))
+                        .text_color(rgba(chrome.text_hint_rgba))
                         .child(empty_detail),
                 )
                 .into_any_element()
@@ -230,25 +262,33 @@ impl ScriptListApp {
 
                                 let click_entity = click_entity_handle.clone();
                                 let click_handler =
-                                    move |_event: &gpui::ClickEvent,
+                                    move |event: &gpui::ClickEvent,
                                           _window: &mut Window,
                                           cx: &mut gpui::App| {
                                         if let Some(app) = click_entity.upgrade() {
                                             app.update(cx, |this, cx| {
-                                                if let AppView::CurrentAppCommandsView {
-                                                    selected_index,
-                                                    ..
-                                                } = &mut this.current_view
-                                                {
+                                                let should_submit = if let AppView::CurrentAppCommandsView {
+                                                    selected_index, ..
+                                                } = &mut this.current_view {
+                                                    let was_selected = *selected_index == ix;
                                                     *selected_index = ix;
+                                                    crate::ui_foundation::should_submit_selected_row_click(
+                                                        was_selected,
+                                                        event.click_count(),
+                                                    )
+                                                } else {
+                                                    false
+                                                };
+                                                if should_submit {
+                                                    this.execute_selected_current_app_command(
+                                                        original_entry_index,
+                                                        cx,
+                                                    );
                                                 }
-                                                this.execute_selected_current_app_command(
-                                                    original_entry_index,
-                                                    cx,
-                                                );
                                                 cx.notify();
                                             });
                                         }
+                                        cx.stop_propagation();
                                     };
 
                                 let hover_entity = hover_entity_handle.clone();
@@ -305,23 +345,36 @@ impl ScriptListApp {
             .items_center()
             .gap_3()
             .child(
-                div().flex_1().flex().flex_row().items_center().child(
-                    Input::new(&self.gpui_input_state)
-                        .w_full()
-                        .h(px(28.))
-                        .px(px(0.))
-                        .py(px(0.))
-                        .with_size(Size::Size(px(design_typography.font_size_xl)))
-                        .appearance(false)
-                        .bordered(false)
-                        .focus_bordered(false),
-                ),
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .child(
+                        Input::new(&self.gpui_input_state)
+                            .w_full()
+                            .h(px(28.))
+                            .px(px(0.))
+                            .py(px(0.))
+                            .with_size(Size::Size(px(design_typography.font_size_xl)))
+                            .appearance(false)
+                            .bordered(false)
+                            .focus_bordered(false),
+                    ),
             )
-            .child(div().text_sm().text_color(rgb(text_dimmed)).child(format!(
-                "{} command{}",
-                total_count,
-                if total_count == 1 { "" } else { "s" }
-            )));
+            .child(
+                div()
+                    .flex_none()
+                    .whitespace_nowrap()
+                    .text_sm()
+                    .text_color(rgba(chrome.text_hint_rgba))
+                    .child(format!(
+                        "{} command{}",
+                        total_count,
+                        if total_count == 1 { "" } else { "s" }
+                    )),
+            );
 
         let content = div()
             .flex_1()
@@ -456,7 +509,7 @@ impl ScriptListApp {
             )
             .child(footer)
             .rounded(px(design_visual.radius_lg))
-            .text_color(rgb(text_primary))
+            .text_color(rgb(chrome.text_primary_hex))
             .font_family(design_typography.font_family)
             .key_context("current_app_commands")
             .track_focus(&self.focus_handle)
@@ -467,12 +520,20 @@ impl ScriptListApp {
 
 #[cfg(test)]
 mod current_app_commands_chrome_audit {
+    fn production_source() -> &'static str {
+        include_str!("current_app_commands.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source should exist")
+    }
+
     #[test]
     fn current_app_commands_uses_minimal_chrome_footer() {
-        let source = include_str!("current_app_commands.rs");
+        let source = production_source();
         assert!(
-            source.contains("render_minimal_list_prompt_scaffold("),
-            "current_app_commands should use render_minimal_list_prompt_scaffold"
+            source.contains("render_simple_hint_strip(")
+                && source.contains("render_native_main_window_footer_spacer()"),
+            "current_app_commands should use the minimal hint/native-footer spacer chrome"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(
@@ -484,7 +545,7 @@ mod current_app_commands_chrome_audit {
 
     #[test]
     fn current_app_commands_use_wheel_contract_and_vendor_scrollbar() {
-        let source = include_str!("current_app_commands.rs");
+        let source = production_source();
         assert!(
             source.contains(".on_scroll_wheel(cx.listener("),
             "current_app_commands should intercept wheel scrolling on the list pane"
