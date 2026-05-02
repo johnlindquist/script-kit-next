@@ -57,6 +57,50 @@ fn process_manager_render_and_keyboard_use_visible_entry_helper() {
 }
 
 #[test]
+fn process_manager_scroll_and_refresh_are_visible_row_owned() {
+    for required in [
+        ".on_scroll_wheel(cx.listener(",
+        "builtin_scroll_target_from_wheel(",
+        "Self::builtin_reanchor_selection_from_scroll(",
+        "self.builtin_uniform_list_scrollbar(&self.process_list_scroll_handle",
+        "Clamp selection index against the visible filtered rows.",
+        "Self::process_manager_filtered_entries(\n                                        &app.cached_processes,\n                                        filter,",
+        "Self::process_manager_filtered_entries(\n                                        &this.cached_processes,\n                                        &current_filter,",
+        "cx.stop_propagation();",
+    ] {
+        assert!(
+            PROCESS_MANAGER.contains(required),
+            "Process Manager scrolling/refresh should stay visible-row-owned: {required}"
+        );
+    }
+}
+
+#[test]
+fn process_manager_chrome_and_clicks_use_shared_contracts() {
+    for required in [
+        "AppChromeColors::from_theme(&self.theme)",
+        "rgba(chrome.text_hint_rgba)",
+        ".h_full()\n                .flex()\n                .flex_col()\n                .items_center()\n                .justify_center()",
+        "cx.stop_propagation();",
+        "trigger_process_manager_stop_all(cx)",
+    ] {
+        assert!(
+            PROCESS_MANAGER.contains(required),
+            "Process Manager chrome/click handling should use shared contract: {required}"
+        );
+    }
+    for legacy in [
+        "let text_dimmed = self.theme.colors.text.dimmed;",
+        ".text_color(rgb(self.theme.colors.text.muted))",
+    ] {
+        assert!(
+            !PROCESS_MANAGER.contains(legacy),
+            "Process Manager should not use raw muted/dimmed theme text: {legacy}"
+        );
+    }
+}
+
+#[test]
 fn process_manager_state_and_elements_use_visible_row_helpers() {
     let elements_body = source_between(
         COLLECT_ELEMENTS,

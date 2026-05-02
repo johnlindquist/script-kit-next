@@ -101,6 +101,14 @@ When ACP opens dictation history as an attachment portal, that same browser swit
 
 That is a materially broader contract than the older “few built-ins plus apps” description.
 
+## Process Manager
+
+Process Manager is a mini built-in list for active Script Kit child processes, with filtering, selection, and destructive stop actions kept on one visible-row contract.
+
+The renderer filters through one helper family, so keyboard navigation, `getState`, `getElements`, Tab AI targets, and visible rows agree on the same selected process. Wheel movement uses the shared selection-owned uniform-list helpers and vendor scrollbar, while periodic refresh and post-stop clamping re-evaluate the filtered visible rows instead of the raw process cache.
+
+Process Manager routes secondary text through `AppChromeColors`, centers empty states in the available list pane, and stops propagation for row and Stop All clicks so parent surfaces cannot double-handle destructive actions.
+
 ## Trigger-builtin registry
 
 The stdin `triggerBuiltin` verb resolves through a single canonical registry instead of three hand-kept match arms. Duplicate aliases or typoed canonical ids fail loudly at startup, not silently at runtime.
