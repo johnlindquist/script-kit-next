@@ -7,9 +7,8 @@
  * The reliable ACP verification order is:
  *   1. State receipt (getAcpState) — machine-readable proof
  *   2. Probe receipt (getAcpTestProbe) — key-route / picker-acceptance telemetry
- *   3. Screenshot capture — visual proof (secondary confirmation)
+ *   3. Screenshot capture — visual proof with pixel-content audit
  *   4. Vision checks — structured prompts for external image readers
- *   Note: actual image-read / pixel inspection is NOT performed automatically.
  *
  * Usage:
  *   bun scripts/agentic/verify-shot.ts --session NAME [options]
@@ -17,7 +16,7 @@
  * Options:
  *   --session NAME              Session name (default: "default")
  *   --label LABEL               Human-readable step label (default: "verify")
- *   --out PATH                  Screenshot output path (default: test-screenshots/<label>-<ts>.png)
+ *   --out PATH                  Screenshot output path (default: .test-screenshots/<label>-<ts>.png)
  *   --acp-status STATUS         Assert ACP status equals this value
  *   --acp-picker-open           Assert picker is open
  *   --acp-picker-closed         Assert picker is closed
@@ -62,8 +61,9 @@
  *   2 = infrastructure error (session dead, capture failed, etc.)
  */
 
-import { existsSync, mkdirSync, statSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "fs";
 import { join, resolve } from "path";
+import { inflateSync } from "node:zlib";
 
 const SCHEMA_VERSION = 3;
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
@@ -197,12 +197,22 @@ interface ScreenshotResult {
   sizeBytes: number | null;
   width: number | null;
   height: number | null;
+  contentAudit: ScreenshotContentAudit | null;
   captureMethod: "window.ts" | "captureWindow" | null;
   windowCaptureMethod: "quartz" | "screencapture" | null;
   windowFrontmost: boolean | null;
   windowFocused: boolean | null;
   windowId: number | null;
   error: string | null;
+}
+
+interface ScreenshotContentAudit {
+  sampledPixels: number;
+  nonBlackPixels: number;
+  nonTransparentPixels: number;
+  uniqueBucketCount: number;
+  meanLuma: number;
+  blank: boolean;
 }
 
 interface VisionCheck {
@@ -585,6 +595,143 @@ async function getImageDimensions(
   }
 }
 
+function paethPredictor(a: number, b: number, c: number): number {
+  const p = a + b - c;
+  const pa = Math.abs(p - a);
+  const pb = Math.abs(p - b);
+  const pc = Math.abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  if (pb <= pc) return b;
+  return c;
+}
+
+function auditPngContent(filePath: string): ScreenshotContentAudit {
+  const bytes = new Uint8Array(readFileSync(filePath));
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (!signature.every((value, index) => bytes[index] === value)) {
+    throw new Error("Screenshot is not a PNG file");
+  }
+
+  let offset = 8;
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idatParts: Uint8Array[] = [];
+
+  while (offset + 12 <= bytes.length) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset + offset);
+    const length = view.getUint32(0);
+    const type = String.fromCharCode(
+      bytes[offset + 4],
+      bytes[offset + 5],
+      bytes[offset + 6],
+      bytes[offset + 7]
+    );
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    if (dataEnd + 4 > bytes.length) {
+      throw new Error(`Invalid PNG chunk ${type}`);
+    }
+
+    const chunk = bytes.subarray(dataStart, dataEnd);
+    if (type === "IHDR") {
+      const ihdr = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+      width = ihdr.getUint32(0);
+      height = ihdr.getUint32(4);
+      bitDepth = chunk[8];
+      colorType = chunk[9];
+    } else if (type === "IDAT") {
+      idatParts.push(chunk);
+    } else if (type === "IEND") {
+      break;
+    }
+
+    offset = dataEnd + 4;
+  }
+
+  if (width <= 0 || height <= 0) {
+    throw new Error("PNG missing dimensions");
+  }
+  if (bitDepth !== 8 || (colorType !== 6 && colorType !== 2)) {
+    throw new Error(`Unsupported PNG format for audit: bitDepth=${bitDepth} colorType=${colorType}`);
+  }
+
+  const bytesPerPixel = colorType === 6 ? 4 : 3;
+  const rowBytes = width * bytesPerPixel;
+  const compressed = new Uint8Array(idatParts.reduce((sum, part) => sum + part.length, 0));
+  let writeOffset = 0;
+  for (const part of idatParts) {
+    compressed.set(part, writeOffset);
+    writeOffset += part.length;
+  }
+
+  const inflated = new Uint8Array(inflateSync(compressed));
+  const expected = height * (rowBytes + 1);
+  if (inflated.length < expected) {
+    throw new Error(`PNG pixel data too short: ${inflated.length} < ${expected}`);
+  }
+
+  const previous = new Uint8Array(rowBytes);
+  const current = new Uint8Array(rowBytes);
+  let readOffset = 0;
+  let sampledPixels = 0;
+  let nonBlackPixels = 0;
+  let nonTransparentPixels = 0;
+  let lumaSum = 0;
+  const buckets = new Set<string>();
+
+  for (let y = 0; y < height; y++) {
+    const filter = inflated[readOffset++];
+    current.fill(0);
+    for (let x = 0; x < rowBytes; x++) {
+      const raw = inflated[readOffset++];
+      const left = x >= bytesPerPixel ? current[x - bytesPerPixel] : 0;
+      const up = previous[x] ?? 0;
+      const upLeft = x >= bytesPerPixel ? previous[x - bytesPerPixel] : 0;
+      let value: number;
+      if (filter === 0) value = raw;
+      else if (filter === 1) value = raw + left;
+      else if (filter === 2) value = raw + up;
+      else if (filter === 3) value = raw + Math.floor((left + up) / 2);
+      else if (filter === 4) value = raw + paethPredictor(left, up, upLeft);
+      else throw new Error(`Unsupported PNG filter ${filter}`);
+      current[x] = value & 0xff;
+    }
+
+    for (let x = 0; x < rowBytes; x += bytesPerPixel) {
+      const r = current[x];
+      const g = current[x + 1];
+      const b = current[x + 2];
+      const a = colorType === 6 ? current[x + 3] : 255;
+      sampledPixels += 1;
+      if (a > 0) nonTransparentPixels += 1;
+      if (a > 0 && (r > 8 || g > 8 || b > 8)) nonBlackPixels += 1;
+      lumaSum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      buckets.add(`${r >> 5}:${g >> 5}:${b >> 5}:${a === 0 ? 0 : 1}`);
+    }
+
+    previous.set(current);
+  }
+
+  const meanLuma = sampledPixels > 0 ? lumaSum / sampledPixels : 0;
+  const uniqueBucketCount = buckets.size;
+  const blank =
+    sampledPixels === 0 ||
+    nonTransparentPixels === 0 ||
+    nonBlackPixels === 0 ||
+    (uniqueBucketCount <= 2 && meanLuma < 5);
+
+  return {
+    sampledPixels,
+    nonBlackPixels,
+    nonTransparentPixels,
+    uniqueBucketCount,
+    meanLuma,
+    blank,
+  };
+}
+
 async function captureScreenshot(
   session: string,
   outPath: string,
@@ -630,6 +777,7 @@ async function captureScreenshot(
         sizeBytes: null,
         width: null,
         height: null,
+        contentAudit: null,
         captureMethod: null,
         windowCaptureMethod: null,
         windowFrontmost: null,
@@ -655,6 +803,7 @@ async function captureScreenshot(
         sizeBytes: null,
         width: null,
         height: null,
+        contentAudit: null,
         captureMethod: null,
         windowCaptureMethod: null,
         windowFrontmost: null,
@@ -682,6 +831,7 @@ async function captureScreenshot(
         sizeBytes: null,
         width: null,
         height: null,
+        contentAudit: null,
         captureMethod: null,
         windowCaptureMethod: null,
         windowFrontmost: null,
@@ -778,6 +928,7 @@ async function captureScreenshot(
           sizeBytes: null,
           width: null,
           height: null,
+          contentAudit: null,
           captureMethod,
           windowCaptureMethod,
           windowFrontmost,
@@ -803,6 +954,7 @@ async function captureScreenshot(
         sizeBytes: null,
         width: null,
         height: null,
+        contentAudit: null,
         captureMethod: "window.ts",
         windowCaptureMethod,
         windowFrontmost,
@@ -844,6 +996,7 @@ async function captureScreenshot(
         sizeBytes: null,
         width: null,
         height: null,
+        contentAudit: null,
         captureMethod,
         windowCaptureMethod,
         windowFrontmost,
@@ -874,6 +1027,7 @@ async function captureScreenshot(
         sizeBytes: null,
         width: null,
         height: null,
+        contentAudit: null,
         captureMethod,
         windowCaptureMethod,
         windowFrontmost,
@@ -902,6 +1056,7 @@ async function captureScreenshot(
         sizeBytes: null,
         width: null,
         height: null,
+        contentAudit: null,
         captureMethod,
         windowCaptureMethod,
         windowFrontmost,
@@ -921,6 +1076,67 @@ async function captureScreenshot(
 
   const stats = statSync(outPath);
   const dims = await getImageDimensions(outPath);
+  let contentAudit: ScreenshotContentAudit;
+  try {
+    contentAudit = auditPngContent(outPath);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      result: {
+        captured: false,
+        path: outPath,
+        sizeBytes: stats.size,
+        width: dims.width,
+        height: dims.height,
+        contentAudit: null,
+        captureMethod,
+        windowCaptureMethod,
+        windowFrontmost,
+        windowFocused,
+        windowId,
+        error: `Screenshot pixel audit failed: ${reason}`,
+      },
+      plan: {
+        routing: captureRouting,
+        requestedAutomationWindowId,
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        showIssuedBeforeCapture,
+      },
+    };
+  }
+
+  diag("verify_shot_pixel_audit", {
+    label,
+    ...contentAudit,
+  });
+
+  if (contentAudit.blank) {
+    return {
+      result: {
+        captured: false,
+        path: outPath,
+        sizeBytes: stats.size,
+        width: dims.width,
+        height: dims.height,
+        contentAudit,
+        captureMethod,
+        windowCaptureMethod,
+        windowFrontmost,
+        windowFocused,
+        windowId,
+        error:
+          "Screenshot pixel audit rejected a blank/black image. Check macOS Screen Recording permission or capture timing before using this PNG as visual proof.",
+      },
+      plan: {
+        routing: captureRouting,
+        requestedAutomationWindowId,
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        showIssuedBeforeCapture,
+      },
+    };
+  }
 
   return {
     result: {
@@ -929,6 +1145,7 @@ async function captureScreenshot(
       sizeBytes: stats.size,
       width: dims.width,
       height: dims.height,
+      contentAudit,
       captureMethod,
       windowCaptureMethod,
       windowFrontmost,
@@ -1575,11 +1792,13 @@ if (opts.help) {
       contracts: [
         "popup-capture-receipts",
         "detached-proof-contract",
+        "screenshot-pixel-content-audit",
       ],
       receipts: [
         "popupCapture.strategy",
         "popupCapture.targetBounds",
         "popupCapture.semanticReceiptsArePrimary",
+        "screenshotReceipt.contentAudit",
       ],
     };
     console.log(JSON.stringify(helpJson, null, 2));
@@ -1592,7 +1811,7 @@ ACP proof bundle: state receipt + test probe + screenshot + vision prompts.
 Options:
   --session NAME              Session name (default: "default")
   --label LABEL               Human-readable step label (default: "verify")
-  --out PATH                  Screenshot output path (auto-generated if omitted)
+  --out PATH                  Screenshot output path (default: .test-screenshots/<label>-<ts>.png)
   --acp-status STATUS         Assert ACP status equals this value
   --acp-picker-open           Assert picker is open
   --acp-picker-closed         Assert picker is closed
@@ -1631,8 +1850,7 @@ Options:
 Verification order (ACP golden path):
   1. State receipt (getAcpState) — machine-readable proof
   2. Probe receipt (getAcpTestProbe) — key-route/picker-acceptance telemetry
-  3. Screenshot capture — visual proof (metadata only; no automatic
-     pixel inspection — a human or vision tool must read the PNG)
+  3. Screenshot capture — visual proof with metadata + pixel-content audit
   4. Vision checks — structured prompts for external image readers
   5. Assertions check state + probe fields
 
@@ -1673,7 +1891,7 @@ let outPath: string;
 if (opts.out) {
   outPath = resolve(String(opts.out));
 } else {
-  const screenshotDir = join(PROJECT_ROOT, "test-screenshots");
+  const screenshotDir = join(PROJECT_ROOT, ".test-screenshots");
   if (!existsSync(screenshotDir)) {
     mkdirSync(screenshotDir, { recursive: true });
   }

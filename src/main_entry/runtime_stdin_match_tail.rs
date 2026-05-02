@@ -87,6 +87,15 @@
                                                 }
                                             }
                                             Err(e) => {
+                                                tracing::error!(
+                                                    category = "STDIN",
+                                                    event_type = "stdin_capture_window_failed",
+                                                    requested_title = %title,
+                                                    requested_path = %path,
+                                                    error = %e,
+                                                    correlation_id = %logging::current_correlation_id(),
+                                                    "captureWindow failed before writing screenshot"
+                                                );
                                                 logging::log("STDIN", &format!("Failed to capture window: {}", e));
                                             }
                                         }
