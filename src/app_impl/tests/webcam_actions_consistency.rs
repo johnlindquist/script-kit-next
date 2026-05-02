@@ -128,22 +128,52 @@ mod tests {
     }
 
     #[test]
-    fn render_webcam_footer_primary_uses_capture_flow() {
-        let content =
+    fn webcam_footer_primary_uses_capture_photo_label_without_ai() {
+        let render =
             fs::read_to_string("src/render_prompts/other.rs").expect("Failed to read render file");
-
-        let start = content
-            .find("render_webcam_prompt(")
-            .expect("render_webcam_prompt not found");
-        let section = &content[start..];
+        let ui = fs::read_to_string("src/app_impl/ui_window.rs")
+            .expect("Failed to read src/app_impl/ui_window.rs");
 
         assert!(
-            section.contains("capture_webcam_photo"),
-            "Webcam footer primary action should use capture flow instead of only closing."
+            render.contains("clickable_webcam_hint_strip("),
+            "Webcam prompt should use a webcam-specific clickable hint strip."
         );
         assert!(
-            section.contains(".primary_label(\"Capture Photo\")"),
-            "Webcam footer primary action label should be 'Capture Photo'."
+            render.contains("universal_prompt_hints_with_primary_label(\"Capture Photo\")"),
+            "Webcam GPUI footer should label the primary action as Capture Photo."
+        );
+        assert!(
+            render.contains("emit_surface_prompt_hint_audit("),
+            "Webcam footer should use surface-specific hint auditing."
+        );
+        assert!(
+            ui.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Capture Photo\")"),
+            "Native webcam footer should label Enter as Capture Photo."
+        );
+        assert!(
+            !ui.contains("FooterButtonConfig::new(FooterAction::Ai, \"⌘↵\", \"AI\").enabled(enabled)"),
+            "Webcam native footer should not expose the launcher AI action."
+        );
+    }
+
+    #[test]
+    fn webcam_footer_run_routes_to_capture_not_execute_selected() {
+        let ui = fs::read_to_string("src/app_impl/ui_window.rs")
+            .expect("Failed to read src/app_impl/ui_window.rs");
+        let run_start = ui.find("FooterAction::Run =>").expect("Run branch exists");
+        let run_branch = &ui[run_start..run_start + 1200];
+
+        assert!(
+            run_branch.contains("AppView::WebcamView"),
+            "Footer Run should special-case WebcamView before launcher fallback."
+        );
+        assert!(
+            run_branch.contains("capture_webcam_photo(cx)"),
+            "Footer Run on WebcamView should capture a photo."
+        );
+        assert!(
+            run_branch.find("capture_webcam_photo(cx)") < run_branch.find("execute_selected(cx)"),
+            "Webcam capture should happen before generic execute_selected fallback."
         );
     }
 

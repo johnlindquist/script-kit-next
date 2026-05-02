@@ -502,8 +502,13 @@ fn webcam_prompt_has_chrome_audit_and_no_redundant_chrome() {
         "webcam prompt should not use PromptFooter"
     );
     assert!(
-        webcam_fn.contains("clickable_universal_hint_strip("),
-        "webcam prompt should use the clickable hint strip"
+        webcam_fn.contains("clickable_webcam_hint_strip("),
+        "webcam prompt should use the capture-specific clickable hint strip"
+    );
+    assert!(
+        webcam_fn.contains("universal_prompt_hints_with_primary_label(\"Capture Photo\")")
+            && webcam_fn.contains("emit_surface_prompt_hint_audit("),
+        "webcam prompt should advertise Capture Photo through surface-specific hint auditing"
     );
     assert!(
         !webcam_fn.contains("rgb(0x"),
