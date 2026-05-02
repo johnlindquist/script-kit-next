@@ -101,7 +101,8 @@ impl ScriptListApp {
         }
         for toast in pending {
             logging::log("UI", &format!("Pushing notification: {}", toast.message));
-            let notification = pending_toast_to_notification(&toast);
+            let notification =
+                crate::toast_manager::notification::pending_toast_to_notification(&toast);
             window.push_notification(notification, cx);
         }
     }

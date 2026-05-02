@@ -3,7 +3,10 @@ use std::rc::Rc;
 
 use super::{ToastAction, ToastColors, ToastDismissCallback, ToastVariant};
 
-/// Default auto-dismiss duration for toasts (5 seconds).
+/// Default non-persistent marker for queued toasts.
+///
+/// The active gpui-component notification bridge uses the vendor default
+/// autohide duration for any `Some(_)` value.
 /// Callers should override via `.duration_ms()` with the appropriate named
 /// constant from `helpers.rs` (e.g. `TOAST_ERROR_MS`, `TOAST_INFO_MS`).
 const TOAST_DEFAULT_DURATION_MS: u64 = 5000;
@@ -58,8 +61,11 @@ impl Toast {
         self
     }
 
-    /// Set the auto-dismiss duration in milliseconds
-    /// Use None for persistent toasts that don't auto-dismiss
+    /// Set whether the runtime notification should auto-dismiss.
+    ///
+    /// The active gpui-component notification bridge treats `Some(_)` as
+    /// non-persistent and uses the vendor default duration. `None` disables
+    /// autohide.
     pub fn duration_ms(mut self, duration: Option<u64>) -> Self {
         self.duration_ms = duration;
         self
