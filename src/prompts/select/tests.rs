@@ -229,14 +229,30 @@ fn test_select_prompt_select_all_preserves_existing_off_filter_selection() {
 }
 
 #[test]
-fn test_select_prompt_generates_stable_semantic_id_when_filter_order_changes() {
-    let stable_id = fallback_select_semantic_id(17, "scripts/demo.ts");
-
-    assert_eq!(
-        stable_id,
-        fallback_select_semantic_id(17, "scripts/demo.ts")
+fn test_select_prompt_emits_minimal_list_chrome_audit() {
+    const SOURCE: &str = include_str!("prompt.rs");
+    assert!(
+        SOURCE.contains("emit_prompt_chrome_audit(")
+            && SOURCE.contains("PromptChromeAudit::minimal_list(\"prompts::select\", true)"),
+        "SelectPrompt::new should emit the shared minimal-list chrome audit contract"
     );
-    assert_ne!(stable_id, fallback_select_semantic_id(3, "scripts/demo.ts"));
+}
+
+#[test]
+fn test_select_prompt_semantic_id_honors_explicit_protocol_id() {
+    let mut choice = choice("Demo", "scripts/demo.ts", None);
+    choice.set_semantic_id("choice:custom-demo".to_string());
+
+    assert_eq!(select_choice_semantic_id(&choice, 17), "choice:custom-demo");
+}
+
+#[test]
+fn test_select_prompt_semantic_id_uses_source_index_when_filter_order_changes() {
+    let choice = choice("Demo", "scripts/demo.ts", None);
+    let stable_id = select_choice_semantic_id(&choice, 17);
+
+    assert_eq!(stable_id, select_choice_semantic_id(&choice, 17));
+    assert_ne!(stable_id, select_choice_semantic_id(&choice, 3));
 }
 
 #[test]
@@ -290,6 +306,42 @@ fn test_select_prompt_compute_row_state_keeps_focus_and_selection_independent() 
     assert!(!selected_but_unfocused.is_focused);
     assert!(selected_but_unfocused.is_selected);
     assert!(selected_but_unfocused.is_hovered);
+}
+
+#[test]
+fn test_select_prompt_single_mode_visual_state_ignores_stale_selection() {
+    let row_state = render::SelectRowState {
+        is_focused: false,
+        is_selected: true,
+        is_hovered: false,
+    };
+
+    assert_eq!(
+        render::visual_row_state_for_selection_mode(row_state, false),
+        render::SelectRowState {
+            is_focused: false,
+            is_selected: false,
+            is_hovered: false,
+        }
+    );
+    assert_eq!(
+        render::visual_row_state_for_selection_mode(row_state, true),
+        row_state
+    );
+}
+
+#[test]
+fn test_select_prompt_toggle_selection_is_multi_select_only() {
+    let mut selected = std::collections::HashSet::from([2]);
+
+    assert!(!toggle_choice_selection(&mut selected, 4, false));
+    assert_eq!(selected, std::collections::HashSet::from([2]));
+
+    assert!(toggle_choice_selection(&mut selected, 4, true));
+    assert_eq!(selected, std::collections::HashSet::from([2, 4]));
+
+    assert!(toggle_choice_selection(&mut selected, 4, true));
+    assert_eq!(selected, std::collections::HashSet::from([2]));
 }
 
 // ============================================================
@@ -384,6 +436,35 @@ fn test_select_prompt_get_elements_uses_stable_key_semantic_id() {
     assert_eq!(elements[2].semantic_id, "choice:fruit-apple");
     // Non-keyed choice uses choice:index:value format
     assert_eq!(elements[3].semantic_id, "choice:1:banana");
+}
+
+#[test]
+fn test_select_prompt_get_elements_uses_explicit_semantic_id() {
+    let mut custom = Choice::new("Apple".to_string(), "apple".to_string());
+    custom.set_semantic_id("choice:explicit-apple".to_string());
+    let choices = vec![custom];
+    let filtered = vec![0];
+    let selected: HashSet<usize> = HashSet::new();
+
+    let (elements, _) = collect_select_prompt_elements("", &choices, &filtered, &selected, 0, 50);
+
+    assert_eq!(elements[2].semantic_id, "choice:explicit-apple");
+}
+
+#[test]
+fn test_select_prompt_get_elements_uses_source_index_after_filter_order_changes() {
+    let choices = vec![
+        Choice::new("Apple".to_string(), "apple".to_string()),
+        Choice::new("Banana".to_string(), "banana".to_string()),
+        Choice::new("Cherry".to_string(), "cherry".to_string()),
+    ];
+    let filtered = vec![2, 0];
+    let selected: HashSet<usize> = HashSet::new();
+
+    let (elements, _) = collect_select_prompt_elements("", &choices, &filtered, &selected, 0, 50);
+
+    assert_eq!(elements[2].semantic_id, "choice:2:cherry");
+    assert_eq!(elements[3].semantic_id, "choice:0:apple");
 }
 
 #[test]

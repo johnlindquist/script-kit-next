@@ -33,11 +33,10 @@ pub(super) struct SelectChoiceIndex {
     pub(super) item_type_lower: String,
     pub(super) last_run_lower: String,
     pub(super) shortcut_lower: String,
-    pub(super) stable_semantic_id: String,
 }
 
 impl SelectChoiceIndex {
-    pub(super) fn from_choice(choice: &Choice, source_index: usize) -> Self {
+    pub(super) fn from_choice(choice: &Choice, _source_index: usize) -> Self {
         let name_lower = choice.name.to_lowercase();
         let description_lower = choice
             .description
@@ -71,7 +70,6 @@ impl SelectChoiceIndex {
                 .as_deref()
                 .unwrap_or_default()
                 .to_lowercase(),
-            stable_semantic_id: fallback_select_semantic_id(source_index, &choice.value),
             metadata,
         }
     }
@@ -332,8 +330,11 @@ fn extract_last_run_token(token: &str) -> Option<String> {
     }
     None
 }
-pub(super) fn fallback_select_semantic_id(source_index: usize, value: &str) -> String {
-    generate_semantic_id("select", source_index, value)
+pub(super) fn select_choice_semantic_id(choice: &Choice, source_index: usize) -> String {
+    choice
+        .semantic_id
+        .clone()
+        .unwrap_or_else(|| choice.generate_id(source_index))
 }
 
 #[cfg(test)]

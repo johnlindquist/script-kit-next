@@ -189,6 +189,24 @@ pub(super) fn toggle_filtered_selection(
     }
 }
 
+pub(super) fn toggle_choice_selection(
+    selected_indices: &mut HashSet<usize>,
+    choice_index: usize,
+    is_multiple: bool,
+) -> bool {
+    if !is_multiple {
+        return false;
+    }
+
+    if selected_indices.contains(&choice_index) {
+        selected_indices.remove(&choice_index);
+    } else {
+        selected_indices.insert(choice_index);
+    }
+
+    true
+}
+
 pub(super) fn resolve_submission_indices(
     is_multiple: bool,
     selected_indices: &[usize],
