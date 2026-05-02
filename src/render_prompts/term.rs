@@ -188,12 +188,21 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let has_actions = self.has_nonempty_sdk_actions();
+        let is_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
 
         let mut chrome_audit =
             crate::components::PromptChromeAudit::editor("render_prompts::term", has_actions);
-        chrome_audit.footer_mode = "custom_hint_strip";
+        chrome_audit.footer_mode = if is_quick_terminal {
+            "native_footer_spacer"
+        } else {
+            "custom_hint_strip"
+        };
         chrome_audit.hint_count = 0;
-        chrome_audit.exception_reason = Some("terminal_owns_contextual_footer");
+        chrome_audit.exception_reason = Some(if is_quick_terminal {
+            "quick_terminal_uses_native_footer"
+        } else {
+            "terminal_owns_contextual_footer"
+        });
         crate::components::emit_prompt_chrome_audit(&chrome_audit);
 
         let render_context = PromptRenderContext::new(self.theme.as_ref(), self.current_design);
@@ -206,7 +215,6 @@ impl ScriptListApp {
 
         // Sync suppress_keys with actions popup state so terminal ignores keys when popup is open
         let show_actions = self.show_actions_popup;
-        let is_quick_terminal = matches!(self.current_view, AppView::QuickTerminalView { .. });
         entity.update(cx, |term, _| {
             term.suppress_keys = show_actions;
             term.escape_cancels = !is_quick_terminal;

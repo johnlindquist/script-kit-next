@@ -126,18 +126,35 @@ impl ScriptListApp {
                 ),
         );
 
-        if matches!(self.current_view, AppView::EditorPrompt { .. }) {
+        if matches!(
+            self.current_view,
+            AppView::EditorPrompt { .. }
+                | AppView::TermPrompt { .. }
+                | AppView::QuickTerminalView { .. }
+        ) {
+            let (component_name, explanation) = match &self.current_view {
+                AppView::EditorPrompt { .. } => (
+                    "EditorContent",
+                    "EditorPrompt fills the content area; footer ownership is routed through the shared main-window footer slot.",
+                ),
+                AppView::QuickTerminalView { .. } => (
+                    "TerminalContent",
+                    "QuickTerminalView fills the compact content area and reserves native-footer space through the shared main-window footer slot.",
+                ),
+                _ => (
+                    "TerminalContent",
+                    "TermPrompt fills the content area and owns the SDK terminal hint strip through the shared main-window footer slot.",
+                ),
+            };
+
             components.push(
-                LayoutComponentInfo::new("EditorContent", LayoutComponentType::Prompt)
+                LayoutComponentInfo::new(component_name, LayoutComponentType::Prompt)
                     .with_bounds(0.0, content_top, window_width, content_height)
                     .with_flex_column()
                     .with_flex_grow(1.0)
                     .with_depth(2)
                     .with_parent("ContentArea")
-                    .with_explanation(
-                        "EditorPrompt fills the content area; footer ownership is routed through the shared main-window footer slot."
-                            .to_string(),
-                    ),
+                    .with_explanation(explanation.to_string()),
             );
 
             return LayoutInfo {
