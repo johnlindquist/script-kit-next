@@ -28,6 +28,8 @@ SDK-facing expanded browser surfaces may use surface-specific footer labels, but
 
 Those SDK-facing browser surfaces also route secondary labels, counts, empty states, and preview metadata through `AppChromeColors` rather than raw muted or dimmed theme colors so custom themes keep the same semantic text ladder as launcher chrome.
 
+Create-flow prompts share the same text ladder through `prompt_text_palette` and `prompt_field_style`: primary values use `text_primary`, empty field values use `placeholder_text_rgba`, and help/count/path-prefix text uses hint or muted opacity tokens instead of local packed-alpha math. Path and Env prompts also use the shared form intro/section/help helpers so secret entry, path filtering, and starter creation keep one compact GPUI surface contract.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.
@@ -231,6 +233,8 @@ This page is justified by the live chrome, popup, and portal code plus the root 
 - [src/render_builtins/sdk_reference.rs](../src/render_builtins/sdk_reference.rs)
 - [src/render_builtins/script_templates.rs](../src/render_builtins/script_templates.rs)
 - [src/components/prompt_layout_shell.rs](../src/components/prompt_layout_shell.rs)
+- [src/prompts/path/render.rs](../src/prompts/path/render.rs)
+- [src/prompts/env/render.rs](../src/prompts/env/render.rs)
 - [src/stories/ask_tab_glyph_options.rs](../src/stories/ask_tab_glyph_options.rs)
 - [src/storybook/dictation_ui_variations.rs](../src/storybook/dictation_ui_variations.rs)
 - [src/storybook/browser.rs](../src/storybook/browser.rs)

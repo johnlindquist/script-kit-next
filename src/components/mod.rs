@@ -106,7 +106,7 @@ pub(crate) use prompt_layout_shell::{
 pub(crate) use prompt_layout_shell::{
     prompt_detail_card, prompt_field_style, prompt_form_help, prompt_form_intro,
     prompt_form_section, prompt_scroll_value, prompt_scroll_value_with_id, prompt_surface,
-    prompt_text_field, PromptFieldState, PromptFieldStyle,
+    prompt_text_field, prompt_text_palette, PromptFieldState, PromptFieldStyle, PromptTextPalette,
 };
 #[allow(unused_imports)]
 pub use prompt_layout_shell::{prompt_shell_container, prompt_shell_content};

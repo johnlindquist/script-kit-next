@@ -55,9 +55,7 @@ impl Render for PathPrompt {
         .flex_1()
         .w_full();
 
-        // Text colors from theme
-        let text_primary = self.theme.colors.text.primary;
-        let text_muted = self.theme.colors.text.muted;
+        let text = crate::components::prompt_text_palette(&self.theme);
 
         // Minimal chrome header: path prefix (muted) + filter text (primary), no buttons
         let path_prefix = self.path_prefix.clone();
@@ -80,7 +78,7 @@ impl Render for PathPrompt {
                     .overflow_x_hidden()
                     .child(
                         div()
-                            .text_color(gpui::rgba((text_muted << 8) | 0xCC))
+                            .text_color(text.help)
                             .flex_shrink_0()
                             .max_w(gpui::px(200.0))
                             .overflow_x_hidden()
@@ -89,9 +87,9 @@ impl Render for PathPrompt {
                     .child(
                         div()
                             .text_color(if filter_is_empty {
-                                gpui::rgb(text_muted)
+                                text.placeholder
                             } else {
-                                gpui::rgb(text_primary)
+                                text.primary
                             })
                             .child(if filter_is_empty {
                                 gpui::SharedString::from("Type to filter...")
@@ -104,7 +102,7 @@ impl Render for PathPrompt {
                 div()
                     .flex_shrink_0()
                     .text_xs()
-                    .text_color(gpui::rgba((text_muted << 8) | 0x99))
+                    .text_color(text.help)
                     .child(format!("{filtered_count} items")),
             );
 
@@ -150,7 +148,7 @@ impl Render for PathPrompt {
             0.0, None, header, content, footer,
         )
         .id(gpui::ElementId::Name("window:path".into()))
-        .text_color(gpui::rgb(text_primary));
+        .text_color(text.primary);
 
         FocusablePrompt::new(container)
             .key_context("path_prompt")

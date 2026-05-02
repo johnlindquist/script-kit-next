@@ -188,6 +188,16 @@ fn path_prompt_render_has_tracing_and_no_hardcoded_hex() {
         !inner_source.contains("PromptFooter::new("),
         "path prompt inner render should not use PromptFooter"
     );
+    assert!(
+        inner_source.contains("prompt_text_palette("),
+        "path prompt inner render should use shared prompt text palette"
+    );
+    assert!(
+        !inner_source.contains("<< 8")
+            && !inner_source.contains("0x99")
+            && !inner_source.contains("0xCC"),
+        "path prompt inner render should not build local packed-alpha text colors"
+    );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"path\",\"tracing_present\":true,\"hardcoded_hex_absent\":true,\"status\":\"pass\"}}");
 }
 
