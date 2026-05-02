@@ -353,6 +353,42 @@ fn path_prompt_render_has_tracing_and_no_hardcoded_hex() {
 }
 
 #[test]
+fn path_native_footer_submits_path_prompt_without_launcher_ai() {
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let path_render = include_str!("../src/prompts/path/render.rs");
+
+    let run_start = ui_window
+        .find("FooterAction::Run =>")
+        .expect("footer Run branch exists");
+    let run_branch = &ui_window[run_start..run_start + 1400];
+    let footer_branch_start = ui_window
+        .find("Resolved PathPrompt footer buttons")
+        .expect("PathPrompt native footer branch exists");
+    let footer_branch = &ui_window[footer_branch_start.saturating_sub(700)..footer_branch_start];
+
+    assert!(
+        run_branch.contains("AppView::PathPrompt")
+            && run_branch.contains("prompt.handle_enter(cx)")
+            && run_branch.find("prompt.handle_enter(cx)") < run_branch.find("execute_selected(cx)"),
+        "PathPrompt native footer Run should submit the path prompt before launcher execute_selected fallback"
+    );
+    assert!(
+        footer_branch.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Select\")")
+            && footer_branch
+                .contains("FooterButtonConfig::new(FooterAction::Actions, \"⌘K\", \"Actions\")")
+            && !footer_branch.contains("FooterAction::Ai"),
+        "PathPrompt native footer should expose Select and Actions, not launcher AI"
+    );
+    assert!(
+        path_render.contains("render_native_main_window_footer_spacer()")
+            && path_render.contains("active_main_window_footer_surface()")
+            && !path_render.contains("PromptFooter::new("),
+        "PathPrompt entity should keep its native-footer spacer exception and avoid PromptFooter"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"path_footer\",\"run_routes_to_path\":true,\"ai_absent\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn template_prompt_render_has_tracing_and_uses_shared_helpers() {
     let source = include_str!("../src/prompts/template/render.rs");
     let outer_source = include_str!("../src/render_prompts/other.rs");
