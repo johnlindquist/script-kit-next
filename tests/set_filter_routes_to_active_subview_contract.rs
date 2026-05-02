@@ -84,8 +84,9 @@ fn set_filter_text_immediate_delegates_to_subview_router_helper() {
          script-list fallback rendering."
     );
 
+    let compact_receiver_body: String = receiver_body.split_whitespace().collect();
     assert!(
-        receiver_body.contains("if !handled_by_subview && !text.is_empty() {"),
+        compact_receiver_body.contains("if!handled_by_subview&&!text.is_empty()"),
         "src/app_impl/filter_input_updates.rs `set_filter_text_immediate` must \
          guard its fallback-mode branch with `!handled_by_subview && !text.is_empty()`. \
          `get_filtered_results_cached` and `collect_fallbacks` are ScriptList-only; \

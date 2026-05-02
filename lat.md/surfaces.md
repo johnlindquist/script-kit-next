@@ -153,3 +153,9 @@ That means scaffold choice is part of the surface contract:
 - `ScriptList` is the default launcher pattern, with the info panel revealed explicitly through `show_info_panel`
 - `PromptChromeAudit::expanded(...)` should only appear on preview-dense surfaces
 - `FileSearchPresentation` is an explicit exception because it supports both compact entry from `ScriptList` and a full browser mode
+
+## Selection-Owned Expanded Browsers
+
+Preview browsers keep one selected row synchronized with the visible list, preview pane, and portal attach target.
+
+Notes Browse is preview-dense and uses the expanded scaffold because reading note content is required before attaching it to ACP. In portal mode, Enter attaches the selected note and Escape cancels the portal before clearing any filter. Wheel movement, scrollbar movement, and row clicks must update `selected_index` so the list, preview, and attached note cannot drift apart.
