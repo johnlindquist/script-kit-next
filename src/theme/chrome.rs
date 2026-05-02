@@ -25,6 +25,11 @@ pub(crate) struct AppChromeColors {
     pub text_dimmed_hex: u32,
     pub accent_hex: u32,
 
+    pub text_strong_rgba: u32,
+    pub text_muted_rgba: u32,
+    pub text_hint_rgba: u32,
+    pub text_icon_rgba: u32,
+
     /// `text_primary` composited with `opacity.text_placeholder` (0.40 by default).
     /// The canonical semantic token for placeholder-tier chrome text: launcher
     /// microcopy hints, empty-state search placeholders, and quiet trailing hints.
@@ -111,6 +116,14 @@ impl AppChromeColors {
             text_muted_hex: colors.text.muted,
             text_dimmed_hex: colors.text.dimmed,
             accent_hex: colors.accent.selected,
+
+            text_strong_rgba: hex_to_rgba_with_opacity(colors.text.primary, opacity.text_strong),
+            text_muted_rgba: hex_to_rgba_with_opacity(
+                colors.text.primary,
+                opacity.text_muted_alpha,
+            ),
+            text_hint_rgba: hex_to_rgba_with_opacity(colors.text.primary, opacity.text_hint),
+            text_icon_rgba: hex_to_rgba_with_opacity(colors.text.primary, opacity.text_icon),
 
             placeholder_text_rgba: hex_to_rgba_with_opacity(
                 colors.text.primary,
@@ -227,6 +240,30 @@ mod tests {
             chrome.placeholder_text_rgba,
             hex_to_rgba_with_opacity(theme.colors.text.primary, opacity.text_placeholder),
             "placeholder text must resolve from text_primary + shared placeholder alpha"
+        );
+    }
+
+    #[test]
+    fn semantic_text_rgba_tokens_use_primary_text_ladder() {
+        let theme = Theme::dark_default();
+        let chrome = AppChromeColors::from_theme(&theme);
+        let opacity = theme.get_opacity();
+
+        assert_eq!(
+            chrome.text_strong_rgba,
+            hex_to_rgba_with_opacity(theme.colors.text.primary, opacity.text_strong)
+        );
+        assert_eq!(
+            chrome.text_muted_rgba,
+            hex_to_rgba_with_opacity(theme.colors.text.primary, opacity.text_muted_alpha)
+        );
+        assert_eq!(
+            chrome.text_hint_rgba,
+            hex_to_rgba_with_opacity(theme.colors.text.primary, opacity.text_hint)
+        );
+        assert_eq!(
+            chrome.text_icon_rgba,
+            hex_to_rgba_with_opacity(theme.colors.text.primary, opacity.text_icon)
         );
     }
 
