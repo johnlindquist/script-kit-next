@@ -354,78 +354,7 @@ impl FormTextArea {
 
     /// Handle key down events (legacy, kept for render callback)
     fn handle_key_down(&mut self, event: &KeyDownEvent, cx: &mut Context<Self>) {
-        let key = event.keystroke.key.as_str();
-        let cmd = event.keystroke.modifiers.platform;
-        let shift = event.keystroke.modifiers.shift;
-
-        // Select all
-        if cmd && !shift && key.eq_ignore_ascii_case("a") {
-            self.select_all();
-            cx.notify();
-            return;
-        }
-        // Clipboard
-        if cmd && !shift && key.eq_ignore_ascii_case("c") {
-            self.copy(cx);
-            return;
-        }
-        if cmd && !shift && key.eq_ignore_ascii_case("x") {
-            self.cut(cx);
-            cx.notify();
-            return;
-        }
-        if cmd && !shift && key.eq_ignore_ascii_case("v") {
-            self.paste(cx);
-            cx.notify();
-            return;
-        }
-        // Navigation with optional selection
-        if !cmd && is_key_left(key) {
-            self.move_left(shift);
-            cx.notify();
-            return;
-        }
-        if !cmd && is_key_right(key) {
-            self.move_right(shift);
-            cx.notify();
-            return;
-        }
-        if !cmd && is_key_up(key) {
-            self.move_up(shift);
-            cx.notify();
-            return;
-        }
-        if !cmd && is_key_down(key) {
-            self.move_down(shift);
-            cx.notify();
-            return;
-        }
-        if !cmd && key.eq_ignore_ascii_case("home") {
-            self.move_home(shift);
-            cx.notify();
-            return;
-        }
-        if !cmd && key.eq_ignore_ascii_case("end") {
-            self.move_end(shift);
-            cx.notify();
-            return;
-        }
-        // Editing
-        if !cmd && is_key_backspace(key) {
-            self.backspace_char();
-            cx.notify();
-            return;
-        }
-        if !cmd && is_key_delete(key) {
-            self.delete_forward_char();
-            cx.notify();
-            return;
-        }
-        // Enter inserts newline
-        if !cmd && is_key_enter(key) {
-            self.insert_text_at_cursor("\n");
-            cx.notify();
-        }
+        self.handle_key_event(event, cx);
     }
 
     /// Unified key event handler called by form_prompt.rs
@@ -561,8 +490,12 @@ mod tests {
             "if !cmd && is_key_enter(key) {\n            self.insert_text_at_cursor(\"\\n\");";
         let enter_helper_usages = TEXT_AREA_SOURCE.matches(enter_handler_snippet).count();
         assert_eq!(
-            enter_helper_usages, 2,
-            "both text area key handlers should use is_key_enter so Return inserts a newline"
+            enter_helper_usages, 1,
+            "text area key handling should centralize Return newline insertion in handle_key_event"
+        );
+        assert!(
+            TEXT_AREA_SOURCE.contains("self.handle_key_event(event, cx);"),
+            "legacy text area key callback should forward to the unified key handler"
         );
     }
 }

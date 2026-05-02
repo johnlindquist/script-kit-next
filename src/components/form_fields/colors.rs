@@ -8,22 +8,22 @@ pub struct FormFieldColors {
     pub background: u32,
     /// Background color when focused
     pub background_focused: u32,
-    /// Text color when typing
-    pub text: u32,
-    /// Placeholder text color
-    pub placeholder: u32,
-    /// Label text color
-    pub label: u32,
+    /// Text color when typing.
+    pub text: gpui::Rgba,
+    /// Placeholder text color.
+    pub placeholder: gpui::Rgba,
+    /// Label text color.
+    pub label: gpui::Rgba,
     /// Border color
     pub border: u32,
     /// Border color when focused
     pub border_focused: u32,
-    /// Cursor color
-    pub cursor: u32,
+    /// Cursor color.
+    pub cursor: gpui::Rgba,
     /// Checkbox checked background
     pub checkbox_checked: u32,
-    /// Checkbox check mark color
-    pub checkbox_mark: u32,
+    /// Checkbox check mark color.
+    pub checkbox_mark: gpui::Rgba,
     /// Shared input font size token for all editable field text
     pub input_font_size: f32,
     /// Shared label font size token for labels, hints, and inline indicators
@@ -34,18 +34,18 @@ impl FormFieldColors {
     /// Create FormFieldColors from a Theme
     pub fn from_theme(theme: &crate::theme::Theme) -> Self {
         let ui_font_size = theme.get_fonts().ui_size;
-        let cursor_color = theme.colors.accent.selected;
+        let chrome = crate::theme::AppChromeColors::from_theme(theme);
         Self {
             background: theme.colors.background.search_box,
             background_focused: theme.colors.background.main,
-            text: theme.colors.text.primary,
-            placeholder: theme.colors.text.muted,
-            label: theme.colors.text.secondary,
+            text: gpui::rgb(chrome.text_primary_hex),
+            placeholder: gpui::rgba(chrome.placeholder_text_rgba),
+            label: gpui::rgba(chrome.text_muted_rgba),
             border: theme.colors.ui.border,
-            border_focused: theme.colors.accent.selected,
-            cursor: cursor_color,
-            checkbox_checked: theme.colors.accent.selected,
-            checkbox_mark: theme.colors.background.main,
+            border_focused: chrome.accent_hex,
+            cursor: gpui::rgb(chrome.accent_hex),
+            checkbox_checked: chrome.accent_hex,
+            checkbox_mark: gpui::rgb(theme.colors.background.main),
             input_font_size: (ui_font_size + 2.0).max(12.0),
             label_font_size: (ui_font_size - 2.0).max(10.0),
         }
@@ -53,18 +53,27 @@ impl FormFieldColors {
 
     /// Create FormFieldColors from design colors
     pub fn from_design(colors: &crate::designs::DesignColors) -> Self {
+        use crate::theme::opacity::{OPACITY_DISABLED, OPACITY_TEXT_MUTED};
+        use crate::ui_foundation::hex_to_rgba_with_opacity;
+
         let typography = crate::designs::DesignTypography::default();
         Self {
             background: colors.background_secondary,
             background_focused: colors.background,
-            text: colors.text_primary,
-            placeholder: colors.text_muted,
-            label: colors.text_secondary,
+            text: gpui::rgb(colors.text_primary),
+            placeholder: gpui::rgba(hex_to_rgba_with_opacity(
+                colors.text_primary,
+                OPACITY_DISABLED,
+            )),
+            label: gpui::rgba(hex_to_rgba_with_opacity(
+                colors.text_primary,
+                OPACITY_TEXT_MUTED,
+            )),
             border: colors.border,
             border_focused: colors.accent,
-            cursor: colors.accent,
+            cursor: gpui::rgb(colors.accent),
             checkbox_checked: colors.accent,
-            checkbox_mark: colors.background,
+            checkbox_mark: gpui::rgb(colors.background),
             input_font_size: typography.font_size_lg,
             label_font_size: typography.font_size_sm,
         }

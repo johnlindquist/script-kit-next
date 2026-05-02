@@ -40,12 +40,12 @@ const formHtml = `
 
   <div class="space-y-2">
     <label for="username" class="block text-sm font-medium">Username</label>
-    <input type="text" name="username" id="username" placeholder="Enter your username" class="w-full px-4 py-2 border rounded" />
+    <input type="TEXT" name="username" id="username" placeholder="Enter your username" class="w-full px-4 py-2 border rounded" />
   </div>
 
   <div class="space-y-2">
     <label for="password" class="block text-sm font-medium">Password</label>
-    <input type="password" name="password" id="password" placeholder="Enter your password" class="w-full px-4 py-2 border rounded" />
+    <input type="PASSWORD" name="password" id="password" placeholder="Enter your password" class="w-full px-4 py-2 border rounded" />
   </div>
 
   <div class="space-y-2">
@@ -54,7 +54,7 @@ const formHtml = `
   </div>
 
   <div class="flex items-center space-x-2">
-    <input type="checkbox" name="subscribe" id="subscribe" value="yes" class="h-4 w-4" />
+    <input type="Checkbox" name="subscribe" id="subscribe" value="yes" class="h-4 w-4" />
     <label for="subscribe" class="text-sm">Subscribe to newsletter</label>
   </div>
 </div>

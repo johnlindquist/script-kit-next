@@ -1,6 +1,6 @@
 use gpui::{
-    div, prelude::*, px, rgb, App, Context, Entity, FocusHandle, Focusable, KeyDownEvent, Render,
-    Window,
+    div, prelude::*, px, App, ClickEvent, Context, ElementId, Entity, FocusHandle, Focusable,
+    KeyDownEvent, Render, Window,
 };
 
 use crate::components::{FormCheckbox, FormFieldColors, FormTextArea, FormTextField};
@@ -61,7 +61,8 @@ impl FormPromptState {
                     &format!("Creating field: {} (type: {})", field.name, field_type),
                 );
 
-                let entity = match field_type.as_str() {
+                let normalized_type = field_type.to_ascii_lowercase();
+                let entity = match normalized_type.as_str() {
                     "checkbox" => {
                         let checkbox = FormCheckbox::new(field.clone(), colors, cx);
                         FormFieldEntity::Checkbox(cx.new(|_| checkbox))
@@ -112,36 +113,49 @@ impl FormPromptState {
     }
 
     /// Focus the next field (for Tab navigation).
-    pub fn focus_next(&mut self, cx: &mut Context<Self>) {
+    pub fn focus_next(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.fields.is_empty() {
             return;
         }
-        self.focused_index = (self.focused_index + 1) % self.fields.len();
-        cx.notify();
+        let next = (self.focused_index + 1) % self.fields.len();
+        self.focus_field_at(next, window, cx);
     }
 
     /// Focus the previous field (for Shift+Tab navigation).
-    pub fn focus_previous(&mut self, cx: &mut Context<Self>) {
+    pub fn focus_previous(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.fields.is_empty() {
             return;
         }
-        if self.focused_index == 0 {
-            self.focused_index = self.fields.len() - 1;
+        let previous = if self.focused_index == 0 {
+            self.fields.len() - 1
         } else {
-            self.focused_index -= 1;
+            self.focused_index - 1
+        };
+        self.focus_field_at(previous, window, cx);
+    }
+
+    fn focus_handle_at(&self, index: usize, cx: &App) -> Option<FocusHandle> {
+        self.fields.get(index).map(|(_, entity)| match entity {
+            FormFieldEntity::TextField(e) => e.read(cx).focus_handle(cx),
+            FormFieldEntity::TextArea(e) => e.read(cx).focus_handle(cx),
+            FormFieldEntity::Checkbox(e) => e.read(cx).focus_handle(cx),
+        })
+    }
+
+    fn focus_field_at(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if self.fields.is_empty() {
+            return;
+        }
+        self.focused_index = index.min(self.fields.len() - 1);
+        if let Some(focus_handle) = self.focus_handle_at(self.focused_index, cx) {
+            focus_handle.focus(window, cx);
         }
         cx.notify();
     }
 
     /// Get the focus handle for the currently focused field.
     pub fn current_focus_handle(&self, cx: &App) -> Option<FocusHandle> {
-        self.fields
-            .get(self.focused_index)
-            .map(|(_, entity)| match entity {
-                FormFieldEntity::TextField(e) => e.read(cx).focus_handle(cx),
-                FormFieldEntity::TextArea(e) => e.read(cx).focus_handle(cx),
-                FormFieldEntity::Checkbox(e) => e.read(cx).focus_handle(cx),
-            })
+        self.focus_handle_at(self.focused_index, cx)
     }
 
     /// Handle keyboard input by forwarding to the currently focused field.
@@ -223,11 +237,23 @@ impl Render for FormPromptState {
         // Build the form fields container
         let mut container = div().flex().flex_col().gap(px(16.)).w_full();
 
-        for (_field_def, entity) in &self.fields {
+        for (index, (_field_def, entity)) in self.fields.iter().enumerate() {
+            let focus_slot_click = cx.listener(
+                move |this: &mut Self,
+                      _event: &ClickEvent,
+                      window: &mut Window,
+                      cx: &mut Context<Self>| {
+                    this.focus_field_at(index, window, cx);
+                },
+            );
+            let slot = div()
+                .id(ElementId::Name(format!("form-field-slot-{index}").into()))
+                .w_full()
+                .on_click(focus_slot_click);
             container = match entity {
-                FormFieldEntity::TextField(e) => container.child(e.clone()),
-                FormFieldEntity::TextArea(e) => container.child(e.clone()),
-                FormFieldEntity::Checkbox(e) => container.child(e.clone()),
+                FormFieldEntity::TextField(e) => container.child(slot.child(e.clone())),
+                FormFieldEntity::TextArea(e) => container.child(slot.child(e.clone())),
+                FormFieldEntity::Checkbox(e) => container.child(slot.child(e.clone())),
             };
         }
 
@@ -236,7 +262,7 @@ impl Render for FormPromptState {
             container = container.child(
                 div()
                     .p(px(16.))
-                    .text_color(rgb(colors.label))
+                    .text_color(colors.label)
                     .child("No form fields found in HTML"),
             );
         }

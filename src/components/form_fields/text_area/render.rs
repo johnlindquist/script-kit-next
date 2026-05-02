@@ -1,6 +1,7 @@
 use gpui::*;
 use gpui_component::scroll::ScrollableElement;
 
+use super::super::helpers::{char_len, slice_by_char_range};
 use super::FormTextArea;
 
 impl Focusable for FormTextArea {
@@ -18,6 +19,7 @@ impl Render for FormTextArea {
         let label = self.field.label.clone();
         let rows = self.rows;
         let has_value = !self.value.is_empty();
+        let cursor_pos = self.cursor_position;
 
         // Calculate border and background based on focus using shared whisper surface
         let surface = colors.whisper_surface(is_focused);
@@ -63,19 +65,40 @@ impl Render for FormTextArea {
             },
         );
 
-        // Build text content
+        let cursor_element = div().w(px(2.)).h(rems(1.125)).bg(colors.cursor);
+
+        // Build text content with the same visible cursor affordance as text fields.
         let text_content: Div = if has_value {
-            div()
-                .flex()
-                .flex_col()
-                .text_size(px(colors.input_font_size))
-                .text_color(rgb(colors.text))
-                .child(display_text)
+            let display_len = char_len(&display_text);
+            let safe_cursor = cursor_pos.min(display_len);
+            let text_before = slice_by_char_range(&display_text, 0, safe_cursor);
+            let text_after = slice_by_char_range(&display_text, safe_cursor, display_len);
+            let mut content = div().flex().flex_row().items_start().child(
+                div()
+                    .text_size(px(colors.input_font_size))
+                    .text_color(colors.text)
+                    .child(text_before.to_string()),
+            );
+            if is_focused {
+                content = content.child(cursor_element);
+            }
+            content.child(
+                div()
+                    .text_size(px(colors.input_font_size))
+                    .text_color(colors.text)
+                    .child(text_after.to_string()),
+            )
         } else {
-            div()
-                .text_size(px(colors.input_font_size))
-                .text_color(rgb(colors.placeholder))
-                .child(placeholder)
+            let mut content = div().flex().flex_row().items_center();
+            if is_focused {
+                content = content.child(cursor_element);
+            }
+            content.child(
+                div()
+                    .text_size(px(colors.input_font_size))
+                    .text_color(colors.placeholder)
+                    .child(placeholder),
+            )
         };
 
         // Input surface - uses shared prompt_surface for consistent card chrome
@@ -107,7 +130,7 @@ impl Render for FormTextArea {
             container = container.child(
                 div()
                     .text_size(px(colors.label_font_size))
-                    .text_color(rgb(colors.label))
+                    .text_color(colors.label)
                     .font_weight(FontWeight::MEDIUM)
                     .child(label_text),
             );

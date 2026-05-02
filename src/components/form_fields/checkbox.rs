@@ -130,7 +130,7 @@ impl Render for FormCheckbox {
             checkbox_box = checkbox_box.child(
                 div()
                     .text_size(px(colors.label_font_size))
-                    .text_color(rgb(colors.checkbox_mark))
+                    .text_color(colors.checkbox_mark)
                     .font_weight(FontWeight::BOLD)
                     .child("✓"),
             );
@@ -160,7 +160,7 @@ impl Render for FormCheckbox {
             .child(
                 div()
                     .text_size(px(colors.input_font_size))
-                    .text_color(rgb(colors.text))
+                    .text_color(colors.text)
                     .child(label),
             )
     }
