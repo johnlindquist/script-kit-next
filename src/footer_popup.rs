@@ -266,6 +266,8 @@ pub(crate) fn notify_main_footer_popup(
         unsafe {
             if let Some(config) = config {
                 refresh_main_footer_host(ns_window, config);
+            } else {
+                remove_main_footer_host(ns_window);
             }
         }
     }
