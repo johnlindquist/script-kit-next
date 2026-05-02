@@ -328,6 +328,7 @@ fn emoji_picker_advertises_and_wires_shared_actions() {
 
 const UI_WINDOW_SOURCE: &str = include_str!("../../src/app_impl/ui_window.rs");
 const FOOTER_POPUP_SOURCE: &str = include_str!("../../src/footer_popup.rs");
+const AI_PRESETS_SOURCE: &str = include_str!("../../src/render_builtins/ai_presets.rs");
 
 #[test]
 fn ui_window_resolves_native_footer_from_view() {
@@ -383,6 +384,98 @@ fn footer_popup_uses_subtle_hover_for_native_footer_buttons() {
         FOOTER_POPUP_SOURCE
             .contains("let selected_ns: id = ns_color_from_rgba(chrome.selection_rgba);"),
         "native footer selected state should still restore chrome.selection_rgba"
+    );
+}
+
+#[test]
+fn builtin_renderers_delegate_native_footer_policy_to_slot_helper() {
+    let renderers: &[(&str, &str)] = &[
+        (
+            "app_launcher",
+            include_str!("../../src/render_builtins/app_launcher.rs"),
+        ),
+        (
+            "window_switcher",
+            include_str!("../../src/render_builtins/window_switcher.rs"),
+        ),
+        (
+            "browser_tabs",
+            include_str!("../../src/render_builtins/browser_tabs.rs"),
+        ),
+        (
+            "theme_chooser",
+            include_str!("../../src/render_builtins/theme_chooser.rs"),
+        ),
+        (
+            "process_manager",
+            include_str!("../../src/render_builtins/process_manager.rs"),
+        ),
+        (
+            "current_app_commands",
+            include_str!("../../src/render_builtins/current_app_commands.rs"),
+        ),
+        (
+            "search_ai_presets",
+            include_str!("../../src/render_builtins/ai_presets.rs"),
+        ),
+        (
+            "settings",
+            include_str!("../../src/render_builtins/settings.rs"),
+        ),
+        (
+            "favorites",
+            include_str!("../../src/render_builtins/favorites.rs"),
+        ),
+    ];
+
+    for (name, source) in renderers {
+        assert!(
+            source.contains("main_window_footer_slot("),
+            "{name} must route footer ownership through main_window_footer_slot"
+        );
+        assert!(
+            !source.contains("active_main_window_footer_surface()"),
+            "{name} must not duplicate native-footer surface checks in render code"
+        );
+    }
+}
+
+#[test]
+fn create_ai_preset_form_does_not_inherit_launcher_native_footer() {
+    assert!(
+        UI_WINDOW_SOURCE
+            .contains("AppView::SearchAiPresetsView { .. } => Some(\"search_ai_presets\")"),
+        "search presets list keeps the native footer surface"
+    );
+    assert!(
+        !UI_WINDOW_SOURCE
+            .contains("AppView::CreateAiPresetView { .. } => Some(\"create_ai_preset\")"),
+        "create preset form must not inherit the generic launcher native footer"
+    );
+    assert!(
+        !AI_PRESETS_SOURCE.contains("Some(\"create_ai_preset\")"),
+        "create preset renderer must not reserve native footer space"
+    );
+}
+
+#[test]
+fn prompt_footer_exception_builtins_do_not_register_native_footer() {
+    for surface in ["design_gallery", "browse_kits", "installed_kits"] {
+        assert!(
+            !UI_WINDOW_SOURCE.contains(&format!("Some(\"{surface}\")")),
+            "{surface} must not register a native footer while it owns PromptFooter actions"
+        );
+    }
+
+    let design_gallery = include_str!("../../src/render_builtins/design_gallery.rs");
+    let kit_store = include_str!("../../src/render_builtins/kit_store.rs");
+    assert!(
+        design_gallery.contains("PromptFooter::new("),
+        "design gallery keeps its GPUI PromptFooter exception"
+    );
+    assert!(
+        kit_store.contains("PromptFooter::new("),
+        "kit store keeps its GPUI PromptFooter exception"
     );
 }
 

@@ -109,8 +109,7 @@ impl ScriptListApp {
         let text_muted = self.theme.colors.text.muted;
 
         // Load favorites and resolve to script/scriptlet names
-        let favorites = script_kit_gpui::favorites::load_favorites()
-            .unwrap_or_default();
+        let favorites = script_kit_gpui::favorites::load_favorites().unwrap_or_default();
 
         let resolved: Vec<(String, String)> = favorites
             .script_ids
@@ -168,33 +167,35 @@ impl ScriptListApp {
         let list_items: Vec<AnyElement> = filtered
             .iter()
             .enumerate()
-            .map(|(display_idx, (_original_idx, fav_id, name, description))| {
-                let is_selected = display_idx == selected_index;
-                let fav_id_owned = fav_id.to_string();
-                let entity_clone = entity.clone();
+            .map(
+                |(display_idx, (_original_idx, fav_id, name, description))| {
+                    let is_selected = display_idx == selected_index;
+                    let fav_id_owned = fav_id.to_string();
+                    let entity_clone = entity.clone();
 
-                div()
-                    .id(display_idx)
-                    .cursor_pointer()
-                    .on_click(move |_event, window, cx| {
-                        if let Some(app) = entity_clone.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.run_favorite(&fav_id_owned, window, cx);
-                            });
-                        }
-                    })
-                    .child(
-                        ListItem::new(name.to_string(), list_colors)
-                            .description_opt(if description.is_empty() {
-                                None
-                            } else {
-                                Some(description.to_string())
-                            })
-                            .selected(is_selected)
-                            .with_accent_bar(is_selected),
-                    )
-                    .into_any_element()
-            })
+                    div()
+                        .id(display_idx)
+                        .cursor_pointer()
+                        .on_click(move |_event, window, cx| {
+                            if let Some(app) = entity_clone.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.run_favorite(&fav_id_owned, window, cx);
+                                });
+                            }
+                        })
+                        .child(
+                            ListItem::new(name.to_string(), list_colors)
+                                .description_opt(if description.is_empty() {
+                                    None
+                                } else {
+                                    Some(description.to_string())
+                                })
+                                .selected(is_selected)
+                                .with_accent_bar(is_selected),
+                        )
+                        .into_any_element()
+                },
+            )
             .collect();
 
         let list_element: AnyElement = if count == 0 {
@@ -265,13 +266,9 @@ impl ScriptListApp {
                     .h(px(1.))
                     .bg(rgb(self.theme.colors.ui.border)),
             )
-            .child(if matches!(
-                crate::footer_popup::active_main_window_footer_surface(),
-                Some("favorites")
-            ) {
-                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-            } else {
-                div()
+            .when_some(
+                self.main_window_footer_slot(
+                    div()
                     .w_full()
                     .px(px(design_spacing.padding_lg))
                     .py(px(design_spacing.padding_sm))
@@ -280,8 +277,10 @@ impl ScriptListApp {
                     .child(
                         "\u{21b5} Run \u{00b7} U Move Up \u{00b7} J Move Down \u{00b7} D Remove from Favorites \u{00b7} Esc Back",
                     )
-                    .into_any_element()
-            })
+                    .into_any_element(),
+                ),
+                |d, footer| d.child(footer),
+            )
             .into_any_element()
     }
 

@@ -87,7 +87,6 @@ impl ScriptListApp {
         selected_index: usize,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-
         // Use design tokens for GLOBAL theming
         let tokens = get_tokens(self.current_design);
         let design_colors = tokens.colors();
@@ -515,12 +514,7 @@ impl ScriptListApp {
                     .child(list_element),
             )
             // Footer
-            .child(if matches!(
-                crate::footer_popup::active_main_window_footer_surface(),
-                Some("design_gallery")
-            ) {
-                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-            } else {
+            .child(
                 div()
                     .id("design-gallery-footer-tooltip")
                     .tooltip(|window, cx| {
@@ -539,8 +533,8 @@ impl ScriptListApp {
                             .show_secondary(false),
                         PromptFooterColors::from_theme(&self.theme),
                     ))
-                    .into_any_element()
-            })
+                    .into_any_element(),
+            )
             .into_any_element()
     }
 }

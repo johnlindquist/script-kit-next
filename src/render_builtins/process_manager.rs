@@ -95,9 +95,7 @@ impl ScriptListApp {
             .into_iter()
             .take(limit)
             .enumerate()
-            .map(|(display_index, (source_index, process))| {
-                (display_index, source_index, process)
-            })
+            .map(|(display_index, (source_index, process))| (display_index, source_index, process))
             .collect()
     }
 
@@ -573,27 +571,20 @@ impl ScriptListApp {
                     .py(px(design_spacing.padding_xs))
                     .child(list_element),
             )
-            .child(
-                if matches!(
-                    crate::footer_popup::active_main_window_footer_surface(),
-                    Some("process_manager")
-                ) {
-                    crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(
-                    )
-                } else {
-                    crate::components::render_simple_hint_strip(
-                        if total_count > 0 {
-                            vec![
-                                gpui::SharedString::from("↵ Stop"),
-                                gpui::SharedString::from("⌘↵ Stop All"),
-                                gpui::SharedString::from("Esc Back"),
-                            ]
-                        } else {
-                            vec![gpui::SharedString::from("Esc Back")]
-                        },
-                        None,
-                    )
-                },
+            .when_some(
+                self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+                    if total_count > 0 {
+                        vec![
+                            gpui::SharedString::from("↵ Stop"),
+                            gpui::SharedString::from("⌘↵ Stop All"),
+                            gpui::SharedString::from("Esc Back"),
+                        ]
+                    } else {
+                        vec![gpui::SharedString::from("Esc Back")]
+                    },
+                    None,
+                )),
+                |d, footer| d.child(footer),
             )
             .into_any_element()
     }

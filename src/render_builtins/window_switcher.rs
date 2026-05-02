@@ -178,7 +178,6 @@ impl ScriptListApp {
         let text_muted = self.theme.colors.text.muted;
         let text_dimmed = self.theme.colors.text.dimmed;
 
-
         // Build virtualized list
         let list_element: AnyElement = if filtered_len == 0 {
             div()
@@ -229,57 +228,64 @@ impl ScriptListApp {
                                 // Click handler: select on click, focus window on double-click
                                 let click_entity = click_entity_handle.clone();
                                 let win_id = window_info.id;
-                                let click_handler = move |event: &gpui::ClickEvent,
-                                                           _window: &mut Window,
-                                                           cx: &mut gpui::App| {
-                                    if let Some(app) = click_entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            if let AppView::WindowSwitcherView {
-                                                selected_index, ..
-                                            } = &mut this.current_view
-                                            {
-                                                *selected_index = ix;
-                                            }
-                                            cx.notify();
+                                let click_handler =
+                                    move |event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = click_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if let AppView::WindowSwitcherView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
+                                                {
+                                                    *selected_index = ix;
+                                                }
+                                                cx.notify();
 
-                                            // Double-click: focus window
-                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
-                                                if mouse_event.down.click_count == 2 {
-                                                    logging::log(
-                                                        "UI",
-                                                        &format!(
-                                                            "Double-click focusing window {}",
-                                                            win_id
-                                                        ),
-                                                    );
-                                                    if window_control::focus_window(win_id).is_ok()
-                                                    {
-                                                        this.hide_main_and_reset(cx);
+                                                // Double-click: focus window
+                                                if let gpui::ClickEvent::Mouse(mouse_event) = event
+                                                {
+                                                    if mouse_event.down.click_count == 2 {
+                                                        logging::log(
+                                                            "UI",
+                                                            &format!(
+                                                                "Double-click focusing window {}",
+                                                                win_id
+                                                            ),
+                                                        );
+                                                        if window_control::focus_window(win_id)
+                                                            .is_ok()
+                                                        {
+                                                            this.hide_main_and_reset(cx);
+                                                        }
                                                     }
                                                 }
-                                            }
-                                        });
-                                    }
-                                };
+                                            });
+                                        }
+                                    };
 
                                 // Hover handler for mouse tracking
                                 let hover_entity = hover_entity_handle.clone();
-                                let hover_handler = move |is_hovered: &bool, _window: &mut Window, cx: &mut gpui::App| {
-                                    if let Some(app) = hover_entity.upgrade() {
-                                        app.update(cx, |this, cx| {
-                                            if *is_hovered {
-                                                this.input_mode = InputMode::Mouse;
-                                                if this.hovered_index != Some(ix) {
-                                                    this.hovered_index = Some(ix);
+                                let hover_handler =
+                                    move |is_hovered: &bool,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app) = hover_entity.upgrade() {
+                                            app.update(cx, |this, cx| {
+                                                if *is_hovered {
+                                                    this.input_mode = InputMode::Mouse;
+                                                    if this.hovered_index != Some(ix) {
+                                                        this.hovered_index = Some(ix);
+                                                        cx.notify();
+                                                    }
+                                                } else if this.hovered_index == Some(ix) {
+                                                    this.hovered_index = None;
                                                     cx.notify();
                                                 }
-                                            } else if this.hovered_index == Some(ix) {
-                                                this.hovered_index = None;
-                                                cx.notify();
-                                            }
-                                        });
-                                    }
-                                };
+                                            });
+                                        }
+                                    };
 
                                 div()
                                     .id(ix)
@@ -473,20 +479,13 @@ impl ScriptListApp {
                     .child(actions_panel),
             );
 
-        let footer = if matches!(
-            crate::footer_popup::active_main_window_footer_surface(),
-            Some("window_switcher")
-        ) {
-            crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-        } else {
-            crate::components::render_simple_hint_strip(
-                vec![
-                    gpui::SharedString::from("↵ Switch"),
-                    gpui::SharedString::from("Esc Back"),
-                ],
-                None,
-            )
-        };
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            vec![
+                gpui::SharedString::from("↵ Switch"),
+                gpui::SharedString::from("Esc Back"),
+            ],
+            None,
+        ));
 
         div()
             .w_full()
@@ -513,14 +512,14 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(content),
             )
-            .child(footer)
-        .rounded(px(design_visual.radius_lg))
-        .text_color(rgb(text_primary))
-        .font_family(design_typography.font_family)
-        .key_context("window_switcher")
-        .track_focus(&self.focus_handle)
-        .on_key_down(handle_key)
-        .into_any_element()
+            .when_some(footer, |d, footer| d.child(footer))
+            .rounded(px(design_visual.radius_lg))
+            .text_color(rgb(text_primary))
+            .font_family(design_typography.font_family)
+            .key_context("window_switcher")
+            .track_focus(&self.focus_handle)
+            .on_key_down(handle_key)
+            .into_any_element()
     }
 }
 
