@@ -18,11 +18,27 @@ impl ScriptListApp {
         // Load all presets (defaults + user-saved)
         let all_presets = crate::ai::presets::load_presets().unwrap_or_default();
         let default_presets: Vec<(&str, &str, &str)> = vec![
-            ("general", "General Assistant", "Helpful AI assistant for any task"),
+            (
+                "general",
+                "General Assistant",
+                "Helpful AI assistant for any task",
+            ),
             ("coder", "Code Assistant", "Expert programmer and debugger"),
-            ("writer", "Writing Assistant", "Help with writing and editing"),
-            ("researcher", "Research Assistant", "Deep analysis and research"),
-            ("creative", "Creative Partner", "Brainstorming and creative ideas"),
+            (
+                "writer",
+                "Writing Assistant",
+                "Help with writing and editing",
+            ),
+            (
+                "researcher",
+                "Research Assistant",
+                "Deep analysis and research",
+            ),
+            (
+                "creative",
+                "Creative Partner",
+                "Brainstorming and creative ideas",
+            ),
         ];
 
         let mut items: Vec<(String, String, String, bool)> = Vec::new();
@@ -31,7 +47,12 @@ impl ScriptListApp {
         }
         for preset in &all_presets {
             if !default_presets.iter().any(|(did, _, _)| *did == preset.id) {
-                items.push((preset.id.clone(), preset.name.clone(), preset.description.clone(), false));
+                items.push((
+                    preset.id.clone(),
+                    preset.name.clone(),
+                    preset.description.clone(),
+                    false,
+                ));
             }
         }
 
@@ -39,7 +60,9 @@ impl ScriptListApp {
         let filtered_items: Vec<_> = if filter.is_empty() {
             items.iter().enumerate().collect()
         } else {
-            items.iter().enumerate()
+            items
+                .iter()
+                .enumerate()
                 .filter(|(_, (id, name, desc, _))| {
                     name.to_lowercase().contains(&filter_lower)
                         || desc.to_lowercase().contains(&filter_lower)
@@ -52,32 +75,40 @@ impl ScriptListApp {
         let list_colors = ListItemColors::from_theme(&self.theme);
         let entity = cx.entity().downgrade();
 
-        let list_items: Vec<AnyElement> = filtered_items.iter().enumerate()
-            .map(|(display_idx, (_original_idx, (id, name, desc, is_default)))| {
-                let is_selected = display_idx == selected_index;
-                let id_clone = id.clone();
-                let entity_clone = entity.clone();
-                let badge = if *is_default { " (built-in)" } else { " (custom)" };
-                let description = format!("{}{}", desc, badge);
+        let list_items: Vec<AnyElement> = filtered_items
+            .iter()
+            .enumerate()
+            .map(
+                |(display_idx, (_original_idx, (id, name, desc, is_default)))| {
+                    let is_selected = display_idx == selected_index;
+                    let id_clone = id.clone();
+                    let entity_clone = entity.clone();
+                    let badge = if *is_default {
+                        " (built-in)"
+                    } else {
+                        " (custom)"
+                    };
+                    let description = format!("{}{}", desc, badge);
 
-                div()
-                    .id(display_idx)
-                    .cursor_pointer()
-                    .on_click(move |_event, window, cx| {
-                        if let Some(app) = entity_clone.upgrade() {
-                            app.update(cx, |this, cx| {
-                                this.select_ai_preset(&id_clone, window, cx);
-                            });
-                        }
-                    })
-                    .child(
-                        ListItem::new(name.clone(), list_colors)
-                            .description_opt(Some(description))
-                            .selected(is_selected)
-                            .with_accent_bar(is_selected),
-                    )
-                    .into_any_element()
-            })
+                    div()
+                        .id(display_idx)
+                        .cursor_pointer()
+                        .on_click(move |_event, window, cx| {
+                            if let Some(app) = entity_clone.upgrade() {
+                                app.update(cx, |this, cx| {
+                                    this.select_ai_preset(&id_clone, window, cx);
+                                });
+                            }
+                        })
+                        .child(
+                            ListItem::new(name.clone(), list_colors)
+                                .description_opt(Some(description))
+                                .selected(is_selected)
+                                .with_accent_bar(is_selected),
+                        )
+                        .into_any_element()
+                },
+            )
             .collect();
 
         let list_element: AnyElement = if count == 0 {
@@ -87,10 +118,20 @@ impl ScriptListApp {
                 .text_center()
                 .text_color(rgb(text_muted))
                 .font_family(design_typography.font_family)
-                .child(if filter.is_empty() { "No presets available" } else { "No presets match your filter" })
+                .child(if filter.is_empty() {
+                    "No presets available"
+                } else {
+                    "No presets match your filter"
+                })
                 .into_any_element()
         } else {
-            div().w_full().flex().flex_col().min_h(px(0.)).children(list_items).into_any_element()
+            div()
+                .w_full()
+                .flex()
+                .flex_col()
+                .min_h(px(0.))
+                .children(list_items)
+                .into_any_element()
         };
 
         let header = div()
@@ -126,20 +167,13 @@ impl ScriptListApp {
             .overflow_hidden()
             .child(list_element);
 
-        let footer = if matches!(
-            crate::footer_popup::active_main_window_footer_surface(),
-            Some("search_ai_presets")
-        ) {
-            crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-        } else {
-            crate::components::render_simple_hint_strip(
-                vec![
-                    gpui::SharedString::from("↵ Select"),
-                    gpui::SharedString::from("Esc Back"),
-                ],
-                None,
-            )
-        };
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            vec![
+                gpui::SharedString::from("↵ Select"),
+                gpui::SharedString::from("Esc Back"),
+            ],
+            None,
+        ));
 
         div()
             .w_full()
@@ -166,13 +200,13 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(content),
             )
-            .child(footer)
-        .rounded(px(design_visual.radius_lg))
-        .text_color(rgb(text_primary))
-        .font_family(design_typography.font_family)
-        .key_context("search_ai_presets")
-        .track_focus(&self.focus_handle)
-        .into_any_element()
+            .when_some(footer, |d, footer| d.child(footer))
+            .rounded(px(design_visual.radius_lg))
+            .text_color(rgb(text_primary))
+            .font_family(design_typography.font_family)
+            .key_context("search_ai_presets")
+            .track_focus(&self.focus_handle)
+            .into_any_element()
     }
 
     /// Render the create AI preset form.
@@ -199,11 +233,22 @@ impl ScriptListApp {
 
         let fields: Vec<(&str, &str, &str, usize)> = vec![
             ("Name", "Preset name (e.g., Code Reviewer)", &name, 0),
-            ("System Prompt", "Instructions for the AI", &system_prompt, 1),
-            ("Model (optional)", "Model ID or leave empty for any", &model, 2),
+            (
+                "System Prompt",
+                "Instructions for the AI",
+                &system_prompt,
+                1,
+            ),
+            (
+                "Model (optional)",
+                "Model ID or leave empty for any",
+                &model,
+                2,
+            ),
         ];
 
-        let field_elements: Vec<AnyElement> = fields.iter()
+        let field_elements: Vec<AnyElement> = fields
+            .iter()
             .map(|(label, placeholder, value, idx)| {
                 let is_active = *idx == active_field;
                 let label_color = if is_active { accent } else { text_dimmed };
@@ -211,10 +256,14 @@ impl ScriptListApp {
                 let entity_for_click = entity.clone();
                 let field_idx = *idx;
 
-                div().w_full().mb(px(design_spacing.padding_md))
+                div()
+                    .w_full()
+                    .mb(px(design_spacing.padding_md))
                     .child(
-                        div().text_size(px(design_typography.font_size_sm))
-                            .text_color(rgb(label_color)).mb(px(4.))
+                        div()
+                            .text_size(px(design_typography.font_size_sm))
+                            .text_color(rgb(label_color))
+                            .mb(px(4.))
                             .child(label.to_string()),
                     )
                     .child(
@@ -223,7 +272,8 @@ impl ScriptListApp {
                             .w_full()
                             .px(px(design_spacing.padding_md))
                             .py(px(design_spacing.padding_sm))
-                            .border_1().border_color(rgb(border_color))
+                            .border_1()
+                            .border_color(rgb(border_color))
                             .rounded(px(design_visual.radius_md))
                             .text_size(px(design_typography.font_size_md))
                             .text_color(rgb(text_primary))
@@ -231,7 +281,11 @@ impl ScriptListApp {
                             .on_click(move |_event, _window, cx| {
                                 if let Some(app) = entity_for_click.upgrade() {
                                     app.update(cx, |this, cx| {
-                                        if let AppView::CreateAiPresetView { ref mut active_field, .. } = this.current_view {
+                                        if let AppView::CreateAiPresetView {
+                                            ref mut active_field,
+                                            ..
+                                        } = this.current_view
+                                        {
                                             *active_field = field_idx;
                                             cx.notify();
                                         }
@@ -239,7 +293,10 @@ impl ScriptListApp {
                                 }
                             })
                             .child(if value.is_empty() {
-                                div().text_color(rgb(text_muted)).child(placeholder.to_string()).into_any_element()
+                                div()
+                                    .text_color(rgb(text_muted))
+                                    .child(placeholder.to_string())
+                                    .into_any_element()
                             } else {
                                 div().child(value.to_string()).into_any_element()
                             }),
@@ -273,17 +330,6 @@ impl ScriptListApp {
                             .child("Type to edit \u{00b7} Tab: next field \u{00b7} Enter: save \u{00b7} Esc: cancel"),
                     ),
             )
-            .when(
-                matches!(
-                    crate::footer_popup::active_main_window_footer_surface(),
-                    Some("create_ai_preset")
-                ),
-                |d| {
-                    d.child(
-                        crate::components::prompt_layout_shell::render_native_main_window_footer_spacer(),
-                    )
-                },
-            )
             .into_any_element()
     }
 
@@ -303,8 +349,19 @@ impl ScriptListApp {
 
     /// Handle keyboard input for the Create AI Preset form.
     #[allow(dead_code)] // Called from startup_new_actions.rs interceptor
-    pub(crate) fn handle_create_ai_preset_key(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if let AppView::CreateAiPresetView { ref mut name, ref mut system_prompt, ref mut model, ref mut active_field } = self.current_view {
+    pub(crate) fn handle_create_ai_preset_key(
+        &mut self,
+        key: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let AppView::CreateAiPresetView {
+            ref mut name,
+            ref mut system_prompt,
+            ref mut model,
+            ref mut active_field,
+        } = self.current_view
+        {
             let active = *active_field;
             if crate::ui_foundation::is_key_tab(key) {
                 *active_field = (active + 1) % 3;
@@ -312,11 +369,19 @@ impl ScriptListApp {
             } else if crate::ui_foundation::is_key_enter(key) {
                 let name_val = name.clone();
                 let prompt_val = system_prompt.clone();
-                let model_val = if model.trim().is_empty() { None } else { Some(model.as_str()) };
+                let model_val = if model.trim().is_empty() {
+                    None
+                } else {
+                    Some(model.as_str())
+                };
                 match crate::ai::presets::create_preset(&name_val, &prompt_val, model_val) {
                     Ok(preset) => {
                         tracing::info!(id = %preset.id, name = %preset.name, action = "create_preset_success", "AI preset created");
-                        self.show_hud(format!("Preset '{}' created", preset.name), Some(HUD_SHORT_MS), cx);
+                        self.show_hud(
+                            format!("Preset '{}' created", preset.name),
+                            Some(HUD_SHORT_MS),
+                            cx,
+                        );
                         ai::reload_ai_presets(cx);
                         self.go_back_or_close(window, cx);
                     }
@@ -328,10 +393,24 @@ impl ScriptListApp {
             } else if crate::ui_foundation::is_key_escape(key) {
                 self.go_back_or_close(window, cx);
             } else if crate::ui_foundation::is_key_backspace(key) {
-                match active { 0 => { name.pop(); } 1 => { system_prompt.pop(); } _ => { model.pop(); } }
+                match active {
+                    0 => {
+                        name.pop();
+                    }
+                    1 => {
+                        system_prompt.pop();
+                    }
+                    _ => {
+                        model.pop();
+                    }
+                }
                 cx.notify();
             } else if key.len() == 1 {
-                match active { 0 => name.push_str(key), 1 => system_prompt.push_str(key), _ => model.push_str(key) }
+                match active {
+                    0 => name.push_str(key),
+                    1 => system_prompt.push_str(key),
+                    _ => model.push_str(key),
+                }
                 cx.notify();
             }
         }
@@ -339,18 +418,43 @@ impl ScriptListApp {
 
     /// Handle keyboard input for the Search AI Presets view.
     #[allow(dead_code)] // Called from startup_new_actions.rs interceptor
-    pub(crate) fn handle_search_ai_presets_key(&mut self, key: &str, window: &mut Window, cx: &mut Context<Self>) {
-        if let AppView::SearchAiPresetsView { ref filter, ref mut selected_index } = self.current_view {
+    pub(crate) fn handle_search_ai_presets_key(
+        &mut self,
+        key: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let AppView::SearchAiPresetsView {
+            ref filter,
+            ref mut selected_index,
+        } = self.current_view
+        {
             if crate::ui_foundation::is_key_enter(key) {
                 // Build the same item list as render_search_ai_presets to ensure
                 // selected_index maps to the correct preset.
                 let all_presets = crate::ai::presets::load_presets().unwrap_or_default();
                 let default_presets: Vec<(&str, &str, &str)> = vec![
-                    ("general", "General Assistant", "Helpful AI assistant for any task"),
+                    (
+                        "general",
+                        "General Assistant",
+                        "Helpful AI assistant for any task",
+                    ),
                     ("coder", "Code Assistant", "Expert programmer and debugger"),
-                    ("writer", "Writing Assistant", "Help with writing and editing"),
-                    ("researcher", "Research Assistant", "Deep analysis and research"),
-                    ("creative", "Creative Partner", "Brainstorming and creative ideas"),
+                    (
+                        "writer",
+                        "Writing Assistant",
+                        "Help with writing and editing",
+                    ),
+                    (
+                        "researcher",
+                        "Research Assistant",
+                        "Deep analysis and research",
+                    ),
+                    (
+                        "creative",
+                        "Creative Partner",
+                        "Brainstorming and creative ideas",
+                    ),
                 ];
                 let mut items: Vec<(String, String, String)> = Vec::new();
                 for (id, name, desc) in &default_presets {
@@ -358,14 +462,19 @@ impl ScriptListApp {
                 }
                 for preset in &all_presets {
                     if !default_presets.iter().any(|(did, _, _)| *did == preset.id) {
-                        items.push((preset.id.clone(), preset.name.clone(), preset.description.clone()));
+                        items.push((
+                            preset.id.clone(),
+                            preset.name.clone(),
+                            preset.description.clone(),
+                        ));
                     }
                 }
                 let filter_lower = filter.to_lowercase();
                 let filtered: Vec<_> = if filter.is_empty() {
                     items.iter().collect()
                 } else {
-                    items.iter()
+                    items
+                        .iter()
                         .filter(|(id, name, desc)| {
                             name.to_lowercase().contains(&filter_lower)
                                 || desc.to_lowercase().contains(&filter_lower)

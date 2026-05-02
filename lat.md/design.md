@@ -22,6 +22,8 @@ Select rows still render through [[src/components/unified_list_item/render.rs#Un
 
 Footer ownership stays single-source. When the native main-window footer reports the `select_prompt` surface, select renders the shared native-footer spacer instead of the GPUI hint strip so the prompt cannot stack two footer rows.
 
+Built-in renderers delegate native footer ownership through `main_window_footer_slot` rather than checking `active_main_window_footer_surface()` directly. PromptFooter exceptions such as Design Gallery and Kit Store stay off the native footer map until their domain-specific actions have native footer buttons.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.

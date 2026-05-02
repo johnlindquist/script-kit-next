@@ -122,7 +122,11 @@ impl ScriptListApp {
         })
     }
 
-    fn kit_store_git_error(operation: &str, status: std::process::ExitStatus, stderr: &[u8]) -> String {
+    fn kit_store_git_error(
+        operation: &str,
+        status: std::process::ExitStatus,
+        stderr: &[u8],
+    ) -> String {
         let stderr = String::from_utf8_lossy(stderr).trim().to_string();
         format!(
             "{} failed with status {}{}",
@@ -184,7 +188,9 @@ impl ScriptListApp {
         Ok(hash)
     }
 
-    fn kit_store_install(result: &KitStoreSearchResult) -> Result<script_kit_gpui::kit_store::InstalledKit, String> {
+    fn kit_store_install(
+        result: &KitStoreSearchResult,
+    ) -> Result<script_kit_gpui::kit_store::InstalledKit, String> {
         let repo_url = if result.clone_url.is_empty() {
             return Err("Selected kit is missing clone URL".to_string());
         } else {
@@ -193,7 +199,8 @@ impl ScriptListApp {
 
         // Delegate clone + plugin.json synthesis to git_ops, which installs
         // directly into the canonical plugin root (`<kit_path>/kit/<plugin-id>/`).
-        let (plugin_id, install_path) = script_kit_gpui::kit_store::git_ops::install_kit(&repo_url)?;
+        let (plugin_id, install_path) =
+            script_kit_gpui::kit_store::git_ops::install_kit(&repo_url)?;
 
         let git_hash = Self::kit_store_git_hash(&install_path)?;
         let mut kits = Self::kit_store_list_installed();
@@ -288,7 +295,11 @@ impl ScriptListApp {
         }
     }
 
-    fn kit_store_install_selected_result(&mut self, selected: &KitStoreSearchResult, cx: &mut Context<Self>) {
+    fn kit_store_install_selected_result(
+        &mut self,
+        selected: &KitStoreSearchResult,
+        cx: &mut Context<Self>,
+    ) {
         let selected = selected.clone();
 
         self.toast_manager.push(
@@ -342,16 +353,17 @@ impl ScriptListApp {
         .detach();
     }
 
-    fn kit_store_update_selected_kit(&mut self, kit: &script_kit_gpui::kit_store::InstalledKit, cx: &mut Context<Self>) {
+    fn kit_store_update_selected_kit(
+        &mut self,
+        kit: &script_kit_gpui::kit_store::InstalledKit,
+        cx: &mut Context<Self>,
+    ) {
         let kit = kit.clone();
         let kit_name = kit.name.clone();
 
         self.toast_manager.push(
-            components::toast::Toast::info(
-                format!("Updating '{}'...", kit_name),
-                &self.theme,
-            )
-            .duration_ms(Some(TOAST_INFO_MS)),
+            components::toast::Toast::info(format!("Updating '{}'...", kit_name), &self.theme)
+                .duration_ms(Some(TOAST_INFO_MS)),
         );
         cx.notify();
 
@@ -390,16 +402,17 @@ impl ScriptListApp {
         .detach();
     }
 
-    fn kit_store_remove_selected_kit(&mut self, kit: &script_kit_gpui::kit_store::InstalledKit, cx: &mut Context<Self>) {
+    fn kit_store_remove_selected_kit(
+        &mut self,
+        kit: &script_kit_gpui::kit_store::InstalledKit,
+        cx: &mut Context<Self>,
+    ) {
         let kit = kit.clone();
         let kit_name = kit.name.clone();
 
         self.toast_manager.push(
-            components::toast::Toast::info(
-                format!("Removing '{}'...", kit_name),
-                &self.theme,
-            )
-            .duration_ms(Some(TOAST_INFO_MS)),
+            components::toast::Toast::info(format!("Removing '{}'...", kit_name), &self.theme)
+                .duration_ms(Some(TOAST_INFO_MS)),
         );
         cx.notify();
 
@@ -460,10 +473,9 @@ impl ScriptListApp {
         let opacity = self.theme.get_opacity();
         let text_primary = chrome.text_primary_hex;
         let text_name = rgba((chrome.text_primary_hex << 8) | 0xff);
-        let text_muted = rgba((chrome.text_primary_hex << 8)
-            | ((opacity.text_muted_alpha * 255.0) as u32));
-        let text_hint = rgba((chrome.text_primary_hex << 8)
-            | ((opacity.text_hint * 255.0) as u32));
+        let text_muted =
+            rgba((chrome.text_primary_hex << 8) | ((opacity.text_muted_alpha * 255.0) as u32));
+        let text_hint = rgba((chrome.text_primary_hex << 8) | ((opacity.text_hint * 255.0) as u32));
         let text_placeholder = rgba(chrome.placeholder_text_rgba);
         let divider_bg = rgba(chrome.divider_rgba);
         let selected_row_bg = rgba(chrome.selection_rgba);
@@ -573,9 +585,7 @@ impl ScriptListApp {
                     cx.spawn(async move |this, cx| {
                         let results = cx
                             .background_executor()
-                            .spawn(async move {
-                                Self::kit_store_search_results(&query_for_fetch)
-                            })
+                            .spawn(async move { Self::kit_store_search_results(&query_for_fetch) })
                             .await;
                         let _ = this.update(cx, |this, cx| {
                             // Guard: only apply if query still matches (stale check)
@@ -649,7 +659,10 @@ impl ScriptListApp {
                                 let result_for_install = result.clone();
 
                                 div()
-                                    .id(ElementId::NamedInteger("kit-store-browse-row".into(), ix as u64))
+                                    .id(ElementId::NamedInteger(
+                                        "kit-store-browse-row".into(),
+                                        ix as u64,
+                                    ))
                                     .w_full()
                                     .h(px(KIT_STORE_ROW_HEIGHT))
                                     .px(px(12.0))
@@ -660,13 +673,17 @@ impl ScriptListApp {
                                     .justify_between()
                                     .gap(px(12.0))
                                     .when(is_selected, |row| row.bg(selected_row_bg))
-                                    .when(!is_selected, |row| row.hover(move |style| style.bg(hover_row_bg)))
+                                    .when(!is_selected, |row| {
+                                        row.hover(move |style| style.bg(hover_row_bg))
+                                    })
                                     .cursor_pointer()
                                     .on_click(move |_event, _window, cx| {
                                         if let Some(entity) = row_entity.upgrade() {
                                             entity.update(cx, |this, cx| {
-                                                if let AppView::BrowseKitsView { selected_index, .. } =
-                                                    &mut this.current_view
+                                                if let AppView::BrowseKitsView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
                                                 {
                                                     *selected_index = ix;
                                                 }
@@ -717,7 +734,10 @@ impl ScriptListApp {
                                     )
                                     .child(
                                         div()
-                                            .id(ElementId::NamedInteger("kit-store-install-btn".into(), ix as u64))
+                                            .id(ElementId::NamedInteger(
+                                                "kit-store-install-btn".into(),
+                                                ix as u64,
+                                            ))
                                             .px(px(10.0))
                                             .py(px(6.0))
                                             .rounded(px(6.0))
@@ -851,12 +871,7 @@ impl ScriptListApp {
                             .child(list_scrollbar),
                     ),
             )
-            .child(if matches!(
-                crate::footer_popup::active_main_window_footer_surface(),
-                Some("browse_kits")
-            ) {
-                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-            } else {
+            .child(
                 PromptFooter::new(
                     PromptFooterConfig::new()
                         .primary_label("Install")
@@ -866,8 +881,8 @@ impl ScriptListApp {
                         .secondary_shortcut("esc"),
                     PromptFooterColors::from_theme(&self.theme),
                 )
-                .into_any_element()
-            })
+                .into_any_element(),
+            )
             .into_any_element()
     }
 
@@ -891,10 +906,9 @@ impl ScriptListApp {
         let chrome = crate::theme::AppChromeColors::from_theme(&self.theme);
         let opacity = self.theme.get_opacity();
         let text_name = rgba((chrome.text_primary_hex << 8) | 0xff);
-        let text_muted = rgba((chrome.text_primary_hex << 8)
-            | ((opacity.text_muted_alpha * 255.0) as u32));
-        let text_hint = rgba((chrome.text_primary_hex << 8)
-            | ((opacity.text_hint * 255.0) as u32));
+        let text_muted =
+            rgba((chrome.text_primary_hex << 8) | ((opacity.text_muted_alpha * 255.0) as u32));
+        let text_hint = rgba((chrome.text_primary_hex << 8) | ((opacity.text_hint * 255.0) as u32));
         let divider_bg = rgba(chrome.divider_rgba);
         let selected_row_bg = rgba(chrome.selection_rgba);
         let hover_row_bg = rgba(chrome.hover_rgba);
@@ -1003,7 +1017,10 @@ impl ScriptListApp {
                                 let kit_for_remove = kit.clone();
 
                                 div()
-                                    .id(ElementId::NamedInteger("kit-store-installed-row".into(), ix as u64))
+                                    .id(ElementId::NamedInteger(
+                                        "kit-store-installed-row".into(),
+                                        ix as u64,
+                                    ))
                                     .w_full()
                                     .h(px(KIT_STORE_ROW_HEIGHT))
                                     .px(px(12.0))
@@ -1014,13 +1031,17 @@ impl ScriptListApp {
                                     .justify_between()
                                     .gap(px(12.0))
                                     .when(is_selected, |row| row.bg(selected_row_bg))
-                                    .when(!is_selected, |row| row.hover(move |style| style.bg(hover_row_bg)))
+                                    .when(!is_selected, |row| {
+                                        row.hover(move |style| style.bg(hover_row_bg))
+                                    })
                                     .cursor_pointer()
                                     .on_click(move |_event, _window, cx| {
                                         if let Some(entity) = row_entity.upgrade() {
                                             entity.update(cx, |this, cx| {
-                                                if let AppView::InstalledKitsView { selected_index, .. } =
-                                                    &mut this.current_view
+                                                if let AppView::InstalledKitsView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
                                                 {
                                                     *selected_index = ix;
                                                 }
@@ -1070,7 +1091,10 @@ impl ScriptListApp {
                                             .gap(px(8.0))
                                             .child(
                                                 div()
-                                                    .id(ElementId::NamedInteger("kit-store-update-btn".into(), ix as u64))
+                                                    .id(ElementId::NamedInteger(
+                                                        "kit-store-update-btn".into(),
+                                                        ix as u64,
+                                                    ))
                                                     .px(px(10.0))
                                                     .py(px(6.0))
                                                     .rounded(px(6.0))
@@ -1080,8 +1104,11 @@ impl ScriptListApp {
                                                     .text_color(accent_badge_text)
                                                     .cursor_pointer()
                                                     .on_click(move |_event, _window, cx| {
-                                                        if let Some(entity) = update_btn_entity.upgrade() {
-                                                            let kit_for_update = kit_for_update.clone();
+                                                        if let Some(entity) =
+                                                            update_btn_entity.upgrade()
+                                                        {
+                                                            let kit_for_update =
+                                                                kit_for_update.clone();
                                                             entity.update(cx, |this, cx| {
                                                                 this.kit_store_update_selected_kit(
                                                                     &kit_for_update,
@@ -1094,7 +1121,10 @@ impl ScriptListApp {
                                             )
                                             .child(
                                                 div()
-                                                    .id(ElementId::NamedInteger("kit-store-remove-btn".into(), ix as u64))
+                                                    .id(ElementId::NamedInteger(
+                                                        "kit-store-remove-btn".into(),
+                                                        ix as u64,
+                                                    ))
                                                     .px(px(10.0))
                                                     .py(px(6.0))
                                                     .rounded(px(6.0))
@@ -1104,8 +1134,11 @@ impl ScriptListApp {
                                                     .text_color(badge_text)
                                                     .cursor_pointer()
                                                     .on_click(move |_event, _window, cx| {
-                                                        if let Some(entity) = remove_btn_entity.upgrade() {
-                                                            let kit_for_remove = kit_for_remove.clone();
+                                                        if let Some(entity) =
+                                                            remove_btn_entity.upgrade()
+                                                        {
+                                                            let kit_for_remove =
+                                                                kit_for_remove.clone();
                                                             entity.update(cx, |this, cx| {
                                                                 this.kit_store_remove_selected_kit(
                                                                     &kit_for_remove,
@@ -1187,12 +1220,7 @@ impl ScriptListApp {
                             .child(list_scrollbar),
                     ),
             )
-            .child(if matches!(
-                crate::footer_popup::active_main_window_footer_surface(),
-                Some("installed_kits")
-            ) {
-                crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-            } else {
+            .child(
                 PromptFooter::new(
                     PromptFooterConfig::new()
                         .primary_label("Update")
@@ -1202,8 +1230,8 @@ impl ScriptListApp {
                         .secondary_shortcut("⌫"),
                     PromptFooterColors::from_theme(&self.theme),
                 )
-                .into_any_element()
-            })
+                .into_any_element(),
+            )
             .into_any_element()
     }
 }

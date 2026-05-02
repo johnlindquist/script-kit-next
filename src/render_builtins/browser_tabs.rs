@@ -104,8 +104,7 @@ impl ScriptListApp {
                         }
                         cx.stop_propagation();
                     } else if is_key_enter(key) {
-                        if let Some(tab) =
-                            filtered_tabs.get(*selected_index).map(|m| m.tab.clone())
+                        if let Some(tab) = filtered_tabs.get(*selected_index).map(|m| m.tab.clone())
                         {
                             match crate::browser_tabs::activate_tab(&tab) {
                                 Ok(()) => this.hide_main_and_reset(cx),
@@ -188,41 +187,44 @@ impl ScriptListApp {
                                 let click_entity = click_entity_handle.clone();
                                 let hover_entity = hover_entity_handle.clone();
                                 let tab_for_click = tab.clone();
-                                let click_handler = move |event: &gpui::ClickEvent,
-                                                           _window: &mut Window,
-                                                           cx: &mut gpui::App| {
-                                    if let Some(app_entity) = click_entity.upgrade() {
-                                        let tab = tab_for_click.clone();
-                                        app_entity.update(cx, |this, cx| {
-                                            if let AppView::BrowserTabsView {
-                                                selected_index, ..
-                                            } = &mut this.current_view
-                                            {
-                                                *selected_index = ix;
-                                            }
-                                            cx.notify();
+                                let click_handler =
+                                    move |event: &gpui::ClickEvent,
+                                          _window: &mut Window,
+                                          cx: &mut gpui::App| {
+                                        if let Some(app_entity) = click_entity.upgrade() {
+                                            let tab = tab_for_click.clone();
+                                            app_entity.update(cx, |this, cx| {
+                                                if let AppView::BrowserTabsView {
+                                                    selected_index,
+                                                    ..
+                                                } = &mut this.current_view
+                                                {
+                                                    *selected_index = ix;
+                                                }
+                                                cx.notify();
 
-                                            if let gpui::ClickEvent::Mouse(mouse_event) = event {
-                                                if mouse_event.down.click_count == 2 {
-                                                    if crate::browser_tabs::activate_tab(&tab)
-                                                        .is_ok()
-                                                    {
-                                                        this.hide_main_and_reset(cx);
-                                                    } else {
-                                                        this.toast_manager.push(
-                                                            components::toast::Toast::error(
-                                                                "Failed to activate tab",
-                                                                &this.theme,
-                                                            )
-                                                            .duration_ms(Some(TOAST_ERROR_MS)),
-                                                        );
-                                                        cx.notify();
+                                                if let gpui::ClickEvent::Mouse(mouse_event) = event
+                                                {
+                                                    if mouse_event.down.click_count == 2 {
+                                                        if crate::browser_tabs::activate_tab(&tab)
+                                                            .is_ok()
+                                                        {
+                                                            this.hide_main_and_reset(cx);
+                                                        } else {
+                                                            this.toast_manager.push(
+                                                                components::toast::Toast::error(
+                                                                    "Failed to activate tab",
+                                                                    &this.theme,
+                                                                )
+                                                                .duration_ms(Some(TOAST_ERROR_MS)),
+                                                            );
+                                                            cx.notify();
+                                                        }
                                                     }
                                                 }
-                                            }
-                                        });
-                                    }
-                                };
+                                            });
+                                        }
+                                    };
 
                                 let hover_handler =
                                     move |is_hovered: &bool,
@@ -343,12 +345,11 @@ impl ScriptListApp {
                                 return;
                             };
 
-                            let filtered_len =
-                                crate::browser_tabs::fuzzy_search_browser_tabs(
-                                    &this.cached_browser_tabs,
-                                    &current_filter,
-                                )
-                                .len();
+                            let filtered_len = crate::browser_tabs::fuzzy_search_browser_tabs(
+                                &this.cached_browser_tabs,
+                                &current_filter,
+                            )
+                            .len();
 
                             let Some(new_selected) = this.builtin_scroll_target_from_wheel(
                                 event,
@@ -413,21 +414,15 @@ impl ScriptListApp {
                     )),
             )
             // Footer
-            .child(
-                if matches!(
-                    crate::footer_popup::active_main_window_footer_surface(),
-                    Some("browser_tabs")
-                ) {
-                    crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-                } else {
-                    crate::components::render_simple_hint_strip(
-                        vec![
-                            gpui::SharedString::from("↵ Open Tab"),
-                            gpui::SharedString::from("Esc Back"),
-                        ],
-                        None,
-                    )
-                },
+            .when_some(
+                self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+                    vec![
+                        gpui::SharedString::from("↵ Open Tab"),
+                        gpui::SharedString::from("Esc Back"),
+                    ],
+                    None,
+                )),
+                |d, footer| d.child(footer),
             )
             .into_any_element()
     }

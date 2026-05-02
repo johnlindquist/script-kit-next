@@ -467,20 +467,13 @@ impl ScriptListApp {
                 8,
             ));
 
-        let footer = if matches!(
-            crate::footer_popup::active_main_window_footer_surface(),
-            Some("current_app_commands")
-        ) {
-            crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-        } else {
-            crate::components::render_simple_hint_strip(
-                vec![
-                    gpui::SharedString::from("↵ Run"),
-                    gpui::SharedString::from("Esc Back"),
-                ],
-                None,
-            )
-        };
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            vec![
+                gpui::SharedString::from("↵ Run"),
+                gpui::SharedString::from("Esc Back"),
+            ],
+            None,
+        ));
 
         div()
             .w_full()
@@ -507,7 +500,7 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(content),
             )
-            .child(footer)
+            .when_some(footer, |d, footer| d.child(footer))
             .rounded(px(design_visual.radius_lg))
             .text_color(rgb(chrome.text_primary_hex))
             .font_family(design_typography.font_family)
@@ -532,8 +525,8 @@ mod current_app_commands_chrome_audit {
         let source = production_source();
         assert!(
             source.contains("render_simple_hint_strip(")
-                && source.contains("render_native_main_window_footer_spacer()"),
-            "current_app_commands should use the minimal hint/native-footer spacer chrome"
+                && source.contains("main_window_footer_slot("),
+            "current_app_commands should route minimal hint chrome through the shared footer slot"
         );
         let legacy = "Prompt".to_owned() + "Footer::new(";
         assert_eq!(

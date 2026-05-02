@@ -603,20 +603,13 @@ impl ScriptListApp {
             .py(px(design_spacing.padding_xs))
             .child(list_element);
 
-        let footer = if matches!(
-            crate::footer_popup::active_main_window_footer_surface(),
-            Some("settings")
-        ) {
-            Some(crate::components::prompt_layout_shell::render_native_main_window_footer_spacer())
-        } else {
-            Some(crate::components::render_simple_hint_strip(
-                vec![
-                    gpui::SharedString::from("↵ Open"),
-                    gpui::SharedString::from("Esc Back"),
-                ],
-                None,
-            ))
-        };
+        let footer = self.main_window_footer_slot(crate::components::render_simple_hint_strip(
+            vec![
+                gpui::SharedString::from("↵ Open"),
+                gpui::SharedString::from("Esc Back"),
+            ],
+            None,
+        ));
 
         crate::components::render_minimal_list_prompt_shell_with_footer(
             design_visual.radius_lg,

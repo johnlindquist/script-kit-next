@@ -567,8 +567,10 @@ impl ScriptListApp {
                 self.go_back_or_close(window, cx);
             }
             "theme_chooser_remix" => {
-                let remixed =
-                    Self::build_theme_chooser_remix(self.theme.as_ref(), theme_chooser_remix_seed());
+                let remixed = Self::build_theme_chooser_remix(
+                    self.theme.as_ref(),
+                    theme_chooser_remix_seed(),
+                );
                 self.apply_theme_chooser_theme(remixed, "theme_chooser_action_remix", cx);
             }
             "theme_chooser_reset" => {
@@ -1826,17 +1828,12 @@ impl ScriptListApp {
             ));
 
         // ── Footer: canonical three-key hint strip per .impeccable.md ──
-        let footer = if matches!(
-            crate::footer_popup::active_main_window_footer_surface(),
-            Some("theme_chooser")
-        ) {
-            crate::components::prompt_layout_shell::render_native_main_window_footer_spacer()
-        } else {
+        let footer = self.main_window_footer_slot(
             crate::components::prompt_layout_shell::render_simple_hint_strip(
                 Self::theme_chooser_hint_items(),
                 None,
-            )
-        };
+            ),
+        );
 
         // ── Empty state when filter has no matches ─────────────────
         if filtered_count == 0 {
@@ -1854,7 +1851,7 @@ impl ScriptListApp {
                 .child(header)
                 .child(header_divider)
                 .child(self.render_theme_chooser_empty_state_body(filter, summary, &chrome))
-                .child(footer)
+                .when_some(footer, |d, footer| d.child(footer))
                 .into_any_element();
         }
 
@@ -1890,7 +1887,7 @@ impl ScriptListApp {
                     )
                     .child(preview_panel),
             )
-            .child(footer)
+            .when_some(footer, |d, footer| d.child(footer))
             .into_any_element()
     }
 }
