@@ -317,12 +317,7 @@ impl BatchTargetCapabilities {
             AutomationBatchTargetKind::AcpDetached => Self {
                 display_name: "Detached ACP",
                 unsupported_target_name: "detached ACP",
-                supported_commands: &[
-                    "setInput",
-                    "waitFor",
-                    "selectByValue",
-                    "selectBySemanticId",
-                ],
+                supported_commands: &["setInput", "waitFor", "selectByValue", "selectBySemanticId"],
                 concise_unsupported_message: true,
             },
             AutomationBatchTargetKind::Notes => Self {
@@ -334,12 +329,7 @@ impl BatchTargetCapabilities {
             AutomationBatchTargetKind::ActionsDialog => Self {
                 display_name: "ActionsDialog",
                 unsupported_target_name: "ActionsDialog",
-                supported_commands: &[
-                    "setInput",
-                    "selectByValue",
-                    "selectBySemanticId",
-                    "waitFor",
-                ],
+                supported_commands: &["setInput", "selectByValue", "selectBySemanticId", "waitFor"],
                 concise_unsupported_message: false,
             },
             AutomationBatchTargetKind::PromptPopup => Self {
@@ -364,9 +354,7 @@ fn batch_target_kind_for_resolved_target(
     }
 }
 
-fn supported_batch_commands_for_target(
-    kind: AutomationBatchTargetKind,
-) -> &'static [&'static str] {
+fn supported_batch_commands_for_target(kind: AutomationBatchTargetKind) -> &'static [&'static str] {
     BatchTargetCapabilities::for_target(kind).supported_commands
 }
 
@@ -390,7 +378,10 @@ fn unsupported_batch_command_error(
         ),
     };
     let suggestion = if capabilities.concise_unsupported_message {
-        format!("{} batch supports: {}.", capabilities.display_name, supported)
+        format!(
+            "{} batch supports: {}.",
+            capabilities.display_name, supported
+        )
     } else {
         format!(
             "Use a supported command for {} targets.",
@@ -2916,16 +2907,22 @@ impl ScriptListApp {
                     AppView::SettingsView {
                         filter,
                         selected_index,
-                    } => (
-                        "settings".to_string(),
-                        None,
-                        None,
-                        filter.clone(),
-                        0,
-                        0,
-                        *selected_index as i32,
-                        None,
-                    ),
+                    } => {
+                        let (total, visible_count) =
+                            self.settings_dataset_and_visible_counts(filter);
+                        let selected_value =
+                            self.settings_selected_visible_row_name(filter, *selected_index);
+                        (
+                            "settings".to_string(),
+                            None,
+                            None,
+                            filter.clone(),
+                            total,
+                            visible_count,
+                            *selected_index as i32,
+                            selected_value,
+                        )
+                    }
                     AppView::FavoritesBrowseView {
                         filter,
                         selected_index,

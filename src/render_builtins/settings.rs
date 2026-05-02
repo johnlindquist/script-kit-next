@@ -132,6 +132,31 @@ fn get_settings_items() -> Vec<SettingsItem> {
 }
 
 impl ScriptListApp {
+    fn settings_visible_row_names(&self, filter: &str) -> Vec<String> {
+        let items = get_settings_items();
+        filtered_settings_items(&items, filter)
+            .into_iter()
+            .map(|item| item.name.to_string())
+            .collect()
+    }
+
+    fn settings_dataset_and_visible_counts(&self, filter: &str) -> (usize, usize) {
+        let items = get_settings_items();
+        let visible_count = filtered_settings_items(&items, filter).len();
+        (items.len(), visible_count)
+    }
+
+    fn settings_selected_visible_row_name(
+        &self,
+        filter: &str,
+        selected_index: usize,
+    ) -> Option<String> {
+        let items = get_settings_items();
+        filtered_settings_items(&items, filter)
+            .get(selected_index)
+            .map(|item| item.name.to_string())
+    }
+
     /// Execute a settings action selected from the settings hub.
     fn execute_settings_action(
         &mut self,
