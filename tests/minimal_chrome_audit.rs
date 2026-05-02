@@ -366,6 +366,28 @@ fn template_prompt_render_has_tracing_and_uses_shared_helpers() {
         "template prompt should use shared prompt_field_style"
     );
     assert!(
+        source.contains("prompt_text_palette("),
+        "template prompt should use shared prompt_text_palette"
+    );
+    assert!(
+        source.contains("template-fields-scroll") && source.contains(".overflow_y_scrollbar()"),
+        "template prompt should keep placeholder fields in a scrollable region"
+    );
+    assert!(
+        outer_source.contains("template_prompt_hints()")
+            && outer_source.contains("emit_surface_prompt_hint_audit("),
+        "template prompt should use truthful surface-specific footer hints"
+    );
+    let ui_window_source = include_str!("../src/app_impl/ui_window.rs");
+    assert!(
+        ui_window_source.contains("AppView::TemplatePrompt")
+            && ui_window_source
+                .contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Submit\")")
+            && ui_window_source
+                .contains("FooterButtonConfig::new(FooterAction::Ai, \"⇥\", \"Next Field\")"),
+        "native template footer should advertise Submit and Next Field instead of Run/AI"
+    );
+    assert!(
         !source.contains("rgb(0x"),
         "template prompt should not contain hardcoded hex rgb colors"
     );
