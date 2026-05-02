@@ -1830,7 +1830,7 @@ mod prompt_layout_shell_tests {
     }
 
     #[test]
-    fn select_prompt_uses_universal_hint_strip() {
+    fn select_prompt_uses_footer_aware_universal_hint_strip() {
         let source = include_str!("../prompts/select/render.rs");
         let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
         let render_code = &source[..render_fn_end];
@@ -1842,6 +1842,11 @@ mod prompt_layout_shell_tests {
         assert!(
             render_code.contains("emit_prompt_hint_audit("),
             "select prompt should emit a prompt hint audit"
+        );
+        assert!(
+            render_code.contains("render_minimal_list_prompt_shell_with_footer(")
+                && render_code.contains("render_native_main_window_footer_spacer()"),
+            "select prompt should swap the GPUI hint strip for a native footer spacer when needed"
         );
         assert!(
             !render_code.contains("SharedString::from(\"↵ Select\")"),
