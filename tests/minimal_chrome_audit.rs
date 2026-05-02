@@ -518,6 +518,54 @@ fn webcam_prompt_has_chrome_audit_and_no_redundant_chrome() {
 }
 
 #[test]
+fn mic_protocol_stays_stubbed_until_media_surface_exists() {
+    let execute_script = include_str!("../src/execute_script/mod.rs");
+    let prompt_messages = include_str!("../src/main_sections/prompt_messages.rs");
+    let prompt_handler = include_str!("../src/prompt_handler/mod.rs");
+    let app_view_state = include_str!("../src/main_sections/app_view_state.rs");
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let micro_render = include_str!("../src/render_prompts/micro.rs");
+    let micro_fn_start = micro_render
+        .find("fn render_micro_prompt(")
+        .expect("micro render fn exists");
+    let micro_fn_end = micro_render[micro_fn_start..]
+        .find("\n    fn ")
+        .map(|ix| micro_fn_start + ix)
+        .unwrap_or_else(|| {
+            micro_render[micro_fn_start..]
+                .find("\n#[cfg(test)]")
+                .map(|ix| micro_fn_start + ix)
+                .unwrap_or(micro_render.len())
+        });
+    let micro_fn = &micro_render[micro_fn_start..micro_fn_end];
+
+    assert!(
+        execute_script.contains("Message::Mic { id }")
+            && execute_script.contains("Some(PromptMessage::MicComingSoon { id })"),
+        "SDK mic() should stay routed to the explicit coming-soon prompt message until a real media surface exists"
+    );
+    assert!(
+        prompt_messages.contains("MicComingSoon"),
+        "mic() should keep a named stub message instead of borrowing the micro prompt"
+    );
+    assert!(
+        prompt_handler.contains("self.show_prompt_coming_soon_toast(\"mic()\", cx)"),
+        "mic() should surface as coming-soon feedback rather than launcher footer chrome"
+    );
+    assert!(
+        !app_view_state.contains("MicView") && !ui_window.contains("mic_prompt"),
+        "mic() must not expose native-footer surface metadata until a real MicView is implemented"
+    );
+    assert!(
+        micro_fn.contains("\"render_prompts::micro\"")
+            && micro_fn.contains("\"ultra_compact_no_footer\"")
+            && !micro_fn.contains("PromptFooter::new("),
+        "micro() is the ultra-compact text prompt and should not be repurposed as microphone UI"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"mic_stub\",\"mic_coming_soon\":true,\"micro_prompt_distinct\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn naming_prompt_render_has_tracing_and_uses_shared_helpers() {
     let source = include_str!("../src/prompts/naming/render.rs");
     let outer_source = include_str!("../src/render_prompts/other.rs");
