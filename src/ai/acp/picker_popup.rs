@@ -7,16 +7,14 @@ use gpui::{
     StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
 };
 
-use crate::ai::context_picker_row::{
-    render_soft_compact_picker_row, CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
-};
 use crate::ai::window::context_picker::empty_state_hints;
 use crate::ai::window::context_picker::types::{
     ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger,
 };
 use crate::components::inline_dropdown::{
-    inline_dropdown_visible_range_from_start, InlineDropdown, InlineDropdownColors,
-    InlineDropdownEmptyState, InlineDropdownSynopsis,
+    inline_dropdown_visible_range_from_start, render_soft_compact_picker_row, InlineDropdown,
+    InlineDropdownColors, InlineDropdownEmptyState, InlineDropdownSynopsis,
+    CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
 };
 
 use super::view::AcpChatView;
@@ -467,7 +465,7 @@ impl AcpMentionPopupWindow {
     }
 
     fn render_empty_state(&self, cx: &mut Context<Self>) -> gpui::AnyElement {
-        use crate::ai::context_picker_row::{GHOST, HINT};
+        use crate::components::inline_dropdown::{GHOST, HINT};
         use crate::list_item::FONT_MONO;
 
         let theme = crate::theme::get_cached_theme();
@@ -554,11 +552,11 @@ mod tests {
     use super::{
         popup_bounds, popup_height, should_submit_acp_picker_row_click, AcpMentionPopupSnapshot,
     };
-    use crate::ai::context_picker_row::{
-        CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
-    };
     use crate::ai::window::context_picker::types::{
         ContextPickerItem, ContextPickerItemKind, ContextPickerTrigger, SlashCommandPayload,
+    };
+    use crate::components::inline_dropdown::{
+        CONTEXT_PICKER_SYNOPSIS_HEIGHT, SOFT_COMPACT_PICKER_ROW_HEIGHT,
     };
     use gpui::SharedString;
 

@@ -8,8 +8,9 @@ use gpui::{
     StatefulInteractiveElement, Styled, WeakEntity, Window, WindowHandle,
 };
 
-use crate::ai::context_picker_row::render_dense_monoline_picker_row_with_accessory;
-use crate::components::inline_dropdown::{InlineDropdown, InlineDropdownColors};
+use crate::components::inline_dropdown::{
+    render_dense_monoline_picker_row_with_accessory, InlineDropdown, InlineDropdownColors,
+};
 use gpui_component::{IconName, IconNamed};
 
 use super::view::AcpChatView;

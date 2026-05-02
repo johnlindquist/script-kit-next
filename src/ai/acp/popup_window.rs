@@ -2,8 +2,8 @@
 //!
 //! Window mechanics (bounds math, no-focus-steal config, child-window attach,
 //! AppKit pointer plumbing) moved to the shared
-//! [`crate::components::inline_popup_window`] module so ACP and the upcoming
-//! menu-syntax `:` / `+` trigger popup share a single implementation.
+//! [`crate::components::inline_popup_window`] module so ACP and the
+//! menu-syntax `:`, `;`, and `!` trigger popups share a single implementation.
 //!
 //! This file remains as a thin compatibility facade: every `DENSE_PICKER_*`
 //! / `dense_picker_*` / `popup_*` name historically exposed by this module is
@@ -15,7 +15,7 @@
 //! on top so callers can keep passing a bare item count and get
 //! `CONTEXT_PICKER_ROW_HEIGHT` applied automatically.
 
-use crate::ai::context_picker_row::CONTEXT_PICKER_ROW_HEIGHT;
+use crate::components::inline_dropdown::CONTEXT_PICKER_ROW_HEIGHT;
 
 // Re-export constants under ACP-compatible names. Consumers continue to
 // reference them via `super::popup_window::DENSE_PICKER_*` without knowing the

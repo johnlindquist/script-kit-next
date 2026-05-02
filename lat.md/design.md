@@ -132,9 +132,19 @@ Inline `@` mentions are designed as stable pointers into other context surfaces.
 
 Parent-relative popup windows and consistent row heights keep the app feeling like one system instead of a stack of unrelated dialogs. That rule matters most for the main window, actions popup, and context-picker surfaces.
 
-Window mechanics for dense inline popups (ACP `/` slash commands, ACP `@` mentions, ACP model selector, ACP history, and the upcoming menu-syntax `:`/`+` trigger popup) share one implementation in [[src/components/inline_popup_window.rs#inline_popup_window_options]]. The shared module owns popup bounds math, `no-focus-steal` window options, child-window attach/detach, and AppKit pointer plumbing. Surface-specific files like [[src/ai/acp/popup_window.rs]] remain as thin facades that re-export the shared symbols under their ACP-compatible names, so historical callers and source-text audits stay stable.
+Window mechanics for dense inline popups (ACP `/` slash commands, ACP `@` mentions, ACP model selector, ACP history, and menu-syntax `:`, `;`, and `!` trigger popups) share one implementation in [[src/components/inline_popup_window.rs#inline_popup_window_options]]. The shared module owns popup bounds math, `no-focus-steal` window options, child-window attach/detach, and AppKit pointer plumbing. Surface-specific files like [[src/ai/acp/popup_window.rs]] remain as thin facades that re-export the shared symbols under their ACP-compatible names, so historical callers and source-text audits stay stable.
 
 Row rendering for those popups is owned by [[src/components/inline_dropdown/mod.rs]] (`InlineDropdown`, `render_soft_compact_picker_row`, `inline_dropdown_visible_range_from_start`, `InlineDropdownColors`). The neutral row **shape** that cross-surface callers and the menu-syntax trigger popup carry is [[src/components/inline_picker.rs#InlinePickerRow]] — a behavior-free struct with `id`, `kind`, title/token/subtitle/detail/example text slots, optional leading visual, badges, accessory, precomputed highlight ranges, and an `enabled` flag. Owners map their domain row (ACP's `ContextPickerItem`, menu-syntax's `TriggerPickerRow`) into `InlinePickerRow` via a small adapter function kept in the owner's module, never in the shared file. The shared file also exposes enabled-aware selection helpers (`inline_picker_next_enabled_index`, `inline_picker_previous_enabled_index`, `inline_picker_normalize_selected_index`) that skip disabled rows — something the generic `inline_dropdown` selection helpers do not know about.
+
+ACP popup files should source shared row renderers and row-height constants directly from `inline_dropdown`. The ACP-local `context_picker_row` module must not become the owner of popup row mechanics again.
+
+Menu-syntax popup rows keep footer actions explicit but clickable. Keyboard default selection skips footer rows, while mouse clicks on enabled footer rows still route through the same accept outcome as keyboard activation.
+
+Menu-syntax popup updates preserve the current visible page before handing the new snapshot back to `inline_dropdown_visible_range_from_start`. This keeps arrow navigation from shifting the window on every row movement once the selection has left the first page.
+
+Menu-syntax popup window height reserves the shared synopsis strip when the selected row has detail or example text. The row window and synopsis chrome should size together instead of clipping the lower strip.
+
+Menu-syntax trigger popups register as attached automation windows with the `menuSyntaxTriggerPopup` surface. Runtime screenshot and layout probes should target that child window rather than the suppressed main surface behind it.
 
 The detached actions dialog is intentionally footerless. Action rows already expose their shortcuts inline, so extra footer chrome would duplicate information and compete with the list.
 
