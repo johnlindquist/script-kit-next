@@ -117,6 +117,12 @@ Browse maps native `Run` to Install and `Close` to Back, or Clear Search while a
 
 Stdin-driven view transitions explicitly resync the native footer before notifying, so automation entry paths cannot leave the previous launcher footer visible over Kit Store surfaces.
 
+## Design Gallery Footer
+
+Design Gallery keeps its single Select affordance in the native footer slot, preventing an in-content PromptFooter from stacking with the AppKit footer.
+
+The gallery registers the `design_gallery` native footer surface and renders only a `↵ Select` fallback hint through `main_window_footer_slot`. Native footer Run is handled by a gallery-specific guard before launcher fallback, preserving the current no-op Select behavior until a real selection action exists.
+
 ## Settings Hub
 
 Settings is a mini built-in list for operational configuration actions, with renderer, automation, and state receipts sharing the same filtered-row projection.

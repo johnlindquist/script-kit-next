@@ -198,7 +198,9 @@ impl ScriptListApp {
 
         match action {
             crate::footer_popup::FooterAction::Run => {
-                if self.dispatch_kit_store_primary_footer_action(cx) {
+                if self.dispatch_design_gallery_select_footer_action(cx) {
+                    return;
+                } else if self.dispatch_kit_store_primary_footer_action(cx) {
                     return;
                 } else if let AppView::TemplatePrompt { entity, .. } = &self.current_view {
                     let entity = entity.clone();
@@ -317,6 +319,20 @@ impl ScriptListApp {
         true
     }
 
+    fn dispatch_design_gallery_select_footer_action(&mut self, cx: &mut Context<Self>) -> bool {
+        if !matches!(self.current_view, AppView::DesignGalleryView { .. }) {
+            return false;
+        }
+
+        tracing::info!(
+            target: "script_kit::footer_popup",
+            event = "design_gallery_footer_select_ignored",
+            "Design Gallery native footer Select preserves current no-op selection behavior"
+        );
+        cx.notify();
+        true
+    }
+
     /// Start a one-time async bridge that drains `footer_action_channel()` and
     /// dispatches each action into the existing `ScriptListApp` methods.
     fn ensure_main_footer_action_listener(&self, window: &Window, cx: &mut Context<Self>) {
@@ -400,6 +416,7 @@ impl ScriptListApp {
             AppView::AppLauncherView { .. } => Some("app_launcher"),
             AppView::WindowSwitcherView { .. } => Some("window_switcher"),
             AppView::BrowserTabsView { .. } => Some("browser_tabs"),
+            AppView::DesignGalleryView { .. } => Some("design_gallery"),
             AppView::ScratchPadView { .. } => Some("scratch_pad"),
             AppView::ThemeChooserView { .. } => Some("theme_chooser"),
             AppView::ProcessManagerView { .. } => Some("process_manager"),
@@ -625,6 +642,24 @@ impl ScriptListApp {
                 view = ?self.current_view,
                 button_count = buttons.len(),
                 "Resolved DropPrompt footer buttons"
+            );
+            return buttons;
+        }
+
+        if matches!(self.current_view, AppView::DesignGalleryView { .. }) {
+            use crate::footer_popup::{FooterAction, FooterButtonConfig};
+
+            let footer_disabled = self.main_window_footer_buttons_blocked();
+            let buttons = vec![
+                FooterButtonConfig::new(FooterAction::Run, "↵", "Select")
+                    .enabled(!footer_disabled),
+            ];
+            tracing::info!(
+                target: "script_kit::footer_popup",
+                event = "main_window_footer_buttons_resolved",
+                view = ?self.current_view,
+                button_count = buttons.len(),
+                "Resolved Design Gallery footer buttons"
             );
             return buttons;
         }
@@ -976,18 +1011,10 @@ impl ScriptListApp {
                 };
                 Some((ViewType::ScriptList, filtered_count))
             }
-            AppView::DesignGalleryView { filter, .. } => {
-                // Calculate total gallery items (separators + icons)
-                let total_items = designs::separator_variations::SeparatorStyle::count()
-                    + designs::icon_variations::total_icon_count();
-                let filtered_count = if filter.is_empty() {
-                    total_items
-                } else {
-                    // For now, return total - filtering can be added later
-                    total_items
-                };
-                Some((ViewType::ScriptList, filtered_count))
-            }
+            AppView::DesignGalleryView { filter, .. } => Some((
+                ViewType::ScriptList,
+                crate::design_gallery_filtered_len(filter),
+            )),
             #[cfg(feature = "storybook")]
             AppView::DesignExplorerView { .. } => Some((ViewType::DivPrompt, 0)),
             AppView::ProcessManagerView { filter, .. } => {

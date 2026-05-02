@@ -237,7 +237,7 @@ use ui_foundation::get_vibrancy_background;
 use warning_banner::{WarningBanner, WarningBannerColors};
 use window_resize::{initial_window_height, reset_resize_debounce, resize_to_view_sync, ViewType};
 
-use components::{FormFieldColors, PromptFooter, PromptFooterColors, PromptFooterConfig};
+use components::{FormFieldColors, PromptFooterColors, PromptFooterConfig};
 use designs::{get_tokens, render_design_item, DesignVariant};
 use frecency::FrecencyStore;
 use list_item::{

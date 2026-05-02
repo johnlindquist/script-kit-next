@@ -841,6 +841,89 @@ fn kit_store_footer_uses_single_native_slot_owner() {
 }
 
 #[test]
+fn design_gallery_footer_uses_single_native_slot_owner() {
+    let source = include_str!("../src/render_builtins/design_gallery.rs");
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+
+    assert!(
+        !source.contains("PromptFooter::new("),
+        "Design Gallery should not render an in-content PromptFooter that can stack with the native footer"
+    );
+    assert!(
+        source.contains("main_window_footer_slot(")
+            && source.contains("render_simple_hint_strip(")
+            && source.contains("\"↵ Select\""),
+        "Design Gallery should route its fallback Select hint through the native footer slot"
+    );
+    assert!(
+        !source.contains("active_main_window_footer_surface()"),
+        "Design Gallery renderer should delegate native-footer policy to main_window_footer_slot"
+    );
+    assert!(
+        ui_window.contains("AppView::DesignGalleryView { .. } => Some(\"design_gallery\")"),
+        "Design Gallery should register a native footer surface"
+    );
+    assert!(
+        ui_window.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Select\")"),
+        "Design Gallery native footer should preserve the visible Select shortcut"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"design_gallery\",\"single_footer_owner\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn design_gallery_footer_run_does_not_execute_launcher_selection() {
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let run_start = ui_window
+        .find("FooterAction::Run =>")
+        .expect("footer Run branch exists");
+    let run_branch = &ui_window[run_start..run_start + 1800];
+    assert!(
+        run_branch.contains("dispatch_design_gallery_select_footer_action(cx)")
+            && run_branch.contains("execute_selected(cx)")
+            && run_branch.find("dispatch_design_gallery_select_footer_action(cx)")
+                < run_branch.find("execute_selected(cx)"),
+        "Design Gallery native footer Select must be handled before launcher execute_selected fallback"
+    );
+}
+
+#[test]
+fn design_gallery_native_footer_is_select_only() {
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let branch_end = ui_window
+        .find("Resolved Design Gallery footer buttons")
+        .expect("Design Gallery footer branch exists");
+    let branch = &ui_window[branch_end.saturating_sub(700)..branch_end];
+    assert!(
+        branch.contains("FooterButtonConfig::new(FooterAction::Run, \"↵\", \"Select\")"),
+        "Design Gallery footer should advertise Select"
+    );
+    assert!(
+        !branch.contains("FooterAction::Ai")
+            && !branch.contains("FooterAction::Actions")
+            && !branch.contains("\"Run\""),
+        "Design Gallery footer should not inherit launcher Run/AI/Actions chrome"
+    );
+}
+
+#[test]
+fn design_gallery_sizing_uses_render_projection() {
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let sizing_start = ui_window
+        .find("pub(crate) fn calculate_window_size_params")
+        .expect("calculate_window_size_params exists");
+    let sizing = &ui_window[sizing_start..];
+    assert!(
+        sizing.contains("AppView::DesignGalleryView { filter, .. }")
+            && sizing.contains("design_gallery_filtered_len(filter)"),
+        "Design Gallery sizing should use the same filtered row projection as render"
+    );
+    assert!(
+        !sizing.contains("separator_variations::SeparatorStyle::count()"),
+        "Design Gallery sizing should not use stale separator/icon-only counts"
+    );
+}
+
+#[test]
 fn naming_prompt_render_has_tracing_and_uses_shared_helpers() {
     let source = include_str!("../src/prompts/naming/render.rs");
     let outer_source = include_str!("../src/render_prompts/other.rs");
