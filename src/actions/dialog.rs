@@ -215,6 +215,41 @@ pub enum GroupedActionItem {
     Item(usize),
 }
 
+#[inline]
+pub(super) fn is_selectable_row(row: &GroupedActionItem) -> bool {
+    matches!(row, GroupedActionItem::Item(_))
+}
+
+pub(super) fn first_selectable_index(rows: &[GroupedActionItem]) -> Option<usize> {
+    rows.iter().position(is_selectable_row)
+}
+
+pub(super) fn last_selectable_index(rows: &[GroupedActionItem]) -> Option<usize> {
+    rows.iter().rposition(is_selectable_row)
+}
+
+pub(super) fn selectable_index_at_or_before(
+    rows: &[GroupedActionItem],
+    start: usize,
+) -> Option<usize> {
+    if rows.is_empty() {
+        return None;
+    }
+    let clamped = start.min(rows.len() - 1);
+    (0..=clamped).rev().find(|&ix| is_selectable_row(&rows[ix]))
+}
+
+pub(super) fn selectable_index_at_or_after(
+    rows: &[GroupedActionItem],
+    start: usize,
+) -> Option<usize> {
+    if rows.is_empty() {
+        return None;
+    }
+    let clamped = start.min(rows.len() - 1);
+    (clamped..rows.len()).find(|&ix| is_selectable_row(&rows[ix]))
+}
+
 /// Coerce action selection to skip section headers during navigation
 ///
 /// When the given index lands on a header:
@@ -2276,37 +2311,34 @@ impl ActionsDialog {
             return;
         }
 
-        // Search backwards from current position to find the previous selectable item
-        // This correctly skips section headers when moving up
-        for i in (0..self.selected_index).rev() {
-            if matches!(self.grouped_items.get(i), Some(GroupedActionItem::Item(_))) {
-                self.selected_index = i;
-                self.reveal_selection_after_navigation(cx);
-                logging::log_debug(
-                    "ACTIONS_SCROLL",
-                    &format!("Up: selected_index={}", self.selected_index),
-                );
-                return;
-            }
+        if let Some(i) = selectable_index_at_or_before(&self.grouped_items, self.selected_index - 1)
+        {
+            self.selected_index = i;
+            self.reveal_selection_after_navigation(cx);
+            logging::log_debug(
+                "ACTIONS_SCROLL",
+                &format!("Up: selected_index={}", self.selected_index),
+            );
         }
     }
 
     /// Move selection down, skipping section headers
     pub fn move_down(&mut self, cx: &mut Context<Self>) {
-        if self.selected_index < self.grouped_items.len().saturating_sub(1) {
-            let new_index = self.selected_index + 1;
-            // Skip section headers - search forward
-            for i in new_index..self.grouped_items.len() {
-                if matches!(self.grouped_items.get(i), Some(GroupedActionItem::Item(_))) {
-                    self.selected_index = i;
-                    self.reveal_selection_after_navigation(cx);
-                    logging::log_debug(
-                        "ACTIONS_SCROLL",
-                        &format!("Down: selected_index={}", self.selected_index),
-                    );
-                    break;
-                }
-            }
+        if self.selected_index >= self.grouped_items.len().saturating_sub(1) {
+            return;
+        }
+
+        let Some(start) = self.selected_index.checked_add(1) else {
+            return;
+        };
+
+        if let Some(i) = selectable_index_at_or_after(&self.grouped_items, start) {
+            self.selected_index = i;
+            self.reveal_selection_after_navigation(cx);
+            logging::log_debug(
+                "ACTIONS_SCROLL",
+                &format!("Down: selected_index={}", self.selected_index),
+            );
         }
     }
 
@@ -3820,13 +3852,30 @@ mod tests {
     use super::{
         action_subtitle_for_display, actions_dialog_scrollbar_fade_duration,
         actions_dialog_scrollbar_fade_opacity, actions_dialog_scrollbar_viewport_height,
-        clear_duplicate_action_shortcuts, is_destructive_action, matching_action_id_for_keystroke,
-        matching_filtered_action_id_for_keystroke, should_render_section_separator, ActionsDialog,
-        ActionsDialogChromeAudit, ActionsDialogRuntimeAudit,
+        clear_duplicate_action_shortcuts, first_selectable_index, is_destructive_action,
+        last_selectable_index, matching_action_id_for_keystroke,
+        matching_filtered_action_id_for_keystroke, selectable_index_at_or_after,
+        selectable_index_at_or_before, should_render_section_separator, ActionsDialog,
+        ActionsDialogChromeAudit, ActionsDialogRuntimeAudit, GroupedActionItem,
     };
     use crate::actions::types::{Action, ActionCategory, ScriptInfo, SectionStyle};
     use crate::menu_syntax::{MenuSyntaxAction, MenuSyntaxActionKind};
     use crate::menu_syntax_actions::{PowerSyntaxActionSection, SectionMode};
+
+    #[test]
+    fn selectable_index_helpers_skip_section_headers_directionally() {
+        let rows = vec![
+            GroupedActionItem::SectionHeader("One".to_string()),
+            GroupedActionItem::Item(0),
+            GroupedActionItem::SectionHeader("Two".to_string()),
+            GroupedActionItem::Item(1),
+        ];
+
+        assert_eq!(first_selectable_index(&rows), Some(1));
+        assert_eq!(last_selectable_index(&rows), Some(3));
+        assert_eq!(selectable_index_at_or_before(&rows, 2), Some(1));
+        assert_eq!(selectable_index_at_or_after(&rows, 2), Some(3));
+    }
 
     #[test]
     fn destructive_detection_matches_known_ids() {
