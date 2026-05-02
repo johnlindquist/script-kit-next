@@ -375,6 +375,24 @@ fn footer_popup_accepts_config_driven_refresh() {
 }
 
 #[test]
+fn footer_popup_notify_none_removes_native_footer_host() {
+    // @lat: [[lat.md/windowing#Windowing#Operational Rules]]
+    let notify_pos = FOOTER_POPUP_SOURCE
+        .find("pub(crate) fn notify_main_footer_popup")
+        .expect("footer_popup.rs must define notify_main_footer_popup");
+    let notify_section =
+        &FOOTER_POPUP_SOURCE[notify_pos..FOOTER_POPUP_SOURCE.len().min(notify_pos + 1200)];
+
+    assert!(
+        notify_section.contains("if let Some(config) = config")
+            && notify_section.contains("refresh_main_footer_host(ns_window, config);")
+            && notify_section
+                .contains("} else {\n                remove_main_footer_host(ns_window);"),
+        "notify_main_footer_popup(None) must remove the stale native footer host"
+    );
+}
+
+#[test]
 fn footer_popup_uses_subtle_hover_for_native_footer_buttons() {
     assert!(
         FOOTER_POPUP_SOURCE.contains("let hover_ns: id = ns_color_from_rgba(chrome.hover_rgba);"),
