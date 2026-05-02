@@ -3368,6 +3368,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                             view.handle_stdin_protocol_message(*message, ctx);
                         }
                     }
+                    view.sync_main_footer_popup(window, ctx);
                     ctx.notify();
                 }); // close app_entity_inner.update
             }); // close window_for_stdin.update

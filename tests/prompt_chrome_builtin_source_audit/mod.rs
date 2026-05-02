@@ -513,7 +513,7 @@ fn create_ai_preset_form_does_not_inherit_launcher_native_footer() {
 
 #[test]
 fn prompt_footer_exception_builtins_do_not_register_native_footer() {
-    for surface in ["design_gallery", "browse_kits", "installed_kits"] {
+    for surface in ["design_gallery"] {
         assert!(
             !UI_WINDOW_SOURCE.contains(&format!("Some(\"{surface}\")")),
             "{surface} must not register a native footer while it owns PromptFooter actions"
@@ -521,14 +521,27 @@ fn prompt_footer_exception_builtins_do_not_register_native_footer() {
     }
 
     let design_gallery = include_str!("../../src/render_builtins/design_gallery.rs");
-    let kit_store = include_str!("../../src/render_builtins/kit_store.rs");
     assert!(
         design_gallery.contains("PromptFooter::new("),
         "design gallery keeps its GPUI PromptFooter exception"
     );
+}
+
+#[test]
+fn kit_store_routes_footer_through_native_slot() {
+    let kit_store = include_str!("../../src/render_builtins/kit_store.rs");
     assert!(
-        kit_store.contains("PromptFooter::new("),
-        "kit store keeps its GPUI PromptFooter exception"
+        !kit_store.contains("PromptFooter::new("),
+        "kit store should not keep an in-content PromptFooter once it registers native footer surfaces"
+    );
+    assert!(
+        kit_store.contains("main_window_footer_slot(")
+            && kit_store.contains("render_simple_hint_strip(")
+            && kit_store.contains("emit_surface_prompt_hint_audit(")
+            && !kit_store.contains("PromptChromeAudit::exception(")
+            && UI_WINDOW_SOURCE.contains("Some(\"kit_store_browse\")")
+            && UI_WINDOW_SOURCE.contains("Some(\"kit_store_installed\")"),
+        "kit store should register native footer surfaces and route fallback hints through the shared slot"
     );
 }
 

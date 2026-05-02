@@ -109,6 +109,14 @@ The renderer filters through one helper family, so keyboard navigation, `getStat
 
 Process Manager routes secondary text through `AppChromeColors`, centers empty states in the available list pane, and stops propagation for row and Stop All clicks so parent surfaces cannot double-handle destructive actions.
 
+## Kit Store Footers
+
+Kit Store browse and installed views keep their domain actions in the native footer slot, preventing an in-content PromptFooter from stacking with the AppKit footer.
+
+Browse maps native `Run` to Install and `Close` to Back, or Clear Search while a query is active; Installed maps `Run` to Update and `Apply` to Remove. The renderer still supplies GPUI hint strips as fallback elements, but `main_window_footer_slot` replaces them with the shared spacer whenever the native footer is active.
+
+Stdin-driven view transitions explicitly resync the native footer before notifying, so automation entry paths cannot leave the previous launcher footer visible over Kit Store surfaces.
+
 ## Settings Hub
 
 Settings is a mini built-in list for operational configuration actions, with renderer, automation, and state receipts sharing the same filtered-row projection.

@@ -22,7 +22,9 @@ Select rows still render through [[src/components/unified_list_item/render.rs#Un
 
 Footer ownership stays single-source. When the native main-window footer reports the `select_prompt` surface, select renders the shared native-footer spacer instead of the GPUI hint strip so the prompt cannot stack two footer rows.
 
-Built-in renderers delegate native footer ownership through `main_window_footer_slot` rather than checking `active_main_window_footer_surface()` directly. PromptFooter exceptions such as Design Gallery and Kit Store stay off the native footer map until their domain-specific actions have native footer buttons.
+Built-in renderers delegate native footer ownership through `main_window_footer_slot` rather than checking `active_main_window_footer_surface()` directly. Domain-specific built-ins such as Kit Store register native footer buttons before replacing their GPUI fallback strip with the spacer; remaining PromptFooter exceptions must stay off the native footer map.
+
+Kit Store browse and installed views own surface-specific footer semantics through the native main-window footer. Browse advertises Install and Back or Clear Search; Installed advertises Update and Remove. Row action chips remain row-local mouse affordances, while the fallback GPUI footer is only a hint strip routed through the native footer slot.
 
 SDK-facing expanded browser surfaces may use surface-specific footer labels, but they still keep the three-affordance budget and audit through `emit_surface_prompt_hint_audit` so intentional custom copy does not look like universal-footer drift.
 
