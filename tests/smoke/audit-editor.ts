@@ -8,11 +8,14 @@ mkdirSync(dir, { recursive: true });
 console.error('[AUDIT] Testing EDITOR prompt with grid overlay');
 
 // Use void to not await - editor takes (content, language)
-void editor(`function hello() {
+void editor(`// editor chrome audit
+// Verify:
+// - code starts after configured top/left padding
+// - editor fills the body above the shared footer slot
+// - no card/border chrome around the editor body
+function hello() {
   console.log("Hello, World!");
 }
-
-// This is a code editor test
 const x = 42;`, 'typescript');
 
 await new Promise(r => setTimeout(r, 1500));

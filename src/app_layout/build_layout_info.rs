@@ -126,6 +126,29 @@ impl ScriptListApp {
                 ),
         );
 
+        if matches!(self.current_view, AppView::EditorPrompt { .. }) {
+            components.push(
+                LayoutComponentInfo::new("EditorContent", LayoutComponentType::Prompt)
+                    .with_bounds(0.0, content_top, window_width, content_height)
+                    .with_flex_column()
+                    .with_flex_grow(1.0)
+                    .with_depth(2)
+                    .with_parent("ContentArea")
+                    .with_explanation(
+                        "EditorPrompt fills the content area; footer ownership is routed through the shared main-window footer slot."
+                            .to_string(),
+                    ),
+            );
+
+            return LayoutInfo {
+                window_width,
+                window_height,
+                prompt_type: prompt_type.to_string(),
+                components,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+            };
+        }
+
         // Script list (left panel) - 50% width
         components.push(
             LayoutComponentInfo::new("ScriptList", LayoutComponentType::List)

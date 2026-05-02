@@ -15,8 +15,8 @@ use crate::logging;
 use crate::snippet::ParsedSnippet;
 use crate::theme::Theme;
 use gpui::{
-    div, prelude::*, px, rgb, App, Context, Entity, FocusHandle, Focusable, IntoElement, Render,
-    SharedString, Styled, Subscription, Window,
+    div, prelude::*, px, rgb, rgba, App, Context, Entity, FocusHandle, Focusable, IntoElement,
+    Render, SharedString, Styled, Subscription, Window,
 };
 #[cfg(test)]
 use gpui_component::input::Position;
@@ -912,42 +912,33 @@ impl EditorPrompt {
 
     /// Render the choice popup overlay — whisper chrome: ghost bg, no border, no card shadow.
     fn render_choices_popup(&self, _cx: &Context<Self>) -> Option<impl IntoElement> {
-        use crate::ui_foundation::HexColorExt;
-
         let popup = self.choices_popup.as_ref()?;
-        let colors = &self.theme.colors;
+        let chrome = crate::theme::AppChromeColors::from_theme(self.theme.as_ref());
 
         Some(
             div()
+                .id("editor-choice-popup")
                 .absolute()
                 .top(px(40.)) // Position below the editor toolbar area
                 .left(px(16.))
                 .min_w(px(200.))
                 .max_w(px(400.))
-                // Whisper chrome: near-opaque bg for readability, no border, no rounded card, no shadow
-                .bg(colors.background.main.to_rgb())
+                .bg(rgba(chrome.inline_dropdown_surface_rgba))
                 .py(px(4.))
                 .children(popup.choices.iter().enumerate().map(|(idx, choice)| {
                     let is_selected = idx == popup.selected_index;
                     let bg_color: gpui::Hsla = if is_selected {
-                        // Theme-driven selected accent
-                        rgb(colors.accent.selected).into()
+                        rgba(chrome.selection_rgba).into()
                     } else {
                         gpui::transparent_black()
-                    };
-                    let text_color = if is_selected {
-                        rgb(colors.text.on_accent)
-                    } else {
-                        rgb(colors.text.primary)
                     };
 
                     div()
                         .px(px(12.))
                         .py(px(6.))
                         .bg(bg_color)
-                        .text_color(text_color)
+                        .text_color(rgb(chrome.text_primary_hex))
                         .text_sm()
-                        .cursor_pointer()
                         .child(choice.clone())
                 })),
         )
@@ -1181,8 +1172,8 @@ impl Render for EditorPrompt {
             );
         }
 
-        // NOTE: Footer rendering has been moved to the unified PromptFooter component
-        // in render_prompts/editor.rs. The snippet state and language are passed to that footer.
+        // Footer/chrome is owned by render_prompts/editor.rs via main_window_footer_slot().
+        // EditorPrompt only renders the code editor body and snippet-local overlays.
 
         // Add relative positioning to container for choices popup overlay
         container = container.relative();

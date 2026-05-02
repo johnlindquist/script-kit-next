@@ -142,15 +142,75 @@ fn file_search_uses_shared_expanded_view_contract() {
 #[test]
 fn editor_choice_popup_has_no_box_card_chrome() {
     let source = include_str!("../src/editor/mod.rs");
+    let start = source
+        .find("fn render_choices_popup")
+        .expect("render_choices_popup exists");
+    let popup_source = &source[start..];
     assert!(
-        !source.contains(".rounded_md()"),
+        !popup_source.contains(".rounded_md()"),
         "editor choice popup should not use rounded card chrome"
     );
     assert!(
-        !source.contains(".border_1()"),
+        !popup_source.contains(".border_1()"),
         "editor choice popup should not use bordered card chrome"
     );
-    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_choice_popup\",\"border_absent\":true,\"rounded_absent\":true,\"status\":\"pass\"}}");
+    assert!(
+        popup_source.contains("AppChromeColors::from_theme")
+            && popup_source.contains("inline_dropdown_surface_rgba")
+            && popup_source.contains("selection_rgba")
+            && popup_source.contains("text_primary_hex"),
+        "editor choice popup should resolve inline dropdown chrome through AppChromeColors"
+    );
+    assert!(
+        !popup_source.contains("colors.background.main.to_rgb()")
+            && !popup_source.contains("colors.accent.selected")
+            && !popup_source.contains("colors.text.on_accent"),
+        "editor choice popup should avoid raw background/accent/on-accent color paths"
+    );
+    assert!(
+        !popup_source.contains(".cursor_pointer()") || popup_source.contains(".on_mouse_down("),
+        "pointer cursor should only be used when choice rows are actually clickable"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_choice_popup\",\"border_absent\":true,\"rounded_absent\":true,\"chrome_tokens\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn editor_footer_contract_is_single_source() {
+    let editor_source = include_str!("../src/editor/mod.rs");
+    let wrapper_source = include_str!("../src/render_prompts/editor.rs");
+    assert!(
+        !editor_source.contains("PromptFooter"),
+        "EditorPrompt should not reference PromptFooter; footer ownership belongs to the wrapper"
+    );
+    assert!(
+        !wrapper_source.contains("PromptFooter::new("),
+        "editor wrapper should not instantiate PromptFooter"
+    );
+    assert!(
+        wrapper_source.contains("main_window_footer_slot(self.clickable_universal_hint_strip(cx))"),
+        "editor wrapper should route universal hints through main_window_footer_slot"
+    );
+    assert!(
+        !wrapper_source.contains("40px fixed height"),
+        "editor wrapper comments should not hard-code stale footer height"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_footer\",\"single_source\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn editor_layout_info_has_editor_content_branch() {
+    let source = include_str!("../src/app_layout/build_layout_info.rs");
+    assert!(
+        source.contains("AppView::EditorPrompt")
+            && source.contains("EditorContent")
+            && source.contains("LayoutComponentType::Prompt"),
+        "build_layout_info should expose an EditorContent prompt branch"
+    );
+    assert!(
+        source.contains("return LayoutInfo"),
+        "editor layout branch should return before adding main-menu ScriptList/PreviewPanel components"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"editor_layout_info\",\"editor_content_branch\":true,\"status\":\"pass\"}}");
 }
 
 #[test]

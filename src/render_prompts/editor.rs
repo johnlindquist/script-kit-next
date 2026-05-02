@@ -60,12 +60,10 @@ impl ScriptListApp {
             "prompt_surface_rendered"
         );
 
-        crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::editor(
-                "render_prompts::editor",
-                has_actions,
-            ),
-        );
+        crate::components::emit_prompt_chrome_audit(&crate::components::PromptChromeAudit::editor(
+            "render_prompts::editor",
+            has_actions,
+        ));
 
         // Sync suppress_keys with actions popup state so editor ignores keys when popup is open
         let show_actions = self.show_actions_popup;
@@ -174,7 +172,8 @@ impl ScriptListApp {
         //
         // Container with flex layout:
         // - Editor wrapper using flex_1 to fill remaining space above footer
-        // - Footer as normal child at bottom (40px fixed height)
+        // - Footer slot is resolved through main_window_footer_slot(); native/GPUI height
+        //   stays owned by the shared main-window footer contract.
         div()
             .relative() // Needed for absolute positioned actions dialog overlay
             .flex()
@@ -211,8 +210,7 @@ impl ScriptListApp {
                     ActionsBackdropConfig {
                         backdrop_id: "editor-actions-backdrop",
                         close_host: ActionsDialogHost::EditorPrompt,
-                        backdrop_log_message:
-                            "Editor actions backdrop clicked - dismissing dialog",
+                        backdrop_log_message: "Editor actions backdrop clicked - dismissing dialog",
                         show_pointer_cursor: true,
                     },
                     cx,
