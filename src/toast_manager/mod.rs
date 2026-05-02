@@ -5,6 +5,9 @@
 //! render loop, call `drain_pending()` to convert queued toasts into
 //! gpui-component notifications.
 
+#[allow(dead_code)]
+pub(crate) mod notification;
+
 use crate::components::{Toast, ToastVariant};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -172,10 +175,13 @@ impl ToastManager {
                     message.push_str(&format!(" (x{})", notification.repeats));
                 }
 
+                // Runtime notifications currently preserve only simple message
+                // feedback. Any Some(duration) uses gpui-component's default
+                // autohide duration; None maps to a persistent notification.
                 PendingToast {
                     message,
                     variant: notification.toast.get_variant(),
-                    duration_ms: notification.toast.get_duration_ms(),
+                    persistent: notification.toast.get_duration_ms().is_none(),
                 }
             })
             .collect();
@@ -198,7 +204,7 @@ impl ToastManager {
 pub struct PendingToast {
     pub message: String,
     pub variant: ToastVariant,
-    pub duration_ms: Option<u64>,
+    pub persistent: bool,
 }
 
 #[cfg(test)]
@@ -243,11 +249,35 @@ mod tests {
 
         assert_eq!(pending[0].message, "First");
         assert_eq!(pending[0].variant, ToastVariant::Info);
-        assert_eq!(pending[0].duration_ms, Some(4000));
+        assert!(!pending[0].persistent);
 
         assert_eq!(pending[1].message, "Second");
         assert_eq!(pending[1].variant, ToastVariant::Info);
-        assert_eq!(pending[1].duration_ms, None);
+        assert!(pending[1].persistent);
+    }
+
+    #[test]
+    fn test_drain_pending_collapses_some_duration_to_non_persistent_contract() {
+        let mut manager = ToastManager::new();
+
+        manager.push(make_test_toast("Short", Some(1000)));
+        manager.push(make_test_toast("Long", Some(10_000)));
+        manager.push(make_test_toast("Pinned", None));
+
+        let pending = manager.drain_pending();
+        assert_eq!(pending.len(), 3);
+        assert!(
+            !pending[0].persistent,
+            "Some(duration) uses gpui-component's default autohide"
+        );
+        assert!(
+            !pending[1].persistent,
+            "custom Some(duration) values are not runtime durations"
+        );
+        assert!(
+            pending[2].persistent,
+            "None is the only persistent notification marker"
+        );
     }
 
     #[test]

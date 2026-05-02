@@ -52,6 +52,12 @@ Actions dialogs should inherit that same semantic text ladder instead of using s
 
 Default actions-dialog row selection and hover backgrounds resolve through `AppChromeColors`, and the live fallback keeps the container border off so detached popups stay material-first.
 
+## Transient Feedback
+
+Toast notifications are queued as simple message feedback, then bridged into gpui-component notifications during render.
+
+`ToastManager` is a staging queue, not a custom visual runtime. It preserves message text, variant, duplicate-count suffixes, and persistent-vs-default-autohide behavior. The conversion bridge owns Script Kit chrome tokens and vibrancy shadow suppression so notifications follow popup material rules instead of the older custom toast renderer.
+
 ## Shortcut recorder modal
 
 The shortcut recorder is a compact popup modal for capture, not an instructional overlay.

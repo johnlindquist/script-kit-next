@@ -55,44 +55,6 @@ fn parse_deeplink_url(url: &str) -> Option<String> {
     None
 }
 
-/// Convert our ToastVariant to gpui-component's NotificationType
-fn toast_variant_to_notification_type(variant: ToastVariant) -> NotificationType {
-    match variant {
-        ToastVariant::Success => NotificationType::Success,
-        ToastVariant::Warning => NotificationType::Warning,
-        ToastVariant::Error => NotificationType::Error,
-        ToastVariant::Info => NotificationType::Info,
-    }
-}
-
-/// Convert a PendingToast to a gpui-component Notification
-fn pending_toast_to_notification(toast: &PendingToast) -> Notification {
-    let notification_type = toast_variant_to_notification_type(toast.variant);
-
-    let mut notification = Notification::new()
-        .message(&toast.message)
-        .with_type(notification_type);
-
-    // Add title for errors/warnings (makes them stand out more)
-    match toast.variant {
-        ToastVariant::Error => {
-            notification = notification.title("Error");
-        }
-        ToastVariant::Warning => {
-            notification = notification.title("Warning");
-        }
-        _ => {}
-    }
-
-    // Note: gpui-component Notification has fixed 5s autohide
-    // For persistent toasts, set autohide(false)
-    if toast.duration_ms.is_none() {
-        notification = notification.autohide(false);
-    }
-
-    notification
-}
-
 /// Check if shutdown has been requested (prevents new script spawns during shutdown)
 #[allow(dead_code)]
 pub fn is_shutting_down() -> bool {

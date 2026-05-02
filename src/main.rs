@@ -17,7 +17,6 @@ use gpui::{
 
 // gpui-component Root wrapper for theme and context provision
 use gpui_component::input::{Input, InputEvent, InputState};
-use gpui_component::notification::{Notification, NotificationType};
 use gpui_component::Root;
 use gpui_component::{Sizable, Size};
 use itertools::Itertools;
@@ -227,8 +226,7 @@ use crate::error::ErrorSeverity;
 use crate::filter_coalescer::FilterCoalescer;
 use crate::form_prompt::FormPromptState;
 use crate::navigation::{NavCoalescer, NavDirection};
-use crate::toast_manager::{PendingToast, ToastManager};
-use components::ToastVariant;
+use crate::toast_manager::ToastManager;
 use editor::EditorPrompt;
 use prompts::{
     ContainerOptions, ContainerPadding, DivPrompt, DropPrompt, EnvPrompt, PathInfo, PathPrompt,
