@@ -30,6 +30,7 @@ pub struct UnifiedListItem {
     a11y_label: Option<SharedString>,
     a11y_hint: Option<SharedString>,
     show_accent_bar: bool,
+    direct_hover: bool,
 }
 
 impl UnifiedListItem {
@@ -47,6 +48,7 @@ impl UnifiedListItem {
             a11y_label: None,
             a11y_hint: None,
             show_accent_bar: false,
+            direct_hover: true,
         }
     }
 
@@ -107,6 +109,11 @@ impl UnifiedListItem {
 
     pub fn with_accent_bar(mut self, show: bool) -> Self {
         self.show_accent_bar = show;
+        self
+    }
+
+    pub fn with_direct_hover(mut self, enabled: bool) -> Self {
+        self.direct_hover = enabled;
         self
     }
 }
@@ -205,7 +212,7 @@ impl RenderOnce for UnifiedListItem {
             .items_center()
             .id(self.id);
 
-        if !state.is_selected && !state.is_disabled {
+        if self.direct_hover && !state.is_selected && !state.is_disabled {
             container = container.hover(move |s| s.bg(hover_bg));
         }
 
@@ -446,6 +453,32 @@ pub struct SectionHeader {
     label: SharedString,
     count: Option<usize>,
     colors: UnifiedListItemColors,
+}
+
+#[cfg(test)]
+mod builder_tests {
+    use super::*;
+
+    #[test]
+    fn unified_list_item_direct_hover_defaults_enabled() {
+        let item = UnifiedListItem::new(
+            ElementId::Name("choice:test".into()),
+            TextContent::plain("Test"),
+        );
+
+        assert!(item.direct_hover);
+    }
+
+    #[test]
+    fn unified_list_item_direct_hover_can_be_disabled() {
+        let item = UnifiedListItem::new(
+            ElementId::Name("choice:test".into()),
+            TextContent::plain("Test"),
+        )
+        .with_direct_hover(false);
+
+        assert!(!item.direct_hover);
+    }
 }
 
 impl SectionHeader {

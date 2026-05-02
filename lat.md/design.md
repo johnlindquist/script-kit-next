@@ -10,6 +10,16 @@ When Enter will paste into another app, the footer should swap the generic `Run`
 
 When the ACP chat surface is active, the footer hides the `Run` button until a validated `SCRIPT_READY path=... validated=true` receipt exists in the assistant output. Once a receipt is present, `Run` dispatches `execute_script_by_path` for that specific script path rather than the generic `execute_selected`. This prevents running the wrong target during script generation.
 
+## Select prompt contract
+
+Select prompts use the minimal list shell while making row identity, keyboard ownership, and selection ownership explicit.
+
+Typed filtering is owned by the prompt entity. Single-select submission is focus-owned, so stale selected-set state cannot paint as a second active row; multi-select submission is selected-set-owned and keeps checked rows independent from focus. Row semantic IDs resolve through [[src/prompts/select/types.rs#select_choice_semantic_id]], which keeps rendered row IDs and `getElements` IDs aligned as explicit `semanticId` > stable key > source-index fallback.
+
+Keyboard routing is classified through [[src/prompts/select/render.rs#classify_select_key]] before dispatch. Plain navigation, Enter, Backspace, printable filter text, multi-select Cmd+A, and multi-select Cmd+Space stay prompt-owned; platform shortcuts such as Cmd+Enter and Cmd+K yield to the shared global/action routing advertised by the universal footer.
+
+Select rows still render through [[src/components/unified_list_item/render.rs#UnifiedListItem]], but pass `.with_direct_hover(false)` so the prompt's modality-adjusted row state owns hover paint. This avoids a double-hover path where GPUI hover styling could contradict keyboard modality.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.
@@ -192,6 +202,10 @@ This page is justified by the live chrome, popup, and portal code plus the root 
 - [src/components/shortcut_recorder/render.rs](../src/components/shortcut_recorder/render.rs)
 - [src/app_impl/shortcut_recorder.rs](../src/app_impl/shortcut_recorder.rs)
 - [src/components/launcher_ask_ai_hint.rs](../src/components/launcher_ask_ai_hint.rs)
+- [src/prompts/select/prompt.rs](../src/prompts/select/prompt.rs)
+- [src/prompts/select/render.rs](../src/prompts/select/render.rs)
+- [src/prompts/select/types.rs](../src/prompts/select/types.rs)
+- [src/components/unified_list_item/render.rs](../src/components/unified_list_item/render.rs)
 - [src/stories/ask_tab_glyph_options.rs](../src/stories/ask_tab_glyph_options.rs)
 - [src/storybook/dictation_ui_variations.rs](../src/storybook/dictation_ui_variations.rs)
 - [src/storybook/browser.rs](../src/storybook/browser.rs)

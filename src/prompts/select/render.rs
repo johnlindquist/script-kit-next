@@ -40,6 +40,71 @@ pub(super) fn visual_row_state_for_input_modality(
     }
 }
 
+pub(super) fn visual_row_state_for_selection_mode(
+    row_state: SelectRowState,
+    is_multiple: bool,
+) -> SelectRowState {
+    if is_multiple {
+        row_state
+    } else {
+        SelectRowState {
+            is_selected: false,
+            ..row_state
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum SelectKeyIntent {
+    MoveUp,
+    MoveDown,
+    Submit,
+    Backspace,
+    Append(char),
+    ToggleFocusedSelection,
+    ToggleAllFiltered,
+    LetGlobalHandle,
+    Ignore,
+}
+
+pub(super) fn classify_select_key(
+    key: &str,
+    key_char: Option<&str>,
+    has_platform_modifier: bool,
+    is_multiple: bool,
+) -> SelectKeyIntent {
+    if has_platform_modifier {
+        if key.eq_ignore_ascii_case("a") && is_multiple {
+            return SelectKeyIntent::ToggleAllFiltered;
+        }
+        if is_key_space(key) && is_multiple {
+            return SelectKeyIntent::ToggleFocusedSelection;
+        }
+
+        return SelectKeyIntent::LetGlobalHandle;
+    }
+
+    if is_key_up(key) {
+        SelectKeyIntent::MoveUp
+    } else if is_key_down(key) {
+        SelectKeyIntent::MoveDown
+    } else if is_key_space(key) {
+        SelectKeyIntent::Append(' ')
+    } else if is_key_enter(key) {
+        SelectKeyIntent::Submit
+    } else if is_key_backspace(key) {
+        SelectKeyIntent::Backspace
+    } else if let Some(ch) = printable_char(key_char) {
+        if should_append_to_filter(ch) {
+            SelectKeyIntent::Append(ch)
+        } else {
+            SelectKeyIntent::Ignore
+        }
+    } else {
+        SelectKeyIntent::Ignore
+    }
+}
+
 pub(super) fn extract_choice_icon_hint(description: Option<&str>) -> Option<&str> {
     description.and_then(|raw| {
         raw.split(['•', '|', '\n'])
@@ -101,8 +166,9 @@ impl Render for SelectPrompt {
         let tokens = get_tokens(self.design_variant);
         let spacing = tokens.spacing();
 
-        let text_color = rgb(chrome.text_secondary_hex);
-        let muted_color = rgb(chrome.text_muted_hex);
+        let text_color = rgb(chrome.text_primary_hex);
+        let placeholder_color = rgba(chrome.placeholder_text_rgba);
+        let hint_color = rgba(chrome.text_hint_rgba);
 
         let placeholder = self
             .placeholder
@@ -127,7 +193,7 @@ impl Render for SelectPrompt {
                     .flex_1()
                     .text_size(px(16.0))
                     .text_color(if self.filter_text.is_empty() {
-                        muted_color
+                        placeholder_color
                     } else {
                         text_color
                     })
@@ -137,7 +203,7 @@ impl Render for SelectPrompt {
                 container.child(
                     div()
                         .text_xs()
-                        .text_color(muted_color)
+                        .text_color(hint_color)
                         .child(format!("{} selected", self.selected.len())),
                 )
             });
@@ -154,7 +220,7 @@ impl Render for SelectPrompt {
                 .w_full()
                 .py(px(spacing.padding_xl))
                 .px(px(spacing.item_padding_x))
-                .text_color(muted_color)
+                .text_color(hint_color)
                 .child(empty_message)
                 .into_any_element()
         } else {
@@ -182,17 +248,18 @@ impl Render for SelectPrompt {
                                             &this.selected,
                                             this.hovered_index,
                                         );
-                                        let visual_row_state = visual_row_state_for_input_modality(
-                                            row_state,
-                                            last_input_was_keyboard,
+                                        let visual_row_state = visual_row_state_for_selection_mode(
+                                            visual_row_state_for_input_modality(
+                                                row_state,
+                                                last_input_was_keyboard,
+                                            ),
+                                            this.multiple,
                                         );
                                         let is_focused = visual_row_state.is_focused;
                                         let is_selected = visual_row_state.is_selected;
                                         let is_hovered = visual_row_state.is_hovered;
                                         let semantic_id =
-                                            choice.semantic_id.clone().unwrap_or_else(|| {
-                                                indexed_choice.stable_semantic_id.clone()
-                                            });
+                                            select_choice_semantic_id(choice, choice_idx);
                                         let leading = if this.multiple {
                                             Some(LeadingContent::Emoji(
                                                 choice_selection_indicator(true, is_selected)
@@ -264,6 +331,7 @@ impl Render for SelectPrompt {
                                                 })
                                                 .density(Density::Comfortable)
                                                 .with_accent_bar(is_focused)
+                                                .with_direct_hover(false)
                                                 .colors(item_colors),
                                             );
 
@@ -313,37 +381,20 @@ impl Render for SelectPrompt {
                 },
                 |this, event, _window, cx| {
                     let key_str = event.keystroke.key.as_str();
-                    let has_ctrl = event.keystroke.modifiers.platform; // Cmd on macOS, Ctrl on others
-                    let is_up = is_key_up(key_str);
-                    let is_down = is_key_down(key_str);
-                    let is_space = is_key_space(key_str);
-                    let is_enter = is_key_enter(key_str);
-                    let is_backspace = is_key_backspace(key_str);
-
-                    // Handle Ctrl/Cmd+A for select all
-                    if has_ctrl && key_str.eq_ignore_ascii_case("a") {
-                        this.toggle_select_all_filtered(cx);
-                        return;
-                    }
-
-                    if is_up {
-                        this.move_up(cx);
-                    } else if is_down {
-                        this.move_down(cx);
-                    } else if is_space {
-                        if has_ctrl {
-                            this.toggle_selection(cx);
-                        } else {
-                            this.handle_char(' ', cx);
-                        }
-                    } else if is_enter {
-                        this.submit();
-                    } else if is_backspace {
-                        this.handle_backspace(cx);
-                    } else if let Some(ch) = printable_char(event.keystroke.key_char.as_deref()) {
-                        if should_append_to_filter(ch) {
-                            this.handle_char(ch, cx);
-                        }
+                    match classify_select_key(
+                        key_str,
+                        event.keystroke.key_char.as_deref(),
+                        event.keystroke.modifiers.platform,
+                        this.multiple,
+                    ) {
+                        SelectKeyIntent::MoveUp => this.move_up(cx),
+                        SelectKeyIntent::MoveDown => this.move_down(cx),
+                        SelectKeyIntent::Submit => this.submit(),
+                        SelectKeyIntent::Backspace => this.handle_backspace(cx),
+                        SelectKeyIntent::Append(ch) => this.handle_char(ch, cx),
+                        SelectKeyIntent::ToggleFocusedSelection => this.toggle_selection(cx),
+                        SelectKeyIntent::ToggleAllFiltered => this.toggle_select_all_filtered(cx),
+                        SelectKeyIntent::LetGlobalHandle | SelectKeyIntent::Ignore => {}
                     }
                 },
             )
@@ -352,7 +403,10 @@ impl Render for SelectPrompt {
 
 #[cfg(test)]
 mod tests {
-    use super::{visual_row_state_for_input_modality, SelectRowState};
+    use super::{
+        classify_select_key, visual_row_state_for_input_modality,
+        visual_row_state_for_selection_mode, SelectKeyIntent, SelectRowState,
+    };
 
     /// Row background resolution — test-only helper retained for unit test coverage.
     fn resolve_row_bg_rgba(
@@ -472,6 +526,67 @@ mod tests {
     }
 
     #[test]
+    fn visual_row_state_drops_single_select_stale_selection() {
+        let row_state = SelectRowState {
+            is_focused: false,
+            is_selected: true,
+            is_hovered: false,
+        };
+        assert_eq!(
+            visual_row_state_for_selection_mode(row_state, false),
+            SelectRowState {
+                is_focused: false,
+                is_selected: false,
+                is_hovered: false,
+            }
+        );
+    }
+
+    #[test]
+    fn select_key_classifier_yields_global_platform_shortcuts() {
+        assert_eq!(
+            classify_select_key("enter", Some("\n"), true, true),
+            SelectKeyIntent::LetGlobalHandle
+        );
+        assert_eq!(
+            classify_select_key("k", Some("k"), true, true),
+            SelectKeyIntent::LetGlobalHandle
+        );
+        assert_eq!(
+            classify_select_key("a", Some("a"), true, false),
+            SelectKeyIntent::LetGlobalHandle
+        );
+    }
+
+    #[test]
+    fn select_key_classifier_keeps_multi_select_shortcuts_local() {
+        assert_eq!(
+            classify_select_key("a", Some("a"), true, true),
+            SelectKeyIntent::ToggleAllFiltered
+        );
+        assert_eq!(
+            classify_select_key("space", Some(" "), true, true),
+            SelectKeyIntent::ToggleFocusedSelection
+        );
+    }
+
+    #[test]
+    fn select_key_classifier_keeps_plain_input_local() {
+        assert_eq!(
+            classify_select_key("enter", Some("\n"), false, true),
+            SelectKeyIntent::Submit
+        );
+        assert_eq!(
+            classify_select_key("space", Some(" "), false, true),
+            SelectKeyIntent::Append(' ')
+        );
+        assert_eq!(
+            classify_select_key("x", Some("x"), false, true),
+            SelectKeyIntent::Append('x')
+        );
+    }
+
+    #[test]
     fn select_render_drops_local_row_alpha_constants() {
         const SOURCE: &str = include_str!("render.rs");
         let render_fn_end = SOURCE.find("#[cfg(test)]").unwrap_or(SOURCE.len());
@@ -483,6 +598,24 @@ mod tests {
         assert!(
             !render_code.contains("ROW_HOVER_BG_ALPHA"),
             "select render should not define ROW_HOVER_BG_ALPHA"
+        );
+    }
+
+    #[test]
+    fn select_render_disables_unified_direct_hover() {
+        const SOURCE: &str = include_str!("render.rs");
+        assert!(
+            SOURCE.contains(".with_direct_hover(false)"),
+            "select render should let modality-adjusted row state own hover paint"
+        );
+    }
+
+    #[test]
+    fn select_prompt_render_uses_shared_semantic_id_helper() {
+        const SOURCE: &str = include_str!("render.rs");
+        assert!(
+            SOURCE.contains("select_choice_semantic_id(choice, choice_idx)"),
+            "select rows should use the same semantic ID helper as automation elements"
         );
     }
 }

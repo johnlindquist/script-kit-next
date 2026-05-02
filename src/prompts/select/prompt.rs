@@ -31,7 +31,7 @@ pub(crate) fn collect_select_prompt_elements(
         ));
     }
 
-    // Visible choice rows — use Choice.generate_id() for semantic IDs
+    // Visible choice rows expose the same semantic IDs as rendered row elements.
     for (display_idx, &choice_idx) in filtered_choices.iter().enumerate() {
         if elements.len() >= limit {
             break;
@@ -42,7 +42,7 @@ pub(crate) fn collect_select_prompt_elements(
         let is_focused = display_idx == focused_index;
 
         elements.push(crate::protocol::ElementInfo {
-            semantic_id: choice.generate_id(display_idx),
+            semantic_id: select_choice_semantic_id(choice, choice_idx),
             element_type: crate::protocol::ElementType::Choice,
             text: Some(choice.name.clone()),
             value: Some(choice.value.clone()),
@@ -108,6 +108,9 @@ impl SelectPrompt {
                 choices.len(),
                 multiple
             ),
+        );
+        crate::components::emit_prompt_chrome_audit(
+            &crate::components::PromptChromeAudit::minimal_list("prompts::select", true),
         );
 
         let filtered_choices: Vec<usize> = (0..choices.len()).collect();
@@ -187,18 +190,9 @@ impl SelectPrompt {
     /// Toggle selection of currently focused item
     pub(super) fn toggle_selection(&mut self, cx: &mut Context<Self>) {
         if let Some(&choice_idx) = self.filtered_choices.get(self.focused_index) {
-            if self.multiple {
-                if self.selected.contains(&choice_idx) {
-                    self.selected.remove(&choice_idx);
-                } else {
-                    self.selected.insert(choice_idx);
-                }
-            } else {
-                // Single select mode - replace selection
-                self.selected.clear();
-                self.selected.insert(choice_idx);
+            if toggle_choice_selection(&mut self.selected, choice_idx, self.multiple) {
+                cx.notify();
             }
-            cx.notify();
         }
     }
 

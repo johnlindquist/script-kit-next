@@ -22,7 +22,11 @@ const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_ch
 const THEME_CHOOSER_HEADER_SOURCE: &str =
     include_str!("../src/render_builtins/theme_chooser_list_header.rs");
 const KIT_STORE_SOURCE: &str = include_str!("../src/render_builtins/kit_store.rs");
+const SELECT_PROMPT_SOURCE: &str = include_str!("../src/prompts/select/prompt.rs");
 const SELECT_RENDER_SOURCE: &str = include_str!("../src/prompts/select/render.rs");
+const SELECT_TYPES_SOURCE: &str = include_str!("../src/prompts/select/types.rs");
+const UNIFIED_LIST_ITEM_RENDER_SOURCE: &str =
+    include_str!("../src/components/unified_list_item/render.rs");
 const WARNING_BANNER_SOURCE: &str = include_str!("../src/warning_banner.rs");
 
 // ---------------------------------------------------------------------------
@@ -344,6 +348,52 @@ fn select_prompt_masks_stateful_hover_with_window_input_modality() {
     assert!(
         SELECT_RENDER_SOURCE.contains("let is_hovered = visual_row_state.is_hovered;"),
         "SelectPrompt should drive UnifiedListItem hover state from modality-adjusted row state"
+    );
+}
+
+#[test]
+fn select_prompt_uses_shared_semantic_ids_and_chrome_contract() {
+    assert!(
+        SELECT_TYPES_SOURCE.contains("pub(super) fn select_choice_semantic_id("),
+        "SelectPrompt should centralize rendered and automation row semantic IDs"
+    );
+    assert!(
+        SELECT_PROMPT_SOURCE.contains("select_choice_semantic_id(choice, choice_idx)"),
+        "SelectPrompt getElements should use source-indexed shared semantic IDs"
+    );
+    assert!(
+        SELECT_RENDER_SOURCE.contains("select_choice_semantic_id(choice, choice_idx)"),
+        "SelectPrompt row render should use the same semantic ID helper as getElements"
+    );
+    assert!(
+        SELECT_PROMPT_SOURCE.contains("PromptChromeAudit::minimal_list(\"prompts::select\", true)"),
+        "SelectPrompt should emit the shared minimal-list chrome audit contract"
+    );
+}
+
+#[test]
+fn select_prompt_keeps_selection_and_hover_ownership_explicit() {
+    assert!(
+        SELECT_RENDER_SOURCE.contains("pub(super) fn classify_select_key("),
+        "SelectPrompt keyboard routing should be classified by a pure helper"
+    );
+    assert!(
+        SELECT_RENDER_SOURCE.contains("SelectKeyIntent::LetGlobalHandle"),
+        "SelectPrompt should yield platform shortcuts it does not own"
+    );
+    assert!(
+        SELECT_RENDER_SOURCE.contains("visual_row_state_for_selection_mode("),
+        "SelectPrompt should normalize visual selection by single/multi selection mode"
+    );
+    assert!(
+        SELECT_RENDER_SOURCE.contains(".with_direct_hover(false)"),
+        "SelectPrompt should disable UnifiedListItem direct hover so modality state owns hover paint"
+    );
+    assert!(
+        UNIFIED_LIST_ITEM_RENDER_SOURCE.contains("direct_hover: true")
+            && UNIFIED_LIST_ITEM_RENDER_SOURCE.contains("pub fn with_direct_hover(")
+            && UNIFIED_LIST_ITEM_RENDER_SOURCE.contains("if self.direct_hover &&"),
+        "UnifiedListItem should default to direct hover while allowing select to opt out"
     );
 }
 
