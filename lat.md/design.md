@@ -40,6 +40,8 @@ Terminal prompt chrome distinguishes SDK `term()` from Quick Terminal without ch
 
 Select and drop prompts keep ownership of their prompt surfaces in layout metadata rather than falling back to launcher list/preview probes. Select rows pair pointer chrome with mouse activation so keyboard and mouse selection ownership stay aligned.
 
+Webcam prompts own capture semantics in both GPUI and native footer chrome. Their primary footer action is `Capture Photo`, the actions footer remains `⌘K Actions`, and footer Run routes to the webcam capture helper before any launcher execution fallback.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.

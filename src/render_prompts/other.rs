@@ -175,6 +175,32 @@ impl ScriptListApp {
             .into_any_element()
     }
 
+    fn clickable_webcam_hint_strip(&self, cx: &mut Context<Self>) -> AnyElement {
+        let on_capture = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Run,
+                window,
+                cx,
+                "gpui_footer",
+            );
+        });
+        let on_actions = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
+            this.dispatch_main_window_footer_action(
+                crate::footer_popup::FooterAction::Actions,
+                window,
+                cx,
+                "gpui_footer",
+            );
+        });
+
+        crate::components::HintStrip::new(
+            crate::components::universal_prompt_hints_with_primary_label("Capture Photo"),
+        )
+        .on_hint_click(0, on_capture)
+        .on_hint_click(2, on_actions)
+        .into_any_element()
+    }
+
     fn render_wrapped_prompt_entity(
         &mut self,
         entity: impl IntoElement,
@@ -364,8 +390,12 @@ impl ScriptListApp {
                 "media_capture_surface_with_hint_strip",
             ),
         );
-        let hints = crate::components::universal_prompt_hints();
-        crate::components::emit_prompt_hint_audit("render_prompts::webcam", &hints);
+        let hints = crate::components::universal_prompt_hints_with_primary_label("Capture Photo");
+        crate::components::emit_surface_prompt_hint_audit(
+            "render_prompts::webcam",
+            &hints,
+            "webcam_capture_actions_footer",
+        );
         let theme = PromptRenderContext::new(self.theme.as_ref(), self.current_design).theme;
         let handle_key = cx.listener(Self::other_prompt_shell_handle_key_webcam);
 
@@ -394,9 +424,9 @@ impl ScriptListApp {
                     .overflow_hidden()
                     .child(entity),
             )
-            // Shared three-key hint strip footer (native or GPUI)
+            // Capture-owned hint strip footer (native or GPUI)
             .when_some(
-                self.main_window_footer_slot(self.clickable_universal_hint_strip(cx)),
+                self.main_window_footer_slot(self.clickable_webcam_hint_strip(cx)),
                 |d, footer| d.child(footer),
             )
             .into_any_element()
