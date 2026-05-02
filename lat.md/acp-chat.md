@@ -454,6 +454,7 @@ Quick Terminal renders the same native AppKit main-window footer as the launcher
 The chrome (blur, divider, height, typography, padding, right-alignment) is shared via the native footer renderer; only the button list is scoped to actions meaningful in the terminal surface.
 
 - `src/app_impl/ui_window.rs` `main_window_footer_surface` registers `AppView::QuickTerminalView { .. } => Some("quick_terminal")`. Without this arm, `main_window_uses_native_footer()` returns false and the GPUI hint strip leaks back in.
+- SDK-spawned `AppView::TermPrompt` intentionally does not register a native footer surface. It keeps the GPUI terminal hint strip, while only `QuickTerminalView` swaps that strip for a native-footer spacer.
 - `src/app_impl/ui_window.rs` `quick_terminal_footer_buttons()` returns `[Close]` always, plus `[Apply, Close]` when `tab_ai_harness_apply_back_route` AND `tab_ai_harness_return_view` are both `Some(_)`. Run / AI / Actions are intentionally NOT in this list — they are main-menu affordances; visual parity comes from sharing the native footer renderer, not from copying the main-menu button row.
 - `main_window_footer_buttons_for_current_view` checks Quick Terminal first, then ACP, then falls through to the standard set.
 - `dispatch_main_window_footer_action` already maps `FooterAction::Apply` to `apply_tab_ai_result_from_terminal` and `FooterAction::Close` to `close_tab_ai_harness_terminal_with_window` for `AppView::QuickTerminalView`. Don't add new dispatch arms — adding the surface entry was sufficient.
