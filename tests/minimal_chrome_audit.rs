@@ -566,6 +566,62 @@ fn mic_protocol_stays_stubbed_until_media_surface_exists() {
 }
 
 #[test]
+fn mini_prompt_submits_enter_and_avoids_double_header_padding() {
+    let source = include_str!("../src/render_prompts/mini.rs");
+    let render_fn_end = source.find("#[cfg(test)]").unwrap_or(source.len());
+    let render_code = &source[..render_fn_end];
+    let header_start = render_code
+        .find("let header =")
+        .expect("mini header exists");
+    let header_end = render_code
+        .find("let content =")
+        .expect("mini content exists");
+    let header = &render_code[header_start..header_end];
+
+    assert!(
+        render_code.contains("is_key_enter(key)")
+            && render_code.contains("submit_arg_prompt_from_current_state(&prompt_id, cx)"),
+        "mini prompt Enter should submit current prompt state like other arg-like prompts"
+    );
+    assert!(
+        !header.contains(".px(px(mini_padding_x))") && !header.contains(".py(px(mini_padding"),
+        "mini prompt should let the shared minimal-list shell own header padding"
+    );
+    assert!(
+        render_code.contains("main_window_footer_slot(")
+            && render_code.contains("universal_prompt_hints()"),
+        "mini prompt should keep shared footer ownership through the native footer slot"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"mini\",\"enter_submit\":true,\"shared_header_padding\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
+fn micro_prompt_stays_footerless_and_off_native_footer_surface_map() {
+    let micro = include_str!("../src/render_prompts/micro.rs");
+    let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let surface_fn_start = ui_window
+        .find("fn main_window_footer_surface")
+        .expect("main_window_footer_surface exists");
+    let surface_fn_end = ui_window[surface_fn_start..]
+        .find("\n    ///")
+        .map(|ix| surface_fn_start + ix)
+        .unwrap_or(ui_window.len());
+    let surface_fn = &ui_window[surface_fn_start..surface_fn_end];
+
+    assert!(
+        micro.contains("PromptChromeAudit::exception(")
+            && micro.contains("\"ultra_compact_no_footer\"")
+            && !micro.contains("main_window_footer_slot("),
+        "micro prompt should remain an explicitly footerless ultra-compact surface"
+    );
+    assert!(
+        !surface_fn.contains("AppView::MicroPrompt"),
+        "micro prompt must stay off native footer routing because it does not reserve footer space"
+    );
+    eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"micro\",\"footerless\":true,\"native_footer_absent\":true,\"status\":\"pass\"}}");
+}
+
+#[test]
 fn naming_prompt_render_has_tracing_and_uses_shared_helpers() {
     let source = include_str!("../src/prompts/naming/render.rs");
     let outer_source = include_str!("../src/render_prompts/other.rs");
