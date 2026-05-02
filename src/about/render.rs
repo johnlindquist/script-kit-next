@@ -10,7 +10,7 @@ use gpui::{
     KeyDownEvent, Window,
 };
 
-use crate::{about::AboutState, branding, components::HintStrip, theme, updates::UpdateState};
+use crate::{about::AboutState, branding, theme, updates::UpdateState};
 
 pub type AboutClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 pub type AboutKeyHandler = Rc<dyn Fn(&KeyDownEvent, &mut Window, &mut App)>;
@@ -25,6 +25,13 @@ pub struct AboutSurfaceActions {
     pub open_release: AboutClickHandler,
     pub toggle_acknowledgements: AboutClickHandler,
     pub key_down: AboutKeyHandler,
+}
+
+fn is_about_activation_key(key: &str) -> bool {
+    key == " "
+        || key.eq_ignore_ascii_case("space")
+        || key.eq_ignore_ascii_case("enter")
+        || key.eq_ignore_ascii_case("return")
 }
 
 /// Render the launcher-native About surface opened from the tray menu.
@@ -97,7 +104,6 @@ fn render_about_surface_inner(
                         .child(render_footer(chrome)),
                 ),
         )
-        .child(HintStrip::new(vec!["Esc Close".into(), "Tab Focus".into()]))
 }
 
 fn render_header(chrome: theme::AppChromeColors, dismiss: AboutClickHandler) -> Div {
@@ -127,10 +133,23 @@ fn render_header(chrome: theme::AppChromeColors, dismiss: AboutClickHandler) -> 
                 .items_center()
                 .justify_center()
                 .text_size(px(16.0))
-                .text_color(rgb(chrome.text_secondary_hex))
+                .text_color(rgba(chrome.text_icon_rgba))
+                .cursor_pointer()
                 .hover(|style| style.bg(rgba(chrome.hover_rgba)))
                 .child("×")
-                .on_click(move |event, window, cx| dismiss(event, window, cx)),
+                .on_click({
+                    let dismiss = dismiss.clone();
+                    move |event, window, cx| dismiss(event, window, cx)
+                })
+                .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                    if is_about_activation_key(event.keystroke.key.as_str()) {
+                        let click_event = ClickEvent::default();
+                        dismiss(&click_event, window, cx);
+                        cx.stop_propagation();
+                    } else {
+                        cx.propagate();
+                    }
+                }),
         )
 }
 
@@ -185,7 +204,7 @@ fn render_title_version(chrome: theme::AppChromeColors) -> Div {
                 .items_center()
                 .text_size(px(12.0))
                 .font_weight(FontWeight::MEDIUM)
-                .text_color(rgb(chrome.text_secondary_hex))
+                .text_color(rgba(chrome.text_muted_rgba))
                 .child(format!("v{}", env!("CARGO_PKG_VERSION"))),
         )
 }
@@ -198,7 +217,7 @@ fn render_tagline(chrome: theme::AppChromeColors) -> Div {
         .text_size(px(14.0))
         .line_height(px(20.0))
         .text_center()
-        .text_color(rgb(chrome.text_secondary_hex))
+        .text_color(rgba(chrome.text_muted_rgba))
         .child(branding::TAGLINE)
 }
 
@@ -221,7 +240,7 @@ fn render_creator_row(chrome: theme::AppChromeColors) -> Div {
                 .justify_center()
                 .text_size(px(11.0))
                 .font_weight(FontWeight::SEMIBOLD)
-                .text_color(rgb(chrome.text_secondary_hex))
+                .text_color(rgba(chrome.text_hint_rgba))
                 .child("JL"),
         )
         .child(
@@ -304,7 +323,8 @@ fn render_update_card(
 
     div()
         .mt(px(24.0))
-        .w(px(500.0))
+        .w_full()
+        .max_w(px(500.0))
         .min_h(px(64.0))
         .p(px(14.0))
         .rounded(px(12.0))
@@ -317,6 +337,8 @@ fn render_update_card(
         .gap(px(12.0))
         .child(
             div()
+                .flex_1()
+                .min_w(px(0.0))
                 .flex()
                 .flex_col()
                 .gap(px(4.0))
@@ -331,7 +353,11 @@ fn render_update_card(
                     div()
                         .text_size(px(12.0))
                         .line_height(px(18.0))
-                        .text_color(rgb(chrome.text_secondary_hex))
+                        .min_w(px(0.0))
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .whitespace_nowrap()
+                        .text_color(rgba(chrome.text_muted_rgba))
                         .child(status),
                 ),
         )
@@ -351,7 +377,8 @@ fn render_acknowledgements(
 ) -> Div {
     div()
         .mt(px(14.0))
-        .w(px(500.0))
+        .w_full()
+        .max_w(px(500.0))
         .rounded(px(9.0))
         .border_1()
         .border_color(rgba(chrome.border_rgba))
@@ -368,12 +395,25 @@ fn render_acknowledgements(
                 .text_size(px(12.0))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(rgb(chrome.text_primary_hex))
+                .cursor_pointer()
                 .hover(|style| style.bg(rgba(chrome.hover_rgba)))
                 .child("Acknowledgements")
                 .child(if state.acks_open { "−" } else { "+" })
                 .on_click({
                     let toggle = actions.toggle_acknowledgements.clone();
                     move |event, window, cx| toggle(event, window, cx)
+                })
+                .on_key_down({
+                    let toggle = actions.toggle_acknowledgements.clone();
+                    move |event: &KeyDownEvent, window, cx| {
+                        if is_about_activation_key(event.keystroke.key.as_str()) {
+                            let click_event = ClickEvent::default();
+                            toggle(&click_event, window, cx);
+                            cx.stop_propagation();
+                        } else {
+                            cx.propagate();
+                        }
+                    }
                 }),
         )
         .when(state.acks_open, |container| {
@@ -384,7 +424,7 @@ fn render_acknowledgements(
                     .pb(px(10.0))
                     .text_size(px(12.0))
                     .line_height(px(18.0))
-                    .text_color(rgb(chrome.text_secondary_hex))
+                    .text_color(rgba(chrome.text_muted_rgba))
                     .child("Powered by GPUI, ureq, tray-icon, resvg, and the Rust ecosystem."),
             )
         })
@@ -397,8 +437,12 @@ fn render_footer(chrome: theme::AppChromeColors) -> Div {
         .flex()
         .items_center()
         .gap(px(8.0))
+        .max_w_full()
+        .overflow_hidden()
+        .text_ellipsis()
+        .whitespace_nowrap()
         .text_size(px(11.0))
-        .text_color(rgba((chrome.text_muted_hex << 8) | 0xAA))
+        .text_color(rgba(chrome.text_muted_rgba))
         .child("© John Lindquist · Built with GPUI")
 }
 
@@ -409,9 +453,17 @@ fn action_button(
     handler: AboutClickHandler,
     enabled: bool,
 ) -> impl IntoElement {
-    div()
+    let mut label_element = div()
+        .min_w(px(0.0))
+        .overflow_hidden()
+        .text_ellipsis()
+        .whitespace_nowrap()
+        .child(label);
+    if enabled {
+        label_element = label_element.cursor_pointer();
+    }
+    let mut button = div()
         .id(id)
-        .tab_index(0)
         .h(px(34.0))
         .min_w(px(142.0))
         .px(px(12.0))
@@ -427,12 +479,31 @@ fn action_button(
         .text_color(if enabled {
             rgb(chrome.text_primary_hex)
         } else {
-            rgba((chrome.text_secondary_hex << 8) | 0x80)
+            rgba(chrome.text_hint_rgba)
         })
-        .when(enabled, |button| {
-            button
-                .hover(|style| style.bg(rgba(chrome.hover_rgba)))
-                .on_click(move |event, window, cx| handler(event, window, cx))
-        })
-        .child(label)
+        .child(label_element);
+
+    if enabled {
+        button = button
+            .tab_index(0)
+            .cursor_pointer()
+            .hover(|style| style.bg(rgba(chrome.hover_rgba)))
+            .on_click({
+                let handler = handler.clone();
+                move |event, window, cx| handler(event, window, cx)
+            })
+            .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                if is_about_activation_key(event.keystroke.key.as_str()) {
+                    let click_event = ClickEvent::default();
+                    handler(&click_event, window, cx);
+                    cx.stop_propagation();
+                } else {
+                    cx.propagate();
+                }
+            });
+    } else {
+        button = button.cursor_default();
+    }
+
+    button
 }

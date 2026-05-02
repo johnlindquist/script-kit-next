@@ -10,7 +10,7 @@ The About route is a full-window `AppView` surface restored back to its previous
 
 ## Layout
 
-The About layout presents product identity, version, creator attribution, community links, update status, acknowledgements, and a hint strip.
+The About layout presents product identity, version, creator attribution, community links, update status, and acknowledgements without persistent instructional chrome.
 
 [[src/about/render.rs#render_about_surface]] renders the surface with the shared chrome tokens, a 52px header, centered content card, quick-action row, update card, acknowledgements disclosure, and footer.
 

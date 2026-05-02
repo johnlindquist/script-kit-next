@@ -367,6 +367,9 @@ impl RenderOnce for Button {
                             // Create a default click event for keyboard activation
                             let click_event = ClickEvent::default();
                             callback(&click_event, window, cx);
+                            cx.stop_propagation();
+                        } else {
+                            cx.propagate();
                         }
                     });
                 }
