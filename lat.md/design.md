@@ -44,6 +44,8 @@ Webcam prompts own capture semantics in both GPUI and native footer chrome. Thei
 
 SDK `mic()` is still a media stub, not a rendered prompt surface. It must remain routed to coming-soon feedback until a real microphone view can own explicit recording footer semantics; `micro()` remains the ultra-compact text prompt with no footer.
 
+`mini()` is an arg-like compact list prompt: Enter submits the current prompt state, the shared minimal-list shell owns header padding, and footer hints route through the native footer slot. `micro()` stays footerless and off native-footer routing so the main window does not reserve space the renderer never draws around.
+
 ## Launcher query memory
 
 Exact non-empty launcher queries should reopen with the last submitted result promoted back to the first selectable row so `Up` recall and retyping the same query both support one-keystroke reruns.

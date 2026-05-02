@@ -29,10 +29,10 @@ impl ScriptListApp {
         let text_muted = theme.colors.text.muted;
         // Mini uses shared layout tokens from the resize contract
         let mini_padding_x: f32 = crate::window_resize::mini_layout::HEADER_PADDING_X;
-        let mini_padding_y: f32 = crate::window_resize::mini_layout::HEADER_PADDING_Y;
 
-        // Navigation key handler — Escape, arrows, Tab, Cmd+W
-        // Text editing is handled by the Input component; Enter by the subscription
+        // Navigation key handler — Escape, Enter, arrows, Tab, Cmd+W
+        // Text editing is handled by the Input component.
+        let prompt_id = id;
         let handle_key = cx.listener(
             move |this: &mut Self,
                   event: &gpui::KeyDownEvent,
@@ -47,6 +47,13 @@ impl ScriptListApp {
                 // Escape dismisses
                 if ui_foundation::is_key_escape(key) {
                     this.go_back_or_close(window, cx);
+                    cx.stop_propagation();
+                    return;
+                }
+
+                // Enter submits the current prompt state
+                if ui_foundation::is_key_enter(key) {
+                    this.submit_arg_prompt_from_current_state(&prompt_id, cx);
                     cx.stop_propagation();
                     return;
                 }
@@ -102,8 +109,6 @@ impl ScriptListApp {
         let input_height = CURSOR_HEIGHT_LG + (CURSOR_MARGIN_Y * 2.0);
         let header = div()
             .w_full()
-            .px(px(mini_padding_x))
-            .py(px(mini_padding_y))
             .flex()
             .flex_row()
             .items_center()
@@ -220,8 +225,24 @@ mod mini_prompt_render_tests {
             "mini prompt should use shared mini layout horizontal padding token"
         );
         assert!(
-            MINI_SOURCE.contains("mini_layout::HEADER_PADDING_Y"),
-            "mini prompt should use shared mini layout vertical padding token"
+            MINI_SOURCE.contains("render_minimal_list_prompt_shell_with_footer("),
+            "mini prompt should let the shared minimal-list shell own header padding"
+        );
+    }
+
+    #[test]
+    fn mini_prompt_header_does_not_double_pad_shared_shell() {
+        let start = MINI_SOURCE.find("let header =").expect("header exists");
+        let end = MINI_SOURCE.find("let content =").expect("content exists");
+        let header = &MINI_SOURCE[start..end];
+
+        assert!(
+            !header.contains(".px(px(mini_padding_x))"),
+            "mini prompt header should not apply local horizontal padding before the shared shell"
+        );
+        assert!(
+            !header.contains(".py(px(mini_padding"),
+            "mini prompt header should not apply local vertical padding before the shared shell"
         );
     }
 
@@ -290,16 +311,25 @@ mod mini_prompt_render_tests {
 
     #[test]
     fn mini_prompt_has_key_handlers() {
+        let render_fn_end = MINI_SOURCE
+            .find("#[cfg(test)]")
+            .unwrap_or(MINI_SOURCE.len());
+        let render_code = &MINI_SOURCE[..render_fn_end];
+
         assert!(
-            MINI_SOURCE.contains("is_key_escape(key)"),
+            render_code.contains("is_key_escape(key)"),
             "mini prompt should handle Escape"
         );
         assert!(
-            MINI_SOURCE.contains("is_key_enter(key)"),
+            render_code.contains("is_key_enter(key)"),
             "mini prompt should handle Enter"
         );
         assert!(
-            MINI_SOURCE.contains("stop_propagation()"),
+            render_code.contains("submit_arg_prompt_from_current_state(&prompt_id, cx)"),
+            "mini prompt Enter should submit the current prompt state"
+        );
+        assert!(
+            render_code.contains("stop_propagation()"),
             "mini prompt should stop propagation on handled keys"
         );
     }
