@@ -46,7 +46,8 @@ fn assert_minimal_builtin_surface(name: &str, source: &str) {
         assert!(
             source.contains("SectionDivider::new()")
                 || source.contains("border_t(px(DIVIDER_HEIGHT))")
-                || source.contains("border_b(px(DIVIDER_HEIGHT))"),
+                || source.contains("border_b(px(DIVIDER_HEIGHT))")
+                || source.contains("render_native_main_window_footer_spacer()"),
             "{name} should use shared minimal chrome structure tokens"
         );
     }
