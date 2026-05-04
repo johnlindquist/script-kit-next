@@ -23,6 +23,8 @@ These files define the durable automation contract and the proof-oriented harnes
 - [scripts/test-harness.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/test-harness.ts) - Autonomous test harness using stdin JSON protocol.
 - [scripts/agentic/index.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/index.ts) - Orchestrator for common proof-bearing agentic flows.
 - [scripts/agentic/filterable-surface-matrix.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/filterable-surface-matrix.ts) - State-first matrix for migrated filterable launcher surfaces.
+- [scripts/agentic/attached-popup-surface-matrix.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/attached-popup-surface-matrix.ts) - Attached-popup image-library matrix, starting with Actions Dialog.
+- [scripts/agentic/surface-navigator.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/surface-navigator.ts) - Warm-session navigator for known surfaces and image-library screenshots.
 - [scripts/agentic/session.sh](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/session.sh) - Reusable session management for runtime agentic tests.
 - [scripts/agentic/verify-shot.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/verify-shot.ts) - Proof bundle generation and capture strategy selection.
 - [.codex/hooks/stop-continue-agentic-testing.ts](/Users/johnlindquist/dev/script-kit-gpui/.codex/hooks/stop-continue-agentic-testing.ts) - Run-scoped Codex Stop hook dispatcher.
@@ -37,6 +39,8 @@ These source files justify the automation summary on this page.
 - [scripts/test-harness.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/test-harness.ts)
 - [scripts/agentic/index.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/index.ts)
 - [scripts/agentic/filterable-surface-matrix.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/filterable-surface-matrix.ts)
+- [scripts/agentic/attached-popup-surface-matrix.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/attached-popup-surface-matrix.ts)
+- [scripts/agentic/surface-navigator.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/surface-navigator.ts)
 - [scripts/agentic/session.sh](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/session.sh)
 - [scripts/agentic/verify-shot.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/verify-shot.ts)
 - [.codex/hooks/stop-continue-agentic-testing.ts](/Users/johnlindquist/dev/script-kit-gpui/.codex/hooks/stop-continue-agentic-testing.ts)
@@ -60,6 +64,7 @@ These rules describe the behavior constraints that automation changes should pre
 - Prefer state-first proofs (`getElements`, `getState`, targeted `batch`) for non-visual checks, and escalate to screenshots or native focus only when state cannot prove the behavior.
 - Keep automation target identity stable across a proof run.
 - Treat focus-stealing native input as a last resort, especially for attached popups that expose state snapshots but may not expose an independent GPUI key handle.
+- For screenshot-library work, use `surface-navigate --capture --strict-window` before ad hoc screenshots.
 - Treat screenshot ambiguity as a hard failure, not a best-effort capture.
 - Treat blank or black screenshots as infrastructure failures, not visual proof.
 
@@ -76,6 +81,24 @@ AURP-18 starts normalizing the stable sibling surfaces behind named row-projecti
 Process Manager follows the same AURP-18 owner shape through `process_manager_*` helpers, including PID-aware filtering shared by render, keyboard, `getState`, `getElements`, and Tab AI target capture. [[tests/process_manager_visible_rows_contract.rs#process_manager_declares_visible_row_helper_family]] and [[tests/process_manager_visible_rows_contract.rs#process_manager_tab_ai_targets_use_visible_row_helpers]] pin the contract.
 
 MCP-backed catalog surfaces use `mcp_resources` as their projection owner. SDK Reference and Script Template Catalog rows flow through `sdk_reference_*` and `script_template_catalog_*` helpers before render, `getState`, `getElements`, sizing, and Tab AI read them; [[tests/mcp_catalog_visible_rows_contract.rs#mcp_resource_declares_catalog_projection_helper_families]] pins that owner.
+
+## Surface Navigator
+
+`surface-navigate` is the warm-session, state-first entrypoint for known app surfaces and screenshot-library capture.
+
+The navigator defaults to `--group filterable-main`, reuses `FILTERABLE_SURFACE_MATRIX`, enters each surface through its real runtime command, reveals and settles the app window, waits for the expected `promptType`, promotes the window to an exact target, samples `getState` and `getElements`, and optionally performs safe non-submitting `batch` interactions before capture. Its default output root is `.notes/image-library/`.
+
+Screenshot captures route through `verify-shot --strict-window` with an exact automation target, so ambiguous, wrong-window, blank, or black PNGs are infrastructure failures rather than visual proof. The first supported group is the stable main-hosted filterable surfaces: Current App Commands, Clipboard History, Emoji Picker, App Launcher, Design Gallery, and Process Manager. [[tests/agentic_surface_navigator_contract.rs#surface_navigator_captures_strict_image_library_outputs]] and [[tests/verify_shot_strict_window_contract.rs#strict_window_requires_exact_target_or_window_id]] pin the contract.
+
+Image-library capture writes one sidecar receipt per PNG plus `.notes/image-library/manifest.json`. Each manifest entry records the promoted exact automation target, native `osWindowId`, final pre-capture state/elements observation, strict capture identity, and PNG content audit. Navigator screenshots must be gated by a final `getState`/`getElements` snapshot after any safe interaction and immediately before capture. Current matrix surfaces declare filter-only safe interaction because semantic row selection is not yet supported for these main filterable prompt variants; any future selection attempt must fail closed on a failed batch receipt. [[tests/agentic_image_library_manifest_contract.rs#navigator_writes_sidecar_receipts_and_manifest]] pins the durable proof format.
+
+The `--group attached-popup` path starts with `actions-dialog-attached-popup` from `ATTACHED_POPUP_SURFACE_MATRIX`. It opens the host window, uses the stdin Cmd+K `simulateKey` path to open Actions Dialog, promotes `{kind:"actionsDialog",index:0}` to the exact `actions-dialog` id, samples `getElements`, and captures the parent native window through `verify-shot --strict-window`. `verify-shot` skips the pre-capture `show` command for exact attached-popup captures so it does not dismiss or obscure the popup, and missing `targetBoundsInScreenshot` marks the receipt as an infrastructure error. Manifest entries for attached popups carry `surfaceClass`, `windowKind`, `preCaptureInspection`, `preCaptureElements`, `popupCapture.strategy`, and `popupCapture.targetBounds`. The active matrix now includes the ACP Chat slash Prompt Popup after repeated fresh runtime proof with `parent_capture_with_crop`, and cases may declare an expected automation id so kind/index promotion cannot accept the wrong popup. [[tests/agentic_attached_popup_surface_navigator_contract.rs#attached_popup_matrix_declares_actions_dialog_active_cases]], [[tests/agentic_attached_popup_surface_navigator_contract.rs#attached_popup_matrix_declares_prompt_popup_active_case]], [[tests/agentic_attached_popup_surface_navigator_contract.rs#attached_popup_promotion_can_require_exact_automation_id]], and [[tests/verify_shot_strict_window_contract.rs#strict_window_skips_show_for_attached_popup_exact_capture]] pin this attached-popup slice.
+
+The `--group attached-popup` matrix supports host fixtures for Actions Dialog and Prompt Popup screenshots. Hosted Actions Dialog cases enter a stable `filterable-main` matrix surface through its real `triggerBuiltin` command, wait for the host `promptType`, sample host `getState`/`getElements`, then open Actions Dialog through stdin Cmd+K and capture the popup with the same exact-target `parent_capture_with_crop` proof. Hosted Actions Dialog cases currently cover Clipboard History, Emoji Picker, and App Launcher. The active Prompt Popup case opens Agent Chat with `triggerBuiltin tab-ai`, uses protocol `setAcpInput "/"`, requires `expectedAutomationWindowId: "acp-mention-popup"` while promoting `{kind:"promptPopup",index:0}`, and captures through `parent_capture_with_crop` under `--case all`. [[tests/agentic_prompt_popup_fixture_contract.rs#prompt_popup_fixture_is_active_attached_popup_case]] and [[tests/agentic_prompt_popup_fixture_contract.rs#prompt_popup_fixture_uses_protocol_acp_input_not_native_input]] pin the promoted boundary.
+
+Multi-surface screenshot-library sweeps use `--fresh-per-case` to isolate each captured view in its own short-lived session. Warm state receipts are still the default for non-visual proof, but visual sweeps must avoid stale rendered frames when switching between main-hosted prompt variants. The manifest records whether fresh per-case isolation was used. [[tests/agentic_surface_navigator_contract.rs#surface_navigator_can_isolate_screenshot_cases]] covers this guard.
+
+The `--group all-active` path runs every active `filterable-main` and `attached-popup` matrix case into one combined image-library manifest. It does not include candidates, each entry records its `sourceGroup`, and dispatch routes by that per-case group so attached-popup crop proof and Prompt Popup exact-id proof stay intact. Fresh visual sweeps include the source group in each temporary session name to avoid collisions as more families become active. [[tests/agentic_surface_navigator_all_active_contract.rs#all_active_group_combines_active_matrices]] and [[tests/agentic_surface_navigator_all_active_contract.rs#all_active_dispatch_routes_by_source_group]] pin the combined sweep.
 
 ## Batch target capabilities
 
@@ -100,6 +123,8 @@ Agentic-testing runs generate one bounded improvement pass with `$agentic-testin
 ## Surface-proof CLI
 
 `surface-proof` is the default seconds-first proof entrypoint for already-open product surfaces. It promotes one exact automation target and returns a machine-readable proof bundle.
+
+`surface-proof` records state-first evidence in `proofBundle.usage`, `proofBundle.capabilities`, `proofBundle.state`, `proofBundle.elements`, and `proofBundle.targetIdentity`, so agents can assert that ordinary surface proof used `getState`/`getElements` without screenshot capture, native input, `show`, or fixed sleeps.
 
 ### Surface classes
 

@@ -17,6 +17,7 @@
  *   acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
  *   acp-open               Open ACP and verify it reaches ready state
  *   acp-setup-recovery     Recovery from ACP setup state; select agent with --select-agent ID
+ *   surface-navigate       Navigate known surfaces, safely interact, and capture image-library screenshots
  *   scenario               Run a replayable scenario with proof bundle (--scenario NAME --index N)
  *   vision-loop            Materialize visionCrops from a receipt into crop files + manifest
  *   preflight              Check all prerequisites (session, window, permissions)
@@ -69,6 +70,31 @@ interface RecipeReceipt {
 }
 
 type SurfaceProofKind = "main" | "actionsDialog" | "promptPopup" | "acpDetached";
+
+interface SurfaceProofUsage {
+  stateFirst: true;
+  usedGetState: boolean;
+  usedGetElements: boolean;
+  usedInspect: boolean;
+  usedWaitFor: boolean;
+  usedBatch: boolean;
+  usedGpuiEvent: boolean;
+  usedScreenshot: false;
+  usedNativeInput: false;
+  usedShow: false;
+  usedFixedSleepMs: 0;
+}
+
+interface SurfaceProofCapabilities {
+  state: boolean;
+  elements: boolean;
+  inspect: boolean;
+  waitFor: boolean;
+  batch: string[];
+  gpuiEvent: boolean;
+  nativeInputRequired: false;
+  screenshotRequired: false;
+}
 
 /** Input delivery method chosen by the routing logic. */
 type RoutedInputMethod = "batch" | "simulateGpuiEvent" | "native";
@@ -522,6 +548,58 @@ async function recipePreflight(session: string): Promise<RecipeReceipt> {
   };
 }
 
+async function recipeSurfaceProofPreflight(session: string): Promise<StepReceipt[]> {
+  const steps: StepReceipt[] = [];
+
+  const sessionStatusStep = await step("session-status", () =>
+    runTool(
+      ["bash", "scripts/agentic/session.sh", "status", session],
+      "session-status"
+    )
+  );
+
+  const sessionJson = sessionStatusStep.output as Record<string, unknown> | null;
+  if (sessionJson && typeof sessionJson === "object" && !("raw" in sessionJson)) {
+    const status = sessionJson.status as string | undefined;
+    const alive = sessionJson.alive as boolean | undefined;
+    const forwarderAlive = sessionJson.forwarderAlive as boolean | undefined;
+    const healthy = sessionJson.healthy as boolean | undefined;
+
+    if (
+      status === "not_found" ||
+      alive === false ||
+      forwarderAlive === false ||
+      healthy === false
+    ) {
+      const issues = (sessionJson.issues as string[]) ?? [];
+      sessionStatusStep.status = "fail";
+      sessionStatusStep.output = {
+        ...sessionJson,
+        _surfaceProofVerdict: "unhealthy",
+        _failReasons: [
+          ...(status === "not_found" ? ["status:not_found"] : []),
+          ...(alive === false ? ["alive:false"] : []),
+          ...(forwarderAlive === false ? ["forwarderAlive:false"] : []),
+          ...(healthy === false ? ["healthy:false"] : []),
+          ...issues.map((i: string) => `issue:${i}`),
+        ],
+      };
+    }
+  }
+  steps.push(sessionStatusStep);
+
+  steps.push(
+    await step("session-state", () =>
+      runTool(
+        ["bun", "scripts/agentic/session-state.ts", "--session", session],
+        "session-state"
+      )
+    )
+  );
+
+  return steps;
+}
+
 function inferSurfaceClass(kind: SurfaceProofKind): "main" | "attachedPopup" | "detached" {
   switch (kind) {
     case "main":
@@ -534,22 +612,120 @@ function inferSurfaceClass(kind: SurfaceProofKind): "main" | "attachedPopup" | "
   }
 }
 
+function exactTargetFromSurfaceProofBundle(
+  bundle: any,
+  fallbackKind: SurfaceProofKind,
+  index: number
+): AutomationTargetJson {
+  if (fallbackKind === "main") return { type: "main" };
+  const windowId = bundle?.resolvedTarget?.windowId;
+  if (windowId) return { type: "id", id: String(windowId) };
+  return { type: "kind", kind: fallbackKind, index };
+}
+
+function responsePayload(output: unknown): unknown {
+  if (output && typeof output === "object" && "response" in output) {
+    return (output as Record<string, unknown>).response;
+  }
+  return output;
+}
+
+function surfaceProofUsage(bundle: any, stateStep: StepReceipt, elementsStep: StepReceipt): SurfaceProofUsage {
+  const stepTypes = Array.isArray(bundle?.steps)
+    ? bundle.steps.map((s: any) => String(s?.type ?? ""))
+    : [];
+
+  return {
+    stateFirst: true,
+    usedGetState: stateStep.status === "pass",
+    usedGetElements: elementsStep.status === "pass",
+    usedInspect: stepTypes.includes("inspect"),
+    usedWaitFor: stepTypes.includes("waitFor"),
+    usedBatch: false,
+    usedGpuiEvent: stepTypes.includes("simulateGpuiEvent"),
+    usedScreenshot: false,
+    usedNativeInput: false,
+    usedShow: false,
+    usedFixedSleepMs: 0,
+  };
+}
+
+function surfaceProofCapabilities(
+  kind: SurfaceProofKind,
+  stateStep: StepReceipt,
+  elementsStep: StepReceipt
+): SurfaceProofCapabilities {
+  const attachedPopup = kind === "actionsDialog" || kind === "promptPopup";
+  return {
+    state: stateStep.status === "pass",
+    elements: elementsStep.status === "pass",
+    inspect: true,
+    waitFor: true,
+    batch: attachedPopup ? ["setInput"] : [],
+    gpuiEvent: kind === "acpDetached",
+    nativeInputRequired: false,
+    screenshotRequired: false,
+  };
+}
+
+async function collectSurfaceStateAndElements(
+  session: string,
+  target: AutomationTargetJson,
+  kind: SurfaceProofKind
+): Promise<{ stateStep: StepReceipt; elementsStep: StepReceipt }> {
+  const stamp = Date.now();
+  const stateStep = await step("surface.getState", () =>
+    rpc(
+      session,
+      buildCmd(
+        {
+          type: "getState",
+          requestId: `surface-proof-${kind}-state-${stamp}`,
+        },
+        target
+      ),
+      { expect: "stateResult", timeout: 5000 }
+    )
+  );
+
+  const elementsStep = await step("surface.getElements", () =>
+    rpc(
+      session,
+      buildCmd(
+        {
+          type: "getElements",
+          requestId: `surface-proof-${kind}-elements-${stamp}`,
+          limit: 500,
+        },
+        target
+      ),
+      { expect: "elementsResult", timeout: 5000 }
+    )
+  );
+
+  return { stateStep, elementsStep };
+}
+
 async function recipeSurfaceProof(
   session: string,
   opts: { kind?: SurfaceProofKind; index?: number } = {}
 ): Promise<RecipeReceipt> {
+  // @lat: [[lat.md/automation#Automation#Surface-proof CLI]]
   const kind = opts.kind ?? "main";
   const index = opts.index ?? 0;
-  const preflight = await recipePreflight(session);
+  const preflightSteps = await recipeSurfaceProofPreflight(session);
   let bundle;
 
-  if (preflight.status !== "pass") {
+  if (!preflightSteps.every((s) => s.status === "pass")) {
     return {
       schemaVersion: SCHEMA_VERSION,
       recipe: "surface-proof",
       status: "fail",
-      steps: preflight.steps,
-      summary: `Cannot proceed: ${preflight.summary}`,
+      steps: preflightSteps,
+      summary: `Cannot proceed: ${preflightSteps
+        .filter((s) => s.status !== "pass")
+        .map((s) => s.name)
+        .join(", ")}`,
     };
   }
 
@@ -568,6 +744,47 @@ async function recipeSurfaceProof(
       break;
   }
 
+  const target = exactTargetFromSurfaceProofBundle(bundle, kind, index);
+  const { stateStep, elementsStep } = await collectSurfaceStateAndElements(
+    session,
+    target,
+    kind
+  );
+  const initialWindowId = bundle.resolvedTarget.windowId;
+  const finalWindowId = target.type === "id" ? target.id : initialWindowId;
+  const proofBundle = {
+    ...bundle,
+    targetIdentity: {
+      stable: initialWindowId === finalWindowId,
+      initialWindowId,
+      finalWindowId,
+    },
+    usage: surfaceProofUsage(bundle, stateStep, elementsStep),
+    capabilities: surfaceProofCapabilities(kind, stateStep, elementsStep),
+    state: responsePayload(stateStep.output),
+    elements: responsePayload(elementsStep.output),
+    steps: [
+      ...bundle.steps,
+      {
+        type: "getState",
+        at: new Date().toISOString(),
+        request: { target },
+        response: responsePayload(stateStep.output),
+      },
+      {
+        type: "getElements",
+        at: new Date().toISOString(),
+        request: { target },
+        response: responsePayload(elementsStep.output),
+      },
+    ],
+  };
+  const allPass =
+    bundle.warnings.length === 0 &&
+    stateStep.status === "pass" &&
+    elementsStep.status === "pass" &&
+    proofBundle.targetIdentity.stable;
+
   console.error(
     JSON.stringify({
       event: "surface_proof_complete",
@@ -578,27 +795,31 @@ async function recipeSurfaceProof(
       warningCount: bundle.warnings.length,
       resolvedWindowId: bundle.resolvedTarget.windowId,
       surfaceId: bundle.resolvedTarget.surfaceId ?? null,
+      usedScreenshot: false,
+      usedNativeInput: false,
     })
   );
 
   return {
     schemaVersion: SCHEMA_VERSION,
     recipe: "surface-proof",
-    status: bundle.warnings.length === 0 ? "pass" : "fail",
+    status: allPass ? "pass" : "fail",
     steps: [
-      ...preflight.steps,
+      ...preflightSteps,
       {
         name: "scenario",
         status: bundle.warnings.length === 0 ? "pass" : "fail",
         output: bundle,
         durationMs: 0,
       },
+      stateStep,
+      elementsStep,
     ],
     summary:
-      bundle.warnings.length === 0
-        ? `Deterministic ${inferSurfaceClass(kind)} proof succeeded for ${kind}`
+      allPass
+        ? `State-first ${inferSurfaceClass(kind)} proof succeeded for ${kind}`
         : `Scenario warnings: ${bundle.warnings.join(", ")}`,
-    proofBundle: bundle,
+    proofBundle,
   };
 }
 
@@ -1567,6 +1788,21 @@ switch (recipe) {
     break;
   }
 
+  case "surface-navigate": {
+    const navArgs = process.argv.slice(3);
+    const proc = Bun.spawn(
+      ["bun", "scripts/agentic/surface-navigator.ts", ...navArgs],
+      { stdout: "pipe", stderr: "pipe", cwd: PROJECT_ROOT }
+    );
+    const navStdout = await new Response(proc.stdout).text();
+    const navStderr = await new Response(proc.stderr).text();
+    const navExit = await proc.exited;
+    if (navStderr) process.stderr.write(navStderr);
+    process.stdout.write(navStdout);
+    process.exit(navExit);
+    break;
+  }
+
   case "help":
   case "--help": {
     const jsonFlag = process.argv.includes("--json");
@@ -1583,6 +1819,7 @@ switch (recipe) {
           { name: "acp-detached-accept", description: "One-command detached ACP proof: resolve, accept, identity check", flags: ["--session", "--kind", "--index", "--key", "--vision", "--json"] },
           { name: "acp-setup-recovery", description: "Recovery from ACP setup state", flags: ["--session", "--select-agent", "--json"] },
           { name: "surface-proof", description: "Seconds-first proof for main / attached popup / detached surfaces", flags: ["--session", "--kind", "--index", "--json"] },
+          { name: "surface-navigate", description: "Warm-session state-first navigation, safe interaction, and strict screenshot capture for known surfaces", flags: ["--session", "--group", "--case", "--interact", "--capture", "--out-dir", "--manifest", "--fresh-per-case", "--keep-session", "--json"] },
           { name: "scenario", description: "Run a replayable scenario with proof bundle", flags: ["--session", "--scenario", "--index", "--json"] },
           { name: "vision-loop", description: "Materialize visionCrops from receipt", flags: ["--receipt", "--out-dir"] },
           { name: "help", description: "Show help (--json for machine-readable)", flags: ["--json"] },
@@ -1598,6 +1835,11 @@ switch (recipe) {
           "resolvedWindowId",
           "dispatchPath",
           "resolvedTarget.windowId",
+          "proofBundle.usage",
+          "proofBundle.capabilities",
+          "proofBundle.state",
+          "proofBundle.elements",
+          "proofBundle.targetIdentity",
         ],
         routing: {
           description: "Non-main targets (acpDetached, actionsDialog, promptPopup) are routed through batch/simulateGpuiEvent first; native input is last resort.",
@@ -1621,6 +1863,7 @@ Recipes:
   acp-detached-accept    One-command detached ACP proof: resolve → accept → identity check
   acp-setup-recovery     Recovery from ACP setup; select agent with --select-agent ID
   surface-proof          Seconds-first proof for main / attached popup / detached surfaces
+  surface-navigate       Warm-session navigation, safe interaction, and strict screenshots for known surfaces
   scenario               Run a replayable scenario with proof bundle output
   vision-loop            Materialize visionCrops from receipt (pass --receipt, --out-dir)
   help                   Show this help (--json for machine-readable output)
@@ -1644,6 +1887,8 @@ Available scenarios:
 
 Examples:
   bun scripts/agentic/index.ts surface-proof --session default --kind main
+  bun scripts/agentic/index.ts surface-navigate --session default --group filterable-main --case all --interact safe --capture --fresh-per-case --out-dir .notes/image-library --manifest .notes/image-library/manifest.json --json
+  bun scripts/agentic/index.ts surface-navigate --session popup --group attached-popup --case actions-dialog-attached-popup --capture --fresh-per-case --json
   bun scripts/agentic/index.ts surface-proof --session default --kind promptPopup --index 0
   bun scripts/agentic/index.ts surface-proof --session default --kind acpDetached --index 0
   bun scripts/agentic/index.ts acp-accept --session default --key enter

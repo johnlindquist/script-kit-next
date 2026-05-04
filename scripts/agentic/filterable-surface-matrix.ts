@@ -17,16 +17,37 @@ import { resolve } from "path";
 const SCHEMA_VERSION = 1;
 const PROJECT_ROOT = resolve(import.meta.dir, "../..");
 
-type JsonObject = Record<string, unknown>;
+export type JsonObject = Record<string, unknown>;
 
-interface FilterableSurfaceMatrixEntry {
+export type MatrixAutomationTarget =
+  | {
+      type: "kind";
+      kind: "main" | "actionsDialog" | "promptPopup";
+      index: 0;
+    }
+  | {
+      type: "id";
+      id: string;
+    };
+
+export interface SafeSurfaceInteractions {
+  filter: boolean;
+  selectFirstVisibleChoice: boolean;
+  submit: false;
+}
+
+export interface FilterableSurfaceMatrixEntry {
   id: string;
   surface: string;
+  viewName: string;
+  imageLibraryName: string;
   promptType: string;
   listSemanticId: string;
   entryCommand: JsonObject;
   filterText: string;
   expectedElementChromeCount: number;
+  target: MatrixAutomationTarget;
+  safeInteractions: SafeSurfaceInteractions;
 }
 
 interface RpcEnvelope {
@@ -41,7 +62,7 @@ interface StepReceipt {
   response: JsonObject;
 }
 
-interface CountObservation {
+export interface CountObservation {
   choiceCount: number;
   visibleChoiceCount: number;
   listCount: number;
@@ -49,61 +70,92 @@ interface CountObservation {
   selectedValue: string | null;
 }
 
+const MAIN_TARGET: MatrixAutomationTarget = { type: "kind", kind: "main", index: 0 };
+const SAFE_NON_SUBMITTING_INTERACTIONS: SafeSurfaceInteractions = {
+  filter: true,
+  selectFirstVisibleChoice: false,
+  submit: false,
+};
+
 // @lat: [[lat.md/automation#Automation#Operational Rules]]
 export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
   {
     id: "current-app-commands-visible-rows",
     surface: "currentAppCommands",
+    viewName: "current-app-commands",
+    imageLibraryName: "current-app-commands.png",
     promptType: "currentAppCommands",
     listSemanticId: "list:menu-commands",
     entryCommand: { type: "triggerBuiltin", name: "current-app-commands" },
     filterText: "workspace",
     expectedElementChromeCount: 2,
+    target: MAIN_TARGET,
+    safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS,
   },
   {
     id: "clipboard-history-visible-rows",
     surface: "clipboardHistory",
+    viewName: "clipboard-history",
+    imageLibraryName: "clipboard-history.png",
     promptType: "clipboardHistory",
     listSemanticId: "list:clipboard-history",
     entryCommand: { type: "triggerBuiltin", name: "clipboard-history" },
     filterText: "__aurp11_no_clipboard_match__",
     expectedElementChromeCount: 2,
+    target: MAIN_TARGET,
+    safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS,
   },
   {
     id: "emoji-picker-visible-rows",
     surface: "emojiPicker",
+    viewName: "emoji-picker",
+    imageLibraryName: "emoji-picker.png",
     promptType: "emojiPicker",
     listSemanticId: "list:emoji-results",
     entryCommand: { type: "triggerBuiltin", name: "emoji" },
     filterText: "heart",
     expectedElementChromeCount: 2,
+    target: MAIN_TARGET,
+    safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS,
   },
   {
     id: "app-launcher-visible-rows",
     surface: "appLauncher",
+    viewName: "app-launcher",
+    imageLibraryName: "app-launcher.png",
     promptType: "appLauncher",
     listSemanticId: "list:apps",
     entryCommand: { type: "triggerBuiltin", name: "apps" },
     filterText: "__aurp16_no_app_match__",
     expectedElementChromeCount: 2,
+    target: MAIN_TARGET,
+    safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS,
   },
   {
     id: "design-gallery-visible-rows",
     surface: "designGallery",
+    viewName: "design-gallery",
+    imageLibraryName: "design-gallery.png",
     promptType: "designGallery",
     listSemanticId: "list:design-gallery",
     entryCommand: { type: "triggerBuiltin", name: "design-gallery" },
     filterText: "icon",
     expectedElementChromeCount: 2,
+    target: MAIN_TARGET,
+    safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS,
   },
   {
     id: "process-manager-visible-rows",
     surface: "processManager",
+    viewName: "process-manager",
+    imageLibraryName: "process-manager.png",
     promptType: "processManager",
     listSemanticId: "list:processes",
     entryCommand: { type: "triggerBuiltin", name: "process-manager" },
     filterText: "__aurp16_no_process_match__",
     expectedElementChromeCount: 2,
+    target: MAIN_TARGET,
+    safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS,
   },
 ];
 
@@ -119,7 +171,7 @@ function argValue(flag: string, fallback: string): string {
   return process.argv[index + 1] ?? fallback;
 }
 
-function selectedCases(caseId: string): FilterableSurfaceMatrixEntry[] {
+export function selectedCases(caseId: string): FilterableSurfaceMatrixEntry[] {
   if (caseId === "all") {
     return FILTERABLE_SURFACE_MATRIX;
   }
@@ -130,7 +182,7 @@ function selectedCases(caseId: string): FilterableSurfaceMatrixEntry[] {
   return [entry];
 }
 
-async function runTool(cmd: string[], label: string): Promise<JsonObject> {
+export async function runTool(cmd: string[], label: string): Promise<JsonObject> {
   const proc = Bun.spawn(cmd, {
     cwd: PROJECT_ROOT,
     stdout: "pipe",
@@ -149,15 +201,15 @@ async function runTool(cmd: string[], label: string): Promise<JsonObject> {
   }
 }
 
-async function sessionStart(session: string): Promise<JsonObject> {
+export async function sessionStart(session: string): Promise<JsonObject> {
   return runTool(["bash", "scripts/agentic/session.sh", "start", session], "session.start");
 }
 
-async function sessionStop(session: string): Promise<JsonObject> {
+export async function sessionStop(session: string): Promise<JsonObject> {
   return runTool(["bash", "scripts/agentic/session.sh", "stop", session], "session.stop");
 }
 
-async function sendAndAwaitParse(
+export async function sendAndAwaitParse(
   session: string,
   command: JsonObject,
   timeoutMs: number,
@@ -183,7 +235,7 @@ async function sendAndAwaitParse(
   return receipt;
 }
 
-async function rpc(
+export async function rpc(
   session: string,
   command: JsonObject,
   expect: string,
@@ -225,7 +277,7 @@ function stringField(source: JsonObject, key: string): string {
   return value;
 }
 
-function elementsFrom(response: JsonObject): JsonObject[] {
+export function elementsFrom(response: JsonObject): JsonObject[] {
   const elements = response.elements;
   if (!Array.isArray(elements)) {
     throw new Error("elementsResult response must contain an elements array");
@@ -248,7 +300,7 @@ function listCountFromElements(response: JsonObject, listSemanticId: string): nu
   return Number(match[1]);
 }
 
-function observeCounts(
+export function observeCounts(
   entry: FilterableSurfaceMatrixEntry,
   state: JsonObject,
   elements: JsonObject,
@@ -291,32 +343,89 @@ function observeCounts(
   };
 }
 
-async function runEntry(
+export async function enterFilterableSurface(
+  session: string,
+  entry: FilterableSurfaceMatrixEntry,
+  timeoutMs: number,
+): Promise<JsonObject> {
+  return sendAndAwaitParse(session, entry.entryCommand, timeoutMs);
+}
+
+export async function waitForPromptType(
+  session: string,
+  entry: FilterableSurfaceMatrixEntry,
+  timeoutMs: number,
+): Promise<JsonObject> {
+  const deadline = Date.now() + timeoutMs;
+  let lastState: JsonObject | null = null;
+  while (Date.now() < deadline) {
+    const command = {
+      type: "getState",
+      requestId: `${entry.id}-wait-state-${Date.now()}`,
+    };
+    const state = await rpc(session, command, "stateResult", Math.min(timeoutMs, 1000));
+    lastState = state;
+    if (state.promptType === entry.promptType) {
+      return state;
+    }
+    await Bun.sleep(50);
+  }
+  throw new Error(
+    `${entry.id}: expected promptType ${entry.promptType}, last state ${JSON.stringify(lastState)}`,
+  );
+}
+
+export async function getStateAndElements(
+  session: string,
+  entry: FilterableSurfaceMatrixEntry,
+  timeoutMs: number,
+  requestLabel = "snapshot",
+  targetOverride: MatrixAutomationTarget = entry.target,
+): Promise<{ state: JsonObject; elements: JsonObject; observation: CountObservation }> {
+  const stateCommand = {
+    type: "getState",
+    requestId: `${entry.id}-${requestLabel}-state`,
+    target: targetOverride,
+  };
+  const elementsCommand = {
+    type: "getElements",
+    requestId: `${entry.id}-${requestLabel}-elements`,
+    target: targetOverride,
+    limit: 500,
+  };
+  const state = await rpc(session, stateCommand, "stateResult", timeoutMs);
+  const elements = await rpc(session, elementsCommand, "elementsResult", timeoutMs);
+  return {
+    state,
+    elements,
+    observation: observeCounts(entry, state, elements),
+  };
+}
+
+export async function runEntry(
   session: string,
   entry: FilterableSurfaceMatrixEntry,
   timeoutMs: number,
 ): Promise<JsonObject> {
   const steps: StepReceipt[] = [];
 
-  await sendAndAwaitParse(session, entry.entryCommand, timeoutMs);
+  await enterFilterableSurface(session, entry, timeoutMs);
   await sendAndAwaitParse(session, { type: "setFilter", text: "" }, timeoutMs);
 
   const emptyStateCommand = {
     type: "getState",
     requestId: `${entry.id}-empty-state`,
+    target: entry.target,
   };
   const emptyElementsCommand = {
     type: "getElements",
     requestId: `${entry.id}-empty-elements`,
-    limit: 200,
+    target: entry.target,
+    limit: 500,
   };
-  const emptyState = await rpc(session, emptyStateCommand, "stateResult", timeoutMs);
-  const emptyElements = await rpc(
-    session,
-    emptyElementsCommand,
-    "elementsResult",
-    timeoutMs,
-  );
+  const emptySnapshot = await getStateAndElements(session, entry, timeoutMs, "empty");
+  const emptyState = emptySnapshot.state;
+  const emptyElements = emptySnapshot.elements;
   steps.push({ name: "empty.getState", command: emptyStateCommand, response: emptyState });
   steps.push({
     name: "empty.getElements",
@@ -330,24 +439,17 @@ async function runEntry(
   const filteredStateCommand = {
     type: "getState",
     requestId: `${entry.id}-filtered-state`,
+    target: entry.target,
   };
   const filteredElementsCommand = {
     type: "getElements",
     requestId: `${entry.id}-filtered-elements`,
-    limit: 200,
+    target: entry.target,
+    limit: 500,
   };
-  const filteredState = await rpc(
-    session,
-    filteredStateCommand,
-    "stateResult",
-    timeoutMs,
-  );
-  const filteredElements = await rpc(
-    session,
-    filteredElementsCommand,
-    "elementsResult",
-    timeoutMs,
-  );
+  const filteredSnapshot = await getStateAndElements(session, entry, timeoutMs, "filtered");
+  const filteredState = filteredSnapshot.state;
+  const filteredElements = filteredSnapshot.elements;
   steps.push({
     name: "filtered.getState",
     command: filteredStateCommand,
@@ -359,8 +461,8 @@ async function runEntry(
     response: filteredElements,
   });
 
-  const empty = observeCounts(entry, emptyState, emptyElements);
-  const filtered = observeCounts(entry, filteredState, filteredElements);
+  const empty = emptySnapshot.observation;
+  const filtered = filteredSnapshot.observation;
 
   return {
     id: entry.id,
@@ -424,4 +526,6 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+if (import.meta.main) {
+  await main();
+}
