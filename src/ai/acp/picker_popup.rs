@@ -19,6 +19,8 @@ use crate::components::inline_dropdown::{
 
 use super::view::AcpChatView;
 
+const ACP_MENTION_POPUP_AUTOMATION_ID: &str = "acp-mention-popup";
+
 #[derive(Clone)]
 pub(crate) struct AcpMentionPopupSnapshot {
     pub(crate) trigger: ContextPickerTrigger,
@@ -56,6 +58,8 @@ fn clear_mention_popup_window_slot() {
 }
 
 pub(crate) fn close_mention_popup_window(cx: &mut App) {
+    crate::windows::remove_runtime_window_handle(ACP_MENTION_POPUP_AUTOMATION_ID);
+    crate::windows::remove_automation_window(ACP_MENTION_POPUP_AUTOMATION_ID);
     if let Some(storage) = ACP_MENTION_POPUP_WINDOW.get() {
         if let Ok(mut guard) = storage.lock() {
             if let Some(slot) = guard.take() {
@@ -137,6 +141,69 @@ fn popup_height(snapshot: &AcpMentionPopupSnapshot) -> f32 {
     ) + CONTEXT_PICKER_SYNOPSIS_HEIGHT
 }
 
+fn automation_bounds(bounds: Bounds<Pixels>) -> crate::protocol::AutomationWindowBounds {
+    crate::protocol::AutomationWindowBounds {
+        x: f32::from(bounds.origin.x) as f64,
+        y: f32::from(bounds.origin.y) as f64,
+        width: f32::from(bounds.size.width) as f64,
+        height: f32::from(bounds.size.height) as f64,
+    }
+}
+
+fn resolve_mention_popup_parent_automation_id(
+    parent_window_handle: AnyWindowHandle,
+    parent_bounds: Bounds<Pixels>,
+) -> anyhow::Result<String> {
+    for window in crate::windows::list_automation_windows() {
+        if crate::windows::get_runtime_window_handle(&window.id)
+            .is_some_and(|handle| handle == parent_window_handle)
+        {
+            return Ok(window.id);
+        }
+    }
+
+    if crate::get_main_window_handle().is_some_and(|handle| handle == parent_window_handle) {
+        let parent_id = "main".to_string();
+        crate::windows::upsert_runtime_window_handle(&parent_id, parent_window_handle);
+        let preserved_semantic_surface = crate::windows::list_automation_windows()
+            .into_iter()
+            .find(|window| window.id == parent_id)
+            .and_then(|window| window.semantic_surface)
+            .unwrap_or_else(|| "acpChat".to_string());
+        crate::windows::upsert_automation_window(crate::protocol::AutomationWindowInfo {
+            id: parent_id.clone(),
+            kind: crate::protocol::AutomationWindowKind::Main,
+            title: Some("Script Kit".to_string()),
+            focused: true,
+            visible: true,
+            semantic_surface: Some(preserved_semantic_surface),
+            bounds: Some(automation_bounds(parent_bounds)),
+            parent_window_id: None,
+            parent_kind: None,
+        });
+        return Ok(parent_id);
+    }
+
+    anyhow::bail!("Cannot register ACP mention popup: parent automation identity is required");
+}
+
+fn register_mention_popup_automation_window(
+    parent_window_handle: AnyWindowHandle,
+    parent_bounds: Bounds<Pixels>,
+    popup_bounds: Bounds<Pixels>,
+) -> anyhow::Result<()> {
+    let parent_id =
+        resolve_mention_popup_parent_automation_id(parent_window_handle, parent_bounds)?;
+    crate::windows::register_attached_popup(
+        ACP_MENTION_POPUP_AUTOMATION_ID.to_string(),
+        crate::protocol::AutomationWindowKind::PromptPopup,
+        Some("ACP Mention Picker".to_string()),
+        Some("promptPopup".to_string()),
+        Some(automation_bounds(popup_bounds)),
+        Some(parent_id.as_str()),
+    )
+}
+
 pub(crate) fn popup_bounds(
     parent_bounds: Bounds<Pixels>,
     left: f32,
@@ -180,14 +247,30 @@ pub(crate) fn sync_mention_popup_window(
                 });
 
                 if update_result.is_ok() {
+                    if let Err(error) = register_mention_popup_automation_window(
+                        parent_window_handle,
+                        parent_bounds,
+                        bounds,
+                    ) {
+                        tracing::warn!(
+                            target: "script_kit::automation",
+                            event = "acp_mention_popup_registry_failed",
+                            error = %error,
+                            "Failed to refresh ACP mention popup automation registry entry"
+                        );
+                    }
                     return Ok(());
                 }
 
+                crate::windows::remove_runtime_window_handle(ACP_MENTION_POPUP_AUTOMATION_ID);
+                crate::windows::remove_automation_window(ACP_MENTION_POPUP_AUTOMATION_ID);
                 *guard = None;
             } else {
                 let _ = slot.handle.update(cx, |_popup, window, _cx| {
                     window.remove_window();
                 });
+                crate::windows::remove_runtime_window_handle(ACP_MENTION_POPUP_AUTOMATION_ID);
+                crate::windows::remove_automation_window(ACP_MENTION_POPUP_AUTOMATION_ID);
                 *guard = None;
             }
         }
@@ -206,6 +289,18 @@ pub(crate) fn sync_mention_popup_window(
             window.remove_window();
         });
         return Err(error.context("failed to configure ACP mention popup window"));
+    }
+
+    let any_handle: AnyWindowHandle = handle.into();
+    crate::windows::upsert_runtime_window_handle(ACP_MENTION_POPUP_AUTOMATION_ID, any_handle);
+    if let Err(error) =
+        register_mention_popup_automation_window(parent_window_handle, parent_bounds, bounds)
+    {
+        crate::windows::remove_runtime_window_handle(ACP_MENTION_POPUP_AUTOMATION_ID);
+        let _ = handle.update(cx, |_popup, window, _cx| {
+            window.remove_window();
+        });
+        return Err(error);
     }
 
     if let Ok(mut guard) = storage.lock() {
