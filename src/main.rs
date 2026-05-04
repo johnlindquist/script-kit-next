@@ -61,6 +61,7 @@ mod filter_coalescer;
 mod focus_coordinator;
 mod footer_popup;
 mod form_prompt;
+mod formatting;
 mod hotkeys;
 #[allow(dead_code)] // Symbols used by hint_strip for SVG keyboard glyph icons
 mod icons;

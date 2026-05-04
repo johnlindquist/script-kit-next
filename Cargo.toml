@@ -168,6 +168,7 @@ tokio-util = { version = "0.7", features = ["compat"] }
 tempfile = "3"
 tree-sitter = "0.25"
 tree-sitter-typescript = "0.23.2"
+chrono-humanize = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 # Note: We use core-graphics directly for Cmd+V simulation (more reliable than enigo on macOS)

@@ -85,24 +85,10 @@ impl AiApp {
         let is_copied = self.is_message_copied(&msg_id);
 
         // Relative timestamp + full datetime for tooltip
-        let timestamp: SharedString = {
-            let now = Utc::now();
-            let diff = now - message.created_at;
-            if diff.num_minutes() < 1 {
-                "just now".into()
-            } else if diff.num_minutes() < 60 {
-                format!("{}m ago", diff.num_minutes()).into()
-            } else if diff.num_hours() < 24 {
-                format!("{}h ago", diff.num_hours()).into()
-            } else {
-                message.created_at.format("%b %d").to_string().into()
-            }
-        };
-        let full_timestamp: SharedString = message
-            .created_at
-            .format("%B %-d, %Y at %-I:%M %p")
-            .to_string()
-            .into();
+        let timestamp: SharedString =
+            crate::formatting::format_relative_time_short_dt(message.created_at).into();
+        let full_timestamp: SharedString =
+            crate::formatting::format_absolute_datetime(message.created_at).into();
 
         let role_label = if is_user {
             "You"

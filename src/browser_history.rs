@@ -5,7 +5,7 @@ use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
-use chrono::{DateTime, Local, Utc};
+use chrono::{DateTime, Utc};
 use rusqlite::Connection;
 
 const CHROMIUM_EPOCH_OFFSET_SECS: i64 = 11_644_473_600;
@@ -426,11 +426,12 @@ pub fn format_history_timestamp(last_visited_at_ms: i64) -> String {
         return "Unknown time".to_string();
     }
 
-    let Some(utc) = DateTime::<Utc>::from_timestamp_millis(last_visited_at_ms) else {
-        return "Unknown time".to_string();
-    };
-    let local = utc.with_timezone(&Local);
-    local.format("%Y-%m-%d %H:%M").to_string()
+    let formatted = crate::formatting::format_absolute_unix_millis(last_visited_at_ms);
+    if formatted == "unknown time" {
+        "Unknown time".to_string()
+    } else {
+        formatted
+    }
 }
 
 fn recency_bonus(last_visited_at_ms: i64) -> i32 {

@@ -218,7 +218,7 @@ impl AiApp {
             "_Model: {} | Provider: {} | Created: {}_\n\n---\n\n",
             chat.model_id,
             chat.provider,
-            chat.created_at.format("%Y-%m-%d %H:%M")
+            crate::formatting::format_absolute_datetime(chat.created_at)
         ));
 
         for msg in &self.current_messages {
