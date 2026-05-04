@@ -3447,6 +3447,17 @@ impl AcpChatView {
     pub(crate) fn set_input(&mut self, value: String, cx: &mut Context<Self>) {
         self.live_thread()
             .update(cx, |thread, cx| thread.set_input(value, cx));
+        self.refresh_mention_session(cx);
+    }
+
+    pub(crate) fn set_input_in_window(
+        &mut self,
+        value: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.cache_popup_parent_window(window, cx);
+        self.set_input(value, cx);
     }
 
     pub(crate) fn stage_inline_context_parts_from_host(

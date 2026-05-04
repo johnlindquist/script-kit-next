@@ -50,6 +50,12 @@ Embedded host interceptors in [[src/app_impl/startup.rs]] and [[src/app_impl/sta
 
 Automation `simulateKey` routes in [[src/main_entry/runtime_stdin.rs]] and [[src/main_entry/app_run_setup.rs]] also call the helper before closing, so agentic tests exercise the same cancellation contract as the user-facing surface.
 
+## Protocol input
+
+Protocol-driven ACP input preserves the same popup refresh path as user input.
+
+The stdin `setAcpInput` command routes through `AcpChatView::set_input_in_window`, which caches the parent GPUI window before calling `set_input`. That keeps slash and mention picker refreshes protocol-only while still giving the attached Prompt Popup enough parent-window geometry to sync its popup window. The ACP mention picker registers that popup as `AutomationWindowKind::PromptPopup` through the shared attached-popup registry and removes the entry when the popup closes. Protocol `setAcpInput "/"` is the active screenshot-library path for the ACP slash Prompt Popup after repeated fresh proof, and the matrix pins its promoted id to `acp-mention-popup`. [[tests/agentic_prompt_popup_fixture_contract.rs#protocol_acp_input_refreshes_prompt_popup_session]] pins the input refresh, and [[tests/agentic_prompt_popup_fixture_contract.rs#prompt_popup_target_is_promoted_to_exact_id_with_crop_bounds]] pins popup registry coverage.
+
 ## Detached window behavior
 
 The detached ACP window lives in `src/ai/acp/chat_window.rs` and carries a live thread when opened from an existing conversation.

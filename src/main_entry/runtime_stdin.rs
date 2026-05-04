@@ -916,7 +916,7 @@ cx.spawn(async move |cx: &mut gpui::AsyncApp| {
                                     AppView::AcpChatView { entity } => {
                                         let entity = entity.clone();
                                         entity.update(ctx, |chat, cx| {
-                                            chat.set_input(text.clone(), cx);
+                                            chat.set_input_in_window(text.clone(), window, cx);
                                             if submit {
                                                 if let Some(t) = chat.thread() {
                                                     let _ = t.update(cx, |thread, cx| thread.submit_input(cx));
