@@ -360,7 +360,7 @@ fn no_direct_ai_open_window_in_user_facing_branches() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn reset_window_positions_shows_hud_confirmation() {
+fn reset_window_positions_returns_to_default_menu_without_hud() {
     let content = builtin_execution_content();
 
     let reset_section_start = content
@@ -369,23 +369,28 @@ fn reset_window_positions_shows_hud_confirmation() {
     let block = &content[reset_section_start..reset_section_start + 800];
 
     assert!(
-        block.contains("show_hud("),
-        "Expected ResetWindowPositions to show HUD feedback"
+        block.contains("reset_window_positions_to_default_main_menu(cx)"),
+        "Expected ResetWindowPositions to use the shared default menu reset helper"
     );
     assert!(
-        block.contains("Window positions reset"),
-        "Expected ResetWindowPositions HUD to confirm reset"
+        !block.contains("show_hud("),
+        "ResetWindowPositions should not trigger HUD feedback"
+    );
+    assert!(
+        !block.contains("close_and_reset_window(cx)"),
+        "ResetWindowPositions should leave the main menu visible instead of hiding the launcher"
     );
 }
 
 #[test]
 fn reset_window_positions_suppresses_save_before_reset() {
-    let content = builtin_execution_content();
+    let content = std::fs::read_to_string("src/app_impl/lifecycle_reset.rs")
+        .expect("Failed to read lifecycle_reset.rs");
 
     let reset_section_start = content
-        .find("SettingsCommandType::ResetWindowPositions")
-        .expect("Expected ResetWindowPositions match arm");
-    let block = &content[reset_section_start..reset_section_start + 500];
+        .find("fn reset_window_positions_to_default_main_menu")
+        .expect("Expected reset_window_positions_to_default_main_menu helper");
+    let block = &content[reset_section_start..reset_section_start + 1200];
 
     assert!(
         block.contains("suppress_save()"),
@@ -394,6 +399,14 @@ fn reset_window_positions_suppresses_save_before_reset() {
     assert!(
         block.contains("reset_all_positions()"),
         "Expected ResetWindowPositions to call reset_all_positions"
+    );
+    assert!(
+        block.contains("reset_to_script_list(cx)"),
+        "Expected ResetWindowPositions to reset the main window back to the default script list"
+    );
+    assert!(
+        block.contains("calculate_eye_line_bounds_on_mouse_display"),
+        "Expected ResetWindowPositions to reposition the main window to default bounds immediately"
     );
 }
 

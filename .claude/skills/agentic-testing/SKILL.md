@@ -387,17 +387,21 @@ checkpoint strategy so agents do not need to reconstruct these from scratch.
 
 ## Default Surface Proof (Preferred)
 
-Use `surface-proof` as the default seconds-first proof command for an already-open product surface.
+Use `surface-proof` as the default seconds-first proof command for an already-open product surface. For main-hosted surfaces, enter through the real runtime command and keep the proof state-first.
 
 ```bash
 bash scripts/agentic/session.sh start default
+bash scripts/agentic/session.sh send default '{"type":"triggerBuiltin","name":"clipboard"}' --await-parse
 bun scripts/agentic/index.ts surface-proof --session default --kind main
+bash scripts/agentic/session.sh stop default
+bash scripts/agentic/session.sh status default
+
+# Advanced exact-target proofs when a popup or detached surface already exists:
 bun scripts/agentic/index.ts surface-proof --session default --kind promptPopup --index 0
 bun scripts/agentic/index.ts surface-proof --session default --kind acpDetached --index 0
-bash scripts/agentic/session.sh stop default
 ```
 
-This path reuses a warm session, promotes the target through `automation-window.ts inspect`, returns a machine-readable proof bundle, and does not call `show` unless the proof explicitly needs a visible surface.
+This path reuses a warm session, promotes the target through `automation-window.ts inspect`, samples `getState` and `getElements`, returns a machine-readable proof bundle, and does not call `show`, native input, or screenshot capture unless the proof explicitly needs that escalation.
 
 Sample output shape:
 
@@ -406,20 +410,33 @@ Sample output shape:
   "schemaVersion": 1,
   "recipe": "surface-proof",
   "status": "pass",
-  "summary": "Deterministic attachedPopup proof succeeded for promptPopup",
+  "summary": "State-first main proof succeeded for main",
   "proofBundle": {
     "schemaVersion": 2,
-    "scenario": "prompt-popup-exact-id",
-    "surfaceClass": "attachedPopup",
+    "scenario": "main-window-exact-id",
+    "surfaceClass": "main",
     "resolvedTarget": {
-      "windowId": "promptPopup:0",
-      "windowKind": "PromptPopup"
+      "windowId": "main",
+      "windowKind": "Main"
     },
-    "steps": [
-      { "type": "resolveTarget" },
-      { "type": "inspect" },
-      { "type": "waitFor" }
-    ],
+    "targetIdentity": { "stable": true },
+    "usage": {
+      "stateFirst": true,
+      "usedGetState": true,
+      "usedGetElements": true,
+      "usedScreenshot": false,
+      "usedNativeInput": false,
+      "usedShow": false,
+      "usedFixedSleepMs": 0
+    },
+    "capabilities": {
+      "state": true,
+      "elements": true,
+      "nativeInputRequired": false,
+      "screenshotRequired": false
+    },
+    "state": { "type": "stateResult" },
+    "elements": { "type": "elementsResult" },
     "warnings": []
   }
 }

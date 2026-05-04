@@ -8,14 +8,20 @@ const MATRIX: &str = include_str!("../scripts/agentic/filterable-surface-matrix.
 
 fn function_body<'a>(source: &'a str, name: &str, next_name: &str) -> &'a str {
     let start_pat = format!("function {name}(");
+    let export_start_pat = format!("export function {name}(");
     let start = source
         .find(&start_pat)
+        .or_else(|| source.find(&export_start_pat))
         .unwrap_or_else(|| panic!("missing function start: {start_pat}"));
     let end_pat = format!("\nfunction {next_name}(");
     let async_end_pat = format!("\nasync function {next_name}(");
+    let export_end_pat = format!("\nexport function {next_name}(");
+    let export_async_end_pat = format!("\nexport async function {next_name}(");
     let end_rel = source[start..]
         .find(&end_pat)
         .or_else(|| source[start..].find(&async_end_pat))
+        .or_else(|| source[start..].find(&export_end_pat))
+        .or_else(|| source[start..].find(&export_async_end_pat))
         .unwrap_or_else(|| panic!("missing next function start: {end_pat}"));
     &source[start..start + end_rel]
 }
@@ -51,6 +57,22 @@ fn matrix_declares_current_app_commands_visible_row_case() {
     assert!(
         MATRIX.contains("expectedElementChromeCount: 2"),
         "Input plus list chrome must be explicit so totalCount parity is testable."
+    );
+    assert!(
+        MATRIX.contains("viewName: \"current-app-commands\"")
+            && MATRIX.contains("imageLibraryName: \"current-app-commands.png\""),
+        "The matrix must declare stable image-library names for navigator captures."
+    );
+    assert!(
+        MATRIX.contains("target: MAIN_TARGET")
+            && MATRIX.contains("const MAIN_TARGET: MatrixAutomationTarget = { type: \"kind\", kind: \"main\", index: 0 };"),
+        "Stable matrix surfaces must declare exact main-window automation targets."
+    );
+    assert!(
+        MATRIX.contains("safeInteractions: SAFE_NON_SUBMITTING_INTERACTIONS")
+            && MATRIX.contains("selectFirstVisibleChoice: false")
+            && MATRIX.contains("submit: false"),
+        "Navigator-safe interactions must be explicit, filter-only for currently supported matrix surfaces, and non-submitting."
     );
 }
 
@@ -144,8 +166,8 @@ fn matrix_runner_uses_parse_receipts_and_typed_rpcs() {
         "Fire-and-forget commands must wait for parse receipts."
     );
     assert!(
-        MATRIX.contains("await rpc(session, emptyStateCommand, \"stateResult\", timeoutMs)"),
-        "Empty state proof must use typed stateResult RPC."
+        MATRIX.contains("export async function getStateAndElements("),
+        "State and element proof must be exported for the surface navigator."
     );
     assert!(
         MATRIX.contains("emptyElementsCommand"),
@@ -164,6 +186,49 @@ fn matrix_runner_uses_parse_receipts_and_typed_rpcs() {
         MATRIX.contains("await sendAndAwaitParse(session, { type: \"setFilter\", text: \"\" }, timeoutMs);"),
         "Each case must reset the active filter after entry so multi-case runs do not inherit the prior case's filter."
     );
+}
+
+#[test]
+fn matrix_exports_reusable_surface_navigation_helpers() {
+    for helper in [
+        "export async function enterFilterableSurface(",
+        "export async function waitForPromptType(",
+        "export async function getStateAndElements(",
+        "export function observeCounts(",
+        "export async function sendAndAwaitParse(",
+        "export async function rpc(",
+    ] {
+        assert!(
+            MATRIX.contains(helper),
+            "filterable matrix must export reusable helper: {helper}"
+        );
+    }
+}
+
+#[test]
+fn matrix_get_state_and_elements_accepts_target_override() {
+    assert!(
+        MATRIX.contains("targetOverride") && MATRIX.contains("target: targetOverride"),
+        "navigator must be able to promote kind targets to exact id targets without forking getState/getElements logic"
+    );
+}
+
+#[test]
+fn matrix_entries_declare_image_library_metadata() {
+    for (view_name, file_name) in [
+        ("current-app-commands", "current-app-commands.png"),
+        ("clipboard-history", "clipboard-history.png"),
+        ("emoji-picker", "emoji-picker.png"),
+        ("app-launcher", "app-launcher.png"),
+        ("design-gallery", "design-gallery.png"),
+        ("process-manager", "process-manager.png"),
+    ] {
+        assert!(
+            MATRIX.contains(&format!("viewName: \"{view_name}\""))
+                && MATRIX.contains(&format!("imageLibraryName: \"{file_name}\"")),
+            "matrix entry must declare viewName={view_name} and imageLibraryName={file_name}"
+        );
+    }
 }
 
 #[test]

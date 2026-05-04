@@ -47,6 +47,7 @@
  *   --skip-screenshot           Only run state assertions, skip capture
  *   --skip-state                Only capture screenshot, skip ACP state query
  *   --skip-probe                Skip ACP test probe query
+ *   --strict-window             Require exact target/window identity for non-ACP captures
  *   --target-json JSON           ACP window target for getAcpState/getAcpTestProbe RPCs
  *                               (same AutomationWindowTarget shape as the Rust protocol)
  *   --capture-window-id N        Exact native window ID for screencapture
@@ -272,6 +273,8 @@ function parseArgs() {
       opts.emitVisionCrops = true;
     } else if (arg === "--skip-probe") {
       opts.skipProbe = true;
+    } else if (arg === "--strict-window") {
+      opts.strictWindow = true;
     } else if (arg === "--json") {
       // default, no-op
     } else if (arg.startsWith("--") && i + 1 < args.length) {
@@ -574,6 +577,12 @@ function shouldQueryProbe(
   );
 }
 
+function isAttachedPopupWindowKind(kind: string | null | undefined): boolean {
+  return ["ActionsDialog", "PromptPopup", "actionsDialog", "promptPopup"].includes(
+    String(kind ?? "")
+  );
+}
+
 async function getImageDimensions(
   filePath: string
 ): Promise<{ width: number | null; height: number | null }> {
@@ -746,7 +755,7 @@ async function captureScreenshot(
   let windowFrontmost: boolean | null = null;
   let windowFocused: boolean | null = null;
   let windowId: number | null = null;
-  const strictWindowProof = hasAcpAssertions(opts);
+  const strictWindowProof = opts.strictWindow === true || hasAcpAssertions(opts);
   const inspectionOsWindowId =
     typeof inspection?.osWindowId === "number" && inspection.osWindowId > 0
       ? inspection.osWindowId
@@ -763,6 +772,33 @@ async function captureScreenshot(
         : "inspection-os-window-id"
       : "generic-frontmost";
   let showIssuedBeforeCapture = false;
+
+  if (opts.strictWindow === true && !targetJson && captureWindowId == null) {
+    return {
+      result: {
+        captured: false,
+        path: outPath,
+        sizeBytes: null,
+        width: null,
+        height: null,
+        contentAudit: null,
+        captureMethod: null,
+        windowCaptureMethod: null,
+        windowFrontmost: null,
+        windowFocused: null,
+        windowId: null,
+        error:
+          "Strict window capture requires --target-json or --capture-window-id; refusing generic frontmost capture",
+      },
+      plan: {
+        routing: captureRouting,
+        requestedAutomationWindowId,
+        requestedOsWindowId,
+        inspectionOsWindowId,
+        showIssuedBeforeCapture,
+      },
+    };
+  }
 
   if (
     targetJson &&
@@ -822,34 +858,40 @@ async function captureScreenshot(
     };
   }
 
-  const showCommand = await sendSessionCommand(session, JSON.stringify({ type: "show" }));
-  if (!showCommand.ok) {
-    return {
-      result: {
-        captured: false,
-        path: outPath,
-        sizeBytes: null,
-        width: null,
-        height: null,
-        contentAudit: null,
-        captureMethod: null,
-        windowCaptureMethod: null,
-        windowFrontmost: null,
-        windowFocused: null,
-        windowId: null,
-        error: `Failed to send show before capture: ${showCommand.stderr || showCommand.stdout || "unknown error"}`,
-      },
-      plan: {
-        routing: captureRouting,
-        requestedAutomationWindowId,
-        requestedOsWindowId,
-        inspectionOsWindowId,
-        showIssuedBeforeCapture,
-      },
-    };
+  const skipShowForAttachedPopup =
+    targetJson != null &&
+    requestedOsWindowId != null &&
+    isAttachedPopupWindowKind(inspection?.windowKind);
+  if (!skipShowForAttachedPopup) {
+    const showCommand = await sendSessionCommand(session, JSON.stringify({ type: "show" }));
+    if (!showCommand.ok) {
+      return {
+        result: {
+          captured: false,
+          path: outPath,
+          sizeBytes: null,
+          width: null,
+          height: null,
+          contentAudit: null,
+          captureMethod: null,
+          windowCaptureMethod: null,
+          windowFrontmost: null,
+          windowFocused: null,
+          windowId: null,
+          error: `Failed to send show before capture: ${showCommand.stderr || showCommand.stdout || "unknown error"}`,
+        },
+        plan: {
+          routing: captureRouting,
+          requestedAutomationWindowId,
+          requestedOsWindowId,
+          inspectionOsWindowId,
+          showIssuedBeforeCapture,
+        },
+      };
+    }
+    showIssuedBeforeCapture = true;
+    await Bun.sleep(500);
   }
-  showIssuedBeforeCapture = true;
-  await Bun.sleep(500);
 
   // Use the window.ts helper for reliable capture
   const windowScript = join(PROJECT_ROOT, "scripts/agentic/window.ts");
@@ -1787,7 +1829,7 @@ if (opts.help) {
       schemaVersion: 1,
       script: "verify-shot",
       commands: [
-        { name: "run", description: "Collect state/probe/screenshot proof", flags: ["--session", "--label", "--out", "--target-json", "--capture-window-id", "--vision", "--skip-screenshot", "--skip-state", "--skip-probe", "--json"] },
+        { name: "run", description: "Collect state/probe/screenshot proof", flags: ["--session", "--label", "--out", "--target-json", "--capture-window-id", "--strict-window", "--vision", "--skip-screenshot", "--skip-state", "--skip-probe", "--json"] },
       ],
       contracts: [
         "popup-capture-receipts",
@@ -1842,6 +1884,7 @@ Options:
   --skip-screenshot           Only run state assertions, skip capture
   --skip-state                Only capture screenshot, skip state query
   --skip-probe                Skip ACP test probe query
+  --strict-window             Require --target-json or --capture-window-id and forbid generic fallback
   --target-json JSON          ACP window target for getAcpState/getAcpTestProbe RPCs
   --capture-window-id N       Exact native window ID for screencapture
                               (the inspected osWindowId, not automationWindowId)
@@ -1982,16 +2025,11 @@ for (const a of assertions) {
 }
 
 // Build receipt
-const allPassed = assertions.every((a) => a.passed);
-const hasInfraError =
-  (stateResult?.error && !skipState) ||
-  (probeResult?.error && needsProbe) ||
-  (screenshotResult && !screenshotResult.captured && !skipScreenshot);
-
 const hasMustReviewItems = visionChecks.some((v) => v.mustReview);
 
 // Compute deterministic popup capture strategy receipt
 let popupCapture: PopupCaptureReceipt | null = null;
+let popupCaptureInfraError = false;
 if (inspection) {
   const wk = inspection.windowKind;
   const attachedPopupKinds = ["ActionsDialog", "PromptPopup", "actionsDialog", "promptPopup"];
@@ -2026,6 +2064,7 @@ if (inspection) {
       // Mark the receipt as an error since we cannot verify this popup.
       // The receipt will show strategy=parent_capture_with_crop but null bounds,
       // and the overall status will be "error" because hasInfraError will be set.
+      popupCaptureInfraError = true;
       if (!stateResult?.error && !screenshotResult?.error) {
         // Force infrastructure error when crop bounds are missing for attached popup
         if (screenshotResult) {
@@ -2062,6 +2101,13 @@ if (inspection) {
     };
   }
 }
+
+const allPassed = assertions.every((a) => a.passed);
+const hasInfraError =
+  (stateResult?.error && !skipState) ||
+  (probeResult?.error && needsProbe) ||
+  (screenshotResult && !screenshotResult.captured && !skipScreenshot) ||
+  popupCaptureInfraError;
 
 // Build resolvedTarget from inspection when available
 const resolvedTarget: VerifyReceipt["resolvedTarget"] = inspection
