@@ -92,6 +92,27 @@ fn about_surface_text_is_contained_in_fixed_rows() {
 }
 
 #[test]
+fn about_surface_body_scrolls_when_content_exceeds_container() {
+    let body_start = ABOUT_RENDER_SOURCE
+        .find(".id(\"about-content-scroll\")")
+        .expect("About should expose a stable scroll container id");
+    let body_block = &ABOUT_RENDER_SOURCE[body_start
+        ..ABOUT_RENDER_SOURCE[body_start..]
+            .find(".child(\n                    div()")
+            .map(|offset| body_start + offset)
+            .expect("About scroll container should wrap the content column")];
+
+    assert!(
+        body_block.contains(".flex_1()") && body_block.contains(".overflow_y_scrollbar()"),
+        "About body should consume remaining window height and become scrollable when content overflows"
+    );
+    assert!(
+        !body_block.contains(".overflow_hidden()"),
+        "About body should not clip overflowing vertical content"
+    );
+}
+
+#[test]
 fn about_route_takes_launcher_input_out_of_focus() {
     assert!(ABOUT_ROUTE_SOURCE.contains("self.focused_input = FocusedInput::None"));
     assert!(ABOUT_ROUTE_SOURCE.contains("self.pending_focus = Some(FocusTarget::AppRoot)"));

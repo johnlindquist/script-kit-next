@@ -229,6 +229,13 @@ pub struct DoInCurrentAppReceipt {
 /// primary current-app router after the visible command is removed.
 pub const CURRENT_APP_COMMANDS_COMPAT_LABEL: &str = "Current App Commands";
 
+const DO_IN_CURRENT_APP_LABEL_ALIASES: [&str; 4] = [
+    DO_IN_CURRENT_APP_LABEL,
+    CURRENT_APP_COMMANDS_COMPAT_LABEL,
+    "Do in Current Commands",
+    "Do in Current Command",
+];
+
 /// Returns the effective user request for the primary current-app command.
 ///
 /// Behavior:
@@ -239,51 +246,118 @@ pub const CURRENT_APP_COMMANDS_COMPAT_LABEL: &str = "Current App Commands";
 /// - "Current App Commands <request>" -> Some("<request>")
 /// - anything else -> Some(trimmed raw input)
 pub fn normalize_do_in_current_app_request(raw: Option<&str>) -> Option<&str> {
-    tracing::info!(raw_input = ?raw, "do_in_current_app.normalize_request.entry");
+    tracing::info!(
+        target: "script_kit::do_in_trace",
+        event = "DO_IN_TRACE normalize.entry",
+        raw_present = raw.is_some(),
+        "DO_IN_TRACE normalize.entry"
+    );
     let raw = raw.map(str::trim).filter(|text| !text.is_empty())?;
+    let raw_safe = crate::logging::log_user_value(raw);
 
-    let raw_lower = raw.to_ascii_lowercase();
-
-    for label in [DO_IN_CURRENT_APP_LABEL, CURRENT_APP_COMMANDS_COMPAT_LABEL] {
-        let label_lower = label.to_ascii_lowercase();
-
-        if raw_lower == label_lower {
-            tracing::info!(
-                raw = %raw,
-                label = %label,
-                "do_in_current_app.normalize_request → None (matches label, treated as empty)"
-            );
-            return None;
-        }
-
-        if raw_lower.starts_with(&label_lower) {
-            let rest = raw[label.len()..]
-                .trim_start_matches(|ch: char| {
-                    ch.is_ascii_whitespace() || matches!(ch, ':' | '-' | '\u{2014}' | '\u{2013}')
-                })
-                .trim();
-
-            if rest.is_empty() {
+    for label in DO_IN_CURRENT_APP_LABEL_ALIASES {
+        if let Some(rest) = strip_do_in_current_app_label_request(raw, label) {
+            let Some(rest) = rest else {
                 tracing::info!(
-                    raw = %raw,
+                    target: "script_kit::do_in_trace",
+                    event = "DO_IN_TRACE normalize.result",
+                    raw_preview = %raw_safe,
+                    raw_bytes = raw_safe.raw_bytes,
+                    raw_safe_bytes = raw_safe.safe_bytes,
+                    raw_truncated = raw_safe.truncated,
                     label = %label,
-                    "do_in_current_app.normalize_request → None (label prefix with empty query)"
+                    result = "none_label_or_empty_labeled_query",
+                    "DO_IN_TRACE normalize.result"
                 );
                 return None;
-            }
+            };
 
+            let rest_safe = crate::logging::log_user_value(rest);
             tracing::info!(
-                raw = %raw,
+                target: "script_kit::do_in_trace",
+                event = "DO_IN_TRACE normalize.result",
+                raw_preview = %raw_safe,
+                raw_bytes = raw_safe.raw_bytes,
+                raw_safe_bytes = raw_safe.safe_bytes,
+                raw_truncated = raw_safe.truncated,
                 label = %label,
-                rest = %rest,
-                "do_in_current_app.normalize_request → Some (stripped labeled query)"
+                rest_preview = %rest_safe,
+                rest_bytes = rest_safe.raw_bytes,
+                rest_safe_bytes = rest_safe.safe_bytes,
+                rest_truncated = rest_safe.truncated,
+                result = "some_stripped_labeled_query",
+                "DO_IN_TRACE normalize.result"
             );
             return Some(rest);
         }
     }
 
-    tracing::info!(raw = %raw, "do_in_current_app.normalize_request → Some (real query)");
+    tracing::info!(
+        target: "script_kit::do_in_trace",
+        event = "DO_IN_TRACE normalize.result",
+        raw_preview = %raw_safe,
+        raw_bytes = raw_safe.raw_bytes,
+        raw_safe_bytes = raw_safe.safe_bytes,
+        raw_truncated = raw_safe.truncated,
+        result = "some_real_query",
+        "DO_IN_TRACE normalize.result"
+    );
     Some(raw)
+}
+
+/// Extracts a Do-in request only when the raw text is a full command label or alias.
+///
+/// This is used by the launcher submission path: arbitrary ScriptList filter text
+/// selects the Do-in command but must not prefill the new CurrentAppCommands list.
+pub fn normalize_do_in_current_app_labeled_request(raw: Option<&str>) -> Option<&str> {
+    let raw = raw.map(str::trim).filter(|text| !text.is_empty())?;
+
+    for label in DO_IN_CURRENT_APP_LABEL_ALIASES {
+        if let Some(rest) = strip_do_in_current_app_label_request(raw, label) {
+            return rest;
+        }
+    }
+
+    None
+}
+
+fn strip_do_in_current_app_label_request<'a>(raw: &'a str, label: &str) -> Option<Option<&'a str>> {
+    let prefix = raw.get(..label.len())?;
+    if !prefix.eq_ignore_ascii_case(label) {
+        return None;
+    }
+
+    let rest = raw.get(label.len()..)?;
+    if rest.is_empty() {
+        return Some(None);
+    }
+
+    let first = rest.chars().next()?;
+    if !(first.is_ascii_whitespace() || matches!(first, ':' | '-' | '\u{2014}' | '\u{2013}')) {
+        return None;
+    }
+
+    let rest = rest
+        .trim_start_matches(|ch: char| {
+            ch.is_ascii_whitespace() || matches!(ch, ':' | '-' | '\u{2014}' | '\u{2013}')
+        })
+        .trim();
+    Some((!rest.is_empty()).then_some(rest))
+}
+
+/// Computes the query carried into Do-in execution from a launcher submission.
+pub fn effective_do_in_current_app_query_for_submission(
+    raw_query: &str,
+    query_override: Option<&str>,
+) -> String {
+    match query_override {
+        Some(explicit_query) => normalize_do_in_current_app_request(Some(explicit_query))
+            .unwrap_or_default()
+            .to_string(),
+        None => normalize_do_in_current_app_labeled_request(Some(raw_query))
+            .unwrap_or_default()
+            .to_string(),
+    }
 }
 
 fn normalize_intent_match_text(text: &str) -> String {
@@ -335,8 +409,13 @@ pub fn resolve_do_in_current_app_intent(
 
     if normalized_query.is_empty() {
         tracing::info!(
+            target: "script_kit::do_in_trace",
+            event = "DO_IN_TRACE resolve.result",
             total_entries = entries.len(),
-            "do_in_current_app.resolve → OpenCommandPalette (empty query, showing all entries)"
+            normalized_query = %normalized_query,
+            action = "open_command_palette",
+            reason = "empty_query",
+            "DO_IN_TRACE resolve.result"
         );
         return (
             DoInCurrentAppAction::OpenCommandPalette,
@@ -364,31 +443,55 @@ pub fn resolve_do_in_current_app_intent(
         .collect();
 
     tracing::info!(
+        target: "script_kit::do_in_trace",
+        event = "DO_IN_TRACE resolve.match_results",
         normalized_query = %normalized_query,
         total_entries = entries.len(),
         filtered_count = filtered.len(),
         exact_match_count = exact_matches.len(),
-        "do_in_current_app.resolve.match_results"
+        "DO_IN_TRACE resolve.match_results"
     );
 
     let (action, action_name) = if exact_matches.len() == 1 {
         tracing::info!(
+            target: "script_kit::do_in_trace",
+            event = "DO_IN_TRACE resolve.result",
             entry_index = exact_matches[0],
             entry_name = %entries[exact_matches[0]].name,
-            "do_in_current_app.resolve → ExecuteEntry (single exact match)"
+            normalized_query = %normalized_query,
+            filtered_count = filtered.len(),
+            exact_match_count = exact_matches.len(),
+            action = "execute_entry",
+            reason = "single_exact_match",
+            "DO_IN_TRACE resolve.result"
         );
         (
             DoInCurrentAppAction::ExecuteEntry(exact_matches[0]),
             "execute_entry",
         )
     } else if filtered.is_empty() {
-        tracing::info!("do_in_current_app.resolve → GenerateScript (no menu matches)");
+        tracing::info!(
+            target: "script_kit::do_in_trace",
+            event = "DO_IN_TRACE resolve.result",
+            normalized_query = %normalized_query,
+            total_entries = entries.len(),
+            filtered_count = filtered.len(),
+            exact_match_count = exact_matches.len(),
+            action = "generate_script",
+            reason = "no_menu_matches",
+            "DO_IN_TRACE resolve.result"
+        );
         (DoInCurrentAppAction::GenerateScript, "generate_script")
     } else {
         tracing::info!(
+            target: "script_kit::do_in_trace",
+            event = "DO_IN_TRACE resolve.result",
             filtered_count = filtered.len(),
             exact_match_count = exact_matches.len(),
-            "do_in_current_app.resolve → OpenCommandPalette (multiple matches, no single exact)"
+            normalized_query = %normalized_query,
+            action = "open_command_palette",
+            reason = "multiple_matches_no_single_exact",
+            "DO_IN_TRACE resolve.result"
         );
         (
             DoInCurrentAppAction::OpenCommandPalette,
@@ -1780,6 +1883,82 @@ mod tests {
     }
 
     #[test]
+    fn normalize_do_in_current_app_request_does_not_clear_launcher_prefixes() {
+        // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+        assert_eq!(normalize_do_in_current_app_request(Some("do")), Some("do"));
+        assert_eq!(
+            normalize_do_in_current_app_request(Some("do in")),
+            Some("do in")
+        );
+        assert_eq!(
+            normalize_do_in_current_app_request(Some("do in current")),
+            Some("do in current")
+        );
+    }
+
+    #[test]
+    fn normalize_do_in_current_app_labeled_request_only_extracts_full_label_requests() {
+        // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+        assert_eq!(
+            normalize_do_in_current_app_labeled_request(Some("do")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_labeled_request(Some("do in")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_labeled_request(Some("automation")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_labeled_request(Some("Do in Current Appclose tab")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_labeled_request(Some("Do in Current Application close")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_labeled_request(Some("Current App CommandsX close tab")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_labeled_request(Some("Do in Current Commandments: close")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_labeled_request(Some("Do in Current App: close tab")),
+            Some("close tab")
+        );
+        assert_eq!(
+            normalize_do_in_current_app_labeled_request(Some("Do in Current Command - close tab")),
+            Some("close tab")
+        );
+    }
+
+    #[test]
+    fn effective_do_in_current_app_query_for_submission_clears_plain_launcher_filters() {
+        // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+        assert_eq!(
+            effective_do_in_current_app_query_for_submission("do", None),
+            ""
+        );
+        assert_eq!(
+            effective_do_in_current_app_query_for_submission("automation", None),
+            ""
+        );
+        assert_eq!(
+            effective_do_in_current_app_query_for_submission("Do in Current App: close tab", None,),
+            "close tab"
+        );
+        assert_eq!(
+            effective_do_in_current_app_query_for_submission("close tab", Some("close tab"),),
+            "close tab"
+        );
+    }
+
+    #[test]
     fn normalize_do_in_current_app_request_drops_compat_label() {
         assert_eq!(
             normalize_do_in_current_app_request(Some("Current App Commands")),
@@ -1788,6 +1967,23 @@ mod tests {
         assert_eq!(
             normalize_do_in_current_app_request(Some("current app commands")),
             None
+        );
+    }
+
+    #[test]
+    fn normalize_do_in_current_app_request_drops_current_command_aliases() {
+        // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+        assert_eq!(
+            normalize_do_in_current_app_request(Some("Do in Current Command")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_request(Some("do in current commands")),
+            None
+        );
+        assert_eq!(
+            normalize_do_in_current_app_request(Some("Do in Current Command: close tab")),
+            Some("close tab")
         );
     }
 

@@ -54,18 +54,10 @@
                                 // Use display_preview() from ClipboardEntryMeta
                                 let display_content = entry.display_preview();
 
-                                // Format relative time (entry.timestamp is in milliseconds)
-                                let now_ms = chrono::Utc::now().timestamp_millis();
-                                let age_secs = (now_ms - entry.timestamp) / 1000;
-                                let relative_time = if age_secs < 60 {
-                                    "just now".to_string()
-                                } else if age_secs < 3600 {
-                                    format!("{}m ago", age_secs / 60)
-                                } else if age_secs < 86400 {
-                                    format!("{}h ago", age_secs / 3600)
-                                } else {
-                                    format!("{}d ago", age_secs / 86400)
-                                };
+                                let relative_time =
+                                    crate::formatting::format_relative_time_short_millis(
+                                        entry.timestamp,
+                                    );
 
                                 // Add pin indicator
                                 let name = if entry.pinned {

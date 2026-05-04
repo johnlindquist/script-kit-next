@@ -10,11 +10,38 @@ impl ScriptListApp {
         let handler_start = std::time::Instant::now();
 
         if self.suppress_filter_events {
+            tracing::info!(
+                target: "script_kit::do_in_trace",
+                event = "DO_IN_TRACE filter_change.suppressed",
+                current_view = ?self.current_view,
+                canonical_filter = %self.filter_text,
+                "DO_IN_TRACE filter_change.suppressed"
+            );
             return;
         }
 
         let new_text = self.gpui_input_state.read(cx).value().to_string();
         let shared_filter_view = self.current_view_uses_shared_filter_input();
+        let new_text_safe = logging::log_user_value(&new_text);
+        let canonical_filter_safe = logging::log_user_value(&self.filter_text);
+        tracing::info!(
+            target: "script_kit::do_in_trace",
+            event = "DO_IN_TRACE filter_change.entry",
+            current_view = ?self.current_view,
+            new_text_preview = %new_text_safe,
+            new_text_bytes = new_text_safe.raw_bytes,
+            new_text_safe_bytes = new_text_safe.safe_bytes,
+            new_text_truncated = new_text_safe.truncated,
+            canonical_filter_preview = %canonical_filter_safe,
+            canonical_filter_bytes = canonical_filter_safe.raw_bytes,
+            canonical_filter_safe_bytes = canonical_filter_safe.safe_bytes,
+            canonical_filter_truncated = canonical_filter_safe.truncated,
+            shared_filter_view,
+            show_actions_popup = self.show_actions_popup,
+            pending_filter_sync = self.pending_filter_sync,
+            input_mode = ?self.input_mode,
+            "DO_IN_TRACE filter_change.entry"
+        );
 
         // Skip filter updates when actions popup is open
         // (text input should go to actions dialog search, not main filter)
@@ -22,15 +49,60 @@ impl ScriptListApp {
             if shared_filter_view && new_text != self.filter_text {
                 self.pending_filter_sync = true;
             }
+            tracing::info!(
+                target: "script_kit::do_in_trace",
+                event = "DO_IN_TRACE filter_change.actions_popup_return",
+                current_view = ?self.current_view,
+                new_text_preview = %new_text_safe,
+                new_text_bytes = new_text_safe.raw_bytes,
+                new_text_safe_bytes = new_text_safe.safe_bytes,
+                new_text_truncated = new_text_safe.truncated,
+                canonical_filter_preview = %canonical_filter_safe,
+                shared_filter_view,
+                pending_filter_sync = self.pending_filter_sync,
+                "DO_IN_TRACE filter_change.actions_popup_return"
+            );
             return;
         }
 
         if !shared_filter_view {
+            tracing::info!(
+                target: "script_kit::do_in_trace",
+                event = "DO_IN_TRACE filter_change.not_shared_return",
+                current_view = ?self.current_view,
+                new_text_preview = %new_text_safe,
+                new_text_bytes = new_text_safe.raw_bytes,
+                new_text_safe_bytes = new_text_safe.safe_bytes,
+                new_text_truncated = new_text_safe.truncated,
+                canonical_filter_preview = %canonical_filter_safe,
+                "DO_IN_TRACE filter_change.not_shared_return"
+            );
             return;
         }
+
+        if Self::single_line_filter_input_contains_newline(&new_text) {
+            tracing::warn!(
+                target: "script_kit::do_in_trace",
+                event = "DO_IN_TRACE filter_change.newline_ignored",
+                current_view = ?self.current_view,
+                canonical_filter_preview = %canonical_filter_safe,
+                raw_len = new_text.len(),
+                new_text_preview = %new_text_safe,
+                new_text_bytes = new_text_safe.raw_bytes,
+                new_text_safe_bytes = new_text_safe.safe_bytes,
+                new_text_truncated = new_text_safe.truncated,
+                "DO_IN_TRACE filter_change.newline_ignored"
+            );
+            self.pending_filter_sync = true;
+            self.sync_filter_input_if_needed(window, cx);
+            cx.notify();
+            return;
+        }
+
         self.pending_filter_sync = false;
 
         if matches!(&self.current_view, AppView::CurrentAppCommandsView { .. }) {
+            let previous_filter = self.filter_text.clone();
             self.filter_text = new_text.clone();
             if let Err(error) = self.refresh_current_app_commands_session_if_needed(&new_text, cx) {
                 tracing::warn!(
@@ -44,6 +116,8 @@ impl ScriptListApp {
                 selected_index,
             } = &mut self.current_view
             {
+                let selected_before = *selected_index;
+                let filter_before = filter.clone();
                 if Self::sync_builtin_query_state(filter, selected_index, &new_text) {
                     let input_mode = if self.input_mode == InputMode::Keyboard {
                         "keyboard"
@@ -64,6 +138,23 @@ impl ScriptListApp {
                         input_mode = %input_mode,
                         "current_app_commands.filter_updated"
                     );
+                    tracing::info!(
+                        target: "script_kit::do_in_trace",
+                        event = "DO_IN_TRACE current_app_filter.synced",
+                        previous_canonical_filter = %previous_filter,
+                        previous_view_filter = %filter_before,
+                        new_text_preview = %new_text_safe,
+                        new_text_bytes = new_text_safe.raw_bytes,
+                        new_text_safe_bytes = new_text_safe.safe_bytes,
+                        new_text_truncated = new_text_safe.truncated,
+                        selected_before,
+                        selected_after = *selected_index,
+                        total_entries = receipt.total_entries,
+                        matched_entries = receipt.matched_entries,
+                        normalized_query = %receipt.normalized_query,
+                        input_mode,
+                        "DO_IN_TRACE current_app_filter.synced"
+                    );
 
                     Self::scroll_builtin_to_top_with_log(
                         &self.current_app_commands_scroll_handle,
@@ -73,6 +164,19 @@ impl ScriptListApp {
                         input_mode,
                     );
                     cx.notify();
+                } else {
+                    tracing::info!(
+                        target: "script_kit::do_in_trace",
+                        event = "DO_IN_TRACE current_app_filter.unchanged",
+                        previous_canonical_filter = %previous_filter,
+                        view_filter = %filter_before,
+                        new_text_preview = %new_text_safe,
+                        new_text_bytes = new_text_safe.raw_bytes,
+                        new_text_safe_bytes = new_text_safe.safe_bytes,
+                        new_text_truncated = new_text_safe.truncated,
+                        selected_index = *selected_index,
+                        "DO_IN_TRACE current_app_filter.unchanged"
+                    );
                 }
             }
             return;
@@ -477,6 +581,17 @@ impl ScriptListApp {
                 ScriptListSpecialEntry::QuickTerminal => "quick_terminal",
                 ScriptListSpecialEntry::ActionsHelp => "actions_help",
             };
+            tracing::info!(
+                target: "script_kit::do_in_trace",
+                event = "DO_IN_TRACE script_list_special_entry_routed",
+                filter_text_preview = %new_text_safe,
+                filter_text_bytes = new_text_safe.raw_bytes,
+                filter_text_safe_bytes = new_text_safe.safe_bytes,
+                filter_text_truncated = new_text_safe.truncated,
+                entry_kind,
+                current_view = ?self.current_view,
+                "DO_IN_TRACE script_list_special_entry_routed"
+            );
             tracing::info!(
                 target: "script_kit::tab_ai",
                 event = "script_list_special_entry_routed",
@@ -1155,6 +1270,29 @@ mod tests {
         assert!(
             emoji_section.contains("scroll_builtin_to_top_with_log"),
             "emoji picker should reset to top on real filter changes via shared helper"
+        );
+    }
+
+    #[test]
+    fn test_handle_filter_input_change_ignores_newline_before_shared_view_mutation() {
+        let source = read_filter_input_change_source();
+        let newline_guard_pos = source
+            .find("single_line_filter_input_contains_newline(&new_text)")
+            .expect("newline guard not found");
+        let current_app_pos = source
+            .find("AppView::CurrentAppCommandsView")
+            .expect("current app commands arm not found");
+        assert!(
+            newline_guard_pos < current_app_pos,
+            "newline-bearing filter input must be rejected before mutating shared builtin view filters"
+        );
+
+        let guard_section = &source[newline_guard_pos..(newline_guard_pos + 500).min(source.len())];
+        assert!(
+            guard_section.contains("self.pending_filter_sync = true")
+                && guard_section.contains("self.sync_filter_input_if_needed(window, cx);")
+                && guard_section.contains("return;"),
+            "newline guard must immediately resync the GPUI input back to canonical filter text"
         );
     }
 

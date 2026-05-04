@@ -11,7 +11,9 @@ use script_kit_gpui::config::BuiltInConfig;
 use script_kit_gpui::menu_bar::current_app_commands::{
     build_current_app_command_recipe, build_current_app_intent_trace_receipt,
     build_generate_script_prompt_from_snapshot, build_generated_script_prompt_from_recipe,
-    current_app_commands_session_identity_changed, normalize_trace_current_app_intent_request,
+    current_app_commands_session_identity_changed,
+    effective_do_in_current_app_query_for_submission, normalize_do_in_current_app_labeled_request,
+    normalize_do_in_current_app_request, normalize_trace_current_app_intent_request,
     normalize_turn_this_into_a_command_request, parse_current_app_command_recipe_json,
     resolve_do_in_current_app_intent, suggest_current_app_command_name,
     verify_current_app_command_recipe, CurrentAppCommandsLiveIdentity, CurrentAppCommandsSession,
@@ -51,6 +53,153 @@ fn current_app_commands_builtin_is_no_longer_registered() {
             .iter()
             .all(|e| e.id != "builtin/current-app-commands"),
         "builtin/current-app-commands should no longer be in the registry"
+    );
+}
+
+#[test]
+fn do_in_current_app_current_command_alias_clears_palette_filter_without_clearing_plain_text() {
+    // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+    assert_eq!(
+        normalize_do_in_current_app_request(Some("Do in Current Command")),
+        None
+    );
+    assert_eq!(normalize_do_in_current_app_request(Some("do")), Some("do"));
+    assert_eq!(
+        normalize_do_in_current_app_request(Some("do in")),
+        Some("do in")
+    );
+    assert_eq!(
+        normalize_do_in_current_app_request(Some("do in current")),
+        Some("do in current")
+    );
+    assert_eq!(
+        normalize_do_in_current_app_request(Some("Do in Current Commands")),
+        None
+    );
+    assert_eq!(
+        normalize_do_in_current_app_request(Some("Do in Current Command: close tab")),
+        Some("close tab")
+    );
+}
+
+#[test]
+fn do_in_current_app_submission_clears_any_plain_launcher_filter_when_switching_lists() {
+    // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+    for launcher_filter in ["do", "do in", "do in current", "automation", "close tab"] {
+        assert_eq!(
+            effective_do_in_current_app_query_for_submission(launcher_filter, None),
+            "",
+            "plain launcher filter '{launcher_filter}' should not prefill CurrentAppCommandsView"
+        );
+    }
+
+    assert_eq!(
+        normalize_do_in_current_app_labeled_request(Some("Do in Current Command: close tab")),
+        Some("close tab")
+    );
+    for malformed_label_prefix in [
+        "Do in Current Appclose tab",
+        "Do in Current Application close",
+        "Current App CommandsX close tab",
+        "Do in Current Commandments: close",
+    ] {
+        assert_eq!(
+            normalize_do_in_current_app_labeled_request(Some(malformed_label_prefix)),
+            None,
+            "malformed label prefix '{malformed_label_prefix}' must not prefill CurrentAppCommandsView"
+        );
+        assert_eq!(
+            effective_do_in_current_app_query_for_submission(malformed_label_prefix, None),
+            "",
+            "malformed label prefix '{malformed_label_prefix}' should behave like ordinary launcher text"
+        );
+    }
+    assert_eq!(
+        effective_do_in_current_app_query_for_submission("Do in Current Command: close tab", None,),
+        "close tab"
+    );
+    assert_eq!(
+        effective_do_in_current_app_query_for_submission("close tab", Some("close tab")),
+        "close tab",
+        "explicit query overrides from programmatic paths should still prefill/route"
+    );
+}
+
+#[test]
+fn current_app_commands_scroll_does_not_render_reanchor_selection() {
+    let source = std::fs::read_to_string("src/render_builtins/current_app_commands.rs")
+        .expect("must read current_app_commands renderer");
+    let production_source = source
+        .split("#[cfg(test)]")
+        .next()
+        .expect("production source should exist");
+
+    assert!(
+        !production_source.contains("builtin_reanchor_selection_from_scroll("),
+        "current app commands should not reanchor selection during render; main-menu-style selection is owned by keyboard/wheel movement"
+    );
+}
+
+#[test]
+fn do_in_current_app_execution_uses_effective_query_for_list_switching() {
+    // @lat: [[lat.md/protocol#Protocol#Query and introspection]]
+    let source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("must read builtin execution source");
+    let arm_start = source
+        .find("UtilityCommandType::DoInCurrentApp => {")
+        .expect("DoInCurrentApp execution arm must exist");
+    let arm_body = &source[arm_start..];
+    let arm_end = arm_body
+        .find("UtilityCommandType::CurrentAppCommands => {")
+        .expect("next utility command arm must exist");
+    let arm_body = &arm_body[..arm_end];
+    let compacted_arm: String = arm_body.chars().filter(|ch| !ch.is_whitespace()).collect();
+
+    assert!(
+        compacted_arm.contains("effective_do_in_current_app_query_for_submission("),
+        "DoInCurrentApp must derive a boundary-safe effective query before routing"
+    );
+    assert!(
+        compacted_arm
+            .contains("resolve_do_in_current_app_intent(&entries,effective_query_for_router,"),
+        "DoInCurrentApp must route using the effective query, not the ScriptList filter"
+    );
+    assert!(
+        compacted_arm
+            .contains("self.present_current_app_commands_entries(entries,&snapshot_receipt,snapshot_pid,&effective_query,"),
+        "CurrentAppCommandsView must open with the effective query"
+    );
+    assert!(
+        !compacted_arm.contains("do_in_current_app_empty_snapshot"),
+        "DoInCurrentApp should present the empty CurrentAppCommandsView rather than erroring before the list switch"
+    );
+    assert!(
+        !compacted_arm
+            .contains("resolve_do_in_current_app_intent(&entries,Some(&raw_query_owned),"),
+        "raw ScriptList filter text must not feed DoIn routing"
+    );
+}
+
+#[test]
+fn current_app_commands_presentation_resets_scroll_to_top() {
+    // @lat: [[lat.md/surfaces#Surfaces#Selection-Owned Expanded Browsers]]
+    let source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("must read builtin execution source");
+    let fn_start = source
+        .find("pub(crate) fn present_current_app_commands_session(")
+        .expect("present_current_app_commands_session must exist");
+    let fn_body = &source[fn_start..];
+    let fn_end = fn_body
+        .find("pub(crate) fn open_current_app_commands_from_tray(")
+        .expect("next function must exist");
+    let fn_body = &fn_body[..fn_end];
+    let compacted: String = fn_body.chars().filter(|ch| !ch.is_whitespace()).collect();
+
+    assert!(
+        compacted.contains(
+            "current_app_commands_scroll_handle.scroll_to_item(0,gpui::ScrollStrategy::Top);"
+        ),
+        "opening CurrentAppCommandsView should reset the shared scroll handle to row 0"
     );
 }
 

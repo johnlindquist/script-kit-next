@@ -24,7 +24,7 @@ impl ScriptListApp {
         let filtered_tabs =
             crate::browser_tabs::fuzzy_search_browser_tabs(&self.cached_browser_tabs, &filter);
         let filtered_len = filtered_tabs.len();
-        let selected_index = if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
+        let selected_index = if let Some(reanchored) = self.builtin_reanchor_selection_from_scroll(
             selected_index,
             &self.browser_tabs_scroll_handle,
             filtered_len,
@@ -370,27 +370,7 @@ impl ScriptListApp {
 
                             this.browser_tabs_scroll_handle
                                 .scroll_to_item(new_selected, ScrollStrategy::Nearest);
-
-                            if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
-                                new_selected,
-                                &this.browser_tabs_scroll_handle,
-                                filtered_len,
-                                8,
-                            ) {
-                                if let AppView::BrowserTabsView { selected_index, .. } =
-                                    &mut this.current_view
-                                {
-                                    *selected_index = reanchored;
-                                }
-                                tracing::info!(
-                                    target: "script_kit::scroll",
-                                    event = "builtin_selection_resynced_from_scrollbar",
-                                    view = "browser_tabs",
-                                    reason = "wheel",
-                                    selected_before = new_selected,
-                                    selected_after = reanchored,
-                                );
-                            }
+                            this.note_builtin_selection_owned_wheel_scroll(new_selected);
 
                             Self::log_builtin_scroll_event(
                                 "browser_tabs",

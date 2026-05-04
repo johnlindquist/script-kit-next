@@ -643,21 +643,7 @@ impl ScriptListApp {
                                     }
                                     this.process_list_scroll_handle
                                         .scroll_to_item(new_selected, ScrollStrategy::Nearest);
-                                    if let Some(reanchored) =
-                                        Self::builtin_reanchor_selection_from_scroll(
-                                            new_selected,
-                                            &this.process_list_scroll_handle,
-                                            filtered_len,
-                                            8,
-                                        )
-                                    {
-                                        if let AppView::ProcessManagerView {
-                                            selected_index, ..
-                                        } = &mut this.current_view
-                                        {
-                                            *selected_index = reanchored;
-                                        }
-                                    }
+                                    this.note_builtin_selection_owned_wheel_scroll(new_selected);
                                     cx.notify();
                                     cx.stop_propagation();
                                 },

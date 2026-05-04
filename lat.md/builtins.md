@@ -17,6 +17,7 @@ These facts describe how built-ins are identified, surfaced, and executed.
 - `config.ts` supports a top-level `hiddenCommands: string[]` array of canonical command IDs (e.g. `"builtin/clipboard-history"`, `"script/foo"`). Hidden commands are filtered out of launcher materialization at startup but stay resolvable via `triggerBuiltin` and hotkeys. The older per-command `commands.*.hidden` override continues to work and is OR'd with `hiddenCommands`.
 - User-facing command IDs are canonicalized through the built-in config path instead of being treated as free-form labels.
 - Execution routes through the built-in execution pipeline and can branch into view changes, popups, ACP handoffs, note flows, system actions, or current-app automation.
+- Reset Windows immediately clears persisted bounds, resets the launcher to the default main-menu search, and moves the visible main window back to its default eye-line position without HUD feedback.
 - File search treats plain `Enter` as the default OS open action for the selected item, including directories, while `Tab` browses into a selected directory inline and `Shift+Tab` moves up.
 - File-search directory browsing keeps the current directory rows visible until the next directory stream completes and applies one stable replacement batch, avoiding blank flashes and visible row churn during `Tab` navigation.
 - File search renders a six-row skeleton while choices are still loading and no cached results are visible, preserving the real row columns instead of collapsing to a text-only spinner.
@@ -35,6 +36,7 @@ These files define the built-in catalog and its execution paths.
 
 - [src/builtins/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/builtins/mod.rs) - Built-in enums, grouping, entry construction, action text, and the current built-in catalog.
 - [src/app_execute/builtin_execution.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_execute/builtin_execution.rs) - Built-in execution paths, including ACP, notes, dictation, utility routing, and the PID-aware current-app session refresh guards.
+- [src/app_impl/lifecycle_reset.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_impl/lifecycle_reset.rs) - Shared lifecycle reset helpers, including the immediate Reset Windows return-to-menu behavior.
 - [src/frontmost_app_tracker/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/frontmost_app_tracker/mod.rs) - Frontmost-app identity tracking and PID-aware menu cache ownership so refreshes cannot republish stale menu trees for the wrong app.
 - [src/fallbacks/builtins.rs](/Users/johnlindquist/dev/script-kit-gpui/src/fallbacks/builtins.rs) - Built-in fallback ordering, including the current-app fallback that anchors empty-result flows.
 - [src/scripts/grouping.rs](/Users/johnlindquist/dev/script-kit-gpui/src/scripts/grouping.rs) - Main-menu grouping and the exact-name default Suggested seed list used for empty frecency stores.
@@ -55,6 +57,7 @@ These source files back the built-in behavior described here.
 
 - [src/builtins/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/builtins/mod.rs)
 - [src/app_execute/builtin_execution.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_execute/builtin_execution.rs)
+- [src/app_impl/lifecycle_reset.rs](/Users/johnlindquist/dev/script-kit-gpui/src/app_impl/lifecycle_reset.rs)
 - [src/frontmost_app_tracker/mod.rs](/Users/johnlindquist/dev/script-kit-gpui/src/frontmost_app_tracker/mod.rs)
 - [src/fallbacks/builtins.rs](/Users/johnlindquist/dev/script-kit-gpui/src/fallbacks/builtins.rs)
 - [src/scripts/grouping.rs](/Users/johnlindquist/dev/script-kit-gpui/src/scripts/grouping.rs)
@@ -100,6 +103,12 @@ Each saved entry also carries a human-readable metadata line in the browser. New
 When ACP opens dictation history as an attachment portal, that same browser switches its default `Enter` action from frontmost-app paste to attach. The selected transcript returns to ACP as a stable `kit://dictation-history?id=...` context part instead of collapsing back to the generic provider token.
 
 That is a materially broader contract than the older “few built-ins plus apps” description.
+
+## Dictation model download prompt
+
+The Parakeet model prompt is a stateful MiniPrompt that must not reinterpret a repeated submit as a destructive action after its choices change.
+
+[[src/app_execute/builtin_execution.rs#ScriptListApp#render_dictation_model_prompt]] persists the latest model-download state and reselects the default row only when the prompt opens or the model state phase changes. When the phase becomes `Downloading`, [[src/app_execute/builtin_execution.rs#ScriptListApp#preferred_dictation_model_prompt_index]] selects `Hide` instead of `Cancel download`, so a duplicate Enter from the preceding retry/download submit cannot immediately cancel the background download. Progress-only updates keep the user's current row selection intact.
 
 ## Process Manager
 

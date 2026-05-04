@@ -782,7 +782,7 @@ fn date_preview_value(
 
 fn compact_datetime(iso: &str) -> String {
     chrono::DateTime::parse_from_rfc3339(iso)
-        .map(|dt| dt.format("%Y-%m-%d %H:%M").to_string())
+        .map(|dt| crate::formatting::format_absolute_datetime(dt.with_timezone(&chrono::Utc)))
         .unwrap_or_else(|_| iso.to_string())
 }
 

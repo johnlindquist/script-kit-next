@@ -345,14 +345,7 @@ impl ScriptListApp {
                     action = "reset_window_positions",
                     "settings.action_executed"
                 );
-                crate::window_state::suppress_save();
-                crate::window_state::reset_all_positions();
-                self.show_hud(
-                    "Window positions reset - takes effect next open".to_string(),
-                    Some(HUD_SHORT_MS),
-                    cx,
-                );
-                self.close_and_reset_window(cx);
+                self.reset_window_positions_to_default_main_menu(cx);
             }
         }
     }

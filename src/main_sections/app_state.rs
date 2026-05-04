@@ -369,6 +369,8 @@ struct ScriptListApp {
     scrollbar_fade_gen: u64,
     /// Timestamp of last scroll activity (for fade-out timer)
     last_scroll_time: Option<std::time::Instant>,
+    /// Selected index most recently chosen by a selection-owned builtin wheel scroll.
+    builtin_wheel_owned_selected_index: Option<usize>,
     // Interactive script state
     current_view: AppView,
     pub(crate) main_window_mode: MainWindowMode,

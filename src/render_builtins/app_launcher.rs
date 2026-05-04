@@ -74,7 +74,7 @@ impl ScriptListApp {
 
         let filtered_apps = Self::app_launcher_filtered_entries(&self.apps, &filter);
         let filtered_len = filtered_apps.len();
-        let selected_index = if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
+        let selected_index = if let Some(reanchored) = self.builtin_reanchor_selection_from_scroll(
             selected_index,
             &self.list_scroll_handle,
             filtered_len,
@@ -471,32 +471,9 @@ impl ScriptListApp {
 
                             this.list_scroll_handle
                                 .scroll_to_item(new_selected, ScrollStrategy::Nearest);
+                            this.note_builtin_selection_owned_wheel_scroll(new_selected);
 
-                            let final_selected = if let Some(reanchored) =
-                                Self::builtin_reanchor_selection_from_scroll(
-                                    new_selected,
-                                    &this.list_scroll_handle,
-                                    filtered_len,
-                                    8,
-                                )
-                            {
-                                if let AppView::AppLauncherView { selected_index, .. } =
-                                    &mut this.current_view
-                                {
-                                    *selected_index = reanchored;
-                                }
-                                tracing::info!(
-                                    target: "script_kit::scroll",
-                                    event = "builtin_selection_resynced_from_scrollbar",
-                                    view = "app_launcher",
-                                    reason = "wheel",
-                                    selected_before = new_selected,
-                                    selected_after = reanchored,
-                                );
-                                reanchored
-                            } else {
-                                new_selected
-                            };
+                            let final_selected = new_selected;
 
                             let scroll_top_after =
                                 Self::builtin_uniform_list_scrollbar_metrics(

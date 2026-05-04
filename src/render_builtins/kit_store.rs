@@ -614,12 +614,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::minimal(
-                "kit_store_browse",
-                2,
-                false,
-                false,
-            ),
+            &crate::components::PromptChromeAudit::minimal("kit_store_browse", 2, false, false),
         );
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
@@ -1062,20 +1057,7 @@ impl ScriptListApp {
                                     }
                                     this.list_scroll_handle
                                         .scroll_to_item(new_selected, ScrollStrategy::Nearest);
-                                    if let Some(reanchored) =
-                                        Self::builtin_reanchor_selection_from_scroll(
-                                            new_selected,
-                                            &this.list_scroll_handle,
-                                            total_results,
-                                            8,
-                                        )
-                                    {
-                                        if let AppView::BrowseKitsView { selected_index, .. } =
-                                            &mut this.current_view
-                                        {
-                                            *selected_index = reanchored;
-                                        }
-                                    }
+                                    this.note_builtin_selection_owned_wheel_scroll(new_selected);
                                     cx.notify();
                                     cx.stop_propagation();
                                 },
@@ -1100,12 +1082,7 @@ impl ScriptListApp {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         crate::components::emit_prompt_chrome_audit(
-            &crate::components::PromptChromeAudit::minimal(
-                "kit_store_installed",
-                2,
-                false,
-                false,
-            ),
+            &crate::components::PromptChromeAudit::minimal("kit_store_installed", 2, false, false),
         );
         let tokens = get_tokens(self.current_design);
         let design_spacing = tokens.spacing();
@@ -1496,21 +1473,7 @@ impl ScriptListApp {
                                     }
                                     this.list_scroll_handle
                                         .scroll_to_item(new_selected, ScrollStrategy::Nearest);
-                                    if let Some(reanchored) =
-                                        Self::builtin_reanchor_selection_from_scroll(
-                                            new_selected,
-                                            &this.list_scroll_handle,
-                                            total_kits,
-                                            8,
-                                        )
-                                    {
-                                        if let AppView::InstalledKitsView {
-                                            selected_index, ..
-                                        } = &mut this.current_view
-                                        {
-                                            *selected_index = reanchored;
-                                        }
-                                    }
+                                    this.note_builtin_selection_owned_wheel_scroll(new_selected);
                                     cx.notify();
                                     cx.stop_propagation();
                                 },
