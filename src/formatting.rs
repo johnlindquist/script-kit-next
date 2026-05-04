@@ -2,7 +2,8 @@
 //!
 //! Consolidates duplicate implementations from across the codebase into a single source of truth.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, TimeZone, Utc};
+use chrono_humanize::{Accuracy, HumanTime, Tense};
 
 /// Format a byte count as a human-readable file size (e.g. "1.5 MB", "456 KB", "12 B").
 ///
@@ -23,81 +24,65 @@ pub fn format_file_size(bytes: u64) -> String {
     }
 }
 
-/// Format a Unix timestamp (seconds since epoch) as a long-form relative time string.
+/// Format a Unix timestamp (seconds since epoch) as a human-friendly relative time string.
 ///
-/// Output examples: "Just now", "3 mins ago", "1 hour ago", "2 weeks ago".
+/// Output examples: "just now", "3 minutes ago", "1 hour ago", "2 weeks ago".
 /// Used in file search results and environment variable prompts.
 pub fn format_relative_time_long(unix_timestamp: u64) -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-
     if unix_timestamp == 0 {
         return "Unknown".to_string();
     }
 
-    let diff = now.saturating_sub(unix_timestamp);
-    format_seconds_long(diff)
+    let now = Utc::now().timestamp();
+    format_relative_seconds(now.saturating_sub(unix_timestamp as i64).max(0))
 }
 
-/// Format a `chrono::DateTime<Utc>` as a long-form relative time string.
+/// Format a `chrono::DateTime<Utc>` as a human-friendly relative time string.
 ///
 /// Same output style as [`format_relative_time_long`] but accepts a chrono DateTime.
 pub fn format_relative_time_long_dt(dt: DateTime<Utc>) -> String {
-    let now = Utc::now();
-    let diff = now.signed_duration_since(dt);
-
-    let seconds = diff.num_seconds();
-    if seconds < 0 {
-        return "just now".to_string();
-    }
-
-    format_seconds_long(seconds as u64)
+    format_relative_datetime(dt)
 }
 
-/// Format a `chrono::DateTime<Utc>` as a short-form relative time string.
+/// Format a `chrono::DateTime<Utc>` as a human-friendly relative time string.
 ///
-/// Output examples: "just now", "5s ago", "3m ago", "2h ago", "1d ago", "Mar 05".
+/// Output examples: "just now", "5 minutes ago", "2 hours ago", "1 day ago".
 /// Used in notes, clipboard history, and AI chat timestamps.
 pub fn format_relative_time_short_dt(dt: DateTime<Utc>) -> String {
-    let now = Utc::now();
-    let diff = now - dt;
-
-    if diff.num_seconds() < 5 {
-        "just now".to_string()
-    } else if diff.num_seconds() < 60 {
-        format!("{}s ago", diff.num_seconds())
-    } else if diff.num_minutes() < 60 {
-        format!("{}m ago", diff.num_minutes())
-    } else if diff.num_hours() < 24 {
-        format!("{}h ago", diff.num_hours())
-    } else if diff.num_days() < 7 {
-        format!("{}d ago", diff.num_days())
-    } else {
-        dt.format("%b %d").to_string()
-    }
+    format_relative_datetime(dt)
 }
 
 /// Format a millisecond timestamp (e.g. clipboard entry timestamps) as a short relative time.
 ///
-/// Output examples: "just now", "3m ago", "2h ago", "5d ago".
+/// Output examples: "just now", "3 minutes ago", "2 hours ago", "5 days ago".
 #[allow(dead_code)]
 pub fn format_relative_time_short_millis(timestamp_ms: i64) -> String {
     let now_ms = Utc::now().timestamp_millis();
     let age_secs = (now_ms - timestamp_ms) / 1000;
 
-    if age_secs < 60 {
-        "just now".to_string()
-    } else if age_secs < 3600 {
-        format!("{}m ago", age_secs / 60)
-    } else if age_secs < 86400 {
-        format!("{}h ago", age_secs / 3600)
-    } else {
-        format!("{}d ago", age_secs / 86400)
-    }
+    format_relative_seconds(age_secs.max(0))
+}
+
+/// Format a `chrono::DateTime<Utc>` as a local, readable absolute timestamp.
+pub fn format_absolute_datetime(dt: DateTime<Utc>) -> String {
+    dt.with_timezone(&Local)
+        .format("%b %-d, %Y at %-I:%M %p")
+        .to_string()
+}
+
+/// Format a Unix timestamp as a local, readable absolute timestamp.
+pub fn format_absolute_unix_seconds(unix_timestamp: i64) -> String {
+    Utc.timestamp_opt(unix_timestamp, 0)
+        .single()
+        .map(format_absolute_datetime)
+        .unwrap_or_else(|| "unknown time".to_string())
+}
+
+/// Format a Unix millisecond timestamp as a local, readable absolute timestamp.
+pub fn format_absolute_unix_millis(unix_timestamp_ms: i64) -> String {
+    DateTime::<Utc>::from_timestamp_millis(unix_timestamp_ms)
+        .map(format_absolute_datetime)
+        .unwrap_or_else(|| "unknown time".to_string())
 }
 
 /// Format a `std::time::Duration` as a compact human-readable label.
@@ -115,35 +100,24 @@ pub fn format_duration_compact(dur: std::time::Duration) -> String {
 
 // ── Internal ──────────────────────────────────────────────────────────────────
 
-/// Shared long-form relative time formatting from a seconds delta.
-fn format_seconds_long(diff: u64) -> String {
-    const MINUTE: u64 = 60;
-    const HOUR: u64 = MINUTE * 60;
-    const DAY: u64 = HOUR * 24;
-    const WEEK: u64 = DAY * 7;
-    const MONTH: u64 = DAY * 30;
-    const YEAR: u64 = DAY * 365;
+pub(crate) fn format_relative_seconds(seconds: i64) -> String {
+    if seconds < 60 {
+        return "just now".to_string();
+    }
 
-    if diff < MINUTE {
-        "Just now".to_string()
-    } else if diff < HOUR {
-        let mins = diff / MINUTE;
-        format!("{} min{} ago", mins, if mins == 1 { "" } else { "s" })
-    } else if diff < DAY {
-        let hours = diff / HOUR;
-        format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" })
-    } else if diff < WEEK {
-        let days = diff / DAY;
-        format!("{} day{} ago", days, if days == 1 { "" } else { "s" })
-    } else if diff < MONTH {
-        let weeks = diff / WEEK;
-        format!("{} week{} ago", weeks, if weeks == 1 { "" } else { "s" })
-    } else if diff < YEAR {
-        let months = diff / MONTH;
-        format!("{} month{} ago", months, if months == 1 { "" } else { "s" })
+    HumanTime::from(chrono::Duration::seconds(-seconds)).to_text_en(Accuracy::Precise, Tense::Past)
+}
+
+fn format_relative_datetime(dt: DateTime<Utc>) -> String {
+    if dt > Utc::now() {
+        return "just now".to_string();
+    }
+
+    let text = HumanTime::from(dt).to_text_en(Accuracy::Precise, Tense::Past);
+    if text == "0 seconds ago" {
+        "just now".to_string()
     } else {
-        let years = diff / YEAR;
-        format!("{} year{} ago", years, if years == 1 { "" } else { "s" })
+        text
     }
 }
 
@@ -197,7 +171,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        assert_eq!(format_relative_time_long(now), "Just now");
+        assert_eq!(format_relative_time_long(now), "just now");
     }
 
     #[test]
@@ -206,7 +180,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        assert_eq!(format_relative_time_long(now - 120), "2 mins ago");
+        assert_eq!(format_relative_time_long(now - 120), "2 minutes ago");
     }
 
     #[test]
@@ -224,7 +198,7 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        assert_eq!(format_relative_time_long(now - 60), "1 min ago");
+        assert_eq!(format_relative_time_long(now - 60), "1 minute ago");
         assert_eq!(format_relative_time_long(now - 3600), "1 hour ago");
     }
 
@@ -253,33 +227,32 @@ mod tests {
     #[test]
     fn test_relative_time_short_seconds() {
         let past = Utc::now() - TimeDelta::seconds(30);
-        assert_eq!(format_relative_time_short_dt(past), "30s ago");
+        assert_eq!(format_relative_time_short_dt(past), "30 seconds ago");
     }
 
     #[test]
     fn test_relative_time_short_minutes() {
         let past = Utc::now() - TimeDelta::minutes(5);
-        assert_eq!(format_relative_time_short_dt(past), "5m ago");
+        assert_eq!(format_relative_time_short_dt(past), "5 minutes ago");
     }
 
     #[test]
     fn test_relative_time_short_hours() {
         let past = Utc::now() - TimeDelta::hours(3);
-        assert_eq!(format_relative_time_short_dt(past), "3h ago");
+        assert_eq!(format_relative_time_short_dt(past), "3 hours ago");
     }
 
     #[test]
     fn test_relative_time_short_days() {
         let past = Utc::now() - TimeDelta::days(2);
-        assert_eq!(format_relative_time_short_dt(past), "2d ago");
+        assert_eq!(format_relative_time_short_dt(past), "2 days ago");
     }
 
     #[test]
     fn test_relative_time_short_old_shows_date() {
         let past = Utc::now() - TimeDelta::days(14);
         let result = format_relative_time_short_dt(past);
-        // Should be a date like "Mar 01" not "2w ago"
-        assert!(!result.contains("ago"), "expected date, got: {result}");
+        assert_eq!(result, "2 weeks ago");
     }
 
     // ── format_relative_time_short_millis ─────────────────────────────────
@@ -294,7 +267,19 @@ mod tests {
     fn test_relative_time_short_millis_minutes() {
         let now_ms = Utc::now().timestamp_millis();
         let five_min_ago = now_ms - 5 * 60 * 1000;
-        assert_eq!(format_relative_time_short_millis(five_min_ago), "5m ago");
+        assert_eq!(
+            format_relative_time_short_millis(five_min_ago),
+            "5 minutes ago"
+        );
+    }
+
+    #[test]
+    fn test_absolute_unix_seconds_uses_readable_local_format() {
+        let formatted = format_absolute_unix_seconds(0);
+
+        assert_ne!(formatted, "unknown time");
+        assert!(formatted.contains("1970"));
+        assert!(formatted.contains(" at "));
     }
 
     // ── format_duration_compact ───────────────────────────────────────────

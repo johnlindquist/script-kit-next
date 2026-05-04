@@ -392,47 +392,7 @@ pub fn format_file_size(bytes: u64) -> String {
 /// Format Unix timestamp as relative time (e.g., "2 hours ago", "3 days ago")
 #[allow(dead_code)]
 pub fn format_relative_time(unix_timestamp: u64) -> String {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-
-    if unix_timestamp == 0 {
-        return "Unknown".to_string();
-    }
-
-    let diff = now.saturating_sub(unix_timestamp);
-
-    const MINUTE: u64 = 60;
-    const HOUR: u64 = MINUTE * 60;
-    const DAY: u64 = HOUR * 24;
-    const WEEK: u64 = DAY * 7;
-    const MONTH: u64 = DAY * 30;
-    const YEAR: u64 = DAY * 365;
-
-    if diff < MINUTE {
-        "Just now".to_string()
-    } else if diff < HOUR {
-        let mins = diff / MINUTE;
-        format!("{} min{} ago", mins, if mins == 1 { "" } else { "s" })
-    } else if diff < DAY {
-        let hours = diff / HOUR;
-        format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" })
-    } else if diff < WEEK {
-        let days = diff / DAY;
-        format!("{} day{} ago", days, if days == 1 { "" } else { "s" })
-    } else if diff < MONTH {
-        let weeks = diff / WEEK;
-        format!("{} week{} ago", weeks, if weeks == 1 { "" } else { "s" })
-    } else if diff < YEAR {
-        let months = diff / MONTH;
-        format!("{} month{} ago", months, if months == 1 { "" } else { "s" })
-    } else {
-        let years = diff / YEAR;
-        format!("{} year{} ago", years, if years == 1 { "" } else { "s" })
-    }
+    crate::formatting::format_relative_time_long(unix_timestamp)
 }
 /// Filter and sort FileResults using Nucleo fuzzy matching
 ///
@@ -779,12 +739,12 @@ mod tests {
             .as_secs();
 
         // Just now (0 seconds ago)
-        assert_eq!(format_relative_time(now), "Just now");
+        assert_eq!(format_relative_time(now), "just now");
 
         // Minutes ago
-        assert_eq!(format_relative_time(now - 60), "1 min ago");
-        assert_eq!(format_relative_time(now - 120), "2 mins ago");
-        assert_eq!(format_relative_time(now - 59 * 60), "59 mins ago");
+        assert_eq!(format_relative_time(now - 60), "1 minute ago");
+        assert_eq!(format_relative_time(now - 120), "2 minutes ago");
+        assert_eq!(format_relative_time(now - 59 * 60), "59 minutes ago");
 
         // Hours ago
         assert_eq!(format_relative_time(now - 3600), "1 hour ago");

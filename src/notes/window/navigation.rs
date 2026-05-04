@@ -325,27 +325,7 @@ impl NotesApp {
     pub(super) fn get_relative_time(&self) -> Option<String> {
         self.selected_note_id
             .and_then(|id| self.get_visible_notes().iter().find(|n| n.id == id))
-            .map(|note| {
-                let now = chrono::Utc::now();
-                let diff = now - note.updated_at;
-
-                if diff.num_seconds() < 5 {
-                    "just now".to_string()
-                } else if diff.num_seconds() < 60 {
-                    format!("{}s ago", diff.num_seconds())
-                } else if diff.num_minutes() < 60 {
-                    let mins = diff.num_minutes();
-                    format!("{}m ago", mins)
-                } else if diff.num_hours() < 24 {
-                    let hours = diff.num_hours();
-                    format!("{}h ago", hours)
-                } else if diff.num_days() < 7 {
-                    let days = diff.num_days();
-                    format!("{}d ago", days)
-                } else {
-                    note.updated_at.format("%b %d").to_string()
-                }
-            })
+            .map(|note| crate::formatting::format_relative_time_short_dt(note.updated_at))
     }
 
     /// Select a pinned note by its ordinal position (Cmd+1 through Cmd+9)
@@ -414,22 +394,7 @@ impl NotesApp {
 
     /// Format a DateTime as a relative time string for the note switcher
     pub(super) fn format_relative_time(dt: chrono::DateTime<chrono::Utc>) -> String {
-        let now = chrono::Utc::now();
-        let diff = now - dt;
-
-        if diff.num_seconds() < 5 {
-            "just now".to_string()
-        } else if diff.num_seconds() < 60 {
-            format!("{}s ago", diff.num_seconds())
-        } else if diff.num_minutes() < 60 {
-            format!("{}m ago", diff.num_minutes())
-        } else if diff.num_hours() < 24 {
-            format!("{}h ago", diff.num_hours())
-        } else if diff.num_days() < 7 {
-            format!("{}d ago", diff.num_days())
-        } else {
-            dt.format("%b %d").to_string()
-        }
+        crate::formatting::format_relative_time_short_dt(dt)
     }
 
     /// Strip markdown syntax from a preview string for clean display in the note switcher

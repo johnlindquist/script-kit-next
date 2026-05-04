@@ -39,7 +39,7 @@ impl NotesApp {
         let created_date = self
             .selected_note_id
             .and_then(|id| self.get_visible_notes().iter().find(|n| n.id == id))
-            .map(|note| note.created_at.format("%b %d, %Y").to_string());
+            .map(|note| crate::formatting::format_absolute_datetime(note.created_at));
         let navigate_back_click = cx.listener(|this, _: &gpui::ClickEvent, window, cx| {
             this.navigate_back(window, cx);
         });

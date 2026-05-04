@@ -33,8 +33,7 @@ impl NotesApp {
 
     /// Insert current date/time at cursor position (Cmd+Shift+D)
     pub(super) fn insert_date_time(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let now = chrono::Local::now();
-        let date_str = now.format("%Y-%m-%d %H:%M").to_string();
+        let date_str = crate::formatting::format_absolute_datetime(chrono::Utc::now());
         self.editor_state.update(cx, |state, cx| {
             let selection = state.selection();
             let value = state.value().to_string();

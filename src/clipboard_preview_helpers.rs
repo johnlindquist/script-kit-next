@@ -11,26 +11,11 @@ pub(crate) fn content_type_label(content_type: &clipboard_history::ContentType) 
 }
 
 pub(crate) fn relative_time(now_ts: i64, entry_ts: i64) -> String {
-    let age_secs = now_ts.saturating_sub(entry_ts);
-    if age_secs < 60 {
-        "just now".to_string()
-    } else if age_secs < 3600 {
-        format!("{} minutes ago", age_secs / 60)
-    } else if age_secs < 86400 {
-        format!("{} hours ago", age_secs / 3600)
-    } else {
-        format!("{} days ago", age_secs / 86400)
-    }
+    crate::formatting::format_relative_seconds(now_ts.saturating_sub(entry_ts))
 }
 
 pub(crate) fn absolute_time(entry_ts: i64) -> String {
-    chrono::DateTime::<chrono::Utc>::from_timestamp(entry_ts, 0)
-        .map(|dt| {
-            dt.with_timezone(&chrono::Local)
-                .format("%Y-%m-%d %H:%M")
-                .to_string()
-        })
-        .unwrap_or_else(|| "unknown time".to_string())
+    crate::formatting::format_absolute_unix_millis(entry_ts)
 }
 
 #[cfg(test)]
@@ -66,7 +51,7 @@ mod tests {
         assert_eq!(relative_time(1_000, 995), "just now");
         assert_eq!(relative_time(4_000, 3_880), "2 minutes ago");
         assert_eq!(relative_time(10_000, 2_800), "2 hours ago");
-        assert_eq!(relative_time(200_000, 100_000), "1 days ago");
+        assert_eq!(relative_time(200_000, 100_000), "1 day ago");
     }
 
     #[test]
@@ -85,7 +70,24 @@ mod tests {
         let result = absolute_time(0);
         // Should produce a date string, not "unknown time"
         assert_ne!(result, "unknown time");
-        assert!(result.contains("-"), "expected date format, got: {result}");
+        assert!(
+            result.contains("1970"),
+            "expected date format, got: {result}"
+        );
+    }
+
+    #[test]
+    fn absolute_time_interprets_clipboard_timestamp_as_milliseconds() {
+        let result = absolute_time(1_700_000_000_000);
+
+        assert!(
+            result.contains("2023"),
+            "expected millisecond timestamp to stay near 2023, got: {result}"
+        );
+        assert!(
+            !result.contains("+"),
+            "expected readable timestamp without expanded year, got: {result}"
+        );
     }
 
     #[test]
@@ -94,7 +96,7 @@ mod tests {
         let result = absolute_time(i64::MIN);
         // Either a valid date or "unknown time" — both are acceptable
         assert!(
-            result == "unknown time" || result.contains("-"),
+            result == "unknown time" || result.contains(" at "),
             "unexpected result: {result}"
         );
     }
