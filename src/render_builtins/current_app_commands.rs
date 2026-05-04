@@ -50,27 +50,20 @@ impl ScriptListApp {
         let filtered_entries =
             Self::current_app_commands_filtered_entries(&self.cached_current_app_entries, &filter);
         let filtered_len = filtered_entries.len();
-        let selected_index = if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
+        let filter_safe = crate::logging::log_user_value(&filter);
+        tracing::info!(
+            target: "script_kit::scroll_trace",
+            event = "SCROLL_TRACE current_app.render_state",
+            filter_preview = %filter_safe,
+            filter_bytes = filter_safe.raw_bytes,
+            filter_safe_bytes = filter_safe.safe_bytes,
+            filter_truncated = filter_safe.truncated,
             selected_index,
-            &self.current_app_commands_scroll_handle,
             filtered_len,
-            8,
-        ) {
-            tracing::info!(
-                target: "script_kit::scroll",
-                event = "builtin_selection_resynced_from_scrollbar",
-                view = "current_app_commands",
-                reason = "render",
-                selected_before = selected_index,
-                selected_after = reanchored,
-            );
-            if let AppView::CurrentAppCommandsView { selected_index, .. } = &mut self.current_view {
-                *selected_index = reanchored;
-            }
-            reanchored
-        } else {
-            selected_index
-        };
+            cached_entries = self.cached_current_app_entries.len(),
+            wheel_owned_selected_index = ?self.builtin_wheel_owned_selected_index,
+            "SCROLL_TRACE current_app.render_state"
+        );
 
         // Key handler
         let handle_key = cx.listener(
@@ -404,12 +397,32 @@ impl ScriptListApp {
                         &current_filter,
                     );
                     let filtered_len = filtered.len();
+                    let current_filter_safe = crate::logging::log_user_value(&current_filter);
+                    tracing::info!(
+                        target: "script_kit::scroll_trace",
+                        event = "SCROLL_TRACE current_app.wheel_event",
+                        current_selected,
+                        filtered_len,
+                        filter_preview = %current_filter_safe,
+                        filter_bytes = current_filter_safe.raw_bytes,
+                        filter_safe_bytes = current_filter_safe.safe_bytes,
+                        filter_truncated = current_filter_safe.truncated,
+                        "SCROLL_TRACE current_app.wheel_event"
+                    );
 
                     let Some(new_selected) = this.builtin_scroll_target_from_wheel(
                         event,
                         current_selected,
                         filtered_len,
                     ) else {
+                        tracing::info!(
+                            target: "script_kit::scroll_trace",
+                            event = "SCROLL_TRACE current_app.wheel_no_target",
+                            current_selected,
+                            filtered_len,
+                            filter_preview = %current_filter_safe,
+                            "SCROLL_TRACE current_app.wheel_no_target"
+                        );
                         if filtered_len > 0 {
                             cx.stop_propagation();
                         }
@@ -424,27 +437,16 @@ impl ScriptListApp {
 
                     this.current_app_commands_scroll_handle
                         .scroll_to_item(new_selected, ScrollStrategy::Nearest);
-
-                    if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
-                        new_selected,
-                        &this.current_app_commands_scroll_handle,
+                    this.note_builtin_selection_owned_wheel_scroll(new_selected);
+                    tracing::info!(
+                        target: "script_kit::scroll_trace",
+                        event = "SCROLL_TRACE current_app.wheel_selected",
+                        selected_before = current_selected,
+                        selected_after = new_selected,
                         filtered_len,
-                        8,
-                    ) {
-                        if let AppView::CurrentAppCommandsView { selected_index, .. } =
-                            &mut this.current_view
-                        {
-                            *selected_index = reanchored;
-                        }
-                        tracing::info!(
-                            target: "script_kit::scroll",
-                            event = "builtin_selection_resynced_from_scrollbar",
-                            view = "current_app_commands",
-                            reason = "wheel",
-                            selected_before = new_selected,
-                            selected_after = reanchored,
-                        );
-                    }
+                        filter_preview = %current_filter_safe,
+                        "SCROLL_TRACE current_app.wheel_selected"
+                    );
 
                     Self::log_builtin_scroll_event(
                         "current_app_commands",
@@ -548,8 +550,8 @@ mod current_app_commands_chrome_audit {
             "current_app_commands should use shared wheel delta conversion"
         );
         assert!(
-            source.contains("builtin_reanchor_selection_from_scroll("),
-            "current_app_commands should reanchor selection after handle movement"
+            !source.contains("builtin_reanchor_selection_from_scroll("),
+            "current_app_commands should keep selection owned by keyboard/wheel/click, matching the main menu"
         );
         assert!(
             source.contains("builtin_uniform_list_scrollbar("),

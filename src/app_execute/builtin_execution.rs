@@ -1839,6 +1839,8 @@ impl ScriptListApp {
             false,
             cx,
         );
+        self.current_app_commands_scroll_handle
+            .scroll_to_item(0, gpui::ScrollStrategy::Top);
 
         if self.cached_current_app_entries.is_empty() {
             tracing::info!(
@@ -3087,14 +3089,7 @@ impl ScriptListApp {
 
                 match cmd_type {
                     SettingsCommandType::ResetWindowPositions => {
-                        crate::window_state::suppress_save();
-                        crate::window_state::reset_all_positions();
-                        self.show_hud(
-                            "Window positions reset - takes effect next open".to_string(),
-                            Some(HUD_SHORT_MS),
-                            cx,
-                        );
-                        self.close_and_reset_window(cx);
+                        self.reset_window_positions_to_default_main_menu(cx);
                         Self::builtin_success(dctx, "reset_window_positions")
                     }
                     SettingsCommandType::ChooseTheme => {
@@ -3957,6 +3952,24 @@ impl ScriptListApp {
                     UtilityCommandType::DoInCurrentApp => {
                         let raw_query_owned =
                             query_override.unwrap_or(&self.filter_text).to_string();
+                        let raw_query_safe = crate::logging::log_user_value(&raw_query_owned);
+                        let filter_text_safe = crate::logging::log_user_value(&self.filter_text);
+                        tracing::info!(
+                            target: "script_kit::do_in_trace",
+                            event = "DO_IN_TRACE execution.entry",
+                            trace_id = %dctx.trace_id,
+                            raw_query_preview = %raw_query_safe,
+                            raw_query_bytes = raw_query_safe.raw_bytes,
+                            raw_query_safe_bytes = raw_query_safe.safe_bytes,
+                            raw_query_truncated = raw_query_safe.truncated,
+                            filter_text_preview = %filter_text_safe,
+                            filter_text_bytes = filter_text_safe.raw_bytes,
+                            filter_text_safe_bytes = filter_text_safe.safe_bytes,
+                            filter_text_truncated = filter_text_safe.truncated,
+                            query_override = ?query_override,
+                            current_view = ?self.current_view,
+                            "DO_IN_TRACE execution.entry"
+                        );
                         tracing::info!(
                             trace_id = %dctx.trace_id,
                             raw_query = %raw_query_owned,
@@ -3964,16 +3977,30 @@ impl ScriptListApp {
                             query_override = ?query_override,
                             "do_in_current_app.execution_entry — raw inputs"
                         );
-                        let trimmed_query =
-                            crate::menu_bar::current_app_commands::normalize_do_in_current_app_request(
-                                Some(&raw_query_owned),
-                            )
-                            .unwrap_or_default()
-                            .to_string();
+                        let effective_query =
+                            crate::menu_bar::current_app_commands::effective_do_in_current_app_query_for_submission(
+                                &raw_query_owned,
+                                query_override,
+                            );
+                        let effective_query_for_router = (!effective_query.is_empty())
+                            .then_some(effective_query.as_str());
+                        let effective_query_safe =
+                            crate::logging::log_user_value(&effective_query);
 
                         tracing::info!(
+                            target: "script_kit::do_in_trace",
+                            event = "DO_IN_TRACE execution.normalized",
                             trace_id = %dctx.trace_id,
-                            query = %trimmed_query,
+                            query_preview = %effective_query_safe,
+                            query_bytes = effective_query_safe.raw_bytes,
+                            query_safe_bytes = effective_query_safe.safe_bytes,
+                            query_truncated = effective_query_safe.truncated,
+                            raw_query_preview = %raw_query_safe,
+                            "DO_IN_TRACE execution.normalized"
+                        );
+                        tracing::info!(
+                            trace_id = %dctx.trace_id,
+                            query = %effective_query,
                             "do_in_current_app.requested"
                         );
 
@@ -3984,31 +4011,32 @@ impl ScriptListApp {
                                 let (entries, snapshot_receipt) =
                                     snapshot.into_entries_with_receipt();
 
-                                if entries.is_empty() && trimmed_query.is_empty() {
-                                    let message = format!(
-                                        "No enabled menu bar commands found for {}",
-                                        snapshot_receipt.app_name
-                                    );
-                                    self.show_error_toast(message.clone(), cx);
-                                    Self::builtin_error(
-                                        dctx,
-                                        crate::action_helpers::ERROR_ACTION_FAILED,
-                                        message,
-                                        "do_in_current_app_empty_snapshot",
-                                    )
-                                } else {
                                     let (action, intent_receipt) =
                                         crate::menu_bar::current_app_commands::resolve_do_in_current_app_intent(
                                             &entries,
-                                            Some(&raw_query_owned),
+                                            effective_query_for_router,
                                         );
 
+                                    tracing::info!(
+                                        target: "script_kit::do_in_trace",
+                                        event = "DO_IN_TRACE execution.resolved",
+                                        trace_id = %dctx.trace_id,
+                                        app_name = %snapshot_receipt.app_name,
+                                        bundle_id = %snapshot_receipt.bundle_id,
+                                        leaf_entry_count = snapshot_receipt.leaf_entry_count,
+                                        query_preview = %effective_query_safe,
+                                        raw_query_preview = %raw_query_safe,
+                                        filtered_entries = intent_receipt.filtered_entries,
+                                        exact_matches = intent_receipt.exact_matches,
+                                        resolved_action = intent_receipt.action,
+                                        "DO_IN_TRACE execution.resolved"
+                                    );
                                     tracing::info!(
                                         trace_id = %dctx.trace_id,
                                         app_name = %snapshot_receipt.app_name,
                                         bundle_id = %snapshot_receipt.bundle_id,
                                         leaf_entry_count = snapshot_receipt.leaf_entry_count,
-                                        query = %trimmed_query,
+                                        query = %effective_query,
                                         filtered_entries = intent_receipt.filtered_entries,
                                         exact_matches = intent_receipt.exact_matches,
                                         resolved_action = intent_receipt.action,
@@ -4018,9 +4046,18 @@ impl ScriptListApp {
                                     match action {
                                         crate::menu_bar::current_app_commands::DoInCurrentAppAction::OpenCommandPalette => {
                                             tracing::info!(
+                                                target: "script_kit::do_in_trace",
+                                                event = "DO_IN_TRACE execution.open_palette",
                                                 trace_id = %dctx.trace_id,
                                                 cached_entries = entries.len(),
-                                                filter = %trimmed_query,
+                                                filter_preview = %effective_query_safe,
+                                                placeholder = %snapshot_receipt.placeholder,
+                                                "DO_IN_TRACE execution.open_palette"
+                                            );
+                                            tracing::info!(
+                                                trace_id = %dctx.trace_id,
+                                                cached_entries = entries.len(),
+                                                filter = %effective_query,
                                                 placeholder = %snapshot_receipt.placeholder,
                                                 "do_in_current_app.action → OpenCommandPalette — switching to CurrentAppCommandsView"
                                             );
@@ -4028,12 +4065,22 @@ impl ScriptListApp {
                                                 entries,
                                                 &snapshot_receipt,
                                                 snapshot_pid,
-                                                &trimmed_query,
+                                                &effective_query,
                                                 cx,
                                             );
                                             Self::builtin_success(dctx, "do_in_current_app_open_palette")
                                         }
                                         crate::menu_bar::current_app_commands::DoInCurrentAppAction::ExecuteEntry(entry_index) => {
+                                            tracing::info!(
+                                                target: "script_kit::do_in_trace",
+                                                event = "DO_IN_TRACE execution.execute_entry",
+                                                trace_id = %dctx.trace_id,
+                                                entry_index = entry_index,
+                                                entry_name = %entries[entry_index].name,
+                                                query_preview = %effective_query_safe,
+                                                raw_query_preview = %raw_query_safe,
+                                                "DO_IN_TRACE execution.execute_entry"
+                                            );
                                             tracing::info!(
                                                 trace_id = %dctx.trace_id,
                                                 entry_index = entry_index,
@@ -4041,18 +4088,26 @@ impl ScriptListApp {
                                                 "do_in_current_app.action → ExecuteEntry — running menu command directly"
                                             );
                                             let entry = entries[entry_index].clone();
-                                            self.execute_builtin_inner(&entry, Some(&raw_query_owned), dctx, cx)
+                                            self.execute_builtin_inner(&entry, effective_query_for_router, dctx, cx)
                                         }
                                         crate::menu_bar::current_app_commands::DoInCurrentAppAction::GenerateScript => {
                                             tracing::info!(
+                                                target: "script_kit::do_in_trace",
+                                                event = "DO_IN_TRACE execution.generate_script",
                                                 trace_id = %dctx.trace_id,
-                                                trimmed_query = %trimmed_query,
+                                                query_preview = %effective_query_safe,
+                                                raw_query_preview = %raw_query_safe,
+                                                "DO_IN_TRACE execution.generate_script"
+                                            );
+                                            tracing::info!(
+                                                trace_id = %dctx.trace_id,
+                                                query = %effective_query,
                                                 "do_in_current_app.action → GenerateScript — scheduling async context capture before recipe flow"
                                             );
 
                                             self.spawn_generate_script_from_current_app_with_capture(
                                                 dctx.trace_id.to_string(),
-                                                raw_query_owned.clone(),
+                                                effective_query.clone(),
                                                 snapshot_for_recipe,
                                                 entries,
                                                 snapshot_receipt.clone(),
@@ -4063,7 +4118,6 @@ impl ScriptListApp {
                                             Self::builtin_success(dctx, "do_in_current_app_generate_script_scheduled")
                                         }
                                     }
-                                }
                             }
                             Err(e) => {
                                 let message =
@@ -5751,6 +5805,15 @@ impl ScriptListApp {
         }
     }
 
+    fn preferred_dictation_model_prompt_index(
+        status: &crate::dictation::DictationModelStatus,
+    ) -> usize {
+        match status {
+            crate::dictation::DictationModelStatus::Downloading { .. } => 1,
+            _ => 0,
+        }
+    }
+
     /// Render the dictation model prompt with the given status, replacing
     /// whatever is currently on screen.
     fn render_dictation_model_prompt(
@@ -5758,8 +5821,16 @@ impl ScriptListApp {
         status: crate::dictation::DictationModelStatus,
         cx: &mut Context<Self>,
     ) {
+        let previous_status = dictation_model_prompt_status().lock().clone();
+        let phase_changed =
+            std::mem::discriminant(&previous_status) != std::mem::discriminant(&status);
+        let prompt_visible = self.is_dictation_model_prompt_visible();
         *dictation_model_prompt_status().lock() = status.clone();
-        let (title, placeholder, choices) = Self::build_dictation_model_prompt(status);
+        let (title, placeholder, choices) = Self::build_dictation_model_prompt(status.clone());
+        if !prompt_visible || phase_changed {
+            self.arg_selected_index = Self::preferred_dictation_model_prompt_index(&status)
+                .min(choices.len().saturating_sub(1));
+        }
         self.open_builtin_filterable_view(
             AppView::MiniPrompt {
                 id: BUILTIN_DICTATION_MODEL_PROMPT_ID.to_string(),
@@ -6258,6 +6329,31 @@ mod dictation_model_prompt_tests {
         assert_eq!(choices[0].value, BUILTIN_DICTATION_MODEL_CANCEL);
         assert_eq!(choices[1].name, "Hide");
         assert_eq!(choices[1].value, BUILTIN_DICTATION_MODEL_HIDE);
+    }
+
+    #[test]
+    fn downloading_prompt_prefers_hide_after_phase_change() {
+        let index = ScriptListApp::preferred_dictation_model_prompt_index(
+            &crate::dictation::DictationModelStatus::Downloading {
+                percentage: 0,
+                downloaded_bytes: 0,
+                total_bytes: crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE,
+                speed_bytes_per_sec: 0,
+                eta_seconds: None,
+            },
+        );
+
+        let (_, _, choices) = ScriptListApp::build_dictation_model_prompt(
+            crate::dictation::DictationModelStatus::Downloading {
+                percentage: 0,
+                downloaded_bytes: 0,
+                total_bytes: crate::dictation::PARAKEET_MODEL_ARCHIVE_SIZE,
+                speed_bytes_per_sec: 0,
+                eta_seconds: None,
+            },
+        );
+
+        assert_eq!(choices[index].value, BUILTIN_DICTATION_MODEL_HIDE);
     }
 
     #[test]

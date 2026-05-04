@@ -363,18 +363,10 @@ impl ScriptListApp {
                                 // Use display_preview() from ClipboardEntryMeta
                                 let display_content = entry.display_preview();
 
-                                // Format relative time (entry.timestamp is in milliseconds)
-                                let now_ms = chrono::Utc::now().timestamp_millis();
-                                let age_secs = (now_ms - entry.timestamp) / 1000;
-                                let relative_time = if age_secs < 60 {
-                                    "just now".to_string()
-                                } else if age_secs < 3600 {
-                                    format!("{}m ago", age_secs / 60)
-                                } else if age_secs < 86400 {
-                                    format!("{}h ago", age_secs / 3600)
-                                } else {
-                                    format!("{}d ago", age_secs / 86400)
-                                };
+                                let relative_time =
+                                    crate::formatting::format_relative_time_short_millis(
+                                        entry.timestamp,
+                                    );
 
                                 // Add pin indicator
                                 let name = if entry.pinned {
@@ -601,25 +593,7 @@ impl ScriptListApp {
 
                     this.clipboard_list_scroll_handle
                         .scroll_to_item(new_selected, ScrollStrategy::Nearest);
-                    if let Some(reanchored) = Self::builtin_reanchor_selection_from_scroll(
-                        new_selected,
-                        &this.clipboard_list_scroll_handle,
-                        filtered_len,
-                        8,
-                    ) {
-                        if let AppView::ClipboardHistoryView { selected_index, .. } =
-                            &mut this.current_view
-                        {
-                            *selected_index = reanchored;
-                        }
-                        tracing::info!(
-                            target: "script_kit::scroll",
-                            event = "builtin_selection_resynced_from_scrollbar",
-                            view = "clipboard_history",
-                            selected_before = new_selected,
-                            selected_after = reanchored,
-                        );
-                    }
+                    this.note_builtin_selection_owned_wheel_scroll(new_selected);
                     this.focused_clipboard_entry_id = this
                         .cached_clipboard_entries
                         .iter()

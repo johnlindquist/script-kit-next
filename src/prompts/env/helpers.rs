@@ -2,43 +2,7 @@ use super::*;
 
 /// Format a DateTime as relative time (e.g., "2 hours ago", "3 days ago")
 pub(super) fn format_relative_time(dt: DateTime<Utc>) -> String {
-    let now = Utc::now();
-    let diff = now.signed_duration_since(dt);
-
-    let seconds = diff.num_seconds();
-    if seconds < 0 {
-        return "just now".to_string();
-    }
-    let seconds = seconds as u64;
-
-    const MINUTE: u64 = 60;
-    const HOUR: u64 = MINUTE * 60;
-    const DAY: u64 = HOUR * 24;
-    const WEEK: u64 = DAY * 7;
-    const MONTH: u64 = DAY * 30;
-    const YEAR: u64 = DAY * 365;
-
-    if seconds < MINUTE {
-        "just now".to_string()
-    } else if seconds < HOUR {
-        let mins = seconds / MINUTE;
-        format!("{} min{} ago", mins, if mins == 1 { "" } else { "s" })
-    } else if seconds < DAY {
-        let hours = seconds / HOUR;
-        format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" })
-    } else if seconds < WEEK {
-        let days = seconds / DAY;
-        format!("{} day{} ago", days, if days == 1 { "" } else { "s" })
-    } else if seconds < MONTH {
-        let weeks = seconds / WEEK;
-        format!("{} week{} ago", weeks, if weeks == 1 { "" } else { "s" })
-    } else if seconds < YEAR {
-        let months = seconds / MONTH;
-        format!("{} month{} ago", months, if months == 1 { "" } else { "s" })
-    } else {
-        let years = seconds / YEAR;
-        format!("{} year{} ago", years, if years == 1 { "" } else { "s" })
-    }
+    crate::formatting::format_relative_time_long_dt(dt)
 }
 
 pub(super) fn env_input_placeholder(key: &str, exists_in_keyring: bool) -> String {

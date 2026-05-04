@@ -23,12 +23,12 @@ impl ScriptListApp {
     /// snapshot tied to the current raw input instead of racing the filter
     /// coalescer's `computed_filter_text` field.
     pub(crate) fn set_menu_syntax_mode_from_filter(&mut self, raw: &str) {
-        let capture_targets = crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
-        self.menu_syntax_mode =
-            crate::menu_syntax::MenuSyntaxMode::from_input_with_capture_targets(
-                raw,
-                &capture_targets,
-            );
+        let capture_targets =
+            crate::menu_syntax::registered_capture_targets_from_scripts(&self.scripts);
+        self.menu_syntax_mode = crate::menu_syntax::MenuSyntaxMode::from_input_with_capture_targets(
+            raw,
+            &capture_targets,
+        );
     }
 
     pub(crate) fn current_view_uses_shared_filter_input(&self) -> bool {
@@ -52,6 +52,10 @@ impl ScriptListApp {
                 | AppView::DictationHistoryView { .. }
                 | AppView::NotesBrowseView { .. }
         )
+    }
+
+    pub(crate) fn single_line_filter_input_contains_newline(new_text: &str) -> bool {
+        new_text.contains('\n') || new_text.contains('\r')
     }
 
     pub(crate) fn sync_builtin_query_state(
@@ -446,5 +450,23 @@ mod tests {
                 "power-user prefix '{prefix}' must not be classified as a transient trigger"
             );
         }
+    }
+
+    #[test]
+    fn test_single_line_filter_input_contains_newline_detects_enter_leaks() {
+        use super::ScriptListApp;
+
+        assert!(!ScriptListApp::single_line_filter_input_contains_newline(
+            "do in"
+        ));
+        assert!(ScriptListApp::single_line_filter_input_contains_newline(
+            "do in\n"
+        ));
+        assert!(ScriptListApp::single_line_filter_input_contains_newline(
+            "do in\r"
+        ));
+        assert!(ScriptListApp::single_line_filter_input_contains_newline(
+            "do in\r\n"
+        ));
     }
 }

@@ -24,6 +24,39 @@ fn force_kill_script_process_group(pid: u32) -> Result<(), String> {
 }
 
 impl ScriptListApp {
+    pub(crate) fn reset_window_positions_to_default_main_menu(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log(
+            "WINDOW_STATE",
+            "Resetting window positions and returning main window to default menu",
+        );
+
+        crate::window_state::suppress_save();
+        crate::window_state::reset_all_positions();
+
+        self.reset_to_script_list(cx);
+
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let sizing = crate::window_resize::mini_main_window_sizing_from_grouped_items(&grouped_items);
+        let window_size = size(
+            px(crate::window_resize::width_for_view(ViewType::MiniMainWindow).unwrap_or(750.0)),
+            crate::window_resize::height_for_mini_main_window(sizing),
+        );
+        let bounds = calculate_eye_line_bounds_on_mouse_display(window_size);
+        platform::move_first_window_to_bounds(&bounds);
+
+        cx.spawn(async move |_this, cx| {
+            cx.background_executor()
+                .timer(std::time::Duration::from_millis(100))
+                .await;
+            crate::window_state::allow_save();
+        })
+        .detach();
+        cx.notify();
+    }
+
     pub(crate) fn cancel_script_execution(&mut self, cx: &mut Context<Self>) {
         logging::log("EXEC", "=== Canceling script execution ===");
 

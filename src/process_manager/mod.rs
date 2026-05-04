@@ -227,7 +227,7 @@ impl ProcessManager {
                 "PID {} • {} • started {}",
                 process.pid,
                 process.script_path,
-                process.started_at.format("%Y-%m-%d %H:%M:%S UTC")
+                crate::formatting::format_absolute_datetime(process.started_at)
             ));
         }
 

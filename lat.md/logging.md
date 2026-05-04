@@ -15,6 +15,12 @@ The reference migration is [[src/app_impl/trigger_builtin_dispatch.rs#ScriptList
 
 The two gates are complementary. `logging::log_rate_limit` bounds **same-key bursts inside a 30s window** (so a fuzzer looping the same unknown name cannot produce same-second spam). `protocol_stats::should_log_occurrence(total)` still bumps counters and fires the 1st / 100th occurrence — but is no longer the only defense.
 
+## Live debug trace markers
+
+Verbose reproduction traces use stable marker strings so `./dev.sh` sessions can be filtered while a user exercises a broken UI flow.
+
+The `DO_IN_TRACE` marker follows shared filter-input changes, current-app command normalization, intent resolution, and built-in execution routing for the "Do in Current App" flow. The `SCROLL_TRACE` marker follows current-app command list rendering, wheel-step accumulation, scroll metrics, wheel-owned selection notes, and reanchor decisions. Trace fields that include user-entered text use [[src/logging/safe_user_value.rs#log_user_value]] previews with byte metadata.
+
 ## Source files
 
 Current code references for this page.

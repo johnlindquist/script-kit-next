@@ -9,6 +9,7 @@ use gpui::{
     div, prelude::*, px, rgb, rgba, App, ClickEvent, Div, FocusHandle, FontWeight, IntoElement,
     KeyDownEvent, Window,
 };
+use gpui_component::scroll::ScrollableElement;
 
 use crate::{about::AboutState, branding, theme, updates::UpdateState};
 
@@ -80,13 +81,14 @@ fn render_about_surface_inner(
         .child(render_header(chrome, actions.dismiss.clone()))
         .child(
             div()
+                .id("about-content-scroll")
                 .flex_1()
                 .px(px(32.0))
                 .py(px(24.0))
                 .flex()
+                .flex_col()
                 .items_center()
-                .justify_center()
-                .overflow_hidden()
+                .overflow_y_scrollbar()
                 .child(
                     div()
                         .w_full()

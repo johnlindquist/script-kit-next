@@ -227,7 +227,7 @@ impl ScriptListApp {
                         };
                         let description = format!(
                             "{} · {} chars{}",
-                            note.updated_at.format("%Y-%m-%d %H:%M"),
+                            crate::formatting::format_absolute_datetime(note.updated_at),
                             note.content.chars().count(),
                             if note.is_pinned { " · pinned" } else { "" }
                         );
@@ -312,7 +312,9 @@ impl ScriptListApp {
                                     .text_xs()
                                     .text_color(rgba(chrome.text_hint_rgba))
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .child(note.updated_at.format("%Y-%m-%d %H:%M").to_string()),
+                                    .child(crate::formatting::format_absolute_datetime(
+                                        note.updated_at,
+                                    )),
                             )
                             .child(
                                 div()

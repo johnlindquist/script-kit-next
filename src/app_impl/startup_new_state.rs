@@ -58,6 +58,7 @@
             scrollbar_visibility: crate::transitions::Opacity::INVISIBLE,
             scrollbar_fade_gen: 0,
             last_scroll_time: None,
+            builtin_wheel_owned_selected_index: None,
             current_view: AppView::ScriptList,
             main_window_mode: MainWindowMode::Mini,
             script_session: Arc::new(ParkingMutex::new(None)),

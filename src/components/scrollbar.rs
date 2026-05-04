@@ -18,28 +18,26 @@ use gpui::{prelude::*, *};
 
 /// Choose the authoritative scroll offset for a uniform list scrollbar.
 ///
-/// Once the list has measured at least one frame (`has_measurement` is true),
-/// the live scroll offset reported by the scroll handle is preferred over any
-/// deferred "scroll-to-item" request. Before the first measurement, the
-/// deferred offset is used so the list opens at the intended position.
+/// A pending deferred "scroll-to-item" request is preferred over the live
+/// scroll offset because GPUI applies that request during the next prepaint.
+/// Without honoring it, render-time selection reanchor can read the old live
+/// offset in the same frame that scheduled a wheel scroll and snap selection
+/// back toward the previous viewport. Before the first measurement, this also
+/// keeps the list opening at the intended position.
 ///
 /// The returned value is clamped to `total_items - 1` so it never exceeds the
 /// valid index range.
 pub(crate) fn preferred_scroll_offset(
     live_scroll_offset: usize,
     deferred_scroll_offset: Option<usize>,
-    has_measurement: bool,
+    _has_measurement: bool,
     total_items: usize,
 ) -> usize {
     if total_items == 0 {
         return 0;
     }
 
-    let raw_offset = if has_measurement {
-        live_scroll_offset
-    } else {
-        deferred_scroll_offset.unwrap_or(live_scroll_offset)
-    };
+    let raw_offset = deferred_scroll_offset.unwrap_or(live_scroll_offset);
 
     raw_offset.min(total_items.saturating_sub(1))
 }
@@ -414,8 +412,13 @@ mod tests {
     }
 
     #[test]
-    fn test_preferred_scroll_offset_prefers_live_offset_after_measurement() {
-        assert_eq!(preferred_scroll_offset(7, Some(0), true, 20), 7);
+    fn test_preferred_scroll_offset_prefers_pending_deferred_offset_after_measurement() {
+        assert_eq!(preferred_scroll_offset(7, Some(0), true, 20), 0);
+    }
+
+    #[test]
+    fn test_preferred_scroll_offset_uses_live_offset_without_deferred_offset() {
+        assert_eq!(preferred_scroll_offset(7, None, true, 20), 7);
     }
 
     #[test]
