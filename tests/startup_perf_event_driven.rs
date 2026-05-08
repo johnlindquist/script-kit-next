@@ -91,11 +91,63 @@ fn test_script_list_arrow_history_navigation_uses_top_of_grouped_items_boundary(
         "Up arrow handler should route to history recall and consume the event when in history or at top"
     );
     assert!(
-        source.contains("if this.input_history.current_index().is_some() {")
+        source.contains("let in_history =")
             && source.contains("if let Some(text) = this.input_history.navigate_down() {")
             && source.contains("this.input_history.reset_navigation();")
-            && source.contains("this.queue_filter_compute(String::new(), cx);"),
+            && source.contains("this.clear_filter(window, cx);"),
         "Down arrow handler should navigate history and clear back to empty when moving past newest"
+    );
+    assert!(
+        source.contains("history_filter_render_pending")
+            && source.contains("history_key_repeat_coalesced_until_render"),
+        "History key repeat should wait for the previous recalled filter to render before advancing again"
+    );
+}
+
+#[test]
+fn test_history_recall_suppresses_programmatic_filter_echo_and_waits_for_render_ack() {
+    let startup = read_script_list_startup_source();
+    let filter_change = read_source("src/app_impl/filter_input_change.rs");
+    let filter_updates = read_source("src/app_impl/filter_input_updates.rs");
+    let render_impl = read_source("src/main_sections/render_impl.rs");
+
+    assert!(
+        filter_updates.contains("self.pending_programmatic_filter_echo = Some(text.clone());"),
+        "Programmatic filter writes should mark the next matching input change as an echo"
+    );
+
+    let echo_pos = filter_change
+        .find("programmatic_filter_echo_suppressed")
+        .expect("missing programmatic echo suppression log");
+    let normal_entry_pos = filter_change
+        .find("DO_IN_TRACE filter_change.entry")
+        .expect("missing normal filter-change entry log");
+    assert!(
+        echo_pos < normal_entry_pos,
+        "The delayed programmatic input echo should return before normal filter-change work"
+    );
+
+    assert!(
+        startup.contains("this.history_filter_render_pending =")
+            && startup.contains("history_key_repeat_coalesced_until_render"),
+        "History recalls should mark render pending and coalesce repeat arrows while it is set"
+    );
+    assert!(
+        startup.contains("history_recalled")
+            && startup.contains("logging::log_user_value(&text)")
+            && !startup.contains("format!(\"Recalled: {}\", text)"),
+        "History recall logging should use safe previews instead of raw user-entered history text"
+    );
+    assert!(
+        filter_updates.contains("cancel_history_filter_render_pending_if_obsolete")
+            && filter_change
+                .contains("self.cancel_history_filter_render_pending_if_obsolete(&new_text);"),
+        "Real user filter changes should cancel obsolete pending history render gates"
+    );
+    assert!(
+        render_impl.contains("history_filter_render_ack")
+            && render_impl.contains("this.history_filter_render_pending = None;"),
+        "Render should acknowledge the recalled filter before another history repeat is accepted"
     );
 }
 

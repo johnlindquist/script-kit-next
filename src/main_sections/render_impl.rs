@@ -9,6 +9,32 @@ impl Render for ScriptListApp {
         // Track render timing for filter perf analysis
         let render_start = std::time::Instant::now();
         let filter_snapshot = self.filter_text.clone();
+        if matches!(self.current_view, AppView::ScriptList)
+            && self.computed_filter_text == filter_snapshot
+            && self
+                .history_filter_render_pending
+                .as_deref()
+                .is_some_and(|pending| pending == filter_snapshot)
+        {
+            let rendered_filter = filter_snapshot.clone();
+            let app_entity = cx.entity().downgrade();
+            window.defer(cx, move |_window, cx| {
+                if let Some(app) = app_entity.upgrade() {
+                    app.update(cx, |this, _cx| {
+                        if this.history_filter_render_pending.as_deref()
+                            == Some(rendered_filter.as_str())
+                        {
+                            this.history_filter_render_pending = None;
+                            tracing::info!(
+                                target: "script_kit::input_history",
+                                event = "history_filter_render_ack",
+                                filter_len = rendered_filter.len(),
+                            );
+                        }
+                    });
+                }
+            });
+        }
 
         // Always log render start for "gr" prefix filters to debug the issue
         if filter_snapshot.starts_with("gr") {

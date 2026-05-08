@@ -8,6 +8,9 @@
 //!
 //! Used to establish baseline metrics and identify performance bottlenecks.
 
+#[cfg(test)]
+pub(crate) mod main_menu_history_render_bench;
+
 // --- merged from part_000.rs ---
 use std::collections::VecDeque;
 use std::sync::Mutex;

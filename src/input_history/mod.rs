@@ -226,7 +226,17 @@ impl InputHistory {
     ///
     /// Returns the entry at the new position, or None if at the end.
     pub fn navigate_up(&mut self) -> Option<String> {
+        let previous_index = self.current_index;
         if self.entries.is_empty() {
+            info!(
+                target: "script_kit::input_history",
+                event = "input_history_navigate_up",
+                previous_index = ?previous_index,
+                new_index = ?Option::<usize>::None,
+                entry_count = self.entries.len(),
+                hit = false,
+                reason = "empty",
+            );
             return None;
         }
 
@@ -236,6 +246,15 @@ impl InputHistory {
                 if i + 1 < self.entries.len() {
                     i + 1
                 } else {
+                    info!(
+                        target: "script_kit::input_history",
+                        event = "input_history_navigate_up",
+                        previous_index = ?previous_index,
+                        new_index = ?self.current_index,
+                        entry_count = self.entries.len(),
+                        hit = false,
+                        reason = "at_oldest",
+                    );
                     return None; // Already at oldest
                 }
             }
@@ -249,6 +268,15 @@ impl InputHistory {
             entry = entry.as_deref().unwrap_or("<none>"),
             "Navigated up in history"
         );
+        info!(
+            target: "script_kit::input_history",
+            event = "input_history_navigate_up",
+            previous_index = ?previous_index,
+            new_index,
+            entry_count = self.entries.len(),
+            hit = entry.is_some(),
+            entry_len = entry.as_ref().map(|value| value.len()).unwrap_or(0),
+        );
 
         entry
     }
@@ -258,12 +286,33 @@ impl InputHistory {
     /// Returns the entry at the new position, or None if past the newest entry
     /// (indicating the user should see their current typed input).
     pub fn navigate_down(&mut self) -> Option<String> {
+        let previous_index = self.current_index;
         match self.current_index {
-            None => None, // Not navigating
+            None => {
+                info!(
+                    target: "script_kit::input_history",
+                    event = "input_history_navigate_down",
+                    previous_index = ?previous_index,
+                    new_index = ?Option::<usize>::None,
+                    entry_count = self.entries.len(),
+                    hit = false,
+                    reason = "not_navigating",
+                );
+                None
+            }
             Some(0) => {
                 // At most recent entry, reset navigation
                 self.current_index = None;
                 debug!("Navigated past newest entry, returning to input");
+                info!(
+                    target: "script_kit::input_history",
+                    event = "input_history_navigate_down",
+                    previous_index = ?previous_index,
+                    new_index = ?self.current_index,
+                    entry_count = self.entries.len(),
+                    hit = false,
+                    reason = "past_newest",
+                );
                 None
             }
             Some(i) => {
@@ -275,6 +324,15 @@ impl InputHistory {
                     index = new_index,
                     entry = entry.as_deref().unwrap_or("<none>"),
                     "Navigated down in history"
+                );
+                info!(
+                    target: "script_kit::input_history",
+                    event = "input_history_navigate_down",
+                    previous_index = ?previous_index,
+                    new_index,
+                    entry_count = self.entries.len(),
+                    hit = entry.is_some(),
+                    entry_len = entry.as_ref().map(|value| value.len()).unwrap_or(0),
                 );
 
                 entry

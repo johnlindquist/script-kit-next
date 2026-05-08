@@ -1,6 +1,23 @@
 use super::*;
 
 impl ScriptListApp {
+    pub(crate) fn cancel_history_filter_render_pending_if_obsolete(&mut self, next_filter: &str) {
+        if self
+            .history_filter_render_pending
+            .as_deref()
+            .is_some_and(|pending| pending != next_filter)
+        {
+            tracing::info!(
+                target: "script_kit::input_history",
+                event = "history_filter_render_pending_cancelled_obsolete",
+                next_filter_len = next_filter.len(),
+                history_index = ?self.input_history.current_index(),
+                selected_index = self.selected_index,
+            );
+            self.history_filter_render_pending = None;
+        }
+    }
+
     /// Single authoritative post-filter reconciliation path for ScriptList.
     ///
     /// Called after `computed_filter_text` changes (both debounced and immediate).
@@ -16,7 +33,9 @@ impl ScriptListApp {
         }
 
         // Keep GPUI's list model aligned with the newly computed grouped results.
-        self.sync_list_state();
+        // Filter changes may replace every row while preserving the same count,
+        // so force measured item rebuilding instead of only syncing count.
+        self.sync_list_state_for_filter_replacement();
 
         // Filter changes intentionally restart from the first selectable row.
         self.selected_index = 0;
@@ -109,6 +128,7 @@ impl ScriptListApp {
         self.pending_menu_syntax_ai_proposal = None;
         self.suppress_filter_events = true;
         self.filter_text = text.clone();
+        self.pending_programmatic_filter_echo = Some(text.clone());
         self.gpui_input_state.update(cx, |state, cx| {
             state.set_value(text.clone(), window, cx);
             // Ensure cursor is at end with no selection after programmatic set_value
@@ -309,6 +329,7 @@ impl ScriptListApp {
     }
 
     pub(crate) fn clear_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.cancel_history_filter_render_pending_if_obsolete("");
         self.set_filter_text_immediate(String::new(), window, cx);
     }
 
