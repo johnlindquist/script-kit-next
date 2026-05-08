@@ -22,8 +22,30 @@ impl ScriptListApp {
 
         let new_text = self.gpui_input_state.read(cx).value().to_string();
         let shared_filter_view = self.current_view_uses_shared_filter_input();
+
+        if self
+            .pending_programmatic_filter_echo
+            .as_deref()
+            .is_some_and(|pending| pending == new_text)
+            && new_text == self.filter_text
+        {
+            self.pending_programmatic_filter_echo = None;
+            tracing::info!(
+                target: "script_kit::input_history",
+                event = "programmatic_filter_echo_suppressed",
+                filter_len = new_text.len(),
+                current_view = ?self.current_view,
+            );
+            return;
+        }
+
+        if self.pending_programmatic_filter_echo.is_some() {
+            self.pending_programmatic_filter_echo = None;
+        }
+        self.cancel_history_filter_render_pending_if_obsolete(&new_text);
         let new_text_safe = logging::log_user_value(&new_text);
         let canonical_filter_safe = logging::log_user_value(&self.filter_text);
+
         tracing::info!(
             target: "script_kit::do_in_trace",
             event = "DO_IN_TRACE filter_change.entry",

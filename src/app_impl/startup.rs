@@ -608,7 +608,9 @@ impl ScriptListApp {
             bounds_subscription: None,     // Set later after window setup
             appearance_subscription: None, // Set later after window setup
             suppress_filter_events: false,
+            pending_programmatic_filter_echo: None,
             pending_filter_sync: false,
+            history_filter_render_pending: None,
             pending_placeholder: None,
             last_output: None,
             focus_handle: cx.focus_handle(),
@@ -633,9 +635,13 @@ impl ScriptListApp {
             response_sender: Some(default_response_sender.clone()),
             default_response_sender: Some(default_response_sender),
             // Variable-height list state for main menu (section headers at 24px, items at 48px)
-            // Start with 0 items, will be reset when grouped_items changes
-            // .measure_all() ensures all items are measured upfront for correct scroll height
-            main_list_state: ListState::new(0, ListAlignment::Top, px(100.)).measure_all(),
+            // Start with 0 items; filter replacement installs a fresh state without measuring all rows.
+            main_list_state: ListState::new(
+                0,
+                ListAlignment::Top,
+                px(crate::list_item::effective_average_item_height_for_scroll()),
+            ),
+            main_list_row_generation: 0,
             list_scroll_handle: UniformListScrollHandle::new(),
             arg_list_scroll_handle: UniformListScrollHandle::new(),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),
@@ -1705,6 +1711,20 @@ impl ScriptListApp {
                                     // Main menu: handle list navigation + input history
                                     const HISTORY: &str = "HISTORY";
                                     if is_up {
+                                        if let Some(pending_filter) =
+                                            this.history_filter_render_pending.as_ref()
+                                        {
+                                            tracing::info!(
+                                                target: "script_kit::input_history",
+                                                event = "history_key_repeat_coalesced_until_render",
+                                                key = %key,
+                                                pending_filter_len = pending_filter.len(),
+                                                history_index = ?this.input_history.current_index(),
+                                                selected_index = this.selected_index,
+                                            );
+                                            cx.stop_propagation();
+                                            return;
+                                        }
                                         let (grouped_items, _) = this.get_grouped_results_cached();
                                         let first_item_position =
                                             grouped_items.iter().position(|item| {
@@ -1719,13 +1739,54 @@ impl ScriptListApp {
                                         let in_history =
                                             this.input_history.current_index().is_some();
 
+                                        tracing::info!(
+                                            target: "script_kit::input_history",
+                                            event = "main_menu_arrow_history_decision",
+                                            key = %key,
+                                            action_resolved = event.action.is_some(),
+                                            context_depth = event.context_stack.len(),
+                                            selected_index = this.selected_index,
+                                            first_item_position = ?first_item_position,
+                                            at_top_of_list,
+                                            in_history,
+                                            history_index = ?this.input_history.current_index(),
+                                            grouped_item_count = grouped_items.len(),
+                                            route = if in_history || at_top_of_list { "history_up" } else { "list_up" },
+                                        );
                                         if in_history || at_top_of_list {
                                             if let Some(text) = this.input_history.navigate_up() {
+                                                let safe = logging::log_user_value(&text);
+                                                tracing::info!(
+                                                    target: "script_kit::input_history",
+                                                    event = "history_recalled",
+                                                    direction = "up",
+                                                    filter_preview = %safe,
+                                                    filter_bytes = safe.raw_bytes,
+                                                    filter_safe_bytes = safe.safe_bytes,
+                                                    filter_truncated = safe.truncated,
+                                                    history_index = ?this.input_history.current_index(),
+                                                );
                                                 logging::log(
                                                     HISTORY,
-                                                    &format!("Recalled: {}", text),
+                                                    &format!("Recalled len={}", text.len()),
                                                 );
-                                                this.set_filter_text_immediate(text, window, cx);
+                                                if text != this.filter_text
+                                                    || text != this.computed_filter_text
+                                                {
+                                                    this.history_filter_render_pending =
+                                                        Some(text.clone());
+                                                    this.set_filter_text_immediate(
+                                                        text, window, cx,
+                                                    );
+                                                } else {
+                                                    tracing::info!(
+                                                        target: "script_kit::input_history",
+                                                        event = "history_recall_noop_already_rendered",
+                                                        direction = "up",
+                                                        filter_len = text.len(),
+                                                        history_index = ?this.input_history.current_index(),
+                                                    );
+                                                }
                                             }
                                             cx.stop_propagation();
                                             return;
@@ -1733,15 +1794,75 @@ impl ScriptListApp {
 
                                         this.move_selection_up(cx);
                                     } else if is_down {
-                                        if this.input_history.current_index().is_some() {
+                                        if let Some(pending_filter) =
+                                            this.history_filter_render_pending.as_ref()
+                                        {
+                                            tracing::info!(
+                                                target: "script_kit::input_history",
+                                                event = "history_key_repeat_coalesced_until_render",
+                                                key = %key,
+                                                pending_filter_len = pending_filter.len(),
+                                                history_index = ?this.input_history.current_index(),
+                                                selected_index = this.selected_index,
+                                            );
+                                            cx.stop_propagation();
+                                            return;
+                                        }
+                                        let in_history =
+                                            this.input_history.current_index().is_some();
+                                        tracing::info!(
+                                            target: "script_kit::input_history",
+                                            event = "main_menu_arrow_history_decision",
+                                            key = %key,
+                                            action_resolved = event.action.is_some(),
+                                            context_depth = event.context_stack.len(),
+                                            selected_index = this.selected_index,
+                                            in_history,
+                                            history_index = ?this.input_history.current_index(),
+                                            route = if in_history { "history_down" } else { "list_down" },
+                                        );
+                                        if in_history {
                                             if let Some(text) = this.input_history.navigate_down() {
+                                                let safe = logging::log_user_value(&text);
+                                                tracing::info!(
+                                                    target: "script_kit::input_history",
+                                                    event = "history_recalled",
+                                                    direction = "down",
+                                                    filter_preview = %safe,
+                                                    filter_bytes = safe.raw_bytes,
+                                                    filter_safe_bytes = safe.safe_bytes,
+                                                    filter_truncated = safe.truncated,
+                                                    history_index = ?this.input_history.current_index(),
+                                                );
                                                 logging::log(
                                                     HISTORY,
-                                                    &format!("Recalled: {}", text),
+                                                    &format!("Recalled len={}", text.len()),
                                                 );
-                                                this.set_filter_text_immediate(text, window, cx);
+                                                if text != this.filter_text
+                                                    || text != this.computed_filter_text
+                                                {
+                                                    this.history_filter_render_pending =
+                                                        Some(text.clone());
+                                                    this.set_filter_text_immediate(
+                                                        text, window, cx,
+                                                    );
+                                                } else {
+                                                    tracing::info!(
+                                                        target: "script_kit::input_history",
+                                                        event = "history_recall_noop_already_rendered",
+                                                        direction = "down",
+                                                        filter_len = text.len(),
+                                                        history_index = ?this.input_history.current_index(),
+                                                    );
+                                                }
                                             } else {
                                                 this.input_history.reset_navigation();
+                                                if !this.filter_text.is_empty()
+                                                    || !this.computed_filter_text.is_empty()
+                                                {
+                                                    this.history_filter_render_pending =
+                                                        Some(String::new());
+                                                }
                                                 this.clear_filter(window, cx);
                                             }
                                             cx.stop_propagation();

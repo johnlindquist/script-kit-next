@@ -21,6 +21,10 @@ Verbose reproduction traces use stable marker strings so `./dev.sh` sessions can
 
 The `DO_IN_TRACE` marker follows shared filter-input changes, current-app command normalization, intent resolution, and built-in execution routing for the "Do in Current App" flow. The `SCROLL_TRACE` marker follows current-app command list rendering, wheel-step accumulation, scroll metrics, wheel-owned selection notes, and reanchor decisions. Trace fields that include user-entered text use [[src/logging/safe_user_value.rs#log_user_value]] previews with byte metadata.
 
+The `script_kit::input_history` target follows main-menu Up/Down routing when arrow keys may switch between list navigation and saved input history. It records route decisions, render-paced key-repeat coalescing, render acknowledgments, obsolete-pending cancellations, programmatic filter echo suppression, history indices, and ScriptList key-up receipts so a dev-loop trace can distinguish held/repeat keydowns from post-release navigation. History text uses safe previews rather than raw values.
+
+The ignored `main_menu_history_render_prep_benchmark` test measures the render-prep side of that same path. It asserts that history recall list-state replacement stays below frame budget and that the hot path does not reintroduce full-list `measure_all` work. The `scripts/bench-main-menu-history-render.mjs` gate mirrors those source invariants without depending on proc-macro test compilation.
+
 ## Source files
 
 Current code references for this page.

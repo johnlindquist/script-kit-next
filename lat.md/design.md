@@ -68,6 +68,10 @@ The main launcher list treats the footer as an overlay, so selected-row reveal m
 
 Wheel scrolling in that list also belongs to the launcher's selection-driven path, so the wrapper must stop propagation after handling a wheel event instead of letting GPUI pixel-scroll the list separately.
 
+Filter changes replace the GPUI list-state identity even when the row count is unchanged, but they do not call `measure_all` on every recall. Row-generation ids keep recalled history queries from painting stale rows without forcing GPUI to build the whole list before the next frame. Replacement uses the launcher row-height estimate and leaves final reveal to filter reconciliation, so the old selected row is not revealed before selection resets.
+
+History key repeat is paced by the launcher render loop. A recalled filter must be observed by `ScriptList` render before another repeated Up or Down recall is accepted, so input/footer state cannot outrun the visible rows. Repeats that arrive before render acknowledgment are intentionally coalesced, and real user edits or clears cancel obsolete pending render gates.
+
 The launcher scrollbar should read from the real list handle instead of a second visual-only thumb model. If the handle moves selection-owned content directly, the launcher must immediately reanchor selection back into the visible window before execution shortcuts run.
 
 That same scrollbar must size and clip itself against the footer-safe viewport rather than the full list pane. Otherwise the thumb grows too large, drifts against the true scroll range, and stays visible underneath the footer overlay.

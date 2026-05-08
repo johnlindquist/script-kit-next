@@ -745,6 +745,7 @@ impl ScriptListApp {
             // Capture selected index for render (may be overridden by storybook live spec)
             let selected_for_list_closure = selected_index_for_render;
             let footer_padding = main_list_footer_overlay_total_padding();
+            let row_generation = self.main_list_row_generation;
 
             let variable_height_list =
                 list(self.main_list_state.clone(), move |ix, _window, cx| {
@@ -761,7 +762,7 @@ impl ScriptListApp {
                                     // Section header at 32px height (8px grid) for clear visual separation
                                     div()
                                         .id(ElementId::NamedInteger(
-                                            "section-header".into(),
+                                            format!("section-header-gen-{row_generation}").into(),
                                             ix as u64,
                                         ))
                                         .h(px(effective_section_header_height))
@@ -873,7 +874,10 @@ impl ScriptListApp {
                                     }
 
                                     div()
-                                        .id(ElementId::NamedInteger("script-item".into(), ix as u64))
+                                        .id(ElementId::NamedInteger(
+                                            format!("script-item-gen-{row_generation}").into(),
+                                            ix as u64,
+                                        ))
                                         .h(px(effective_list_item_height))
                                         .on_hover(hover_handler)
                                         .on_click(click_handler)
@@ -1326,6 +1330,25 @@ impl ScriptListApp {
             },
         );
 
+        let handle_key_up = cx.listener(
+            move |this: &mut Self,
+                  event: &gpui::KeyUpEvent,
+                  _window: &mut Window,
+                  _cx: &mut Context<Self>| {
+                let key = event.keystroke.key.as_str();
+                if sk_is_key_up(key) || sk_is_key_down(key) {
+                    tracing::info!(
+                        target: "script_kit::input_history",
+                        event = "script_list_arrow_key_up",
+                        key = %key,
+                        selected_index = this.selected_index,
+                        history_index = ?this.input_history.current_index(),
+                        filter_len = this.filter_text.len(),
+                    );
+                }
+            },
+        );
+
         // Main container with system font and transparency
         // NOTE: Shadow disabled for vibrancy - shadows on transparent elements cause gray fill
 
@@ -1367,6 +1390,7 @@ impl ScriptListApp {
             .key_context("script_list")
             .track_focus(&self.focus_handle)
             .on_key_down(handle_key)
+            .on_key_up(handle_key_up)
             // Header: Search Input + Run + Actions + Logo
             // Use shared header layout constants for consistency with all prompts
             .child({

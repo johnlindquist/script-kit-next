@@ -343,8 +343,12 @@ struct ScriptListApp {
     appearance_subscription: Option<Subscription>,
     /// Suppress handling of programmatic InputEvent::Change updates.
     suppress_filter_events: bool,
+    /// Programmatic filter value whose delayed InputEvent::Change echo should be ignored.
+    pending_programmatic_filter_echo: Option<String>,
     /// Sync gpui input text on next render when window access is available.
     pending_filter_sync: bool,
+    /// History recall filter that must render before another key-repeat recall is accepted.
+    history_filter_render_pending: Option<String>,
     /// Pending placeholder text to set on next render (needs Window access).
     pending_placeholder: Option<String>,
     last_output: Option<SharedString>,
@@ -388,6 +392,8 @@ struct ScriptListApp {
     default_response_sender: Option<mpsc::SyncSender<Message>>,
     // List state for variable-height list (supports section headers at 24px + items at 48px)
     main_list_state: ListState,
+    /// Generation bumped when filter replacement changes row identity without relying on full measurement.
+    main_list_row_generation: u64,
     // Scroll handle for uniform_list (still used for backward compat in some views)
     list_scroll_handle: UniformListScrollHandle,
     // P0: Scroll handle for virtualized arg prompt choices

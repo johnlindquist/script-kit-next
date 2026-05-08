@@ -442,6 +442,35 @@ impl ScriptListApp {
         }
     }
 
+    /// Force GPUI's measured list items to be rebuilt for same-count row replacements.
+    ///
+    /// Filter-history recalls can replace every row while preserving the same
+    /// item count. `sync_list_state` keeps that path cheap for ordinary syncs,
+    /// so filter changes replace the list state identity to avoid stale
+    /// measured row elements being painted under fresh footer/preflight state.
+    pub fn sync_list_state_for_filter_replacement(&mut self) {
+        let (grouped_items, _) = self.get_grouped_results_cached();
+        let item_count = grouped_items.len();
+        let old_list_count = self.main_list_state.item_count();
+
+        self.main_list_row_generation = self.main_list_row_generation.wrapping_add(1);
+        self.main_list_state = ListState::new(
+            item_count,
+            ListAlignment::Top,
+            px(crate::list_item::effective_average_item_height_for_scroll()),
+        );
+        self.last_scrolled_index = None;
+
+        tracing::info!(
+            target: "SCROLL_STATE",
+            old_list_count,
+            item_count,
+            selected_index = self.selected_index,
+            row_generation = self.main_list_row_generation,
+            "replaced list state for filter replacement"
+        );
+    }
+
     /// Validate and correct selection bounds after list structure changes.
     ///
     /// Call this method from event handlers after any operation that may change

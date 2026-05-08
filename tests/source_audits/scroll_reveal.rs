@@ -108,7 +108,70 @@ fn sync_list_state_re_reveals_after_reset() {
     // After resetting reveal cache, must scroll to reveal the current selection
     assert!(
         fn_body.contains("scroll_to_reveal_item(self.selected_index)"),
-        "sync_list_state must re-reveal the selected item after invalidating the reveal cache"
+        "count-only sync_list_state must re-reveal the selected item after invalidating the reveal cache"
+    );
+}
+
+#[test]
+fn filter_replacement_sync_replaces_list_state_even_when_count_unchanged() {
+    let content = read("src/app_navigation/impl_scroll.rs");
+
+    let fn_start = content
+        .find("pub fn sync_list_state_for_filter_replacement(&mut self)")
+        .expect("sync_list_state_for_filter_replacement function not found");
+    let fn_end_marker = content[fn_start..]
+        .find("pub fn validate_selection_bounds")
+        .expect("validate_selection_bounds not found after filter replacement sync");
+    let sync_fn = &content[fn_start..fn_start + fn_end_marker];
+
+    assert!(
+        sync_fn.contains("self.main_list_state = ListState::new(")
+            && sync_fn.contains("item_count,"),
+        "filter replacement sync must replace the ListState so same-count row replacements rebuild visible items"
+    );
+    assert!(
+        !sync_fn.contains(".measure_all()"),
+        "filter replacement sync must not measure every row on each history recall"
+    );
+    assert!(
+        sync_fn.contains("self.main_list_row_generation"),
+        "filter replacement sync must bump row generation so same-count replacements get fresh row identity"
+    );
+    assert!(
+        sync_fn.contains("self.last_scrolled_index = None;"),
+        "filter replacement sync must also invalidate reveal cache"
+    );
+    assert!(
+        sync_fn.contains("effective_average_item_height_for_scroll"),
+        "filter replacement sync should use the real launcher row estimate, not the old 100px fallback"
+    );
+    assert!(
+        !sync_fn.contains("scroll_to_reveal_item(self.selected_index)")
+            && !sync_fn.contains("adjust_selected_item_above_footer_overlay(self.selected_index)"),
+        "filter replacement sync should not reveal the old selection before reconciliation resets it"
+    );
+    assert!(
+        sync_fn.contains("\"replaced list state for filter replacement\""),
+        "filter replacement sync must emit a distinct SCROLL_STATE log"
+    );
+}
+
+#[test]
+fn filter_change_reconciliation_uses_filter_replacement_list_sync() {
+    let content = read("src/app_impl/filter_input_updates.rs");
+
+    let fn_start = content
+        .find("fn reconcile_script_list_after_filter_change(")
+        .expect("reconcile_script_list_after_filter_change function not found");
+    let fn_body = &content[fn_start..content.len().min(fn_start + 900)];
+
+    assert!(
+        fn_body.contains("self.sync_list_state_for_filter_replacement();"),
+        "filter change reconciliation must force list measured-item refresh, not only count sync"
+    );
+    assert!(
+        !fn_body.contains("self.sync_list_state();"),
+        "filter change reconciliation should not use count-only list sync"
     );
 }
 
