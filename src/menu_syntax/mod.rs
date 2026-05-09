@@ -76,7 +76,10 @@ pub use date::{
     ResolvedDate, ResolvedDuration, ResolvedRecurrence, UnresolvedDate,
 };
 #[allow(unused_imports)]
-pub use doctor::{validate as doctor_validate, DoctorIssue, DoctorReport, DoctorSeverity};
+pub use doctor::{
+    validate as doctor_validate, validate_at_path as doctor_validate_at_path, DoctorIssue,
+    DoctorReport, DoctorSeverity,
+};
 pub use execute::{
     build_capture_payload, command_env, payload_env, write_payload_tempfile, MenuSyntaxHandlerKind,
     MenuSyntaxHandlerRef, MenuSyntaxPayload, MENU_SYNTAX_PAYLOAD_SCHEMA_ID,

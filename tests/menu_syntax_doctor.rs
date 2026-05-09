@@ -10,7 +10,7 @@
 //!
 //! Receipt: `cargo test --test menu_syntax_doctor`.
 
-use script_kit_gpui::menu_syntax::{doctor_validate, DoctorSeverity};
+use script_kit_gpui::menu_syntax::{doctor_validate, doctor_validate_at_path, DoctorSeverity};
 use serde_json::json;
 
 fn err_paths(value: &serde_json::Value) -> Vec<String> {
@@ -226,6 +226,43 @@ fn bad_top_level_string_errors_at_dollar() {
     let paths = err_paths(&v);
     assert_eq!(paths, vec!["$"]);
     assert!(err_messages(&v)[0].contains("must be an array"));
+}
+
+#[test]
+fn validate_at_path_prefixes_array_item_diagnostics() {
+    let v = json!([{"family": "capture.v1", "targets": "todo"}]);
+    let report = doctor_validate_at_path(&v, "$.menuSyntax");
+    let paths: Vec<_> = report.errors().map(|i| i.path.as_str()).collect();
+    assert_eq!(paths, vec!["$.menuSyntax[0].targets"]);
+}
+
+#[test]
+fn validate_at_path_prefixes_duplicate_command_indices() {
+    let v = json!([
+        {"family": "command.v1", "head": "deploy"},
+        {"family": "command.v1", "head": "deploy"}
+    ]);
+    let report = doctor_validate_at_path(&v, "$.metadata.menuSyntax");
+    let paths: Vec<_> = report.errors().map(|i| i.path.as_str()).collect();
+    assert_eq!(
+        paths,
+        vec!["$.metadata.menuSyntax[0], $.metadata.menuSyntax[1]"]
+    );
+}
+
+#[test]
+fn malformed_command_args_and_flags_shapes_get_indexed_paths() {
+    let v = json!([{
+        "family": "command.v1",
+        "head": "deploy",
+        "args": "env",
+        "flags": [42, {"name": 42}, {"name": ""}]
+    }]);
+    let paths = err_paths(&v);
+    assert!(paths.contains(&"$[0].args".to_string()));
+    assert!(paths.contains(&"$[0].flags[0]".to_string()));
+    assert!(paths.contains(&"$[0].flags[1].name".to_string()));
+    assert!(paths.contains(&"$[0].flags[2].name".to_string()));
 }
 
 // ============================================================================

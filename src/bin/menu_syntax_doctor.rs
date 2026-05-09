@@ -25,7 +25,7 @@ use std::fs;
 use std::io::{self, Read};
 use std::process::ExitCode;
 
-use script_kit_gpui::menu_syntax::{doctor_validate, DoctorReport, DoctorSeverity};
+use script_kit_gpui::menu_syntax::{doctor_validate_at_path, DoctorReport, DoctorSeverity};
 use serde_json::Value;
 
 #[derive(Debug)]
@@ -78,7 +78,59 @@ fn parse_value(raw: &str) -> Result<Value, String> {
     if let Ok(v) = serde_json::from_str::<Value>(raw) {
         return Ok(v);
     }
+    if let Ok(v) = serde_yaml::from_str::<Value>(raw) {
+        return Ok(v);
+    }
+    if let Some(frontmatter) = extract_yaml_frontmatter(raw) {
+        return serde_yaml::from_str::<Value>(frontmatter)
+            .map_err(|e| format!("parse YAML frontmatter: {e}"));
+    }
     serde_yaml::from_str::<Value>(raw).map_err(|e| format!("parse input as JSON or YAML: {e}"))
+}
+
+fn extract_yaml_frontmatter(raw: &str) -> Option<&str> {
+    let trimmed = raw.trim_start();
+    let rest = trimmed.strip_prefix("---")?;
+    let rest = rest
+        .strip_prefix("\r\n")
+        .or_else(|| rest.strip_prefix('\n'))
+        .unwrap_or(rest);
+    let mut offset = 0;
+    for line in rest.split_inclusive('\n') {
+        let line_without_newline = line.trim_end_matches('\n').trim_end_matches('\r');
+        if line_without_newline == "---" {
+            return Some(&rest[..offset]);
+        }
+        offset += line.len();
+    }
+    None
+}
+
+struct DoctorInput<'a> {
+    value: &'a Value,
+    path: &'static str,
+}
+
+fn select_menu_syntax_value(root: &Value) -> DoctorInput<'_> {
+    if let Some(value) = root.get("menuSyntax") {
+        return DoctorInput {
+            value,
+            path: "$.menuSyntax",
+        };
+    }
+    if let Some(value) = root
+        .get("metadata")
+        .and_then(|metadata| metadata.get("menuSyntax"))
+    {
+        return DoctorInput {
+            value,
+            path: "$.metadata.menuSyntax",
+        };
+    }
+    DoctorInput {
+        value: root,
+        path: "$",
+    }
 }
 
 fn render_human(report: &DoctorReport) -> String {
@@ -113,7 +165,8 @@ fn run(argv: &[String]) -> Result<u8, String> {
     let args = parse_args(argv)?;
     let raw = read_input(args.path.as_deref())?;
     let value = parse_value(&raw)?;
-    let report = doctor_validate(&value);
+    let input = select_menu_syntax_value(&value);
+    let report = doctor_validate_at_path(input.value, input.path);
     let rendered = if args.json {
         render_json(&report)
     } else {
