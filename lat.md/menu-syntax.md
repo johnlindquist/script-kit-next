@@ -272,7 +272,7 @@ Lib-verifiable guards: [[src/menu_syntax/parse.rs#parse]] tests for the five exi
 
 ## Templates
 
-[[src/menu_syntax/templates.rs#render_capture_handler_template]] produces a `.ts` scaffold for a capture handler. Pure function — no filesystem, no editor invocation — so callers can test the output as a string before any file is written.
+[[src/menu_syntax/templates.rs#render_capture_handler_template]] produces a `.ts` scaffold for a capture handler. Pure function — no filesystem or editor invocation — and its receipt executes the generated scaffold against a temp payload before any caller writes it into Script Kit.
 
 Output pins `family: "capture.v1"` and the requested target, wires the `KIT_MENU_SYNTAX_PAYLOAD_PATH` env reader from the Execution Payload contract, and falls back to `~/.scriptkit/menu-syntax/<target-hint>.jsonl` via `SK_PATH`. Scaffolds always emit `defaultHandler: false` with a note explaining why — the ranker's default-handler slot must stay exclusive per target. Known targets get artifact filenames matching the shipped examples (`todos.jsonl`, `events.jsonl`, etc.); unknown targets render verbatim with a generic `entries.jsonl` hint.
 
