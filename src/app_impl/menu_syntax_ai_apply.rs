@@ -13,7 +13,7 @@
 //! component) requires touching the renderer + a binary rebuild and is
 //! the deferred `[~]` half.
 
-use crate::menu_syntax_ai::{MenuSyntaxAiProposal, ProposalKind};
+use crate::menu_syntax_ai::{MenuSyntaxAiProposal, PendingMenuSyntaxAiProposal, ProposalKind};
 
 /// Which key the user pressed on the inline-AI hint card.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +70,29 @@ pub fn apply_proposal(
     }
 }
 
+/// Resolve a pending runtime proposal against the current input. The pure
+/// `apply_proposal` transformer is intentionally context-free; this wrapper
+/// owns the stale-origin guard before any proposal can mutate the launcher
+/// filter.
+#[allow(dead_code)]
+pub(crate) fn apply_pending_proposal(
+    current_input: &str,
+    pending: &PendingMenuSyntaxAiProposal,
+    action: ProposalApplyAction,
+) -> ProposalEffect {
+    match action {
+        ProposalApplyAction::Dismiss => ProposalEffect::Dismiss,
+        ProposalApplyAction::Accept if !pending.is_current_for(current_input) => {
+            ProposalEffect::Dismiss
+        }
+        ProposalApplyAction::Accept => apply_proposal(
+            current_input,
+            &pending.proposal,
+            ProposalApplyAction::Accept,
+        ),
+    }
+}
+
 fn append_token(current_input: &str, token: &str) -> ProposalEffect {
     let trimmed = current_input.trim_end();
     let new_text = if trimmed.is_empty() {
@@ -83,7 +106,7 @@ fn append_token(current_input: &str, token: &str) -> ProposalEffect {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::menu_syntax_ai::{MenuSyntaxAiProposal, ProposalKind};
+    use crate::menu_syntax_ai::{MenuSyntaxAiProposal, PendingMenuSyntaxAiProposal, ProposalKind};
 
     fn add_tag(tag: &str) -> MenuSyntaxAiProposal {
         MenuSyntaxAiProposal {
@@ -113,6 +136,14 @@ mod tests {
                 reason: "model declined".to_string(),
             },
         }
+    }
+
+    fn pending_add_tag(origin: &str) -> PendingMenuSyntaxAiProposal {
+        PendingMenuSyntaxAiProposal::new(
+            origin.to_string(),
+            Some("todo".to_string()),
+            add_tag("errands"),
+        )
     }
 
     #[test]
@@ -265,5 +296,47 @@ mod tests {
         let out3 = apply_proposal(";todo Buy", &p, ProposalApplyAction::Accept);
         assert_eq!(out1, out2);
         assert_eq!(out2, out3);
+    }
+
+    #[test]
+    fn accept_pending_proposal_applies_when_origin_matches_current_input() {
+        let pending = pending_add_tag(";todo Buy milk");
+        assert_eq!(
+            apply_pending_proposal(";todo Buy milk", &pending, ProposalApplyAction::Accept),
+            ProposalEffect::SetFilterText {
+                new_text: ";todo Buy milk #errands".to_string()
+            }
+        );
+    }
+
+    #[test]
+    fn accept_pending_proposal_dismisses_when_current_input_changed() {
+        let pending = pending_add_tag(";todo Buy milk");
+        assert_eq!(
+            apply_pending_proposal(
+                ";todo Buy milk changed",
+                &pending,
+                ProposalApplyAction::Accept
+            ),
+            ProposalEffect::Dismiss
+        );
+    }
+
+    #[test]
+    fn accept_pending_proposal_dismisses_when_target_changed_in_raw_input() {
+        let pending = pending_add_tag(";todo Buy milk");
+        assert_eq!(
+            apply_pending_proposal(";note Buy milk", &pending, ProposalApplyAction::Accept),
+            ProposalEffect::Dismiss
+        );
+    }
+
+    #[test]
+    fn dismiss_pending_proposal_ignores_origin_mismatch() {
+        let pending = pending_add_tag(";todo Buy milk");
+        assert_eq!(
+            apply_pending_proposal(";note Buy milk", &pending, ProposalApplyAction::Dismiss),
+            ProposalEffect::Dismiss
+        );
     }
 }

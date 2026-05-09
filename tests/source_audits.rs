@@ -56,6 +56,9 @@ mod builtin_dispatch_consistency;
 #[path = "source_audits/resize_presentation_contract.rs"]
 mod resize_presentation_contract;
 
+#[path = "source_audits/menu_syntax_ai_stale_proposal.rs"]
+mod menu_syntax_ai_stale_proposal;
+
 #[path = "source_audits/trigger_builtin_sdk_literals.rs"]
 mod trigger_builtin_sdk_literals;
 

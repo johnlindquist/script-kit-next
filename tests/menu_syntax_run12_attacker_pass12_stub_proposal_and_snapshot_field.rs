@@ -13,7 +13,8 @@
 //! Categories: Boundary (8), Composition (7), Resurrection (7). Actions: 22.
 
 use script_kit_gpui::menu_syntax::payload::{CaptureAlias, CaptureInvocation};
-use script_kit_gpui::menu_syntax::{parse_advanced_query, MenuSyntaxActionState};
+use script_kit_gpui::menu_syntax::query::parse_advanced_query;
+use script_kit_gpui::menu_syntax::MenuSyntaxActionState;
 use script_kit_gpui::menu_syntax_ai::{stub_proposal_for, MenuSyntaxAiProposal, ProposalKind};
 
 fn capture_payload(target: &str, body: &str) -> CaptureInvocation {
@@ -149,7 +150,7 @@ fn command_without_help_appends_dash_dash_help_literal() {
     let proposal = stub_proposal_for(&state);
     match &proposal.kind {
         ProposalKind::RewriteInput { rewrite } => {
-            assert_eq!(rewrite, ">deploy prod --help");
+            assert_eq!(rewrite, "!deploy prod --help");
             assert!(rewrite.ends_with(" --help"));
             assert!(rewrite.starts_with('!'));
         }

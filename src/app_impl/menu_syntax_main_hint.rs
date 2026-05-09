@@ -6,6 +6,11 @@ impl ScriptListApp {
         raw_filter_text: &str,
         advanced_query_results_empty: bool,
     ) -> Option<crate::menu_syntax::MenuSyntaxMainHintSnapshot> {
+        let menu_syntax_ai_proposal = self
+            .pending_menu_syntax_ai_proposal
+            .as_ref()
+            .filter(|pending| pending.is_current_for(raw_filter_text))
+            .map(|pending| &pending.proposal);
         let mut snapshot = crate::menu_syntax::build_menu_syntax_main_hint(
             crate::menu_syntax::MenuSyntaxMainHintContext {
                 raw_filter_text,
@@ -18,7 +23,7 @@ impl ScriptListApp {
                 scripts: &self.scripts,
                 scriptlets: &self.scriptlets,
                 advanced_query_results_empty,
-                menu_syntax_ai_proposal: self.pending_menu_syntax_ai_proposal.as_ref(),
+                menu_syntax_ai_proposal,
             },
         )?;
 
