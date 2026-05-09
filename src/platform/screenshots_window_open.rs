@@ -102,7 +102,7 @@ fn reject_blank_screenshot_if_needed(
 }
 
 #[cfg(target_os = "macos")]
-fn screen_capture_access_preflight() -> Option<bool> {
+pub(crate) fn screen_capture_access_preflight() -> Option<bool> {
     #[link(name = "CoreGraphics", kind = "framework")]
     extern "C" {
         fn CGPreflightScreenCaptureAccess() -> bool;
@@ -112,7 +112,7 @@ fn screen_capture_access_preflight() -> Option<bool> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn screen_capture_access_preflight() -> Option<bool> {
+pub(crate) fn screen_capture_access_preflight() -> Option<bool> {
     None
 }
 
