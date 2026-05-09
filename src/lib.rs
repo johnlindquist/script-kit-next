@@ -23,6 +23,9 @@ pub mod dictation;
 // Deterministic AI-relevant desktop context snapshots
 pub mod context_snapshot;
 
+// Computer-use vocabulary over the existing automation inspection protocol
+pub mod computer_use;
+
 // Unified icon system - single API for all icon sources
 // Supports gpui_component IconName, embedded SVGs, SF Symbols, app bundles
 pub mod debug_grid;
@@ -269,6 +272,10 @@ pub mod mcp_protocol;
 // MCP Kit Tools - kit/* namespace tools for app control
 // Provides kit/show, kit/hide, kit/state tools
 pub mod mcp_kit_tools;
+
+// MCP Computer Use Tools - computer/* namespace for desktop observation
+// Provides the stable first slice of agent-facing computer-use capabilities
+pub mod mcp_computer_use_tools;
 
 // MCP Script Tools - scripts/* namespace auto-generated tools
 // Scripts with schema.input become MCP tools automatically
