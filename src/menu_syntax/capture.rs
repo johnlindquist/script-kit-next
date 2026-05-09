@@ -129,7 +129,7 @@ fn split_target(input: &str) -> Option<(String, usize, CaptureAlias)> {
             return None;
         }
         let target = rest[..end].to_ascii_lowercase();
-        return Some((target, 1 + end, CaptureAlias::Plus));
+        return Some((target, 1 + end, CaptureAlias::CapturePrefix));
     }
 
     let colon_idx = input.find(':')?;
@@ -291,7 +291,7 @@ mod tests {
     fn parses_plus_todo_with_body_and_tags() {
         let inv = ok(";todo Renew passport #errands p1");
         assert_eq!(inv.target, "todo");
-        assert_eq!(inv.alias_form, CaptureAlias::Plus);
+        assert_eq!(inv.alias_form, CaptureAlias::CapturePrefix);
         assert_eq!(inv.body, "Renew passport");
         assert_eq!(inv.tags, vec!["errands".to_string()]);
         assert_eq!(inv.priority, Some(1));

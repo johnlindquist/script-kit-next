@@ -22,6 +22,8 @@ Syntax only owns input when the first token clearly opts in. Plain text, URLs, `
 
 Built-in capture targets live in [[src/menu_syntax/payload.rs#KNOWN_CAPTURE_TARGETS]], and script metadata can register additional capture targets at runtime. Unregistered heads — `;github`, `+github`, `+1`, `+react component`, `localhost:3000`, `not-a-target: stuff`, `#work` — fall through to normal fuzzy search where legacy compatibility allows it.
 
+Prefix ownership is target-gated: `;target` is the canonical capture prefix, `+target` is its legacy alias, and `target:` is the keyword alias, but all three only become parser-owned after `target` is built in or registered from metadata. Payload v1 still serializes capture-prefix invocations with the `plus` grammar surface for compatibility, even when the user typed `;target`.
+
 ## Advanced Query
 
 [[src/menu_syntax/filter.rs#apply_advanced_query]] applies typed filters after normal fuzzy search. Filters and tags narrow results; search words still go through the existing launcher ranker.

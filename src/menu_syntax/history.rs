@@ -785,7 +785,7 @@ mod tests {
         use crate::menu_syntax::payload::CaptureAlias;
         let inv = CaptureInvocation {
             target: "todo".into(),
-            alias_form: CaptureAlias::Plus,
+            alias_form: CaptureAlias::CapturePrefix,
             body: "Buy milk".into(),
             tags: vec!["errands".into(), "client".into()],
             priority: Some(1),

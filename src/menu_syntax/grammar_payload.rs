@@ -33,7 +33,8 @@ pub enum GrammarVerb {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum GrammarSurface {
-    /// `+target body` capture
+    /// Capture prefix payload v1 surface. This serializes as `plus` for
+    /// compatibility even when the user typed canonical `;target body`.
     Plus,
     /// keyword-aliased capture (e.g. `todo Buy milk` if `todo` is registered as a keyword)
     Keyword,
@@ -150,7 +151,7 @@ impl From<&CaptureInvocation> for GrammarPayload {
             version: GRAMMAR_PAYLOAD_VERSION,
             verb: GrammarVerb::Capture,
             surface: match c.alias_form {
-                CaptureAlias::Plus => GrammarSurface::Plus,
+                CaptureAlias::CapturePrefix => GrammarSurface::Plus,
                 CaptureAlias::Keyword => GrammarSurface::Keyword,
             },
             target: c.target.clone(),
@@ -301,7 +302,7 @@ mod tests {
     fn sample_capture() -> CaptureInvocation {
         CaptureInvocation {
             target: "todo".into(),
-            alias_form: CaptureAlias::Plus,
+            alias_form: CaptureAlias::CapturePrefix,
             body: "Renew passport".into(),
             tags: vec!["errands".into()],
             priority: Some(1),

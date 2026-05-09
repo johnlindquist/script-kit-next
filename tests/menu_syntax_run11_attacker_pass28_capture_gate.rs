@@ -17,7 +17,7 @@ use script_kit_gpui::menu_syntax::{
 fn empty(target: &str) -> CaptureInvocation {
     CaptureInvocation {
         target: target.to_string(),
-        alias_form: CaptureAlias::Plus,
+        alias_form: CaptureAlias::CapturePrefix,
         body: String::new(),
         tags: vec![],
         priority: None,

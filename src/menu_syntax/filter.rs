@@ -672,7 +672,7 @@ mod tests {
         let scripts = vec![todo_script.clone(), cal_script.clone(), plain_script];
         let invocation = CaptureInvocation {
             target: "todo".to_string(),
-            alias_form: crate::menu_syntax::payload::CaptureAlias::Plus,
+            alias_form: crate::menu_syntax::payload::CaptureAlias::CapturePrefix,
             body: "x".to_string(),
             tags: vec![],
             priority: None,
