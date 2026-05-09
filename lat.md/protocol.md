@@ -56,7 +56,7 @@ The stdin verbs `show`, `hide`, and `simulateKey` are fire-and-forget: each `Ext
 
 The live query surface includes `getState`, `getElements`, `getLayoutInfo`, `captureScreenshot`, and scriptlet/file-search variants.
 
-`getState` and `getElements` both accept an optional `target: AutomationWindowTarget`, so automation can inspect non-default surfaces explicitly.
+`getState` accepts an optional `target: AutomationWindowTarget` for wire compatibility and main-window disambiguation, but `stateResult` remains a main-window state contract. Omitted target, `Main`, `Focused`, and explicit targets resolving to the main window return main state. Explicit non-main targets return a diagnostic `stateResult` with `promptType:"unsupported"` and `promptId:"target_unsupported:<Kind>"`; target resolution failures stay distinct as `promptType:"target_resolution_failed"` and `promptId:"target_error:<error>"`. Use `getElements(target)` for semantic element inspection, `inspectAutomationWindow(target)` for window/surface inspection, and `getAcpState(target)` for ACP state.
 
 `elementsResult` now returns the visible element list plus `totalCount`, `truncated`, `focusedSemanticId`, `selectedSemanticId`, and machine-readable `warnings`. That is the current contract, not just a basic element list.
 
@@ -166,7 +166,7 @@ That means the MCP tool catalog is partly static and partly derived from the cur
 
 The old protocol docs lag the live module split. In current code:
 
-- `getState` and `getElements` both support explicit window targets.
+- `getState` keeps the explicit target field for compatibility, but only `getElements(target)`, `inspectAutomationWindow(target)`, and target-specific state APIs inspect secondary surfaces.
 - `elementsResult` includes focus, selection, truncation, and warnings.
 - `kit://context` supports profiles, per-field flags, diagnostics, and a schema URI.
 - `kit://sdk-reference` is schema-versioned and includes a harness workflow contract.
