@@ -188,16 +188,89 @@ mod tests {
     }
 
     #[test]
-    fn template_reads_payload_env_var() {
-        let out = render_capture_handler_template("note", "daily");
+    fn generated_capture_handler_template_executes_with_payload_env_and_writes_jsonl() {
+        use serde_json::json;
+        use std::process::Command;
+
+        let tmp = tempfile::TempDir::new().expect("tempdir");
+        let handler_path = tmp.path().join("capture-note-handler.mjs");
+        let runner_path = tmp.path().join("run-generated-handler.mjs");
+        let payload_path = tmp.path().join("payload.json");
+
+        std::fs::write(
+            &handler_path,
+            render_capture_handler_template("note", "daily"),
+        )
+        .expect("write generated handler");
+        std::fs::write(
+            &runner_path,
+            r#"import { pathToFileURL } from "node:url";
+const mod = await import(pathToFileURL(process.argv[2]).href);
+console.log(JSON.stringify(mod.metadata));
+"#,
+        )
+        .expect("write runner");
+        std::fs::write(
+            &payload_path,
+            serde_json::to_string(&json!({
+                "body": "Daily note",
+                "tags": ["journal"],
+                "priority": 2,
+                "url": "https://example.test/note",
+                "duration": "15m",
+                "dates": [{ "role": "due", "source": "tomorrow" }],
+                "raw": ";note Daily note #journal p2"
+            }))
+            .expect("serialize payload"),
+        )
+        .expect("write payload");
+
+        let runtime =
+            std::env::var("MENU_SYNTAX_TEST_JS_RUNTIME").unwrap_or_else(|_| "node".to_string());
+        let output = Command::new(runtime)
+            .arg(&runner_path)
+            .arg(&handler_path)
+            .env("KIT_MENU_SYNTAX_PAYLOAD_PATH", &payload_path)
+            .env("SK_PATH", tmp.path())
+            .output()
+            .expect("run generated handler");
         assert!(
-            out.contains("process.env.KIT_MENU_SYNTAX_PAYLOAD_PATH"),
-            "should read the payload env var"
+            output.status.success(),
+            "generated handler failed\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
         );
-        assert!(
-            out.contains("readFile(payloadPath"),
-            "should load the payload JSON from disk"
+
+        let metadata: serde_json::Value =
+            serde_json::from_slice(&output.stdout).expect("metadata stdout must be JSON");
+        assert_eq!(metadata["menuSyntax"][0]["family"], "capture.v1");
+        assert_eq!(metadata["menuSyntax"][0]["targets"], json!(["note"]));
+        assert_eq!(
+            metadata["menuSyntax"][0]["accepts"],
+            json!(["tags", "date", "kv"])
         );
+        assert_eq!(metadata["menuSyntax"][0]["defaultHandler"], false);
+
+        let artifact_path = tmp.path().join("menu-syntax").join("notes.jsonl");
+        let artifact = std::fs::read_to_string(&artifact_path).expect("read notes.jsonl");
+        let lines: Vec<_> = artifact.lines().collect();
+        assert_eq!(lines.len(), 1, "expected one JSONL row: {artifact}");
+        let row: serde_json::Value =
+            serde_json::from_str(lines[0]).expect("artifact row must be JSON");
+        assert_eq!(row["target"], "note");
+        assert_eq!(row["body"], "Daily note");
+        assert_eq!(row["tags"], json!(["journal"]));
+        assert_eq!(row["priority"], 2);
+        assert_eq!(row["url"], "https://example.test/note");
+        assert_eq!(row["duration"], "15m");
+        assert_eq!(
+            row["dates"],
+            json!([{ "role": "due", "source": "tomorrow" }])
+        );
+        assert_eq!(row["raw"], ";note Daily note #journal p2");
+        assert!(row["createdAt"]
+            .as_str()
+            .is_some_and(|created_at| !created_at.is_empty()));
     }
 
     #[test]
