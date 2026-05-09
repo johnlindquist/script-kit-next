@@ -3,6 +3,10 @@
 - Run `lat search` to find sections relevant to your task. Read them to understand the design intent before writing code.
 - Run `lat expand` on user prompts to expand any `[[refs]]` — this resolves section names to file locations and provides context.
 
+## Oracle / packx bundle context
+
+For Oracle review or `oracle-packx` work in this repository, include the repo process context in the bundle or prompt unless the user explicitly excludes it: `AGENTS.md`/`CLAUDE.md`, the owning `.agents/skills/<skill>/SKILL.md`, and relevant `lat.md/` pages found by `lat search`/`lat expand`. Include `lat.md/verification.md` whenever implementation or review checks are part of the question. If packx filters would omit that context, add explicit include filters or paste the relevant checklist into the Oracle prompt. The Oracle prompt should mention the `lat.md/` update rule and required `lat check`.
+
 # Post-task checklist (REQUIRED — do not skip)
 
 After EVERY task, before responding to the user:
