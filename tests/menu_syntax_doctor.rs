@@ -27,6 +27,15 @@ fn err_messages(value: &serde_json::Value) -> Vec<String> {
         .collect()
 }
 
+fn warning_messages(value: &serde_json::Value) -> Vec<String> {
+    doctor_validate(value)
+        .issues
+        .into_iter()
+        .filter(|i| i.severity == DoctorSeverity::Warning)
+        .map(|i| i.message)
+        .collect()
+}
+
 // ============================================================================
 // GOOD fixtures — no errors expected.
 // ============================================================================
@@ -294,4 +303,52 @@ fn unknown_capture_target_is_warning_not_error() {
         "expected a warning about non-built-in target, got: {:?}",
         report.issues
     );
+}
+
+#[test]
+fn core_capture_targets_do_not_warn_as_custom() {
+    for target in ["todo", "cal", "note", "social", "link"] {
+        let v = json!([{"family": "capture.v1", "targets": [target]}]);
+        let warnings = warning_messages(&v);
+        assert!(
+            warnings
+                .iter()
+                .all(|message| !message.contains("not a built-in")),
+            "`{target}` should not warn as custom, got: {warnings:?}"
+        );
+    }
+}
+
+#[test]
+fn mcal_is_known_special_case_for_doctor() {
+    let v = json!([{"family": "capture.v1", "targets": ["mcal"]}]);
+    let report = doctor_validate(&v);
+
+    assert!(!report.has_errors());
+    assert!(
+        report.issues.iter().all(|issue| {
+            !(issue.severity == DoctorSeverity::Warning && issue.message.contains("not a built-in"))
+        }),
+        "mcal is parser/schema-known and should not warn as custom: {:?}",
+        report.issues
+    );
+}
+
+#[test]
+fn shipped_dynamic_targets_warn_as_metadata_driven_custom_targets() {
+    for target in ["gcal", "github", "expense", "snippet", "fixture"] {
+        let v = json!([{"family": "capture.v1", "targets": [target]}]);
+        let report = doctor_validate(&v);
+
+        assert!(!report.has_errors());
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|i| i.severity == DoctorSeverity::Warning
+                    && i.message.contains("not a built-in")),
+            "`{target}` should warn as metadata-driven custom target, got: {:?}",
+            report.issues
+        );
+    }
 }

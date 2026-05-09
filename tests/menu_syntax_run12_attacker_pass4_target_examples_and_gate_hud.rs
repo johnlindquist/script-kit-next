@@ -12,7 +12,10 @@
 
 use script_kit_gpui::menu_syntax::payload::{CaptureAlias, CaptureInvocation};
 use script_kit_gpui::menu_syntax::{
-    builtin_schema, decide_capture_gate, CaptureGateDecision, FieldRequirement,
+    builtin_schema,
+    capture_gate::decide_capture_gate,
+    capture_schema::{CaptureFieldSchema, FieldRequirement},
+    CaptureGateDecision,
 };
 
 fn empty(target: &str) -> CaptureInvocation {
@@ -33,10 +36,7 @@ fn empty(target: &str) -> CaptureInvocation {
 /// Take a known builtin schema and rebrand its target so we can drive the gate
 /// against arbitrary attacker-chosen target strings while still triggering the
 /// "incomplete" branch (and thus the fix-it HUD).
-fn rebrand_schema(
-    template_target: &str,
-    new_target: &str,
-) -> Option<script_kit_gpui::menu_syntax::CaptureFieldSchema> {
+fn rebrand_schema(template_target: &str, new_target: &str) -> Option<CaptureFieldSchema> {
     let mut schema = builtin_schema(template_target)?;
     schema.target = new_target.to_string();
     Some(schema)
@@ -58,7 +58,7 @@ fn boundary_01_long_target_name_keeps_verb_prefix() {
     let inv = empty(&long);
     let hud = block_missing_hud(&inv, "todo");
     assert!(
-        hud.starts_with(&format!("+{long} needs ")),
+        hud.starts_with(&format!(";{long} needs ")),
         "long target must keep its verb prefix, got {hud}"
     );
     assert!(
@@ -71,7 +71,7 @@ fn boundary_01_long_target_name_keeps_verb_prefix() {
 fn boundary_02_unicode_target_uses_unicode_verb() {
     let inv = empty("日記");
     let hud = block_missing_hud(&inv, "todo");
-    assert!(hud.starts_with("+日記 needs "), "got {hud}");
+    assert!(hud.starts_with(";日記 needs "), "got {hud}");
     assert!(hud.contains("— try `;日記 "), "got {hud}");
 }
 
@@ -79,7 +79,7 @@ fn boundary_02_unicode_target_uses_unicode_verb() {
 fn boundary_03_emoji_target_round_trips() {
     let inv = empty("📝");
     let hud = block_missing_hud(&inv, "todo");
-    assert!(hud.starts_with("+📝 needs "), "got {hud}");
+    assert!(hud.starts_with(";📝 needs "), "got {hud}");
     assert!(hud.contains("— try `;📝 "), "got {hud}");
 }
 
@@ -87,7 +87,7 @@ fn boundary_03_emoji_target_round_trips() {
 fn boundary_04_hyphenated_target_no_split() {
     let inv = empty("custom-bug-report");
     let hud = block_missing_hud(&inv, "todo");
-    assert!(hud.starts_with("+custom-bug-report needs "), "got {hud}");
+    assert!(hud.starts_with(";custom-bug-report needs "), "got {hud}");
     assert!(hud.contains("— try `;custom-bug-report "), "got {hud}");
 }
 
@@ -98,7 +98,7 @@ fn boundary_05_uppercase_target_is_not_lowercased() {
     // in the hint card / picker).
     let inv = empty("CAL");
     let hud = block_missing_hud(&inv, "cal");
-    assert!(hud.starts_with("+CAL needs "), "got {hud}");
+    assert!(hud.starts_with(";CAL needs "), "got {hud}");
     assert!(
         hud.contains("— try `;CAL "),
         "fix-it must use the user's exact casing, got {hud}"
@@ -117,7 +117,7 @@ fn boundary_06_target_with_dot_segment() {
 fn boundary_07_single_char_target() {
     let inv = empty("x");
     let hud = block_missing_hud(&inv, "todo");
-    assert!(hud.starts_with("+x needs "), "got {hud}");
+    assert!(hud.starts_with(";x needs "), "got {hud}");
     assert!(hud.contains("— try `;x "), "got {hud}");
 }
 
@@ -141,7 +141,7 @@ fn boundary_09_empty_target_does_not_panic() {
 fn boundary_10_whitespace_in_target_preserved() {
     let inv = empty("two words");
     let hud = block_missing_hud(&inv, "todo");
-    assert!(hud.starts_with("+two words needs "), "got {hud}");
+    assert!(hud.starts_with(";two words needs "), "got {hud}");
     assert!(hud.contains("— try `;two words "), "got {hud}");
 }
 
@@ -161,7 +161,7 @@ fn composition_01_cal_missing_body_and_date_lists_both_in_oxford_form() {
     assert_eq!(missing.len(), 2);
     // Two-item Oxford form is "X and Y" — never trailing comma.
     assert!(
-        hud_message.contains(" needs body and date — try `+cal "),
+        hud_message.contains(" needs body and date — try `;cal "),
         "got {hud_message}"
     );
 }

@@ -235,16 +235,36 @@ mod tests {
     }
 
     #[test]
-    fn template_artifact_hint_matches_shipped_example_conventions() {
-        assert!(render_capture_handler_template("todo", "inbox").contains("todos.jsonl"));
-        assert!(render_capture_handler_template("cal", "events").contains("events.jsonl"));
-        assert!(render_capture_handler_template("note", "daily").contains("notes.jsonl"));
-        assert!(render_capture_handler_template("social", "draft").contains("drafts.jsonl"));
-        assert!(render_capture_handler_template("link", "bookmarks").contains("bookmarks.jsonl"));
+    fn template_core_target_artifact_hints_are_taxonomy_pins() {
+        for (target, slug, filename) in [
+            ("todo", "inbox", "todos.jsonl"),
+            ("cal", "events", "events.jsonl"),
+            ("note", "daily", "notes.jsonl"),
+            ("social", "draft", "drafts.jsonl"),
+            ("link", "bookmarks", "bookmarks.jsonl"),
+        ] {
+            assert!(
+                render_capture_handler_template(target, slug).contains(filename),
+                "`{target}` should scaffold to `{filename}`"
+            );
+        }
     }
 
     #[test]
-    fn template_handles_unknown_target_with_generic_artifact() {
+    fn template_non_core_dynamic_target_uses_generic_artifact_until_registered() {
+        let out = render_capture_handler_template("gcal", "x");
+        assert!(
+            out.contains("entries.jsonl"),
+            "non-core dynamic target should fall back to a generic artifact filename"
+        );
+        assert!(
+            out.contains(r#"targets: ["gcal"]"#),
+            "dynamic target must still render verbatim"
+        );
+    }
+
+    #[test]
+    fn template_unknown_custom_target_uses_generic_artifact() {
         let out = render_capture_handler_template("custom-target", "x");
         assert!(
             out.contains("entries.jsonl"),
@@ -257,11 +277,22 @@ mod tests {
     }
 
     #[test]
-    fn template_accepts_hint_matches_shipped_examples() {
-        let todo = render_capture_handler_template("todo", "x");
-        assert!(todo.contains(r#"accepts: ["tags", "date", "priority", "url", "kv"]"#));
-        let cal = render_capture_handler_template("cal", "x");
-        assert!(cal.contains(r#"accepts: ["date", "duration", "tags", "kv"]"#));
+    fn template_core_target_accepts_hints_are_taxonomy_pins() {
+        for (target, accepts) in [
+            (
+                "todo",
+                r#"accepts: ["tags", "date", "priority", "url", "kv"]"#,
+            ),
+            ("cal", r#"accepts: ["date", "duration", "tags", "kv"]"#),
+            ("note", r#"accepts: ["tags", "date", "kv"]"#),
+            ("social", r#"accepts: ["tags", "url", "kv"]"#),
+            ("link", r#"accepts: ["url", "tags", "kv"]"#),
+        ] {
+            assert!(
+                render_capture_handler_template(target, "x").contains(accepts),
+                "`{target}` should scaffold accepts hint `{accepts}`"
+            );
+        }
     }
 
     #[test]
