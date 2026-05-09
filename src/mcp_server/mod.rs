@@ -26,6 +26,8 @@ use tracing::{debug, error, info, warn};
 pub const DEFAULT_PORT: u16 = 43210;
 /// MCP Server version for discovery
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub(crate) type SharedComputerRuntime =
+    Arc<dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge + Send + Sync + 'static>;
 /// Server capabilities advertised in discovery
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ServerCapabilities {
@@ -59,6 +61,7 @@ pub struct McpServer {
     token: String,
     running: Arc<AtomicBool>,
     kit_path: PathBuf,
+    computer_runtime: Option<SharedComputerRuntime>,
 }
 impl McpServer {
     /// Create a new MCP server instance
@@ -74,6 +77,7 @@ impl McpServer {
             token,
             running: Arc::new(AtomicBool::new(false)),
             kit_path,
+            computer_runtime: None,
         })
     }
 
@@ -89,6 +93,11 @@ impl McpServer {
             .unwrap_or(DEFAULT_PORT);
 
         Self::new(port, kit_path)
+    }
+
+    pub(crate) fn with_computer_runtime(mut self, runtime: SharedComputerRuntime) -> Self {
+        self.computer_runtime = Some(runtime);
+        self
     }
 
     /// Load existing token or create a new one
@@ -234,6 +243,7 @@ impl McpServer {
         let token = self.token.clone();
         let kit_path = self.kit_path.clone();
         let port = self.port;
+        let computer_runtime = self.computer_runtime.clone();
 
         let handle = thread::spawn(move || {
             info!("MCP server started on port {}", port);
@@ -243,8 +253,9 @@ impl McpServer {
                     Ok((stream, addr)) => {
                         debug!("Connection from {}", addr);
                         let token = token.clone();
+                        let computer_runtime = computer_runtime.clone();
                         thread::spawn(move || {
-                            if let Err(e) = handle_connection(stream, &token) {
+                            if let Err(e) = handle_connection(stream, &token, computer_runtime) {
                                 error!("Error handling connection: {}", e);
                             }
                         });
@@ -308,7 +319,11 @@ impl Drop for ServerHandle {
     }
 }
 /// Handle a single HTTP connection
-fn handle_connection(mut stream: TcpStream, expected_token: &str) -> Result<()> {
+fn handle_connection(
+    mut stream: TcpStream,
+    expected_token: &str,
+    computer_runtime: Option<SharedComputerRuntime>,
+) -> Result<()> {
     let mut reader = BufReader::new(stream.try_clone()?);
 
     // Read request line
@@ -388,7 +403,14 @@ fn handle_connection(mut stream: TcpStream, expected_token: &str) -> Result<()> 
         }
         ("POST", "/rpc") => {
             // Handle JSON-RPC request
-            handle_rpc_request(&mut reader, &mut stream, &headers)
+            handle_rpc_request(
+                &mut reader,
+                &mut stream,
+                &headers,
+                computer_runtime.as_deref().map(|runtime| {
+                    runtime as &dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge
+                }),
+            )
         }
         _ => send_response(&mut stream, 404, "Not Found", "Endpoint not found"),
     }
@@ -398,6 +420,7 @@ fn handle_rpc_request(
     reader: &mut BufReader<TcpStream>,
     stream: &mut TcpStream,
     headers: &std::collections::HashMap<String, String>,
+    computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
 ) -> Result<()> {
     // Get Content-Length
     let content_length: usize = headers
@@ -435,9 +458,13 @@ fn handle_rpc_request(
 
     // Parse and handle request with full context
     let response = match mcp_protocol::parse_request(&body_str) {
-        Ok(request) => {
-            mcp_protocol::handle_request_with_context(request, &scripts, &scriptlets, None)
-        }
+        Ok(request) => mcp_protocol::handle_request_with_runtime_context(
+            request,
+            &scripts,
+            &scriptlets,
+            None,
+            computer_runtime,
+        ),
         Err(error_response) => error_response,
     };
 
@@ -735,6 +762,68 @@ mod tests {
         assert_eq!(response["jsonrpc"], "2.0");
         assert_eq!(response["id"], 1);
         assert!(response["result"]["tools"].is_array());
+        Ok(())
+    }
+
+    #[test]
+    fn test_rpc_computer_see_routes_live_runtime() -> anyhow::Result<()> {
+        struct Runtime;
+
+        impl crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge for Runtime {
+            fn inspect_automation_window(
+                &self,
+                request: crate::computer_use::runtime_bridge::ComputerUseInspectRequest,
+            ) -> Result<
+                crate::protocol::AutomationInspectSnapshot,
+                crate::computer_use::runtime_bridge::ComputerUseRuntimeError,
+            > {
+                assert_eq!(
+                    request.target,
+                    Some(crate::protocol::AutomationWindowTarget::Focused)
+                );
+                Ok(crate::protocol::AutomationInspectSnapshot {
+                    schema_version: crate::protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
+                    window_id: "mcp-server-runtime".to_string(),
+                    window_kind: "Main".to_string(),
+                    title: None,
+                    resolved_bounds: None,
+                    target_bounds_in_screenshot: None,
+                    surface_hit_point: None,
+                    suggested_hit_points: Vec::new(),
+                    elements: Vec::new(),
+                    total_count: 0,
+                    focused_semantic_id: None,
+                    selected_semantic_id: None,
+                    screenshot_width: Some(800),
+                    screenshot_height: Some(600),
+                    pixel_probes: Vec::new(),
+                    os_window_id: Some(123),
+                    semantic_quality: Some(crate::protocol::SemanticQuality::Full),
+                    warnings: Vec::new(),
+                })
+            }
+        }
+
+        let (server, _temp_dir) = create_test_server(43227)?;
+        let token = server.token().to_string();
+        let runtime: SharedComputerRuntime = Arc::new(Runtime);
+        let _handle = server.with_computer_runtime(runtime).start()?;
+
+        thread::sleep(std::time::Duration::from_millis(100));
+
+        let request = r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"computer/see","arguments":{"target":{"type":"focused"}}}}"#;
+        let (status, body) = http_post_json(43227, "/rpc", &token, request)?;
+
+        assert_eq!(status, 200);
+        let response: serde_json::Value =
+            serde_json::from_str(&body).context("parse RPC response")?;
+        let text = response["result"]["content"][0]["text"]
+            .as_str()
+            .context("missing computer/see result text")?;
+        let snapshot: crate::protocol::AutomationInspectSnapshot =
+            serde_json::from_str(text).context("parse computer/see snapshot")?;
+        assert_eq!(snapshot.window_id, "mcp-server-runtime");
+        assert_eq!(snapshot.screenshot_width, Some(800));
         Ok(())
     }
 
