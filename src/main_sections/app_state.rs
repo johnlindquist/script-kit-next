@@ -499,7 +499,8 @@ struct ScriptListApp {
     /// filter change or Esc/Tab dismissal. Pass 11 ships a deterministic stub
     /// proposal so the receipt is observable without an LLM round-trip; the
     /// real ACP/LLM call wiring is a follow-up.
-    pub(crate) pending_menu_syntax_ai_proposal: Option<crate::menu_syntax_ai::MenuSyntaxAiProposal>,
+    pub(crate) pending_menu_syntax_ai_proposal:
+        Option<crate::menu_syntax_ai::PendingMenuSyntaxAiProposal>,
     /// When `Some(filter)`, the menu-syntax trigger popup must NOT
     /// automatically re-open for that exact filter text. Set by the
     /// keyboard-apply dispatcher after an Accept (Enter) outcome so the

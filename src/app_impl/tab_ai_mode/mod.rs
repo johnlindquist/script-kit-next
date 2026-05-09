@@ -1307,14 +1307,11 @@ impl ScriptListApp {
     /// deterministic stub proposal, sets `pending_menu_syntax_ai_proposal`,
     /// and triggers a snapshot rebuild. Returns `true` when the chord was
     /// consumed so the legacy ACP route doesn't also fire.
-    pub(crate) fn try_route_cmd_enter_to_menu_syntax_ai(
-        &mut self,
-        cx: &mut Context<Self>,
-    ) -> bool {
+    pub(crate) fn try_route_cmd_enter_to_menu_syntax_ai(&mut self, cx: &mut Context<Self>) -> bool {
         use crate::menu_syntax::{builtin_schema, MenuSyntaxActionState};
         let raw = self.filter_text().to_string();
         let mode = &self.menu_syntax_mode;
-        let proposal = if let Some(invocation) = mode.capture_for(&raw) {
+        let pending = if let Some(invocation) = mode.capture_for(&raw) {
             let target = invocation.target.clone();
             let schema = builtin_schema(&target);
             let state = MenuSyntaxActionState::CaptureComposer {
@@ -1322,29 +1319,43 @@ impl ScriptListApp {
                 payload: invocation,
                 schema: schema.as_ref(),
             };
-            Some(crate::menu_syntax_ai::stub_proposal_for(&state))
+            Some(crate::menu_syntax_ai::PendingMenuSyntaxAiProposal::new(
+                raw.clone(),
+                Some(target.clone()),
+                crate::menu_syntax_ai::stub_proposal_for(&state),
+            ))
         } else if let Some(argv) = mode.command_for(&raw) {
+            let origin_target = Some(format!("!{}", argv.head));
             let state = MenuSyntaxActionState::CommandComposer {
                 head: &argv.head,
                 argv: &argv.argv,
             };
-            Some(crate::menu_syntax_ai::stub_proposal_for(&state))
+            Some(crate::menu_syntax_ai::PendingMenuSyntaxAiProposal::new(
+                raw.clone(),
+                origin_target,
+                crate::menu_syntax_ai::stub_proposal_for(&state),
+            ))
         } else if let Some(query) = mode.advanced_query_for(&raw) {
             let state = MenuSyntaxActionState::RefineQuery { query };
-            Some(crate::menu_syntax_ai::stub_proposal_for(&state))
+            Some(crate::menu_syntax_ai::PendingMenuSyntaxAiProposal::new(
+                raw.clone(),
+                Some("?".to_string()),
+                crate::menu_syntax_ai::stub_proposal_for(&state),
+            ))
         } else {
             None
         };
-        let Some(proposal) = proposal else {
+        let Some(pending) = pending else {
             return false;
         };
         tracing::info!(
             target: "script_kit::menu_syntax_ai",
             event = "menu_syntax_ai_proposal_generated",
-            title = %proposal.title,
-            actionable = proposal.is_actionable(),
+            title = %pending.proposal.title,
+            actionable = pending.proposal.is_actionable(),
+            origin_target = ?pending.origin.target,
         );
-        self.pending_menu_syntax_ai_proposal = Some(proposal);
+        self.pending_menu_syntax_ai_proposal = Some(pending);
         cx.notify();
         true
     }
@@ -1371,15 +1382,19 @@ impl ScriptListApp {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(proposal) = self.pending_menu_syntax_ai_proposal.clone() else {
+        let Some(pending) = self.pending_menu_syntax_ai_proposal.clone() else {
             return false;
         };
         let current_input = self.filter_text().to_string();
-        let effect = crate::menu_syntax_ai_apply::apply_proposal(&current_input, &proposal, action);
+        let origin_matches = pending.is_current_for(&current_input);
+        let effect =
+            crate::menu_syntax_ai_apply::apply_pending_proposal(&current_input, &pending, action);
         tracing::info!(
             target: "script_kit::menu_syntax_ai",
             event = "menu_syntax_ai_proposal_resolved",
             action = ?action,
+            origin_matches,
+            origin_target = ?pending.origin.target,
             effect_kind = match &effect {
                 crate::menu_syntax_ai_apply::ProposalEffect::SetFilterText { .. } => "set_filter_text",
                 crate::menu_syntax_ai_apply::ProposalEffect::Dismiss => "dismiss",

@@ -28,6 +28,42 @@ pub struct MenuSyntaxAiProposal {
     pub kind: ProposalKind,
 }
 
+/// The input identity that produced a pending proposal. Runtime surfaces use
+/// this to prevent a proposal generated for one filter from being applied to a
+/// later filter.
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MenuSyntaxAiProposalOrigin {
+    pub raw_input: String,
+    pub target: Option<String>,
+}
+
+/// Runtime-owned proposal plus the input identity that produced it.
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PendingMenuSyntaxAiProposal {
+    pub origin: MenuSyntaxAiProposalOrigin,
+    pub proposal: MenuSyntaxAiProposal,
+}
+
+#[allow(dead_code)]
+impl PendingMenuSyntaxAiProposal {
+    pub(crate) fn new(
+        raw_input: String,
+        target: Option<String>,
+        proposal: MenuSyntaxAiProposal,
+    ) -> Self {
+        Self {
+            origin: MenuSyntaxAiProposalOrigin { raw_input, target },
+            proposal,
+        }
+    }
+
+    pub(crate) fn is_current_for(&self, current_input: &str) -> bool {
+        self.origin.raw_input == current_input
+    }
+}
+
 /// What the accept-handler should do when the user presses Tab/Enter on the
 /// proposal. Pure data — no GPUI types — so the spec layer is testable
 /// without a window.
