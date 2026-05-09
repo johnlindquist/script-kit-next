@@ -162,7 +162,7 @@ Result values are intentionally NOT pinned byte-exact — version strings and to
 Two different tool families are exposed through MCP:
 
 - Built-in `kit/*` tools come from `src/mcp_kit_tools.rs`.
-- Observation-only `computer/*` tools come from `src/mcp_computer_use_tools.rs`; iteration 1 exposes `computer/see` as the MCP name for the existing `inspectAutomationWindow` snapshot contract while leaving native input actions deferred. MCP routing now accepts an optional `ComputerUseRuntimeBridge`, so stateless callers fail closed while live runtimes can return the serialized `AutomationInspectSnapshot` as tool text.
+- Observation-only `computer/*` tools come from `src/mcp_computer_use_tools.rs`; iteration 1 exposes `computer/see` as the MCP name for the existing `inspectAutomationWindow` snapshot contract while leaving native input actions deferred. MCP routing now accepts an optional `ComputerUseRuntimeBridge`, so stateless callers fail closed while live runtimes can return the serialized `AutomationInspectSnapshot` as tool text. The UI-owned snapshot builder stays in [[src/prompt_handler/mod.rs#ScriptListApp#build_automation_inspect_snapshot]], keeping MCP from forking screenshot capture, semantic collection, or target geometry logic.
 - Script-defined tools are generated from scripts that declare schema through the local SDK surface.
 
 That means the MCP tool catalog is partly static and partly derived from the current script inventory, rather than being a hand-maintained list.
