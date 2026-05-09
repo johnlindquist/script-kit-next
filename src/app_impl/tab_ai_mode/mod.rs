@@ -711,19 +711,7 @@ impl ScriptListApp {
 
         self.tab_ai_harness_return_view = Some(source_view.clone());
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
-        self.current_view = AppView::AcpChatView {
-            entity: entity.clone(),
-        };
-        crate::windows::ensure_embedded_ai_window(true);
-        crate::windows::update_automation_semantic_surface(
-            "main",
-            crate::semantic_surface_for_main_view(&self.current_view),
-        );
-        self.transition_acp_surface(crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedOpened);
-        self.focused_input = FocusedInput::None;
-        self.show_actions_popup = false;
-        self.actions_dialog = None;
-        self.pending_focus = Some(FocusTarget::ChatPrompt);
+        self.enter_embedded_acp_chat_surface(entity.clone());
 
         if let Some(intent) = normalized_intent.clone().filter(|_| !is_setup_mode) {
             entity.update(cx, |chat, cx| {
@@ -1961,8 +1949,7 @@ impl ScriptListApp {
             entity: entity.clone(),
         };
         self.focused_input = FocusedInput::None;
-        self.show_actions_popup = false;
-        self.actions_dialog = None;
+        self.clear_actions_popup_state();
         self.pending_focus = Some(FocusTarget::TermPrompt);
 
         // Deferred resize to avoid RefCell borrow error
@@ -2550,22 +2537,13 @@ impl ScriptListApp {
             capture_generation = self.tab_ai_harness_capture_generation,
         );
 
-        self.current_view = return_view;
-        self.pending_focus = Some(return_focus_target);
-        self.focused_input = match return_focus_target {
-            FocusTarget::MainFilter => FocusedInput::MainFilter,
-            FocusTarget::ActionsDialog => FocusedInput::ActionsSearch,
-            _ => FocusedInput::None,
-        };
+        self.restore_current_view_with_focus(return_view, return_focus_target);
 
         if closing_acp_chat {
             self.acp_ready_script_path = None;
             self.acp_footer_dot_status = None;
             self.acp_footer_model_display = None;
-            crate::windows::update_automation_semantic_surface(
-                "main",
-                crate::semantic_surface_for_main_view(&self.current_view),
-            );
+            self.rekey_main_automation_surface_from_current_view();
             crate::windows::ensure_embedded_ai_window(false);
             self.transition_acp_surface(
                 crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed,
@@ -2605,8 +2583,7 @@ impl ScriptListApp {
         // - tab_ai_harness_capture_generation += 1
         // - self.tab_ai_harness_apply_back_route = None;
         // - self.terminate_tab_ai_harness_session(cx);
-        // - self.current_view = return_view;
-        // - self.pending_focus = Some(return_focus_target);
+        // - self.restore_current_view_with_focus(return_view, return_focus_target);
         // - the close log records session_cleared = closing_quick_terminal
         // - it requeues schedule_tab_ai_harness_prewarm(std::time::Duration::from_millis(250), cx)
         // - it ends with cx.notify()
@@ -2671,10 +2648,10 @@ impl ScriptListApp {
         // which calls the same helper after `reset_to_script_list`.
         crate::windows::update_automation_semantic_surface("main", Some("scriptList".to_string()));
 
-        // Pair with the `ensure_embedded_ai_window(true)` calls in the four
-        // entry paths: tear the embedded AI entry back out of the automation
-        // registry so `listAutomationWindows` stops reporting a kind=ai
-        // window once the user is back on ScriptList.
+        // Pair with the entry upsert in `enter_embedded_acp_chat_surface`:
+        // tear the AI entry back out of the automation registry so
+        // `listAutomationWindows` stops reporting a kind=ai window once the
+        // user is back on ScriptList.
         crate::windows::ensure_embedded_ai_window(false);
         self.transition_acp_surface(crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedClosed);
 

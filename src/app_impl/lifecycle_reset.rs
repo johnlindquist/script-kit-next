@@ -149,6 +149,7 @@ impl ScriptListApp {
     /// 3. Hides the window
     pub(crate) fn close_and_reset_window(&mut self, cx: &mut Context<Self>) {
         logging::log("VISIBILITY", "=== Close and reset window ===");
+        clear_main_state_restore_after_focus_loss();
 
         // Reset pin state when window is closed
         self.is_pinned = false;
@@ -157,8 +158,7 @@ impl ScriptListApp {
         // Close child windows FIRST if open (they are children of main window)
         // Actions window
         if self.show_actions_popup || is_actions_window_open() {
-            self.show_actions_popup = false;
-            self.actions_dialog = None;
+            self.clear_actions_popup_state();
             cx.spawn(async move |_this, cx| {
                 cx.update(|cx| {
                     close_actions_window(cx);
@@ -221,6 +221,83 @@ impl ScriptListApp {
             cx.hide();
         }
         logging::log("VISIBILITY", "=== Window closed ===");
+    }
+
+    pub(crate) fn can_preserve_hide_script_list_on_passive_focus_loss(&self) -> bool {
+        matches!(self.current_view, AppView::ScriptList)
+            && self.is_dismissable_view()
+            && script_kit_gpui::is_main_window_visible()
+            && !self.is_pinned
+            && !script_kit_gpui::is_within_focus_grace_period()
+            && !confirm::is_confirm_window_open()
+            && !ai::acp::chat_window::is_chat_window_open()
+            && !crate::dictation::is_dictation_overlay_open()
+            && !crate::dictation::is_dictation_recording()
+            && self.tab_ai_save_offer_state.is_none()
+            && self.shortcut_recorder_state.is_none()
+    }
+
+    /// Hide a clicked-away ScriptList without clearing the user's filter/list state.
+    pub(crate) fn hide_main_window_preserving_state_for_focus_loss(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        logging::log(
+            "VISIBILITY",
+            "=== Hide main window after focus loss, preserving ScriptList state ===",
+        );
+
+        if !matches!(self.current_view, AppView::ScriptList) {
+            logging::log(
+                "VISIBILITY",
+                "Preserve-state focus-loss hide requested outside ScriptList; falling back to reset close",
+            );
+            self.close_and_reset_window(cx);
+            return;
+        }
+
+        self.is_pinned = false;
+
+        if let Some((x, y, w, h)) = crate::platform::get_main_window_bounds() {
+            let bounds = crate::window_state::PersistedWindowBounds::new(x, y, w, h);
+            let displays = crate::platform::get_macos_displays();
+            let _ =
+                crate::window_state::save_main_position_with_display_detection(bounds, &displays);
+        }
+
+        script_kit_gpui::set_main_window_visible(false);
+        crate::footer_popup::close_main_footer_popup(&mut *cx);
+        mark_main_state_restore_after_focus_loss();
+
+        let notes_open = notes::is_notes_window_open();
+        let ai_open = ai::is_ai_window_open();
+        let acp_chat_open = ai::acp::chat_window::is_chat_window_open();
+        logging::log(
+            "VISIBILITY",
+            &format!(
+                "Secondary windows: notes_open={}, ai_open={}, acp_chat_open={}",
+                notes_open, ai_open, acp_chat_open
+            ),
+        );
+
+        if notes_open || ai_open || acp_chat_open {
+            logging::log(
+                "VISIBILITY",
+                "Using defer_hide_main_window() - preserving state with secondary windows open",
+            );
+            platform::defer_hide_main_window(cx);
+        } else {
+            logging::log(
+                "VISIBILITY",
+                "Using cx.hide() - preserving state with no secondary windows",
+            );
+            cx.hide();
+        }
+
+        logging::log(
+            "VISIBILITY",
+            "=== Main window hidden after focus loss without resetting ScriptList ===",
+        );
     }
 
     /// Clear the current built-in view's filter/query text if non-empty.
@@ -505,8 +582,7 @@ impl ScriptListApp {
             });
 
             // Clear actions popup state (prevents stale overlay on return to menu)
-            self.show_actions_popup = false;
-            self.actions_dialog = None;
+            self.clear_actions_popup_state();
 
             self.update_window_size_deferred(window, cx);
             self.request_script_list_main_filter_focus(cx);

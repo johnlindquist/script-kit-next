@@ -11,6 +11,7 @@ These facts describe the current cross-layer sizing and vibrancy contract.
 - `vendor/gpui-component/crates/ui/src/root.rs` calls `window.set_rem_size(cx.theme().font_size)` during `Root::render`, so rem-based sizing follows the current gpui-component theme on every render.
 - `src/theme/gpui_integration.rs` pushes Script Kit's UI and mono font sizes into the global gpui-component theme, which is what ultimately drives rem sizing.
 - Main and popup-adjacent overlay windows still use `WindowBackgroundAppearance::Blurred` across launcher-adjacent surfaces such as actions, confirm, ACP popup, ACP chat window, dictation, and notes.
+- Main ScriptList focus loss hides the launcher without resetting filter, selection, scroll, or input state; if detached MainList actions are open, they close first and are not restored.
 - Shared popup vibrancy configuration uses recursive `NSVisualEffectView` setup with `BehindWindow` blending for detached popup-family windows.
 - The shortcut recorder opens as a compact detached popup-family window, not an in-window dimming overlay, so shortcut capture uses native blur and parent-child window ordering.
 - Shortcut recorder bounds stay modal-sized around the capture surface instead of matching the launcher width.
@@ -65,10 +66,12 @@ These rules describe the behavior constraints new windows and overlays should fo
 - The footer host is not interchangeable with detached popups; its `WithinWindow` blending and `hitTest:` passthrough are part of the behavior contract.
 - Native footer refresh paths must tear down the AppKit footer host when their resolved config is `None`; clearing only the active surface state can leave a stale footer visible.
 - `window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT` is the shared height contract for the AppKit footer host, GPUI spacer, launcher hover blocker, and footer-safe list reveal math.
+- Main-window resize work belongs to `$window-resizing`: audit both the open helper and follow-up deferred resize path before changing Mini/Full classification.
 - Detached actions popups stay footerless; shortcuts belong in the rows, not duplicated in popup chrome.
 - Shortcut recorder modals belong on the detached popup path, should not dim the launcher with the old full-window backdrop, and should stay narrower than the launcher.
 - The shortcut recorder popup stays child-attached to the parent, resurfaces with `orderFrontRegardless`, and must not override GPUI's `WindowKind::PopUp` level.
 - When a detached actions popup is open over the main window, the GPUI content behind it should be interaction-shielded so background hover/click/scroll state does not mutate; only the native actions toggle and click-anywhere dismissal path stay live.
+- Passive desktop click-away from the main ScriptList must use the preserve-state focus-loss hide path; detached MainList actions close first, while Escape, Cmd+W, script completion, prompt cancellation, and explicit hide/reset commands remain reset paths.
 - HUD messages are standalone feedback and must not reveal the launcher. `PromptMessage::ShowHud` clears script-requested hide restore intent before delegating to the HUD manager, pinned by `tests/hud_visibility_decoupled_contract.rs`.
 
 ## Main Panel Invariants Contract

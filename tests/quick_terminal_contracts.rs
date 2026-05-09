@@ -9,6 +9,7 @@ const QUICK_TERMINAL_WARM_SOURCE: &str = include_str!("../src/app_impl/quick_ter
 const THEME_FOCUS_SOURCE: &str = include_str!("../src/app_impl/theme_focus.rs");
 const THEME_CHOOSER_SOURCE: &str = include_str!("../src/render_builtins/theme_chooser.rs");
 const UI_WINDOW_SOURCE: &str = include_str!("../src/app_impl/ui_window.rs");
+const APP_VIEW_STATE_SOURCE: &str = include_str!("../src/main_sections/app_view_state.rs");
 const RENDER_TERM_PROMPT_SOURCE: &str = include_str!("../src/render_prompts/term.rs");
 
 #[test]
@@ -104,11 +105,12 @@ fn quick_terminal_theme_respects_light_dark_contract() {
 fn quick_terminal_native_footer_does_not_capture_sdk_term_prompt_footer() {
     // @lat: [[lat.md/acp-chat#ACP Chat#Boundary with #Quick Terminal native footer]]
     assert!(
-        UI_WINDOW_SOURCE.contains("AppView::QuickTerminalView { .. } => Some(\"quick_terminal\")"),
+        APP_VIEW_STATE_SOURCE
+            .contains("AppView::QuickTerminalView { .. } => Some(\"quick_terminal\")"),
         "QuickTerminalView must register the native footer surface"
     );
     assert!(
-        !UI_WINDOW_SOURCE.contains("AppView::TermPrompt { .. } => Some(\"term_prompt\")"),
+        !APP_VIEW_STATE_SOURCE.contains("AppView::TermPrompt { .. } => Some(\"term_prompt\")"),
         "SDK TermPrompt must not register a native footer surface; it keeps the GPUI terminal hint strip"
     );
     assert!(

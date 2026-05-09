@@ -777,6 +777,36 @@ impl ScriptListApp {
             .unwrap_or(false)
     }
 
+    /// Mark the shared actions popup as opening.
+    ///
+    /// This is the mutation owner for the popup-open flag and debounce reset.
+    /// Keep the `Clear debounce on open` phrase here so source audits protect
+    /// the footer-Cmd+K race guard without requiring every call site to repeat
+    /// the raw field writes.
+    pub(crate) fn mark_actions_popup_opening(&mut self) {
+        self.show_actions_popup = true;
+        self.actions_closed_at = None; // Clear debounce on open
+    }
+
+    /// Clear shared actions popup state without recording a recent-close debounce.
+    ///
+    /// Use this for route changes, resets, and stale-overlay cleanup where the
+    /// UI is not handling a user close gesture that should debounce footer Cmd+K.
+    pub(crate) fn clear_actions_popup_state(&mut self) {
+        self.show_actions_popup = false;
+        self.actions_dialog = None;
+    }
+
+    /// Mark the shared actions popup as closed.
+    ///
+    /// This is the mutation owner for the popup-open flag and close timestamp.
+    /// Keep the `Record debounce on close` phrase here so close paths share the
+    /// same 300ms recent-close behavior.
+    pub(crate) fn mark_actions_popup_closed(&mut self) {
+        self.clear_actions_popup_state();
+        self.actions_closed_at = Some(std::time::Instant::now()); // Record debounce on close
+    }
+
     /// Close the actions popup and restore focus based on host type.
     ///
     /// This centralizes close behavior, ensuring cx.notify() is always called
@@ -812,9 +842,7 @@ impl ScriptListApp {
         let overlay_depth_after_on_close = self.focus_coordinator.overlay_depth();
         let callback_restored_focus = overlay_depth_after_on_close < overlay_depth_before_on_close;
 
-        self.show_actions_popup = false;
-        self.actions_closed_at = Some(std::time::Instant::now());
-        self.actions_dialog = None;
+        self.mark_actions_popup_closed();
         self.resync_filter_input_after_actions_if_needed(window, cx);
 
         // Close the separate actions window if open
@@ -894,9 +922,7 @@ impl ScriptListApp {
             view = ?self.current_view,
         );
 
-        self.show_actions_popup = false;
-        self.actions_closed_at = Some(std::time::Instant::now());
-        self.actions_dialog = None;
+        self.mark_actions_popup_closed();
         self.mark_filter_resync_after_actions_if_needed();
         if is_actions_window_open() {
             close_actions_window(cx);

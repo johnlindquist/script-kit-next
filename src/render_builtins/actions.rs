@@ -247,8 +247,7 @@ impl ScriptListApp {
             return;
         }
 
-        self.show_actions_popup = true;
-        self.actions_closed_at = None;
+        self.mark_actions_popup_opening();
         self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
         self.focus_handle.focus(window, cx);
         self.gpui_input_focused = false;
@@ -323,8 +322,7 @@ impl ScriptListApp {
             return;
         };
 
-        self.show_actions_popup = true;
-        self.actions_closed_at = None;
+        self.mark_actions_popup_opening();
         self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
         self.focus_handle.focus(window, cx);
         self.gpui_input_focused = false;
@@ -399,8 +397,7 @@ impl ScriptListApp {
             return;
         }
 
-        self.show_actions_popup = true;
-        self.actions_closed_at = None;
+        self.mark_actions_popup_opening();
         self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
         self.focus_handle.focus(window, cx);
         self.gpui_input_focused = false;
@@ -470,9 +467,7 @@ impl ScriptListApp {
 
         if self.show_actions_popup || is_actions_window_open() {
             // Close the actions popup
-            self.show_actions_popup = false;
-            self.actions_closed_at = Some(std::time::Instant::now()); // Record debounce on close
-            self.actions_dialog = None;
+            self.mark_actions_popup_closed();
             self.file_search_actions_path = None;
 
             // Close the actions window via spawn
@@ -519,8 +514,7 @@ impl ScriptListApp {
         // landed even when the file-search input is empty.
 
         // Open actions popup
-        self.show_actions_popup = true;
-        self.actions_closed_at = None; // Clear debounce on open
+        self.mark_actions_popup_opening();
 
         // Use coordinator to push overlay - saves current focus state for restore
         self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
@@ -592,8 +586,7 @@ impl ScriptListApp {
                             return;
                         }
 
-                        app.show_actions_popup = false;
-                        app.actions_dialog = None;
+                        app.mark_actions_popup_closed();
                         app.file_search_actions_path = None;
                         // Use coordinator to pop overlay and restore previous focus
                         app.pop_focus_overlay(cx);
@@ -657,9 +650,7 @@ impl ScriptListApp {
 
         if self.show_actions_popup || is_actions_window_open() {
             // Close the actions popup
-            self.show_actions_popup = false;
-            self.actions_closed_at = Some(std::time::Instant::now()); // Record debounce on close
-            self.actions_dialog = None;
+            self.mark_actions_popup_closed();
 
             // Close the actions window via spawn
             cx.spawn(async move |_this, cx| {
@@ -680,8 +671,7 @@ impl ScriptListApp {
             );
         } else {
             // Open actions popup for the selected clipboard entry
-            self.show_actions_popup = true;
-            self.actions_closed_at = None; // Clear debounce on open
+            self.mark_actions_popup_opening();
             self.focused_clipboard_entry_id = Some(entry.id.clone());
 
             // Use coordinator to push overlay - saves current focus state for restore
@@ -748,8 +738,7 @@ impl ScriptListApp {
                                 return;
                             }
 
-                            app.show_actions_popup = false;
-                            app.actions_dialog = None;
+                            app.mark_actions_popup_closed();
                             // Use coordinator to pop overlay and restore previous focus
                             app.pop_focus_overlay(cx);
                             logging::log(

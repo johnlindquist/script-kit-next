@@ -642,6 +642,7 @@ impl ScriptListApp {
                 px(crate::list_item::effective_average_item_height_for_scroll()),
             ),
             main_list_row_generation: 0,
+            menu_syntax_main_hint_scroll_handle: ScrollHandle::new(),
             list_scroll_handle: UniformListScrollHandle::new(),
             arg_list_scroll_handle: UniformListScrollHandle::new(),
             clipboard_list_scroll_handle: UniformListScrollHandle::new(),

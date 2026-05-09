@@ -67,12 +67,12 @@ fn rekey_helper_reads_post_dispatch_view_and_updates_registry() {
     let body_compact = compact(body);
 
     assert!(
-        body_compact.contains("semantic_surface_for_main_view(&self.current_view)"),
-        "re-key helper must derive the automation surface from the current post-dispatch AppView"
+        body_compact.contains("self.rekey_main_automation_surface_from_current_view()"),
+        "triggerBuiltin re-key helper must delegate to the shared current-view automation surface owner"
     );
     assert!(
-        body_compact.contains("update_automation_semantic_surface(\"main\",semantic_surface)"),
-        "re-key helper must update only the main window semanticSurface tag"
+        !body.contains("update_automation_semantic_surface("),
+        "triggerBuiltin re-key helper must not copy the raw registry write; route through the shared owner"
     );
     assert!(
         !body.contains("upsert_automation_window"),

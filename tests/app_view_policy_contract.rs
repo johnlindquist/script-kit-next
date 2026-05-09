@@ -4,9 +4,10 @@
 //! from the `AppView` enum. Adding a new non-dismissable view meant
 //! remembering to edit `shortcuts_hud_grid.rs`, and old semantic-surface
 //! fallback mapping silently treated new variants as `scriptList`. The fix is
-//! to own behavior on `AppView` via `AppView::surface_contract()` with an
-//! exhaustive match (no wildcard) and no `Default` impl on `DismissPolicy`, so
-//! rustc rejects any `AppView` addition that forgets a policy.
+//! to route `AppView` through an exhaustive `SurfaceKind` identity first, then
+//! own behavior on `SurfaceKind::surface_contract()` with an exhaustive match
+//! (no wildcard) and no `Default` impl on `DismissPolicy`, so rustc rejects any
+//! view or kind addition that forgets a policy.
 //!
 //! These source-level tests pin the structural guarantees the pure unit
 //! tests cannot pin: the absence of a wildcard arm and the absence of a
@@ -55,7 +56,7 @@ fn app_view_dismiss_policy_has_no_wildcard_arm() {
     let dismiss_policy_body = source_between(
         APP_VIEW_STATE,
         "pub(crate) fn dismiss_policy(&self) -> DismissPolicy",
-        "/// Map an [`AppView`] variant to the automation",
+        "impl SurfaceKind",
     );
     assert!(
         !dismiss_policy_body.contains("_ =>"),
@@ -69,20 +70,53 @@ fn app_view_dismiss_policy_has_no_wildcard_arm() {
 }
 
 #[test]
-fn app_view_surface_contract_has_no_wildcard_arm() {
+fn app_view_surface_kind_has_no_wildcard_arm() {
+    let surface_kind_body = source_between(
+        APP_VIEW_STATE,
+        "pub(crate) fn surface_kind(&self) -> SurfaceKind",
+        "/// Exhaustive behavior contract for every top-level launcher view.",
+    );
+    assert!(
+        !surface_kind_body.contains("_ =>"),
+        "AppView::surface_kind must not use a wildcard arm; rustc \
+         exhaustiveness is the contract"
+    );
+    assert!(
+        !surface_kind_body.contains("_ if "),
+        "AppView::surface_kind must not use guard-wildcard arms"
+    );
+}
+
+#[test]
+fn surface_kind_surface_contract_has_no_wildcard_arm() {
     let surface_contract_body = source_between(
+        APP_VIEW_STATE,
+        "pub(crate) fn surface_contract(self) -> LauncherSurfaceContract",
+        "/// Map an [`AppView`] variant to the automation",
+    );
+    assert!(
+        !surface_contract_body.contains("_ =>"),
+        "SurfaceKind::surface_contract must not use a wildcard arm; rustc \
+         exhaustiveness is the contract"
+    );
+    assert!(
+        !surface_contract_body.contains("_ if "),
+        "SurfaceKind::surface_contract must not use guard-wildcard arms"
+    );
+}
+
+#[test]
+fn app_view_surface_contract_delegates_to_surface_kind() {
+    let app_view_surface_contract_body = source_between(
         APP_VIEW_STATE,
         "pub(crate) fn surface_contract(&self) -> LauncherSurfaceContract",
         "/// Dismiss policy for the active top-level launcher view.",
     );
     assert!(
-        !surface_contract_body.contains("_ =>"),
-        "AppView::surface_contract must not use a wildcard arm; rustc \
-         exhaustiveness is the contract"
-    );
-    assert!(
-        !surface_contract_body.contains("_ if "),
-        "AppView::surface_contract must not use guard-wildcard arms"
+        app_view_surface_contract_body.contains("self.surface_kind().surface_contract()"),
+        "AppView::surface_contract should be a thin delegate through \
+         SurfaceKind so docs and proof matrices can key on stable surface \
+         identities"
     );
 }
 
@@ -127,8 +161,8 @@ fn is_dismissable_view_delegates_to_policy() {
 fn theme_chooser_ignores_window_blur_dismissal() {
     let theme_chooser_arm = source_between(
         APP_VIEW_STATE,
-        "AppView::ThemeChooserView { .. } => LauncherSurfaceContract::new(",
-        "AppView::EmojiPickerView { .. }",
+        "SurfaceKind::ThemeChooser => LauncherSurfaceContract::new(",
+        "SurfaceKind::EmojiPicker",
     );
     assert!(
         theme_chooser_arm.contains("explicit,"),
@@ -150,12 +184,22 @@ fn dismiss_policy_surface_exports_are_wired() {
         APP_VIEW_STATE.contains("pub(crate) enum DismissTrigger")
             && APP_VIEW_STATE.contains("pub(crate) enum DismissEffect")
             && APP_VIEW_STATE.contains("pub(crate) struct DismissPolicy")
+            && APP_VIEW_STATE.contains("pub(crate) enum SurfaceKind")
+            && APP_VIEW_STATE.contains("pub(crate) enum LauncherSurfaceFocusPolicy")
+            && APP_VIEW_STATE.contains("pub(crate) enum LauncherSurfaceKeyboardPolicy")
+            && APP_VIEW_STATE.contains("pub(crate) enum LauncherSurfaceActionsPolicy")
+            && APP_VIEW_STATE.contains("pub(crate) enum LauncherSurfaceProofPolicy")
+            && APP_VIEW_STATE.contains("pub(crate) enum LauncherSurfaceVisualPolicy")
             && APP_VIEW_STATE.contains("pub(crate) struct LauncherSurfaceContract")
+            && APP_VIEW_STATE.contains("pub(crate) fn surface_kind(&self) -> SurfaceKind")
             && APP_VIEW_STATE
                 .contains("pub(crate) fn surface_contract(&self) -> LauncherSurfaceContract")
             && APP_VIEW_STATE.contains("pub(crate) fn dismiss_policy(&self) -> DismissPolicy"),
         "app_view_state.rs must expose DismissTrigger, DismissEffect, \
-         DismissPolicy, LauncherSurfaceContract, AppView::surface_contract, \
-         and AppView::dismiss_policy"
+         DismissPolicy, SurfaceKind, LauncherSurfaceFocusPolicy, \
+         LauncherSurfaceKeyboardPolicy, LauncherSurfaceActionsPolicy, \
+         LauncherSurfaceProofPolicy, LauncherSurfaceVisualPolicy, \
+         LauncherSurfaceContract, AppView::surface_kind, \
+         AppView::surface_contract, and AppView::dismiss_policy"
     );
 }

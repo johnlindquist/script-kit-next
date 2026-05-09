@@ -80,8 +80,8 @@ fn try_reuse_embedded_acp_view_handles_none_intent_without_submit() {
          the cached thread state untouched"
     );
     assert!(
-        TAB_AI_MODE_SOURCE.contains("self.current_view = AppView::AcpChatView {\n            entity: entity.clone(),\n        };"),
-        "try_reuse_embedded_acp_view must flip current_view back to AcpChatView with \
+        TAB_AI_MODE_SOURCE.contains("self.enter_embedded_acp_chat_surface(entity.clone());"),
+        "try_reuse_embedded_acp_view must enter AcpChatView with \
          the CACHED entity — not a freshly constructed one — so the preserved thread \
          entity inside the entity becomes the visible, addressable chat again"
     );

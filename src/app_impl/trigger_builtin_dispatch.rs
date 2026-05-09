@@ -164,8 +164,7 @@ impl ScriptListApp {
     /// Callers must not upsert the whole window here because the stdin
     /// dispatchers do not own the latest bounds, focus, or title.
     pub(crate) fn rekey_main_automation_surface_after_trigger_builtin_dispatch(&self) -> bool {
-        let semantic_surface = crate::semantic_surface_for_main_view(&self.current_view);
-        crate::windows::update_automation_semantic_surface("main", semantic_surface)
+        self.rekey_main_automation_surface_from_current_view()
     }
 
     /// Imperative half of [`AppRoute::ShowFilterableView`]. Seeds any

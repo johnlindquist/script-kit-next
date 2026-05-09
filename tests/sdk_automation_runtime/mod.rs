@@ -141,6 +141,8 @@ fn state_result_serializes_all_fields() {
         "gs-1".to_string(),
         "arg".to_string(),
         Some("prompt-1".to_string()),
+        None,
+        None,
         Some("Pick one".to_string()),
         "alpha".to_string(),
         3,
@@ -178,6 +180,8 @@ fn state_result_round_trips() {
     let msg = Message::state_result(
         "gs-rt".to_string(),
         "none".to_string(),
+        None,
+        None,
         None,
         None,
         String::new(),

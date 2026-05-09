@@ -15,15 +15,13 @@ impl ScriptListApp {
         self.computed_filter_text = query.to_string();
         self.pending_filter_sync = true;
         self.pending_placeholder = Some(placeholder.to_string());
-        self.current_view = AppView::ScriptList;
+        self.show_script_list_with_main_filter_focus();
         self.hovered_index = None;
         self.selected_index = 0;
         self.opened_from_main_menu = true;
         self.invalidate_grouped_cache();
         self.sync_list_state();
         self.update_window_size();
-        self.pending_focus = Some(FocusTarget::MainFilter);
-        self.focused_input = FocusedInput::MainFilter;
     }
 
     fn current_main_window_width() -> Option<f32> {
@@ -116,13 +114,7 @@ impl ScriptListApp {
             .unwrap_or((return_width, None));
 
         self.active_attachment_portal_kind = None;
-        self.current_view = return_view;
-        self.pending_focus = Some(return_focus_target);
-        self.focused_input = match return_focus_target {
-            FocusTarget::MainFilter => FocusedInput::MainFilter,
-            FocusTarget::ActionsDialog => FocusedInput::ActionsSearch,
-            _ => FocusedInput::None,
-        };
+        self.restore_current_view_with_focus(return_view, return_focus_target);
 
         // Portal views can temporarily expand the window; restore the
         // originating surface sizing before control returns to the user unless

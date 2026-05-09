@@ -139,6 +139,7 @@ impl ScriptListApp {
     /// Reset all state and return to the script list view.
     /// This clears all prompt state and resizes the window appropriately.
     pub(crate) fn reset_to_script_list(&mut self, cx: &mut Context<Self>) {
+        clear_main_state_restore_after_focus_loss();
         let closing_acp_chat = matches!(self.current_view, AppView::AcpChatView { .. });
         let old_view = match &self.current_view {
             AppView::ScriptList => "ScriptList",
@@ -289,8 +290,7 @@ impl ScriptListApp {
         *self.script_session.lock() = None;
 
         // Clear actions popup state (prevents stale actions dialog from persisting)
-        self.show_actions_popup = false;
-        self.actions_dialog = None;
+        self.clear_actions_popup_state();
 
         // Clear pending path action and close signal
         if let Ok(mut guard) = self.pending_path_action.lock() {

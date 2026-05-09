@@ -22,7 +22,9 @@ Select rows still render through [[src/components/unified_list_item/render.rs#Un
 
 Footer ownership stays single-source. Prompt entities route native-footer fallback through `main_window_footer_slot_for_prompt_surface`, so only the layout shell reads the active native surface and stale native state fails closed to a spacer instead of drawing a second footer row.
 
-Built-in renderers delegate native footer ownership through `main_window_footer_slot` rather than checking `active_main_window_footer_surface()` directly. Domain-specific built-ins register native footer buttons before replacing their GPUI fallback strip with the spacer; explicit footerless exceptions must stay off the native footer map.
+Built-in renderers delegate native footer ownership through `main_window_footer_slot` rather than checking `active_main_window_footer_surface()` directly. Domain-specific built-ins register native footer buttons before replacing their GPUI fallback strip with the spacer; explicit footerless exceptions must stay off the native footer map, and generated surface contracts expose each `AppView` variant's native footer id for agents.
+
+`AppView::native_footer_surface()` owns the footer surface id map. `ui_window.rs` asks that method before building `MainWindowFooterConfig`, so future route changes cannot fork footer ownership away from the view contract registry.
 
 Kit Store browse and installed views own surface-specific footer semantics through the native main-window footer. Browse advertises Install and Back or Clear Search; Installed advertises Update and Remove. Row action chips remain row-local mouse affordances, while the fallback GPUI footer is only a hint strip routed through the native footer slot.
 

@@ -58,6 +58,8 @@ mod lifecycle_reset;
 mod shortcuts_hud_grid;
 #[path = "registries_state.rs"]
 mod registries_state;
+#[path = "automation_surface.rs"]
+mod automation_surface;
 #[path = "prompt_ai.rs"]
 mod prompt_ai;
 #[path = "naming_dialog.rs"]

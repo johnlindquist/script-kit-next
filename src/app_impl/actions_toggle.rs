@@ -172,11 +172,34 @@ impl ScriptListApp {
                         return;
                     }
 
-                    app.show_actions_popup = false;
-                    app.actions_closed_at = Some(std::time::Instant::now());
-                    app.actions_dialog = None;
+                    let should_hide_main_after_actions_focus_loss =
+                        matches!(host, ActionsDialogHost::MainList)
+                            && app.can_preserve_hide_script_list_on_passive_focus_loss()
+                            && !crate::platform::is_main_window_focused();
+
+                    app.mark_actions_popup_closed();
                     app.mark_filter_resync_after_actions_if_needed();
                     app.pop_focus_overlay(cx);
+
+                    if should_hide_main_after_actions_focus_loss {
+                        logging::log(
+                            "FOCUS",
+                            "Actions popup closed after ScriptList focus loss - hiding main while preserving state",
+                        );
+                        app.hide_main_window_preserving_state_for_focus_loss(cx);
+                        cx.notify();
+                        return;
+                    }
+
+                    if !script_kit_gpui::is_main_window_visible() {
+                        logging::log(
+                            "FOCUS",
+                            "Actions popup closed after main was already hidden - skipping focus restoration",
+                        );
+                        cx.notify();
+                        return;
+                    }
+
                     app.request_focus_restore_for_actions_host(host);
                     logging::log("FOCUS", log_message);
                     cx.notify();
@@ -226,8 +249,7 @@ impl ScriptListApp {
                         );
                         // Roll back popup state and show Toast on failure
                         let _ = this.update(cx, |app, cx| {
-                            app.show_actions_popup = false;
-                            app.actions_dialog = None;
+                            app.clear_actions_popup_state();
                             app.pop_focus_overlay(cx);
                             app.toast_manager.push(
                                 components::toast::Toast::error(
@@ -258,8 +280,7 @@ impl ScriptListApp {
     }
 
     fn begin_actions_popup_window_open(&mut self, cx: &mut Context<Self>, window: &mut Window) {
-        self.show_actions_popup = true;
-        self.actions_closed_at = None; // Clear debounce on open
+        self.mark_actions_popup_opening();
         self.hovered_index = None;
         self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
         self.focus_handle.focus(window, cx);
@@ -859,7 +880,7 @@ impl ScriptListApp {
                 if !sdk_actions.is_empty() {
                     self.resync_filter_input_after_actions_if_needed(window, cx);
                     // Open - push overlay to save arg prompt focus state
-                    self.show_actions_popup = true;
+                    self.mark_actions_popup_opening();
                     self.push_focus_overlay(focus_coordinator::FocusRequest::actions_dialog(), cx);
                     self.gpui_input_focused = false;
 

@@ -317,6 +317,44 @@ impl ConfirmFocusedButton {
     }
 }
 
+/// Stable behavior identity for each top-level launcher surface contract.
+///
+/// `AppView` carries runtime payloads and child entities. `SurfaceKind` is the
+/// payload-free identity that agents, generated docs, and proof matrices can
+/// use without reverse-engineering enum fields or render files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum SurfaceKind {
+    ScriptList,
+    About,
+    ActionsDialog,
+    PromptEntity,
+    PromptChildContent,
+    ExplicitPromptEntity,
+    Webcam,
+    ClipboardHistory,
+    AppLauncher,
+    WindowSwitcher,
+    BrowserTabs,
+    GenericFilterableList,
+    ProcessManager,
+    CurrentAppCommands,
+    DesignGallery,
+    #[cfg(feature = "storybook")]
+    DesignExplorer,
+    UtilityChildContent,
+    FileSearchMini,
+    FileSearchFull,
+    ThemeChooser,
+    EmojiPicker,
+    Feedback,
+    SdkReference,
+    ScriptTemplateCatalog,
+    AcpHistory,
+    AttachmentPortalBrowser,
+    AcpChat,
+    ConfirmPrompt,
+}
+
 /// First-pass vocabulary for describing what kind of launcher surface an
 /// [`AppView`] represents.
 ///
@@ -370,6 +408,84 @@ pub(crate) enum LauncherSurfacePreviewRole {
     ContentPane,
     /// The surface explains a completed action or diagnostic result.
     FeedbackPanel,
+}
+
+/// Names the focus owner a surface expects after entry or restoration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum LauncherSurfaceFocusPolicy {
+    /// Focus should land on the shared launcher filter/input chrome.
+    LauncherFilterFocus,
+    /// Focus should land on a script prompt entity.
+    PromptEntityFocus,
+    /// Focus should land inside a child content view such as editor, terminal, or ACP.
+    ChildViewFocus,
+    /// The surface has no normal editable focus target.
+    NoEditableFocus,
+}
+
+/// Names the keyboard dispatcher family a surface expects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum LauncherSurfaceKeyboardPolicy {
+    /// Shared launcher list/filter keys own navigation and activation.
+    LauncherListKeyboard,
+    /// Prompt entities own text entry, validation, and prompt-local keys.
+    PromptEntityKeyboard,
+    /// Child content views own local keyboard interpretation.
+    ChildViewKeyboard,
+    /// Actions-dialog routing owns popup list keys before host shortcuts.
+    ActionsDialogKeyboard,
+    /// The surface only expects explicit shell commands such as dismiss/close.
+    NoEditableKeyboard,
+}
+
+/// Names which layer owns visible/shared actions for a surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum LauncherSurfaceActionsPolicy {
+    /// The main menu owns global launcher actions.
+    MainMenuActions,
+    /// Row-aware host actions can be opened from the surface.
+    HostRowActions,
+    /// A prompt entity owns any local actions.
+    PromptEntityActions,
+    /// A child content view owns any local actions.
+    ChildViewActions,
+    /// The actions dialog owns its own filtered action rows.
+    ActionsDialogActions,
+    /// The surface has no normal shared action surface.
+    NoSurfaceActions,
+}
+
+/// Names the preferred first proof for a surface contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum LauncherSurfaceProofPolicy {
+    /// Use a state receipt before any screenshot.
+    StateReceiptProof,
+    /// Use state plus element list/count receipts.
+    StateAndElementsProof,
+    /// Use child-view state receipts before visual proof.
+    ChildViewStateProof,
+    /// Use popup-scoped state/visibility receipts.
+    PopupStateProof,
+}
+
+/// Names the expected visual shape of a launcher surface.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum LauncherSurfaceVisualPolicy {
+    /// Compact launcher shell with no always-visible split preview.
+    CompactLauncherVisual,
+    /// Split list/detail surface where preview is part of the contract.
+    SplitPreviewVisual,
+    /// Child/content pane such as terminal, editor, ACP, or About.
+    ContentPaneVisual,
+    /// Attached/modal popup visual contract.
+    PopupVisual,
+    /// Completion or diagnostic feedback surface.
+    FeedbackVisual,
 }
 
 /// Shared vocabulary tuple for the future exhaustive AppView behavior registry.
@@ -506,6 +622,11 @@ impl DismissPolicy {
 #[allow(dead_code)]
 pub(crate) struct LauncherSurfaceContract {
     pub(crate) vocabulary: LauncherSurfaceContractVocabulary,
+    pub(crate) focus_policy: LauncherSurfaceFocusPolicy,
+    pub(crate) keyboard_policy: LauncherSurfaceKeyboardPolicy,
+    pub(crate) actions_policy: LauncherSurfaceActionsPolicy,
+    pub(crate) proof_policy: LauncherSurfaceProofPolicy,
+    pub(crate) visual_policy: LauncherSurfaceVisualPolicy,
     pub(crate) dismiss_policy: DismissPolicy,
     pub(crate) automation_semantic_surface: &'static str,
 }
@@ -513,11 +634,21 @@ pub(crate) struct LauncherSurfaceContract {
 impl LauncherSurfaceContract {
     pub(crate) const fn new(
         vocabulary: LauncherSurfaceContractVocabulary,
+        focus_policy: LauncherSurfaceFocusPolicy,
+        keyboard_policy: LauncherSurfaceKeyboardPolicy,
+        actions_policy: LauncherSurfaceActionsPolicy,
+        proof_policy: LauncherSurfaceProofPolicy,
+        visual_policy: LauncherSurfaceVisualPolicy,
         dismiss_policy: DismissPolicy,
         automation_semantic_surface: &'static str,
     ) -> Self {
         Self {
             vocabulary,
+            focus_policy,
+            keyboard_policy,
+            actions_policy,
+            proof_policy,
+            visual_policy,
             dismiss_policy,
             automation_semantic_surface,
         }
@@ -525,17 +656,175 @@ impl LauncherSurfaceContract {
 }
 
 impl AppView {
+    /// Payload-free surface identity for the active top-level launcher view.
+    ///
+    /// Do **not** add `_ => ...` here. The point is to make rustc fail when a
+    /// new [`AppView`] variant is added without an explicit surface identity.
+    pub(crate) fn surface_kind(&self) -> SurfaceKind {
+        match self {
+            AppView::ScriptList => SurfaceKind::ScriptList,
+            AppView::About { .. } => SurfaceKind::About,
+            AppView::ActionsDialog => SurfaceKind::ActionsDialog,
+            AppView::ArgPrompt { .. }
+            | AppView::DivPrompt { .. }
+            | AppView::FormPrompt { .. }
+            | AppView::SelectPrompt { .. }
+            | AppView::PathPrompt { .. }
+            | AppView::DropPrompt { .. }
+            | AppView::TemplatePrompt { .. }
+            | AppView::ChatPrompt { .. }
+            | AppView::MiniPrompt { .. }
+            | AppView::MicroPrompt { .. } => SurfaceKind::PromptEntity,
+            AppView::TermPrompt { .. } | AppView::EditorPrompt { .. } => {
+                SurfaceKind::PromptChildContent
+            }
+            AppView::EnvPrompt { .. }
+            | AppView::NamingPrompt { .. }
+            | AppView::CreateAiPresetView { .. } => SurfaceKind::ExplicitPromptEntity,
+            AppView::WebcamView { .. } => SurfaceKind::Webcam,
+            AppView::ClipboardHistoryView { .. } => SurfaceKind::ClipboardHistory,
+            AppView::AppLauncherView { .. } => SurfaceKind::AppLauncher,
+            AppView::WindowSwitcherView { .. } => SurfaceKind::WindowSwitcher,
+            AppView::BrowserTabsView { .. } => SurfaceKind::BrowserTabs,
+            AppView::BrowseKitsView { .. }
+            | AppView::InstalledKitsView { .. }
+            | AppView::SearchAiPresetsView { .. }
+            | AppView::SettingsView { .. }
+            | AppView::FavoritesBrowseView { .. } => SurfaceKind::GenericFilterableList,
+            AppView::ProcessManagerView { .. } => SurfaceKind::ProcessManager,
+            AppView::CurrentAppCommandsView { .. } => SurfaceKind::CurrentAppCommands,
+            AppView::DesignGalleryView { .. } => SurfaceKind::DesignGallery,
+            #[cfg(feature = "storybook")]
+            AppView::DesignExplorerView { .. } => SurfaceKind::DesignExplorer,
+            AppView::ScratchPadView { .. } | AppView::QuickTerminalView { .. } => {
+                SurfaceKind::UtilityChildContent
+            }
+            AppView::FileSearchView {
+                presentation: FileSearchPresentation::Mini,
+                ..
+            } => SurfaceKind::FileSearchMini,
+            AppView::FileSearchView {
+                presentation: FileSearchPresentation::Full,
+                ..
+            } => SurfaceKind::FileSearchFull,
+            AppView::ThemeChooserView { .. } => SurfaceKind::ThemeChooser,
+            AppView::EmojiPickerView { .. } => SurfaceKind::EmojiPicker,
+            AppView::CreationFeedback { .. } | AppView::ScriptIssuesView { .. } => {
+                SurfaceKind::Feedback
+            }
+            AppView::SdkReferenceView { .. } => SurfaceKind::SdkReference,
+            AppView::ScriptTemplateCatalogView { .. } => SurfaceKind::ScriptTemplateCatalog,
+            AppView::AcpHistoryView { .. } => SurfaceKind::AcpHistory,
+            AppView::BrowserHistoryView { .. }
+            | AppView::DictationHistoryView { .. }
+            | AppView::NotesBrowseView { .. } => SurfaceKind::AttachmentPortalBrowser,
+            AppView::AcpChatView { .. } => SurfaceKind::AcpChat,
+            AppView::ConfirmPrompt { .. } => SurfaceKind::ConfirmPrompt,
+        }
+    }
+
     /// Exhaustive behavior contract for every top-level launcher view.
+    pub(crate) fn surface_contract(&self) -> LauncherSurfaceContract {
+        self.surface_kind().surface_contract()
+    }
+
+    /// Dismiss policy for the active top-level launcher view.
+    ///
+    /// The policy is stored in [`SurfaceKind::surface_contract`] so behavior
+    /// names, dismissal, and automation tags stay declared together.
+    pub(crate) fn dismiss_policy(&self) -> DismissPolicy {
+        self.surface_contract().dismiss_policy
+    }
+
+    /// Native main-window footer surface id for the active view.
+    ///
+    /// This remains AppView-specific rather than SurfaceKind-specific because
+    /// several stable `SurfaceKind`s intentionally group payload-bearing
+    /// routes that still need distinct footer ownership strings.
+    pub(crate) fn native_footer_surface(&self) -> Option<&'static str> {
+        match self {
+            AppView::ScriptList => Some("script_list"),
+            AppView::SelectPrompt { .. } => Some("select_prompt"),
+            AppView::DivPrompt { .. } => Some("div_prompt"),
+            AppView::FormPrompt { .. } => Some("form_prompt"),
+            AppView::EditorPrompt { .. } => Some("editor_prompt"),
+            AppView::EnvPrompt { .. } => Some("env_prompt"),
+            AppView::DropPrompt { .. } => Some("drop_prompt"),
+            AppView::TemplatePrompt { .. } => Some("template_prompt"),
+            AppView::MiniPrompt { .. } => Some("mini_prompt"),
+            AppView::ClipboardHistoryView { .. } => Some("clipboard_history"),
+            AppView::FileSearchView { .. } => Some("file_search"),
+            AppView::WebcamView { .. } => Some("webcam_prompt"),
+            AppView::NamingPrompt { .. } => Some("naming_prompt"),
+            AppView::CreationFeedback { .. } => Some("creation_feedback"),
+            AppView::ArgPrompt { .. } => Some("arg_prompt"),
+            AppView::EmojiPickerView { .. } => Some("emoji_picker"),
+            AppView::AcpHistoryView { .. } => Some("acp_history"),
+            AppView::BrowserHistoryView { .. } => Some("browser_history"),
+            AppView::DictationHistoryView { .. } => Some("dictation_history"),
+            AppView::AcpChatView { .. } => Some("acp_chat"),
+            AppView::ChatPrompt { .. } => Some("chat_prompt"),
+            AppView::QuickTerminalView { .. } => Some("quick_terminal"),
+            AppView::PathPrompt { .. } => Some("path_prompt"),
+            AppView::AppLauncherView { .. } => Some("app_launcher"),
+            AppView::WindowSwitcherView { .. } => Some("window_switcher"),
+            AppView::BrowserTabsView { .. } => Some("browser_tabs"),
+            AppView::DesignGalleryView { .. } => Some("design_gallery"),
+            AppView::ScratchPadView { .. } => Some("scratch_pad"),
+            AppView::ThemeChooserView { .. } => Some("theme_chooser"),
+            AppView::ProcessManagerView { .. } => Some("process_manager"),
+            AppView::CurrentAppCommandsView { .. } => Some("current_app_commands"),
+            AppView::SearchAiPresetsView { .. } => Some("search_ai_presets"),
+            AppView::SettingsView { .. } => Some("settings"),
+            AppView::BrowseKitsView { .. } => Some("kit_store_browse"),
+            AppView::InstalledKitsView { .. } => Some("kit_store_installed"),
+            AppView::FavoritesBrowseView { .. } => Some("favorites"),
+            AppView::ConfirmPrompt { .. } => Some("confirm_prompt"),
+            AppView::About { .. }
+            | AppView::ActionsDialog
+            | AppView::TermPrompt { .. }
+            | AppView::MicroPrompt { .. }
+            | AppView::ScriptIssuesView { .. }
+            | AppView::SdkReferenceView { .. }
+            | AppView::ScriptTemplateCatalogView { .. }
+            | AppView::CreateAiPresetView { .. }
+            | AppView::NotesBrowseView { .. } => None,
+            #[cfg(feature = "storybook")]
+            AppView::DesignExplorerView { .. } => None,
+        }
+    }
+}
+
+impl SurfaceKind {
+    /// Exhaustive behavior contract for every stable launcher surface kind.
     ///
     /// Do **not** add `_ => ...` here. The point is to make rustc fail when
-    /// a new [`AppView`] variant is added without explicit behavior decisions.
-    pub(crate) fn surface_contract(&self) -> LauncherSurfaceContract {
+    /// a new [`SurfaceKind`] is added without explicit behavior decisions.
+    pub(crate) fn surface_contract(self) -> LauncherSurfaceContract {
         use LauncherSurfaceFamily::{
             AssistantWorkspace, AttachmentPortal, FeedbackSurface, FilterableLauncherList,
             MainMenu, ScriptPrompt, UtilityWorkspace,
         };
         use LauncherSurfaceInputOwnership::{
             ChildView, LauncherFilter, NoEditableInput, PromptEntity,
+        };
+        use LauncherSurfaceFocusPolicy::{
+            ChildViewFocus, LauncherFilterFocus, NoEditableFocus, PromptEntityFocus,
+        };
+        use LauncherSurfaceKeyboardPolicy::{
+            ActionsDialogKeyboard, ChildViewKeyboard, LauncherListKeyboard, NoEditableKeyboard,
+            PromptEntityKeyboard,
+        };
+        use LauncherSurfaceActionsPolicy::{
+            ActionsDialogActions, ChildViewActions, HostRowActions, MainMenuActions,
+            NoSurfaceActions, PromptEntityActions,
+        };
+        use LauncherSurfaceProofPolicy::{
+            ChildViewStateProof, PopupStateProof, StateAndElementsProof, StateReceiptProof,
+        };
+        use LauncherSurfaceVisualPolicy::{
+            CompactLauncherVisual, ContentPaneVisual, FeedbackVisual, PopupVisual,
+            SplitPreviewVisual,
         };
         use LauncherSurfacePreviewRole::{
             ContentPane, FeedbackPanel, NoPersistentPreview, OptionalInfoPanel,
@@ -546,283 +835,382 @@ impl AppView {
         let explicit = DismissPolicy::explicit_cmd_w_only();
 
         match self {
-            AppView::ScriptList => LauncherSurfaceContract::new(
+            SurfaceKind::ScriptList => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(MainMenu, LauncherFilter, OptionalInfoPanel),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                MainMenuActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
                 standard,
                 "scriptList",
             ),
-            AppView::About { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::About => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FeedbackSurface,
                     NoEditableInput,
                     ContentPane,
                 ),
+                NoEditableFocus,
+                NoEditableKeyboard,
+                NoSurfaceActions,
+                StateReceiptProof,
+                ContentPaneVisual,
                 explicit,
                 "about",
             ),
-            AppView::ActionsDialog => LauncherSurfaceContract::new(
+            SurfaceKind::ActionsDialog => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FilterableLauncherList,
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
+                LauncherFilterFocus,
+                ActionsDialogKeyboard,
+                ActionsDialogActions,
+                PopupStateProof,
+                PopupVisual,
                 standard,
                 "scriptList",
             ),
 
-            AppView::ArgPrompt { .. }
-            | AppView::DivPrompt { .. }
-            | AppView::FormPrompt { .. }
-            | AppView::SelectPrompt { .. }
-            | AppView::PathPrompt { .. }
-            | AppView::DropPrompt { .. }
-            | AppView::TemplatePrompt { .. }
-            | AppView::ChatPrompt { .. }
-            | AppView::MiniPrompt { .. }
-            | AppView::MicroPrompt { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::PromptEntity => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     ScriptPrompt,
                     PromptEntity,
                     NoPersistentPreview,
                 ),
+                PromptEntityFocus,
+                PromptEntityKeyboard,
+                PromptEntityActions,
+                StateReceiptProof,
+                CompactLauncherVisual,
                 standard,
                 "scriptList",
             ),
 
-            AppView::TermPrompt { .. } | AppView::EditorPrompt { .. } => {
-                LauncherSurfaceContract::new(
-                    LauncherSurfaceContractVocabulary::new(ScriptPrompt, ChildView, ContentPane),
-                    explicit,
-                    "scriptList",
-                )
-            }
-            AppView::EnvPrompt { .. }
-            | AppView::NamingPrompt { .. }
-            | AppView::CreateAiPresetView { .. } => LauncherSurfaceContract::new(
-                LauncherSurfaceContractVocabulary::new(
-                    ScriptPrompt,
-                    PromptEntity,
-                    NoPersistentPreview,
-                ),
-                explicit,
-                "scriptList",
-            ),
-            AppView::WebcamView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::PromptChildContent => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(ScriptPrompt, ChildView, ContentPane),
+                ChildViewFocus,
+                ChildViewKeyboard,
+                ChildViewActions,
+                ChildViewStateProof,
+                ContentPaneVisual,
+                explicit,
+                "scriptList",
+            ),
+            SurfaceKind::ExplicitPromptEntity => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    ScriptPrompt,
+                    PromptEntity,
+                    NoPersistentPreview,
+                ),
+                PromptEntityFocus,
+                PromptEntityKeyboard,
+                PromptEntityActions,
+                StateReceiptProof,
+                CompactLauncherVisual,
+                explicit,
+                "scriptList",
+            ),
+            SurfaceKind::Webcam => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(ScriptPrompt, ChildView, ContentPane),
+                ChildViewFocus,
+                ChildViewKeyboard,
+                ChildViewActions,
+                ChildViewStateProof,
+                ContentPaneVisual,
                 explicit,
                 "scriptList",
             ),
 
-            AppView::ClipboardHistoryView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::ClipboardHistory => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FilterableLauncherList,
                     LauncherFilter,
                     RequiredSplitPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                SplitPreviewVisual,
                 standard,
                 "clipboardHistory",
             ),
-            AppView::AppLauncherView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::AppLauncher => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FilterableLauncherList,
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
                 standard,
                 "appLauncher",
             ),
-            AppView::WindowSwitcherView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::WindowSwitcher => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FilterableLauncherList,
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
                 standard,
                 "windowSwitcher",
             ),
-            AppView::BrowserTabsView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::BrowserTabs => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FilterableLauncherList,
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
                 standard,
                 "browserTabs",
             ),
-            AppView::BrowseKitsView { .. }
-            | AppView::InstalledKitsView { .. }
-            | AppView::SearchAiPresetsView { .. }
-            | AppView::SettingsView { .. }
-            | AppView::FavoritesBrowseView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::GenericFilterableList => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FilterableLauncherList,
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
                 standard,
                 "scriptList",
             ),
-            AppView::ProcessManagerView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::ProcessManager => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FilterableLauncherList,
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
                 explicit,
                 "processManager",
             ),
-            AppView::CurrentAppCommandsView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::CurrentAppCommands => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FilterableLauncherList,
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
                 explicit,
                 "currentAppCommands",
             ),
 
-            AppView::DesignGalleryView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::DesignGallery => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     UtilityWorkspace,
                     LauncherFilter,
                     RequiredSplitPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                SplitPreviewVisual,
                 standard,
                 "designGallery",
             ),
             #[cfg(feature = "storybook")]
-            AppView::DesignExplorerView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::DesignExplorer => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(UtilityWorkspace, ChildView, ContentPane),
+                ChildViewFocus,
+                ChildViewKeyboard,
+                ChildViewActions,
+                ChildViewStateProof,
+                ContentPaneVisual,
                 standard,
                 "scriptList",
             ),
-            AppView::ScratchPadView { .. } | AppView::QuickTerminalView { .. } => {
-                LauncherSurfaceContract::new(
-                    LauncherSurfaceContractVocabulary::new(
-                        UtilityWorkspace,
-                        ChildView,
-                        ContentPane,
-                    ),
-                    explicit,
-                    "scriptList",
-                )
-            }
-            AppView::FileSearchView {
-                presentation: FileSearchPresentation::Mini,
-                ..
-            } => LauncherSurfaceContract::new(
+            SurfaceKind::UtilityChildContent => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(UtilityWorkspace, ChildView, ContentPane),
+                ChildViewFocus,
+                ChildViewKeyboard,
+                ChildViewActions,
+                ChildViewStateProof,
+                ContentPaneVisual,
+                explicit,
+                "scriptList",
+            ),
+            SurfaceKind::FileSearchMini => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     UtilityWorkspace,
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
                 standard,
                 "fileSearch",
             ),
-            AppView::FileSearchView {
-                presentation: FileSearchPresentation::Full,
-                ..
-            } => LauncherSurfaceContract::new(
+            SurfaceKind::FileSearchFull => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     UtilityWorkspace,
                     LauncherFilter,
                     RequiredSplitPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                SplitPreviewVisual,
                 standard,
                 "fileSearch",
             ),
-            AppView::ThemeChooserView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::ThemeChooser => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     UtilityWorkspace,
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
                 explicit,
                 "scriptList",
             ),
-            AppView::EmojiPickerView { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::EmojiPicker => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     UtilityWorkspace,
                     LauncherFilter,
                     NoPersistentPreview,
                 ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                CompactLauncherVisual,
                 explicit,
                 "emojiPicker",
             ),
 
-            AppView::CreationFeedback { .. } | AppView::ScriptIssuesView { .. } => {
-                LauncherSurfaceContract::new(
-                    LauncherSurfaceContractVocabulary::new(
-                        FeedbackSurface,
-                        NoEditableInput,
-                        FeedbackPanel,
-                    ),
-                    explicit,
-                    "scriptList",
-                )
-            }
-            AppView::SdkReferenceView { .. } => LauncherSurfaceContract::new(
-                LauncherSurfaceContractVocabulary::new(
-                    FilterableLauncherList,
-                    LauncherFilter,
-                    RequiredSplitPreview,
-                ),
-                explicit,
-                "scriptList",
-            ),
-            AppView::ScriptTemplateCatalogView { .. } => LauncherSurfaceContract::new(
-                LauncherSurfaceContractVocabulary::new(
-                    FilterableLauncherList,
-                    LauncherFilter,
-                    RequiredSplitPreview,
-                ),
-                explicit,
-                "scriptTemplateCatalog",
-            ),
-
-            AppView::AcpHistoryView { .. } => LauncherSurfaceContract::new(
-                LauncherSurfaceContractVocabulary::new(
-                    AssistantWorkspace,
-                    LauncherFilter,
-                    RequiredSplitPreview,
-                ),
-                standard,
-                "scriptList",
-            ),
-            AppView::BrowserHistoryView { .. }
-            | AppView::DictationHistoryView { .. }
-            | AppView::NotesBrowseView { .. } => LauncherSurfaceContract::new(
-                LauncherSurfaceContractVocabulary::new(
-                    AttachmentPortal,
-                    LauncherFilter,
-                    RequiredSplitPreview,
-                ),
-                standard,
-                "scriptList",
-            ),
-            AppView::AcpChatView { .. } => LauncherSurfaceContract::new(
-                LauncherSurfaceContractVocabulary::new(AssistantWorkspace, ChildView, ContentPane),
-                explicit,
-                "acpChat",
-            ),
-            AppView::ConfirmPrompt { .. } => LauncherSurfaceContract::new(
+            SurfaceKind::Feedback => LauncherSurfaceContract::new(
                 LauncherSurfaceContractVocabulary::new(
                     FeedbackSurface,
                     NoEditableInput,
                     FeedbackPanel,
                 ),
+                NoEditableFocus,
+                NoEditableKeyboard,
+                NoSurfaceActions,
+                StateReceiptProof,
+                FeedbackVisual,
+                explicit,
+                "scriptList",
+            ),
+            SurfaceKind::SdkReference => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    FilterableLauncherList,
+                    LauncherFilter,
+                    RequiredSplitPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                SplitPreviewVisual,
+                explicit,
+                "scriptList",
+            ),
+            SurfaceKind::ScriptTemplateCatalog => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    FilterableLauncherList,
+                    LauncherFilter,
+                    RequiredSplitPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                SplitPreviewVisual,
+                explicit,
+                "scriptTemplateCatalog",
+            ),
+
+            SurfaceKind::AcpHistory => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    AssistantWorkspace,
+                    LauncherFilter,
+                    RequiredSplitPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                SplitPreviewVisual,
+                standard,
+                "scriptList",
+            ),
+            SurfaceKind::AttachmentPortalBrowser => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    AttachmentPortal,
+                    LauncherFilter,
+                    RequiredSplitPreview,
+                ),
+                LauncherFilterFocus,
+                LauncherListKeyboard,
+                HostRowActions,
+                StateAndElementsProof,
+                SplitPreviewVisual,
+                standard,
+                "scriptList",
+            ),
+            SurfaceKind::AcpChat => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(AssistantWorkspace, ChildView, ContentPane),
+                ChildViewFocus,
+                ChildViewKeyboard,
+                ChildViewActions,
+                ChildViewStateProof,
+                ContentPaneVisual,
+                explicit,
+                "acpChat",
+            ),
+            SurfaceKind::ConfirmPrompt => LauncherSurfaceContract::new(
+                LauncherSurfaceContractVocabulary::new(
+                    FeedbackSurface,
+                    NoEditableInput,
+                    FeedbackPanel,
+                ),
+                NoEditableFocus,
+                NoEditableKeyboard,
+                NoSurfaceActions,
+                PopupStateProof,
+                PopupVisual,
                 explicit,
                 "confirmPrompt",
             ),
         }
-    }
-
-    /// Dismiss policy for the active top-level launcher view.
-    ///
-    /// The policy is stored in [`AppView::surface_contract`] so behavior names,
-    /// dismissal, and automation tags stay declared together.
-    pub(crate) fn dismiss_policy(&self) -> DismissPolicy {
-        self.surface_contract().dismiss_policy
     }
 }
 

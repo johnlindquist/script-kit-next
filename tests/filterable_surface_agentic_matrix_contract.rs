@@ -2,7 +2,7 @@
 //!
 //! The runtime matrix is the repeatable agent-facing version of the manual
 //! `getState`/`getElements` proof: migrated filterable surfaces must declare
-//! their entry command, prompt type, list id, and filter text in one place.
+//! their entry command, prompt type, SurfaceKind, list id, and filter text in one place.
 
 const MATRIX: &str = include_str!("../scripts/agentic/filterable-surface-matrix.ts");
 
@@ -40,6 +40,10 @@ fn matrix_declares_current_app_commands_visible_row_case() {
     assert!(
         MATRIX.contains("promptType: \"currentAppCommands\""),
         "The matrix must pin the state promptType expected after entry."
+    );
+    assert!(
+        MATRIX.contains("surfaceKind: \"CurrentAppCommands\""),
+        "The matrix must pin the state surfaceContract.surfaceKind expected after entry."
     );
     assert!(
         MATRIX.contains("listSemanticId: \"list:menu-commands\""),
@@ -104,10 +108,11 @@ fn matrix_declares_expanded_filterable_surface_cases() {
 
 #[test]
 fn matrix_declares_stable_sibling_filterable_surface_cases() {
-    for (id, prompt_type, list_id, entry_name, filter_text) in [
+    for (id, prompt_type, surface_kind, list_id, entry_name, filter_text) in [
         (
             "app-launcher-visible-rows",
             "appLauncher",
+            "AppLauncher",
             "list:apps",
             "apps",
             "__aurp16_no_app_match__",
@@ -115,6 +120,7 @@ fn matrix_declares_stable_sibling_filterable_surface_cases() {
         (
             "design-gallery-visible-rows",
             "designGallery",
+            "DesignGallery",
             "list:design-gallery",
             "design-gallery",
             "icon",
@@ -122,6 +128,7 @@ fn matrix_declares_stable_sibling_filterable_surface_cases() {
         (
             "process-manager-visible-rows",
             "processManager",
+            "ProcessManager",
             "list:processes",
             "process-manager",
             "__aurp16_no_process_match__",
@@ -130,6 +137,7 @@ fn matrix_declares_stable_sibling_filterable_surface_cases() {
         assert!(
             MATRIX.contains(&format!("id: \"{id}\""))
                 && MATRIX.contains(&format!("promptType: \"{prompt_type}\""))
+                && MATRIX.contains(&format!("surfaceKind: \"{surface_kind}\""))
                 && MATRIX.contains(&format!("listSemanticId: \"{list_id}\""))
                 && MATRIX.contains(&format!(
                     "entryCommand: {{ type: \"triggerBuiltin\", name: \"{entry_name}\" }}"
@@ -143,6 +151,12 @@ fn matrix_declares_stable_sibling_filterable_surface_cases() {
 #[test]
 fn matrix_runner_checks_state_and_elements_count_parity() {
     let body = function_body(MATRIX, "observeCounts", "runEntry");
+    assert!(
+        body.contains("objectField(state, \"surfaceContract\")")
+            && body.contains("surfaceKind !== entry.surfaceKind")
+            && body.contains("automationSemanticSurface !== entry.surface"),
+        "The matrix must compare live getState.surfaceContract against the declared surface contract identity."
+    );
     assert!(
         body.contains("visibleChoiceCount > choiceCount"),
         "The matrix must preserve the state subset invariant."

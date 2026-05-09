@@ -507,11 +507,9 @@ impl ScriptListApp {
                 {
                     let _ = self.begin_file_search_session();
                     self.reset_file_search_transient_state();
-                    self.current_view = AppView::ScriptList;
+                    self.show_script_list_with_main_filter_focus();
                     self.filter_text = new_text.clone();
                     self.pending_placeholder = None;
-                    self.pending_focus = Some(FocusTarget::MainFilter);
-                    self.focused_input = FocusedInput::MainFilter;
                     self.queue_filter_compute(new_text.clone(), cx);
                     cx.notify();
                     return;

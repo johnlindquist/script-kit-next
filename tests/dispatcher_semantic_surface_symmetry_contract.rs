@@ -2,7 +2,8 @@
 //!
 //! The string arms no longer live in three stdin files. The symmetry now runs
 //! through one registry, one pure route planner, one imperative dispatcher, and
-//! the `AppView::surface_contract()` semantic-surface registry.
+//! the `AppView::surface_kind() -> SurfaceKind::surface_contract()` semantic
+//! surface registry.
 
 const REGISTRY: &str = include_str!("../src/builtins/trigger_registry.rs");
 const ROUTES: &str = include_str!("../src/app_impl/routes.rs");
@@ -87,6 +88,53 @@ fn compact(source: &str) -> String {
     source.chars().filter(|c| !c.is_whitespace()).collect()
 }
 
+fn surface_kind_for_variant(variant: &str) -> String {
+    let body = source_between(
+        APP_VIEW_STATE,
+        "pub(crate) fn surface_kind(&self) -> SurfaceKind",
+        "/// Exhaustive behavior contract for every top-level launcher view.",
+    );
+    let variant_index = body
+        .find(&format!("AppView::{variant}"))
+        .unwrap_or_else(|| panic!("missing AppView::{variant} in surface_kind()"));
+    let after_variant = &body[variant_index..];
+    let arrow_index = after_variant
+        .find("=>")
+        .unwrap_or_else(|| panic!("missing match arm arrow after AppView::{variant}"));
+    let after_arrow = &after_variant[arrow_index..];
+    after_arrow
+        .split("SurfaceKind::")
+        .nth(1)
+        .and_then(|rest| {
+            rest.split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
+                .next()
+        })
+        .unwrap_or_else(|| panic!("missing SurfaceKind for AppView::{variant}"))
+        .to_string()
+}
+
+fn semantic_surface_for_kind(kind: &str) -> String {
+    let registry_body = source_between(
+        APP_VIEW_STATE,
+        "pub(crate) fn surface_contract(self) -> LauncherSurfaceContract",
+        "/// Map an [`AppView`] variant to the automation",
+    );
+    let marker = format!("SurfaceKind::{kind} =>");
+    let start = registry_body
+        .find(&marker)
+        .unwrap_or_else(|| panic!("missing {marker}"));
+    let rest = &registry_body[start..];
+    let next = rest[marker.len()..]
+        .find("\n            ),")
+        .map(|index| marker.len() + index + "\n            ),".len())
+        .unwrap_or(rest.len());
+    let arm = &rest[..next];
+    arm.rsplit('"')
+        .nth(1)
+        .unwrap_or_else(|| panic!("missing automation semantic surface for SurfaceKind::{kind}"))
+        .to_string()
+}
+
 // @lat: [[lat.md/automation#Automation#Window metadata]]
 #[test]
 fn trigger_registry_declares_every_surface_rekey_target() {
@@ -117,17 +165,12 @@ fn route_planner_covers_every_semantic_surface_target() {
 // @lat: [[lat.md/automation#Automation#Window metadata]]
 #[test]
 fn semantic_surface_map_covers_every_route_flip_target() {
-    let registry_body = source_between(
-        APP_VIEW_STATE,
-        "pub(crate) fn surface_contract(&self) -> LauncherSurfaceContract",
-        "/// Dismiss policy for the active top-level launcher view.",
-    );
     for (_, _, variant, surface) in EXPECTED {
-        let expected_variant = format!("AppView::{variant}");
-        let expected_surface = format!("\"{surface}\"");
-        assert!(
-            registry_body.contains(&expected_variant) && registry_body.contains(&expected_surface),
-            "AppView::surface_contract is missing {expected_variant} mapped to {expected_surface}"
+        let kind = surface_kind_for_variant(variant);
+        let actual_surface = semantic_surface_for_kind(&kind);
+        assert_eq!(
+            actual_surface, *surface,
+            "AppView::{variant} must map exactly through SurfaceKind::{kind} to automation semantic surface `{surface}`"
         );
     }
 }

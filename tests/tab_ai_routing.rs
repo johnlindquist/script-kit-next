@@ -574,12 +574,8 @@ fn close_harness_terminal_restores_return_view() {
         "close must read the saved focus target"
     );
     assert!(
-        close_fn_body.contains("self.current_view = return_view"),
-        "close must restore the previous current_view"
-    );
-    assert!(
-        close_fn_body.contains("self.pending_focus = Some(return_focus_target)"),
-        "close must restore the pending focus target"
+        close_fn_body.contains("self.restore_current_view_with_focus(return_view, return_focus_target)"),
+        "close must restore the previous current_view and focus through the shared route restore owner"
     );
 }
 

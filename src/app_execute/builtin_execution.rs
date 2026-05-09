@@ -1558,8 +1558,7 @@ impl ScriptListApp {
         );
 
         // Clear any stale actions popup from previous view
-        self.show_actions_popup = false;
-        self.actions_dialog = None;
+        self.clear_actions_popup_state();
 
         // Check if this command requires confirmation - open modal if so.
         // Quit Script Kit goes through this same path (see builtin_confirmation_options
@@ -1721,7 +1720,7 @@ impl ScriptListApp {
         self.computed_filter_text.clear();
         self.pending_filter_sync = true;
         self.pending_placeholder = Some("Search scripts, apps, and commands…".to_string());
-        self.current_view = AppView::ScriptList;
+        self.show_script_list_with_main_filter_focus();
         self.main_window_mode = MainWindowMode::Mini;
         self.hovered_index = None;
         self.selected_index = 0;
@@ -1748,8 +1747,6 @@ impl ScriptListApp {
             self.selected_index,
         );
         resize_to_view_sync(ViewType::MiniMainWindow, item_count);
-        self.pending_focus = Some(FocusTarget::MainFilter);
-        self.focused_input = FocusedInput::MainFilter;
         cx.notify();
     }
 
@@ -2371,9 +2368,7 @@ impl ScriptListApp {
                 }
                 if crate::actions::is_actions_window_open() {
                     crate::actions::close_actions_window(cx);
-                    self.show_actions_popup = false;
-                    self.actions_closed_at = Some(std::time::Instant::now());
-                    self.actions_dialog = None;
+                    self.mark_actions_popup_closed();
                     self.mark_filter_resync_after_actions_if_needed();
                     self.pop_focus_overlay(cx);
                 }
@@ -2552,9 +2547,7 @@ impl ScriptListApp {
                 }
                 if crate::actions::is_actions_window_open() {
                     crate::actions::close_actions_window(cx);
-                    self.show_actions_popup = false;
-                    self.actions_closed_at = Some(std::time::Instant::now());
-                    self.actions_dialog = None;
+                    self.mark_actions_popup_closed();
                     self.mark_filter_resync_after_actions_if_needed();
                     self.pop_focus_overlay(cx);
                 }

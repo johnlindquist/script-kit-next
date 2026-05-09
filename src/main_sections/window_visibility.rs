@@ -80,6 +80,7 @@ fn sync_main_automation_window(
 /// 1. Sets MAIN_WINDOW_VISIBLE state
 /// 2. Moves the panel to the active space
 /// 3. Consumes NEEDS_RESET and resets hidden state before sizing
+///    or consumes focus-loss restore intent without normalizing ScriptList state
 /// 4. Computes and applies final hidden geometry
 /// 5. Configures as floating panel (first time only)
 /// 6. Shows the window as a non-activating panel
@@ -121,6 +122,12 @@ fn show_main_window_helper(
             "NEEDS_RESET was true - resetting to script list before computing show bounds",
         );
     }
+    let restore_after_focus_loss = if needs_reset_before_show {
+        clear_main_state_restore_after_focus_loss();
+        false
+    } else {
+        consume_main_state_restore_after_focus_loss()
+    };
 
     let current_bounds = platform::get_main_window_bounds();
     let current_window_width = current_bounds.map(|(_, _, width, _)| width as f32);
@@ -134,6 +141,13 @@ fn show_main_window_helper(
     let window_size = app_entity.update(cx, |view, ctx| {
         if needs_reset_before_show {
             view.reset_to_script_list(ctx);
+        } else if restore_after_focus_loss && matches!(view.current_view, AppView::ScriptList) {
+            logging::log(
+                "VISIBILITY",
+                "Restoring ScriptList exactly after focus-loss hide",
+            );
+            view.focused_input = FocusedInput::MainFilter;
+            view.pending_focus = Some(FocusTarget::MainFilter);
         } else {
             view.ensure_selection_at_first_item(ctx);
         }

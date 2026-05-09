@@ -42,7 +42,10 @@ pub use automation_inspect_geometry::{
     default_suggested_hit_points, default_surface_hit_point, target_bounds_in_screenshot,
     target_bounds_in_screenshot_with_main,
 };
-pub use automation_surface::{AutomationSurfaceSnapshot, AUTOMATION_SURFACE_SCHEMA_VERSION};
+pub use automation_surface::{
+    AutomationSurfaceSnapshot, LauncherSurfaceContractSnapshot, AUTOMATION_SURFACE_SCHEMA_VERSION,
+    LAUNCHER_SURFACE_CONTRACT_SCHEMA_VERSION,
+};
 pub use automation_window::{
     AutomationWindowBounds, AutomationWindowInfo, AutomationWindowKind, AutomationWindowTarget,
     AUTOMATION_WINDOW_SCHEMA_VERSION,

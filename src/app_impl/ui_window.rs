@@ -389,46 +389,7 @@ impl ScriptListApp {
     }
 
     fn main_window_footer_surface(&self) -> Option<&'static str> {
-        match &self.current_view {
-            AppView::ScriptList => Some("script_list"),
-            AppView::SelectPrompt { .. } => Some("select_prompt"),
-            AppView::DivPrompt { .. } => Some("div_prompt"),
-            AppView::FormPrompt { .. } => Some("form_prompt"),
-            AppView::EditorPrompt { .. } => Some("editor_prompt"),
-            AppView::EnvPrompt { .. } => Some("env_prompt"),
-            AppView::DropPrompt { .. } => Some("drop_prompt"),
-            AppView::TemplatePrompt { .. } => Some("template_prompt"),
-            AppView::MiniPrompt { .. } => Some("mini_prompt"),
-            AppView::ClipboardHistoryView { .. } => Some("clipboard_history"),
-            AppView::FileSearchView { .. } => Some("file_search"),
-            AppView::WebcamView { .. } => Some("webcam_prompt"),
-            AppView::NamingPrompt { .. } => Some("naming_prompt"),
-            AppView::CreationFeedback { .. } => Some("creation_feedback"),
-            AppView::ArgPrompt { .. } => Some("arg_prompt"),
-            AppView::EmojiPickerView { .. } => Some("emoji_picker"),
-            AppView::AcpHistoryView { .. } => Some("acp_history"),
-            AppView::BrowserHistoryView { .. } => Some("browser_history"),
-            AppView::DictationHistoryView { .. } => Some("dictation_history"),
-            AppView::AcpChatView { .. } => Some("acp_chat"),
-            AppView::ChatPrompt { .. } => Some("chat_prompt"),
-            AppView::QuickTerminalView { .. } => Some("quick_terminal"),
-            AppView::PathPrompt { .. } => Some("path_prompt"),
-            AppView::AppLauncherView { .. } => Some("app_launcher"),
-            AppView::WindowSwitcherView { .. } => Some("window_switcher"),
-            AppView::BrowserTabsView { .. } => Some("browser_tabs"),
-            AppView::DesignGalleryView { .. } => Some("design_gallery"),
-            AppView::ScratchPadView { .. } => Some("scratch_pad"),
-            AppView::ThemeChooserView { .. } => Some("theme_chooser"),
-            AppView::ProcessManagerView { .. } => Some("process_manager"),
-            AppView::CurrentAppCommandsView { .. } => Some("current_app_commands"),
-            AppView::SearchAiPresetsView { .. } => Some("search_ai_presets"),
-            AppView::SettingsView { .. } => Some("settings"),
-            AppView::BrowseKitsView { .. } => Some("kit_store_browse"),
-            AppView::InstalledKitsView { .. } => Some("kit_store_installed"),
-            AppView::FavoritesBrowseView { .. } => Some("favorites"),
-            AppView::ConfirmPrompt { .. } => Some("confirm_prompt"),
-            _ => None,
-        }
+        self.current_view.native_footer_surface()
     }
 
     /// Quick Terminal footer buttons. Scoped to actions actually meaningful in
@@ -981,7 +942,7 @@ impl ScriptListApp {
                 ..
             } => {
                 let row_count = crate::emoji::filtered_grid_row_count(filter, *selected_category);
-                Some((ViewType::ScriptList, row_count))
+                Some((ViewType::MiniMainWindow, row_count))
             }
             AppView::AppLauncherView { filter, .. } => {
                 let apps = &self.apps;
@@ -993,7 +954,7 @@ impl ScriptListApp {
                         .filter(|a| a.name.to_lowercase().contains(&filter_lower))
                         .count()
                 };
-                Some((ViewType::ScriptList, filtered_count))
+                Some((ViewType::MiniMainWindow, filtered_count))
             }
             AppView::WindowSwitcherView { filter, .. } => {
                 let windows = &self.cached_windows;
@@ -1009,10 +970,10 @@ impl ScriptListApp {
                         })
                         .count()
                 };
-                Some((ViewType::ScriptList, filtered_count))
+                Some((ViewType::MiniMainWindow, filtered_count))
             }
             AppView::DesignGalleryView { filter, .. } => Some((
-                ViewType::ScriptList,
+                ViewType::MiniMainWindow,
                 crate::design_gallery_filtered_len(filter),
             )),
             #[cfg(feature = "storybook")]
@@ -1027,7 +988,7 @@ impl ScriptListApp {
                         .filter(|p| p.script_path.to_lowercase().contains(&filter_lower))
                         .count()
                 };
-                Some((ViewType::ScriptList, filtered_count))
+                Some((ViewType::MiniMainWindow, filtered_count))
             }
             AppView::CurrentAppCommandsView { filter, .. } => {
                 let filtered_count = if filter.is_empty() {
@@ -1042,7 +1003,7 @@ impl ScriptListApp {
                         })
                         .count()
                 };
-                Some((ViewType::ScriptList, filtered_count))
+                Some((ViewType::MiniMainWindow, filtered_count))
             }
             AppView::BrowserTabsView { filter, .. } => {
                 let filtered_count = if filter.is_empty() {
@@ -1054,7 +1015,7 @@ impl ScriptListApp {
                     )
                     .len()
                 };
-                Some((ViewType::ScriptList, filtered_count))
+                Some((ViewType::MiniMainWindow, filtered_count))
             }
             AppView::ScratchPadView { .. } => Some((ViewType::EditorPrompt, 0)),
             AppView::QuickTerminalView { .. } => Some((ViewType::TermPrompt, 0)),
@@ -1107,21 +1068,25 @@ impl ScriptListApp {
                 Some((ViewType::ScriptList, count))
             }
             AppView::NamingPrompt { .. } => Some((ViewType::ArgPromptNoChoices, 0)),
-            AppView::BrowseKitsView { results, .. } => Some((ViewType::ScriptList, results.len())),
-            AppView::InstalledKitsView { kits, .. } => Some((ViewType::ScriptList, kits.len())),
+            AppView::BrowseKitsView { results, .. } => {
+                Some((ViewType::MiniMainWindow, results.len()))
+            }
+            AppView::InstalledKitsView { kits, .. } => {
+                Some((ViewType::MiniMainWindow, kits.len()))
+            }
             AppView::SearchAiPresetsView { .. } => {
                 // Presets list - defaults (5) + user presets
                 let count = crate::ai::presets::load_presets()
                     .map(|p| 5 + p.len())
                     .unwrap_or(5);
-                Some((ViewType::ScriptList, count))
+                Some((ViewType::MiniMainWindow, count))
             }
             AppView::CreateAiPresetView { .. } => {
                 // Fixed-size form with 3 fields
                 Some((ViewType::ArgPromptNoChoices, 0))
             }
-            AppView::SettingsView { .. } => Some((ViewType::ScriptList, 0)),
-            AppView::FavoritesBrowseView { .. } => Some((ViewType::ScriptList, 0)),
+            AppView::SettingsView { .. } => Some((ViewType::MiniMainWindow, 0)),
+            AppView::FavoritesBrowseView { .. } => Some((ViewType::MiniMainWindow, 0)),
             AppView::AcpHistoryView { filter, .. } => {
                 let entries = crate::ai::acp::history::load_history();
                 let filtered_count = if filter.is_empty() {
