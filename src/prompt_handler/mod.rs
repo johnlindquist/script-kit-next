@@ -1029,6 +1029,202 @@ fn prompt_message_from_protocol_message(
 
 // --- merged from part_001.rs ---
 impl ScriptListApp {
+    pub(crate) fn build_automation_inspect_snapshot(
+        &self,
+        request_id: &str,
+        target: Option<&protocol::AutomationWindowTarget>,
+        hi_dpi: Option<bool>,
+        probes: &[protocol::PixelProbe],
+        cx: &Context<Self>,
+    ) -> protocol::AutomationInspectSnapshot {
+        tracing::info!(
+            target: "script_kit::automation",
+            request_id = %request_id,
+            target = ?target,
+            probe_count = probes.len(),
+            "automation.inspect.request"
+        );
+
+        // Step 1: Resolve the automation window target.
+        let resolved = match crate::windows::resolve_automation_window(target) {
+            Ok(info) => info,
+            Err(err) => {
+                return protocol::AutomationInspectSnapshot {
+                    schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
+                    window_id: String::new(),
+                    window_kind: "unknown".to_string(),
+                    title: None,
+                    resolved_bounds: None,
+                    target_bounds_in_screenshot: None,
+                    surface_hit_point: None,
+                    suggested_hit_points: Vec::new(),
+                    elements: Vec::new(),
+                    total_count: 0,
+                    focused_semantic_id: None,
+                    selected_semantic_id: None,
+                    screenshot_width: None,
+                    screenshot_height: None,
+                    pixel_probes: Vec::new(),
+                    os_window_id: None,
+                    semantic_quality: Some(protocol::SemanticQuality::Unavailable),
+                    warnings: vec![format!("target_resolution_failed: {}", err)],
+                };
+            }
+        };
+
+        // Step 2: Capture RGBA image for dimensions and pixel probes.
+        let hi_dpi_mode = hi_dpi.unwrap_or(false);
+        let rgba_result = crate::platform::capture_targeted_rgba_image(target, hi_dpi_mode);
+
+        let (shot_w, shot_h, probe_results, mut warnings) = match rgba_result {
+            Ok(ref rgba_image) => {
+                let w = rgba_image.width();
+                let h = rgba_image.height();
+                let mut results = Vec::with_capacity(probes.len());
+                for probe in probes {
+                    if probe.x < w && probe.y < h {
+                        let px = rgba_image.get_pixel(probe.x, probe.y);
+                        results.push(protocol::PixelProbeResult {
+                            x: probe.x,
+                            y: probe.y,
+                            r: px[0],
+                            g: px[1],
+                            b: px[2],
+                            a: px[3],
+                        });
+                    }
+                }
+                (Some(w), Some(h), results, Vec::new())
+            }
+            Err(err) => {
+                tracing::warn!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    error = %err,
+                    "automation.inspect.screenshot_failed"
+                );
+                (
+                    None,
+                    None,
+                    Vec::new(),
+                    vec![format!("screenshot_capture_failed: {}", err)],
+                )
+            }
+        };
+
+        // Step 3: Collect semantic elements via surface-aware collector.
+        let (surface_snapshot, semantic_quality) = if resolved.kind
+            == protocol::AutomationWindowKind::Main
+        {
+            let outcome = self.collect_visible_elements(200, cx);
+            (
+                crate::windows::automation_surface_collector::SurfaceElementSnapshot {
+                    total_count: outcome.total_count,
+                    focused_semantic_id: outcome.focused_semantic_id(),
+                    selected_semantic_id: outcome.selected_semantic_id(),
+                    warnings: outcome.warnings.clone(),
+                    elements: outcome.elements,
+                    quality: crate::windows::automation_surface_collector::SnapshotQuality::Full,
+                },
+                protocol::SemanticQuality::Full,
+            )
+        } else {
+            match crate::windows::automation_surface_collector::collect_surface_snapshot(
+                &resolved, 200, cx,
+            ) {
+                Some(snap) => {
+                    let quality = match snap.quality {
+                            crate::windows::automation_surface_collector::SnapshotQuality::Full => {
+                                protocol::SemanticQuality::Full
+                            }
+                            crate::windows::automation_surface_collector::SnapshotQuality::PanelOnly => {
+                                protocol::SemanticQuality::PanelOnly
+                            }
+                        };
+                    (snap, quality)
+                }
+                None => (
+                    crate::windows::automation_surface_collector::SurfaceElementSnapshot {
+                        elements: Vec::new(),
+                        total_count: 0,
+                        focused_semantic_id: None,
+                        selected_semantic_id: None,
+                        warnings: vec![format!(
+                            "semantic_elements_non_main_pending: no collector for {} ({:?})",
+                            resolved.id, resolved.kind
+                        )],
+                        quality:
+                            crate::windows::automation_surface_collector::SnapshotQuality::PanelOnly,
+                    },
+                    protocol::SemanticQuality::Unavailable,
+                ),
+            }
+        };
+        warnings.extend(surface_snapshot.warnings.clone());
+        let elements = surface_snapshot.elements;
+        let total_count = surface_snapshot.total_count;
+        let focused_semantic_id = surface_snapshot.focused_semantic_id;
+        let selected_semantic_id = surface_snapshot.selected_semantic_id;
+
+        // Step 4: Resolve the native OS window ID (CGWindowID) for
+        // strict screenshot capture threading.
+        let os_window_id = crate::platform::resolve_targeted_os_window_id(target);
+
+        // Step 5: Compute screenshot-relative geometry for the target surface.
+        let target_bounds_in_screenshot = protocol::target_bounds_in_screenshot(&resolved);
+        let surface_hit_point = target_bounds_in_screenshot
+            .as_ref()
+            .map(protocol::default_surface_hit_point);
+        let suggested_hit_points =
+            protocol::default_suggested_hit_points(&resolved, target_bounds_in_screenshot.as_ref());
+
+        tracing::info!(
+            target: "script_kit::automation",
+            request_id = %request_id,
+            window_id = %resolved.id,
+            target_bounds_in_screenshot = ?target_bounds_in_screenshot,
+            suggested_hit_count = suggested_hit_points.len(),
+            "automation.inspect.geometry_computed"
+        );
+
+        let snapshot = protocol::AutomationInspectSnapshot {
+            schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
+            window_id: resolved.id.clone(),
+            window_kind: format!("{:?}", resolved.kind),
+            title: resolved.title.clone(),
+            resolved_bounds: resolved.bounds.clone(),
+            target_bounds_in_screenshot,
+            surface_hit_point,
+            suggested_hit_points,
+            elements,
+            total_count,
+            focused_semantic_id,
+            selected_semantic_id,
+            screenshot_width: shot_w,
+            screenshot_height: shot_h,
+            pixel_probes: probe_results,
+            os_window_id,
+            semantic_quality: Some(semantic_quality),
+            warnings,
+        };
+
+        tracing::info!(
+            target: "script_kit::automation",
+            event = "inspect_automation_window",
+            request_id = %request_id,
+            window_id = %resolved.id,
+            window_kind = %snapshot.window_kind,
+            os_window_id = ?os_window_id,
+            screenshot_width = ?snapshot.screenshot_width,
+            screenshot_height = ?snapshot.screenshot_height,
+            element_count = snapshot.elements.len(),
+            warning_count = snapshot.warnings.len(),
+            "automation.inspect.result"
+        );
+
+        snapshot
+    }
+
     pub(crate) fn handle_stdin_protocol_message(
         &mut self,
         message: crate::protocol::Message,
@@ -3714,200 +3910,12 @@ impl ScriptListApp {
                 hi_dpi,
                 probes,
             } => {
-                tracing::info!(
-                    target: "script_kit::automation",
-                    request_id = %request_id,
-                    target = ?target,
-                    probe_count = probes.len(),
-                    "automation.inspect.request"
-                );
-
-                // Step 1: Resolve the automation window target.
-                let resolved = match crate::windows::resolve_automation_window(target.as_ref()) {
-                    Ok(info) => info,
-                    Err(err) => {
-                        let snapshot = protocol::AutomationInspectSnapshot {
-                            schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
-                            window_id: String::new(),
-                            window_kind: "unknown".to_string(),
-                            title: None,
-                            resolved_bounds: None,
-                            target_bounds_in_screenshot: None,
-                            surface_hit_point: None,
-                            suggested_hit_points: Vec::new(),
-                            elements: Vec::new(),
-                            total_count: 0,
-                            focused_semantic_id: None,
-                            selected_semantic_id: None,
-                            screenshot_width: None,
-                            screenshot_height: None,
-                            pixel_probes: Vec::new(),
-                            os_window_id: None,
-                            semantic_quality: Some(protocol::SemanticQuality::Unavailable),
-                            warnings: vec![format!("target_resolution_failed: {}", err)],
-                        };
-                        if let Some(ref sender) = self.response_sender {
-                            let _ = sender.try_send(Message::automation_inspect_result(
-                                request_id.clone(),
-                                snapshot,
-                            ));
-                        }
-                        return;
-                    }
-                };
-
-                // Step 2: Capture RGBA image for dimensions and pixel probes.
-                let hi_dpi_mode = hi_dpi.unwrap_or(false);
-                let rgba_result =
-                    crate::platform::capture_targeted_rgba_image(target.as_ref(), hi_dpi_mode);
-
-                let (shot_w, shot_h, probe_results, mut warnings) = match rgba_result {
-                    Ok(ref rgba_image) => {
-                        let w = rgba_image.width();
-                        let h = rgba_image.height();
-                        let mut results = Vec::with_capacity(probes.len());
-                        for probe in &probes {
-                            if probe.x < w && probe.y < h {
-                                let px = rgba_image.get_pixel(probe.x, probe.y);
-                                results.push(protocol::PixelProbeResult {
-                                    x: probe.x,
-                                    y: probe.y,
-                                    r: px[0],
-                                    g: px[1],
-                                    b: px[2],
-                                    a: px[3],
-                                });
-                            }
-                        }
-                        (Some(w), Some(h), results, Vec::new())
-                    }
-                    Err(err) => {
-                        tracing::warn!(
-                            target: "script_kit::automation",
-                            request_id = %request_id,
-                            error = %err,
-                            "automation.inspect.screenshot_failed"
-                        );
-                        (
-                            None,
-                            None,
-                            Vec::new(),
-                            vec![format!("screenshot_capture_failed: {}", err)],
-                        )
-                    }
-                };
-
-                // Step 3: Collect semantic elements via surface-aware collector.
-                let (surface_snapshot, semantic_quality) = if resolved.kind
-                    == protocol::AutomationWindowKind::Main
-                {
-                    let outcome = self.collect_visible_elements(200, cx);
-                    (
-                        crate::windows::automation_surface_collector::SurfaceElementSnapshot {
-                            total_count: outcome.total_count,
-                            focused_semantic_id: outcome.focused_semantic_id(),
-                            selected_semantic_id: outcome.selected_semantic_id(),
-                            warnings: outcome.warnings.clone(),
-                            elements: outcome.elements,
-                            quality:
-                                crate::windows::automation_surface_collector::SnapshotQuality::Full,
-                        },
-                        protocol::SemanticQuality::Full,
-                    )
-                } else {
-                    match crate::windows::automation_surface_collector::collect_surface_snapshot(
-                        &resolved, 200, cx,
-                    ) {
-                        Some(snap) => {
-                            let quality = match snap.quality {
-                                crate::windows::automation_surface_collector::SnapshotQuality::Full => {
-                                    protocol::SemanticQuality::Full
-                                }
-                                crate::windows::automation_surface_collector::SnapshotQuality::PanelOnly => {
-                                    protocol::SemanticQuality::PanelOnly
-                                }
-                            };
-                            (snap, quality)
-                        }
-                        None => (
-                            crate::windows::automation_surface_collector::SurfaceElementSnapshot {
-                                elements: Vec::new(),
-                                total_count: 0,
-                                focused_semantic_id: None,
-                                selected_semantic_id: None,
-                                warnings: vec![format!(
-                                    "semantic_elements_non_main_pending: no collector for {} ({:?})",
-                                    resolved.id, resolved.kind
-                                )],
-                                quality:
-                                    crate::windows::automation_surface_collector::SnapshotQuality::PanelOnly,
-                            },
-                            protocol::SemanticQuality::Unavailable,
-                        ),
-                    }
-                };
-                warnings.extend(surface_snapshot.warnings.clone());
-                let elements = surface_snapshot.elements;
-                let total_count = surface_snapshot.total_count;
-                let focused_semantic_id = surface_snapshot.focused_semantic_id;
-                let selected_semantic_id = surface_snapshot.selected_semantic_id;
-
-                // Step 4: Resolve the native OS window ID (CGWindowID) for
-                // strict screenshot capture threading.
-                let os_window_id = crate::platform::resolve_targeted_os_window_id(target.as_ref());
-
-                // Step 5: Compute screenshot-relative geometry for the target surface.
-                let target_bounds_in_screenshot = protocol::target_bounds_in_screenshot(&resolved);
-                let surface_hit_point = target_bounds_in_screenshot
-                    .as_ref()
-                    .map(protocol::default_surface_hit_point);
-                let suggested_hit_points = protocol::default_suggested_hit_points(
-                    &resolved,
-                    target_bounds_in_screenshot.as_ref(),
-                );
-
-                tracing::info!(
-                    target: "script_kit::automation",
-                    request_id = %request_id,
-                    window_id = %resolved.id,
-                    target_bounds_in_screenshot = ?target_bounds_in_screenshot,
-                    suggested_hit_count = suggested_hit_points.len(),
-                    "automation.inspect.geometry_computed"
-                );
-
-                let snapshot = protocol::AutomationInspectSnapshot {
-                    schema_version: protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
-                    window_id: resolved.id.clone(),
-                    window_kind: format!("{:?}", resolved.kind),
-                    title: resolved.title.clone(),
-                    resolved_bounds: resolved.bounds.clone(),
-                    target_bounds_in_screenshot,
-                    surface_hit_point,
-                    suggested_hit_points,
-                    elements,
-                    total_count,
-                    focused_semantic_id,
-                    selected_semantic_id,
-                    screenshot_width: shot_w,
-                    screenshot_height: shot_h,
-                    pixel_probes: probe_results,
-                    os_window_id,
-                    semantic_quality: Some(semantic_quality),
-                    warnings,
-                };
-
-                tracing::info!(
-                    target: "script_kit::automation",
-                    event = "inspect_automation_window",
-                    request_id = %request_id,
-                    window_id = %resolved.id,
-                    window_kind = %snapshot.window_kind,
-                    os_window_id = ?os_window_id,
-                    screenshot_width = ?snapshot.screenshot_width,
-                    screenshot_height = ?snapshot.screenshot_height,
-                    element_count = snapshot.elements.len(),
-                    warning_count = snapshot.warnings.len(),
-                    "automation.inspect.result"
+                let snapshot = self.build_automation_inspect_snapshot(
+                    &request_id,
+                    target.as_ref(),
+                    hi_dpi,
+                    &probes,
+                    cx,
                 );
 
                 if let Some(ref sender) = self.response_sender {
