@@ -235,6 +235,58 @@ fn resolve_main_only_target(
     Ok(resolved)
 }
 
+enum GetStateTargetResolution {
+    MainCompatible,
+    UnsupportedNonMain {
+        resolved: crate::protocol::AutomationWindowInfo,
+    },
+    ResolutionFailed {
+        error: String,
+    },
+}
+
+fn resolve_get_state_target(
+    request_id: &str,
+    target: Option<&crate::protocol::AutomationWindowTarget>,
+) -> GetStateTargetResolution {
+    // getState is a main-window state contract. Secondary surfaces are
+    // inspected through getElements(target), inspectAutomationWindow(target),
+    // and getAcpState(target) rather than partial secondary stateResult data.
+    match target {
+        None
+        | Some(crate::protocol::AutomationWindowTarget::Main)
+        | Some(crate::protocol::AutomationWindowTarget::Focused) => {
+            GetStateTargetResolution::MainCompatible
+        }
+        Some(t) => match crate::windows::resolve_automation_window(Some(t)) {
+            Ok(resolved) if resolved.kind == crate::protocol::AutomationWindowKind::Main => {
+                GetStateTargetResolution::MainCompatible
+            }
+            Ok(resolved) => {
+                tracing::warn!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    resolved_kind = ?resolved.kind,
+                    resolved_id = %resolved.id,
+                    "getState: secondary window state not yet routed, returning unsupported diagnostic"
+                );
+                GetStateTargetResolution::UnsupportedNonMain { resolved }
+            }
+            Err(err) => {
+                tracing::warn!(
+                    target: "script_kit::automation",
+                    request_id = %request_id,
+                    error = %err,
+                    "getState: target resolution failed"
+                );
+                GetStateTargetResolution::ResolutionFailed {
+                    error: err.to_string(),
+                }
+            }
+        },
+    }
+}
+
 /// Which window an ACP read should target.
 #[derive(Clone)]
 enum AcpReadTarget {
@@ -2166,77 +2218,49 @@ impl ScriptListApp {
                     "Collecting state for request"
                 );
 
-                // Validate target if explicitly specified.
-                // Non-main targets are not yet wired to secondary window
-                // state providers, so we return an honest diagnostic with
-                // machine-readable promptType and promptId fields instead
-                // of a bare "error" string.
-                if let Some(ref t) = target {
-                    if !matches!(
-                        t,
-                        protocol::AutomationWindowTarget::Main
-                            | protocol::AutomationWindowTarget::Focused
-                    ) {
-                        match crate::windows::resolve_automation_window(Some(t)) {
-                            Ok(resolved)
-                                if resolved.kind != protocol::AutomationWindowKind::Main =>
-                            {
-                                tracing::warn!(
-                                    target: "script_kit::automation",
-                                    request_id = %request_id,
-                                    resolved_kind = ?resolved.kind,
-                                    resolved_id = %resolved.id,
-                                    "getState: secondary window state not yet routed, returning unsupported diagnostic"
-                                );
-                                if let Some(ref sender) = self.response_sender {
-                                    let _ = sender.try_send(Message::state_result(
-                                        request_id.clone(),
-                                        "unsupported".to_string(),
-                                        Some(format!("target_unsupported:{:?}", resolved.kind)),
-                                        None,
-                                        String::new(),
-                                        0,
-                                        0,
-                                        -1,
-                                        None,
-                                        false,
-                                        resolved.visible,
-                                        None,
-                                        None,
-                                        None,
-                                    ));
-                                }
-                                return;
-                            }
-                            Err(err) => {
-                                tracing::warn!(
-                                    target: "script_kit::automation",
-                                    request_id = %request_id,
-                                    error = %err,
-                                    "getState: target resolution failed"
-                                );
-                                if let Some(ref sender) = self.response_sender {
-                                    let _ = sender.try_send(Message::state_result(
-                                        request_id.clone(),
-                                        "target_resolution_failed".to_string(),
-                                        Some(format!("target_error:{}", err)),
-                                        None,
-                                        String::new(),
-                                        0,
-                                        0,
-                                        -1,
-                                        None,
-                                        false,
-                                        false,
-                                        None,
-                                        None,
-                                        None,
-                                    ));
-                                }
-                                return;
-                            }
-                            _ => {} // Main kind — fall through to normal handling
+                match resolve_get_state_target(&request_id, target.as_ref()) {
+                    GetStateTargetResolution::MainCompatible => {}
+                    GetStateTargetResolution::UnsupportedNonMain { resolved } => {
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(Message::state_result(
+                                request_id.clone(),
+                                "unsupported".to_string(),
+                                Some(format!("target_unsupported:{:?}", resolved.kind)),
+                                None,
+                                String::new(),
+                                0,
+                                0,
+                                -1,
+                                None,
+                                false,
+                                resolved.visible,
+                                None,
+                                None,
+                                None,
+                            ));
                         }
+                        return;
+                    }
+                    GetStateTargetResolution::ResolutionFailed { error } => {
+                        if let Some(ref sender) = self.response_sender {
+                            let _ = sender.try_send(Message::state_result(
+                                request_id.clone(),
+                                "target_resolution_failed".to_string(),
+                                Some(format!("target_error:{}", error)),
+                                None,
+                                String::new(),
+                                0,
+                                0,
+                                -1,
+                                None,
+                                false,
+                                false,
+                                None,
+                                None,
+                                None,
+                            ));
+                        }
+                        return;
                     }
                 }
 

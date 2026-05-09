@@ -130,7 +130,7 @@ Agentic-testing runs generate one bounded improvement pass with `$agentic-testin
 
 `main` proves the launcher without forcing `show`. Attached popups use popup semantics plus visibility waits, and `acpDetached` uses an exact-id replayable scenario.
 
-`actionsDialog` and `promptPopup` follow the attached-popup path. `main` stays state-first through `inspectAutomationWindow` and `getElements`.
+`actionsDialog` and `promptPopup` follow the attached-popup path. `main` stays state-first through `getState`, `inspectAutomationWindow`, and `getElements`; attached popups, detached ACP, and Notes should use `getElements(target)` plus `inspectAutomationWindow(target)`, with `getAcpState(target)` for ACP state, instead of relying on targeted `getState` for secondary-window state.
 
 ### Non-obvious constraints
 
