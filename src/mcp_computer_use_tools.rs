@@ -15,6 +15,8 @@ use serde_json::Value;
 pub const COMPUTER_USE_NAMESPACE: &str = "computer/";
 pub const COMPUTER_SEE_TOOL: &str = "computer/see";
 pub const COMPUTER_LIST_WINDOWS_TOOL: &str = "computer/list_windows";
+pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
+const COMPUTER_PERMISSIONS_SCHEMA_VERSION: u32 = 1;
 
 pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
     vec![
@@ -31,6 +33,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
                 .to_string(),
             input_schema: computer_list_windows_input_schema(),
         },
+        ToolDefinition {
+            name: COMPUTER_LIST_PERMISSIONS_TOOL.to_string(),
+            description: "List read-only macOS permission status for Script Kit computer-use features without requesting permissions."
+                .to_string(),
+            input_schema: computer_list_permissions_input_schema(),
+        },
     ]
 }
 
@@ -46,6 +54,7 @@ pub fn handle_computer_use_tool_call(
     match name {
         COMPUTER_SEE_TOOL => handle_see(arguments, runtime),
         COMPUTER_LIST_WINDOWS_TOOL => handle_list_windows(arguments),
+        COMPUTER_LIST_PERMISSIONS_TOOL => handle_list_permissions(arguments),
         _ => error_result(
             "unknown_tool",
             &format!("Unknown computer-use tool: {name}"),
@@ -64,6 +73,26 @@ struct ComputerUseListWindowsResult {
     windows: Vec<AutomationWindowInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     focused_window_id: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseListPermissionsArgs {}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseListPermissionsResult {
+    schema_version: u32,
+    permissions: Vec<ComputerUsePermissionStatus>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUsePermissionStatus {
+    id: &'static str,
+    name: &'static str,
+    granted: Option<bool>,
+    status: &'static str,
 }
 
 fn handle_see(arguments: &Value, runtime: Option<&dyn ComputerUseRuntimeBridge>) -> ToolResult {
@@ -99,6 +128,48 @@ fn handle_list_windows(arguments: &Value) -> ToolResult {
         windows: crate::windows::list_automation_windows(),
         focused_window_id: crate::windows::focused_automation_window_id(),
     })
+}
+
+fn handle_list_permissions(arguments: &Value) -> ToolResult {
+    let _args: ComputerUseListPermissionsArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    json_tool_result(&ComputerUseListPermissionsResult {
+        schema_version: COMPUTER_PERMISSIONS_SCHEMA_VERSION,
+        permissions: vec![
+            permission_status(
+                "accessibility",
+                "Accessibility",
+                Some(crate::permissions_wizard::check_accessibility_permission()),
+            ),
+            permission_status(
+                "screenRecording",
+                "Screen Recording",
+                crate::platform::screen_capture_access_preflight(),
+            ),
+        ],
+    })
+}
+
+fn permission_status(
+    id: &'static str,
+    name: &'static str,
+    granted: Option<bool>,
+) -> ComputerUsePermissionStatus {
+    let status = match granted {
+        Some(true) => "granted",
+        Some(false) => "notGranted",
+        None => "unknown",
+    };
+
+    ComputerUsePermissionStatus {
+        id,
+        name,
+        granted,
+        status,
+    }
 }
 
 fn runtime_error_result(args: &ComputerUseSeeArgs, error: ComputerUseRuntimeError) -> ToolResult {
@@ -229,6 +300,14 @@ fn computer_list_windows_input_schema() -> Value {
     })
 }
 
+fn computer_list_permissions_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,7 +369,8 @@ mod tests {
             names,
             vec![
                 COMPUTER_SEE_TOOL.to_string(),
-                COMPUTER_LIST_WINDOWS_TOOL.to_string()
+                COMPUTER_LIST_WINDOWS_TOOL.to_string(),
+                COMPUTER_LIST_PERMISSIONS_TOOL.to_string()
             ]
         );
     }
@@ -316,6 +396,28 @@ mod tests {
             .into_iter()
             .find(|tool| tool.name == COMPUTER_LIST_WINDOWS_TOOL)
             .expect("computer/list_windows tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|properties| properties.is_empty()),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn computer_list_permissions_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_LIST_PERMISSIONS_TOOL)
+            .expect("computer/list_permissions tool");
 
         assert_eq!(
             tool.input_schema
@@ -409,6 +511,18 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_permissions_rejects_bad_arguments() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_PERMISSIONS_TOOL,
+            &serde_json::json!({ "request": true }),
+            None,
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("invalid_arguments"));
+    }
+
+    #[test]
     fn computer_list_windows_returns_registry_snapshot_without_runtime() {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -455,5 +569,44 @@ mod tests {
         assert_eq!(window["kind"], "notes");
         assert_eq!(window["visible"], true);
         assert_eq!(window["semanticSurface"], "notes");
+    }
+
+    #[test]
+    fn computer_list_permissions_returns_status_without_runtime() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_PERMISSIONS_TOOL,
+            &serde_json::json!({}),
+            None,
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid permissions json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_PERMISSIONS_SCHEMA_VERSION)
+        );
+
+        let permissions = value["permissions"].as_array().expect("permissions array");
+        let accessibility = permissions
+            .iter()
+            .find(|permission| permission["id"] == "accessibility")
+            .expect("accessibility status");
+        assert_eq!(accessibility["name"], "Accessibility");
+        assert!(accessibility["granted"].is_boolean());
+        assert!(accessibility["status"] == "granted" || accessibility["status"] == "notGranted");
+
+        let screen_recording = permissions
+            .iter()
+            .find(|permission| permission["id"] == "screenRecording")
+            .expect("screen recording status");
+        assert_eq!(screen_recording["name"], "Screen Recording");
+        assert!(
+            screen_recording["status"] == "granted"
+                || screen_recording["status"] == "notGranted"
+                || screen_recording["status"] == "unknown"
+        );
+        assert!(!result.content[0].text.contains("requestAccessibility"));
+        assert!(!result.content[0].text.contains("openSettings"));
     }
 }
