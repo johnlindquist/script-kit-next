@@ -204,6 +204,33 @@ fn current_app_commands_presentation_resets_scroll_to_top() {
 }
 
 #[test]
+fn current_app_commands_presentation_opens_mini_filterable_view() {
+    // @lat: [[lat.md/builtins#Built-ins#Main Window Sizing Modes]]
+    let source = std::fs::read_to_string("src/app_execute/builtin_execution.rs")
+        .expect("must read builtin execution source");
+    let fn_start = source
+        .find("pub(crate) fn present_current_app_commands_session(")
+        .expect("present_current_app_commands_session must exist");
+    let fn_body = &source[fn_start..];
+    let fn_end = fn_body
+        .find("pub(crate) fn open_current_app_commands_from_tray(")
+        .expect("next function must exist");
+    let fn_body = &fn_body[..fn_end];
+    let compacted: String = fn_body.chars().filter(|ch| !ch.is_whitespace()).collect();
+
+    assert!(
+        compacted.contains(
+            "self.open_builtin_filterable_view_with_filter(AppView::CurrentAppCommandsView{filter:filter.to_string(),selected_index:0,},filter,&session.placeholder,false,cx,);"
+        ),
+        "present_current_app_commands_session must open CurrentAppCommandsView through the shared Mini helper path"
+    );
+    assert!(
+        !compacted.contains("resize_to_view_sync(ViewType::ScriptList"),
+        "present_current_app_commands_session must not directly request the wide ScriptList mode"
+    );
+}
+
+#[test]
 fn current_app_commands_view_executes_via_guarded_helper() {
     let source = std::fs::read_to_string("src/render_builtins/current_app_commands.rs")
         .expect("must read current_app_commands renderer");

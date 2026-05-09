@@ -53,6 +53,9 @@ mod consistent_structured_fields;
 #[path = "source_audits/builtin_dispatch_consistency.rs"]
 mod builtin_dispatch_consistency;
 
+#[path = "source_audits/resize_presentation_contract.rs"]
+mod resize_presentation_contract;
+
 #[path = "source_audits/trigger_builtin_sdk_literals.rs"]
 mod trigger_builtin_sdk_literals;
 

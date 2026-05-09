@@ -6,6 +6,37 @@
 
 use super::read_source as read;
 
+fn compact_source(source: &str) -> String {
+    source.chars().filter(|c| !c.is_whitespace()).collect()
+}
+
+fn compact_app_view_match_arm<'a>(compacted: &'a str, view: &str) -> &'a str {
+    let start = compacted
+        .find(view)
+        .unwrap_or_else(|| panic!("calculate_window_size_params missing {view}"));
+    let tail = &compacted[start..];
+    let end = tail[view.len()..]
+        .find("AppView::")
+        .map(|offset| view.len() + offset)
+        .unwrap_or(tail.len());
+    assert!(
+        tail[..end].contains("=>"),
+        "calculate_window_size_params arm for {view} has no =>"
+    );
+    &tail[..end]
+}
+
+fn source_between<'a>(source: &'a str, start_marker: &str, end_marker: &str) -> &'a str {
+    let start = source
+        .find(start_marker)
+        .unwrap_or_else(|| panic!("missing source marker: {start_marker}"));
+    let tail = &source[start..];
+    let end = tail
+        .find(end_marker)
+        .unwrap_or_else(|| panic!("missing end marker after {start_marker}: {end_marker}"));
+    &tail[..end]
+}
+
 #[test]
 fn builtin_execution_uses_dispatch_context_for_builtin_surface() {
     let content = read("src/app_execute/builtin_execution.rs");
@@ -146,7 +177,11 @@ fn execute_builtin_with_query_uses_real_inner_outcome() {
     let fn_start = content
         .find("fn execute_builtin_with_query(")
         .expect("Expected execute_builtin_with_query");
-    let fn_body = &content[fn_start..content.len().min(fn_start + 5000)];
+    let fn_body = source_between(
+        &content[fn_start..],
+        "fn execute_builtin_with_query(",
+        "    /// Open a filterable main-window builtin view with a consistent UX contract.",
+    );
 
     // Must NOT contain the old synthetic success pattern
     assert!(
@@ -217,6 +252,77 @@ fn open_builtin_filterable_view_sets_shared_focus_contract() {
 }
 
 #[test]
+fn deferred_sizing_keeps_mini_filterable_builtins_narrow() {
+    let content = read("src/app_impl/ui_window.rs");
+    let fn_start = content
+        .find("pub(crate) fn calculate_window_size_params")
+        .expect("Expected calculate_window_size_params");
+    let fn_end = content[fn_start..]
+        .find("    /// Returns the focused button when the active view is `ConfirmPrompt`.")
+        .expect("Expected next method after calculate_window_size_params");
+    let body = &content[fn_start..fn_start + fn_end];
+    let compacted = compact_source(body);
+
+    for view in [
+        "AppView::EmojiPickerView{",
+        "AppView::AppLauncherView{",
+        "AppView::WindowSwitcherView{",
+        "AppView::DesignGalleryView{",
+        "AppView::ProcessManagerView{",
+        "AppView::CurrentAppCommandsView{",
+        "AppView::BrowserTabsView{",
+        "AppView::BrowseKitsView{",
+        "AppView::InstalledKitsView{",
+        "AppView::SearchAiPresetsView{",
+        "AppView::SettingsView{",
+        "AppView::FavoritesBrowseView{",
+    ] {
+        let arm = compact_app_view_match_arm(&compacted, view);
+        assert!(
+            arm.contains("ViewType::MiniMainWindow"),
+            "calculate_window_size_params must keep single-column builtin {view} on MiniMainWindow"
+        );
+        assert!(
+            !arm.contains("ViewType::ScriptList"),
+            "calculate_window_size_params must not widen single-column builtin {view} to ScriptList"
+        );
+    }
+}
+
+#[test]
+fn deferred_sizing_keeps_preview_builtins_wide() {
+    let content = read("src/app_impl/ui_window.rs");
+    let fn_start = content
+        .find("pub(crate) fn calculate_window_size_params")
+        .expect("Expected calculate_window_size_params");
+    let fn_end = content[fn_start..]
+        .find("    /// Returns the focused button when the active view is `ConfirmPrompt`.")
+        .expect("Expected next method after calculate_window_size_params");
+    let body = &content[fn_start..fn_start + fn_end];
+    let compacted = compact_source(body);
+
+    for view in [
+        "AppView::ClipboardHistoryView{",
+        "AppView::FileSearchView{",
+        "AppView::ThemeChooserView{",
+        "AppView::AcpHistoryView{",
+        "AppView::BrowserHistoryView{",
+        "AppView::DictationHistoryView{",
+        "AppView::NotesBrowseView{",
+    ] {
+        let arm = compact_app_view_match_arm(&compacted, view);
+        assert!(
+            arm.contains("ViewType::ScriptList"),
+            "calculate_window_size_params must keep preview/detail builtin {view} on ScriptList"
+        );
+        assert!(
+            !arm.contains("ViewType::MiniMainWindow"),
+            "calculate_window_size_params must not narrow preview/detail builtin {view} to MiniMainWindow"
+        );
+    }
+}
+
+#[test]
 fn filterable_view_builtins_are_silent_on_success() {
     let content = read("src/app_execute/builtin_execution.rs");
 
@@ -266,7 +372,11 @@ fn window_switcher_failure_returns_error_outcome() {
     let ws_branch = content
         .find("builtins::BuiltInFeature::WindowSwitcher")
         .expect("Expected WindowSwitcher branch");
-    let block = &content[ws_branch..content.len().min(ws_branch + 1600)];
+    let block = source_between(
+        &content[ws_branch..],
+        "builtins::BuiltInFeature::WindowSwitcher",
+        "            builtins::BuiltInFeature::BrowserTabs",
+    );
 
     // list_windows failure must produce an error outcome
     assert!(

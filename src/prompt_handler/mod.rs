@@ -1729,14 +1729,32 @@ impl ScriptListApp {
                 ) {
                     Ok(term_prompt) => {
                         let entity = cx.new(|_| term_prompt);
+                        let expected_id = id.clone();
                         self.current_view = AppView::TermPrompt { id, entity };
                         self.focused_input = FocusedInput::None; // Terminal handles its own cursor
                         self.pending_focus = Some(FocusTarget::TermPrompt);
                         // DEFERRED RESIZE: Avoid RefCell borrow error by deferring window resize
-                        // to after the current GPUI update cycle completes. Synchronous Cocoa
-                        // setFrame: calls during render can trigger events that re-borrow GPUI state.
-                        cx.spawn(async move |_this, _cx| {
-                            resize_to_view_sync(ViewType::TermPrompt, 0);
+                        // to after the current GPUI update cycle completes. Re-check the active
+                        // prompt id before resizing so a stale task cannot resize a newer view.
+                        cx.spawn(async move |this, cx| {
+                            let target = this
+                                .update(cx, |app, _cx| {
+                                    app.calculate_window_size_params_if_current_view(
+                                        "show_term_deferred_resize",
+                                        |view| {
+                                            matches!(
+                                                view,
+                                                AppView::TermPrompt { id, .. }
+                                                    if id == &expected_id
+                                            )
+                                        },
+                                    )
+                                })
+                                .ok()
+                                .flatten();
+                            if let Some((view_type, item_count)) = target {
+                                resize_to_view_sync(view_type, item_count);
+                            }
                         })
                         .detach();
                         cx.notify();
@@ -1829,6 +1847,7 @@ impl ScriptListApp {
                 };
 
                 let entity = cx.new(|_| editor_prompt);
+                let expected_id = id.clone();
                 self.current_view = AppView::EditorPrompt {
                     id,
                     entity,
@@ -1838,9 +1857,26 @@ impl ScriptListApp {
                 self.pending_focus = Some(FocusTarget::EditorPrompt);
 
                 // DEFERRED RESIZE: Avoid RefCell borrow error by deferring window resize
-                // to after the current GPUI update cycle completes.
-                cx.spawn(async move |_this, _cx| {
-                    resize_to_view_sync(ViewType::EditorPrompt, 0);
+                // to after the current GPUI update cycle completes. Re-check the active
+                // prompt id before resizing so a stale task cannot resize a newer view.
+                cx.spawn(async move |this, cx| {
+                    let target = this
+                        .update(cx, |app, _cx| {
+                            app.calculate_window_size_params_if_current_view(
+                                "show_editor_deferred_resize",
+                                |view| {
+                                    matches!(
+                                        view,
+                                        AppView::EditorPrompt { id, .. } if id == &expected_id
+                                    )
+                                },
+                            )
+                        })
+                        .ok()
+                        .flatten();
+                    if let Some((view_type, item_count)) = target {
+                        resize_to_view_sync(view_type, item_count);
+                    }
                 })
                 .detach();
                 cx.notify();

@@ -67,6 +67,7 @@ These rules describe the behavior constraints new windows and overlays should fo
 - Native footer refresh paths must tear down the AppKit footer host when their resolved config is `None`; clearing only the active surface state can leave a stale footer visible.
 - `window_resize::mini_layout::NATIVE_MAIN_WINDOW_FOOTER_HEIGHT` is the shared height contract for the AppKit footer host, GPUI spacer, launcher hover blocker, and footer-safe list reveal math.
 - Main-window resize work belongs to `$window-resizing`: audit both the open helper and follow-up deferred resize path before changing Mini/Full classification.
+- Spawned async resize work must re-read `current_view` before calling raw resize primitives. Term and editor prompt resize tasks capture the prompt id, derive sizing through `calculate_window_size_params()`, and skip if the view changed.
 - Detached actions popups stay footerless; shortcuts belong in the rows, not duplicated in popup chrome.
 - Shortcut recorder modals belong on the detached popup path, should not dim the launcher with the old full-window backdrop, and should stay narrower than the launcher.
 - The shortcut recorder popup stays child-attached to the parent, resurfaces with `orderFrontRegardless`, and must not override GPUI's `WindowKind::PopUp` level.
