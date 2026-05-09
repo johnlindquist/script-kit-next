@@ -274,6 +274,16 @@ pub fn handle_request_with_context(
     scriptlets: &[std::sync::Arc<Scriptlet>],
     app_state: Option<&mcp_resources::AppStateResource>,
 ) -> JsonRpcResponse {
+    handle_request_with_runtime_context(request, scripts, scriptlets, app_state, None)
+}
+
+pub fn handle_request_with_runtime_context(
+    request: JsonRpcRequest,
+    scripts: &[std::sync::Arc<Script>],
+    scriptlets: &[std::sync::Arc<Scriptlet>],
+    app_state: Option<&mcp_resources::AppStateResource>,
+    computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
+) -> JsonRpcResponse {
     // Check for valid jsonrpc version
     if request.jsonrpc != JSONRPC_VERSION {
         return JsonRpcResponse::error(
@@ -287,7 +297,9 @@ pub fn handle_request_with_context(
     match McpMethod::from_str(&request.method) {
         Some(McpMethod::Initialize) => handle_initialize(request),
         Some(McpMethod::ToolsList) => handle_tools_list_with_scripts(request, scripts),
-        Some(McpMethod::ToolsCall) => handle_tools_call_with_scripts(request, scripts),
+        Some(McpMethod::ToolsCall) => {
+            handle_tools_call_with_runtime(request, scripts, computer_runtime)
+        }
         Some(McpMethod::ResourcesList) => handle_resources_list(request),
         Some(McpMethod::ResourcesRead) => {
             handle_resources_read_with_context(request, scripts, scriptlets, app_state)
@@ -368,6 +380,14 @@ pub fn handle_tools_call_with_scripts(
     request: JsonRpcRequest,
     scripts: &[std::sync::Arc<Script>],
 ) -> JsonRpcResponse {
+    handle_tools_call_with_runtime(request, scripts, None)
+}
+
+pub fn handle_tools_call_with_runtime(
+    request: JsonRpcRequest,
+    scripts: &[std::sync::Arc<Script>],
+    computer_runtime: Option<&dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge>,
+) -> JsonRpcResponse {
     // Validate params
     let params = match request.params.as_object() {
         Some(p) => p,
@@ -407,7 +427,11 @@ pub fn handle_tools_call_with_scripts(
 
     // Route computer/* namespace tools
     if mcp_computer_use_tools::is_computer_use_tool(tool_name) {
-        let result = mcp_computer_use_tools::handle_computer_use_tool_call(tool_name, &arguments);
+        let result = mcp_computer_use_tools::handle_computer_use_tool_call(
+            tool_name,
+            &arguments,
+            computer_runtime,
+        );
         return JsonRpcResponse::success(
             request.id,
             serde_json::to_value(result).unwrap_or(serde_json::json!({})),
@@ -672,6 +696,77 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn test_tools_call_routes_computer_see_to_runtime() -> anyhow::Result<()> {
+        struct Runtime;
+
+        impl crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge for Runtime {
+            fn inspect_automation_window(
+                &self,
+                request: crate::computer_use::runtime_bridge::ComputerUseInspectRequest,
+            ) -> Result<
+                crate::protocol::AutomationInspectSnapshot,
+                crate::computer_use::runtime_bridge::ComputerUseRuntimeError,
+            > {
+                assert_eq!(
+                    request.target,
+                    Some(crate::protocol::AutomationWindowTarget::Focused)
+                );
+                Ok(crate::protocol::AutomationInspectSnapshot {
+                    schema_version: crate::protocol::AUTOMATION_INSPECT_SCHEMA_VERSION,
+                    window_id: "main:0".to_string(),
+                    window_kind: "Main".to_string(),
+                    title: None,
+                    resolved_bounds: None,
+                    target_bounds_in_screenshot: None,
+                    surface_hit_point: None,
+                    suggested_hit_points: Vec::new(),
+                    elements: Vec::new(),
+                    total_count: 0,
+                    focused_semantic_id: None,
+                    selected_semantic_id: None,
+                    screenshot_width: Some(800),
+                    screenshot_height: Some(600),
+                    pixel_probes: Vec::new(),
+                    os_window_id: Some(123),
+                    semantic_quality: Some(crate::protocol::SemanticQuality::Full),
+                    warnings: Vec::new(),
+                })
+            }
+        }
+
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(43),
+            method: "tools/call".to_string(),
+            params: serde_json::json!({
+                "name": "computer/see",
+                "arguments": {
+                    "target": { "type": "focused" }
+                }
+            }),
+        };
+
+        let runtime = Runtime;
+        let response = handle_tools_call_with_runtime(request, &[], Some(&runtime));
+        assert!(response.error.is_none());
+
+        let result = response.result.context("expected result")?;
+        assert_eq!(result.get("isError"), None);
+        let text = result
+            .get("content")
+            .and_then(|content| content.as_array())
+            .and_then(|content| content.first())
+            .and_then(|item| item.get("text"))
+            .and_then(|text| text.as_str())
+            .context("missing tool text")?;
+        let snapshot: crate::protocol::AutomationInspectSnapshot = serde_json::from_str(text)?;
+        assert_eq!(snapshot.window_id, "main:0");
+        assert!(!text.contains("\"action\""));
+        Ok(())
+    }
+
     #[test]
     fn test_resources_list_returns_all_resources() -> anyhow::Result<()> {
         let request = JsonRpcRequest {

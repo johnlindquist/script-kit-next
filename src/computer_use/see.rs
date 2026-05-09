@@ -1,7 +1,5 @@
-use crate::computer_use::types::{
-    ComputerUseObservationEnvelope, ComputerUseSeeArgs, COMPUTER_USE_SCHEMA_VERSION,
-};
-use crate::protocol::{AutomationInspectSnapshot, AutomationWindowTarget, Message};
+use crate::computer_use::types::ComputerUseSeeArgs;
+use crate::protocol::Message;
 
 pub fn build_inspect_message(request_id: String, args: ComputerUseSeeArgs) -> Message {
     Message::InspectAutomationWindow {
@@ -9,18 +7,6 @@ pub fn build_inspect_message(request_id: String, args: ComputerUseSeeArgs) -> Me
         target: args.target,
         hi_dpi: args.hi_dpi,
         probes: args.probes,
-    }
-}
-
-pub fn envelope_from_snapshot(
-    target: Option<AutomationWindowTarget>,
-    snapshot: AutomationInspectSnapshot,
-) -> ComputerUseObservationEnvelope {
-    ComputerUseObservationEnvelope {
-        schema_version: COMPUTER_USE_SCHEMA_VERSION,
-        action: "see".to_string(),
-        target,
-        observation: snapshot,
     }
 }
 
@@ -37,7 +23,6 @@ mod tests {
                 target: Some(AutomationWindowTarget::Focused),
                 hi_dpi: Some(false),
                 probes: vec![PixelProbe { x: 10, y: 20 }],
-                max_elements: None,
             },
         );
 
