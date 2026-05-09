@@ -522,10 +522,38 @@ fn capture_composer_hint(
             "Optional labels, e.g. #errands #client/acme",
         ));
     }
-    rows.push(hint_row(
-        "Handler",
-        &format!("Best matching ;{target} handler"),
-    ));
+    let mut ranking_warning = None;
+    if let Some(invocation) = invocation {
+        let ranking = crate::menu_syntax::explain_capture_handler_ranking(ctx.scripts, invocation);
+        if let Some(winner) = ranking.winner.as_ref() {
+            rows.push(hint_row("Handler", &winner.script_name));
+            rows.push(hint_row("Why selected", &winner.reason_parts.join(" · ")));
+        } else {
+            rows.push(hint_row(
+                "Handler",
+                &format!("No registered ;{target} handler"),
+            ));
+        }
+        if !ranking.alternatives.is_empty() {
+            let alternatives = ranking
+                .alternatives
+                .iter()
+                .take(3)
+                .map(|row| row.script_name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            rows.push(hint_row("Other matches", &alternatives));
+        }
+        if let Some(warning) = ranking.warning {
+            rows.push(hint_row("Handler conflict", &warning));
+            ranking_warning = Some(warning);
+        }
+    } else {
+        rows.push(hint_row(
+            "Handler",
+            &format!("Best matching ;{target} handler"),
+        ));
+    }
 
     let has_body = invocation
         .map(|invocation| !invocation.body.trim().is_empty() || invocation.url.is_some())
@@ -606,7 +634,7 @@ fn capture_composer_hint(
                 .unwrap_or_else(|| format!(";{target} Example")),
         ),
         examples: target_examples(target),
-        warning: None,
+        warning: ranking_warning,
         accessibility_label: String::new(),
     }))
 }

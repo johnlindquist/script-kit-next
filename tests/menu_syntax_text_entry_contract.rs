@@ -432,3 +432,25 @@ fn state_result_exposes_menu_syntax_main_hint_for_agentic_tests() {
         "getState should compute owned-state and structured-empty grammar hints for automation"
     );
 }
+
+#[test]
+fn capture_composer_hint_explains_handler_ranking_in_state_hint_surface() {
+    let main_hint = fs::read_to_string("src/menu_syntax/main_hint.rs")
+        .expect("Failed to read src/menu_syntax/main_hint.rs");
+    let handler_index = fs::read_to_string("src/menu_syntax/handler_index.rs")
+        .expect("Failed to read src/menu_syntax/handler_index.rs");
+
+    assert!(
+        handler_index.contains("explain_capture_handler_ranking")
+            && handler_index.contains("rank_handlers_for_target")
+            && handler_index.contains("dedupe_ranked_handlers_by_path"),
+        "handler ranking explanation should be backed by the existing ranker and execution dedupe"
+    );
+    assert!(
+        main_hint.contains("explain_capture_handler_ranking")
+            && main_hint.contains("Handler")
+            && main_hint.contains("Why selected")
+            && main_hint.contains("Handler conflict"),
+        "capture composer hint should expose handler ranking through MenuSyntaxMainHintSnapshot rows"
+    );
+}

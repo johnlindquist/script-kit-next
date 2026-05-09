@@ -200,6 +200,8 @@ Wildcard `targets: ["*"]` opts a handler in for every capture target within `cap
 
 [[src/menu_syntax/handler_index.rs#rank_handlers_for_target]] orders matched handlers by a lexicographic score: exact-target > `defaultHandler:true` > user-authored (plugin != "main") > accepts-match boost. Shipped `main/*` examples sort below user handlers in the same priority bucket. Accepts boost is capped at 3 so it never crosses priority buckets. [[src/menu_syntax/handler_index.rs#rank_scripts_handling_capture]] is the dedup-by-path convenience used by [[src/scripts/grouping.rs#build_capture_mode_results]].
 
+[[src/menu_syntax/handler_index.rs#explain_capture_handler_ranking]] derives a state-first explanation from that same sorted and path-deduped order. Capture composer hints add `Handler`, `Why selected`, `Other matches`, and `Handler conflict` rows to `menuSyntaxMainHint`; multiple matching `defaultHandler:true` handlers become a warning while Enter still runs the deterministic winner.
+
 ## Hint Card Edge-to-Edge Chrome
 
 The Power Syntax hint card fills the available main-list area with no nested card chrome — content sits directly inside the outer layout div.
