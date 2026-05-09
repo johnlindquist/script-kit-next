@@ -24,6 +24,12 @@ Shell helper changes outside the Rust app should keep their proof narrow too. Fo
 
 For UI changes outside the main launcher/footer path, use the project's agentic runtime verification flow against the real surface instead of guessing from unit tests alone.
 
+## Oracle Bundle Context
+
+Oracle review bundles should carry the same process context local agents use, so remote review does not miss repo-specific grounding or verification rules.
+
+Include `CLAUDE.md`/`AGENTS.md`, the owning skill file, and relevant `lat.md/` pages in Script Kit GPUI Oracle bundles. Include this [[verification]] page whenever implementation or review checks are part of the prompt, and make the required `lat.md` update plus `lat check` expectations visible to Oracle.
+
 ## Release gates
 
 `make verify` is the broad validation gate. Use it for release work, CI debugging, or when the change touches shared build/test infrastructure.
