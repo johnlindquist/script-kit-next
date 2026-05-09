@@ -11,6 +11,21 @@ use super::*;
 use crate::ai::acp::surface_state::{reduce_acp_surface, AcpSurfaceEvent, AcpSurfaceState};
 
 impl ScriptListApp {
+    /// Switch the launcher into the embedded ACP chat surface and update
+    /// every state mirror that must move in lock-step with that view.
+    pub(crate) fn enter_embedded_acp_chat_surface(
+        &mut self,
+        entity: gpui::Entity<crate::ai::acp::AcpChatView>,
+    ) {
+        self.current_view = AppView::AcpChatView { entity };
+        crate::windows::ensure_embedded_ai_window(true);
+        self.rekey_main_automation_surface_from_current_view();
+        self.transition_acp_surface(AcpSurfaceEvent::EmbeddedOpened);
+        self.focused_input = FocusedInput::None;
+        self.clear_actions_popup_state();
+        self.pending_focus = Some(FocusTarget::ChatPrompt);
+    }
+
     /// Apply an [`AcpSurfaceEvent`]. No-op when the reduced next state
     /// equals the current state. Emits one `acp_surface_transition`
     /// tracing event per real transition so operators can correlate

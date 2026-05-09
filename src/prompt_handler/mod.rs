@@ -1292,6 +1292,7 @@ impl ScriptListApp {
                 "Cleared NEEDS_RESET - script is showing prompt UI"
             );
         }
+        clear_main_state_restore_after_focus_loss();
 
         // Show window if hidden (script may have called hide() for getSelectedText)
         if !script_kit_gpui::is_main_window_visible() {
@@ -2227,6 +2228,8 @@ impl ScriptListApp {
                                 "unsupported".to_string(),
                                 Some(format!("target_unsupported:{:?}", resolved.kind)),
                                 None,
+                                None,
+                                None,
                                 String::new(),
                                 0,
                                 0,
@@ -2247,6 +2250,8 @@ impl ScriptListApp {
                                 request_id.clone(),
                                 "target_resolution_failed".to_string(),
                                 Some(format!("target_error:{}", error)),
+                                None,
+                                None,
                                 None,
                                 String::new(),
                                 0,
@@ -3097,6 +3102,8 @@ impl ScriptListApp {
                     request_id.clone(),
                     prompt_type,
                     prompt_id,
+                    Some(self.current_surface_contract_snapshot()),
+                    self.active_popup_contract_snapshot(),
                     placeholder,
                     input_value,
                     choice_count,
@@ -7209,6 +7216,56 @@ impl ScriptListApp {
             AppView::MicroPrompt { .. } => "micro".to_string(),
             _ => "unknown".to_string(),
         }
+    }
+
+    /// Get the active launcher surface contract for `getState.surfaceContract`.
+    fn current_surface_contract_snapshot(
+        &self,
+    ) -> crate::protocol::LauncherSurfaceContractSnapshot {
+        let contract = self.current_view.surface_contract();
+        crate::protocol::LauncherSurfaceContractSnapshot {
+            schema_version: crate::protocol::LAUNCHER_SURFACE_CONTRACT_SCHEMA_VERSION,
+            surface_kind: format!("{:?}", self.current_view.surface_kind()),
+            family: format!("{:?}", contract.vocabulary.family),
+            input_ownership: format!("{:?}", contract.vocabulary.input_ownership),
+            preview_role: format!("{:?}", contract.vocabulary.preview_role),
+            focus_policy: format!("{:?}", contract.focus_policy),
+            keyboard_policy: format!("{:?}", contract.keyboard_policy),
+            actions_policy: format!("{:?}", contract.actions_policy),
+            proof_policy: format!("{:?}", contract.proof_policy),
+            visual_policy: format!("{:?}", contract.visual_policy),
+            automation_semantic_surface: contract.automation_semantic_surface.to_string(),
+            native_footer_surface: self
+                .current_view
+                .native_footer_surface()
+                .map(str::to_string),
+        }
+    }
+
+    /// Get the active popup surface contract for `getState.activePopupContract`.
+    fn active_popup_contract_snapshot(
+        &self,
+    ) -> Option<crate::protocol::LauncherSurfaceContractSnapshot> {
+        if !(self.show_actions_popup || self.actions_dialog.is_some()) {
+            return None;
+        }
+        let contract = AppView::ActionsDialog.surface_contract();
+        Some(crate::protocol::LauncherSurfaceContractSnapshot {
+            schema_version: crate::protocol::LAUNCHER_SURFACE_CONTRACT_SCHEMA_VERSION,
+            surface_kind: "ActionsDialog".to_string(),
+            family: format!("{:?}", contract.vocabulary.family),
+            input_ownership: format!("{:?}", contract.vocabulary.input_ownership),
+            preview_role: format!("{:?}", contract.vocabulary.preview_role),
+            focus_policy: format!("{:?}", contract.focus_policy),
+            keyboard_policy: format!("{:?}", contract.keyboard_policy),
+            actions_policy: format!("{:?}", contract.actions_policy),
+            proof_policy: format!("{:?}", contract.proof_policy),
+            visual_policy: format!("{:?}", contract.visual_policy),
+            automation_semantic_surface: contract.automation_semantic_surface.to_string(),
+            native_footer_surface: AppView::ActionsDialog
+                .native_footer_surface()
+                .map(str::to_string),
+        })
     }
 
     /// Get the current input/filter value.

@@ -770,15 +770,15 @@ fn mini_prompt_submits_enter_and_avoids_double_header_padding() {
 #[test]
 fn micro_prompt_stays_footerless_and_off_native_footer_surface_map() {
     let micro = include_str!("../src/render_prompts/micro.rs");
-    let ui_window = include_str!("../src/app_impl/ui_window.rs");
-    let surface_fn_start = ui_window
-        .find("fn main_window_footer_surface")
-        .expect("main_window_footer_surface exists");
-    let surface_fn_end = ui_window[surface_fn_start..]
+    let app_view_state = include_str!("../src/main_sections/app_view_state.rs");
+    let surface_fn_start = app_view_state
+        .find("fn native_footer_surface")
+        .expect("native_footer_surface exists");
+    let surface_fn_end = app_view_state[surface_fn_start..]
         .find("\n    ///")
         .map(|ix| surface_fn_start + ix)
-        .unwrap_or(ui_window.len());
-    let surface_fn = &ui_window[surface_fn_start..surface_fn_end];
+        .unwrap_or(app_view_state.len());
+    let surface_fn = &app_view_state[surface_fn_start..surface_fn_end];
 
     assert!(
         micro.contains("PromptChromeAudit::exception(")
@@ -787,7 +787,7 @@ fn micro_prompt_stays_footerless_and_off_native_footer_surface_map() {
         "micro prompt should remain an explicitly footerless ultra-compact surface"
     );
     assert!(
-        !surface_fn.contains("AppView::MicroPrompt"),
+        !surface_fn.contains("AppView::MicroPrompt { .. } => Some("),
         "micro prompt must stay off native footer routing because it does not reserve footer space"
     );
     eprintln!("{{\"audit\":\"minimal_chrome\",\"surface\":\"micro\",\"footerless\":true,\"native_footer_absent\":true,\"status\":\"pass\"}}");
@@ -797,6 +797,7 @@ fn micro_prompt_stays_footerless_and_off_native_footer_surface_map() {
 fn kit_store_footer_uses_single_native_slot_owner() {
     let source = include_str!("../src/render_builtins/kit_store.rs");
     let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let app_view_state = include_str!("../src/main_sections/app_view_state.rs");
     let app_run_setup = include_str!("../src/main_entry/app_run_setup.rs");
     let runtime_stdin = include_str!("../src/main_entry/runtime_stdin.rs");
 
@@ -817,8 +818,8 @@ fn kit_store_footer_uses_single_native_slot_owner() {
         "Kit Store should audit as a native-slot list with surface-specific footer hints"
     );
     assert!(
-        ui_window.contains("AppView::BrowseKitsView { .. } => Some(\"kit_store_browse\")")
-            && ui_window
+        app_view_state.contains("AppView::BrowseKitsView { .. } => Some(\"kit_store_browse\")")
+            && app_view_state
                 .contains("AppView::InstalledKitsView { .. } => Some(\"kit_store_installed\")"),
         "Kit Store views should register native footer surfaces so the fallback strip becomes a spacer"
     );
@@ -850,6 +851,7 @@ fn kit_store_footer_uses_single_native_slot_owner() {
 fn design_gallery_footer_uses_single_native_slot_owner() {
     let source = include_str!("../src/render_builtins/design_gallery.rs");
     let ui_window = include_str!("../src/app_impl/ui_window.rs");
+    let app_view_state = include_str!("../src/main_sections/app_view_state.rs");
 
     assert!(
         !source.contains("PromptFooter::new("),
@@ -866,7 +868,7 @@ fn design_gallery_footer_uses_single_native_slot_owner() {
         "Design Gallery renderer should delegate native-footer policy to main_window_footer_slot"
     );
     assert!(
-        ui_window.contains("AppView::DesignGalleryView { .. } => Some(\"design_gallery\")"),
+        app_view_state.contains("AppView::DesignGalleryView { .. } => Some(\"design_gallery\")"),
         "Design Gallery should register a native footer surface"
     );
     assert!(

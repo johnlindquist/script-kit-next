@@ -160,8 +160,7 @@ fn embedded_acp_close_helper_tears_down_surface_and_registry() {
             && section.contains("prepare_for_host_hide")
             && section.contains("embedded_acp_return_origin_self_guarded")
             && section.contains("self.acp_ready_script_path = None")
-            && section.contains("update_automation_semantic_surface")
-            && section.contains("semantic_surface_for_main_view(&self.current_view)")
+            && section.contains("rekey_main_automation_surface_from_current_view")
             && section.contains("ensure_embedded_ai_window(false)")
             && section.contains("AcpSurfaceEvent::EmbeddedClosed"),
         "embedded ACP close helper must preserve the view, restore origin, and tear down ACP surface bookkeeping"
@@ -169,12 +168,12 @@ fn embedded_acp_close_helper_tears_down_surface_and_registry() {
     assert_ordered(
         section,
         "prepare_for_host_hide",
-        "self.current_view = return_view",
+        "self.restore_current_view_with_focus(return_view, return_focus_target)",
     );
     assert_ordered(
         section,
-        "self.current_view = return_view",
-        "update_automation_semantic_surface",
+        "self.restore_current_view_with_focus(return_view, return_focus_target)",
+        "rekey_main_automation_surface_from_current_view",
     );
 }
 

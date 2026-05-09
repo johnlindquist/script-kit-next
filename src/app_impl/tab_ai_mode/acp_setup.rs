@@ -14,21 +14,7 @@ impl ScriptListApp {
         self.wire_embedded_acp_footer_callbacks(&view_entity, cx);
         self.tab_ai_harness_return_view = Some(source_view);
         self.tab_ai_harness_return_focus_target = Some(self.tab_ai_return_focus_target());
-        self.current_view = AppView::AcpChatView {
-            entity: view_entity,
-        };
-        crate::windows::ensure_embedded_ai_window(true);
-        crate::windows::update_automation_semantic_surface(
-            "main",
-            crate::semantic_surface_for_main_view(&self.current_view),
-        );
-        self.transition_acp_surface(
-            crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedOpened,
-        );
-        self.focused_input = FocusedInput::None;
-        self.show_actions_popup = false;
-        self.actions_dialog = None;
-        self.pending_focus = Some(FocusTarget::ChatPrompt);
+        self.enter_embedded_acp_chat_surface(view_entity);
         cx.notify();
     }
 

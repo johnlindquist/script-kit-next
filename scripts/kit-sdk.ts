@@ -7999,6 +7999,8 @@ export type TransactionTraceMode = 'off' | 'on' | 'onFailure';
 
 export interface PromptState {
   promptType: string;
+  surfaceContract?: LauncherSurfaceContractSnapshot;
+  activePopupContract?: LauncherSurfaceContractSnapshot;
   promptId?: string;
   placeholder?: string;
   inputValue: string;
@@ -8008,6 +8010,21 @@ export interface PromptState {
   selectedValue?: string;
   isFocused: boolean;
   windowVisible: boolean;
+}
+
+export interface LauncherSurfaceContractSnapshot {
+  schemaVersion: number;
+  surfaceKind: string;
+  family: string;
+  inputOwnership: string;
+  previewRole: string;
+  focusPolicy: string;
+  keyboardPolicy: string;
+  actionsPolicy: string;
+  proofPolicy: string;
+  visualPolicy: string;
+  automationSemanticSurface: string;
+  nativeFooterSurface?: string | null;
 }
 
 export type ElementType = 'choice' | 'input' | 'button' | 'panel' | 'list' | 'unknown';
@@ -8106,6 +8123,8 @@ type StateResultMessage = {
   type: 'stateResult';
   requestId: string;
   promptType: string;
+  surfaceContract?: LauncherSurfaceContractSnapshot;
+  activePopupContract?: LauncherSurfaceContractSnapshot;
   promptId?: string;
   placeholder?: string;
   inputValue: string;
@@ -8204,6 +8223,8 @@ globalThis.getState = async function getState(): Promise<PromptState> {
         const state = (msg.type === 'stateResult' ? msg : fallback) as StateResultMessage;
         resolve({
           promptType: state.promptType,
+          surfaceContract: state.surfaceContract,
+          activePopupContract: state.activePopupContract,
           promptId: state.promptId,
           placeholder: state.placeholder,
           inputValue: state.inputValue,

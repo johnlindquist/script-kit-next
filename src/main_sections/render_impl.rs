@@ -181,6 +181,9 @@ impl Render for ScriptListApp {
             }
         }
         if self.was_window_focused && !is_window_focused {
+            let actions_popup_active_or_closing = self.show_actions_popup
+                || self.actions_dialog.is_some()
+                || actions::is_actions_window_open();
             if matches!(self.current_view, AppView::FileSearchView { .. }) {
                 logging::log(
                     "FOCUS",
@@ -202,7 +205,7 @@ impl Render for ScriptListApp {
                 && script_kit_gpui::is_main_window_visible()
                 && !self.is_pinned
                 && !script_kit_gpui::is_within_focus_grace_period()
-                && !actions::is_actions_window_open()
+                && !actions_popup_active_or_closing
                 && !confirm::is_confirm_window_open()
                 && !ai::acp::chat_window::is_chat_window_open()
                 && !crate::dictation::is_dictation_overlay_open()
@@ -210,11 +213,24 @@ impl Render for ScriptListApp {
                 && self.tab_ai_save_offer_state.is_none()
                 && self.shortcut_recorder_state.is_none()
             {
+                if matches!(self.current_view, AppView::ScriptList) {
+                    logging::log(
+                        "FOCUS",
+                        "Main window lost focus in ScriptList - hiding while preserving state",
+                    );
+                    self.hide_main_window_preserving_state_for_focus_loss(cx);
+                } else {
+                    logging::log(
+                        "FOCUS",
+                        "Main window lost focus in dismissable non-ScriptList view - closing and resetting",
+                    );
+                    self.close_and_reset_window(cx);
+                }
+            } else if actions_popup_active_or_closing {
                 logging::log(
                     "FOCUS",
-                    "Main window lost focus while in dismissable view - closing",
+                    "Main window lost focus but actions popup is open or closing - staying open",
                 );
-                self.close_and_reset_window(cx);
             } else if self.shortcut_recorder_state.is_some() {
                 logging::log(
                     "FOCUS",
@@ -224,11 +240,6 @@ impl Render for ScriptListApp {
                 logging::log(
                     "FOCUS",
                     "Main window lost focus but Tab AI save-offer is active - staying open",
-                );
-            } else if actions::is_actions_window_open() {
-                logging::log(
-                    "FOCUS",
-                    "Main window lost focus but actions popup is open - staying open",
                 );
             } else if confirm::is_confirm_window_open() {
                 logging::log(

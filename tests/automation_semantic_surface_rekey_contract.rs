@@ -113,24 +113,52 @@ fn app_view_defines_semantic_surface_mapping() {
          one file, not a scavenger hunt across three dispatchers"
     );
 
+    let identity_body = source_between(
+        APP_VIEW_SOURCE,
+        "pub(crate) fn surface_kind(&self) -> SurfaceKind",
+        "pub(crate) fn surface_contract(&self) -> LauncherSurfaceContract",
+    );
     let registry_body = source_between(
         APP_VIEW_SOURCE,
-        "pub(crate) fn surface_contract(&self) -> LauncherSurfaceContract",
+        "impl SurfaceKind {",
         "/// Dismiss policy for the active top-level launcher view.",
     );
-    for (variant, surface) in [
-        ("AppView::FileSearchView", "fileSearch"),
-        ("AppView::ClipboardHistoryView", "clipboardHistory"),
-        ("AppView::AppLauncherView", "appLauncher"),
-        ("AppView::BrowserTabsView", "browserTabs"),
-        ("AppView::EmojiPickerView", "emojiPicker"),
+    for (variant, kind, surface) in [
+        (
+            "AppView::FileSearchView",
+            "SurfaceKind::FileSearchFull",
+            "fileSearch",
+        ),
+        (
+            "AppView::ClipboardHistoryView",
+            "SurfaceKind::ClipboardHistory",
+            "clipboardHistory",
+        ),
+        (
+            "AppView::AppLauncherView",
+            "SurfaceKind::AppLauncher",
+            "appLauncher",
+        ),
+        (
+            "AppView::BrowserTabsView",
+            "SurfaceKind::BrowserTabs",
+            "browserTabs",
+        ),
+        (
+            "AppView::EmojiPickerView",
+            "SurfaceKind::EmojiPicker",
+            "emojiPicker",
+        ),
     ] {
         assert!(
-            registry_body.contains(variant) && registry_body.contains(&format!("\"{surface}\"")),
-            "`AppView::surface_contract` must include mapping from \
-             `{variant}` to `{surface}` — these are the five subviews the story's \
-             acceptance criteria name explicitly. Dropping any one of \
-             them leaves that subview silently reporting stale surface \
+            identity_body.contains(variant)
+                && identity_body.contains(kind)
+                && registry_body.contains(kind)
+                && registry_body.contains(&format!("\"{surface}\"")),
+            "`AppView::surface_kind` and `SurfaceKind::surface_contract` must map \
+             `{variant}` through `{kind}` to `{surface}` — these are the five \
+             subviews the story's acceptance criteria name explicitly. Dropping \
+             any one of them leaves that subview silently reporting stale surface \
              metadata to automation consumers."
         );
     }

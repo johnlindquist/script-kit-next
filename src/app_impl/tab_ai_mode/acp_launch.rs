@@ -377,19 +377,7 @@ impl ScriptListApp {
 
         // --- View switch FIRST: user sees the ACP chat surface immediately ---
         let view_entity_for_staging = view_entity.clone();
-        self.current_view = AppView::AcpChatView {
-            entity: view_entity,
-        };
-        crate::windows::ensure_embedded_ai_window(true);
-        crate::windows::update_automation_semantic_surface(
-            "main",
-            crate::semantic_surface_for_main_view(&self.current_view),
-        );
-        self.transition_acp_surface(crate::ai::acp::surface_state::AcpSurfaceEvent::EmbeddedOpened);
-        self.focused_input = FocusedInput::None;
-        self.show_actions_popup = false;
-        self.actions_dialog = None;
-        self.pending_focus = Some(FocusTarget::ChatPrompt);
+        self.enter_embedded_acp_chat_surface(view_entity);
         cx.notify();
 
         tracing::info!(

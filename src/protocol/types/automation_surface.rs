@@ -30,3 +30,28 @@ pub struct AutomationSurfaceSnapshot {
     /// Minimum height (px) to consider a window valid for capture.
     pub min_height: u32,
 }
+
+/// Schema version for the launcher surface contract snapshot in `getState`.
+pub const LAUNCHER_SURFACE_CONTRACT_SCHEMA_VERSION: u32 = 1;
+
+/// Machine-readable projection of the active launcher surface contract.
+///
+/// Included in main-window `stateResult` receipts so agents can verify the
+/// runtime surface against the generated contract matrix without reverse-
+/// engineering `promptType` strings.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LauncherSurfaceContractSnapshot {
+    pub schema_version: u32,
+    pub surface_kind: String,
+    pub family: String,
+    pub input_ownership: String,
+    pub preview_role: String,
+    pub focus_policy: String,
+    pub keyboard_policy: String,
+    pub actions_policy: String,
+    pub proof_policy: String,
+    pub visual_policy: String,
+    pub automation_semantic_surface: String,
+    pub native_footer_surface: Option<String>,
+}

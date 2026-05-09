@@ -39,7 +39,7 @@ fn open_mini_main_window_sets_mini_mode_contract() {
         "self.computed_filter_text.clear();",
         "self.pending_filter_sync = true;",
         "self.pending_placeholder = Some(\"Search scripts, apps, and commands…\".to_string());",
-        "self.current_view = AppView::ScriptList;",
+        "self.show_script_list_with_main_filter_focus();",
         "self.main_window_mode = MainWindowMode::Mini;",
         "self.hovered_index = None;",
         "self.selected_index = 0;",
@@ -51,8 +51,6 @@ fn open_mini_main_window_sets_mini_mode_contract() {
         // Skip section headers so selected_index points to a real item
         "self.selected_index = first_selectable;",
         "resize_to_view_sync(ViewType::MiniMainWindow, item_count);",
-        "self.pending_focus = Some(FocusTarget::MainFilter);",
-        "self.focused_input = FocusedInput::MainFilter;",
         "cx.notify();",
     ] {
         assert!(

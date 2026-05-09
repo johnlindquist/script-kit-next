@@ -25,14 +25,13 @@ impl ScriptListApp {
             _ => Box::new(self.current_view.clone()),
         };
 
-        self.current_view = AppView::About {
+        self.transition_current_view_and_rekey_main_automation_surface(AppView::About {
             previous,
             state: crate::about::AboutState::new(),
             update_state,
-        };
+        });
         self.focused_input = FocusedInput::None;
         self.pending_focus = Some(FocusTarget::AppRoot);
-        crate::windows::update_automation_semantic_surface("main", Some("about".to_string()));
         cx.notify();
     }
 
@@ -45,12 +44,10 @@ impl ScriptListApp {
             }
         };
 
-        self.current_view = previous;
+        self.transition_current_view_and_rekey_main_automation_surface(previous);
         let (focus_target, focused_input) = focus_for_about_restore(&self.current_view);
         self.pending_focus = Some(focus_target);
         self.focused_input = focused_input;
-        let semantic = semantic_surface_for_main_view(&self.current_view);
-        crate::windows::update_automation_semantic_surface("main", semantic);
         cx.notify();
     }
 
@@ -75,15 +72,14 @@ impl ScriptListApp {
             AppView::ConfirmPrompt { previous, .. } => previous.clone(),
             _ => Box::new(self.current_view.clone()),
         };
-        self.current_view = AppView::ConfirmPrompt {
+        self.transition_current_view_and_rekey_main_automation_surface(AppView::ConfirmPrompt {
             options,
             sender,
             focused_button: ConfirmFocusedButton::default(),
             previous,
-        };
+        });
         self.focused_input = FocusedInput::None;
         self.pending_focus = Some(FocusTarget::AppRoot);
-        crate::windows::update_automation_semantic_surface("main", Some("confirmPrompt".into()));
         cx.notify();
     }
 }

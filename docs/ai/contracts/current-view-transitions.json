@@ -1,0 +1,858 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": [
+    "src/app_actions",
+    "src/app_execute",
+    "src/app_impl",
+    "src/main_entry",
+    "src/main_sections",
+    "src/prompt_handler"
+  ],
+  "inventory": "ScriptListApp/AppView current_view transition sites",
+  "entries": [
+    {
+      "file": "src/app_actions/handle_action/mod.rs",
+      "line": 722,
+      "owner": "transition_to_script_list_after_action",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ScriptList",
+      "inferredTarget": "AppView::ScriptList",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/builtin_execution.rs",
+      "line": 1679,
+      "owner": "open_builtin_filterable_view",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "view",
+      "inferredTarget": "view",
+      "requiresManualReview": true
+    },
+    {
+      "file": "src/app_execute/builtin_execution.rs",
+      "line": 1723,
+      "owner": "open_mini_main_window",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "",
+      "inferredTarget": "AppView::ScriptList",
+      "requiresManualReview": false,
+      "helper": "show_script_list_with_main_filter_focus",
+      "rekeysMainAutomationSurface": true,
+      "focusTarget": "MainFilter",
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "AppView::ScriptList",
+        "delegatesTo": "restore_current_view_with_focus",
+        "focusTarget": "MainFilter",
+        "focusedInput": "MainFilter",
+        "mainAutomationRekey": true,
+        "semanticSurface": "rekeyMainAutomationSurfaceFromCurrentView",
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_execute/builtin_execution.rs",
+      "line": 1778,
+      "owner": "open_builtin_filterable_view_with_filter",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "view",
+      "inferredTarget": "view",
+      "requiresManualReview": true
+    },
+    {
+      "file": "src/app_execute/builtin_execution.rs",
+      "line": 2339,
+      "owner": "execute_builtin_inner",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::DesignExplorerView { entity: explorer }",
+      "inferredTarget": "AppView::DesignExplorerView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/builtin_execution.rs",
+      "line": 2718,
+      "owner": "execute_builtin_inner",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::CreateAiPresetView { name: String::new(), system_prompt: String::new(), model: String::new(), active_field: 0, }",
+      "inferredTarget": "AppView::CreateAiPresetView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/builtin_execution.rs",
+      "line": 2904,
+      "owner": "execute_builtin_inner",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::SearchAiPresetsView { filter: String::new(), selected_index: 0, }",
+      "inferredTarget": "AppView::SearchAiPresetsView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/builtin_execution.rs",
+      "line": 3264,
+      "owner": "execute_builtin_inner",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::MiniPrompt { id: BUILTIN_MIC_SELECT_PROMPT_ID.to_string(), placeholder: \"Select microphone...\".to_string(), choices, }",
+      "inferredTarget": "AppView::MiniPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/builtin_execution.rs",
+      "line": 4192,
+      "owner": "execute_builtin_inner",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::BrowseKitsView { query: String::new(), selected_index: 0, results: Vec::new(), }",
+      "inferredTarget": "AppView::BrowseKitsView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/builtin_execution.rs",
+      "line": 4226,
+      "owner": "execute_builtin_inner",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::InstalledKitsView { selected_index: 0, kits, }",
+      "inferredTarget": "AppView::InstalledKitsView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/execution_helpers.rs",
+      "line": 107,
+      "owner": "show_api_key_prompt",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::EnvPrompt { id, entity }",
+      "inferredTarget": "AppView::EnvPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/execution_helpers.rs",
+      "line": 409,
+      "owner": "open_scratch_pad",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ScratchPadView { entity, focus_handle: editor_focus_handle, }",
+      "inferredTarget": "AppView::ScratchPadView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/utility_views.rs",
+      "line": 142,
+      "owner": "open_terminal_with_command",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::QuickTerminalView { entity }",
+      "inferredTarget": "AppView::QuickTerminalView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/utility_views.rs",
+      "line": 558,
+      "owner": "open_quick_terminal",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::QuickTerminalView { entity }",
+      "inferredTarget": "AppView::QuickTerminalView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/utility_views.rs",
+      "line": 636,
+      "owner": "open_webcam",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::WebcamView { entity }",
+      "inferredTarget": "AppView::WebcamView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/utility_views.rs",
+      "line": 692,
+      "owner": "open_webcam",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::WebcamView { entity }",
+      "inferredTarget": "AppView::WebcamView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_execute/utility_views.rs",
+      "line": 723,
+      "owner": "open_webcam",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::WebcamView { entity }",
+      "inferredTarget": "AppView::WebcamView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/about_route.rs",
+      "line": 28,
+      "owner": "open_about_surface",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "AppView::About { previous, state: crate::about::AboutState::new(), update_state, }",
+      "inferredTarget": "AppView::About",
+      "requiresManualReview": true,
+      "helper": "transition_current_view_and_rekey_main_automation_surface",
+      "rekeysMainAutomationSurface": true,
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "dynamicArgument",
+        "surfaceKind": "derivedFromNewView",
+        "semanticSurface": "rekeyMainAutomationSurfaceFromCurrentView",
+        "mainAutomationRekey": true,
+        "focusTarget": "callerOwned",
+        "focusedInput": "callerOwned",
+        "resize": "callerOwned",
+        "activePopupContract": "stateReceiptOnly",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/about_route.rs",
+      "line": 39,
+      "owner": "dismiss_about",
+      "receiver": "self",
+      "operation": "replace",
+      "expression": "AppView::ScriptList",
+      "inferredTarget": "AppView::ScriptList",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/about_route.rs",
+      "line": 42,
+      "owner": "dismiss_about",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "other",
+      "inferredTarget": "other",
+      "requiresManualReview": true
+    },
+    {
+      "file": "src/app_impl/about_route.rs",
+      "line": 47,
+      "owner": "dismiss_about",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "previous",
+      "inferredTarget": "previous",
+      "requiresManualReview": true,
+      "helper": "transition_current_view_and_rekey_main_automation_surface",
+      "rekeysMainAutomationSurface": true,
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "dynamicArgument",
+        "surfaceKind": "derivedFromNewView",
+        "semanticSurface": "rekeyMainAutomationSurfaceFromCurrentView",
+        "mainAutomationRekey": true,
+        "focusTarget": "callerOwned",
+        "focusedInput": "callerOwned",
+        "resize": "callerOwned",
+        "activePopupContract": "stateReceiptOnly",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/about_route.rs",
+      "line": 75,
+      "owner": "open_confirm_prompt",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "AppView::ConfirmPrompt { options, sender, focused_button: ConfirmFocusedButton::default(), previous, }",
+      "inferredTarget": "AppView::ConfirmPrompt",
+      "requiresManualReview": true,
+      "helper": "transition_current_view_and_rekey_main_automation_surface",
+      "rekeysMainAutomationSurface": true,
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "dynamicArgument",
+        "surfaceKind": "derivedFromNewView",
+        "semanticSurface": "rekeyMainAutomationSurfaceFromCurrentView",
+        "mainAutomationRekey": true,
+        "focusTarget": "callerOwned",
+        "focusedInput": "callerOwned",
+        "resize": "callerOwned",
+        "activePopupContract": "stateReceiptOnly",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/acp_surface_transitions.rs",
+      "line": 20,
+      "owner": "enter_embedded_acp_chat_surface",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::AcpChatView { entity }",
+      "inferredTarget": "AppView::AcpChatView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/attachment_portal.rs",
+      "line": 18,
+      "owner": "open_script_list_attachment_portal",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "",
+      "inferredTarget": "AppView::ScriptList",
+      "requiresManualReview": false,
+      "helper": "show_script_list_with_main_filter_focus",
+      "rekeysMainAutomationSurface": true,
+      "focusTarget": "MainFilter",
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "AppView::ScriptList",
+        "delegatesTo": "restore_current_view_with_focus",
+        "focusTarget": "MainFilter",
+        "focusedInput": "MainFilter",
+        "mainAutomationRekey": true,
+        "semanticSurface": "rekeyMainAutomationSurfaceFromCurrentView",
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/attachment_portal.rs",
+      "line": 117,
+      "owner": "restore_attachment_portal_return_view",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "return_view, return_focus_target",
+      "inferredTarget": "return_view",
+      "requiresManualReview": true,
+      "helper": "restore_current_view_with_focus",
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "dynamicArgument",
+        "mainAutomationRekey": false,
+        "focusTarget": "dynamicArgument",
+        "focusedInputMap": {
+          "MainFilter": "MainFilter",
+          "ActionsDialog": "ActionsSearch",
+          "default": "None"
+        },
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/automation_surface.rs",
+      "line": 10,
+      "owner": "transition_current_view_and_rekey_main_automation_surface",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "next_view",
+      "inferredTarget": "dynamic",
+      "requiresManualReview": true
+    },
+    {
+      "file": "src/app_impl/automation_surface.rs",
+      "line": 24,
+      "owner": "restore_current_view_with_focus",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "next_view",
+      "inferredTarget": "dynamic",
+      "requiresManualReview": true
+    },
+    {
+      "file": "src/app_impl/automation_surface.rs",
+      "line": 39,
+      "owner": "show_script_list_with_main_filter_focus",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "AppView::ScriptList, FocusTarget::MainFilter",
+      "inferredTarget": "AppView::ScriptList",
+      "requiresManualReview": true,
+      "helper": "restore_current_view_with_focus",
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "dynamicArgument",
+        "mainAutomationRekey": false,
+        "focusTarget": "dynamicArgument",
+        "focusedInputMap": {
+          "MainFilter": "MainFilter",
+          "ActionsDialog": "ActionsSearch",
+          "default": "None"
+        },
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/filter_input_change.rs",
+      "line": 510,
+      "owner": "handle_filter_input_change",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "",
+      "inferredTarget": "AppView::ScriptList",
+      "requiresManualReview": false,
+      "helper": "show_script_list_with_main_filter_focus",
+      "rekeysMainAutomationSurface": true,
+      "focusTarget": "MainFilter",
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "AppView::ScriptList",
+        "delegatesTo": "restore_current_view_with_focus",
+        "focusTarget": "MainFilter",
+        "focusedInput": "MainFilter",
+        "mainAutomationRekey": true,
+        "semanticSurface": "rekeyMainAutomationSurfaceFromCurrentView",
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/filter_input_core.rs",
+      "line": 241,
+      "owner": "open_file_search_view_with_result_transition",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::FileSearchView { query: query.clone(), selected_index: 0, presentation, }",
+      "inferredTarget": "AppView::FileSearchView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/naming_dialog.rs",
+      "line": 72,
+      "owner": "present_naming_dialog",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::NamingPrompt { id: id.clone(), entity, }",
+      "inferredTarget": "AppView::NamingPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/naming_dialog.rs",
+      "line": 232,
+      "owner": "handle_naming_dialog_completion",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::CreationFeedback { path: created_file_path, }",
+      "inferredTarget": "AppView::CreationFeedback",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/prompt_ai.rs",
+      "line": 411,
+      "owner": "show_inline_ai_chat",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ChatPrompt { id: \"inline-ai-setup\".to_string(), entity, }",
+      "inferredTarget": "AppView::ChatPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/prompt_ai.rs",
+      "line": 485,
+      "owner": "show_inline_ai_chat",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ChatPrompt { id: \"inline-ai\".to_string(), entity, }",
+      "inferredTarget": "AppView::ChatPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/registries_state.rs",
+      "line": 233,
+      "owner": "reset_to_script_list",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ScriptList",
+      "inferredTarget": "AppView::ScriptList",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/selection_fallback.rs",
+      "line": 706,
+      "owner": "open_script_issues_view",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ScriptIssuesView { report }",
+      "inferredTarget": "AppView::ScriptIssuesView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/tab_ai_mode/acp_launch.rs",
+      "line": 380,
+      "owner": "open_tab_ai_acp_view_from_request_impl",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "view_entity",
+      "inferredTarget": "AppView::AcpChatView",
+      "requiresManualReview": false,
+      "helper": "enter_embedded_acp_chat_surface",
+      "rekeysMainAutomationSurface": true,
+      "focusTarget": "ChatPrompt",
+      "embeddedAiWindowUpsert": true,
+      "clearsActionsPopupState": true,
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "AppView::AcpChatView",
+        "surfaceKind": "AcpChat",
+        "embeddedAiWindowUpsert": true,
+        "mainAutomationRekey": true,
+        "acpSurfaceEvent": "EmbeddedOpened",
+        "actionsCleanup": "clearActionsPopupState",
+        "focusTarget": "ChatPrompt",
+        "focusedInput": "None",
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/tab_ai_mode/acp_setup.rs",
+      "line": 17,
+      "owner": "show_embedded_acp_setup_view",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "view_entity",
+      "inferredTarget": "AppView::AcpChatView",
+      "requiresManualReview": false,
+      "helper": "enter_embedded_acp_chat_surface",
+      "rekeysMainAutomationSurface": true,
+      "focusTarget": "ChatPrompt",
+      "embeddedAiWindowUpsert": true,
+      "clearsActionsPopupState": true,
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "AppView::AcpChatView",
+        "surfaceKind": "AcpChat",
+        "embeddedAiWindowUpsert": true,
+        "mainAutomationRekey": true,
+        "acpSurfaceEvent": "EmbeddedOpened",
+        "actionsCleanup": "clearActionsPopupState",
+        "focusTarget": "ChatPrompt",
+        "focusedInput": "None",
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/tab_ai_mode/mod.rs",
+      "line": 714,
+      "owner": "try_reuse_embedded_acp_view",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "entity.clone()",
+      "inferredTarget": "AppView::AcpChatView",
+      "requiresManualReview": false,
+      "helper": "enter_embedded_acp_chat_surface",
+      "rekeysMainAutomationSurface": true,
+      "focusTarget": "ChatPrompt",
+      "embeddedAiWindowUpsert": true,
+      "clearsActionsPopupState": true,
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "AppView::AcpChatView",
+        "surfaceKind": "AcpChat",
+        "embeddedAiWindowUpsert": true,
+        "mainAutomationRekey": true,
+        "acpSurfaceEvent": "EmbeddedOpened",
+        "actionsCleanup": "clearActionsPopupState",
+        "focusTarget": "ChatPrompt",
+        "focusedInput": "None",
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/tab_ai_mode/mod.rs",
+      "line": 1948,
+      "owner": "open_tab_ai_harness_terminal_from_request",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::QuickTerminalView { entity: entity.clone(), }",
+      "inferredTarget": "AppView::QuickTerminalView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/tab_ai_mode/mod.rs",
+      "line": 2540,
+      "owner": "close_tab_ai_harness_terminal_impl",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "return_view, return_focus_target",
+      "inferredTarget": "return_view",
+      "requiresManualReview": true,
+      "helper": "restore_current_view_with_focus",
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "dynamicArgument",
+        "mainAutomationRekey": false,
+        "focusTarget": "dynamicArgument",
+        "focusedInputMap": {
+          "MainFilter": "MainFilter",
+          "ActionsDialog": "ActionsSearch",
+          "default": "None"
+        },
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/tab_ai_mode/mod.rs",
+      "line": 2586,
+      "owner": "close_tab_ai_harness_terminal",
+      "receiver": "self",
+      "operation": "transitionHelper",
+      "expression": "return_view, return_focus_target",
+      "inferredTarget": "return_view",
+      "requiresManualReview": true,
+      "helper": "restore_current_view_with_focus",
+      "transitionContract": {
+        "oldView": "runtimeCurrentView",
+        "newView": "dynamicArgument",
+        "mainAutomationRekey": false,
+        "focusTarget": "dynamicArgument",
+        "focusedInputMap": {
+          "MainFilter": "MainFilter",
+          "ActionsDialog": "ActionsSearch",
+          "default": "None"
+        },
+        "resize": "callerOwned",
+        "stateSnapshot": "getState.surfaceContract"
+      }
+    },
+    {
+      "file": "src/app_impl/tab_ai_mode/mod.rs",
+      "line": 2628,
+      "owner": "close_acp_chat_to_script_list",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ScriptList",
+      "inferredTarget": "AppView::ScriptList",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/tab_ai_mode/mod.rs",
+      "line": 4338,
+      "owner": "save_tab_ai_script",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::CreationFeedback { path: created_file_path, }",
+      "inferredTarget": "AppView::CreationFeedback",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/trigger_builtin_dispatch.rs",
+      "line": 184,
+      "owner": "show_filterable_view",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::DesignGalleryView { filter: String::new(), selected_index: 0, }",
+      "inferredTarget": "AppView::DesignGalleryView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/trigger_builtin_dispatch.rs",
+      "line": 196,
+      "owner": "show_filterable_view",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ClipboardHistoryView { filter: String::new(), selected_index: 0, }",
+      "inferredTarget": "AppView::ClipboardHistoryView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/trigger_builtin_dispatch.rs",
+      "line": 203,
+      "owner": "show_filterable_view",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::AppLauncherView { filter: String::new(), selected_index: 0, }",
+      "inferredTarget": "AppView::AppLauncherView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/trigger_builtin_dispatch.rs",
+      "line": 215,
+      "owner": "show_filterable_view",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::BrowserTabsView { filter: String::new(), selected_index: 0, }",
+      "inferredTarget": "AppView::BrowserTabsView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/trigger_builtin_dispatch.rs",
+      "line": 231,
+      "owner": "show_filterable_view",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::EmojiPickerView { filter: String::new(), selected_index: 0, selected_category: None, }",
+      "inferredTarget": "AppView::EmojiPickerView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/trigger_builtin_dispatch.rs",
+      "line": 246,
+      "owner": "show_filterable_view",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::WindowSwitcherView { filter: String::new(), selected_index: 0, }",
+      "inferredTarget": "AppView::WindowSwitcherView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/trigger_builtin_dispatch.rs",
+      "line": 264,
+      "owner": "show_filterable_view",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ProcessManagerView { filter: String::new(), selected_index: 0, }",
+      "inferredTarget": "AppView::ProcessManagerView",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/app_impl/ui_window.rs",
+      "line": 1171,
+      "owner": "resolve_confirm_prompt",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "previous",
+      "inferredTarget": "previous",
+      "requiresManualReview": true
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 1517,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ArgPrompt { id, placeholder, choices, actions, }",
+      "inferredTarget": "AppView::ArgPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 1559,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::MiniPrompt { id, placeholder, choices, }",
+      "inferredTarget": "AppView::MiniPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 1597,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::MicroPrompt { id, placeholder, choices, }",
+      "inferredTarget": "AppView::MicroPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 1662,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::DivPrompt { id, entity }",
+      "inferredTarget": "AppView::DivPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 1684,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::FormPrompt { id, entity }",
+      "inferredTarget": "AppView::FormPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 1732,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::TermPrompt { id, entity }",
+      "inferredTarget": "AppView::TermPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 1832,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::EditorPrompt { id, entity, focus_handle: editor_focus_handle, }",
+      "inferredTarget": "AppView::EditorPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 5998,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::PathPrompt { id, entity, focus_handle, }",
+      "inferredTarget": "AppView::PathPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 6074,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::EnvPrompt { id, entity }",
+      "inferredTarget": "AppView::EnvPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 6111,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::DropPrompt { id, entity }",
+      "inferredTarget": "AppView::DropPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 6142,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::TemplatePrompt { id, entity }",
+      "inferredTarget": "AppView::TemplatePrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 6187,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::SelectPrompt { id, entity }",
+      "inferredTarget": "AppView::SelectPrompt",
+      "requiresManualReview": false
+    },
+    {
+      "file": "src/prompt_handler/mod.rs",
+      "line": 6459,
+      "owner": "handle_prompt_message",
+      "receiver": "self",
+      "operation": "assign",
+      "expression": "AppView::ChatPrompt { id, entity }",
+      "inferredTarget": "AppView::ChatPrompt",
+      "requiresManualReview": false
+    }
+  ]
+}

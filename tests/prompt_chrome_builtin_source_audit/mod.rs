@@ -16,6 +16,7 @@ const PROCESS_MANAGER_SOURCE: &str = include_str!("../../src/render_builtins/pro
 const SELECT_PROMPT_SOURCE: &str = include_str!("../../src/prompts/select/render.rs");
 const PATH_PROMPT_SOURCE: &str = include_str!("../../src/prompts/path/render.rs");
 const CHAT_PROMPT_SOURCE: &str = include_str!("../../src/prompts/chat/render_core.rs");
+const APP_VIEW_STATE_SOURCE: &str = include_str!("../../src/main_sections/app_view_state.rs");
 
 /// Assert that a minimal-list builtin surface uses shared chrome infrastructure.
 ///
@@ -50,6 +51,7 @@ fn assert_minimal_builtin_surface(name: &str, source: &str) {
             source.contains("SectionDivider::new()")
                 || source.contains("border_t(px(DIVIDER_HEIGHT))")
                 || source.contains("border_b(px(DIVIDER_HEIGHT))")
+                || source.contains("main_window_footer_slot(")
                 || source.contains("render_native_main_window_footer_spacer()"),
             "{name} should use shared minimal chrome structure tokens"
         );
@@ -546,10 +548,10 @@ fn prompt_entity_footer_surface_strings_match_ui_window_map() {
         ),
     ];
 
-    for (surface, ui_window_mapping, renderer_source) in cases {
+    for (surface, app_view_mapping, renderer_source) in cases {
         assert!(
-            UI_WINDOW_SOURCE.contains(ui_window_mapping),
-            "{surface} must be registered in main_window_footer_surface"
+            APP_VIEW_STATE_SOURCE.contains(app_view_mapping),
+            "{surface} must be registered in AppView::native_footer_surface"
         );
         assert!(
             renderer_source.contains(&format!("\"{surface}\"")),
@@ -561,12 +563,12 @@ fn prompt_entity_footer_surface_strings_match_ui_window_map() {
 #[test]
 fn create_ai_preset_form_does_not_inherit_launcher_native_footer() {
     assert!(
-        UI_WINDOW_SOURCE
+        APP_VIEW_STATE_SOURCE
             .contains("AppView::SearchAiPresetsView { .. } => Some(\"search_ai_presets\")"),
         "search presets list keeps the native footer surface"
     );
     assert!(
-        !UI_WINDOW_SOURCE
+        !APP_VIEW_STATE_SOURCE
             .contains("AppView::CreateAiPresetView { .. } => Some(\"create_ai_preset\")"),
         "create preset form must not inherit the generic launcher native footer"
     );
@@ -600,7 +602,7 @@ fn design_gallery_routes_footer_through_native_slot() {
             && design_gallery.contains("emit_surface_prompt_hint_audit(")
             && design_gallery.contains("\"↵ Select\"")
             && !design_gallery.contains("active_main_window_footer_surface()")
-            && UI_WINDOW_SOURCE.contains("Some(\"design_gallery\")"),
+            && APP_VIEW_STATE_SOURCE.contains("Some(\"design_gallery\")"),
         "design gallery should register a native footer surface and route fallback hints through the shared slot"
     );
 }
@@ -617,8 +619,8 @@ fn kit_store_routes_footer_through_native_slot() {
             && kit_store.contains("render_simple_hint_strip(")
             && kit_store.contains("emit_surface_prompt_hint_audit(")
             && !kit_store.contains("PromptChromeAudit::exception(")
-            && UI_WINDOW_SOURCE.contains("Some(\"kit_store_browse\")")
-            && UI_WINDOW_SOURCE.contains("Some(\"kit_store_installed\")"),
+            && APP_VIEW_STATE_SOURCE.contains("Some(\"kit_store_browse\")")
+            && APP_VIEW_STATE_SOURCE.contains("Some(\"kit_store_installed\")"),
         "kit store should register native footer surfaces and route fallback hints through the shared slot"
     );
 }

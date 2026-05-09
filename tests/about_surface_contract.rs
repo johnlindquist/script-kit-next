@@ -116,7 +116,9 @@ fn about_surface_body_scrolls_when_content_exceeds_container() {
 fn about_route_takes_launcher_input_out_of_focus() {
     assert!(ABOUT_ROUTE_SOURCE.contains("self.focused_input = FocusedInput::None"));
     assert!(ABOUT_ROUTE_SOURCE.contains("self.pending_focus = Some(FocusTarget::AppRoot)"));
-    assert!(ABOUT_ROUTE_SOURCE.contains("semantic_surface_for_main_view"));
+    assert!(
+        ABOUT_ROUTE_SOURCE.contains("transition_current_view_and_rekey_main_automation_surface")
+    );
 }
 
 #[test]

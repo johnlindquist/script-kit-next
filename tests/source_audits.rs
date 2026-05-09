@@ -20,6 +20,9 @@ mod execution_helpers;
 #[path = "source_audits/shortcut_alias_file_actions.rs"]
 mod shortcut_alias_file_actions;
 
+#[path = "source_audits/shortcut_config_source.rs"]
+mod shortcut_config_source;
+
 #[path = "source_audits/action_coverage_audit.rs"]
 mod action_coverage_audit;
 

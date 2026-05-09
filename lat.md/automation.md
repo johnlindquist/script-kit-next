@@ -18,33 +18,33 @@ These points capture the stable automation behavior that runtime tooling depends
 
 These files define the durable automation contract and the proof-oriented harness around it.
 
-- [src/protocol/transaction_executor.rs](/Users/johnlindquist/dev/script-kit-gpui/src/protocol/transaction_executor.rs) - Deterministic `waitFor` and `batch` execution.
-- [src/platform/screenshots_window_open.rs](/Users/johnlindquist/dev/script-kit-gpui/src/platform/screenshots_window_open.rs) - Resolver-driven screenshot capture and ambiguous-candidate rejection.
-- [scripts/test-harness.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/test-harness.ts) - Autonomous test harness using stdin JSON protocol.
-- [scripts/agentic/index.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/index.ts) - Orchestrator for common proof-bearing agentic flows.
-- [scripts/agentic/filterable-surface-matrix.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/filterable-surface-matrix.ts) - State-first matrix for migrated filterable launcher surfaces.
-- [scripts/agentic/attached-popup-surface-matrix.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/attached-popup-surface-matrix.ts) - Attached-popup image-library matrix, starting with Actions Dialog.
-- [scripts/agentic/surface-navigator.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/surface-navigator.ts) - Warm-session navigator for known surfaces and image-library screenshots.
-- [scripts/agentic/session.sh](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/session.sh) - Reusable session management for runtime agentic tests.
-- [scripts/agentic/verify-shot.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/verify-shot.ts) - Proof bundle generation and capture strategy selection.
-- [.codex/hooks/stop-continue-agentic-testing.ts](/Users/johnlindquist/dev/script-kit-gpui/.codex/hooks/stop-continue-agentic-testing.ts) - Run-scoped Codex Stop hook dispatcher.
-- [.codex/hooks/marketing-infographics.md](/Users/johnlindquist/dev/script-kit-gpui/.codex/hooks/marketing-infographics.md) - Marketing image brief used by the Stop hook.
+- [src/protocol/transaction_executor.rs](src/protocol/transaction_executor.rs) - Deterministic `waitFor` and `batch` execution.
+- [src/platform/screenshots_window_open.rs](src/platform/screenshots_window_open.rs) - Resolver-driven screenshot capture and ambiguous-candidate rejection.
+- [scripts/test-harness.ts](scripts/test-harness.ts) - Autonomous test harness using stdin JSON protocol.
+- [scripts/agentic/index.ts](scripts/agentic/index.ts) - Orchestrator for common proof-bearing agentic flows.
+- [scripts/agentic/filterable-surface-matrix.ts](scripts/agentic/filterable-surface-matrix.ts) - State-first matrix for migrated filterable launcher surfaces.
+- [scripts/agentic/attached-popup-surface-matrix.ts](scripts/agentic/attached-popup-surface-matrix.ts) - Attached-popup image-library matrix, starting with Actions Dialog.
+- [scripts/agentic/surface-navigator.ts](scripts/agentic/surface-navigator.ts) - Warm-session navigator for known surfaces and image-library screenshots.
+- [scripts/agentic/session.sh](scripts/agentic/session.sh) - Reusable session management for runtime agentic tests.
+- [scripts/agentic/verify-shot.ts](scripts/agentic/verify-shot.ts) - Proof bundle generation and capture strategy selection.
+- [.codex/hooks/stop-continue-agentic-testing.ts](.codex/hooks/stop-continue-agentic-testing.ts) - Run-scoped Codex Stop hook dispatcher.
+- [.codex/hooks/marketing-infographics.md](.codex/hooks/marketing-infographics.md) - Marketing image brief used by the Stop hook.
 
 ## Source Documents
 
 These source files justify the automation summary on this page.
 
-- [src/protocol/transaction_executor.rs](/Users/johnlindquist/dev/script-kit-gpui/src/protocol/transaction_executor.rs)
-- [src/platform/screenshots_window_open.rs](/Users/johnlindquist/dev/script-kit-gpui/src/platform/screenshots_window_open.rs)
-- [scripts/test-harness.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/test-harness.ts)
-- [scripts/agentic/index.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/index.ts)
-- [scripts/agentic/filterable-surface-matrix.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/filterable-surface-matrix.ts)
-- [scripts/agentic/attached-popup-surface-matrix.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/attached-popup-surface-matrix.ts)
-- [scripts/agentic/surface-navigator.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/surface-navigator.ts)
-- [scripts/agentic/session.sh](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/session.sh)
-- [scripts/agentic/verify-shot.ts](/Users/johnlindquist/dev/script-kit-gpui/scripts/agentic/verify-shot.ts)
-- [.codex/hooks/stop-continue-agentic-testing.ts](/Users/johnlindquist/dev/script-kit-gpui/.codex/hooks/stop-continue-agentic-testing.ts)
-- [.codex/hooks/marketing-infographics.md](/Users/johnlindquist/dev/script-kit-gpui/.codex/hooks/marketing-infographics.md)
+- [src/protocol/transaction_executor.rs](src/protocol/transaction_executor.rs)
+- [src/platform/screenshots_window_open.rs](src/platform/screenshots_window_open.rs)
+- [scripts/test-harness.ts](scripts/test-harness.ts)
+- [scripts/agentic/index.ts](scripts/agentic/index.ts)
+- [scripts/agentic/filterable-surface-matrix.ts](scripts/agentic/filterable-surface-matrix.ts)
+- [scripts/agentic/attached-popup-surface-matrix.ts](scripts/agentic/attached-popup-surface-matrix.ts)
+- [scripts/agentic/surface-navigator.ts](scripts/agentic/surface-navigator.ts)
+- [scripts/agentic/session.sh](scripts/agentic/session.sh)
+- [scripts/agentic/verify-shot.ts](scripts/agentic/verify-shot.ts)
+- [.codex/hooks/stop-continue-agentic-testing.ts](.codex/hooks/stop-continue-agentic-testing.ts)
+- [.codex/hooks/marketing-infographics.md](.codex/hooks/marketing-infographics.md)
 
 ## Related Pages
 
@@ -72,7 +72,7 @@ These rules describe the behavior constraints that automation changes should pre
 
 The matrix makes migrated filterable launcher surfaces repeatable state-first checks.
 
-`scripts/agentic/filterable-surface-matrix.ts` declares each migrated surface's entry command, `promptType`, `getElements` list semantic id, and narrowing filter text. The runner starts a session, enters the real surface, samples empty and filtered `getState`/`getElements` receipts, and asserts `visibleChoiceCount` equals the list item count while `totalCount` remains visible rows plus input/list chrome. AURP-06 starts with `current-app-commands-visible-rows`, the surface migrated in AURP-05.
+`scripts/agentic/filterable-surface-matrix.ts` declares each migrated surface's entry command, `promptType`, `SurfaceKind`, `getElements` list semantic id, and narrowing filter text. The runner starts a session, enters the real surface, samples empty and filtered `getState`/`getElements` receipts, and asserts `stateResult.surfaceContract.surfaceKind` plus `automationSemanticSurface` match the matrix, `visibleChoiceCount` equals the list item count, and `totalCount` remains visible rows plus input/list chrome. Attached actions popups can be proven through `stateResult.activePopupContract`. AURP-06 starts with `current-app-commands-visible-rows`, the surface migrated in AURP-05.
 
 AURP-11 expands the matrix with `clipboard-history-visible-rows` and `emoji-picker-visible-rows`, then resets each case's filter after entry so multi-case runs cannot inherit prior filter state. AURP-16 adds `app-launcher-visible-rows`, `design-gallery-visible-rows`, and `process-manager-visible-rows` because their entry commands and state/element receipts are stable without browser or window-manager setup. [[tests/filterable_surface_agentic_matrix_contract.rs#matrix_declares_expanded_filterable_surface_cases]] and [[tests/filterable_surface_agentic_matrix_contract.rs#matrix_declares_stable_sibling_filterable_surface_cases]] pin these cases.
 
@@ -150,7 +150,9 @@ The Bun proof helper in [[scripts/agentic/verify-shot.ts]] independently audits 
 
 Subview tags currently wired through `triggerBuiltin`: `fileSearch`, `clipboardHistory`, `appLauncher`, `browserTabs`, `emojiPicker`, `windowSwitcher`, `processManager`, `currentAppCommands`, `designGallery`, `acpChat`. Each arm in the stdin dispatchers must have a matching `AppView` variant in `AppView::surface_contract()` — without it the surface stays at the prior value. `acpChat` is the Main-hosted ACP chat surface (flipped via `triggerBuiltin tab-ai` / `tabai`); detached ACP popups use the popup-level surface class documented in [[lat.md/automation#Automation#Surface-proof CLI#Surface classes]] and are not keyed through this map.
 
-The re-key goes through [[src/app_impl/trigger_builtin_dispatch.rs#ScriptListApp#rekey_main_automation_surface_after_trigger_builtin_dispatch]], which reads the post-dispatch `current_view` and calls [[src/windows/automation_registry.rs#update_automation_semantic_surface]] rather than a full upsert. The stdin dispatchers call this named helper after `dispatch_trigger_builtin`, so they do not recompute bounds, focus, title, or raw surface tags they do not own. The `AppView → semanticSurface` mapping lives inside `AppView::surface_contract()` next to the enum in `src/main_sections/app_view_state.rs`; `semantic_surface_for_main_view()` delegates to that registry.
+The re-key goes through [[src/app_impl/trigger_builtin_dispatch.rs#ScriptListApp#rekey_main_automation_surface_after_trigger_builtin_dispatch]], which delegates to [[src/app_impl/automation_surface.rs#ScriptListApp#rekey_main_automation_surface_from_current_view]] after dispatch mutates `current_view`. The stdin dispatchers call the triggerBuiltin helper after `dispatch_trigger_builtin`, so they do not recompute bounds, focus, title, or raw surface tags they do not own. The `AppView → semanticSurface` mapping lives inside `SurfaceKind::surface_contract()` next to the enum in `src/main_sections/app_view_state.rs`; `semantic_surface_for_main_view()` delegates to that registry.
+
+Current-view-derived main-window re-keying is owned by `rekey_main_automation_surface_from_current_view`. About, parent confirm, embedded ACP entry, embedded ACP return-to-origin, and triggerBuiltin post-dispatch paths call that helper instead of duplicating `semantic_surface_for_main_view(&self.current_view)` plus `update_automation_semantic_surface("main", …)`. Hard resets to ScriptList still use explicit `scriptList` writes where existing hide/detach contracts pin reset ordering.
 
 `sync_main_automation_window` preserves the existing `semanticSurface` on window-bounds / focus-change events — if it silently hardcoded `scriptList`, a resize following a subview transition would clobber the re-key and the automation consumer would see the subview on screen yet `scriptList` in the registry.
 

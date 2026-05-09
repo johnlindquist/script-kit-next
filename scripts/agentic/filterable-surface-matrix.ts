@@ -3,8 +3,8 @@
  * State-first verification matrix for filterable launcher surfaces.
  *
  * The matrix is intentionally data-first: each migrated surface declares the
- * entry command, promptType, list semantic id, and filter text that must keep
- * `getState.visibleChoiceCount` aligned with `getElements`.
+ * entry command, promptType, SurfaceKind, list semantic id, and filter text
+ * that must keep `getState.visibleChoiceCount` aligned with `getElements`.
  *
  * Usage:
  *   bun scripts/agentic/filterable-surface-matrix.ts --list
@@ -42,6 +42,7 @@ export interface FilterableSurfaceMatrixEntry {
   viewName: string;
   imageLibraryName: string;
   promptType: string;
+  surfaceKind: string;
   listSemanticId: string;
   entryCommand: JsonObject;
   filterText: string;
@@ -85,6 +86,7 @@ export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
     viewName: "current-app-commands",
     imageLibraryName: "current-app-commands.png",
     promptType: "currentAppCommands",
+    surfaceKind: "CurrentAppCommands",
     listSemanticId: "list:menu-commands",
     entryCommand: { type: "triggerBuiltin", name: "current-app-commands" },
     filterText: "workspace",
@@ -98,6 +100,7 @@ export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
     viewName: "clipboard-history",
     imageLibraryName: "clipboard-history.png",
     promptType: "clipboardHistory",
+    surfaceKind: "ClipboardHistory",
     listSemanticId: "list:clipboard-history",
     entryCommand: { type: "triggerBuiltin", name: "clipboard-history" },
     filterText: "__aurp11_no_clipboard_match__",
@@ -111,6 +114,7 @@ export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
     viewName: "emoji-picker",
     imageLibraryName: "emoji-picker.png",
     promptType: "emojiPicker",
+    surfaceKind: "EmojiPicker",
     listSemanticId: "list:emoji-results",
     entryCommand: { type: "triggerBuiltin", name: "emoji" },
     filterText: "heart",
@@ -124,6 +128,7 @@ export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
     viewName: "app-launcher",
     imageLibraryName: "app-launcher.png",
     promptType: "appLauncher",
+    surfaceKind: "AppLauncher",
     listSemanticId: "list:apps",
     entryCommand: { type: "triggerBuiltin", name: "apps" },
     filterText: "__aurp16_no_app_match__",
@@ -137,6 +142,7 @@ export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
     viewName: "design-gallery",
     imageLibraryName: "design-gallery.png",
     promptType: "designGallery",
+    surfaceKind: "DesignGallery",
     listSemanticId: "list:design-gallery",
     entryCommand: { type: "triggerBuiltin", name: "design-gallery" },
     filterText: "icon",
@@ -150,6 +156,7 @@ export const FILTERABLE_SURFACE_MATRIX: FilterableSurfaceMatrixEntry[] = [
     viewName: "process-manager",
     imageLibraryName: "process-manager.png",
     promptType: "processManager",
+    surfaceKind: "ProcessManager",
     listSemanticId: "list:processes",
     entryCommand: { type: "triggerBuiltin", name: "process-manager" },
     filterText: "__aurp16_no_process_match__",
@@ -277,6 +284,14 @@ function stringField(source: JsonObject, key: string): string {
   return value;
 }
 
+function objectField(source: JsonObject, key: string): JsonObject {
+  const value = source[key];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Expected object ${key}, got ${JSON.stringify(value)}`);
+  }
+  return value as JsonObject;
+}
+
 export function elementsFrom(response: JsonObject): JsonObject[] {
   const elements = response.elements;
   if (!Array.isArray(elements)) {
@@ -309,6 +324,22 @@ export function observeCounts(
   if (promptType !== entry.promptType) {
     throw new Error(
       `${entry.id}: expected promptType ${entry.promptType}, got ${promptType}`,
+    );
+  }
+  const surfaceContract = objectField(state, "surfaceContract");
+  const surfaceKind = stringField(surfaceContract, "surfaceKind");
+  if (surfaceKind !== entry.surfaceKind) {
+    throw new Error(
+      `${entry.id}: expected surfaceContract.surfaceKind ${entry.surfaceKind}, got ${surfaceKind}`,
+    );
+  }
+  const automationSemanticSurface = stringField(
+    surfaceContract,
+    "automationSemanticSurface",
+  );
+  if (automationSemanticSurface !== entry.surface) {
+    throw new Error(
+      `${entry.id}: expected surfaceContract.automationSemanticSurface ${entry.surface}, got ${automationSemanticSurface}`,
     );
   }
 
