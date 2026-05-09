@@ -9,19 +9,29 @@ use crate::computer_use::runtime_bridge::{
 };
 use crate::computer_use::types::ComputerUseSeeArgs;
 use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
+use crate::protocol::{AutomationWindowInfo, AUTOMATION_WINDOW_SCHEMA_VERSION};
 use serde_json::Value;
 
 pub const COMPUTER_USE_NAMESPACE: &str = "computer/";
 pub const COMPUTER_SEE_TOOL: &str = "computer/see";
+pub const COMPUTER_LIST_WINDOWS_TOOL: &str = "computer/list_windows";
 
 pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
-    vec![ToolDefinition {
-        name: COMPUTER_SEE_TOOL.to_string(),
-        description:
-            "Inspect a Script Kit automation window and return a state-first computer-use observation."
+    vec![
+        ToolDefinition {
+            name: COMPUTER_SEE_TOOL.to_string(),
+            description:
+                "Inspect a Script Kit automation window and return a state-first computer-use observation."
+                    .to_string(),
+            input_schema: computer_see_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_LIST_WINDOWS_TOOL.to_string(),
+            description: "List registered Script Kit automation windows without interacting with them."
                 .to_string(),
-        input_schema: computer_see_input_schema(),
-    }]
+            input_schema: computer_list_windows_input_schema(),
+        },
+    ]
 }
 
 pub fn is_computer_use_tool(name: &str) -> bool {
@@ -35,11 +45,25 @@ pub fn handle_computer_use_tool_call(
 ) -> ToolResult {
     match name {
         COMPUTER_SEE_TOOL => handle_see(arguments, runtime),
+        COMPUTER_LIST_WINDOWS_TOOL => handle_list_windows(arguments),
         _ => error_result(
             "unknown_tool",
             &format!("Unknown computer-use tool: {name}"),
         ),
     }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseListWindowsArgs {}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseListWindowsResult {
+    schema_version: u32,
+    windows: Vec<AutomationWindowInfo>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    focused_window_id: Option<String>,
 }
 
 fn handle_see(arguments: &Value, runtime: Option<&dyn ComputerUseRuntimeBridge>) -> ToolResult {
@@ -62,6 +86,19 @@ fn handle_see(arguments: &Value, runtime: Option<&dyn ComputerUseRuntimeBridge>)
         Ok(snapshot) => json_tool_result(&snapshot),
         Err(error) => runtime_error_result(&args, error),
     }
+}
+
+fn handle_list_windows(arguments: &Value) -> ToolResult {
+    let _args: ComputerUseListWindowsArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    json_tool_result(&ComputerUseListWindowsResult {
+        schema_version: AUTOMATION_WINDOW_SCHEMA_VERSION,
+        windows: crate::windows::list_automation_windows(),
+        focused_window_id: crate::windows::focused_automation_window_id(),
+    })
 }
 
 fn runtime_error_result(args: &ComputerUseSeeArgs, error: ComputerUseRuntimeError) -> ToolResult {
@@ -184,13 +221,23 @@ fn computer_see_input_schema() -> Value {
     })
 }
 
+fn computer_list_windows_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::protocol::{
-        AutomationInspectSnapshot, AutomationWindowTarget, SemanticQuality,
-        AUTOMATION_INSPECT_SCHEMA_VERSION,
+        AutomationInspectSnapshot, AutomationWindowBounds, AutomationWindowInfo,
+        AutomationWindowKind, AutomationWindowTarget, SemanticQuality,
+        AUTOMATION_INSPECT_SCHEMA_VERSION, AUTOMATION_WINDOW_SCHEMA_VERSION,
     };
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     struct FakeComputerUseRuntime;
 
@@ -233,13 +280,19 @@ mod tests {
     }
 
     #[test]
-    fn computer_see_tool_definition_is_registered() {
+    fn computer_use_tool_definitions_are_registered() {
         let names: Vec<String> = get_computer_use_tool_definitions()
             .into_iter()
             .map(|tool| tool.name)
             .collect();
 
-        assert_eq!(names, vec![COMPUTER_SEE_TOOL.to_string()]);
+        assert_eq!(
+            names,
+            vec![
+                COMPUTER_SEE_TOOL.to_string(),
+                COMPUTER_LIST_WINDOWS_TOOL.to_string()
+            ]
+        );
     }
 
     #[test]
@@ -254,6 +307,28 @@ mod tests {
                 .get("additionalProperties")
                 .and_then(Value::as_bool),
             Some(false)
+        );
+    }
+
+    #[test]
+    fn computer_list_windows_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_LIST_WINDOWS_TOOL)
+            .expect("computer/list_windows tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            tool.input_schema
+                .get("properties")
+                .and_then(Value::as_object)
+                .map(|properties| properties.is_empty()),
+            Some(true)
         );
     }
 
@@ -319,5 +394,66 @@ mod tests {
 
         assert_eq!(result.is_error, Some(true));
         assert!(result.content[0].text.contains("invalid_arguments"));
+    }
+
+    #[test]
+    fn computer_list_windows_rejects_bad_arguments() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_WINDOWS_TOOL,
+            &serde_json::json!({ "target": { "type": "focused" } }),
+            None,
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("invalid_arguments"));
+    }
+
+    #[test]
+    fn computer_list_windows_returns_registry_snapshot_without_runtime() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos();
+        let id = format!("mcp-list-windows-test-{nonce}");
+
+        crate::windows::upsert_automation_window(AutomationWindowInfo {
+            id: id.clone(),
+            kind: AutomationWindowKind::Notes,
+            title: Some("MCP List Windows Test".to_string()),
+            focused: false,
+            visible: true,
+            semantic_surface: Some("notes".to_string()),
+            bounds: Some(AutomationWindowBounds {
+                x: 10.0,
+                y: 20.0,
+                width: 300.0,
+                height: 200.0,
+            }),
+            parent_window_id: None,
+            parent_kind: None,
+        });
+
+        let result =
+            handle_computer_use_tool_call(COMPUTER_LIST_WINDOWS_TOOL, &serde_json::json!({}), None);
+
+        crate::windows::remove_automation_window(&id);
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_windows json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(AUTOMATION_WINDOW_SCHEMA_VERSION)
+        );
+        assert!(value["focusedWindowId"].is_null() || value["focusedWindowId"].is_string());
+
+        let windows = value["windows"].as_array().expect("windows array");
+        let window = windows
+            .iter()
+            .find(|window| window["id"] == id)
+            .expect("registered test window should be listed");
+        assert_eq!(window["kind"], "notes");
+        assert_eq!(window["visible"], true);
+        assert_eq!(window["semanticSurface"], "notes");
     }
 }

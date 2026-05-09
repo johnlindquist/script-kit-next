@@ -694,6 +694,10 @@ mod tests {
             tool_names.contains(&"computer/see"),
             "Should include computer/see"
         );
+        assert!(
+            tool_names.contains(&"computer/list_windows"),
+            "Should include computer/list_windows"
+        );
         Ok(())
     }
 
@@ -764,6 +768,39 @@ mod tests {
         let snapshot: crate::protocol::AutomationInspectSnapshot = serde_json::from_str(text)?;
         assert_eq!(snapshot.window_id, "main:0");
         assert!(!text.contains("\"action\""));
+        Ok(())
+    }
+
+    #[test]
+    fn test_tools_call_computer_list_windows_does_not_require_runtime() -> anyhow::Result<()> {
+        let request = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: serde_json::json!(44),
+            method: "tools/call".to_string(),
+            params: serde_json::json!({
+                "name": "computer/list_windows",
+                "arguments": {}
+            }),
+        };
+
+        let response = handle_tools_call_with_runtime(request, &[], None);
+        assert!(response.error.is_none());
+
+        let result = response.result.context("expected result")?;
+        assert_eq!(result.get("isError"), None);
+        let text = result
+            .get("content")
+            .and_then(|content| content.as_array())
+            .and_then(|content| content.first())
+            .and_then(|item| item.get("text"))
+            .and_then(|text| text.as_str())
+            .context("missing tool text")?;
+        let value: serde_json::Value = serde_json::from_str(text)?;
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(crate::protocol::AUTOMATION_WINDOW_SCHEMA_VERSION)
+        );
+        assert!(value["windows"].is_array());
         Ok(())
     }
 
