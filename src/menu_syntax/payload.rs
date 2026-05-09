@@ -132,6 +132,44 @@ pub fn is_known_capture_target(target: &str) -> bool {
         .any(|k| k.eq_ignore_ascii_case(target))
 }
 
+#[cfg(test)]
+mod capture_target_taxonomy_tests {
+    use super::*;
+
+    #[test]
+    fn core_capture_targets_are_stable_taxonomy() {
+        assert_eq!(
+            KNOWN_CAPTURE_TARGETS,
+            &["todo", "cal", "note", "social", "link"]
+        );
+    }
+
+    #[test]
+    fn known_capture_targets_are_case_insensitive_for_core_and_mcal() {
+        for target in [
+            "todo", "TODO", "cal", "CAL", "note", "NOTE", "social", "SOCIAL", "link", "LINK",
+            "mcal", "MCAL",
+        ] {
+            assert!(
+                is_known_capture_target(target),
+                "`{target}` should be parser-known"
+            );
+        }
+    }
+
+    #[test]
+    fn shipped_dynamic_targets_are_not_parser_known_without_metadata() {
+        for target in [
+            "gcal", "github", "expense", "snippet", "fixture", "reminder", "snooze", "defer",
+        ] {
+            assert!(
+                !is_known_capture_target(target),
+                "`{target}` should stay metadata-driven until registered"
+            );
+        }
+    }
+}
+
 /// Positional argument descriptor for a `command.v1` handler. Mirrors
 /// `CommandArgSpec` in `kit-init/types/menu-syntax.d.ts` so authors get the
 /// same shape on both sides. Empty `values` means any string is accepted.

@@ -89,6 +89,10 @@ fn bare_semicolon_lists_all_targets_original_order() {
         create_handler_footer(&snap).title,
         "Create capture handler…"
     );
+    assert!(
+        !target_tokens(&snap).contains(&";mcal"),
+        "mcal is schema-known but must not appear in the bare picker unless metadata registers it"
+    );
 }
 
 #[test]
@@ -190,6 +194,18 @@ fn mcal_context() -> TriggerPickerContext {
         scripts: vec![mcal],
         ..Default::default()
     }
+}
+
+#[test]
+fn registered_mcal_uses_metadata_label_in_filtered_path() {
+    let ctx = mcal_context();
+    let snap = snapshot(";mac", &ctx);
+    let rows = target_rows(&snap);
+
+    assert_eq!(snap.target, None);
+    assert_eq!(rows[0].token.as_deref(), Some(";mcal"));
+    assert_eq!(rows[0].title, "Add event to macOS Calendar");
+    assert_eq!(rows[0].detail.as_deref(), Some("Registered capture target"));
 }
 
 #[test]

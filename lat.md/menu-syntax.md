@@ -80,6 +80,14 @@ Command authors declare argv schema (label, description, positional args, named 
 
 [[src/menu_syntax/payload.rs#MenuSyntaxHandlerSpec]] gained optional `head`, `description`, `args` (`Vec<CommandArgSpec>`), `flags` (`Vec<CommandFlagSpec>`), and `usage` fields, all `#[serde(default)]` so capture handlers don't have to set them. [[src/menu_syntax/payload.rs#CommandArgSpec]] and [[src/menu_syntax/payload.rs#CommandFlagSpec]] mirror the TS shapes in `kit-init/types/menu-syntax.d.ts`. [[src/menu_syntax/filter.rs#script_command_schema_for]] scans loaded scripts for the first `command.v1` handler whose `head` matches case-insensitively and returns the spec by value. [[src/menu_syntax/main_hint.rs#command_schema_rows]] renders one hint row per arg (`label = arg.name`, value = `values.join(" | ")` else description else `e.g. example`, "required" chip when applicable) and one per flag (label = flag long form, value combines alias / values / description). The order is: parsed-invocation rows from `command_preview_rows` first, then the schema rows. The receipt fixture is `menu_syntax::main_hint::tests::command_composer_renders_schema_rows_for_registered_head` (asserts labels include `env` + `--dry-run`, env row has the `required` chip, env value is `"prod | staging | dev"`, dry-run value contains the description). A negative twin (`command_composer_without_schema_omits_schema_rows`) pins that no schema rows leak when no script registers a matching handler.
 
+## Capture Target Taxonomy Audit
+
+Capture targets are pinned into core, special-case, and metadata-driven groups before any registry extraction.
+
+The core built-ins are `todo`, `cal`, `note`, `social`, and `link`. [[src/menu_syntax/payload.rs#KNOWN_CAPTURE_TARGETS]] is the parser-owned list, and the bare `;` trigger picker exposes exactly those five targets in that order. [[src/menu_syntax/capture_schema.rs#builtin_target_slugs]] is the schema-owned builtin list and must stay schema-backed without implying picker visibility.
+
+`mcal` is intentionally special: [[src/menu_syntax/payload.rs#is_known_capture_target]] treats it as parser-known and [[src/menu_syntax/capture_schema.rs#builtin_schema]] gives it the calendar schema, but the default picker does not list `;mcal` until script metadata registers that target. Shipped examples such as `gcal`, `github`, `expense`, `snippet`, `fixture`, `reminder`, `snooze`, and `defer` remain metadata-driven custom targets; they can register labels and schemas through `menuSyntax`, but parser-known status and builtin schemas must not drift to include them.
+
 ## Capture Field Schemas
 
 Capture targets declare which payload fields are required, optional, or forbidden so the UI can refuse to ship nonsense (e.g. `;cal` without a date).

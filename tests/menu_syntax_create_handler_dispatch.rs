@@ -1,6 +1,5 @@
-use script_kit_gpui::menu_syntax::{
-    create_capture_handler_scaffold, OsCaptureHandlerScaffoldEffects,
-};
+use script_kit_gpui::menu_syntax::create_capture_handler_scaffold;
+use script_kit_gpui::menu_syntax::trigger_picker::OsCaptureHandlerScaffoldEffects;
 
 #[test]
 fn create_handler_writes_template_to_expected_path() {

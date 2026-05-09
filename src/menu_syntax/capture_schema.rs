@@ -308,9 +308,22 @@ mod tests {
     }
 
     #[test]
+    fn shipped_dynamic_targets_do_not_have_builtin_schema() {
+        for target in [
+            "gcal", "github", "expense", "snippet", "fixture", "reminder", "snooze", "defer",
+        ] {
+            assert!(
+                builtin_schema(target).is_none(),
+                "`{target}` should not gain a builtin schema by accident"
+            );
+        }
+    }
+
+    #[test]
     fn builtin_target_slugs_match_known_targets() {
         let slugs: Vec<&str> = builtin_target_slugs().to_vec();
         assert_eq!(slugs.len(), 5);
+        assert_eq!(slugs, vec!["todo", "note", "link", "cal", "social"]);
         for slug in &slugs {
             assert!(
                 builtin_schema(slug).is_some(),
@@ -318,6 +331,21 @@ mod tests {
                 slug
             );
         }
+    }
+
+    #[test]
+    fn mcal_uses_calendar_schema_but_is_not_core_builtin_slug() {
+        let cal = builtin_schema("cal").expect("cal schema");
+        let mcal = builtin_schema("mcal").expect("mcal schema");
+
+        assert_eq!(mcal.target, "mcal");
+        assert_eq!(mcal.required, cal.required);
+        assert_eq!(mcal.optional, cal.optional);
+        assert_eq!(mcal.forbidden, cal.forbidden);
+        assert!(
+            !builtin_target_slugs().contains(&"mcal"),
+            "mcal is schema-known, but not one of the core builtin slugs"
+        );
     }
 
     #[test]
