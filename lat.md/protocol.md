@@ -86,6 +86,8 @@ Every stdin `requestId` is accepted and echoed back on its response envelope ver
 
 `stateResult` also carries `screenshotIdentity: Option<String>` — the bare filename of the most recent Tab AI screenshot captured in this process lifetime, or omitted when no capture has occurred. The filename already encodes three independent identity axes (timestamp + PID + sequence) via [[src/ai/harness/screenshot_files.rs#build_tab_ai_screenshot_filename]], so automation can verify identity threading from capture through ACP context by reading `getState.screenshotIdentity` directly instead of grepping the filesystem. The field is populated by the main-window `getState` arm reading [[src/ai/harness/screenshot_files.rs#current_screenshot_identity]], which is the single accessor over the `TAB_AI_SCREENSHOT_LAST_IDENTITY` static that both capture paths write via [[src/ai/harness/screenshot_files.rs#record_last_screenshot_identity]]. Pinned at source level in `tests/state_result_screenshot_identity_contract.rs` (4 tests: variant declaration + camelCase rename + skip_if_none, constructor param, capture-path record calls, snapshot-reads-through-accessor).
 
+The long positional `Message::state_result(...)` constructor must stay in the same field order as the `StateResult` variant and forwarding literal. [[tests/state_result_constructor_order_contract.rs#state_result_constructor_signature_and_forwarding_match_variant_field_order]] pins that full order so same-type slots cannot silently drift.
+
 ### getConfigFingerprint stdin RPC
 
 A read-only probe exposing the current `~/.kit/config.ts` fingerprint so automation can verify a write landed on disk without shelling out to `bun` or `stat`.
