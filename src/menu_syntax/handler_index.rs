@@ -305,7 +305,7 @@ mod tests {
     fn invocation(target: &str, body: &str) -> CaptureInvocation {
         CaptureInvocation {
             target: target.to_string(),
-            alias_form: CaptureAlias::Plus,
+            alias_form: CaptureAlias::CapturePrefix,
             body: body.to_string(),
             tags: Vec::new(),
             priority: None,

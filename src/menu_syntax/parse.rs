@@ -80,15 +80,7 @@ pub fn parse_with_config_and_capture_targets(
             let head_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
             let head = &rest[..head_end];
             if !is_capture_target_registered(head, registered_capture_targets) {
-                if first == '+' && head_end == rest.len() {
-                    return MenuSyntaxParse::None;
-                }
-                // Partial / unknown target — keep the popup driving so `;`
-                // never falls through to launcher search-fallback.
-                return MenuSyntaxParse::Incomplete(IncompleteSyntax {
-                    kind: IncompleteKind::BareCapturePrefix,
-                    hint: "Choose a capture target: todo, cal, note, social, link".to_string(),
-                });
+                return MenuSyntaxParse::None;
             }
             return finalize_capture(input, registered_capture_targets);
         }
@@ -307,11 +299,11 @@ mod tests {
     }
 
     #[test]
-    fn plus_routes_to_capture() {
+    fn semicolon_routes_to_capture() {
         match parse(";todo Renew passport #errands p1") {
             MenuSyntaxParse::Capture(inv) => {
                 assert_eq!(inv.target, "todo");
-                assert_eq!(inv.alias_form, CaptureAlias::Plus);
+                assert_eq!(inv.alias_form, CaptureAlias::CapturePrefix);
                 assert_eq!(inv.body, "Renew passport");
                 assert_eq!(inv.tags, vec!["errands".to_string()]);
                 assert_eq!(inv.priority, Some(1));
@@ -339,25 +331,61 @@ mod tests {
     }
 
     #[test]
-    fn plus_bare_is_incomplete() {
-        match parse(";") {
-            MenuSyntaxParse::Incomplete(s) => {
-                assert!(matches!(s.kind, IncompleteKind::BareCapturePrefix));
+    fn capture_prefix_bare_is_incomplete() {
+        for input in [";", "+"] {
+            match parse(input) {
+                MenuSyntaxParse::Incomplete(s) => {
+                    assert!(matches!(s.kind, IncompleteKind::BareCapturePrefix));
+                }
+                other => panic!("expected Incomplete for {input}, got {other:?}"),
             }
-            other => panic!("expected Incomplete, got {other:?}"),
         }
     }
 
     // @lat: menu-syntax Parser Boundary
     #[test]
-    fn unknown_plus_head_falls_back_to_normal_search() {
+    fn unknown_capture_prefix_head_falls_back_to_normal_search() {
+        assert_eq!(parse(";github"), MenuSyntaxParse::None);
+        assert_eq!(parse(";github issue"), MenuSyntaxParse::None);
         assert_eq!(parse("+github"), MenuSyntaxParse::None);
         assert_eq!(parse("+1"), MenuSyntaxParse::None);
         assert_eq!(parse("+react component"), MenuSyntaxParse::None);
     }
 
+    // @lat: menu-syntax Parser Boundary
     #[test]
-    fn registered_capture_target_claims_plus_and_keyword_forms() {
+    fn prefix_ownership_conformance_matrix() {
+        let registered = vec!["github".to_string()];
+        let cases: &[(&str, &[String], &str)] = &[
+            (";", &[], "bare-capture-prefix"),
+            (";todo", &[], "missing-body:todo"),
+            (";todo body", &[], "capture:todo:prefix"),
+            (";unknown", &[], "none"),
+            (";unknown body", &[], "none"),
+            ("+", &[], "bare-capture-prefix"),
+            ("+todo body", &[], "capture:todo:prefix"),
+            ("+unknown", &[], "none"),
+            ("+unknown body", &[], "none"),
+            ("todo: body", &[], "capture:todo:keyword"),
+            ("unknown: body", &[], "none"),
+            ("localhost:3000", &[], "none"),
+            ("#tag", &[], "none"),
+            (";github body", &registered, "capture:github:prefix"),
+            ("+github body", &registered, "capture:github:prefix"),
+            ("github: body", &registered, "capture:github:keyword"),
+        ];
+
+        for (input, targets, expected) in cases {
+            let actual = parse_shape(parse_with_capture_targets(input, targets));
+            assert_eq!(
+                actual, *expected,
+                "parse boundary mismatch for input {input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn registered_capture_target_claims_legacy_plus_and_keyword_forms() {
         let targets = vec!["github".to_string()];
         match parse_with_capture_targets("+github issue #bug", &targets) {
             MenuSyntaxParse::Capture(inv) => {
@@ -474,6 +502,30 @@ mod tests {
                 assert_eq!(a.argv, vec!["--dry-run".to_string()]);
             }
             other => panic!("expected Argv, got {other:?}"),
+        }
+    }
+
+    fn parse_shape(parsed: MenuSyntaxParse) -> String {
+        match parsed {
+            MenuSyntaxParse::None => "none".to_string(),
+            MenuSyntaxParse::AdvancedQuery(_) => "advanced-query".to_string(),
+            MenuSyntaxParse::Argv(_) => "argv".to_string(),
+            MenuSyntaxParse::Capture(inv) => {
+                let alias = match inv.alias_form {
+                    CaptureAlias::CapturePrefix => "prefix",
+                    CaptureAlias::Keyword => "keyword",
+                };
+                format!("capture:{}:{alias}", inv.target)
+            }
+            MenuSyntaxParse::Incomplete(s) => match s.kind {
+                IncompleteKind::BareCapturePrefix => "bare-capture-prefix".to_string(),
+                IncompleteKind::BareQueryPrefix => "bare-query-prefix".to_string(),
+                IncompleteKind::BareArgvPrefix => "bare-argv-prefix".to_string(),
+                IncompleteKind::MissingCaptureBody(target) => format!("missing-body:{target}"),
+                IncompleteKind::UnknownCaptureTarget(target) => {
+                    format!("unknown-capture-target:{target}")
+                }
+            },
         }
     }
 }

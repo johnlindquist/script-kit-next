@@ -35,7 +35,7 @@ fn empty_query() -> AdvancedQuery {
 fn empty_invocation(target: &str) -> CaptureInvocation {
     CaptureInvocation {
         target: target.into(),
-        alias_form: CaptureAlias::Plus,
+        alias_form: CaptureAlias::CapturePrefix,
         body: String::new(),
         tags: vec![],
         priority: None,

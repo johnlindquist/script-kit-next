@@ -199,6 +199,9 @@ pub fn build_trigger_picker_snapshot(
     if plus_capture_body_boundary_has_started(input, &capture_targets) {
         return None;
     }
+    if let Some(filter) = canonical_capture_picker_filter(input) {
+        return Some(build_capture_picker_snapshot(filter.as_deref(), ctx));
+    }
 
     let parsed = if capture_targets.is_empty() {
         parse(input)
@@ -370,6 +373,16 @@ fn capture_picker_filter(input: &str) -> Option<String> {
         return None;
     }
     Some(rest.to_ascii_lowercase())
+}
+
+fn canonical_capture_picker_filter(input: &str) -> Option<Option<String>> {
+    let trimmed = input.trim_start();
+    let rest = trimmed.strip_prefix(';')?;
+    if rest.trim().is_empty() {
+        return Some(None);
+    }
+    let head = rest.split_whitespace().next()?;
+    Some(Some(head.to_ascii_lowercase()))
 }
 
 fn unknown_plus_capture_body(input: &str) -> bool {

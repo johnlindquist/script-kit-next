@@ -92,7 +92,7 @@ mod tests {
     fn capture(raw: &str) -> CaptureInvocation {
         CaptureInvocation {
             target: "cal".to_string(),
-            alias_form: CaptureAlias::Plus,
+            alias_form: CaptureAlias::CapturePrefix,
             body: "Design review".to_string(),
             tags: vec![],
             priority: None,

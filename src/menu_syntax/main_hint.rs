@@ -1120,7 +1120,7 @@ fn capture_validation_chips_and_snapshot(
         None => {
             synthetic = CaptureInvocation {
                 target: target.to_string(),
-                alias_form: CaptureAlias::Plus,
+                alias_form: CaptureAlias::CapturePrefix,
                 body: String::new(),
                 tags: vec![],
                 priority: None,
@@ -2355,7 +2355,7 @@ mod tests {
     fn capture_validation_cal_with_body_and_date_yields_ready() {
         let mut inv = CaptureInvocation {
             target: "cal".to_string(),
-            alias_form: CaptureAlias::Plus,
+            alias_form: CaptureAlias::CapturePrefix,
             body: "Design review".to_string(),
             tags: vec![],
             priority: None,
@@ -2397,7 +2397,7 @@ mod tests {
     fn capture_validation_link_with_bad_url_yields_malformed() {
         let inv = CaptureInvocation {
             target: "link".to_string(),
-            alias_form: CaptureAlias::Plus,
+            alias_form: CaptureAlias::CapturePrefix,
             body: String::new(),
             tags: vec![],
             priority: None,

@@ -62,7 +62,8 @@ pub struct AdvancedQuery {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CaptureAlias {
-    Plus,
+    /// A sigil-prefixed capture such as `;todo body` or legacy `+todo body`.
+    CapturePrefix,
     Keyword,
 }
 
