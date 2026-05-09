@@ -101,7 +101,8 @@ pub use grammar_payload::{
 };
 #[allow(unused_imports)]
 pub use handler_index::{
-    rank_handlers_for_target, rank_scripts_handling_capture, HandlerScore, RankedHandler,
+    explain_capture_handler_ranking, rank_handlers_for_target, rank_scripts_handling_capture,
+    CaptureHandlerRankingExplanation, CaptureHandlerRankingRow, HandlerScore, RankedHandler,
 };
 #[allow(unused_imports)]
 pub use history::{

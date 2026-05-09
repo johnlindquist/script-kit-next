@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::scripts::Script;
@@ -26,6 +27,25 @@ pub struct HandlerScore {
     pub default_handler: u8,
     pub user_authored: u8,
     pub accepts_boost: u8,
+}
+
+/// Human-readable explanation for the capture handler that Enter will run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureHandlerRankingExplanation {
+    pub winner: Option<CaptureHandlerRankingRow>,
+    pub alternatives: Vec<CaptureHandlerRankingRow>,
+    pub warning: Option<String>,
+}
+
+/// One deduped executable handler plus the score details behind its rank.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureHandlerRankingRow {
+    pub script_name: String,
+    pub plugin_id: String,
+    pub path: PathBuf,
+    pub score: HandlerScore,
+    pub reason_parts: Vec<String>,
+    pub matched_accepts: Vec<String>,
 }
 
 /// Cap `accepts_boost` at 3 so even a handler that accepts `["date","url",
@@ -84,17 +104,118 @@ pub fn rank_scripts_handling_capture(
     invocation: &CaptureInvocation,
 ) -> Vec<Arc<Script>> {
     let ranked = rank_handlers_for_target(scripts, invocation);
+    dedupe_ranked_handlers_by_path(ranked)
+        .into_iter()
+        .map(|entry| entry.script)
+        .collect()
+}
+
+/// Explain the same deduped handler order used by Enter/list execution.
+pub fn explain_capture_handler_ranking(
+    scripts: &[Arc<Script>],
+    invocation: &CaptureInvocation,
+) -> CaptureHandlerRankingExplanation {
+    let ranked = dedupe_ranked_handlers_by_path(rank_handlers_for_target(scripts, invocation));
+    let rows = ranked
+        .iter()
+        .map(|entry| capture_handler_ranking_row(entry, invocation))
+        .collect::<Vec<_>>();
+    let winner = rows.first().cloned();
+    let alternatives = rows.iter().skip(1).cloned().collect::<Vec<_>>();
+
+    let default_matches = ranked
+        .iter()
+        .filter(|entry| entry.spec.default_handler)
+        .count();
+    let warning = if default_matches > 1 {
+        winner.as_ref().map(|winner| {
+            format!(
+                "Multiple defaultHandler:true handlers match ;{}; Enter will use {} by ranking.",
+                invocation.target, winner.script_name
+            )
+        })
+    } else {
+        None
+    };
+
+    CaptureHandlerRankingExplanation {
+        winner,
+        alternatives,
+        warning,
+    }
+}
+
+fn dedupe_ranked_handlers_by_path(ranked: Vec<RankedHandler>) -> Vec<RankedHandler> {
     let mut seen_paths: Vec<std::path::PathBuf> = Vec::with_capacity(ranked.len());
-    let mut out: Vec<Arc<Script>> = Vec::with_capacity(ranked.len());
+    let mut out: Vec<RankedHandler> = Vec::with_capacity(ranked.len());
     for entry in ranked {
         let path = entry.script.path.clone();
         if seen_paths.iter().any(|p| p == &path) {
             continue;
         }
         seen_paths.push(path);
-        out.push(entry.script);
+        out.push(entry);
     }
     out
+}
+
+fn capture_handler_ranking_row(
+    entry: &RankedHandler,
+    invocation: &CaptureInvocation,
+) -> CaptureHandlerRankingRow {
+    let matched_accepts = matched_accepts_for(&entry.spec, invocation);
+    CaptureHandlerRankingRow {
+        script_name: entry.script.name.clone(),
+        plugin_id: entry.script.plugin_id.clone(),
+        path: entry.script.path.clone(),
+        score: entry.score,
+        reason_parts: reason_parts_for(entry, invocation, &matched_accepts),
+        matched_accepts,
+    }
+}
+
+fn reason_parts_for(
+    entry: &RankedHandler,
+    invocation: &CaptureInvocation,
+    matched_accepts: &[String],
+) -> Vec<String> {
+    let mut reasons = Vec::new();
+    if entry.score.exact_target > 0 {
+        reasons.push(format!("exact target ;{}", invocation.target));
+    } else {
+        reasons.push("wildcard target *".to_string());
+    }
+    if entry.spec.default_handler {
+        reasons.push("defaultHandler:true".to_string());
+    } else {
+        reasons.push("defaultHandler:false".to_string());
+    }
+    if entry.score.user_authored > 0 {
+        reasons.push("user-authored plugin".to_string());
+    } else {
+        reasons.push("shipped main".to_string());
+    }
+    if !matched_accepts.is_empty() {
+        reasons.push(format!("accepts matched: {}", matched_accepts.join(", ")));
+    }
+    reasons
+}
+
+fn matched_accepts_for(
+    spec: &MenuSyntaxHandlerSpec,
+    invocation: &CaptureInvocation,
+) -> Vec<String> {
+    let mut matched = Vec::new();
+    for accept in &spec.accepts {
+        let lc = accept.to_ascii_lowercase();
+        if !KNOWN_ACCEPTS.iter().any(|k| *k == lc) {
+            continue;
+        }
+        if invocation_has(&lc, invocation) && !matched.iter().any(|seen| seen == &lc) {
+            matched.push(lc);
+        }
+    }
+    matched
 }
 
 fn score_spec(
@@ -488,5 +609,141 @@ mod tests {
         let ranked = rank_handlers_for_target(&[h], &inv);
         assert_eq!(ranked.len(), 1);
         assert_eq!(ranked[0].score.exact_target, 1);
+    }
+
+    #[test]
+    fn ranking_explanation_names_same_winner_as_execution_order() {
+        let plain = script_with_menu_syntax(
+            "Plain Todo",
+            "main",
+            json!([{ "family": "capture.v1", "targets": ["todo"] }]),
+        );
+        let default = script_with_menu_syntax(
+            "Default Todo",
+            "main",
+            json!([{ "family": "capture.v1", "targets": ["todo"], "defaultHandler": true }]),
+        );
+        let inv = invocation("todo", "x");
+
+        let explanation = explain_capture_handler_ranking(&[plain.clone(), default.clone()], &inv);
+        let execution_order = rank_scripts_handling_capture(&[plain, default], &inv);
+
+        assert_eq!(
+            explanation.winner.expect("winner").path,
+            execution_order.first().expect("execution winner").path
+        );
+    }
+
+    #[test]
+    fn ranking_explanation_includes_exact_default_user_and_accepts_reasons() {
+        let handler = script_with_menu_syntax(
+            "User Default Todo",
+            "my-plugin",
+            json!([{
+                "family": "capture.v1",
+                "targets": ["todo"],
+                "defaultHandler": true,
+                "accepts": ["date", "tags", "relativeDate"]
+            }]),
+        );
+        let mut inv = invocation("todo", "buy milk tomorrow #errands");
+        inv.date_phrases.push(super::super::payload::DatePhrase {
+            role: super::super::payload::DateRole::Due,
+            source: "tomorrow".into(),
+            source_span: (0, 8),
+        });
+        inv.tags.push("errands".into());
+
+        let explanation = explain_capture_handler_ranking(&[handler], &inv);
+        let winner = explanation.winner.expect("winner");
+
+        assert_eq!(winner.matched_accepts, vec!["date", "tags"]);
+        assert!(winner
+            .reason_parts
+            .contains(&"exact target ;todo".to_string()));
+        assert!(winner
+            .reason_parts
+            .contains(&"defaultHandler:true".to_string()));
+        assert!(winner
+            .reason_parts
+            .contains(&"user-authored plugin".to_string()));
+        assert!(winner
+            .reason_parts
+            .contains(&"accepts matched: date, tags".to_string()));
+    }
+
+    #[test]
+    fn ranking_explanation_warns_on_multiple_default_handlers_for_same_target() {
+        let a = script_with_menu_syntax(
+            "AAA Default Todo",
+            "main",
+            json!([{ "family": "capture.v1", "targets": ["todo"], "defaultHandler": true }]),
+        );
+        let b = script_with_menu_syntax(
+            "BBB Default Todo",
+            "main",
+            json!([{ "family": "capture.v1", "targets": ["todo"], "defaultHandler": true }]),
+        );
+        let inv = invocation("todo", "x");
+
+        let explanation = explain_capture_handler_ranking(&[b, a], &inv);
+
+        assert_eq!(
+            explanation.winner.as_ref().expect("winner").script_name,
+            "AAA Default Todo"
+        );
+        let warning = explanation.warning.expect("conflict warning");
+        assert!(warning.contains("Multiple defaultHandler:true handlers match ;todo"));
+        assert!(warning.contains("AAA Default Todo"));
+    }
+
+    #[test]
+    fn ranking_explanation_dedupes_same_script_specs_by_path() {
+        let multi_spec = script_with_menu_syntax(
+            "Todo Both",
+            "main",
+            json!([
+                { "family": "capture.v1", "targets": ["todo"] },
+                { "family": "capture.v1", "targets": ["*"] }
+            ]),
+        );
+        let inv = invocation("todo", "x");
+
+        let explanation = explain_capture_handler_ranking(&[multi_spec], &inv);
+
+        assert_eq!(
+            explanation.winner.as_ref().expect("winner").script_name,
+            "Todo Both"
+        );
+        assert!(explanation.alternatives.is_empty());
+        assert!(explanation.warning.is_none());
+    }
+
+    #[test]
+    fn ranking_explanation_ignores_unknown_accept_tokens() {
+        let handler = script_with_menu_syntax(
+            "Future Accepts Todo",
+            "main",
+            json!([{
+                "family": "capture.v1",
+                "targets": ["todo"],
+                "accepts": ["relativeDate", "recurrence"]
+            }]),
+        );
+        let mut inv = invocation("todo", "buy milk tomorrow");
+        inv.date_phrases.push(super::super::payload::DatePhrase {
+            role: super::super::payload::DateRole::Due,
+            source: "tomorrow".into(),
+            source_span: (0, 8),
+        });
+
+        let explanation = explain_capture_handler_ranking(&[handler], &inv);
+        let winner = explanation.winner.expect("winner");
+
+        assert!(winner.matched_accepts.is_empty());
+        assert!(winner
+            .reason_parts
+            .iter()
+            .all(|part| !part.contains("accepts matched")));
     }
 }
