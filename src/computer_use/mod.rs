@@ -4,6 +4,7 @@
 //! Script Kit's existing state-first automation inspection protocol without
 //! introducing a second targeting or screenshot model.
 
+pub mod gpui_runtime_bridge;
 pub mod runtime_bridge;
 pub mod see;
 pub mod types;

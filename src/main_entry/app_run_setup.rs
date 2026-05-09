@@ -185,11 +185,23 @@
     // Clone before start_hotkey_listener consumes original
     let config_for_app = loaded_config.clone();
 
+    let mcp_computer_runtime = std::sync::Arc::new(
+        crate::computer_use::gpui_runtime_bridge::GpuiComputerUseRuntimeBridge::new(
+            std::time::Duration::from_millis(1500),
+        ),
+    );
+    let mcp_computer_runtime_for_server: std::sync::Arc<
+        dyn crate::computer_use::runtime_bridge::ComputerUseRuntimeBridge + Send + Sync,
+    > = mcp_computer_runtime.clone();
+
     // Start MCP server for AI agent integration
     // Server runs on localhost:43210 with Bearer token authentication
     // Discovery file written to ~/.scriptkit/server.json
     let _mcp_handle = match mcp_server::McpServer::with_defaults() {
-        Ok(server) => match server.start() {
+        Ok(server) => match server
+            .with_computer_runtime(mcp_computer_runtime_for_server)
+            .start()
+        {
             Ok(handle) => {
                 logging::log(
                     "MCP",
@@ -498,6 +510,28 @@ app.run(move |cx: &mut App| {
                 return;
             }
         };
+
+        let (mcp_computer_ui_tx, mcp_computer_ui_rx) = async_channel::bounded(16);
+        mcp_computer_runtime.install(mcp_computer_ui_tx);
+        let app_entity_for_mcp_computer = app_entity.clone();
+        cx.spawn(async move |cx: &mut gpui::AsyncApp| {
+            while let Ok(request) = mcp_computer_ui_rx.recv().await {
+                let app_entity = app_entity_for_mcp_computer.clone();
+                let snapshot = cx.update(|cx| {
+                    app_entity.update(cx, |app, app_cx| {
+                        app.build_automation_inspect_snapshot(
+                            &request.request_id,
+                            request.request.target.as_ref(),
+                            request.request.hi_dpi,
+                            &request.request.probes,
+                            app_cx,
+                        )
+                    })
+                });
+                request.respond(Ok(snapshot));
+            }
+        })
+        .detach();
 
         // Set initial focus via the Root window
         // We access the app entity within the window context to properly focus it
