@@ -1132,6 +1132,26 @@ impl ScriptListApp {
         }
     }
 
+    /// Calculate sizing only when the current view still matches the caller's
+    /// expected async resize target.
+    pub(crate) fn calculate_window_size_params_if_current_view(
+        &mut self,
+        reason: &'static str,
+        is_expected_view: impl FnOnce(&AppView) -> bool,
+    ) -> Option<(ViewType, usize)> {
+        if !is_expected_view(&self.current_view) {
+            tracing::debug!(
+                target: "WINDOW_RESIZE",
+                reason,
+                current_view = ?self.current_view,
+                "Skipping stale deferred resize for inactive view"
+            );
+            return None;
+        }
+
+        self.calculate_window_size_params()
+    }
+
     /// Returns the focused button when the active view is `ConfirmPrompt`.
     pub(crate) fn confirm_prompt_focused_button(&self) -> Option<ConfirmFocusedButton> {
         if let AppView::ConfirmPrompt { focused_button, .. } = &self.current_view {
