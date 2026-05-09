@@ -117,3 +117,54 @@ fn yaml_input_via_stdin_validates_too() {
     let (code, stdout, _) = run_with_stdin(yaml, &[]);
     assert_eq!(code, 0, "stdout was: {stdout}");
 }
+
+#[test]
+fn metadata_wrapper_json_reports_menu_syntax_path() {
+    let input = r#"{
+        "name": "Demo",
+        "menuSyntax": [
+            {"family": "capture.v1", "targets": "todo"}
+        ]
+    }"#;
+    let (code, stdout, _) = run_with_stdin(input, &[]);
+    assert_eq!(code, 1, "stdout was: {stdout}");
+    assert!(
+        stdout.contains("$.menuSyntax[0].targets"),
+        "stdout was: {stdout}"
+    );
+}
+
+#[test]
+fn nested_metadata_wrapper_json_reports_nested_menu_syntax_path() {
+    let input = r#"{
+        "metadata": {
+            "menuSyntax": [
+                {"family": "command.v1", "head": "deploy", "args": "env"}
+            ]
+        }
+    }"#;
+    let (code, stdout, _) = run_with_stdin(input, &[]);
+    assert_eq!(code, 1, "stdout was: {stdout}");
+    assert!(
+        stdout.contains("$.metadata.menuSyntax[0].args"),
+        "stdout was: {stdout}"
+    );
+}
+
+#[test]
+fn yaml_frontmatter_reports_menu_syntax_path() {
+    let input = r#"---
+name: Demo
+menuSyntax:
+  - family: capture.v1
+    targets: todo
+---
+body content
+"#;
+    let (code, stdout, _) = run_with_stdin(input, &[]);
+    assert_eq!(code, 1, "stdout was: {stdout}");
+    assert!(
+        stdout.contains("$.menuSyntax[0].targets"),
+        "stdout was: {stdout}"
+    );
+}

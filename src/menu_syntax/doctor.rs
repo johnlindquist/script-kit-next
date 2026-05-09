@@ -96,19 +96,28 @@ const KNOWN_CAPTURE_ACCEPTS: &[&str] = &[
 /// Validate a `metadata.menuSyntax` value (Object or Array form).
 /// Returns a `DoctorReport` with one entry per problem found.
 pub fn validate(value: &Value) -> DoctorReport {
+    validate_at_path(value, "$")
+}
+
+/// Validate a `metadata.menuSyntax` value rooted at `base_path`.
+///
+/// The CLI uses this when authors pass a wrapper object such as
+/// `{ "menuSyntax": [...] }`, preserving actionable paths like
+/// `$.menuSyntax[0].targets` instead of reporting everything at `$`.
+pub fn validate_at_path(value: &Value, base_path: &str) -> DoctorReport {
     let mut issues = Vec::new();
     match value {
         Value::Array(items) => {
             let mut command_heads: BTreeMap<String, Vec<usize>> = BTreeMap::new();
             for (idx, item) in items.iter().enumerate() {
-                let path = format!("$[{idx}]");
+                let path = format!("{base_path}[{idx}]");
                 validate_one(item, &path, &mut issues, Some((&mut command_heads, idx)));
             }
             for (head, indices) in command_heads {
                 if indices.len() > 1 {
                     let label = indices
                         .iter()
-                        .map(|i| format!("$[{i}]"))
+                        .map(|i| format!("{base_path}[{i}]"))
                         .collect::<Vec<_>>()
                         .join(", ");
                     issues.push(DoctorIssue::err(
@@ -122,17 +131,17 @@ pub fn validate(value: &Value) -> DoctorReport {
             }
         }
         Value::Object(_) => {
-            validate_one(value, "$", &mut issues, None);
+            validate_one(value, base_path, &mut issues, None);
         }
         Value::Null => {
             issues.push(DoctorIssue::warn(
-                "$",
+                base_path,
                 "menuSyntax is null — drop the field or replace with an array",
             ));
         }
         _ => {
             issues.push(DoctorIssue::err(
-                "$",
+                base_path,
                 format!(
                     "menuSyntax must be an array (or single-spec object); got {}",
                     json_type_label(value)
