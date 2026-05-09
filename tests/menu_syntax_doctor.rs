@@ -36,6 +36,15 @@ fn warning_messages(value: &serde_json::Value) -> Vec<String> {
         .collect()
 }
 
+fn warning_paths(value: &serde_json::Value) -> Vec<String> {
+    doctor_validate(value)
+        .issues
+        .into_iter()
+        .filter(|i| i.severity == DoctorSeverity::Warning)
+        .map(|i| i.path)
+        .collect()
+}
+
 // ============================================================================
 // GOOD fixtures — no errors expected.
 // ============================================================================
@@ -182,6 +191,56 @@ fn bad_unknown_accepts_token_errors_at_indexed_path() {
     let msg = &err_messages(&v)[0];
     assert!(msg.contains("unknown accepts token `nonsense`"));
     assert!(msg.contains("tags"));
+}
+
+#[test]
+fn unknown_capture_requirement_tokens_warn_at_indexed_paths() {
+    let v = json!([{
+        "family": "capture.v1",
+        "targets": ["expense"],
+        "required": ["body", "location"],
+        "optional": ["date:start", "attachment"],
+        "forbidden": ["url"]
+    }]);
+
+    let report = doctor_validate(&v);
+    assert!(
+        !report.has_errors(),
+        "unknown requirement tokens should warn, not fail: {:?}",
+        report.issues
+    );
+    let paths = warning_paths(&v);
+    assert!(paths.contains(&"$[0].required[1]".to_string()));
+    assert!(paths.contains(&"$[0].optional[1]".to_string()));
+    let messages = warning_messages(&v);
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("unknown required token `location`")));
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("unknown optional token `attachment`")));
+}
+
+#[test]
+fn malformed_capture_requirement_lists_error_at_paths() {
+    let v = json!([{
+        "family": "capture.v1",
+        "targets": ["expense"],
+        "required": "body",
+        "optional": [42],
+        "forbidden": ["url"]
+    }]);
+
+    let paths = err_paths(&v);
+    assert!(paths.contains(&"$[0].required".to_string()));
+    assert!(paths.contains(&"$[0].optional[0]".to_string()));
+    let messages = err_messages(&v);
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("required must be an array")));
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("optional entry must be a string")));
 }
 
 #[test]

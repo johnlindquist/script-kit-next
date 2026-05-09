@@ -22,6 +22,7 @@ pub const KEYS_DIR: &str = "keys";
 pub const KEY_HISTORY_SUFFIX: &str = ".history.jsonl";
 pub const ARGV_HISTORY_FILENAME: &str = "argv.history.jsonl";
 pub const COMMANDS_DIR: &str = "commands";
+pub const MAX_HISTORY_WARNINGS: usize = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TagHistoryEntry {
@@ -60,6 +61,23 @@ pub struct ArgvFrequency {
     pub argv: Vec<String>,
     pub count: u64,
     pub last_seen_ts: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HistoryReadReport<T> {
+    pub pool: Vec<T>,
+    pub skipped: usize,
+    pub warnings: Vec<String>,
+}
+
+impl<T> Default for HistoryReadReport<T> {
+    fn default() -> Self {
+        Self {
+            pool: Vec::new(),
+            skipped: 0,
+            warnings: Vec::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -134,15 +152,25 @@ impl HistoryStore {
     }
 
     pub fn try_read_tag_pool(&self, target: &str) -> io::Result<Vec<TagFrequency>> {
+        Ok(self.try_read_tag_pool_report(target)?.pool)
+    }
+
+    pub fn try_read_tag_pool_report(
+        &self,
+        target: &str,
+    ) -> io::Result<HistoryReadReport<TagFrequency>> {
         let path = self.tag_history_path(target)?;
         let file = match File::open(&path) {
             Ok(file) => file,
-            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                return Ok(HistoryReadReport::default());
+            }
             Err(err) => return Err(err),
         };
         let reader = BufReader::new(file);
         let mut entries = Vec::new();
-        for line_result in reader.lines() {
+        let mut report = HistoryReadReport::default();
+        for (idx, line_result) in reader.lines().enumerate() {
             let line = line_result?;
             let trimmed = line.trim();
             if trimmed.is_empty() {
@@ -150,16 +178,30 @@ impl HistoryStore {
             }
             // History must not poison autocomplete. Dirty JSONL lines are
             // ignored, matching the tolerant artifact-reader precedent.
-            let Ok(mut entry) = serde_json::from_str::<TagHistoryEntry>(trimmed) else {
-                continue;
+            let mut entry = match serde_json::from_str::<TagHistoryEntry>(trimmed) {
+                Ok(entry) => entry,
+                Err(err) => {
+                    report.skipped += 1;
+                    push_history_warning(
+                        &mut report,
+                        format!("{}:{} invalid JSON: {err}", path.display(), idx + 1),
+                    );
+                    continue;
+                }
             };
             let Some(tag) = normalize_tag(&entry.tag) else {
+                report.skipped += 1;
+                push_history_warning(
+                    &mut report,
+                    format!("{}:{} empty tag ignored", path.display(), idx + 1),
+                );
                 continue;
             };
             entry.tag = tag;
             entries.push(entry);
         }
-        Ok(build_tag_pool(entries))
+        report.pool = build_tag_pool(entries);
+        Ok(report)
     }
 
     pub fn tag_history_path(&self, target: &str) -> io::Result<PathBuf> {
@@ -209,29 +251,54 @@ impl HistoryStore {
     }
 
     pub fn try_read_key_pool(&self, target: &str, key: &str) -> io::Result<Vec<ValueFrequency>> {
+        Ok(self.try_read_key_pool_report(target, key)?.pool)
+    }
+
+    pub fn try_read_key_pool_report(
+        &self,
+        target: &str,
+        key: &str,
+    ) -> io::Result<HistoryReadReport<ValueFrequency>> {
         let path = self.key_history_path(target, key)?;
         let file = match File::open(&path) {
             Ok(file) => file,
-            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                return Ok(HistoryReadReport::default());
+            }
             Err(err) => return Err(err),
         };
         let reader = BufReader::new(file);
         let mut entries = Vec::new();
-        for line_result in reader.lines() {
+        let mut report = HistoryReadReport::default();
+        for (idx, line_result) in reader.lines().enumerate() {
             let line = line_result?;
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
             }
-            let Ok(entry) = serde_json::from_str::<ValueHistoryEntry>(trimmed) else {
-                continue;
+            let entry = match serde_json::from_str::<ValueHistoryEntry>(trimmed) {
+                Ok(entry) => entry,
+                Err(err) => {
+                    report.skipped += 1;
+                    push_history_warning(
+                        &mut report,
+                        format!("{}:{} invalid JSON: {err}", path.display(), idx + 1),
+                    );
+                    continue;
+                }
             };
             if entry.value.trim().is_empty() {
+                report.skipped += 1;
+                push_history_warning(
+                    &mut report,
+                    format!("{}:{} empty value ignored", path.display(), idx + 1),
+                );
                 continue;
             }
             entries.push(entry);
         }
-        Ok(build_value_pool(entries))
+        report.pool = build_value_pool(entries);
+        Ok(report)
     }
 
     pub fn key_history_path(&self, target: &str, key: &str) -> io::Result<PathBuf> {
@@ -279,29 +346,53 @@ impl CommandHistoryStore {
     }
 
     pub fn try_read_argv_pool(&self, head: &str) -> io::Result<Vec<ArgvFrequency>> {
+        Ok(self.try_read_argv_pool_report(head)?.pool)
+    }
+
+    pub fn try_read_argv_pool_report(
+        &self,
+        head: &str,
+    ) -> io::Result<HistoryReadReport<ArgvFrequency>> {
         let path = self.argv_history_path(head)?;
         let file = match File::open(&path) {
             Ok(file) => file,
-            Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(err) if err.kind() == io::ErrorKind::NotFound => {
+                return Ok(HistoryReadReport::default());
+            }
             Err(err) => return Err(err),
         };
         let reader = BufReader::new(file);
         let mut entries = Vec::new();
-        for line_result in reader.lines() {
+        let mut report = HistoryReadReport::default();
+        for (idx, line_result) in reader.lines().enumerate() {
             let line = line_result?;
             let trimmed = line.trim();
             if trimmed.is_empty() {
                 continue;
             }
-            let Ok(entry) = serde_json::from_str::<ArgvHistoryEntry>(trimmed) else {
-                continue;
+            let entry = match serde_json::from_str::<ArgvHistoryEntry>(trimmed) {
+                Ok(entry) => entry,
+                Err(err) => {
+                    report.skipped += 1;
+                    push_history_warning(
+                        &mut report,
+                        format!("{}:{} invalid JSON: {err}", path.display(), idx + 1),
+                    );
+                    continue;
+                }
             };
             if entry.argv.is_empty() {
+                report.skipped += 1;
+                push_history_warning(
+                    &mut report,
+                    format!("{}:{} empty argv ignored", path.display(), idx + 1),
+                );
                 continue;
             }
             entries.push(entry);
         }
-        Ok(build_argv_pool(entries))
+        report.pool = build_argv_pool(entries);
+        Ok(report)
     }
 
     pub fn argv_history_path(&self, head: &str) -> io::Result<PathBuf> {
@@ -441,6 +532,12 @@ fn append_jsonl_rows<T: Serialize>(path: &Path, rows: &[T]) -> io::Result<()> {
     // sibling launcher processes.
     let mut file = OpenOptions::new().create(true).append(true).open(path)?;
     file.write_all(&buf)
+}
+
+fn push_history_warning<T>(report: &mut HistoryReadReport<T>, msg: String) {
+    if report.warnings.len() < MAX_HISTORY_WARNINGS {
+        report.warnings.push(msg);
+    }
 }
 
 fn normalize_tag(raw: &str) -> Option<String> {
@@ -612,6 +709,33 @@ mod tests {
     }
 
     #[test]
+    fn read_tag_pool_report_surfaces_dirty_lines_without_poisoning_pool() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = HistoryStore::new(tmp.path().join("menu-syntax"));
+        let path = store.tag_history_path("todo").unwrap();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "{\"ts\":10,\"tag\":\"ok\"}\nnot json\n{\"ts\":20,\"tag\":\"\"}\n{\"ts\":30,\"tag\":\"ok\"}\n",
+        )
+        .unwrap();
+
+        let report = store.try_read_tag_pool_report("todo").unwrap();
+        assert_eq!(report.pool.len(), 1);
+        assert_eq!(report.pool[0].tag, "ok");
+        assert_eq!(report.pool[0].count, 2);
+        assert_eq!(report.skipped, 2);
+        assert!(report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("invalid JSON")));
+        assert!(report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("empty tag")));
+    }
+
+    #[test]
     fn record_payload_tags_skips_negated_tags() {
         let tmp = tempfile::TempDir::new().unwrap();
         let store = HistoryStore::new(tmp.path().join("menu-syntax"));
@@ -676,6 +800,33 @@ mod tests {
         assert_eq!(pool[0].last_seen_ts, 200);
         assert_eq!(pool[1].value, "friday 2pm");
         assert_eq!(pool[1].last_seen_ts, 100);
+    }
+
+    #[test]
+    fn read_key_pool_report_surfaces_dirty_lines_without_poisoning_pool() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = HistoryStore::new(tmp.path().join("menu-syntax"));
+        let path = store.key_history_path("cal", "start").unwrap();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "{\"ts\":10,\"value\":\"friday\"}\nnot json\n{\"ts\":20,\"value\":\"\"}\n{\"ts\":30,\"value\":\"friday\"}\n",
+        )
+        .unwrap();
+
+        let report = store.try_read_key_pool_report("cal", "start").unwrap();
+        assert_eq!(report.pool.len(), 1);
+        assert_eq!(report.pool[0].value, "friday");
+        assert_eq!(report.pool[0].count, 2);
+        assert_eq!(report.skipped, 2);
+        assert!(report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("invalid JSON")));
+        assert!(report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("empty value")));
     }
 
     #[test]
@@ -842,6 +993,33 @@ mod tests {
         assert_eq!(pool[0].last_seen_ts, 300);
         assert_eq!(pool[1].argv, vec!["staging"]);
         assert_eq!(pool[1].count, 1);
+    }
+
+    #[test]
+    fn read_argv_pool_report_surfaces_dirty_lines_without_poisoning_pool() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = CommandHistoryStore::new(tmp.path().join("commands"));
+        let path = store.argv_history_path("deploy").unwrap();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            "{\"ts\":10,\"argv\":[\"prod\"]}\nnot json\n{\"ts\":20,\"argv\":[]}\n{\"ts\":30,\"argv\":[\"prod\"]}\n",
+        )
+        .unwrap();
+
+        let report = store.try_read_argv_pool_report("deploy").unwrap();
+        assert_eq!(report.pool.len(), 1);
+        assert_eq!(report.pool[0].argv, vec!["prod"]);
+        assert_eq!(report.pool[0].count, 2);
+        assert_eq!(report.skipped, 2);
+        assert!(report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("invalid JSON")));
+        assert!(report
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("empty argv")));
     }
 
     #[test]
