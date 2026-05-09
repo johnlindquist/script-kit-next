@@ -1594,6 +1594,39 @@ mod tests {
     }
 
     #[test]
+    fn parse_stdin_command_supports_computer_see_protocol_message() -> anyhow::Result<()> {
+        let parsed = parse_stdin_command(
+            r#"{"type":"inspectAutomationWindow","requestId":"cu-see-1","target":{"type":"focused"},"hiDpi":false,"probes":[{"x":10,"y":20}]}"#,
+        )?;
+
+        assert_eq!(parsed.command_type(), "inspectAutomationWindow");
+        assert_eq!(parsed.request_id(), Some("cu-see-1"));
+
+        match parsed {
+            StdinCommand::Protocol(message) => match message.as_ref() {
+                crate::protocol::Message::InspectAutomationWindow {
+                    request_id,
+                    target,
+                    hi_dpi,
+                    probes,
+                } => {
+                    assert_eq!(request_id, "cu-see-1");
+                    assert_eq!(
+                        target,
+                        &Some(crate::protocol::AutomationWindowTarget::Focused)
+                    );
+                    assert_eq!(hi_dpi, &Some(false));
+                    assert_eq!(probes, &vec![crate::protocol::PixelProbe { x: 10, y: 20 }]);
+                }
+                other => panic!("expected InspectAutomationWindow, got {other:?}"),
+            },
+            other => panic!("expected protocol message, got {other:?}"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
     fn parse_stdin_command_surfaces_external_command_error_for_known_verb_with_wrong_field() {
         let err = parse_stdin_command(r#"{"type":"setFilter","value":"foo"}"#)
             .expect_err("wrong field name should fail parse");

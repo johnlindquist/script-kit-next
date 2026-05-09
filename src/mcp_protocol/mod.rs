@@ -16,6 +16,7 @@
 #![allow(dead_code)]
 
 // --- merged from part_000.rs ---
+use crate::mcp_computer_use_tools;
 use crate::mcp_kit_tools;
 use crate::mcp_resources;
 use crate::mcp_script_tools;
@@ -337,6 +338,7 @@ pub fn handle_tools_list_with_scripts(
 ) -> JsonRpcResponse {
     // Get kit/* namespace tools
     let mut all_tools = mcp_kit_tools::get_kit_tool_definitions();
+    all_tools.extend(mcp_computer_use_tools::get_computer_use_tool_definitions());
 
     // Get scripts/* namespace tools (only scripts with schema.input)
     let script_tools = mcp_script_tools::get_script_tool_definitions(scripts);
@@ -397,6 +399,15 @@ pub fn handle_tools_call_with_scripts(
     // Route kit/* namespace tools
     if mcp_kit_tools::is_kit_tool(tool_name) {
         let result = mcp_kit_tools::handle_kit_tool_call(tool_name, &arguments);
+        return JsonRpcResponse::success(
+            request.id,
+            serde_json::to_value(result).unwrap_or(serde_json::json!({})),
+        );
+    }
+
+    // Route computer/* namespace tools
+    if mcp_computer_use_tools::is_computer_use_tool(tool_name) {
+        let result = mcp_computer_use_tools::handle_computer_use_tool_call(tool_name, &arguments);
         return JsonRpcResponse::success(
             request.id,
             serde_json::to_value(result).unwrap_or(serde_json::json!({})),
@@ -654,6 +665,10 @@ mod tests {
         assert!(
             tool_names.contains(&"kit/state"),
             "Should include kit/state"
+        );
+        assert!(
+            tool_names.contains(&"computer/see"),
+            "Should include computer/see"
         );
         Ok(())
     }
