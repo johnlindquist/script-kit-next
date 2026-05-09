@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
+use super::metadata::parse_field_requirement_token;
 use super::payload::{is_known_capture_target, KNOWN_CAPTURE_TARGETS};
 
 /// Severity of a single diagnostic. Errors should fail the CLI with a
@@ -287,6 +288,10 @@ fn validate_capture(
         }
     }
 
+    for field in ["required", "optional", "forbidden"] {
+        validate_capture_requirement_list(obj, path, field, issues);
+    }
+
     if let Some(accepts) = obj.get("accepts") {
         let Value::Array(arr) = accepts else {
             issues.push(DoctorIssue::err(
@@ -313,6 +318,60 @@ fn validate_capture(
                     ),
                 ));
             }
+        }
+    }
+}
+
+fn validate_capture_requirement_list(
+    obj: &serde_json::Map<String, Value>,
+    path: &str,
+    field: &str,
+    issues: &mut Vec<DoctorIssue>,
+) {
+    let Some(value) = obj.get(field) else {
+        return;
+    };
+    let Value::Array(arr) = value else {
+        issues.push(DoctorIssue::err(
+            format!("{path}.{field}"),
+            format!("{field} must be an array, got {}", json_type_label(value)),
+        ));
+        return;
+    };
+
+    let mut seen: BTreeSet<String> = BTreeSet::new();
+    for (i, item) in arr.iter().enumerate() {
+        let item_path = format!("{path}.{field}[{i}]");
+        let Value::String(token) = item else {
+            issues.push(DoctorIssue::err(
+                item_path,
+                format!(
+                    "{field} entry must be a string, got {}",
+                    json_type_label(item)
+                ),
+            ));
+            continue;
+        };
+        let normalized = token.trim().to_ascii_lowercase();
+        if normalized.is_empty() {
+            issues.push(DoctorIssue::warn(
+                item_path,
+                format!("empty {field} token will be ignored"),
+            ));
+            continue;
+        }
+        if parse_field_requirement_token(token).is_none() {
+            issues.push(DoctorIssue::warn(
+                item_path,
+                format!("unknown {field} token `{token}` will be ignored by the capture schema"),
+            ));
+            continue;
+        }
+        if !seen.insert(normalized) {
+            issues.push(DoctorIssue::warn(
+                item_path,
+                format!("duplicate {field} token `{token}`"),
+            ));
         }
     }
 }

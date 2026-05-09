@@ -60,6 +60,33 @@ fn good_fixture_via_stdin_json_exits_zero_and_emits_valid_json() {
 }
 
 #[test]
+fn unknown_requirement_token_surfaces_in_json_output_but_exits_zero() {
+    let input = r#"{
+        "menuSyntax": [
+            {
+                "family": "capture.v1",
+                "targets": ["expense"],
+                "required": ["body", "location"]
+            }
+        ]
+    }"#;
+    let (code, stdout, _) = run_with_stdin(input, &["--json"]);
+    assert_eq!(code, 0, "stdout was: {stdout}");
+    let parsed: serde_json::Value = serde_json::from_str(stdout.trim()).expect("valid JSON");
+    let issues = parsed["issues"].as_array().expect("issues array");
+    assert!(
+        issues.iter().any(|issue| {
+            issue["severity"] == "warning"
+                && issue["path"] == "$.menuSyntax[0].required[1]"
+                && issue["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("will be ignored"))
+        }),
+        "expected warning for unknown requirement token, got: {parsed}"
+    );
+}
+
+#[test]
 fn bad_fixture_via_stdin_human_exits_one_and_lists_error() {
     let (code, stdout, _) = run_with_stdin(bad_unknown_family_json(), &[]);
     assert_eq!(code, 1, "stdout was: {stdout}");
