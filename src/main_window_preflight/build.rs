@@ -28,6 +28,7 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
         crate::scripts::SearchResult::ClipboardHistory(_) => {
             MainWindowPreflightActionKind::RunCommand
         }
+        crate::scripts::SearchResult::BrowserTab(_) => MainWindowPreflightActionKind::SwitchWindow,
         crate::scripts::SearchResult::BrowserHistory(_) => {
             MainWindowPreflightActionKind::RunCommand
         }

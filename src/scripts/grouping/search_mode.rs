@@ -49,6 +49,7 @@ pub(super) fn build_search_mode_results(
                 SearchResult::ClipboardHistory(cm) => {
                     Some(format!("clipboard-history/{}", cm.entry.id))
                 }
+                SearchResult::BrowserTab(_) => None,
                 SearchResult::BrowserHistory(bm) => Some(bm.hit.stable_key.clone()),
                 // Suppressed: agents don't participate in search-mode frecency
                 SearchResult::Agent(_) => None,

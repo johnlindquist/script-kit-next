@@ -332,6 +332,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
+                    scripts::SearchResult::BrowserTab(_) => None,
                     scripts::SearchResult::BrowserHistory(_) => None,
                     // Suppressed: agents don't track frecency in the launcher
                     scripts::SearchResult::Agent(_) => None,
@@ -456,6 +457,9 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::ClipboardHistory(clipboard_match) => {
                         self.execute_root_clipboard_history_paste(&clipboard_match.entry.id, cx);
+                    }
+                    scripts::SearchResult::BrowserTab(browser_tab_match) => {
+                        self.execute_root_browser_tab_switch(&browser_tab_match.hit, cx);
                     }
                     scripts::SearchResult::BrowserHistory(browser_match) => {
                         self.execute_root_browser_history_open(&browser_match.hit.url, cx);
@@ -653,6 +657,27 @@ impl ScriptListApp {
                 );
                 self.show_hud(
                     "Failed to open browser history page".to_string(),
+                    Some(HUD_MEDIUM_MS),
+                    cx,
+                );
+            }
+        }
+    }
+
+    pub(crate) fn execute_root_browser_tab_switch(
+        &mut self,
+        hit: &crate::browser_tabs::RootBrowserTabSearchHit,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::browser_tabs::focus_root_browser_tab(hit) {
+            Ok(()) => {
+                logging::log("EXEC", &format!("Focused root browser tab: {}", hit.title));
+                self.hide_main_and_reset(cx);
+            }
+            Err(error) => {
+                logging::log("ERROR", &format!("Failed to focus root browser tab: {error}"));
+                self.show_hud(
+                    "Failed to switch browser tab".to_string(),
                     Some(HUD_MEDIUM_MS),
                     cx,
                 );

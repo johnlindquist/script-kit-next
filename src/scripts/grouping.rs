@@ -58,6 +58,11 @@ pub const MAX_MENU_BAR_ITEMS: usize = 5;
 /// Minimum score required for a menu bar item to appear in results
 /// This filters out weak matches that would clutter the list
 pub const MIN_MENU_BAR_SCORE: i32 = 25;
+pub const ROOT_PASSIVE_RESULT_SCORE_BASE: i32 = 100_000;
+
+pub(crate) fn root_passive_result_score(rank: usize) -> i32 {
+    ROOT_PASSIVE_RESULT_SCORE_BASE.saturating_sub(rank as i32)
+}
 
 /// Get grouped results with SUGGESTED/MAIN sections based on frecency.
 #[instrument(level = "debug", skip_all, fields(filter_len = filter_text.len()))]
@@ -405,6 +410,11 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
             ..Default::default()
         },
         &[],
+        crate::browser_tabs::RootBrowserTabsSectionOptions {
+            enabled: false,
+            ..Default::default()
+        },
+        &[],
         crate::browser_history::RootBrowserHistorySectionOptions {
             enabled: false,
             ..Default::default()
@@ -439,6 +449,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
     root_acp_history_hits: &[crate::ai::acp::history::AcpHistorySearchHit],
     root_acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+    root_browser_tab_hits: &[crate::browser_tabs::RootBrowserTabSearchHit],
+    root_browser_tabs_options: crate::browser_tabs::RootBrowserTabsSectionOptions,
     root_browser_history_hits: &[crate::browser_history::RootBrowserHistorySearchHit],
     root_browser_history_options: crate::browser_history::RootBrowserHistorySectionOptions,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
@@ -477,6 +489,14 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         filter_text,
         advanced_query,
         root_file_options,
+    );
+    append_root_browser_tabs_section(
+        &mut grouped,
+        &mut flat_results,
+        filter_text,
+        advanced_query,
+        root_browser_tab_hits,
+        root_browser_tabs_options,
     );
     append_root_notes_section(
         &mut grouped,
@@ -552,7 +572,8 @@ fn append_root_acp_history_section(
     let rows = hits
         .iter()
         .take(options.max_results)
-        .map(|hit| {
+        .enumerate()
+        .map(|(rank, hit)| {
             let entry = hit.entry.clone();
             let subtitle = format!(
                 "{} · {} message{}",
@@ -562,7 +583,7 @@ fn append_root_acp_history_section(
             );
             SearchResult::AcpHistory(crate::scripts::AcpHistoryMatch {
                 entry,
-                score: hit.score.min(i32::MAX as u32) as i32,
+                score: root_passive_result_score(rank),
                 matched_field: hit.matched_field,
                 subtitle,
             })
@@ -601,7 +622,7 @@ fn append_root_notes_section(
                 hit: hit.clone(),
                 title,
                 subtitle: format!("{pinned}Updated {updated} · {} chars", hit.char_count),
-                score: hit.score.min(i32::MAX.saturating_sub(rank as i32)),
+                score: root_passive_result_score(rank),
             })
         })
         .collect::<Vec<_>>();
@@ -641,12 +662,47 @@ fn append_root_clipboard_history_section(
                 entry: entry.clone(),
                 title: entry.display_preview(),
                 subtitle: format!("{pinned}{content_type} · {time}"),
-                score: i32::MAX.saturating_sub(rank as i32),
+                score: root_passive_result_score(rank),
             })
         })
         .collect::<Vec<_>>();
 
     append_root_passive_section(grouped, flat_results, "Clipboard History", rows);
+}
+
+fn append_root_browser_tabs_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    hits: &[crate::browser_tabs::RootBrowserTabSearchHit],
+    options: crate::browser_tabs::RootBrowserTabsSectionOptions,
+) {
+    if advanced_query.is_some()
+        || !crate::browser_tabs::root_browser_tabs_query_is_eligible(filter_text, options.clone())
+    {
+        return;
+    }
+
+    let rows = hits
+        .iter()
+        .take(options.max_results)
+        .enumerate()
+        .map(|(rank, hit)| {
+            let subtitle = if hit.domain.is_empty() {
+                hit.provider_label.clone()
+            } else {
+                format!("{} · {}", hit.domain, hit.provider_label)
+            };
+            SearchResult::BrowserTab(crate::scripts::BrowserTabMatch {
+                hit: hit.clone(),
+                subtitle,
+                score: root_passive_result_score(rank),
+            })
+        })
+        .collect::<Vec<_>>();
+
+    append_root_passive_section(grouped, flat_results, "Browser Tabs", rows);
 }
 
 fn append_root_browser_history_section(
@@ -678,7 +734,7 @@ fn append_root_browser_history_section(
                     "{} · {}/{} · {}",
                     hit.domain, hit.provider_label, hit.profile_label, time
                 ),
-                score: i32::MAX.saturating_sub(rank as i32),
+                score: root_passive_result_score(rank),
             })
         })
         .collect::<Vec<_>>();
