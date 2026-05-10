@@ -5,9 +5,10 @@ use crate::computer_use::runtime_bridge::{
 };
 use crate::computer_use::window_observation::{
     computer_use_window_observation_v1, window_capture_selection_candidates_v1,
-    window_duplicate_groups_v1, window_list_candidate_v1, window_own_process_policy_v1,
-    window_title_fallbacks_v1, WindowCaptureSelectionObservationInputV1,
-    WindowDuplicateObservationInputV1, WindowTitleFallbackObservationInputV1,
+    window_duplicate_groups_v1, window_enumeration_context_v1, window_list_candidate_v1,
+    window_own_process_policy_v1, window_title_fallbacks_v1,
+    WindowCaptureSelectionObservationInputV1, WindowDuplicateObservationInputV1,
+    WindowEnumerationObservationInputV1, WindowTitleFallbackObservationInputV1,
 };
 use crate::protocol::{AutomationInspectSnapshot, TargetWindowBounds};
 use std::sync::mpsc::{self, SyncSender};
@@ -357,6 +358,14 @@ fn core_graphics_windows_for_pid(
         );
         let mut observation =
             computer_use_window_observation_v1(&bounds, is_on_screen, layer, alpha, sharing_state);
+        observation.enumeration_context = Some(window_enumeration_context_v1(
+            WindowEnumerationObservationInputV1 {
+                option_on_screen_only: true,
+                option_all: false,
+                option_exclude_desktop_elements: false,
+                relative_to_window: K_CG_NULL_WINDOW_ID,
+            },
+        ));
         observation.own_process_window_policy = own_process_window_policy;
         let own_process_window_policy_status = observation
             .own_process_window_policy

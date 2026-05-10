@@ -30,6 +30,8 @@ pub struct ComputerUseWindowObservationV1 {
     pub list_candidate: Option<WindowListCandidateV1>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capture_selection_candidate: Option<WindowCaptureSelectionCandidateV1>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enumeration_context: Option<WindowEnumerationContextV1>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -108,6 +110,53 @@ pub struct WindowListThresholdsV1 {
     pub min_alpha: f64,
     pub min_width: u32,
     pub min_height: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowEnumerationContextV1 {
+    pub source: &'static str,
+    pub mode: WindowEnumerationMode,
+    pub relative_to_window: u32,
+    pub raw_options: WindowEnumerationRawOptionsV1,
+    pub offscreen_coverage: WindowEnumerationCoverageStatus,
+    pub desktop_element_policy: WindowEnumerationDesktopElementPolicy,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowEnumerationMode {
+    OnScreenOnly,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowEnumerationCoverageStatus {
+    NotEnumerated,
+    Unknown,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowEnumerationDesktopElementPolicy {
+    NotExcludedByOption,
+    Unknown,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowEnumerationRawOptionsV1 {
+    pub option_on_screen_only: bool,
+    pub option_all: bool,
+    pub option_exclude_desktop_elements: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct WindowEnumerationObservationInputV1 {
+    pub option_on_screen_only: bool,
+    pub option_all: bool,
+    pub option_exclude_desktop_elements: bool,
+    pub relative_to_window: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -263,6 +312,7 @@ pub fn computer_use_window_observation_v1(
         own_process_window_policy: None,
         list_candidate: None,
         capture_selection_candidate: None,
+        enumeration_context: None,
     }
 }
 
@@ -348,6 +398,35 @@ pub fn window_list_candidate_v1(
             min_width: WINDOW_LIST_MIN_WIDTH,
             min_height: WINDOW_LIST_MIN_HEIGHT,
         },
+    }
+}
+
+pub fn window_enumeration_context_v1(
+    input: WindowEnumerationObservationInputV1,
+) -> WindowEnumerationContextV1 {
+    let offscreen_coverage = if input.option_on_screen_only {
+        WindowEnumerationCoverageStatus::NotEnumerated
+    } else {
+        WindowEnumerationCoverageStatus::Unknown
+    };
+
+    let desktop_element_policy = if input.option_exclude_desktop_elements {
+        WindowEnumerationDesktopElementPolicy::Unknown
+    } else {
+        WindowEnumerationDesktopElementPolicy::NotExcludedByOption
+    };
+
+    WindowEnumerationContextV1 {
+        source: "coreGraphicsWindowList",
+        mode: WindowEnumerationMode::OnScreenOnly,
+        relative_to_window: input.relative_to_window,
+        raw_options: WindowEnumerationRawOptionsV1 {
+            option_on_screen_only: input.option_on_screen_only,
+            option_all: input.option_all,
+            option_exclude_desktop_elements: input.option_exclude_desktop_elements,
+        },
+        offscreen_coverage,
+        desktop_element_policy,
     }
 }
 
@@ -709,6 +788,60 @@ mod tests {
         assert_eq!(serialized["thresholds"]["minAlpha"], 0.0);
         assert_eq!(serialized["thresholds"]["minWidth"], 60);
         assert_eq!(serialized["thresholds"]["minHeight"], 60);
+    }
+
+    #[test]
+    fn window_enumeration_context_marks_on_screen_only_inventory() {
+        let context = window_enumeration_context_v1(enumeration_input(true, false, false, 0));
+
+        assert_eq!(context.source, "coreGraphicsWindowList");
+        assert_eq!(context.mode, WindowEnumerationMode::OnScreenOnly);
+        assert_eq!(context.relative_to_window, 0);
+        assert_eq!(
+            context.offscreen_coverage,
+            WindowEnumerationCoverageStatus::NotEnumerated
+        );
+        assert_eq!(
+            context.desktop_element_policy,
+            WindowEnumerationDesktopElementPolicy::NotExcludedByOption
+        );
+    }
+
+    #[test]
+    fn window_enumeration_context_preserves_raw_options() {
+        let context = window_enumeration_context_v1(enumeration_input(true, false, false, 0));
+
+        assert_eq!(context.raw_options.option_on_screen_only, true);
+        assert_eq!(context.raw_options.option_all, false);
+        assert_eq!(context.raw_options.option_exclude_desktop_elements, false);
+    }
+
+    #[test]
+    fn window_enumeration_context_marks_offscreen_not_enumerated_for_on_screen_only() {
+        let context = window_enumeration_context_v1(enumeration_input(true, false, false, 0));
+
+        assert_eq!(
+            context.offscreen_coverage,
+            WindowEnumerationCoverageStatus::NotEnumerated
+        );
+    }
+
+    #[test]
+    fn window_enumeration_context_serializes_camel_case_contract() {
+        let context = window_enumeration_context_v1(enumeration_input(true, false, false, 0));
+        let serialized = serde_json::to_value(context).expect("serialize context");
+
+        assert_eq!(serialized["source"], "coreGraphicsWindowList");
+        assert_eq!(serialized["mode"], "onScreenOnly");
+        assert_eq!(serialized["relativeToWindow"], 0);
+        assert_eq!(serialized["rawOptions"]["optionOnScreenOnly"], true);
+        assert_eq!(serialized["rawOptions"]["optionAll"], false);
+        assert_eq!(
+            serialized["rawOptions"]["optionExcludeDesktopElements"],
+            false
+        );
+        assert_eq!(serialized["offscreenCoverage"], "notEnumerated");
+        assert_eq!(serialized["desktopElementPolicy"], "notExcludedByOption");
     }
 
     #[test]
@@ -1244,6 +1377,15 @@ mod tests {
     }
 
     #[test]
+    fn window_observation_initializes_enumeration_context_as_none() {
+        assert_eq!(
+            computer_use_window_observation_v1(&bounds(120, 90), true, 0, Some(1.0), Some(1))
+                .enumeration_context,
+            None
+        );
+    }
+
+    #[test]
     fn own_process_window_policy_serializes_camel_case_contract() {
         let policy = window_own_process_policy_v1(true, Some(true)).expect("policy");
         let serialized = serde_json::to_value(policy).expect("serialize policy");
@@ -1293,6 +1435,20 @@ mod tests {
             duplicate_group_status,
             title_fallback_status,
             own_process_window_policy_status,
+        }
+    }
+
+    fn enumeration_input(
+        option_on_screen_only: bool,
+        option_all: bool,
+        option_exclude_desktop_elements: bool,
+        relative_to_window: u32,
+    ) -> WindowEnumerationObservationInputV1 {
+        WindowEnumerationObservationInputV1 {
+            option_on_screen_only,
+            option_all,
+            option_exclude_desktop_elements,
+            relative_to_window,
         }
     }
 }
