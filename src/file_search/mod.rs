@@ -253,6 +253,15 @@ pub use os_open::{
     prompt_rename_target_name, quick_look, rename_path, reveal_in_finder, show_info,
 };
 
+pub fn parent_folder_search_query(path: &str) -> Option<String> {
+    let parent = Path::new(path).parent()?;
+    if parent.as_os_str().is_empty() {
+        return None;
+    }
+    let parent = parent.to_str()?;
+    Some(ensure_trailing_slash(parent))
+}
+
 /// Rank a bounded batch of Spotlight results for display in root launcher search.
 pub fn rank_root_file_results(
     results: &[FileResult],
@@ -1372,6 +1381,21 @@ mod tests {
         assert_eq!(ensure_trailing_slash(""), "/");
         // Single tilde
         assert_eq!(ensure_trailing_slash("~"), "~/");
+    }
+    #[test]
+    fn parent_folder_search_query_returns_trailing_slashed_parent() {
+        assert_eq!(
+            parent_folder_search_query("/tmp/projects/readme.md"),
+            Some("/tmp/projects/".to_string())
+        );
+    }
+    #[test]
+    fn parent_folder_search_query_handles_root_parent() {
+        assert_eq!(parent_folder_search_query("/hosts"), Some("/".to_string()));
+    }
+    #[test]
+    fn parent_folder_search_query_rejects_relative_leaf_without_parent() {
+        assert_eq!(parent_folder_search_query("readme.md"), None);
     }
     #[test]
     fn test_parent_dir_display_root() {

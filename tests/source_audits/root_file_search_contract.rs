@@ -145,6 +145,7 @@ mod tests {
             "root_file_copy_path",
             "root_file_quick_look",
             "root_file_search_in_folder",
+            "root_file_browse_parent_folder",
         ] {
             assert!(
                 !dedicated_file_search.contains(forbidden),
@@ -237,6 +238,7 @@ mod tests {
             "root_file_copy_path",
             "root_file_quick_look",
             "root_file_search_in_folder",
+            "root_file_browse_parent_folder",
         ] {
             assert!(
                 source.contains(action_id),
@@ -247,6 +249,11 @@ mod tests {
             source.contains("ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID")
                 && source.contains("| ROOT_FILE_SEARCH_IN_FOLDER_ACTION_ID"),
             "Search Inside Folder action id should be reserved and recognized as a captured root-file action"
+        );
+        assert!(
+            source.contains("ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID")
+                && source.contains("| ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID"),
+            "Browse Parent Folder action id should be reserved and recognized as a captured root-file action"
         );
     }
 
@@ -274,6 +281,34 @@ mod tests {
                 && normalized.contains("ensure_trailing_slash(&file.path)")
                 && normalized.contains("self.open_file_search(query, cx);"),
             "root folder action should hand off to dedicated File Search with a trailing-slashed directory path"
+        );
+    }
+
+    #[test]
+    fn root_file_browse_parent_folder_action_is_file_only_and_opens_dedicated_file_search() {
+        let actions_source = fs::read_to_string("src/app_impl/actions_toggle.rs")
+            .expect("read src/app_impl/actions_toggle.rs");
+        let selection_source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        let actions_normalized = actions_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let selection_normalized = selection_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        assert!(
+            actions_normalized.contains("ROOT_FILE_BROWSE_PARENT_FOLDER_ACTION_ID")
+                && actions_normalized.contains("!is_dir"),
+            "Browse Parent Folder should only be rendered for regular root file rows"
+        );
+        assert!(
+            selection_normalized.contains("root_file_browse_parent_folder_query")
+                && selection_normalized.contains("parent_folder_search_query(&file.path)")
+                && selection_normalized.contains("self.open_file_search(query, cx);"),
+            "Browse Parent Folder should hand off to dedicated File Search at the containing folder"
         );
     }
 
