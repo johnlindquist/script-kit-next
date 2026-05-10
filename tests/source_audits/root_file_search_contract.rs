@@ -157,6 +157,46 @@ mod tests {
     }
 
     #[test]
+    fn root_file_directory_context_ranking_stays_bounded_and_below_filename_first() {
+        let source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let production = production_source(&source);
+        let provider_source = production
+            .split("pub fn root_file_provider_query_for_user_query(")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split("/// Returns true when the root launcher")
+                    .next()
+            })
+            .expect("root provider query builder should be present");
+        let rank_source = production
+            .split("pub fn rank_root_file_results(")
+            .nth(1)
+            .and_then(|section| section.split("/// Payload for file drag-out").next())
+            .expect("rank_root_file_results source should be present");
+
+        assert!(
+            production.contains("const ROOT_FILE_PATH_CONTEXT_TIER: i32 = 3")
+                && production.contains("const ROOT_FILE_PATH_CONTEXT_MAX_TERMS: usize = 4"),
+            "directory-context ranking should stay below filename token tier 4 and bounded by term count"
+        );
+        assert!(
+            provider_source.contains("root_file_path_context_mdquery_branches(&terms)")
+                && provider_source.contains("kMDItemPath ==")
+                && provider_source.contains("kMDItemFSName ==")
+                && provider_source.contains("root_file_query_has_safe_global_length(term)"),
+            "provider query should add bounded path+filename branches only for safe parent terms"
+        );
+        assert!(
+            rank_source.contains("root_file_path_context_matches_query(file, &q)")
+                && rank_source.contains("ROOT_FILE_PATH_CONTEXT_TIER")
+                && rank_source.contains("root_file_name_relevance_tier(&file.name, &q, name_matched).max"),
+            "root ranking should apply directory-context relevance without replacing filename-first relevance"
+        );
+    }
+
+    #[test]
     fn root_file_renderer_uses_file_type_specific_svg_icons() {
         let source = fs::read_to_string("src/designs/core/render.rs")
             .expect("read src/designs/core/render.rs");

@@ -30,6 +30,12 @@ Root recent-file seed-pool changes are verified with source audits and grouping 
 
 Hydration must use the deeper seed limit, empty-root rendering must use the render limit, grouping must remain provider-free, and non-empty global recent seeds must keep filename-token eligibility.
 
+## Root File Directory Context Ranking
+
+Root file directory-context ranking is verified with pure query-builder and ranking tests because it changes retrieval and scoring math without adding UI state.
+
+Run `cargo test --lib root_file_path_context`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. If the known local SIGBUS failure interrupts tests before execution, keep the failure log and use `cargo check --lib` plus targeted source inspection as the proof path.
+
 ## Computer-use native-window capture
 
 Native-window capture proof goes through the real MCP path and treats the JSON receipt as the primary oracle.
