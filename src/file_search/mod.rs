@@ -436,8 +436,8 @@ fn root_file_name_relevance_tier(name: &str, query: &str, name_matched: bool) ->
     1
 }
 
-/// Return true when a root recent-file seed is a high-confidence filename-side match.
-pub fn root_file_name_seed_matches_query(name: &str, query: &str) -> bool {
+/// Return true when a root file query is a high-confidence filename-token match.
+pub fn root_file_name_token_matches_query(name: &str, query: &str) -> bool {
     let query = query.trim().to_lowercase();
     if query.is_empty() {
         return false;
@@ -456,6 +456,11 @@ pub fn root_file_name_seed_matches_query(name: &str, query: &str) -> bool {
         || stem_lc.starts_with(&query)
         || contains_at_root_file_boundary(&name_lc, &query)
         || contains_at_root_file_boundary(&stem_lc, &query)
+}
+
+/// Return true when a root recent-file seed is a high-confidence filename-side match.
+pub fn root_file_name_seed_matches_query(name: &str, query: &str) -> bool {
+    root_file_name_token_matches_query(name, query)
 }
 
 fn contains_at_root_file_boundary(haystack: &str, needle: &str) -> bool {
@@ -873,6 +878,35 @@ mod tests {
         assert!(!should_search_root_files("/Users/example"));
         assert!(!should_search_root_files("~/Documents"));
         assert!(!should_search_root_files("kMDItemFSName == 'notes.txt'"));
+    }
+
+    #[test]
+    fn root_file_name_token_match_accepts_separator_boundary_prefixes() {
+        assert!(root_file_name_token_matches_query(
+            "client-design-notes.md",
+            "design"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "Q2 Report.pdf",
+            "report"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "project_alpha_summary.txt",
+            "alpha"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "design-notes.md",
+            "design"
+        ));
+    }
+
+    #[test]
+    fn root_file_name_token_match_rejects_mid_token_and_empty_queries() {
+        assert!(!root_file_name_token_matches_query(
+            "redesign-notes.md",
+            "design"
+        ));
+        assert!(!root_file_name_token_matches_query("notes.md", ""));
     }
 
     fn file(path: &str, name: &str, file_type: FileType) -> FileResult {
