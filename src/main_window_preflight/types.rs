@@ -34,6 +34,29 @@ pub(crate) struct MainWindowPreflightAction {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) enum MainWindowPreflightResultRole {
+    Primary,
+    RootFile,
+    RootPassive,
+    Fallback,
+    ScriptIssue,
+    Agent,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct MainWindowPreflightVisibleResult {
+    pub visible_rank: usize,
+    pub grouped_index: usize,
+    pub stable_key: Option<String>,
+    pub role: MainWindowPreflightResultRole,
+    pub action_kind: MainWindowPreflightActionKind,
+    pub type_label: String,
+    pub source_name: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct RootPassiveSourceReceipt {
     pub enabled: bool,
     pub frame_count: usize,
@@ -56,6 +79,8 @@ pub(crate) struct MainWindowPreflightReceipt {
     pub filter_text: String,
     pub selected_index: usize,
     pub selected_result_key: Option<String>,
+    pub selected_result_role: MainWindowPreflightResultRole,
+    pub visible_results: Vec<MainWindowPreflightVisibleResult>,
     pub visible_result_key_fingerprint: String,
     pub visible_result_count: usize,
     pub root_passive_frame: Option<RootPassiveFrameReceipt>,

@@ -1356,6 +1356,13 @@ mod advanced_query_tests {
         })
     }
 
+    fn builtin_entry(name: &str) -> BuiltInEntry {
+        match builtin_result(name) {
+            SearchResult::BuiltIn(bm) => bm.entry,
+            _ => unreachable!("builtin_result always returns a BuiltIn row"),
+        }
+    }
+
     fn acp_history_hit(
         session_id: &str,
         title: &str,
@@ -1404,6 +1411,93 @@ mod advanced_query_tests {
         }
     }
 
+    fn root_browser_tab_hit(
+        stable_key: &str,
+        title: &str,
+    ) -> crate::browser_tabs::RootBrowserTabSearchHit {
+        crate::browser_tabs::RootBrowserTabSearchHit {
+            stable_key: stable_key.to_string(),
+            tab: crate::browser_tabs::BrowserTabInfo {
+                browser_name: "Safari".to_string(),
+                browser_bundle_id: "com.apple.Safari".to_string(),
+                window_index: 1,
+                tab_index: 1,
+                title: title.to_string(),
+                url: "https://example.com/design".to_string(),
+            },
+            title: title.to_string(),
+            url: "https://example.com/design".to_string(),
+            domain: "example.com".to_string(),
+            provider_label: "Safari".to_string(),
+            score: 100,
+        }
+    }
+
+    fn root_browser_history_hit(
+        stable_key: &str,
+        title: &str,
+    ) -> crate::browser_history::RootBrowserHistorySearchHit {
+        crate::browser_history::RootBrowserHistorySearchHit {
+            stable_key: stable_key.to_string(),
+            provider_label: "Safari".to_string(),
+            profile_label: "Default".to_string(),
+            title: title.to_string(),
+            url: "https://example.com/design-history".to_string(),
+            domain: "example.com".to_string(),
+            last_visit_unix_ms: chrono::Utc::now().timestamp_millis(),
+            visit_count: 3,
+        }
+    }
+
+    fn root_dictation_history_hit(
+        id: &str,
+        preview: &str,
+    ) -> crate::dictation::RootDictationHistorySearchHit {
+        crate::dictation::RootDictationHistorySearchHit {
+            id: id.to_string(),
+            preview: preview.to_string(),
+            target: "Main Filter".to_string(),
+            timestamp: "2026-05-10T17:13:06Z".to_string(),
+            audio_duration_ms: 1200,
+            score: 100,
+            matched_field: crate::dictation::DictationHistorySearchField::Transcript,
+        }
+    }
+
+    fn grouped_result_roles(
+        grouped: &[GroupedListItem],
+        flat: &[SearchResult],
+    ) -> Vec<(usize, &'static str)> {
+        grouped
+            .iter()
+            .enumerate()
+            .filter_map(|(grouped_index, item)| {
+                let GroupedListItem::Item(flat_index) = item else {
+                    return None;
+                };
+                let role = match flat.get(*flat_index)? {
+                    SearchResult::Script(_)
+                    | SearchResult::Scriptlet(_)
+                    | SearchResult::Skill(_)
+                    | SearchResult::BuiltIn(_)
+                    | SearchResult::App(_)
+                    | SearchResult::Window(_) => "primary",
+                    SearchResult::File(_) => "rootFile",
+                    SearchResult::Note(_)
+                    | SearchResult::AcpHistory(_)
+                    | SearchResult::ClipboardHistory(_)
+                    | SearchResult::DictationHistory(_)
+                    | SearchResult::BrowserTab(_)
+                    | SearchResult::BrowserHistory(_) => "rootPassive",
+                    SearchResult::Fallback(_) => "fallback",
+                    SearchResult::ScriptIssue(_) => "scriptIssue",
+                    SearchResult::Agent(_) => "agent",
+                };
+                Some((grouped_index, role))
+            })
+            .collect()
+    }
+
     #[test]
     fn root_file_rows_append_files_section_for_eligible_search() {
         let frecency_store = FrecencyStore::new();
@@ -1444,6 +1538,137 @@ mod advanced_query_tests {
                 SearchResult::File(file) if file.file.path == "/Users/example/Desktop/fix spelling.png"
             )),
             "Files section should point at the ranked root file row"
+        );
+    }
+
+    #[test]
+    fn root_passive_sources_never_precede_primary_launcher_rows_for_same_query() {
+        let frecency_store = FrecencyStore::new();
+        let query = "design";
+        let root_files = vec![root_file(
+            "/Users/example/Desktop/design-notes.md",
+            "design-notes.md",
+        )];
+        let browser_tabs = vec![root_browser_tab_hit("tab/design", "design tab")];
+        let notes = vec![root_note_hit(
+            "33333333-3333-3333-3333-333333333333",
+            "design note",
+            false,
+        )];
+        let clipboard = vec![clipboard_history_entry(
+            "clip-design",
+            "design copied text",
+            false,
+        )];
+        let dictation = vec![root_dictation_history_hit(
+            "dictation-design",
+            "design transcript",
+        )];
+        let acp = vec![acp_history_hit("session-design", "design conversation")];
+        let browser_history = vec![root_browser_history_hit(
+            "history/design",
+            "design history page",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files_with_options(
+            &[],
+            &[],
+            &[builtin_entry("Design Gallery")],
+            &[],
+            &[],
+            &frecency_store,
+            query,
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            false,
+            &root_files,
+            &[],
+            crate::file_search::RootFileSectionOptions::default(),
+            &notes,
+            crate::notes::RootNotesSectionOptions {
+                enabled: true,
+                ..Default::default()
+            },
+            &clipboard,
+            crate::clipboard_history::RootClipboardHistorySectionOptions {
+                enabled: true,
+                ..Default::default()
+            },
+            &dictation,
+            crate::dictation::RootDictationHistorySectionOptions {
+                enabled: true,
+                max_results: 3,
+                min_query_chars: 3,
+                scan_limit: 10,
+            },
+            &acp,
+            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+            &browser_tabs,
+            crate::browser_tabs::RootBrowserTabsSectionOptions {
+                enabled: true,
+                ..Default::default()
+            },
+            &browser_history,
+            crate::browser_history::RootBrowserHistorySectionOptions {
+                enabled: true,
+                min_query_chars: 3,
+                ..Default::default()
+            },
+        );
+
+        let roles = grouped_result_roles(&grouped, &flat);
+        let first_primary = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "primary").then_some(*index))
+            .expect("collision fixture should include a primary launcher row");
+        let first_root_file = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "rootFile").then_some(*index))
+            .expect("collision fixture should include a root file row");
+        let first_passive = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "rootPassive").then_some(*index))
+            .expect("collision fixture should include a passive row");
+        let first_fallback = roles
+            .iter()
+            .find_map(|(index, role)| (*role == "fallback").then_some(*index))
+            .expect("collision fixture should include a File Search fallback row");
+
+        assert!(first_primary < first_root_file);
+        assert!(first_primary < first_passive);
+        assert!(first_root_file < first_fallback);
+        assert!(first_passive < first_fallback);
+        assert!(
+            roles
+                .iter()
+                .all(|(index, role)| *role != "rootPassive" || *index > first_primary),
+            "no passive root row should appear before the first primary launcher row"
+        );
+
+        let section_labels = grouped
+            .iter()
+            .filter_map(|item| match item {
+                GroupedListItem::SectionHeader(label, None) => Some(label.as_str()),
+                GroupedListItem::SectionHeader(_, Some(_)) | GroupedListItem::Item(_) => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            section_labels,
+            vec![
+                "Files",
+                "Browser Tabs",
+                "Notes",
+                "Clipboard History",
+                "Dictation History",
+                "AI Conversations",
+                "Browser History",
+                "Use \"design\" with...",
+            ]
         );
     }
 

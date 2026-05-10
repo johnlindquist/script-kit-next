@@ -77,15 +77,110 @@ fn main_window_preflight_exposes_selection_key_and_frame_fingerprint() {
         fs::read_to_string("src/prompt_handler/mod.rs").expect("read prompt handler");
 
     assert!(types.contains("pub selected_result_key: Option<String>"));
+    assert!(types.contains("pub selected_result_role: MainWindowPreflightResultRole"));
+    assert!(types.contains("pub visible_results: Vec<MainWindowPreflightVisibleResult>"));
     assert!(types.contains("pub visible_result_key_fingerprint: String"));
     assert!(types.contains("pub visible_result_count: usize"));
     assert!(build.contains("result.stable_selection_key()"));
+    assert!(build.contains("visible_result_receipts(app)"));
     assert!(build.contains("visible_result_keys(app).join(\"|\")"));
     assert!(build.contains("selected_result_key = ?receipt.selected_result_key"));
     assert!(protocol.contains("mainWindowPreflight"));
     assert!(protocol.contains("rootFileSearch"));
     assert!(prompt_handler.contains("serde_json::to_value(receipt).ok()"));
     assert!(prompt_handler.contains("\"loading\": self.root_file_search_loading"));
+}
+
+#[test]
+fn preflight_visible_results_expose_search_safety_roles() {
+    let types =
+        fs::read_to_string("src/main_window_preflight/types.rs").expect("read preflight types");
+    let build =
+        fs::read_to_string("src/main_window_preflight/build.rs").expect("read preflight builder");
+
+    assert!(types.contains("pub(crate) enum MainWindowPreflightResultRole"));
+    assert!(types.contains("pub(crate) struct MainWindowPreflightVisibleResult"));
+    for required in [
+        "Primary",
+        "RootFile",
+        "RootPassive",
+        "Fallback",
+        "ScriptIssue",
+        "Agent",
+        "pub visible_rank: usize",
+        "pub grouped_index: usize",
+        "pub stable_key: Option<String>",
+        "pub action_kind: MainWindowPreflightActionKind",
+        "pub type_label: String",
+        "pub source_name: Option<String>",
+    ] {
+        assert!(
+            types.contains(required),
+            "preflight types should expose `{required}`"
+        );
+    }
+
+    let classifier = build
+        .split("fn result_role(")
+        .nth(1)
+        .and_then(|rest| rest.split("fn enter_action_kind(").next())
+        .expect("result_role classifier should precede enter_action_kind");
+    assert!(
+        !classifier.contains("_ =>"),
+        "result_role must classify every SearchResult variant explicitly"
+    );
+    for required in [
+        "SearchResult::Script(_)",
+        "SearchResult::Scriptlet(_)",
+        "SearchResult::Skill(_)",
+        "SearchResult::BuiltIn(_)",
+        "SearchResult::App(_)",
+        "SearchResult::Window(_)",
+        "MainWindowPreflightResultRole::Primary",
+        "SearchResult::File(_)",
+        "MainWindowPreflightResultRole::RootFile",
+        "SearchResult::Note(_)",
+        "SearchResult::AcpHistory(_)",
+        "SearchResult::ClipboardHistory(_)",
+        "SearchResult::DictationHistory(_)",
+        "SearchResult::BrowserTab(_)",
+        "SearchResult::BrowserHistory(_)",
+        "MainWindowPreflightResultRole::RootPassive",
+        "SearchResult::Fallback(_)",
+        "MainWindowPreflightResultRole::Fallback",
+        "SearchResult::ScriptIssue(_)",
+        "MainWindowPreflightResultRole::ScriptIssue",
+        "SearchResult::Agent(_)",
+        "MainWindowPreflightResultRole::Agent",
+    ] {
+        assert!(
+            classifier.contains(required),
+            "result_role should contain `{required}`"
+        );
+    }
+
+    let receipt_builder = build
+        .split("fn visible_result_receipts(")
+        .nth(1)
+        .and_then(|rest| rest.split("fn build_tab_action(").next())
+        .expect("visible_result_receipts should precede build_tab_action");
+    for required in [
+        "grouped_items()",
+        "search_result_for_flat_index",
+        "GroupedListItem::Item(flat_index)",
+        "visible_rank",
+        "grouped_index",
+        "result.stable_selection_key()",
+        "result_role(result)",
+        "enter_action_kind(result)",
+        "result.type_label().to_string()",
+        "result.source_name().map(ToString::to_string)",
+    ] {
+        assert!(
+            receipt_builder.contains(required),
+            "visible_result_receipts should contain `{required}`"
+        );
+    }
 }
 
 #[test]
