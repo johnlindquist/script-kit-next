@@ -81,20 +81,20 @@ impl ScriptListApp {
             });
 
             let mut batch = Vec::new();
-            let mut done = false;
-            while !done {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(16))
-                    .await;
+            loop {
+                if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                    return;
+                }
 
-                while let Ok(event) = rx.try_recv() {
-                    match event {
-                        crate::file_search::SearchEvent::Result(result) => batch.push(result),
-                        crate::file_search::SearchEvent::Done => {
-                            done = true;
-                            break;
-                        }
+                match rx.try_recv() {
+                    Ok(crate::file_search::SearchEvent::Result(result)) => batch.push(result),
+                    Ok(crate::file_search::SearchEvent::Done) => break,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        cx.background_executor()
+                            .timer(std::time::Duration::from_millis(16))
+                            .await;
                     }
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
                 }
             }
 

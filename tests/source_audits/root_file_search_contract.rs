@@ -81,4 +81,22 @@ mod tests {
             "getState should refresh grouped rows before reporting ScriptList visible rows"
         );
     }
+
+    #[test]
+    fn root_file_search_receive_loop_handles_cancel_and_disconnect() {
+        let source = fs::read_to_string("src/app_impl/root_file_search.rs")
+            .expect("read src/app_impl/root_file_search.rs");
+        let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        assert!(
+            normalized.contains(
+                "loop { if cancel.load(std::sync::atomic::Ordering::Relaxed) { return; }"
+            ),
+            "root file receive loop should keep honoring cancellation after the worker starts"
+        );
+        assert!(
+            normalized.contains("Err(std::sync::mpsc::TryRecvError::Disconnected) => break"),
+            "root file receive loop should exit if the worker channel disconnects before Done"
+        );
+    }
 }
