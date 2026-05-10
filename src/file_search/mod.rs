@@ -436,6 +436,28 @@ fn root_file_name_relevance_tier(name: &str, query: &str, name_matched: bool) ->
     1
 }
 
+/// Return true when a root recent-file seed is a high-confidence filename-side match.
+pub fn root_file_name_seed_matches_query(name: &str, query: &str) -> bool {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return false;
+    }
+
+    let name_lc = name.to_lowercase();
+    let stem_lc = Path::new(name)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or(name)
+        .to_lowercase();
+
+    name_lc == query
+        || stem_lc == query
+        || name_lc.starts_with(&query)
+        || stem_lc.starts_with(&query)
+        || contains_at_root_file_boundary(&name_lc, &query)
+        || contains_at_root_file_boundary(&stem_lc, &query)
+}
+
 fn contains_at_root_file_boundary(haystack: &str, needle: &str) -> bool {
     if needle.is_empty() {
         return false;

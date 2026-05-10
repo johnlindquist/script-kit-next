@@ -482,6 +482,7 @@ fn append_root_file_section(
             let merged = merge_root_global_file_results_with_recent(
                 root_file_results,
                 root_recent_file_results,
+                filter_text,
             );
             crate::file_search::rank_root_file_results(
                 &merged,
@@ -593,11 +594,19 @@ fn root_file_section_insertion_index(
 fn merge_root_global_file_results_with_recent(
     provider_results: &[crate::file_search::FileResult],
     recent_results: &[crate::file_search::FileResult],
+    filter_text: &str,
 ) -> Vec<crate::file_search::FileResult> {
     let mut seen = std::collections::HashSet::new();
     let mut merged = Vec::with_capacity(provider_results.len() + recent_results.len());
 
-    for file in provider_results.iter().chain(recent_results.iter()) {
+    for file in provider_results {
+        if seen.insert(file.path.clone()) {
+            merged.push(file.clone());
+        }
+    }
+    for file in recent_results.iter().filter(|file| {
+        crate::file_search::root_file_name_seed_matches_query(&file.name, filter_text)
+    }) {
         if seen.insert(file.path.clone()) {
             merged.push(file.clone());
         }
@@ -988,6 +997,93 @@ mod advanced_query_tests {
                 SearchResult::Fallback(fallback) if fallback.display_label() == "Search Files for \"design\""
             )),
             "seeded global file rows should keep the full File Search handoff"
+        );
+    }
+
+    #[test]
+    fn root_global_recent_seed_rejects_path_only_match_while_loading() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/Design/archive/readme.md",
+            "readme.md",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "design",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            true,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            flat.iter().all(|result| !matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/Design/archive/readme.md"
+            )),
+            "path-only recent files should not seed non-empty global root search"
+        );
+        assert!(
+            grouped
+                .iter()
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Files · Searching...")),
+            "the loading Files section should remain visible for the continuation row"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::Fallback(fallback) if fallback.display_label() == "Search Files for \"design\""
+            )),
+            "path-only recent rejection should still keep the dedicated File Search handoff"
+        );
+    }
+
+    #[test]
+    fn root_global_provider_path_only_match_still_renders() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![root_file(
+            "/Users/example/Design/archive/readme.md",
+            "readme.md",
+        )];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "design",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            false,
+            &root_files,
+            &[],
+        );
+
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/Design/archive/readme.md"
+            )),
+            "provider-returned path-only matches should still render after the provider answers"
         );
     }
 
