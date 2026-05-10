@@ -67,6 +67,9 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Clipboard History row has no filesystem path"),
         )),
+        Some(SearchResult::DictationHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Dictation History row has no filesystem path"),
+        )),
         Some(SearchResult::BrowserTab(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Browser Tabs row has no filesystem path"),
         )),
@@ -110,6 +113,9 @@ pub fn extract_path_for_copy(
         )),
         Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Clipboard History row has no filesystem path"),
+        )),
+        Some(SearchResult::DictationHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Dictation History row has no filesystem path"),
         )),
         Some(SearchResult::BrowserTab(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Browser Tabs row has no filesystem path"),
@@ -164,6 +170,9 @@ pub fn extract_path_for_quick_terminal(
         )),
         Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open clipboard history in Quick Terminal"),
+        )),
+        Some(SearchResult::DictationHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot open dictation history in Quick Terminal"),
         )),
         Some(SearchResult::BrowserTab(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open browser tabs in Quick Terminal"),
@@ -240,6 +249,9 @@ pub fn extract_path_for_edit(
         )),
         Some(SearchResult::ClipboardHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit clipboard history"),
+        )),
+        Some(SearchResult::DictationHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot edit dictation history"),
         )),
         Some(SearchResult::BrowserHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit browser history"),

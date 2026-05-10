@@ -405,6 +405,13 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
             ..Default::default()
         },
         &[],
+        crate::dictation::RootDictationHistorySectionOptions {
+            enabled: false,
+            max_results: 0,
+            min_query_chars: usize::MAX,
+            scan_limit: 0,
+        },
+        &[],
         crate::ai::acp::history::RootAcpHistorySectionOptions {
             enabled: false,
             ..Default::default()
@@ -447,6 +454,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_notes_options: crate::notes::RootNotesSectionOptions,
     root_clipboard_history_hits: &[crate::clipboard_history::ClipboardEntryMeta],
     root_clipboard_history_options: crate::clipboard_history::RootClipboardHistorySectionOptions,
+    root_dictation_history_hits: &[crate::dictation::RootDictationHistorySearchHit],
+    root_dictation_history_options: crate::dictation::RootDictationHistorySectionOptions,
     root_acp_history_hits: &[crate::ai::acp::history::AcpHistorySearchHit],
     root_acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
     root_browser_tab_hits: &[crate::browser_tabs::RootBrowserTabSearchHit],
@@ -513,6 +522,14 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         advanced_query,
         root_clipboard_history_hits,
         root_clipboard_history_options,
+    );
+    append_root_dictation_history_section(
+        &mut grouped,
+        &mut flat_results,
+        filter_text,
+        advanced_query,
+        root_dictation_history_hits,
+        root_dictation_history_options,
     );
     append_root_acp_history_section(
         &mut grouped,
@@ -668,6 +685,43 @@ fn append_root_clipboard_history_section(
         .collect::<Vec<_>>();
 
     append_root_passive_section(grouped, flat_results, "Clipboard History", rows);
+}
+
+fn append_root_dictation_history_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    hits: &[crate::dictation::RootDictationHistorySearchHit],
+    options: crate::dictation::RootDictationHistorySectionOptions,
+) {
+    if advanced_query.is_some()
+        || !crate::dictation::root_dictation_history_query_is_eligible(filter_text, options)
+    {
+        return;
+    }
+
+    let rows = hits
+        .iter()
+        .take(options.max_results)
+        .enumerate()
+        .map(|(rank, hit)| {
+            let time = crate::dictation::format_history_timestamp(&hit.timestamp);
+            let duration = crate::dictation::format_history_duration_ms(hit.audio_duration_ms);
+            SearchResult::DictationHistory(crate::scripts::DictationHistoryMatch {
+                id: hit.id.clone(),
+                preview: hit.preview.clone(),
+                target: hit.target.clone(),
+                timestamp: hit.timestamp.clone(),
+                audio_duration_ms: hit.audio_duration_ms,
+                subtitle: format!("{} · {} · {}", hit.target, duration, time),
+                score: root_passive_result_score(rank),
+                matched_field: hit.matched_field,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    append_root_passive_section(grouped, flat_results, "Dictation History", rows);
 }
 
 fn append_root_browser_tabs_section(

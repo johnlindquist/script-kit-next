@@ -32,6 +32,25 @@ pub struct DictationHistorySearchHit {
     pub matched_field: DictationHistorySearchField,
 }
 
+#[derive(Debug, Clone)]
+pub struct RootDictationHistorySearchHit {
+    pub id: String,
+    pub preview: String,
+    pub target: String,
+    pub timestamp: String,
+    pub audio_duration_ms: u64,
+    pub score: u32,
+    pub matched_field: DictationHistorySearchField,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RootDictationHistorySectionOptions {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub scan_limit: usize,
+}
+
 fn history_path() -> std::path::PathBuf {
     crate::setup::get_kit_path().join("dictation-history.jsonl")
 }
@@ -293,6 +312,48 @@ pub fn search_history(query: &str, limit: usize) -> Vec<DictationHistorySearchHi
         event = "dictation_history_search_executed",
         query = %query,
         limit,
+        hit_count = hits.len(),
+    );
+    hits
+}
+
+pub fn root_dictation_history_query_is_eligible(
+    query: &str,
+    options: RootDictationHistorySectionOptions,
+) -> bool {
+    let trimmed = query.trim();
+    options.enabled
+        && trimmed.len() >= options.min_query_chars
+        && !trimmed.contains('\n')
+        && !trimmed.contains('\r')
+}
+
+pub fn search_root_dictation_history(
+    query: &str,
+    options: RootDictationHistorySectionOptions,
+) -> Vec<RootDictationHistorySearchHit> {
+    let entries = load_history()
+        .into_iter()
+        .take(options.scan_limit)
+        .collect::<Vec<_>>();
+    let hits = rank_history_entries(entries, query, options.max_results)
+        .into_iter()
+        .map(|hit| RootDictationHistorySearchHit {
+            id: hit.entry.id,
+            preview: hit.entry.preview,
+            target: hit.entry.target,
+            timestamp: hit.entry.timestamp,
+            audio_duration_ms: hit.entry.audio_duration_ms,
+            score: hit.score,
+            matched_field: hit.matched_field,
+        })
+        .collect::<Vec<_>>();
+    tracing::info!(
+        category = "DICTATION",
+        event = "root_dictation_history_search_executed",
+        query_len = query.trim().chars().count(),
+        scan_limit = options.scan_limit,
+        max_results = options.max_results,
         hit_count = hits.len(),
     );
     hits

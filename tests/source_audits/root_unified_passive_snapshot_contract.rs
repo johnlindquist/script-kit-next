@@ -69,6 +69,7 @@ fn passive_root_sections_share_score_cap_and_order() {
         "append_root_browser_tabs_section",
         "append_root_notes_section",
         "append_root_clipboard_history_section",
+        "append_root_dictation_history_section",
         "append_root_acp_history_section",
         "append_root_browser_history_section",
     ] {
@@ -92,6 +93,16 @@ fn passive_root_sections_share_score_cap_and_order() {
         grouping.find("append_root_browser_tabs_section(")
             < grouping.find("append_root_notes_section("),
         "Browser Tabs should remain before Notes"
+    );
+    assert!(
+        grouping.find("append_root_clipboard_history_section(")
+            < grouping.find("append_root_dictation_history_section("),
+        "Dictation History should remain after Clipboard History"
+    );
+    assert!(
+        grouping.find("append_root_dictation_history_section(")
+            < grouping.find("append_root_acp_history_section("),
+        "Dictation History should remain before AI Conversations"
     );
     assert!(
         grouping.find("append_root_acp_history_section(")

@@ -119,7 +119,7 @@ fn root_unified_browser_history_result_is_stable_non_bindable_and_web_typed() {
     assert!(types.contains("SearchResult::BrowserHistory(_) => \"Open Page\""));
     assert!(types.contains("SearchResult::BrowserHistory(_) => (\"Web\", 0x38BDF8)"));
     assert!(types.contains("SearchResult::BrowserHistory(_) => Some(\"Browser History\")"));
-    assert!(unified.contains("SearchResult::BrowserHistory(_) => 11"));
+    assert!(unified.contains("SearchResult::BrowserHistory(_) => 12"));
 }
 
 #[test]

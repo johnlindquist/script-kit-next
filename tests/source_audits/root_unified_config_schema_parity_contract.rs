@@ -51,6 +51,16 @@ const ROOT_UNIFIED_SOURCES: &[RootUnifiedSourceSpec] = &[
         verification_heading: "Root Unified Search Clipboard History",
     },
     RootUnifiedSourceSpec {
+        rust_field: "dictation_history",
+        schema_field: "dictationHistory",
+        config_struct: "UnifiedSearchDictationHistoryConfig",
+        default_prefix: "DEFAULT_UNIFIED_SEARCH_DICTATION_HISTORY_",
+        section_options_fn: "dictation_history_section_options",
+        grouping_fn: "append_root_dictation_history_section",
+        audit_module: "root_unified_dictation_history_contract",
+        verification_heading: "Root Unified Search Dictation History",
+    },
+    RootUnifiedSourceSpec {
         rust_field: "browser_tabs",
         schema_field: "browserTabs",
         config_struct: "UnifiedSearchBrowserTabsConfig",
@@ -179,6 +189,7 @@ fn root_unified_user_controls_are_clamped_or_explicitly_policy_gated() {
         "max_results.clamp(1, 5)",
         "min_query_chars.clamp(2, 32)",
         "min_query_chars.clamp(4, 32)",
+        "scan_limit.clamp(25, 200)",
         "scan_limit.clamp(25, 2_000)",
         "scan_limit.clamp(10, 250)",
         "cache_ttl_ms.clamp(1_000, 60_000)",
@@ -189,6 +200,10 @@ fn root_unified_user_controls_are_clamped_or_explicitly_policy_gated() {
             "UnifiedSearchConfig source options must clamp user control `{required_clamp}`"
         );
     }
+    assert!(
+        config_types.contains("scan_limit: unified.clipboard_history.scan_limit.clamp(25, 1000)"),
+        "clipboard-history options must clamp scan_limit while applying built-in gating"
+    );
 
     for schema_control in [
         "enabled?: boolean",
