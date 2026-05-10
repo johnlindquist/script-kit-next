@@ -2976,6 +2976,7 @@ impl ScriptListApp {
             scripts::SearchResult::App(_) => "app",
             scripts::SearchResult::Window(_) => "window",
             scripts::SearchResult::File(_) => "file",
+            scripts::SearchResult::Note(_) => "note",
             scripts::SearchResult::AcpHistory(_) => "acpHistory",
             scripts::SearchResult::ClipboardHistory(_) => "clipboardHistory",
             scripts::SearchResult::Agent(_) => "agent",
@@ -3014,6 +3015,13 @@ impl ScriptListApp {
                 "name": m.file.name,
                 "path": m.file.path,
                 "fileType": format!("{:?}", m.file.file_type),
+            }),
+            scripts::SearchResult::Note(m) => serde_json::json!({
+                "noteId": m.hit.id.as_str(),
+                "title": m.title,
+                "updatedAt": m.hit.updated_at.to_rfc3339(),
+                "isPinned": m.hit.is_pinned,
+                "charCount": m.hit.char_count,
             }),
             scripts::SearchResult::AcpHistory(m) => serde_json::json!({
                 "sessionId": m.entry.session_id,

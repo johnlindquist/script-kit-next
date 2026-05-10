@@ -56,6 +56,7 @@ impl Default for BuiltInConfig {
 pub struct UnifiedSearchConfig {
     pub enabled: bool,
     pub files: UnifiedSearchFilesConfig,
+    pub notes: UnifiedSearchNotesConfig,
     pub acp_history: UnifiedSearchAcpHistoryConfig,
     pub clipboard_history: UnifiedSearchClipboardHistoryConfig,
 }
@@ -65,6 +66,7 @@ impl Default for UnifiedSearchConfig {
         Self {
             enabled: DEFAULT_UNIFIED_SEARCH_ENABLED,
             files: UnifiedSearchFilesConfig::default(),
+            notes: UnifiedSearchNotesConfig::default(),
             acp_history: UnifiedSearchAcpHistoryConfig::default(),
             clipboard_history: UnifiedSearchClipboardHistoryConfig::default(),
         }
@@ -107,6 +109,26 @@ impl Default for UnifiedSearchAcpHistoryConfig {
             enabled: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_ENABLED,
             max_results: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MAX_RESULTS,
             min_query_chars: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MIN_QUERY_CHARS,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchNotesConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub search_content: bool,
+}
+
+impl Default for UnifiedSearchNotesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_NOTES_ENABLED,
+            max_results: DEFAULT_UNIFIED_SEARCH_NOTES_MAX_RESULTS,
+            min_query_chars: DEFAULT_UNIFIED_SEARCH_NOTES_MIN_QUERY_CHARS,
+            search_content: DEFAULT_UNIFIED_SEARCH_NOTES_SEARCH_CONTENT,
         }
     }
 }
@@ -174,6 +196,16 @@ impl UnifiedSearchConfig {
             enabled: self.enabled && self.acp_history.enabled,
             max_results: self.acp_history.max_results.clamp(1, 5),
             min_query_chars: self.acp_history.min_query_chars.clamp(2, 32),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn notes_section_options(&self) -> crate::notes::RootNotesSectionOptions {
+        crate::notes::RootNotesSectionOptions {
+            enabled: self.enabled && self.notes.enabled,
+            max_results: self.notes.max_results.clamp(1, 5),
+            min_query_chars: self.notes.min_query_chars.clamp(2, 32),
+            search_content: self.notes.search_content,
         }
     }
 }

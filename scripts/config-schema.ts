@@ -1299,7 +1299,7 @@ export interface Config extends BaseConfig {
    * handoff rows, but they do not promote above commands, scripts, apps, or
    * skills unless an explicit promotion policy is configured.
    *
-   * @default { enabled: true, files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" }, acpHistory: { enabled: true, maxResults: 3, minQueryChars: 3 } }
+ * @default { enabled: true, files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" }, notes: { enabled: true, maxResults: 3, minQueryChars: 3, searchContent: true }, acpHistory: { enabled: true, maxResults: 3, minQueryChars: 3 } }
    * @example
    * ```typescript
    * unifiedSearch: {
@@ -1494,6 +1494,8 @@ export interface UnifiedSearchConfig {
   enabled?: boolean;
   /** Controls for root file rows backed by recent files, Spotlight, and folder browsing. */
   files?: UnifiedSearchFilesConfig;
+  /** Controls for passive root Notes rows backed by the local Notes index. */
+  notes?: UnifiedSearchNotesConfig;
   /** Controls for passive root AI conversation rows backed by saved ACP history. */
   acpHistory?: UnifiedSearchAcpHistoryConfig;
   /** Controls for opt-in passive root clipboard history rows. */
@@ -1525,6 +1527,17 @@ export interface UnifiedSearchAcpHistoryConfig {
   maxResults?: number;
   /** Minimum query length before AI conversation rows appear. Clamped to 2-32. */
   minQueryChars?: number;
+}
+
+export interface UnifiedSearchNotesConfig {
+  /** Enable local Notes rows in root launcher search. */
+  enabled?: boolean;
+  /** Maximum number of Notes rows to append. Clamped to 1-5. */
+  maxResults?: number;
+  /** Minimum query length before Notes rows appear. Clamped to 2-32. */
+  minQueryChars?: number;
+  /** Search note body content in addition to titles while still rendering metadata only. */
+  searchContent?: boolean;
 }
 
 export interface UnifiedSearchClipboardHistoryConfig {

@@ -1508,6 +1508,7 @@ fn predicate_user_label(predicate: &Predicate) -> String {
             ArtifactKind::App => "apps only".to_string(),
             ArtifactKind::Window => "windows only".to_string(),
             ArtifactKind::File => "files only".to_string(),
+            ArtifactKind::Note => "notes only".to_string(),
             ArtifactKind::AcpHistory => "AI conversations only".to_string(),
             ArtifactKind::ClipboardHistory => "clipboard history only".to_string(),
             ArtifactKind::Fallback => "fallbacks only".to_string(),
@@ -1551,6 +1552,10 @@ fn artifact_kind_label(kind: &ArtifactKind) -> &'static str {
         ArtifactKind::Builtin => "builtin",
         ArtifactKind::App => "app",
         ArtifactKind::Window => "window",
+        ArtifactKind::File => "file",
+        ArtifactKind::Note => "note",
+        ArtifactKind::AcpHistory => "acp-history",
+        ArtifactKind::ClipboardHistory => "clipboard-history",
         ArtifactKind::Fallback => "fallback",
         ArtifactKind::Issue => "issue",
     }

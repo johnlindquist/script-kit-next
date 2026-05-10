@@ -358,8 +358,16 @@ impl ScriptListApp {
             let advanced_query = self.menu_syntax_mode.advanced_query_for(raw_filter_text);
             let unified_search = self.config.get_unified_search();
             let root_file_options = unified_search.root_file_section_options();
+            let notes_options = unified_search.notes_section_options();
             let acp_history_options = unified_search.acp_history_section_options();
             let clipboard_history_options = self.config.root_clipboard_history_section_options();
+            let root_note_hits = if advanced_query.is_none()
+                && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
+            {
+                crate::notes::search_root_notes_meta(search_text, notes_options)
+            } else {
+                Vec::new()
+            };
             let root_clipboard_history_hits = if advanced_query.is_none()
                 && crate::clipboard_history::root_clipboard_history_query_is_eligible(
                     search_text,
@@ -403,6 +411,8 @@ impl ScriptListApp {
                 &self.root_file_results,
                 &self.root_recent_file_results,
                 root_file_options,
+                &root_note_hits,
+                notes_options,
                 &root_clipboard_history_hits,
                 clipboard_history_options,
                 &root_acp_history_hits,

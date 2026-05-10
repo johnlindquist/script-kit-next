@@ -49,6 +49,7 @@ pub fn result_kind(result: &SearchResult) -> ArtifactKind {
         SearchResult::App(_) => ArtifactKind::App,
         SearchResult::Window(_) => ArtifactKind::Window,
         SearchResult::File(_) => ArtifactKind::File,
+        SearchResult::Note(_) => ArtifactKind::Note,
         SearchResult::AcpHistory(_) => ArtifactKind::AcpHistory,
         SearchResult::ClipboardHistory(_) => ArtifactKind::ClipboardHistory,
         SearchResult::Agent(_) => ArtifactKind::Agent,

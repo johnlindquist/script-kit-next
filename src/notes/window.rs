@@ -399,8 +399,9 @@ mod window_ops;
 pub use acp_host::close_notes_embedded_acp;
 pub use window_ops::{
     close_notes_window, get_notes_app_entity_and_handle, get_notes_editor_text,
-    inject_text_into_notes, is_notes_window, is_notes_window_open, open_notes_window,
-    open_notes_window_without_launcher_restore, quick_capture, save_note_with_content,
+    inject_text_into_notes, is_notes_window, is_notes_window_open, open_note_in_notes_window,
+    open_notes_window, open_notes_window_without_launcher_restore, quick_capture,
+    save_note_with_content,
 };
 
 #[cfg(test)]

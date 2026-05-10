@@ -78,6 +78,81 @@ pub fn open_notes_window_without_launcher_restore(cx: &mut App) -> Result<()> {
     open_notes_window_with_close_behavior(cx, NotesCloseBehavior::LeaveLauncherHidden)
 }
 
+pub fn open_note_in_notes_window(cx: &mut App, note_id: NoteId) -> Result<()> {
+    storage::init_notes_db()?;
+    let note = storage::get_note(note_id)?.ok_or_else(|| anyhow::anyhow!("Note not found"))?;
+    if note.deleted_at.is_some() {
+        anyhow::bail!("Note is deleted");
+    }
+
+    let existing_handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+
+    let existing_app = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.clone())
+    };
+
+    if let (Some(handle), Some(notes_app)) = (existing_handle, existing_app.clone()) {
+        if crate::is_main_window_visible() {
+            crate::set_main_window_visible(false);
+            crate::platform::defer_hide_main_window(cx);
+        }
+
+        let result = handle.update(cx, |_root, window, cx| {
+            window.activate_window();
+            notes_app.update(cx, |app, cx| {
+                app.select_note_by_id_from_root(note_id, window, cx)
+            })
+        });
+
+        match result {
+            Ok(Ok(())) => return Ok(()),
+            Ok(Err(error)) => return Err(error),
+            Err(_) => {
+                let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+                if let Ok(mut g) = slot.lock() {
+                    *g = None;
+                }
+                let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+                if let Ok(mut g) = slot.lock() {
+                    *g = None;
+                }
+            }
+        }
+    }
+
+    open_notes_window_with_close_behavior(cx, NotesCloseBehavior::LeaveLauncherHidden)?;
+
+    let handle = {
+        let slot = NOTES_WINDOW.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| *g)
+    };
+    let notes_app = {
+        let slot = NOTES_APP_ENTITY.get_or_init(|| std::sync::Mutex::new(None));
+        slot.lock().ok().and_then(|g| g.clone())
+    };
+
+    if let (Some(handle), Some(notes_app)) = (handle, notes_app) {
+        let result = handle.update(cx, |_root, window, cx| {
+            window.activate_window();
+            notes_app.update(cx, |app, cx| {
+                app.select_note_by_id_from_root(note_id, window, cx)
+            })
+        });
+
+        return match result {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(error)) => Err(error),
+            Err(error) => Err(anyhow::anyhow!("Failed to update Notes window: {error}")),
+        };
+    }
+
+    Err(anyhow::anyhow!("Notes window is unavailable"))
+}
+
 fn open_notes_window_with_close_behavior(
     cx: &mut App,
     close_behavior: NotesCloseBehavior,

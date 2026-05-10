@@ -16,6 +16,7 @@ fn enter_action_kind(result: &crate::scripts::SearchResult) -> MainWindowPreflig
         crate::scripts::SearchResult::App(_) => MainWindowPreflightActionKind::LaunchApp,
         crate::scripts::SearchResult::Window(_) => MainWindowPreflightActionKind::SwitchWindow,
         crate::scripts::SearchResult::File(_) => MainWindowPreflightActionKind::OpenFile,
+        crate::scripts::SearchResult::Note(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::AcpHistory(_) => MainWindowPreflightActionKind::RunCommand,
         crate::scripts::SearchResult::ClipboardHistory(_) => {
             MainWindowPreflightActionKind::RunCommand

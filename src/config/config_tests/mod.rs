@@ -1285,6 +1285,28 @@ fn unified_search_acp_history_options_are_sanitized() {
 }
 
 #[test]
+fn unified_search_notes_options_are_sanitized() {
+    let json = r#"{
+        "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
+        "unifiedSearch": {
+            "notes": {
+                "maxResults": 99,
+                "minQueryChars": 1,
+                "searchContent": false
+            }
+        }
+    }"#;
+
+    let config: Config = serde_json::from_str(json).unwrap();
+    let options = config.get_unified_search().notes_section_options();
+
+    assert!(options.enabled);
+    assert_eq!(options.max_results, 5);
+    assert_eq!(options.min_query_chars, 2);
+    assert!(!options.search_content);
+}
+
+#[test]
 fn unified_search_clipboard_history_is_opt_in_and_gated_by_builtins() {
     let json = r#"{
         "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },

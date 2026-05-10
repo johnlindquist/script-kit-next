@@ -11,6 +11,7 @@ pub enum ArtifactKind {
     App,
     Window,
     File,
+    Note,
     AcpHistory,
     ClipboardHistory,
     Fallback,
@@ -28,6 +29,7 @@ impl ArtifactKind {
             "app" | "apps" => Some(Self::App),
             "window" | "windows" => Some(Self::Window),
             "file" | "files" => Some(Self::File),
+            "note" | "notes" => Some(Self::Note),
             "acphistory" | "acp-history" | "ai-conversation" | "ai-conversations" => {
                 Some(Self::AcpHistory)
             }

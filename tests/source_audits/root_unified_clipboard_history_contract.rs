@@ -9,10 +9,7 @@ fn root_unified_clipboard_history_config_is_opt_in_and_scoped() {
     assert!(config_types.contains("builtins.clipboard_history"));
     assert!(config_schema.contains("clipboardHistory?: UnifiedSearchClipboardHistoryConfig"));
     assert!(defaults.contains("DEFAULT_UNIFIED_SEARCH_CLIPBOARD_HISTORY_ENABLED: bool = false"));
-    assert!(
-        !config_schema.contains("notes?: UnifiedSearch"),
-        "config.ts schema should still omit notes until root notes search is implemented"
-    );
+    assert!(config_schema.contains("notes?: UnifiedSearchNotesConfig"));
 }
 
 #[test]
