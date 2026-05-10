@@ -505,7 +505,7 @@ fn append_root_file_section(
         return;
     }
 
-    let promote = root_file_section_should_promote(mode, filter_text, &files);
+    let promote = root_file_section_should_promote(mode, filter_text, &files, flat_results);
     let insertion_index = root_file_section_insertion_index(grouped, flat_results, promote);
 
     let mut file_group = Vec::with_capacity(files.len() + 2);
@@ -530,6 +530,7 @@ fn root_file_section_should_promote(
     mode: crate::file_search::RootFileSectionMode,
     filter_text: &str,
     files: &[crate::scripts::FileMatch],
+    flat_results: &[SearchResult],
 ) -> bool {
     if mode != crate::file_search::RootFileSectionMode::GlobalQuery {
         return false;
@@ -540,11 +541,30 @@ fn root_file_section_should_promote(
         return false;
     }
 
+    if top_launcher_result_strongly_matches_query(flat_results, query) {
+        return false;
+    }
+
     let Some(first_file) = files.first() else {
         return false;
     };
 
     crate::file_search::root_file_name_token_matches_query(&first_file.file.name, query)
+}
+
+fn top_launcher_result_strongly_matches_query(flat_results: &[SearchResult], query: &str) -> bool {
+    flat_results
+        .iter()
+        .find(|result| {
+            !matches!(
+                result,
+                SearchResult::ScriptIssue(_) | SearchResult::Fallback(_)
+            )
+        })
+        .is_some_and(|result| {
+            !matches!(result, SearchResult::File(_))
+                && crate::file_search::root_file_name_token_matches_query(result.name(), query)
+        })
 }
 
 fn root_file_section_insertion_index(
@@ -768,7 +788,7 @@ mod advanced_query_tests {
     use super::*;
     use crate::file_search::{FileResult, FileType};
     use crate::menu_syntax::{parse, AdvancedQuery, MenuSyntaxParse};
-    use crate::scripts::types::MatchIndices;
+    use crate::scripts::types::{BuiltInMatch, MatchIndices};
 
     fn issue_row() -> SearchResult {
         SearchResult::ScriptIssue(ScriptIssueMatch {
@@ -895,6 +915,21 @@ mod advanced_query_tests {
             modified: 0,
             file_type,
         }
+    }
+
+    fn builtin_result(name: &str) -> SearchResult {
+        SearchResult::BuiltIn(BuiltInMatch {
+            entry: BuiltInEntry {
+                id: format!("builtin/{}", name.to_lowercase().replace(' ', "-")),
+                name: name.to_string(),
+                description: "Test built-in".to_string(),
+                keywords: Vec::new(),
+                feature: crate::builtins::BuiltInFeature::AppLauncher,
+                icon: None,
+                group: crate::builtins::BuiltInGroup::Core,
+            },
+            score: i32::MAX,
+        })
     }
 
     #[test]
@@ -1139,6 +1174,7 @@ mod advanced_query_tests {
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design",
             &file_matches,
+            &[],
         ));
         assert_eq!(
             root_file_section_insertion_index(&grouped, &files, true),
@@ -1158,6 +1194,7 @@ mod advanced_query_tests {
             crate::file_search::RootFileSectionMode::DirectoryBrowse,
             "design",
             &files,
+            &[],
         ));
     }
 
@@ -1175,6 +1212,7 @@ mod advanced_query_tests {
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design",
             &files,
+            &[],
         ));
     }
 
@@ -1192,6 +1230,42 @@ mod advanced_query_tests {
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design",
             &files,
+            &[],
+        ));
+    }
+
+    #[test]
+    fn root_global_strong_launcher_match_blocks_file_section_promotion() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file(
+                "/Users/example/Desktop/fix spelling.png",
+                "fix spelling.png",
+            ),
+            score: 100,
+        }];
+        let launcher_results = vec![builtin_result("Fix Spelling and Grammar")];
+
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
+            "spelling",
+            &files,
+            &launcher_results,
+        ));
+    }
+
+    #[test]
+    fn root_global_weak_launcher_match_does_not_block_file_section_promotion() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file("/Users/example/Desktop/design-notes.md", "design-notes.md"),
+            score: 100,
+        }];
+        let launcher_results = vec![builtin_result("Redesign Theme")];
+
+        assert!(root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
+            "design",
+            &files,
+            &launcher_results,
         ));
     }
 
