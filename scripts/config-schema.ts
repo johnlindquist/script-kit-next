@@ -1293,6 +1293,25 @@ export interface AiPreferences {
  */
 export interface Config extends BaseConfig {
   /**
+   * Unified root search controls.
+   *
+   * Files are a passive source by default: they can appear before fallback
+   * handoff rows, but they do not promote above commands, scripts, apps, or
+   * skills unless an explicit promotion policy is configured.
+   *
+   * @default { enabled: true, files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" } }
+   * @example
+   * ```typescript
+   * unifiedSearch: {
+   *   files: {
+   *     enabled: false
+   *   }
+   * }
+   * ```
+   */
+  unifiedSearch?: UnifiedSearchConfig;
+
+  /**
    * Command-specific configuration for shortcuts and visibility.
    * 
    * Each key is a command ID in the format `{category}/{identifier}`:
@@ -1468,6 +1487,31 @@ export interface Config extends BaseConfig {
    * ```
    */
   updates?: UpdatesConfig;
+}
+
+export interface UnifiedSearchConfig {
+  /** Enable all unified root-search passive sources. */
+  enabled?: boolean;
+  /** Controls for root file rows backed by recent files, Spotlight, and folder browsing. */
+  files?: UnifiedSearchFilesConfig;
+}
+
+export interface UnifiedSearchFilesConfig {
+  /** Enable file rows in root launcher search. */
+  enabled?: boolean;
+  /** Enable global Spotlight-backed file results for ordinary text queries. */
+  globalSearch?: boolean;
+  /** Enable frecency-backed recent files on the empty root launcher and as result seeds. */
+  recentFiles?: boolean;
+  /** Enable folder browsing from root queries such as ~/dev. */
+  directoryBrowse?: boolean;
+  /**
+   * Controls whether file rows may promote above primary launcher results.
+   *
+   * "never" is the safe default. "exactFilenameOnly" is opt-in and still only
+   * allows exact filename/stem matches when no primary launcher row exists.
+   */
+  promotion?: "never" | "exactFilenameOnly";
 }
 
 // =============================================================================

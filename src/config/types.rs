@@ -48,6 +48,84 @@ impl Default for BuiltInConfig {
 }
 
 // ============================================
+// UNIFIED SEARCH CONFIG
+// ============================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchConfig {
+    pub enabled: bool,
+    pub files: UnifiedSearchFilesConfig,
+}
+
+impl Default for UnifiedSearchConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_ENABLED,
+            files: UnifiedSearchFilesConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchFilesConfig {
+    pub enabled: bool,
+    pub global_search: bool,
+    pub recent_files: bool,
+    pub directory_browse: bool,
+    pub promotion: RootFilePromotionConfig,
+}
+
+impl Default for UnifiedSearchFilesConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_FILES_ENABLED,
+            global_search: DEFAULT_UNIFIED_SEARCH_FILES_GLOBAL_SEARCH,
+            recent_files: DEFAULT_UNIFIED_SEARCH_FILES_RECENT_FILES,
+            directory_browse: DEFAULT_UNIFIED_SEARCH_FILES_DIRECTORY_BROWSE,
+            promotion: RootFilePromotionConfig::Never,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum RootFilePromotionConfig {
+    Never,
+    ExactFilenameOnly,
+}
+
+impl Default for RootFilePromotionConfig {
+    fn default() -> Self {
+        Self::Never
+    }
+}
+
+impl From<RootFilePromotionConfig> for crate::file_search::RootFilePromotionPolicy {
+    fn from(value: RootFilePromotionConfig) -> Self {
+        match value {
+            RootFilePromotionConfig::Never => Self::Never,
+            RootFilePromotionConfig::ExactFilenameOnly => Self::ExactFilenameOnly,
+        }
+    }
+}
+
+impl UnifiedSearchConfig {
+    pub fn root_file_section_options(&self) -> crate::file_search::RootFileSectionOptions {
+        crate::file_search::RootFileSectionOptions {
+            files_enabled: self.enabled && self.files.enabled,
+            recent_files_enabled: self.enabled && self.files.enabled && self.files.recent_files,
+            global_search_enabled: self.enabled && self.files.enabled && self.files.global_search,
+            directory_browse_enabled: self.enabled
+                && self.files.enabled
+                && self.files.directory_browse,
+            promotion_policy: self.files.promotion.into(),
+        }
+    }
+}
+
+// ============================================
 // PROCESS LIMITS
 // ============================================
 
@@ -761,6 +839,13 @@ pub struct Config {
     /// Suggested section configuration (frecency-based ranking)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suggested: Option<SuggestedConfig>,
+    /// Unified root-search sources such as passive local file rows.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "unifiedSearch"
+    )]
+    pub unified_search: Option<UnifiedSearchConfig>,
     /// Hotkey for opening Notes window (no default; user-configured only)
     #[serde(
         default,
@@ -869,6 +954,7 @@ impl Default for Config {
             process_limits: None,     // Will use ProcessLimits::default() via getter
             clipboard_history_max_text_length: None, // Will use default via getter
             suggested: None,          // Will use SuggestedConfig::default() via getter
+            unified_search: None,     // Will use UnifiedSearchConfig::default() via getter
             notes_hotkey: None,       // No default shortcut; must be explicitly configured
             ai_hotkey: None,          // Will use HotkeyConfig::default_ai_hotkey() via getter
             ai_hotkey_enabled: None,  // Defaults to true via getter
@@ -960,6 +1046,11 @@ impl Config {
     /// Returns the suggested section configuration, or defaults if not configured
     pub fn get_suggested(&self) -> SuggestedConfig {
         self.suggested.clone().unwrap_or_default()
+    }
+
+    /// Returns unified root-search configuration, or defaults if not configured.
+    pub fn get_unified_search(&self) -> UnifiedSearchConfig {
+        self.unified_search.clone().unwrap_or_default()
     }
 
     /// Returns the notes hotkey configuration, or None if not configured.

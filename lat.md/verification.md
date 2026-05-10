@@ -38,6 +38,14 @@ Root file directory-context ranking is verified with pure query-builder and rank
 
 Run `cargo test --lib root_file_path_context`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. If the known local SIGBUS failure interrupts tests before execution, keep the failure log and use `cargo check --lib` plus targeted source inspection as the proof path.
 
+## Root Unified Search Safety Controls
+
+Root unified-search safety is verified with grouping, config, and selection-key checks before runtime screenshots.
+
+Files must remain passive by default: they can beat fallback handoff rows, but not command, script, app, skill, or window rows unless an explicit exact-only promotion policy allows it. Async provider updates must preserve the selected stable result key.
+
+Use `cargo test --test source_audits root_file_search_contract -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. If `cargo test --lib root_file` hits the known local SIGBUS before tests execute, keep the failure log and rely on the focused source-audit proof plus `cargo check --lib`.
+
 ## Computer-use native-window capture
 
 Native-window capture proof goes through the real MCP path and treats the JSON receipt as the primary oracle.

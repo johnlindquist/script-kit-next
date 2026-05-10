@@ -27,6 +27,13 @@ pub const DEFAULT_AI_HOTKEY_ENABLED: bool = true;
 pub const DEFAULT_LOGS_HOTKEY_ENABLED: bool = true;
 pub const DEFAULT_DICTATION_HOTKEY_ENABLED: bool = true;
 
+/// Default unified root-search feature flags.
+pub const DEFAULT_UNIFIED_SEARCH_ENABLED: bool = true;
+pub const DEFAULT_UNIFIED_SEARCH_FILES_ENABLED: bool = true;
+pub const DEFAULT_UNIFIED_SEARCH_FILES_GLOBAL_SEARCH: bool = true;
+pub const DEFAULT_UNIFIED_SEARCH_FILES_RECENT_FILES: bool = true;
+pub const DEFAULT_UNIFIED_SEARCH_FILES_DIRECTORY_BROWSE: bool = true;
+
 /// Default max text length for clipboard history entries (bytes)
 pub const DEFAULT_CLIPBOARD_HISTORY_MAX_TEXT_LENGTH: usize = 100_000;
 

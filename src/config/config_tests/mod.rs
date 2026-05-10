@@ -38,6 +38,7 @@ fn test_config_serialization() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -94,6 +95,7 @@ fn test_config_with_bun_path() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -132,6 +134,7 @@ fn test_config_without_bun_path() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -170,6 +173,7 @@ fn test_config_serialization_skip_none_bun_path() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -213,6 +217,7 @@ fn test_config_serialization_preserves_multiple_modifiers() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -323,6 +328,7 @@ fn test_config_with_empty_modifiers_list() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -367,6 +373,7 @@ fn test_config_key_preservation() {
             process_limits: None,
             clipboard_history_max_text_length: None,
             suggested: None,
+            unified_search: None,
             notes_hotkey: None,
             ai_hotkey: None,
             logs_hotkey: None,
@@ -410,6 +417,7 @@ fn test_config_with_editor() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -453,6 +461,7 @@ fn test_config_without_editor() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -498,6 +507,7 @@ fn test_get_editor_from_config() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -544,6 +554,7 @@ fn test_get_editor_from_env() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -596,6 +607,7 @@ fn test_get_editor_default() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -648,6 +660,7 @@ fn test_config_editor_priority() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -769,6 +782,7 @@ fn test_config_get_padding_custom() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -817,6 +831,7 @@ fn test_config_get_editor_font_size_custom() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -873,6 +888,7 @@ fn test_config_get_terminal_font_size_custom() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -990,6 +1006,7 @@ fn test_config_serialization_includes_set_ui_settings() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -1104,6 +1121,7 @@ fn test_config_with_builtins() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -1185,6 +1203,67 @@ fn test_config_deserialization_without_builtins() {
 }
 
 #[test]
+fn unified_search_defaults_enable_files_but_disable_promotion() {
+    let config = Config::default();
+    let unified = config.get_unified_search();
+
+    assert!(unified.enabled);
+    assert!(unified.files.enabled);
+    assert!(unified.files.global_search);
+    assert!(unified.files.recent_files);
+    assert!(unified.files.directory_browse);
+    assert_eq!(unified.files.promotion, RootFilePromotionConfig::Never);
+}
+
+#[test]
+fn unified_search_top_level_disabled_loads() {
+    let json = r#"{
+        "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
+        "unifiedSearch": { "enabled": false }
+    }"#;
+
+    let config: Config = serde_json::from_str(json).unwrap();
+    let unified = config.get_unified_search();
+
+    assert!(!unified.enabled);
+    assert!(unified.files.enabled);
+}
+
+#[test]
+fn unified_search_files_disabled_loads() {
+    let json = r#"{
+        "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
+        "unifiedSearch": { "files": { "enabled": false } }
+    }"#;
+
+    let config: Config = serde_json::from_str(json).unwrap();
+    let unified = config.get_unified_search();
+
+    assert!(unified.enabled);
+    assert!(!unified.files.enabled);
+}
+
+#[test]
+fn unified_search_promotion_exact_filename_only_loads() {
+    let json = r#"{
+        "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
+        "unifiedSearch": {
+            "files": {
+                "promotion": "exactFilenameOnly"
+            }
+        }
+    }"#;
+
+    let config: Config = serde_json::from_str(json).unwrap();
+    let unified = config.get_unified_search();
+
+    assert_eq!(
+        unified.files.promotion,
+        RootFilePromotionConfig::ExactFilenameOnly
+    );
+}
+
+#[test]
 fn test_config_serialization_skips_none_builtins() {
     let config = Config::default();
     let json = serde_json::to_string(&config).unwrap();
@@ -1210,6 +1289,7 @@ fn test_config_serialization_includes_set_builtins() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -1368,6 +1448,7 @@ fn test_config_with_process_limits() {
         }),
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -1501,6 +1582,7 @@ fn test_config_serialization_includes_set_process_limits() {
         process_limits: Some(ProcessLimits::default()),
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -1633,6 +1715,7 @@ fn test_requires_confirmation_user_override_disable() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -1686,6 +1769,7 @@ fn test_requires_confirmation_user_override_enable() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,
@@ -1812,6 +1896,7 @@ fn test_requires_confirmation_with_partial_command_config() {
         process_limits: None,
         clipboard_history_max_text_length: None,
         suggested: None,
+        unified_search: None,
         notes_hotkey: None,
         ai_hotkey: None,
         logs_hotkey: None,

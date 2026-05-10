@@ -370,6 +370,50 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
     root_file_results: &[crate::file_search::FileResult],
     root_recent_file_results: &[crate::file_search::FileResult],
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
+    get_grouped_results_with_validation_query_and_root_files_with_options(
+        scripts,
+        scriptlets,
+        builtins,
+        apps,
+        skills,
+        frecency_store,
+        filter_text,
+        suggested_config,
+        menu_bar_items,
+        menu_bar_bundle_id,
+        input_history,
+        validation,
+        advanced_query,
+        root_file_search_mode,
+        root_file_search_loading,
+        root_file_results,
+        root_recent_file_results,
+        crate::file_search::RootFileSectionOptions::default(),
+    )
+}
+
+#[instrument(level = "debug", skip_all, fields(filter_len = filter_text.len()))]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_options(
+    scripts: &[Arc<Script>],
+    scriptlets: &[Arc<Scriptlet>],
+    builtins: &[BuiltInEntry],
+    apps: &[AppInfo],
+    skills: &[Arc<PluginSkill>],
+    frecency_store: &FrecencyStore,
+    filter_text: &str,
+    suggested_config: &SuggestedConfig,
+    menu_bar_items: &[MenuBarItem],
+    menu_bar_bundle_id: Option<&str>,
+    input_history: Option<&crate::input_history::InputHistory>,
+    validation: Option<&ValidationReport>,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    root_file_search_mode: Option<crate::file_search::RootFileSectionMode>,
+    root_file_search_loading: bool,
+    root_file_results: &[crate::file_search::FileResult],
+    root_recent_file_results: &[crate::file_search::FileResult],
+    root_file_options: crate::file_search::RootFileSectionOptions,
+) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     let (mut grouped, mut flat_results) = get_grouped_results_with_validation_and_query(
         scripts,
         scriptlets,
@@ -396,6 +440,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         filter_text,
         frecency_store,
         advanced_query,
+        root_file_options,
     );
     append_recent_root_file_section(
         &mut grouped,
@@ -403,6 +448,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         root_recent_file_results,
         filter_text,
         advanced_query,
+        root_file_options,
     );
 
     (grouped, flat_results)
@@ -414,7 +460,11 @@ fn append_recent_root_file_section(
     recent_file_results: &[crate::file_search::FileResult],
     filter_text: &str,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    options: crate::file_search::RootFileSectionOptions,
 ) {
+    if !options.files_enabled || !options.recent_files_enabled {
+        return;
+    }
     if advanced_query.is_some() || !filter_text.trim().is_empty() || recent_file_results.is_empty()
     {
         return;
@@ -429,27 +479,7 @@ fn append_recent_root_file_section(
         return;
     }
 
-    let insertion_index = grouped
-        .iter()
-        .position(
-            |item| matches!(item, GroupedListItem::SectionHeader(label, _) if label == "Suggested"),
-        )
-        .and_then(|suggested_index| {
-            grouped
-                .iter()
-                .enumerate()
-                .skip(suggested_index + 1)
-                .find_map(|(index, item)| {
-                    matches!(item, GroupedListItem::SectionHeader(label, _) if label != "Suggested")
-                        .then_some(index)
-                })
-        })
-        .or_else(|| {
-            grouped
-                .iter()
-                .position(|item| matches!(item, GroupedListItem::SectionHeader(_, _)))
-        })
-        .unwrap_or(grouped.len());
+    let insertion_index = root_file_passive_insertion_index(grouped, flat_results);
 
     let mut recent_group = Vec::with_capacity(eligible_recent_files.len() + 1);
     recent_group.push(GroupedListItem::SectionHeader(
@@ -478,12 +508,27 @@ fn append_root_file_section(
     filter_text: &str,
     frecency_store: &FrecencyStore,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    options: crate::file_search::RootFileSectionOptions,
 ) {
+    if !options.files_enabled {
+        return;
+    }
     let Some(mode) = root_file_search_mode else {
         return;
     };
     if advanced_query.is_some() {
         return;
+    }
+    match mode {
+        crate::file_search::RootFileSectionMode::GlobalQuery if !options.global_search_enabled => {
+            return;
+        }
+        crate::file_search::RootFileSectionMode::DirectoryBrowse
+            if !options.directory_browse_enabled =>
+        {
+            return;
+        }
+        _ => {}
     }
 
     let files = match mode {
@@ -514,7 +559,13 @@ fn append_root_file_section(
         return;
     }
 
-    let promote = root_file_section_should_promote(mode, filter_text, &files, flat_results);
+    let promote = root_file_section_should_promote(
+        options.promotion_policy,
+        mode,
+        filter_text,
+        &files,
+        flat_results,
+    );
     let insertion_index = root_file_section_insertion_index(grouped, flat_results, promote);
 
     let mut file_group = Vec::with_capacity(files.len() + 2);
@@ -536,11 +587,15 @@ fn append_root_file_section(
 }
 
 fn root_file_section_should_promote(
+    policy: crate::file_search::RootFilePromotionPolicy,
     mode: crate::file_search::RootFileSectionMode,
     filter_text: &str,
     files: &[crate::scripts::FileMatch],
     flat_results: &[SearchResult],
 ) -> bool {
+    if policy == crate::file_search::RootFilePromotionPolicy::Never {
+        return false;
+    }
     if mode != crate::file_search::RootFileSectionMode::GlobalQuery {
         return false;
     }
@@ -550,7 +605,7 @@ fn root_file_section_should_promote(
         return false;
     }
 
-    if top_launcher_result_strongly_matches_query(flat_results, query) {
+    if flat_results.iter().any(is_primary_launcher_result) {
         return false;
     }
 
@@ -558,22 +613,27 @@ fn root_file_section_should_promote(
         return false;
     };
 
-    crate::file_search::root_file_name_token_matches_query(&first_file.file.name, query)
+    match policy {
+        crate::file_search::RootFilePromotionPolicy::Never => false,
+        crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly => {
+            crate::file_search::root_file_name_exact_or_stem_matches_query(
+                &first_file.file.name,
+                query,
+            )
+        }
+    }
 }
 
-fn top_launcher_result_strongly_matches_query(flat_results: &[SearchResult], query: &str) -> bool {
-    flat_results
-        .iter()
-        .find(|result| {
-            !matches!(
-                result,
-                SearchResult::ScriptIssue(_) | SearchResult::Fallback(_)
-            )
-        })
-        .is_some_and(|result| {
-            !matches!(result, SearchResult::File(_))
-                && crate::file_search::root_file_name_token_matches_query(result.name(), query)
-        })
+fn is_primary_launcher_result(result: &SearchResult) -> bool {
+    matches!(
+        result,
+        SearchResult::Script(_)
+            | SearchResult::Scriptlet(_)
+            | SearchResult::Skill(_)
+            | SearchResult::BuiltIn(_)
+            | SearchResult::App(_)
+            | SearchResult::Window(_)
+    )
 }
 
 fn root_file_section_insertion_index(
@@ -595,6 +655,13 @@ fn root_file_section_insertion_index(
         };
     }
 
+    root_file_passive_insertion_index(grouped, flat_results)
+}
+
+fn root_file_passive_insertion_index(
+    grouped: &[GroupedListItem],
+    flat_results: &[SearchResult],
+) -> usize {
     grouped
         .iter()
         .position(|item| match item {
@@ -1264,7 +1331,7 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_global_strong_filename_match_promotes_files_section() {
+    fn root_global_exact_stem_match_promotes_files_section_when_opted_in() {
         let files = vec![SearchResult::File(crate::scripts::FileMatch {
             file: root_file("/Users/example/Desktop/design-notes.md", "design-notes.md"),
             score: 100,
@@ -1279,15 +1346,16 @@ mod advanced_query_tests {
             .collect::<Vec<_>>();
 
         assert!(root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
-            "design",
+            "design-notes",
             &file_matches,
             &[],
         ));
         assert_eq!(
             root_file_section_insertion_index(&grouped, &files, true),
             0,
-            "strong filename matches should insert Files above ordinary launcher groups"
+            "exact filename/stem matches can insert Files above ordinary launcher groups only when opted in"
         );
     }
 
@@ -1299,6 +1367,7 @@ mod advanced_query_tests {
         }];
 
         assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::DirectoryBrowse,
             "design",
             &files,
@@ -1307,7 +1376,7 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_global_boundary_filename_token_match_promotes_files_section() {
+    fn root_global_boundary_filename_token_match_does_not_promote_exact_policy() {
         let files = vec![crate::scripts::FileMatch {
             file: root_file(
                 "/Users/example/Desktop/client-design-notes.md",
@@ -1316,7 +1385,8 @@ mod advanced_query_tests {
             score: 100,
         }];
 
-        assert!(root_file_section_should_promote(
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design",
             &files,
@@ -1325,7 +1395,7 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_global_camel_case_filename_token_match_promotes_files_section() {
+    fn root_global_camel_case_filename_token_match_does_not_promote_exact_policy() {
         let files = vec![crate::scripts::FileMatch {
             file: root_file(
                 "/Users/example/Desktop/ClientDesignNotes.md",
@@ -1334,7 +1404,8 @@ mod advanced_query_tests {
             score: 100,
         }];
 
-        assert!(root_file_section_should_promote(
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design",
             &files,
@@ -1438,7 +1509,7 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_global_multiword_strong_match_promotes_files_section() {
+    fn root_global_multiword_token_match_does_not_promote_exact_policy() {
         let files = vec![crate::scripts::FileMatch {
             file: root_file(
                 "/Users/example/Desktop/client-design-notes.md",
@@ -1447,7 +1518,8 @@ mod advanced_query_tests {
             score: 100,
         }];
 
-        assert!(root_file_section_should_promote(
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design notes",
             &files,
@@ -1466,6 +1538,7 @@ mod advanced_query_tests {
         }];
 
         assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design notes",
             &files,
@@ -1481,6 +1554,7 @@ mod advanced_query_tests {
         }];
 
         assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "script kit readme",
             &files,
@@ -1533,13 +1607,14 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_global_short_digit_filename_match_promotes_files_section() {
+    fn root_global_short_digit_token_match_does_not_promote_exact_policy() {
         let files = vec![crate::scripts::FileMatch {
             file: root_file("/Users/example/Desktop/Q2Report.pdf", "Q2Report.pdf"),
             score: 100,
         }];
 
-        assert!(root_file_section_should_promote(
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "q2",
             &files,
@@ -1555,6 +1630,7 @@ mod advanced_query_tests {
         }];
 
         assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "ai",
             &files,
@@ -1573,6 +1649,7 @@ mod advanced_query_tests {
         }];
 
         assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design",
             &files,
@@ -1592,6 +1669,7 @@ mod advanced_query_tests {
         let launcher_results = vec![builtin_result("Fix Spelling and Grammar")];
 
         assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "spelling",
             &files,
@@ -1600,14 +1678,15 @@ mod advanced_query_tests {
     }
 
     #[test]
-    fn root_global_weak_launcher_match_does_not_block_file_section_promotion() {
+    fn root_global_weak_launcher_match_blocks_file_section_promotion() {
         let files = vec![crate::scripts::FileMatch {
             file: root_file("/Users/example/Desktop/design-notes.md", "design-notes.md"),
             score: 100,
         }];
         let launcher_results = vec![builtin_result("Redesign Theme")];
 
-        assert!(root_file_section_should_promote(
+        assert!(!root_file_section_should_promote(
+            crate::file_search::RootFilePromotionPolicy::ExactFilenameOnly,
             crate::file_search::RootFileSectionMode::GlobalQuery,
             "design",
             &files,
@@ -2355,11 +2434,18 @@ mod advanced_query_tests {
             "recent design notes.md",
         )];
 
-        append_recent_root_file_section(&mut grouped, &mut flat, &recent_files, "", None);
+        append_recent_root_file_section(
+            &mut grouped,
+            &mut flat,
+            &recent_files,
+            "",
+            None,
+            crate::file_search::RootFileSectionOptions::default(),
+        );
 
         assert!(
-            matches!(&grouped[2], GroupedListItem::SectionHeader(label, None) if label == "Recent Files"),
-            "Recent Files should insert after Suggested items and before Commands"
+            matches!(&grouped[4], GroupedListItem::SectionHeader(label, None) if label == "Recent Files"),
+            "Recent Files should insert after primary launcher groups"
         );
     }
 
