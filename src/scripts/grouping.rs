@@ -1217,6 +1217,75 @@ mod advanced_query_tests {
     }
 
     #[test]
+    fn root_global_camel_case_filename_token_match_promotes_files_section() {
+        let files = vec![crate::scripts::FileMatch {
+            file: root_file(
+                "/Users/example/Desktop/ClientDesignNotes.md",
+                "ClientDesignNotes.md",
+            ),
+            score: 100,
+        }];
+
+        assert!(root_file_section_should_promote(
+            crate::file_search::RootFileSectionMode::GlobalQuery,
+            "design",
+            &files,
+            &[],
+        ));
+    }
+
+    #[test]
+    fn root_global_recent_seed_accepts_camel_case_filename_token() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/Desktop/ClientDesignNotes.md",
+            "ClientDesignNotes.md",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "design",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            true,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            grouped.iter().any(|item| matches!(
+                item,
+                GroupedListItem::SectionHeader(label, None) if label == "Files · Searching..."
+            )),
+            "global root search should keep the loading Files header while camel-case recent seeds render"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/Desktop/ClientDesignNotes.md"
+            )),
+            "camel-case filename token matches should seed non-empty global root file results before provider rows arrive"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::Fallback(fallback) if fallback.display_label() == "Search Files for \"design\""
+            )),
+            "seeded global file rows should keep the full File Search handoff"
+        );
+    }
+
+    #[test]
     fn root_global_mid_token_contains_does_not_promote_files_section() {
         let files = vec![crate::scripts::FileMatch {
             file: root_file(

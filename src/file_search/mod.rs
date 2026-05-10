@@ -422,8 +422,14 @@ fn root_file_name_relevance_tier(name: &str, query: &str, name_matched: bool) ->
     if name_lc.starts_with(query) || stem_lc.starts_with(query) {
         return 5;
     }
-    if contains_at_root_file_boundary(&name_lc, query)
-        || contains_at_root_file_boundary(&stem_lc, query)
+    if contains_at_root_file_token_boundary(name, query)
+        || contains_at_root_file_token_boundary(
+            Path::new(name)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or(name),
+            query,
+        )
     {
         return 4;
     }
@@ -454,8 +460,14 @@ pub fn root_file_name_token_matches_query(name: &str, query: &str) -> bool {
         || stem_lc == query
         || name_lc.starts_with(&query)
         || stem_lc.starts_with(&query)
-        || contains_at_root_file_boundary(&name_lc, &query)
-        || contains_at_root_file_boundary(&stem_lc, &query)
+        || contains_at_root_file_token_boundary(name, &query)
+        || contains_at_root_file_token_boundary(
+            Path::new(name)
+                .file_stem()
+                .and_then(|stem| stem.to_str())
+                .unwrap_or(name),
+            &query,
+        )
 }
 
 /// Return true when a root recent-file seed is a high-confidence filename-side match.
@@ -463,18 +475,50 @@ pub fn root_file_name_seed_matches_query(name: &str, query: &str) -> bool {
     root_file_name_token_matches_query(name, query)
 }
 
-fn contains_at_root_file_boundary(haystack: &str, needle: &str) -> bool {
+fn contains_at_root_file_token_boundary(haystack: &str, needle: &str) -> bool {
     if needle.is_empty() {
         return false;
     }
-    haystack.match_indices(needle).any(|(idx, _)| {
-        idx == 0
-            || haystack[..idx]
-                .chars()
-                .next_back()
-                .map(is_root_file_boundary_char)
-                .unwrap_or(false)
-    })
+
+    let haystack_lc = haystack.to_lowercase();
+    let needle_lc = needle.to_lowercase();
+    haystack_lc
+        .match_indices(&needle_lc)
+        .any(|(idx, _)| is_root_file_token_boundary_at(haystack, idx))
+}
+
+fn is_root_file_token_boundary_at(haystack: &str, idx: usize) -> bool {
+    if idx == 0 {
+        return true;
+    }
+    if !haystack.is_char_boundary(idx) {
+        return false;
+    }
+
+    let Some(previous) = haystack[..idx].chars().next_back() else {
+        return true;
+    };
+    if is_root_file_boundary_char(previous) {
+        return true;
+    }
+
+    let Some(current) = haystack[idx..].chars().next() else {
+        return false;
+    };
+    if previous.is_ascii_lowercase() && current.is_ascii_uppercase() {
+        return true;
+    }
+    if previous.is_ascii_digit() && current.is_ascii_alphabetic() {
+        return true;
+    }
+
+    let next_start = idx + current.len_utf8();
+    let next = haystack
+        .get(next_start..)
+        .and_then(|rest| rest.chars().next());
+    previous.is_ascii_uppercase()
+        && current.is_ascii_uppercase()
+        && next.is_some_and(|ch| ch.is_ascii_lowercase())
 }
 
 fn is_root_file_boundary_char(ch: char) -> bool {
@@ -901,10 +945,47 @@ mod tests {
     }
 
     #[test]
+    fn root_file_name_token_match_accepts_camel_case_boundaries() {
+        assert!(root_file_name_token_matches_query(
+            "ClientDesignNotes.md",
+            "design"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "clientDesignNotes.md",
+            "notes"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "ScriptKitGPUI.md",
+            "kit"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "ScriptKitGPUI.md",
+            "gpui"
+        ));
+    }
+
+    #[test]
+    fn root_file_name_token_match_accepts_acronym_and_digit_boundaries() {
+        assert!(root_file_name_token_matches_query(
+            "HTTPServerLogs.md",
+            "server"
+        ));
+        assert!(root_file_name_token_matches_query("Q2Report.pdf", "report"));
+    }
+
+    #[test]
     fn root_file_name_token_match_rejects_mid_token_and_empty_queries() {
         assert!(!root_file_name_token_matches_query(
             "redesign-notes.md",
             "design"
+        ));
+        assert!(!root_file_name_token_matches_query(
+            "redesignNotes.md",
+            "design"
+        ));
+        assert!(!root_file_name_token_matches_query(
+            "myserverLogs.md",
+            "server"
         ));
         assert!(!root_file_name_token_matches_query("notes.md", ""));
     }
@@ -1136,6 +1217,35 @@ mod tests {
             ranked.first().map(|entry| entry.file.name.as_str()),
             Some("fix-notes.md"),
             "filename prefix should beat separator-boundary contains"
+        );
+    }
+
+    #[test]
+    fn root_file_ranking_prefers_camel_boundary_over_plain_contains_or_path_only() {
+        let results = vec![
+            file(
+                "/tmp/archive/design/readme.md",
+                "readme.md",
+                FileType::Document,
+            ),
+            file(
+                "/tmp/redesignNotes.md",
+                "redesignNotes.md",
+                FileType::Document,
+            ),
+            file(
+                "/tmp/ClientDesignNotes.md",
+                "ClientDesignNotes.md",
+                FileType::Document,
+            ),
+        ];
+
+        let ranked = rank_root_file_results(&results, "design", 3, |_| 0.0);
+
+        assert_eq!(
+            ranked.first().map(|entry| entry.file.name.as_str()),
+            Some("ClientDesignNotes.md"),
+            "camel-case filename tokens should rank above lowercase mid-token contains and path-only matches"
         );
     }
 
