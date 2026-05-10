@@ -246,8 +246,8 @@ pub fn render_design_item(
                     )
                 }
                 SearchResult::Fallback(fm) => {
-                    let fallback_label = fm.fallback.display_label();
-                    let fallback_description = fm.fallback.display_description();
+                    let fallback_label = fm.display_label();
+                    let fallback_description = fm.display_description();
                     // Fallback commands from "Use with..." section
                     // Map fallback icon names to SVG icons
                     let icon_name = match fm.fallback.icon() {

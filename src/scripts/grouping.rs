@@ -25,7 +25,8 @@ use crate::plugins::PluginSkill;
 
 use super::search::fuzzy_search_unified_all_with_skills;
 use super::types::{
-    MatchIndices, Script, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet, SearchResult,
+    FallbackMatch, MatchIndices, Script, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet,
+    SearchResult,
 };
 use super::validation::ValidationReport;
 
@@ -412,7 +413,8 @@ fn append_root_file_section(
         crate::file_search::ROOT_FILE_RENDER_LIMIT,
         |key| frecency_store.get_score(key),
     );
-    if files.is_empty() {
+    let handoff = root_file_search_handoff_result(filter_text);
+    if files.is_empty() && handoff.is_none() {
         return;
     }
 
@@ -430,14 +432,38 @@ fn append_root_file_section(
         })
         .unwrap_or(grouped.len());
 
-    let mut file_group = Vec::with_capacity(files.len() + 1);
+    let mut file_group = Vec::with_capacity(files.len() + 2);
     file_group.push(GroupedListItem::SectionHeader("Files".to_string(), None));
     for file_match in files {
         let idx = flat_results.len();
         flat_results.push(SearchResult::File(file_match));
         file_group.push(GroupedListItem::Item(idx));
     }
+    if let Some(handoff) = handoff {
+        let idx = flat_results.len();
+        flat_results.push(handoff);
+        file_group.push(GroupedListItem::Item(idx));
+    }
     grouped.splice(insertion_index..insertion_index, file_group);
+}
+
+fn root_file_search_handoff_result(filter_text: &str) -> Option<SearchResult> {
+    let query = filter_text.trim();
+    if !crate::file_search::should_search_root_files(query) {
+        return None;
+    }
+
+    let fallback = crate::fallbacks::builtins::get_builtin_fallbacks()
+        .into_iter()
+        .find(|fallback| fallback.id == crate::fallbacks::builtins::SEARCH_FILES_FALLBACK_ID)?;
+
+    Some(SearchResult::Fallback(
+        FallbackMatch::new(crate::fallbacks::FallbackItem::Builtin(fallback), 0)
+            .with_display_overrides(
+                format!("Search Files for \"{query}\""),
+                "Open full File Search",
+            ),
+    ))
 }
 
 /// Incomplete menu-syntax hint row.

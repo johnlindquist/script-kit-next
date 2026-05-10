@@ -3026,8 +3026,8 @@ impl ScriptListApp {
                 "path": m.skill.path.to_string_lossy(),
             }),
             scripts::SearchResult::Fallback(m) => serde_json::json!({
-                "name": m.fallback.display_label(),
-                "description": m.fallback.display_description(),
+                "name": m.display_label(),
+                "description": m.display_description(),
             }),
             scripts::SearchResult::ScriptIssue(m) => serde_json::json!({
                 "title": m.title,

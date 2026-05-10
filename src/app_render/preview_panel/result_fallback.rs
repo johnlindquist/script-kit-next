@@ -2,10 +2,9 @@
                         use super::{ALPHA_DIVIDER_DARK, ALPHA_MUTED_LABEL, ALPHA_SECTION_HEADER};
 
                         // Fallback command preview
-                        let fallback = &fallback_match.fallback;
-                        let fallback_name = fallback.display_name();
-                        let fallback_label = fallback.display_label();
-                        let fallback_description = fallback.display_description();
+                        let fallback_name = fallback_match.display_name();
+                        let fallback_label = fallback_match.display_label();
+                        let fallback_description = fallback_match.display_description();
 
                         // Header showing "Fallback"
                         let mut path_div = div()

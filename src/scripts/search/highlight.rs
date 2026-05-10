@@ -256,7 +256,7 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
         }
         SearchResult::Fallback(fm) => {
             let mut indices = MatchIndices::default();
-            let fallback_label = fm.fallback.display_label();
+            let fallback_label = fm.display_label();
 
             // Try name match for fallback items
             let (name_matched, name_indices) = highlight_ctx.indices_for(&fallback_label);

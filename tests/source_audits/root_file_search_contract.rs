@@ -130,6 +130,150 @@ mod tests {
     }
 
     #[test]
+    fn root_file_handoff_row_uses_existing_search_files_fallback() {
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let types_source =
+            fs::read_to_string("src/scripts/types.rs").expect("read src/scripts/types.rs");
+        let builtins_source = fs::read_to_string("src/fallbacks/builtins.rs")
+            .expect("read src/fallbacks/builtins.rs");
+
+        assert!(
+            builtins_source.contains("pub const SEARCH_FILES_FALLBACK_ID: &str = \"search-files\""),
+            "Search Files fallback id should be exported instead of repeated as an inline literal"
+        );
+        assert!(
+            grouping_source.contains("fn root_file_search_handoff_result(")
+                && grouping_source.contains("SEARCH_FILES_FALLBACK_ID")
+                && grouping_source.contains("Search Files for \\\"{query}\\\"")
+                && grouping_source.contains("Open full File Search")
+                && grouping_source.contains("SearchResult::Fallback("),
+            "root file grouping should append a synthetic fallback row that opens the dedicated File Search view"
+        );
+        assert!(
+            types_source.contains("title_override: Option<String>")
+                && types_source.contains("description_override: Option<String>")
+                && types_source.contains("with_display_overrides(")
+                && types_source.contains("pub fn display_label(&self) -> String")
+                && types_source.contains("pub fn display_description(&self) -> String"),
+            "fallback matches should support dynamic display text without leaking static strings"
+        );
+        assert!(
+            fs::read_to_string("src/app_layout/collect_elements.rs")
+                .expect("read src/app_layout/collect_elements.rs")
+                .contains("scripts::SearchResult::Fallback(m) => m.display_label()"),
+            "automation element labels should expose the handoff row's dynamic title"
+        );
+    }
+
+    #[test]
+    fn root_file_handoff_row_does_not_start_file_search_processes() {
+        let source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let handoff_source = source
+            .split("fn root_file_search_handoff_result(")
+            .nth(1)
+            .and_then(|section| section.split("/// Incomplete menu-syntax hint row.").next())
+            .expect("root_file_search_handoff_result source should be present");
+
+        for forbidden in [
+            "mdfind",
+            "search_files(",
+            "search_files_streaming",
+            "std::process::Command",
+            "std::fs::read_dir",
+            "list_directory",
+        ] {
+            assert!(
+                !handoff_source.contains(forbidden),
+                "root file handoff row should only reuse the fallback execution path, not start searches: {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn root_file_handoff_row_groups_after_files_before_fallbacks() {
+        let source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let append_source = source
+            .split("fn append_root_file_section(")
+            .nth(1)
+            .and_then(|section| section.split("fn root_file_search_handoff_result(").next())
+            .expect("append_root_file_section source should be present");
+
+        let section_offset = append_source
+            .find("GroupedListItem::SectionHeader(\"Files\".to_string(), None)")
+            .expect("Files section header should be inserted");
+        let file_offset = append_source
+            .find("flat_results.push(SearchResult::File(file_match));")
+            .expect("actual file rows should be inserted");
+        let handoff_offset = append_source
+            .find("flat_results.push(handoff);")
+            .expect("handoff row should be inserted after actual file rows");
+        let splice_offset = append_source
+            .find("grouped.splice(insertion_index..insertion_index, file_group);")
+            .expect("Files group should still be spliced before fallback rows");
+
+        assert!(
+            section_offset < file_offset && file_offset < handoff_offset && handoff_offset < splice_offset,
+            "Files section should render real file rows, then the handoff row, before the group is inserted ahead of fallbacks"
+        );
+        assert!(
+            append_source.contains("let handoff = root_file_search_handoff_result(filter_text);")
+                && append_source.contains("files.is_empty() && handoff.is_none()"),
+            "Files section should still appear with the handoff row when Spotlight returns zero file rows"
+        );
+    }
+
+    #[test]
+    fn fallback_keeps_window_open_uses_search_files_constant() {
+        let source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        let body = source
+            .split("fn fallback_keeps_window_open(")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split("fn should_ignore_main_menu_open_carryover_input")
+                    .next()
+            })
+            .expect("fallback_keeps_window_open source should be present");
+
+        assert!(
+            body.contains("SEARCH_FILES_FALLBACK_ID"),
+            "search-files fallback window behavior should use the exported id constant"
+        );
+        assert!(
+            !body.contains("\"search-files\""),
+            "search-files id should not be repeated as a literal in fallback_keeps_window_open"
+        );
+    }
+
+    #[test]
+    fn fallback_mode_enter_prefers_visible_grouped_fallback_selection() {
+        let source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        let body = source
+            .split("pub fn execute_selected_fallback(")
+            .nth(1)
+            .and_then(|section| {
+                section
+                    .split("/// Execute a built-in fallback action without window reference")
+                    .next()
+            })
+            .expect("execute_selected_fallback source should be present");
+
+        assert!(
+            body.contains("self.selected_main_list_search_result_owned()")
+                && body.contains("scripts::SearchResult::Fallback(fallback_match)")
+                && body.contains("self.execute_fallback_item(&fallback_match.fallback, cx);")
+                && body.find("selected_main_list_search_result_owned()")
+                    < body.find("main_menu_fallback_state.selected_item()"),
+            "fallback-mode Enter should execute the visible grouped fallback row before consulting the legacy fallback cursor"
+        );
+    }
+
+    #[test]
     fn root_file_actions_are_main_list_only() {
         let source = fs::read_to_string("src/app_impl/actions_dialog.rs")
             .expect("read src/app_impl/actions_dialog.rs");
