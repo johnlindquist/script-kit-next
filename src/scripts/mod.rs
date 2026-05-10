@@ -46,6 +46,8 @@ pub(crate) use self::grouping::get_grouped_results_with_validation_and_query;
 #[allow(unused_imports)]
 pub(crate) use self::grouping::get_grouped_results_with_validation_query_and_root_files;
 #[allow(unused_imports)]
+pub(crate) use self::grouping::get_grouped_results_with_validation_query_and_root_files_with_options;
+#[allow(unused_imports)]
 pub use self::loader::{read_scripts, read_scripts_report};
 pub use self::scheduling::register_scheduled_scripts;
 pub use self::scriptlet_loader::{load_scriptlets, read_scriptlets_from_file};

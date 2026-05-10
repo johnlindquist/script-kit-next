@@ -31,6 +31,16 @@ impl RootFileSearchRequest {
 
 impl ScriptListApp {
     pub(crate) fn refresh_root_recent_file_results(&mut self) {
+        let options = self.config.get_unified_search().root_file_section_options();
+        if !options.files_enabled || !options.recent_files_enabled {
+            if !self.root_recent_file_results.is_empty() {
+                self.root_recent_file_results.clear();
+                self.invalidate_grouped_cache();
+            }
+            self.root_recent_file_revision = self.frecency_store.revision();
+            return;
+        }
+
         let revision = self.frecency_store.revision();
         if self.root_recent_file_revision == revision {
             return;
@@ -113,6 +123,12 @@ impl ScriptListApp {
             return;
         }
 
+        let selection_before = if matches!(self.current_view, AppView::ScriptList) {
+            Some(self.main_menu_selection_snapshot())
+        } else {
+            None
+        };
+
         self.root_file_results = results;
         self.root_file_search_loading = loading;
         if clear_cancel {
@@ -121,6 +137,9 @@ impl ScriptListApp {
         self.invalidate_grouped_cache();
         if matches!(self.current_view, AppView::ScriptList) {
             self.sync_list_state_for_filter_replacement();
+            if let Some(snapshot) = selection_before {
+                self.restore_main_menu_selection_from_snapshot(snapshot);
+            }
             self.validate_selection_bounds(cx);
             self.rebuild_main_window_preflight_if_needed();
         }
@@ -129,6 +148,27 @@ impl ScriptListApp {
 
     pub(crate) fn maybe_start_root_file_search(&mut self, query: &str, cx: &mut Context<Self>) {
         let trimmed = query.trim();
+        let root_file_options = self.config.get_unified_search().root_file_section_options();
+        if !root_file_options.files_enabled {
+            self.cancel_root_file_search();
+            let had_results = !self.root_file_results.is_empty()
+                || !self.root_recent_file_results.is_empty()
+                || !self.root_file_search_query.is_empty()
+                || self.root_file_search_loading
+                || self.root_file_search_mode.is_some();
+            self.root_file_results.clear();
+            self.root_recent_file_results.clear();
+            self.root_file_search_query.clear();
+            self.root_file_search_mode = None;
+            self.root_file_search_loading = false;
+            if had_results {
+                self.root_file_search_generation = self.root_file_search_generation.wrapping_add(1);
+                self.invalidate_grouped_cache();
+                cx.notify();
+            }
+            return;
+        }
+
         let can_collect = matches!(self.current_view, AppView::ScriptList)
             && self
                 .menu_syntax_mode
@@ -142,11 +182,15 @@ impl ScriptListApp {
 
         let request = if !can_collect {
             None
-        } else if crate::file_search::should_search_root_files(trimmed) {
+        } else if root_file_options.global_search_enabled
+            && crate::file_search::should_search_root_files(trimmed)
+        {
             Some(RootFileSearchRequest::GlobalQuery {
                 query: trimmed.to_string(),
             })
-        } else if crate::file_search::looks_like_root_directory_browse_query(trimmed) {
+        } else if root_file_options.directory_browse_enabled
+            && crate::file_search::looks_like_root_directory_browse_query(trimmed)
+        {
             crate::file_search::parse_directory_path(trimmed).map(|parsed| {
                 RootFileSearchRequest::DirectoryBrowse {
                     query: trimmed.to_string(),

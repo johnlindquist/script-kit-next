@@ -101,6 +101,73 @@ mod tests {
     }
 
     #[test]
+    fn root_unified_search_config_gates_provider_and_grouping() {
+        let config_source =
+            fs::read_to_string("src/config/types.rs").expect("read src/config/types.rs");
+        let root_source = fs::read_to_string("src/app_impl/root_file_search.rs")
+            .expect("read src/app_impl/root_file_search.rs");
+        let grouping_source =
+            fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
+        let filtering_source = fs::read_to_string("src/app_impl/filtering_cache.rs")
+            .expect("read src/app_impl/filtering_cache.rs");
+
+        assert!(
+            config_source.contains("pub struct UnifiedSearchConfig")
+                && config_source.contains("pub struct UnifiedSearchFilesConfig")
+                && config_source.contains("pub enum RootFilePromotionConfig")
+                && config_source.contains("pub fn root_file_section_options(&self)"),
+            "config.ts should expose real unifiedSearch.files controls that map to root file section options"
+        );
+        assert!(
+            root_source.contains("root_file_options.files_enabled")
+                && root_source.contains("root_file_options.global_search_enabled")
+                && root_source.contains("root_file_options.directory_browse_enabled")
+                && root_source.contains("options.recent_files_enabled"),
+            "root provider startup and recent hydration should honor unifiedSearch.files gates before launching work"
+        );
+        assert!(
+            filtering_source
+                .contains("self.config.get_unified_search().root_file_section_options()")
+                && filtering_source.contains(
+                    "get_grouped_results_with_validation_query_and_root_files_with_options"
+                ),
+            "main menu grouping should pass config-derived root file options into the Files section"
+        );
+        assert!(
+            grouping_source.contains("!options.files_enabled")
+                && grouping_source.contains("!options.recent_files_enabled")
+                && grouping_source.contains("!options.global_search_enabled")
+                && grouping_source.contains("!options.directory_browse_enabled"),
+            "grouping should keep a defensive config gate even if provider state is stale"
+        );
+    }
+
+    #[test]
+    fn async_root_file_updates_preserve_selection_by_stable_key() {
+        let state_source =
+            fs::read_to_string("src/main_sections/app_state.rs").expect("read app_state.rs");
+        let root_source = fs::read_to_string("src/app_impl/root_file_search.rs")
+            .expect("read src/app_impl/root_file_search.rs");
+
+        assert!(
+            state_source.contains("struct MainMenuSelectionSnapshot")
+                && state_source.contains("main_menu_selection_snapshot")
+                && state_source.contains("restore_main_menu_selection_from_snapshot")
+                && state_source.contains("history_result_key()")
+                && state_source.contains("grouped_index_for_history_result_key"),
+            "main menu selection preservation should snapshot and restore stable result keys, not grouped indexes"
+        );
+        assert!(
+            root_source.contains("let selection_before =")
+                && root_source.contains("self.main_menu_selection_snapshot()")
+                && root_source.contains("self.restore_main_menu_selection_from_snapshot(snapshot)")
+                && root_source.contains("self.sync_list_state_for_filter_replacement();")
+                && root_source.contains("self.validate_selection_bounds(cx);"),
+            "async root file publish path should rebuild rows, restore the previous key, then validate bounds"
+        );
+    }
+
+    #[test]
     fn root_global_file_search_publishes_partial_batches_before_done() {
         let source = fs::read_to_string("src/app_impl/root_file_search.rs")
             .expect("read src/app_impl/root_file_search.rs");
@@ -329,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn root_global_file_promotion_stays_grouping_only() {
+    fn root_global_file_promotion_is_policy_gated_and_grouping_only() {
         let grouping_source =
             fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
         let production = production_source(&grouping_source);
@@ -344,14 +411,15 @@ mod tests {
             .expect("root file promotion helper should be present");
 
         assert!(
-            helper.contains("RootFileSectionMode::GlobalQuery")
+            helper.contains("RootFilePromotionPolicy::Never")
+                && helper.contains("RootFileSectionMode::GlobalQuery")
                 && helper.contains("filter_text.trim()")
                 && helper.contains("root_file_global_query_is_eligible(query)")
-                && helper.contains("top_launcher_result_strongly_matches_query(flat_results, query)")
+                && helper.contains("flat_results.iter().any(is_primary_launcher_result)")
                 && helper.contains("files.first()")
-                && helper
-                    .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
-            "root file promotion should depend on the shared strong global filename-token match and the current launcher winner"
+                && helper.contains("RootFilePromotionPolicy::ExactFilenameOnly")
+                && helper.contains("root_file_name_exact_or_stem_matches_query("),
+            "root file promotion should default to never and require exact filename/stem opt-in without primary launcher rows"
         );
         assert!(
             production.contains("root_file_section_insertion_index(grouped, flat_results, promote)")
@@ -374,7 +442,7 @@ mod tests {
     }
 
     #[test]
-    fn root_global_promotion_and_recent_seeds_share_filename_token_gate() {
+    fn root_global_promotion_uses_exact_gate_while_recent_seeds_keep_token_gate() {
         let file_search_source =
             fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
         let grouping_source =
@@ -403,10 +471,9 @@ mod tests {
         assert!(
             promote_helper.contains("RootFileSectionMode::GlobalQuery")
                 && promote_helper.contains("root_file_global_query_is_eligible(query)")
-                && promote_helper.contains("top_launcher_result_strongly_matches_query(flat_results, query)")
-                && promote_helper
-                    .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
-            "promotion should use the same filename-token gate as recent seeds unless the launcher winner already strongly matches"
+                && promote_helper.contains("flat_results.iter().any(is_primary_launcher_result)")
+                && promote_helper.contains("root_file_name_exact_or_stem_matches_query("),
+            "promotion should be stricter than recent seeds: exact filename/stem only and blocked by primary launcher rows"
         );
         assert!(
             !promote_helper.contains("ROOT_FILE_MIN_QUERY_CHARS"),
@@ -551,9 +618,8 @@ mod tests {
             })
             .expect("root file promotion helper should be present");
         assert!(
-            promote_helper
-                .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
-            "multi-word promotion should continue to use the shared filename-token gate"
+            promote_helper.contains("root_file_name_exact_or_stem_matches_query("),
+            "multi-word promotion should stay exact-only instead of using the broader filename-token gate"
         );
         assert!(
             file_search_production.contains("root_file_name_token_matches_query(name, query)"),
@@ -589,11 +655,9 @@ mod tests {
             .expect("root file promotion helper should be present");
         assert!(
             promote_helper.contains("root_file_global_query_is_eligible(query)")
-                && promote_helper
-                    .contains("top_launcher_result_strongly_matches_query(flat_results, query)")
-                && promote_helper
-                    .contains("root_file_name_token_matches_query(&first_file.file.name, query)"),
-            "promotion should share root global search eligibility before applying filename-token promotion"
+                && promote_helper.contains("flat_results.iter().any(is_primary_launcher_result)")
+                && promote_helper.contains("root_file_name_exact_or_stem_matches_query("),
+            "promotion should share root global search eligibility before applying exact filename-only promotion"
         );
         assert!(
             !promote_helper.contains("ROOT_FILE_MIN_QUERY_CHARS"),
@@ -602,26 +666,28 @@ mod tests {
     }
 
     #[test]
-    fn root_global_file_promotion_respects_strong_launcher_winner() {
+    fn root_global_file_promotion_respects_primary_launcher_rows() {
         let grouping_source =
             fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
         let production = production_source(&grouping_source);
         let launcher_helper = production
-            .split("fn top_launcher_result_strongly_matches_query(")
+            .split("fn is_primary_launcher_result(")
             .nth(1)
             .and_then(|section| {
                 section
                     .split("fn root_file_section_insertion_index(")
                     .next()
             })
-            .expect("launcher collision helper should be present");
+            .expect("primary launcher helper should be present");
 
         assert!(
-            launcher_helper.contains("SearchResult::ScriptIssue(_)")
-                && launcher_helper.contains("SearchResult::Fallback(_)")
-                && launcher_helper.contains("SearchResult::File(_)")
-                && launcher_helper.contains("root_file_name_token_matches_query(result.name(), query)"),
-            "file promotion should ignore issue/fallback/file rows and defer to a strong current launcher winner"
+            launcher_helper.contains("SearchResult::Script(_)")
+                && launcher_helper.contains("SearchResult::Scriptlet(_)")
+                && launcher_helper.contains("SearchResult::Skill(_)")
+                && launcher_helper.contains("SearchResult::BuiltIn(_)")
+                && launcher_helper.contains("SearchResult::App(_)")
+                && launcher_helper.contains("SearchResult::Window(_)"),
+            "file promotion should be blocked by any primary launcher row"
         );
         for forbidden in [
             "mdfind",
@@ -633,7 +699,7 @@ mod tests {
         ] {
             assert!(
                 !launcher_helper.contains(forbidden),
-                "launcher collision guard must stay grouping-only: {forbidden}"
+                "primary launcher guard must stay grouping-only: {forbidden}"
             );
         }
     }

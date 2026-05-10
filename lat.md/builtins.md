@@ -112,6 +112,16 @@ When ACP opens dictation history as an attachment portal, that same browser swit
 
 That is a materially broader contract than the older “few built-ins plus apps” description.
 
+## Root Unified Search Files
+
+Root file rows are a passive launcher source, so async file search cannot displace primary command intent.
+
+Root Files and empty-root Recent Files render after primary launcher rows such as commands, scripts, apps, skills, and windows, but before fallback handoff rows. Promotion defaults to `never`; the opt-in promotion policy is exact filename or stem only and still refuses to promote when primary launcher rows exist.
+
+`config.ts` exposes `unifiedSearch.files` controls for the implemented file source: `enabled`, `globalSearch`, `recentFiles`, `directoryBrowse`, and `promotion`. Disabled sources are gated before provider startup and again during grouping so stale provider state cannot leak rows.
+
+Async root file provider updates snapshot the current launcher selection by `[[src/scripts/types.rs#SearchResult#history_result_key]]`, rebuild grouped rows, then restore the matching stable key before validating bounds. This prevents late file results from turning the same numeric row index into a different command.
+
 ## Dictation model download prompt
 
 The Parakeet model prompt is a stateful MiniPrompt that must not reinterpret a repeated submit as a destructive action after its choices change.

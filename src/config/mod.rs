@@ -33,8 +33,9 @@ pub use defaults::DEFAULT_SUGGESTED_HALF_LIFE_DAYS;
 pub use types::{
     AcpProfile, AiPreferences, BuiltInConfig, ClaudeCodeConfig, Config, DictationPreferences,
     HotkeyConfig, LayoutConfig, McpConfig, McpHttpServerConfig, McpServerConfig,
-    McpStdioServerConfig, ScriptKitUserPreferences, SuggestedConfig, ThemeSelectionPreferences,
-    WatcherConfig, WindowManagementPreferences,
+    McpStdioServerConfig, RootFilePromotionConfig, ScriptKitUserPreferences, SuggestedConfig,
+    ThemeSelectionPreferences, UnifiedSearchConfig, UnifiedSearchFilesConfig, WatcherConfig,
+    WindowManagementPreferences,
 };
 
 // Re-export loader

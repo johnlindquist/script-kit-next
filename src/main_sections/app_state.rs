@@ -236,6 +236,22 @@ impl MainMenuResultCacheState {
             })
     }
 
+    fn grouped_index_for_history_result_key(&self, key: &str) -> Option<usize> {
+        self.cached_grouped_items
+            .iter()
+            .enumerate()
+            .find_map(|(grouped_index, item)| {
+                let GroupedListItem::Item(result_idx) = item else {
+                    return None;
+                };
+                self.cached_grouped_flat_results
+                    .get(*result_idx)
+                    .and_then(|result| result.history_result_key())
+                    .filter(|candidate| candidate == key)
+                    .map(|_| grouped_index)
+            })
+    }
+
     fn selectable_bounds(&self) -> (Option<usize>, Option<usize>) {
         (
             self.cached_grouped_first_selectable_index,
@@ -283,6 +299,60 @@ impl MainMenuResultCacheState {
         self.cached_grouped_first_selectable_index = None;
         self.cached_grouped_last_selectable_index = None;
         self.grouped_cache_key = String::from(MAIN_MENU_RESULT_CACHE_INVALIDATED_KEY);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct MainMenuSelectionSnapshot {
+    query: String,
+    selected_key: Option<String>,
+}
+
+impl ScriptListApp {
+    pub(crate) fn main_menu_selection_snapshot(&mut self) -> MainMenuSelectionSnapshot {
+        self.get_grouped_results_cached();
+        let selected_key = self
+            .main_menu_result_caches
+            .flat_result_index_for_coerced_grouped_selection(self.selected_index)
+            .and_then(|(_, result_idx)| {
+                self.main_menu_result_caches
+                    .search_result_for_flat_index(result_idx)
+            })
+            .and_then(|result| result.history_result_key());
+
+        MainMenuSelectionSnapshot {
+            query: self.computed_filter_text.clone(),
+            selected_key,
+        }
+    }
+
+    pub(crate) fn restore_main_menu_selection_from_snapshot(
+        &mut self,
+        snapshot: MainMenuSelectionSnapshot,
+    ) -> bool {
+        if snapshot.query != self.computed_filter_text {
+            return false;
+        }
+        let Some(selected_key) = snapshot.selected_key else {
+            return false;
+        };
+
+        self.get_grouped_results_cached();
+        let Some(grouped_index) = self
+            .main_menu_result_caches
+            .grouped_index_for_history_result_key(&selected_key)
+        else {
+            return false;
+        };
+
+        if self.selected_index == grouped_index {
+            return false;
+        }
+
+        self.selected_index = grouped_index;
+        self.hovered_index = None;
+        self.last_scrolled_index = None;
+        true
     }
 }
 

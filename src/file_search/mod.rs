@@ -143,6 +143,39 @@ pub const ROOT_FILE_BROWSE_RENDER_LIMIT: usize = 12;
 /// Minimum visible query length before root launcher file search starts.
 pub const ROOT_FILE_MIN_QUERY_CHARS: usize = 3;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RootFilePromotionPolicy {
+    Never,
+    ExactFilenameOnly,
+}
+
+impl Default for RootFilePromotionPolicy {
+    fn default() -> Self {
+        Self::Never
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RootFileSectionOptions {
+    pub files_enabled: bool,
+    pub recent_files_enabled: bool,
+    pub global_search_enabled: bool,
+    pub directory_browse_enabled: bool,
+    pub promotion_policy: RootFilePromotionPolicy,
+}
+
+impl Default for RootFileSectionOptions {
+    fn default() -> Self {
+        Self {
+            files_enabled: true,
+            recent_files_enabled: true,
+            global_search_enabled: true,
+            directory_browse_enabled: true,
+            promotion_policy: RootFilePromotionPolicy::Never,
+        }
+    }
+}
+
 /// Which source currently backs the root launcher's `Files` section.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RootFileSectionMode {
@@ -548,6 +581,22 @@ fn root_file_name_relevance_tier(name: &str, query: &str, name_matched: bool) ->
 pub fn root_file_name_token_matches_query(name: &str, query: &str) -> bool {
     let terms = root_file_query_terms(query);
     root_file_filename_terms_match(name, &terms)
+}
+
+pub fn root_file_name_exact_or_stem_matches_query(name: &str, query: &str) -> bool {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() {
+        return false;
+    }
+
+    let name_lc = name.to_lowercase();
+    let stem_lc = Path::new(name)
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or(name)
+        .to_lowercase();
+
+    name_lc == q || stem_lc == q
 }
 
 fn root_file_filename_terms_match(name: &str, terms: &[String]) -> bool {
@@ -1289,6 +1338,34 @@ mod tests {
             "server"
         ));
         assert!(!root_file_name_token_matches_query("notes.md", ""));
+    }
+
+    #[test]
+    fn root_file_exact_or_stem_match_accepts_exact_stem() {
+        assert!(root_file_name_exact_or_stem_matches_query(
+            "design-notes.md",
+            "design-notes"
+        ));
+        assert!(root_file_name_exact_or_stem_matches_query(
+            "design-notes.md",
+            "design-notes.md"
+        ));
+    }
+
+    #[test]
+    fn root_file_exact_or_stem_match_rejects_token_prefix() {
+        assert!(!root_file_name_exact_or_stem_matches_query(
+            "design-notes.md",
+            "design"
+        ));
+    }
+
+    #[test]
+    fn root_file_exact_or_stem_match_rejects_boundary_token() {
+        assert!(!root_file_name_exact_or_stem_matches_query(
+            "client-design-notes.md",
+            "design"
+        ));
     }
 
     #[test]
