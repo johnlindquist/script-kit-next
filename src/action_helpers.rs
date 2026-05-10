@@ -58,6 +58,9 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot reveal fallback commands in Finder"),
         )),
+        Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Notes row has no filesystem path"),
+        )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("AI Conversations row has no filesystem path"),
         )),
@@ -92,6 +95,9 @@ pub fn extract_path_for_copy(
         )),
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot copy fallback command path"),
+        )),
+        Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Notes row has no filesystem path"),
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("AI Conversations row has no filesystem path"),
@@ -137,6 +143,9 @@ pub fn extract_path_for_quick_terminal(
         )),
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open fallback commands in Quick Terminal"),
+        )),
+        Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot open notes in Quick Terminal"),
         )),
         Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open AI conversations in Quick Terminal"),
@@ -186,6 +195,9 @@ pub fn extract_path_for_edit(
         Some(SearchResult::Skill(m)) => Ok(m.skill.path.clone()),
         Some(SearchResult::File(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit files from root search"),
+        )),
+        Some(SearchResult::Note(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot edit notes from root search"),
         )),
         Some(SearchResult::Scriptlet(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit scriptlets"),

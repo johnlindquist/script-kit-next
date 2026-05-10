@@ -15,6 +15,40 @@ use super::model::{Note, NoteId};
 /// Global database connection for notes
 static NOTES_DB: OnceLock<Arc<Mutex<Connection>>> = OnceLock::new();
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RootNotesSectionOptions {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub search_content: bool,
+}
+
+impl Default for RootNotesSectionOptions {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_results: 3,
+            min_query_chars: 3,
+            search_content: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct RootNoteSearchHit {
+    pub id: NoteId,
+    pub title: String,
+    pub updated_at: DateTime<Utc>,
+    pub is_pinned: bool,
+    pub char_count: usize,
+    pub score: i32,
+}
+
+pub(crate) fn root_notes_query_is_eligible(query: &str, options: RootNotesSectionOptions) -> bool {
+    let query = query.trim();
+    options.enabled && !query.contains('\n') && query.chars().count() >= options.min_query_chars
+}
+
 /// Get the path to the notes database
 fn get_notes_db_path() -> PathBuf {
     if cfg!(test) {
@@ -384,6 +418,104 @@ pub fn search_notes(query: &str) -> Result<Vec<Note>> {
     }
 }
 
+/// Search notes for root launcher rows without returning note body content.
+pub(crate) fn search_root_notes_meta(
+    query: &str,
+    options: RootNotesSectionOptions,
+) -> Vec<RootNoteSearchHit> {
+    if !root_notes_query_is_eligible(query, options) {
+        return Vec::new();
+    }
+
+    match search_root_notes_meta_result(query.trim(), options) {
+        Ok(hits) => hits,
+        Err(error) => {
+            tracing::warn!(
+                query = %query,
+                error = %error,
+                "root_notes_search_failed"
+            );
+            Vec::new()
+        }
+    }
+}
+
+fn search_root_notes_meta_result(
+    query: &str,
+    options: RootNotesSectionOptions,
+) -> Result<Vec<RootNoteSearchHit>> {
+    init_notes_db()?;
+    let db = get_db()?;
+    let conn = db
+        .lock()
+        .map_err(|e| anyhow::anyhow!("DB lock error: {}", e))?;
+
+    let limit = options.max_results.clamp(1, 5) as i64;
+    let hits = if options.search_content {
+        let sanitized_query = sanitize_fts_query(query);
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT n.id, n.title, n.updated_at, n.is_pinned, length(n.content)
+                FROM notes n
+                INNER JOIN notes_fts fts ON n.rowid = fts.rowid
+                WHERE notes_fts MATCH ?1 AND n.deleted_at IS NULL
+                ORDER BY bm25(notes_fts, 8.0, 1.0), n.is_pinned DESC, n.updated_at DESC
+                LIMIT ?2
+                "#,
+            )
+            .context("Failed to prepare root notes FTS query")?;
+
+        let hits = stmt
+            .query_map(params![sanitized_query, limit], row_to_root_note_hit)
+            .context("Failed to execute root notes FTS query")?
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to collect root notes FTS results")?;
+        hits
+    } else {
+        let like_pattern = format!("%{}%", query);
+        let exact = query.to_lowercase();
+        let prefix = format!("{}%", exact);
+        let mut stmt = conn
+            .prepare(
+                r#"
+                SELECT id, title, updated_at, is_pinned, length(content)
+                FROM notes
+                WHERE deleted_at IS NULL AND title LIKE ?1
+                ORDER BY
+                    CASE
+                        WHEN lower(title) = ?2 THEN 0
+                        WHEN lower(title) LIKE ?3 THEN 1
+                        ELSE 2
+                    END,
+                    is_pinned DESC,
+                    updated_at DESC
+                LIMIT ?4
+                "#,
+            )
+            .context("Failed to prepare root notes title query")?;
+
+        let hits = stmt
+            .query_map(
+                params![like_pattern, exact, prefix, limit],
+                row_to_root_note_hit,
+            )
+            .context("Failed to execute root notes title query")?
+            .collect::<Result<Vec<_>, _>>()
+            .context("Failed to collect root notes title results")?;
+        hits
+    };
+
+    Ok(hits
+        .into_iter()
+        .enumerate()
+        .map(|(rank, mut hit)| {
+            hit.score = i32::MAX.saturating_sub(rank as i32);
+            hit
+        })
+        .collect())
+}
+
 /// Permanently delete a note
 pub fn delete_note_permanently(id: NoteId) -> Result<()> {
     let db = get_db()?;
@@ -607,6 +739,28 @@ fn row_to_note(row: &rusqlite::Row) -> rusqlite::Result<Note> {
     })
 }
 
+fn row_to_root_note_hit(row: &rusqlite::Row) -> rusqlite::Result<RootNoteSearchHit> {
+    let id_str: String = row.get(0)?;
+    let title: String = row.get(1)?;
+    let updated_at_str: String = row.get(2)?;
+    let is_pinned: i32 = row.get(3)?;
+    let char_count: i64 = row.get(4)?;
+
+    let id = NoteId::parse(&id_str).unwrap_or_default();
+    let updated_at = DateTime::parse_from_rfc3339(&updated_at_str)
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_else(|_| Utc::now());
+
+    Ok(RootNoteSearchHit {
+        id,
+        title,
+        updated_at,
+        is_pinned: is_pinned != 0,
+        char_count: char_count.max(0) as usize,
+        score: 0,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -764,6 +918,76 @@ mod tests {
             "search should cap FTS results at 200, got {}",
             results.len()
         );
+    }
+
+    #[test]
+    fn test_root_notes_query_eligibility_respects_config() {
+        let options = RootNotesSectionOptions {
+            enabled: true,
+            min_query_chars: 3,
+            ..Default::default()
+        };
+
+        assert!(root_notes_query_is_eligible("fix", options));
+        assert!(!root_notes_query_is_eligible("fi", options));
+        assert!(!root_notes_query_is_eligible("fix\nnote", options));
+        assert!(!root_notes_query_is_eligible(
+            "fix",
+            RootNotesSectionOptions {
+                enabled: false,
+                ..options
+            }
+        ));
+    }
+
+    #[test]
+    fn test_search_root_notes_meta_is_bounded_active_only_and_metadata_only() {
+        let _guard = notes_db_test_lock().lock().expect("lock");
+        init_notes_db().expect("notes db should initialize before root notes search test");
+        let token = unique_test_token("root_notes");
+        let now = Utc::now();
+        let active = Note {
+            id: NoteId::new(),
+            title: format!("{token} active"),
+            content: format!("{token} body that must not be returned"),
+            created_at: now,
+            updated_at: now,
+            deleted_at: None,
+            is_pinned: true,
+            sort_order: 0,
+        };
+        let deleted = Note {
+            id: NoteId::new(),
+            title: format!("{token} deleted"),
+            content: format!("{token} deleted body"),
+            created_at: now,
+            updated_at: now,
+            deleted_at: Some(now),
+            is_pinned: false,
+            sort_order: 1,
+        };
+
+        save_note(&active).expect("failed to save active note");
+        save_note(&deleted).expect("failed to save deleted note");
+
+        let hits = search_root_notes_meta(
+            &token,
+            RootNotesSectionOptions {
+                enabled: true,
+                max_results: 1,
+                min_query_chars: 3,
+                search_content: true,
+            },
+        );
+
+        delete_note_permanently(active.id).expect("cleanup failed for active note");
+        delete_note_permanently(deleted.id).expect("cleanup failed for deleted note");
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, active.id);
+        assert_eq!(hits[0].title, active.title);
+        assert!(hits[0].is_pinned);
+        assert_eq!(hits[0].char_count, active.content.chars().count());
     }
 
     #[test]

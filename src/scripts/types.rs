@@ -292,6 +292,15 @@ pub struct FileMatch {
     pub score: i32,
 }
 
+/// Represents a passive root-search match for a local Note.
+#[derive(Clone, Debug)]
+pub struct NoteMatch {
+    pub(crate) hit: crate::notes::RootNoteSearchHit,
+    pub(crate) title: String,
+    pub(crate) subtitle: String,
+    pub(crate) score: i32,
+}
+
 /// Represents a passive root-search match for a saved ACP conversation.
 #[derive(Clone, Debug)]
 pub struct AcpHistoryMatch {
@@ -323,6 +332,8 @@ pub enum SearchResult {
     Window(WindowMatch),
     /// Local file result appended from the root launcher file-search source.
     File(FileMatch),
+    /// Local Note surfaced as a passive root-search source.
+    Note(NoteMatch),
     /// Saved ACP conversation surfaced as a passive root-search source.
     AcpHistory(AcpHistoryMatch),
     /// Recent clipboard metadata surfaced as an opt-in passive root-search source.
@@ -358,6 +369,7 @@ impl SearchResult {
             SearchResult::App(am) => &am.app.name,
             SearchResult::Window(wm) => &wm.window.title,
             SearchResult::File(fm) => &fm.file.name,
+            SearchResult::Note(nm) => &nm.title,
             SearchResult::AcpHistory(am) => am.entry.title_display(),
             SearchResult::ClipboardHistory(cm) => &cm.title,
             SearchResult::Agent(am) => &am.agent.name,
@@ -385,6 +397,7 @@ impl SearchResult {
             SearchResult::App(am) => am.app.path.to_str(),
             SearchResult::Window(wm) => Some(&wm.window.app),
             SearchResult::File(fm) => Some(fm.file.path.as_str()),
+            SearchResult::Note(nm) => Some(nm.subtitle.as_str()),
             SearchResult::AcpHistory(am) => Some(am.subtitle.as_str()),
             SearchResult::ClipboardHistory(cm) => Some(cm.subtitle.as_str()),
             SearchResult::Agent(am) => am.agent.description.as_deref(),
@@ -406,6 +419,7 @@ impl SearchResult {
             SearchResult::App(am) => am.score,
             SearchResult::Window(wm) => wm.score,
             SearchResult::File(fm) => fm.score,
+            SearchResult::Note(nm) => nm.score,
             SearchResult::AcpHistory(am) => am.score,
             SearchResult::ClipboardHistory(cm) => cm.score,
             SearchResult::Agent(am) => am.score,
@@ -424,6 +438,7 @@ impl SearchResult {
             SearchResult::App(_) => "App",
             SearchResult::Window(_) => "Window",
             SearchResult::File(_) => "File",
+            SearchResult::Note(_) => "Note",
             SearchResult::AcpHistory(_) => "AI Conversation",
             SearchResult::ClipboardHistory(_) => "Clipboard",
             SearchResult::Agent(_) => "Agent",
@@ -453,6 +468,7 @@ impl SearchResult {
                     }),
             ),
             SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
+            SearchResult::Note(_) => None,
             SearchResult::AcpHistory(_) => None,
             SearchResult::ClipboardHistory(_) => None,
             SearchResult::Window(_) | SearchResult::Skill(_) | SearchResult::Agent(_) => None,
@@ -475,6 +491,7 @@ impl SearchResult {
                 Some(format!("window:{}:{}", wm.window.app, wm.window.title))
             }
             SearchResult::AcpHistory(am) => Some(format!("acp-history/{}", am.entry.session_id)),
+            SearchResult::Note(nm) => Some(format!("note/{}", nm.hit.id.as_str())),
             SearchResult::ClipboardHistory(cm) => {
                 Some(format!("clipboard-history/{}", cm.entry.id))
             }
@@ -502,6 +519,7 @@ impl SearchResult {
             SearchResult::App(_) => ("App", 0xF59E0B),       // Amber-500
             SearchResult::Window(_) => ("Window", 0xEC4899), // Pink-500
             SearchResult::File(_) => ("File", 0x60A5FA),     // Blue-400
+            SearchResult::Note(_) => ("Note", 0xFBBF24),     // Gold-400
             SearchResult::AcpHistory(_) => ("AI Chat", 0x22C55E), // Green-500
             SearchResult::ClipboardHistory(_) => ("Clipboard", 0xA78BFA), // Violet-400
             SearchResult::Agent(_) => ("Agent", 0x0EA5E9),   // Sky-500
@@ -545,6 +563,7 @@ impl SearchResult {
             }
             SearchResult::Agent(am) => am.agent.kit.as_deref(),
             SearchResult::File(_) => Some("Files"),
+            SearchResult::Note(_) => Some("Notes"),
             SearchResult::AcpHistory(_) => Some("AI Conversations"),
             SearchResult::ClipboardHistory(_) => Some("Clipboard History"),
             SearchResult::ScriptIssue(_) => None,
@@ -598,6 +617,7 @@ impl SearchResult {
                     "Open File"
                 }
             }
+            SearchResult::Note(_) => "Open Note",
             SearchResult::AcpHistory(_) => "Resume Conversation",
             SearchResult::ClipboardHistory(_) => "Paste Clipboard",
             SearchResult::Agent(_) => {

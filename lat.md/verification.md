@@ -58,6 +58,14 @@ Checks must prove that root clipboard search is bounded to metadata, disabled by
 
 Use `cargo test --test source_audits root_unified_clipboard_history_contract -- --nocapture` with the existing root file and ACP history source audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`.
 
+## Root Unified Search Notes
+
+Notes root rows are verified with metadata-only storage tests, passive grouping, stable-key, config, and non-toggle open wiring.
+
+Checks must prove that root Notes search excludes empty, short, newline, disabled, and advanced queries; searches active notes only; returns metadata without note bodies; inserts after Files and before Clipboard History and AI Conversations; keys rows by `note/{id}`; and opens Notes through the non-toggle helper.
+
+Use `cargo test --test source_audits root_unified_notes_contract -- --nocapture` with the existing root file, ACP history, and clipboard history audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Because Enter crosses from the launcher to a separate Notes window, add a narrow state-first runtime proof when validating the live surface.
+
 ## Computer-use native-window capture
 
 Native-window capture proof goes through the real MCP path and treats the JSON receipt as the primary oracle.

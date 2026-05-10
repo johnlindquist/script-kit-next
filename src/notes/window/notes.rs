@@ -289,6 +289,37 @@ impl NotesApp {
         self.select_note_internal(id, true, window, cx);
     }
 
+    /// Select an existing active note from root launcher search.
+    pub(super) fn select_note_by_id_from_root(
+        &mut self,
+        id: NoteId,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> anyhow::Result<()> {
+        if self.surface_mode == NotesSurfaceMode::Acp {
+            self.switch_to_notes_surface(window, cx);
+        }
+
+        if self.has_unsaved_changes && !self.save_current_note() {
+            anyhow::bail!("Failed to save current note before opening root note");
+        }
+
+        self.view_mode = NotesViewMode::AllNotes;
+        self.search_query.clear();
+        self.search_state.update(cx, |state, cx| {
+            state.set_value("", window, cx);
+        });
+        self.notes = storage::get_all_notes()
+            .map_err(|error| anyhow::anyhow!("Failed to reload notes for root open: {error}"))?;
+
+        if !self.notes.iter().any(|note| note.id == id) {
+            anyhow::bail!("Root note is missing or deleted");
+        }
+
+        self.select_note(id, window, cx);
+        Ok(())
+    }
+
     /// Select a note without immediately focusing the editor.
     ///
     /// Used by the delete flow so that focus restoration happens via the

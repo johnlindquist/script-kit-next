@@ -129,6 +129,7 @@ pub(super) fn build_grouped_view_results(
                 Some(format!("window:{}:{}", wm.window.app, wm.window.title))
             }
             SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
+            SearchResult::Note(nm) => Some(format!("note/{}", nm.hit.id.as_str())),
             SearchResult::AcpHistory(am) => Some(format!("acp-history/{}", am.entry.session_id)),
             SearchResult::ClipboardHistory(cm) => {
                 Some(format!("clipboard-history/{}", cm.entry.id))
@@ -188,6 +189,7 @@ pub(super) fn build_grouped_view_results(
                         commands_indices.push(idx)
                     }
                     SearchResult::File(_) => {}
+                    SearchResult::Note(_) => {}
                     SearchResult::AcpHistory(_) => {}
                     SearchResult::ClipboardHistory(_) => {}
                     SearchResult::App(_) => apps_indices.push(idx),
@@ -222,6 +224,7 @@ pub(super) fn build_grouped_view_results(
                 }
                 SearchResult::BuiltIn(_) | SearchResult::Window(_) => commands_indices.push(idx),
                 SearchResult::File(_) => {}
+                SearchResult::Note(_) => {}
                 SearchResult::AcpHistory(_) => {}
                 SearchResult::ClipboardHistory(_) => {}
                 SearchResult::App(_) => apps_indices.push(idx),

@@ -24,7 +24,9 @@ impl ScriptListApp {
                 if let Some(result) = self.get_selected_result() {
                     // Skills and windows are non-bindable
                     match result {
-                        scripts::SearchResult::Window(_) | scripts::SearchResult::Skill(_) => {
+                        scripts::SearchResult::Window(_)
+                        | scripts::SearchResult::Skill(_)
+                        | scripts::SearchResult::Note(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,
                                 "Shortcuts not supported for this item type",
@@ -125,6 +127,7 @@ impl ScriptListApp {
                     match result {
                         scripts::SearchResult::Window(_)
                         | scripts::SearchResult::Skill(_)
+                        | scripts::SearchResult::Note(_)
                         | scripts::SearchResult::Agent(_) => {
                             return DispatchOutcome::error(
                                 crate::action_helpers::ERROR_ACTION_FAILED,

@@ -587,6 +587,32 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("File", style));
         }
 
+        scripts::SearchResult::Note(note_match) => {
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(note_match.title.clone()),
+            );
+
+            content = content.child(focused_info_labeled_section(
+                "UPDATED",
+                &crate::formatting::format_absolute_datetime(note_match.hit.updated_at),
+                style,
+            ));
+            content = content.child(focused_info_labeled_section(
+                "LENGTH",
+                &format!("{} chars", note_match.hit.char_count),
+                style,
+            ));
+
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Note", style));
+        }
+
         scripts::SearchResult::AcpHistory(acp_history_match) => {
             let entry = &acp_history_match.entry;
 
@@ -1022,6 +1048,7 @@ impl ScriptListApp {
                         Some(format!("window:{}:{}", m.window.app, m.window.title))
                     }
                     scripts::SearchResult::File(m) => Some(format!("file/{}", m.file.path)),
+                    scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
                     scripts::SearchResult::Agent(m) => {
@@ -1151,6 +1178,12 @@ impl ScriptListApp {
                         format!("acp-history:{}", m.entry.session_id),
                         false,
                         "Resume",
+                    )),
+                    scripts::SearchResult::Note(m) => Some(ScriptInfo::with_action_verb(
+                        &m.title,
+                        format!("note:{}", m.hit.id.as_str()),
+                        false,
+                        "Open",
                     )),
                     scripts::SearchResult::ClipboardHistory(m) => Some(
                         ScriptInfo::with_action_verb(

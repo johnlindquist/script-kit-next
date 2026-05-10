@@ -329,6 +329,7 @@ impl ScriptListApp {
                     // Root file opens record frecency only after the OS open succeeds;
                     // execute_root_file_open is shared by Enter and the root-file Open action.
                     scripts::SearchResult::File(_) => None,
+                    scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
                     // Suppressed: agents don't track frecency in the launcher
@@ -442,6 +443,9 @@ impl ScriptListApp {
                     scripts::SearchResult::File(file_match) => {
                         self.execute_root_file_open(&file_match.file, cx);
                     }
+                    scripts::SearchResult::Note(note_match) => {
+                        self.execute_root_note_open(note_match.hit.id, cx);
+                    }
                     scripts::SearchResult::AcpHistory(acp_history_match) => {
                         self.resume_acp_conversation_from_history(
                             &acp_history_match.entry.session_id,
@@ -537,6 +541,20 @@ impl ScriptListApp {
         match self.selected_main_list_search_result_owned()? {
             scripts::SearchResult::File(file_match) => Some(file_match.file),
             _ => None,
+        }
+    }
+
+    pub(crate) fn execute_root_note_open(
+        &mut self,
+        note_id: crate::notes::NoteId,
+        cx: &mut Context<Self>,
+    ) {
+        match crate::notes::open_note_in_notes_window(cx, note_id) {
+            Ok(()) => self.hide_main_and_reset(cx),
+            Err(error) => {
+                logging::log("ERROR", &format!("Failed to open root note: {error}"));
+                self.show_hud("Failed to open note".to_string(), Some(HUD_MEDIUM_MS), cx);
+            }
         }
     }
 

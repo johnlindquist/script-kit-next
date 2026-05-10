@@ -130,6 +130,16 @@ Eligible non-empty root queries append an AI Conversations section using the exi
 
 `config.ts` exposes `unifiedSearch.acpHistory` only for the implemented ACP history source. Selecting a row resumes the saved conversation through the shared `[[src/render_builtins/acp_history.rs#ScriptListApp#resume_acp_conversation_from_history]]` path; root search does not expose attach-summary actions in this first pass.
 
+## Root Unified Search Notes
+
+Notes rows are a passive launcher source backed by local Notes metadata search.
+
+Eligible non-empty root queries append a Notes section after root Files and before Clipboard History, AI Conversations, and fallback rows. The rows are not part of primary fuzzy sorting and never promote above commands, scripts, apps, skills, windows, or actions.
+
+`config.ts` exposes `unifiedSearch.notes` for the implemented source: `enabled`, `maxResults`, `minQueryChars`, and `searchContent`. The storage search may use Notes FTS over title and content, but root rows only carry note id, title, updated time, pinned state, character count, and score.
+
+Selecting a root Note row opens or focuses the floating Notes window through `[[src/notes/window/window_ops.rs#open_note_in_notes_window]]`, then selects the note in the editor. Root search must not call the toggle-style `[[src/notes/window/window_ops.rs#open_notes_window]]` helper, because that helper closes an already-open Notes window.
+
 ## Root Unified Search Clipboard History
 
 Clipboard history rows are an opt-in passive launcher source for non-empty root queries.

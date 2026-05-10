@@ -226,6 +226,12 @@ pub fn render_design_item(
                         root_file_type_svg_icon(fm.file.file_type).to_string(),
                     )),
                 ),
+                SearchResult::Note(nm) => (
+                    nm.title.clone(),
+                    Some(nm.subtitle.clone()),
+                    None,
+                    Some(IconKind::Svg("NotebookText".to_string())),
+                ),
                 SearchResult::AcpHistory(am) => (
                     am.entry.title_display().to_string(),
                     Some(am.subtitle.clone()),
