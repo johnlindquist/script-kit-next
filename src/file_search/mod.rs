@@ -208,11 +208,26 @@ pub fn root_file_provider_query_for_user_query(user_query: &str) -> String {
 }
 
 /// Returns true when the root launcher should ask Spotlight for file rows.
-pub fn should_search_root_files(query: &str) -> bool {
+pub fn root_file_global_query_is_eligible(query: &str) -> bool {
     let q = query.trim();
-    q.chars().count() >= ROOT_FILE_MIN_QUERY_CHARS
+    root_file_query_has_safe_global_length(q)
         && !looks_like_advanced_mdquery(q)
         && !is_directory_path(q)
+}
+
+fn root_file_query_has_safe_global_length(query: &str) -> bool {
+    query.chars().count() >= ROOT_FILE_MIN_QUERY_CHARS || root_file_short_digit_token_query(query)
+}
+
+fn root_file_short_digit_token_query(query: &str) -> bool {
+    query.chars().count() == 2
+        && query.chars().all(|ch| ch.is_ascii_alphanumeric())
+        && query.chars().any(|ch| ch.is_ascii_digit())
+}
+
+/// Returns true when the root launcher should ask Spotlight for file rows.
+pub fn should_search_root_files(query: &str) -> bool {
+    root_file_global_query_is_eligible(query)
 }
 
 /// Returns true when the root launcher query is syntactically a directory browse.
@@ -1025,6 +1040,22 @@ mod tests {
     }
 
     #[test]
+    fn root_file_short_digit_queries_are_eligible_without_enabling_two_letter_noise() {
+        assert!(should_search_root_files("q2"));
+        assert!(should_search_root_files("Q2"));
+        assert!(should_search_root_files("v2"));
+        assert!(should_search_root_files("3d"));
+        assert!(should_search_root_files("x1"));
+        assert!(!should_search_root_files("ab"));
+        assert!(!should_search_root_files("ai"));
+        assert!(!should_search_root_files("ui"));
+        assert!(!should_search_root_files("q"));
+        assert!(!should_search_root_files("2"));
+        assert!(!should_search_root_files("~/q2"));
+        assert!(!should_search_root_files("kMDItemFSName == 'q2'"));
+    }
+
+    #[test]
     fn root_file_name_token_match_accepts_separator_boundary_prefixes() {
         assert!(root_file_name_token_matches_query(
             "client-design-notes.md",
@@ -1088,6 +1119,20 @@ mod tests {
             "server"
         ));
         assert!(!root_file_name_token_matches_query("notes.md", ""));
+    }
+
+    #[test]
+    fn root_file_short_digit_token_matches_filename_boundaries() {
+        assert!(root_file_name_token_matches_query("Q2Report.pdf", "q2"));
+        assert!(root_file_name_token_matches_query(
+            "2026-q2-report.xlsx",
+            "q2"
+        ));
+        assert!(root_file_name_token_matches_query(
+            "2026Q2Report.xlsx",
+            "q2"
+        ));
+        assert!(!root_file_name_token_matches_query("myq2report.xlsx", "q2"));
     }
 
     #[test]
