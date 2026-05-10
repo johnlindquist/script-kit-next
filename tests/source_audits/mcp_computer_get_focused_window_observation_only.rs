@@ -30,6 +30,12 @@ fn computer_get_focused_window_reads_automation_registry_only() {
         registry.contains("pub fn focused_automation_window()"),
         "automation registry must expose a pure focused-window snapshot helper"
     );
+    assert!(
+        mcp_tools.contains(
+            "COMPUTER_GET_FOCUSED_WINDOW_TOOL => handle_get_focused_window(arguments),"
+        ),
+        "computer/get_focused_window must route directly to the registry-only handler"
+    );
 
     let handler_body = extract_function_body(&mcp_tools, "fn handle_get_focused_window(");
     assert!(
@@ -97,9 +103,10 @@ fn computer_get_focused_window_reads_automation_registry_only() {
         "focused_automation_window must return a cloned snapshot"
     );
     for needle in [
+        "resolve_automation_window",
+        "tracing::",
+        "anyhow!",
         "rebuild_indexes",
-        "tracing::info!",
-        "tracing::warn!",
         "upsert_automation_window",
         "remove_automation_window",
         "set_automation_focus",

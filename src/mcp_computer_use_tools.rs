@@ -1408,6 +1408,7 @@ mod tests {
         assert_eq!(value["focusedWindowId"], id);
         assert_eq!(value["window"]["id"], id);
         assert_eq!(value["window"]["kind"], "notes");
+        assert_eq!(value["window"]["focused"], true);
         assert_eq!(value["window"]["visible"], true);
         assert_eq!(value["window"]["semanticSurface"], "notes");
         assert!(value["warnings"].is_array());
