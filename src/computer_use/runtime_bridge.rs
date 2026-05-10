@@ -1,5 +1,4 @@
 use crate::protocol::{AutomationInspectSnapshot, AutomationWindowTarget, PixelProbe};
-use crate::tray::TrayMenuObservation;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputerUseInspectRequest {
@@ -72,6 +71,4 @@ pub trait ComputerUseRuntimeBridge: Send + Sync {
         &self,
         request: ComputerUseListAppsRequest,
     ) -> Result<ComputerUseListAppsSnapshot, ComputerUseRuntimeError>;
-
-    fn list_tray_menu(&self) -> Result<TrayMenuObservation, ComputerUseRuntimeError>;
 }

@@ -831,15 +831,6 @@ mod tests {
                 },
             )
         }
-
-        fn list_tray_menu(
-            &self,
-        ) -> Result<crate::tray::TrayMenuObservation, ComputerUseRuntimeError> {
-            Ok(crate::tray::tray_menu_observation_snapshot(
-                &crate::updates::UpdateState::Idle,
-                true,
-            ))
-        }
     }
 
     #[test]

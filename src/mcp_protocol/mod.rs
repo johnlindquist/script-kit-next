@@ -781,18 +781,6 @@ mod tests {
                     },
                 )
             }
-
-            fn list_tray_menu(
-                &self,
-            ) -> Result<
-                crate::tray::TrayMenuObservation,
-                crate::computer_use::runtime_bridge::ComputerUseRuntimeError,
-            > {
-                Ok(crate::tray::tray_menu_observation_snapshot(
-                    &crate::updates::UpdateState::Idle,
-                    false,
-                ))
-            }
         }
 
         let request = JsonRpcRequest {

@@ -4,6 +4,10 @@ fn computer_list_tray_menu_reads_script_kit_tray_model_only() {
     let mcp_tools = std::fs::read_to_string("src/mcp_computer_use_tools.rs")
         .expect("read mcp_computer_use_tools.rs");
     let tray = std::fs::read_to_string("src/tray/mod.rs").expect("read tray/mod.rs");
+    let runtime = std::fs::read_to_string("src/computer_use/runtime_bridge.rs")
+        .expect("read runtime_bridge.rs");
+    let bridge = std::fs::read_to_string("src/computer_use/gpui_runtime_bridge.rs")
+        .expect("read gpui_runtime_bridge.rs");
 
     assert!(
         mcp_tools.contains("COMPUTER_LIST_TRAY_MENU_TOOL"),
@@ -37,6 +41,26 @@ fn computer_list_tray_menu_reads_script_kit_tray_model_only() {
         mcp_tools.contains("fn handle_list_tray_menu(arguments: &Value) -> ToolResult {"),
         "computer/list_tray_menu handler must not accept a runtime bridge parameter"
     );
+    for (path, source) in [
+        ("src/computer_use/runtime_bridge.rs", runtime.as_str()),
+        ("src/computer_use/gpui_runtime_bridge.rs", bridge.as_str()),
+    ] {
+        let production_source = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source");
+        for needle in [
+            "fn list_tray_menu",
+            "list_tray_menu(",
+            "ListTrayMenu",
+            "TrayMenuObservation",
+        ] {
+            assert!(
+                !production_source.contains(needle),
+                "{path} must not expose stale computer/list_tray_menu runtime bridge surface; found {needle}"
+            );
+        }
+    }
 
     let handler_body = extract_function_body(&mcp_tools, "fn handle_list_tray_menu(");
     for needle in [
