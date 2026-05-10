@@ -712,6 +712,39 @@ impl ScriptListApp {
         }
     }
 
+    pub(crate) fn try_execute_root_file_action_shortcut(
+        &mut self,
+        key_lower: &str,
+        has_cmd: bool,
+        has_shift: bool,
+        has_alt: bool,
+        has_ctrl: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if !matches!(self.current_view, AppView::ScriptList)
+            || self.show_actions_popup
+            || crate::actions::is_actions_window_open()
+        {
+            return false;
+        }
+        if !has_cmd || has_alt || has_ctrl {
+            return false;
+        }
+
+        let action_id = match (key_lower, has_shift) {
+            ("y", false) => crate::action_helpers::ROOT_FILE_QUICK_LOOK_ACTION_ID,
+            ("c", true) => crate::action_helpers::ROOT_FILE_COPY_PATH_ACTION_ID,
+            ("f", true) => crate::action_helpers::ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID,
+            _ => return false,
+        };
+
+        let Some(file) = self.selected_root_file_result_owned() else {
+            return false;
+        };
+        self.execute_root_file_action(action_id, &file, window, cx)
+    }
+
     /// Execute a fallback item (from the "Use with..." section in search results)
     /// This is called when a fallback is selected from the grouped list
     pub fn execute_fallback_item(

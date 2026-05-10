@@ -354,6 +354,39 @@ mod tests {
     }
 
     #[test]
+    fn root_file_direct_shortcuts_route_through_shared_action_executor() {
+        let selection_source = fs::read_to_string("src/app_impl/selection_fallback.rs")
+            .expect("read src/app_impl/selection_fallback.rs");
+        let normalized = selection_source
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        assert!(
+            normalized.contains("pub(crate) fn try_execute_root_file_action_shortcut")
+                && normalized.contains("ROOT_FILE_QUICK_LOOK_ACTION_ID")
+                && normalized.contains("ROOT_FILE_COPY_PATH_ACTION_ID")
+                && normalized.contains("ROOT_FILE_REVEAL_IN_FINDER_ACTION_ID")
+                && normalized.contains("selected_root_file_result_owned()")
+                && normalized.contains("self.execute_root_file_action(action_id, &file, window, cx)"),
+            "root file direct shortcuts should route selected file rows through the shared root-file action executor"
+        );
+
+        for path in [
+            "src/app_impl/startup.rs",
+            "src/app_impl/startup_new_tab.rs",
+            "src/main_entry/runtime_stdin_match_simulate_key.rs",
+            "src/main_entry/app_run_setup.rs",
+        ] {
+            let source = fs::read_to_string(path).unwrap_or_else(|_| panic!("read {path}"));
+            assert!(
+                source.contains("try_execute_root_file_action_shortcut"),
+                "{path} should offer direct root-file shortcuts on the same ScriptList key path as root directory navigation"
+            );
+        }
+    }
+
+    #[test]
     fn root_directory_child_fragment_filtering_stays_direct_child_only() {
         let file_search_source =
             fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");

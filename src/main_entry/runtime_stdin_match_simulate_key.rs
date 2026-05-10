@@ -75,7 +75,15 @@
                                 match &view.current_view {
                                     AppView::ScriptList => {
                                         // Main script list key handling
-                                        if has_cmd && key_lower == "k" {
+                                        if view.try_execute_root_file_action_shortcut(
+                                            &key_lower, has_cmd, has_shift, _has_alt, _has_ctrl,
+                                            window, ctx,
+                                        ) {
+                                            logging::log(
+                                                "STDIN",
+                                                "SimulateKey: root file direct action shortcut",
+                                            );
+                                        } else if has_cmd && key_lower == "k" {
                                             logging::log(
                                                 "STDIN",
                                                 "SimulateKey: Cmd+K - dispatch actions toggle",
