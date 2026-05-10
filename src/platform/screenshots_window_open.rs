@@ -6,17 +6,18 @@ use image::codecs::png::PngEncoder;
 use image::ImageEncoder;
 use xcap::Window;
 
-#[derive(Debug, Clone, PartialEq)]
-struct PixelAudit {
-    sampled: u64,
-    non_black: u64,
-    non_transparent: u64,
-    unique_bucket_count: usize,
-    mean_luma: f64,
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PixelAudit {
+    pub sampled: u64,
+    pub non_black: u64,
+    pub non_transparent: u64,
+    pub unique_bucket_count: usize,
+    pub mean_luma: f64,
 }
 
 impl PixelAudit {
-    fn is_blank_like(&self) -> bool {
+    pub(crate) fn is_blank_like(&self) -> bool {
         self.sampled == 0
             || self.non_transparent == 0
             || self.non_black == 0
@@ -24,7 +25,7 @@ impl PixelAudit {
     }
 }
 
-fn audit_screenshot_pixels(image: &image::RgbaImage) -> PixelAudit {
+pub(crate) fn audit_screenshot_pixels(image: &image::RgbaImage) -> PixelAudit {
     let mut sampled = 0_u64;
     let mut non_black = 0_u64;
     let mut non_transparent = 0_u64;
@@ -45,12 +46,7 @@ fn audit_screenshot_pixels(image: &image::RgbaImage) -> PixelAudit {
 
         luma_sum += 0.2126 * f64::from(r) + 0.7152 * f64::from(g) + 0.0722 * f64::from(b);
 
-        let bucket = (
-            r / 32,
-            g / 32,
-            b / 32,
-            if a == 0 { 0 } else { 1 },
-        );
+        let bucket = (r / 32, g / 32, b / 32, if a == 0 { 0 } else { 1 });
         buckets.insert(bucket);
     }
 
@@ -67,11 +63,80 @@ fn audit_screenshot_pixels(image: &image::RgbaImage) -> PixelAudit {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct NativeWindowScreenshotCapture {
+    pub png_data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+    pub pixel_audit: PixelAudit,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum NativeWindowCaptureError {
+    PermissionDenied {
+        message: String,
+    },
+    BlankImageRejected {
+        audit: PixelAudit,
+        message: String,
+    },
+    NativeWindowNotFound {
+        native_window_id: u32,
+    },
+    OwnershipMismatch {
+        native_window_id: u32,
+        expected_pid: i32,
+        actual_pid: i32,
+    },
+    AmbiguousNativeWindowId {
+        native_window_id: u32,
+        count: usize,
+    },
+    CaptureFailed {
+        message: String,
+    },
+}
+
+impl std::fmt::Display for NativeWindowCaptureError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::PermissionDenied { message }
+            | Self::BlankImageRejected { message, .. }
+            | Self::CaptureFailed { message } => write!(f, "{message}"),
+            Self::NativeWindowNotFound { native_window_id } => {
+                write!(
+                    f,
+                    "Native window {native_window_id} was not found in xcap inventory"
+                )
+            }
+            Self::OwnershipMismatch {
+                native_window_id,
+                expected_pid,
+                actual_pid,
+            } => write!(
+                f,
+                "Native window {native_window_id} belongs to pid {actual_pid}, not expected pid {expected_pid}"
+            ),
+            Self::AmbiguousNativeWindowId {
+                native_window_id,
+                count,
+            } => write!(
+                f,
+                "Native window {native_window_id} matched {count} xcap windows; refusing to guess"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for NativeWindowCaptureError {}
+
 fn reject_blank_screenshot_if_needed(
     audit: &PixelAudit,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    correlation_id: &str,
+) -> Result<(), NativeWindowCaptureError> {
     tracing::info!(
         target: "script_kit::automation",
+        correlation_id = %correlation_id,
         sampled = audit.sampled,
         non_black = audit.non_black,
         non_transparent = audit.non_transparent,
@@ -84,6 +149,7 @@ fn reject_blank_screenshot_if_needed(
     if audit.is_blank_like() {
         tracing::error!(
             target: "script_kit::automation",
+            correlation_id = %correlation_id,
             sampled = audit.sampled,
             non_black = audit.non_black,
             non_transparent = audit.non_transparent,
@@ -91,11 +157,11 @@ fn reject_blank_screenshot_if_needed(
             mean_luma = audit.mean_luma,
             "automation.capture_screenshot.blank_image_rejected"
         );
-        return Err(
-            "Screenshot capture returned a blank/black image. Check macOS Screen Recording permission for this binary and retry with a reviewable capture."
-                .to_string()
-                .into(),
-        );
+        return Err(NativeWindowCaptureError::BlankImageRejected {
+            audit: audit.clone(),
+            message: "Screenshot capture returned a blank/black image. Check macOS Screen Recording permission for this binary and retry with a reviewable capture."
+                .to_string(),
+        });
     }
 
     Ok(())
@@ -135,21 +201,39 @@ fn capture_and_encode_png(
     window: &xcap::Window,
     hi_dpi: bool,
 ) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
+    let captured = capture_and_encode_png_with_audit(window, hi_dpi, "legacy-targeted-screenshot")
+        .map_err(|error| -> Box<dyn std::error::Error + Send + Sync> {
+            error.to_string().into()
+        })?;
+
+    Ok((captured.png_data, captured.width, captured.height))
+}
+
+fn capture_and_encode_png_with_audit(
+    window: &xcap::Window,
+    hi_dpi: bool,
+    correlation_id: &str,
+) -> Result<NativeWindowScreenshotCapture, NativeWindowCaptureError> {
     const DOWNSCALE_DIVISOR: u32 = 2;
 
     if matches!(screen_capture_access_preflight(), Some(false)) {
         tracing::error!(
             target: "script_kit::automation",
+            correlation_id = %correlation_id,
             "automation.capture_screenshot.permission_failed"
         );
-        return Err(
-            "Screen capture permission is not granted. Enable macOS Screen Recording permission for this binary before collecting screenshot proof."
-                .to_string()
-                .into(),
-        );
+        return Err(NativeWindowCaptureError::PermissionDenied {
+            message: "Screen capture permission is not granted. Enable macOS Screen Recording permission for this binary before collecting screenshot proof."
+                .to_string(),
+        });
     }
 
-    let image = window.capture_image()?;
+    let image =
+        window
+            .capture_image()
+            .map_err(|error| NativeWindowCaptureError::CaptureFailed {
+                message: error.to_string(),
+            })?;
     let original_width = image.width();
     let original_height = image.height();
 
@@ -165,24 +249,192 @@ fn capture_and_encode_png(
             image::imageops::FilterType::Lanczos3,
         );
         tracing::debug!(
+            target: "script_kit::automation",
+            correlation_id = %correlation_id,
             original_width = original_width,
             original_height = original_height,
             new_width = new_width,
             new_height = new_height,
             downscale_divisor = DOWNSCALE_DIVISOR,
-            "Scaled screenshot to 1x resolution"
+            "automation.capture_screenshot.scaled_to_1x"
         );
         (resized, new_width, new_height)
     };
 
     let audit = audit_screenshot_pixels(&final_image);
-    reject_blank_screenshot_if_needed(&audit)?;
+    reject_blank_screenshot_if_needed(&audit, correlation_id)?;
 
     let mut png_data = Vec::new();
     let encoder = PngEncoder::new(&mut png_data);
-    encoder.write_image(&final_image, width, height, image::ExtendedColorType::Rgba8)?;
+    encoder
+        .write_image(&final_image, width, height, image::ExtendedColorType::Rgba8)
+        .map_err(|error| NativeWindowCaptureError::CaptureFailed {
+            message: error.to_string(),
+        })?;
 
-    Ok((png_data, width, height))
+    Ok(NativeWindowScreenshotCapture {
+        png_data,
+        width,
+        height,
+        pixel_audit: audit,
+    })
+}
+
+pub(crate) fn capture_native_window_id_screenshot(
+    native_window_id: u32,
+    expected_owner_pid: i32,
+    hi_dpi: bool,
+    correlation_id: &str,
+) -> Result<NativeWindowScreenshotCapture, NativeWindowCaptureError> {
+    let windows = Window::all().map_err(|error| NativeWindowCaptureError::CaptureFailed {
+        message: error.to_string(),
+    })?;
+    let matches = windows
+        .into_iter()
+        .filter(|window| window.id().ok() == Some(native_window_id))
+        .collect::<Vec<_>>();
+
+    match matches.len() {
+        0 => Err(NativeWindowCaptureError::NativeWindowNotFound { native_window_id }),
+        1 => {
+            let final_owner_pid = core_graphics_owner_pid_for_native_window(native_window_id)?;
+            if final_owner_pid != expected_owner_pid {
+                tracing::warn!(
+                    target: "script_kit::automation",
+                    correlation_id = %correlation_id,
+                    native_window_id = native_window_id,
+                    expected_pid = expected_owner_pid,
+                    actual_pid = final_owner_pid,
+                    "automation.native_window_capture.final_owner_mismatch"
+                );
+                return Err(NativeWindowCaptureError::OwnershipMismatch {
+                    native_window_id,
+                    expected_pid: expected_owner_pid,
+                    actual_pid: final_owner_pid,
+                });
+            }
+            tracing::info!(
+                target: "script_kit::automation",
+                correlation_id = %correlation_id,
+                native_window_id = native_window_id,
+                owner_pid = final_owner_pid,
+                "automation.native_window_capture.xcap_window_selected"
+            );
+            capture_and_encode_png_with_audit(&matches[0], hi_dpi, correlation_id)
+        }
+        count => Err(NativeWindowCaptureError::AmbiguousNativeWindowId {
+            native_window_id,
+            count,
+        }),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn core_graphics_owner_pid_for_native_window(
+    native_window_id: u32,
+) -> Result<i32, NativeWindowCaptureError> {
+    use core_foundation::array::CFArray;
+    use core_foundation::base::{CFTypeRef, TCFType};
+    use core_foundation::dictionary::CFDictionaryRef;
+    use core_foundation::number::CFNumber;
+    use core_foundation::string::CFString;
+    use std::ffi::c_void;
+
+    const K_CG_NULL_WINDOW_ID: u32 = 0;
+    const K_CG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY: u32 = 1;
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGWindowListCopyWindowInfo(
+            option: u32,
+            relative_to_window: u32,
+        ) -> core_foundation::array::CFArrayRef;
+    }
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFDictionaryGetValueIfPresent(
+            the_dict: CFDictionaryRef,
+            key: *const c_void,
+            value: *mut *const c_void,
+        ) -> u8;
+    }
+
+    let window_info_list = unsafe {
+        CGWindowListCopyWindowInfo(K_CG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY, K_CG_NULL_WINDOW_ID)
+    };
+    if window_info_list.is_null() {
+        return Err(NativeWindowCaptureError::CaptureFailed {
+            message: "CGWindowListCopyWindowInfo returned null during final owner check"
+                .to_string(),
+        });
+    }
+
+    let info_array: CFArray = unsafe { CFArray::wrap_under_create_rule(window_info_list) };
+    let k_owner_pid = CFString::new("kCGWindowOwnerPID");
+    let k_window_number = CFString::new("kCGWindowNumber");
+    let mut owner_pids = Vec::new();
+
+    for index in 0..info_array.len() {
+        let Some(item_ref) = info_array.get(index) else {
+            continue;
+        };
+        let dict_ref = *item_ref as CFDictionaryRef;
+        if dict_ref.is_null() {
+            continue;
+        }
+
+        let mut value: *const c_void = std::ptr::null();
+        let found = unsafe {
+            CFDictionaryGetValueIfPresent(
+                dict_ref,
+                k_window_number.as_concrete_TypeRef() as *const c_void,
+                &mut value,
+            )
+        };
+        if found == 0 || value.is_null() {
+            continue;
+        }
+        let number = unsafe { CFNumber::wrap_under_get_rule(value as CFTypeRef as *const _) };
+        if number.to_i64() != Some(i64::from(native_window_id)) {
+            continue;
+        }
+
+        value = std::ptr::null();
+        let found = unsafe {
+            CFDictionaryGetValueIfPresent(
+                dict_ref,
+                k_owner_pid.as_concrete_TypeRef() as *const c_void,
+                &mut value,
+            )
+        };
+        if found == 0 || value.is_null() {
+            continue;
+        }
+        let owner = unsafe { CFNumber::wrap_under_get_rule(value as CFTypeRef as *const _) };
+        if let Some(pid) = owner.to_i64().and_then(|pid| i32::try_from(pid).ok()) {
+            owner_pids.push(pid);
+        }
+    }
+
+    owner_pids.sort_unstable();
+    owner_pids.dedup();
+
+    match owner_pids.as_slice() {
+        [] => Err(NativeWindowCaptureError::NativeWindowNotFound { native_window_id }),
+        [pid] => Ok(*pid),
+        _ => Err(NativeWindowCaptureError::AmbiguousNativeWindowId {
+            native_window_id,
+            count: owner_pids.len(),
+        }),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn core_graphics_owner_pid_for_native_window(
+    native_window_id: u32,
+) -> Result<i32, NativeWindowCaptureError> {
+    Err(NativeWindowCaptureError::NativeWindowNotFound { native_window_id })
 }
 
 // ── Shared candidate-selection infrastructure ───────────────────────────
@@ -199,7 +451,8 @@ struct Candidate {
 
 /// Enumerate all visible Script Kit OS windows that are large enough to be
 /// meaningful screenshot targets.
-fn list_script_kit_candidates() -> Result<Vec<Candidate>, Box<dyn std::error::Error + Send + Sync>> {
+fn list_script_kit_candidates() -> Result<Vec<Candidate>, Box<dyn std::error::Error + Send + Sync>>
+{
     let mut candidates = Vec::new();
     for window in Window::all()? {
         let title = window.title().unwrap_or_else(|_| String::new());
@@ -263,10 +516,7 @@ fn candidate_size_score(
 /// Higher scores mean a better match. Uses bounds as a first-class signal
 /// when available, plus title and focus agreement. The resolved target's
 /// metadata drives selection.
-fn score_candidate(
-    resolved: &crate::protocol::AutomationWindowInfo,
-    candidate: &Candidate,
-) -> i32 {
+fn score_candidate(resolved: &crate::protocol::AutomationWindowInfo, candidate: &Candidate) -> i32 {
     use crate::protocol::AutomationWindowKind;
 
     let mut score: i32 = candidate_size_score(resolved, candidate);
@@ -507,8 +757,11 @@ pub fn capture_targeted_screenshot_with_popup_receipt(
         };
 
         // Resolve parent window metadata
-        let parent_target = crate::protocol::AutomationWindowTarget::Id { id: parent_id.clone() };
-        let parent_resolved = match crate::windows::resolve_automation_window(Some(&parent_target)) {
+        let parent_target = crate::protocol::AutomationWindowTarget::Id {
+            id: parent_id.clone(),
+        };
+        let parent_resolved = match crate::windows::resolve_automation_window(Some(&parent_target))
+        {
             Ok(p) => p,
             Err(err) => {
                 tracing::error!(
@@ -553,8 +806,16 @@ pub fn capture_targeted_screenshot_with_popup_receipt(
                  Refusing to produce unscoped whole-window screenshot.",
                 resolved.id,
                 kind_str,
-                if resolved.bounds.is_some() { "present" } else { "missing" },
-                if parent_resolved.bounds.is_some() { "present" } else { "missing" },
+                if resolved.bounds.is_some() {
+                    "present"
+                } else {
+                    "missing"
+                },
+                if parent_resolved.bounds.is_some() {
+                    "present"
+                } else {
+                    "missing"
+                },
             )
             .into());
         }
@@ -647,8 +908,8 @@ pub fn capture_app_screenshot(
     hi_dpi: bool,
 ) -> Result<(Vec<u8>, u32, u32), Box<dyn std::error::Error + Send + Sync>> {
     let target = crate::protocol::AutomationWindowTarget::Main;
-    let resolved = crate::windows::resolve_automation_window(Some(&target))
-        .map_err(|err| err.to_string())?;
+    let resolved =
+        crate::windows::resolve_automation_window(Some(&target)).map_err(|err| err.to_string())?;
     capture_resolved_window(&resolved, hi_dpi)
 }
 
@@ -793,8 +1054,8 @@ pub fn capture_targeted_rgba_image(
 ) -> Result<image::RgbaImage, Box<dyn std::error::Error + Send + Sync>> {
     const DOWNSCALE_DIVISOR: u32 = 2;
 
-    let resolved = crate::windows::resolve_automation_window(target)
-        .map_err(|err| err.to_string())?;
+    let resolved =
+        crate::windows::resolve_automation_window(target).map_err(|err| err.to_string())?;
 
     let candidates = list_script_kit_candidates()?;
     let best = select_best_candidate(&resolved, &candidates, "capture_rgba")?;

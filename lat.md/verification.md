@@ -24,6 +24,12 @@ Shell helper changes outside the Rust app should keep their proof narrow too. Fo
 
 For UI changes outside the main launcher/footer path, use the project's agentic runtime verification flow against the real surface instead of guessing from unit tests alone.
 
+## Computer-use native-window capture
+
+Native-window capture proof goes through the real MCP path and treats the JSON receipt as the primary oracle.
+
+For `computer/capture_native_window`, first call `computer/list_native_windows` and select a row whose `observation.captureSelectionCandidate.status` is `candidate`; then call `computer/capture_native_window` with `pid`, `nativeWindowId`, and `expectedBundleId`. The primary proof is the receipt: `status:"captured"`, stable `correlationId`, non-empty SHA-256, positive byte length/dimensions, and `pixelAudit.blankLike:false`. When `includeImage:true`, decode `pngBase64`, verify PNG magic bytes, decoded byte length, and SHA-256. Negative proof should include wrong `expectedBundleId` -> `ownershipMismatch`, stale or missing `nativeWindowId` -> `windowNotFound`, unknown input fields -> `invalid_arguments`, and a non-candidate listed row -> `notCaptureCandidate` when the current runtime exposes one; all negative capture receipts must keep `capture:null`.
+
 ## Oracle Bundle Context
 
 Oracle review bundles should carry the same process context local agents use, so remote review does not miss repo-specific grounding or verification rules.

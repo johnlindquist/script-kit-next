@@ -5,11 +5,11 @@
 //! remain deferred until they can cite stable inspection receipts.
 
 use crate::computer_use::runtime_bridge::{
-    ComputerUseAppWindowInfo, ComputerUseInspectRequest, ComputerUseListAppWindowsRequest,
-    ComputerUseListAppsRequest, ComputerUseRunningAppInfo, ComputerUseRuntimeBridge,
-    ComputerUseRuntimeError,
+    ComputerUseAppWindowInfo, ComputerUseCaptureNativeWindowRequest, ComputerUseInspectRequest,
+    ComputerUseListAppWindowsRequest, ComputerUseListAppsRequest, ComputerUseRunningAppInfo,
+    ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
-use crate::computer_use::types::ComputerUseSeeArgs;
+use crate::computer_use::types::{ComputerUseCaptureNativeWindowArgs, ComputerUseSeeArgs};
 use crate::frontmost_app_tracker::{get_cached_menu_snapshot, get_last_real_app};
 use crate::mcp_kit_tools::{ToolContent, ToolDefinition, ToolResult};
 use crate::menu_bar::MenuBarItem;
@@ -30,6 +30,7 @@ pub const COMPUTER_LIST_APP_WINDOWS_TOOL: &str = "computer/list_app_windows";
 pub const COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL: &str =
     "computer/list_app_windows_by_bundle_id";
 pub const COMPUTER_GET_APP_WINDOW_BY_BUNDLE_ID_TOOL: &str = "computer/get_app_window_by_bundle_id";
+pub const COMPUTER_CAPTURE_NATIVE_WINDOW_TOOL: &str = "computer/capture_native_window";
 pub const COMPUTER_LIST_NATIVE_WINDOWS_TOOL: &str = "computer/list_native_windows";
 pub const COMPUTER_GET_NATIVE_WINDOW_TOOL: &str = "computer/get_native_window";
 pub const COMPUTER_GET_APP_WINDOW_TOOL: &str = "computer/get_app_window";
@@ -121,6 +122,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "Return one native window owned by a currently running GUI application matching an exact bundle id and CoreGraphics window id without focusing, activating, launching, quitting, hiding, moving, resizing, capturing screenshots, or sending input."
                 .to_string(),
             input_schema: computer_get_app_window_by_bundle_id_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_CAPTURE_NATIVE_WINDOW_TOOL.to_string(),
+            description: "Capture a PNG screenshot of one exact native macOS window after PID, nativeWindowId, optional bundle-id ownership, and capture-candidate revalidation. Does not focus, activate, move, resize, click, type, request permissions, or fall back to another window."
+                .to_string(),
+            input_schema: computer_capture_native_window_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_LIST_NATIVE_WINDOWS_TOOL.to_string(),
@@ -257,6 +264,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_GET_APP_WINDOW_BY_BUNDLE_ID_TOOL => {
             handle_get_app_window_by_bundle_id(arguments, runtime)
         }
+        COMPUTER_CAPTURE_NATIVE_WINDOW_TOOL => handle_capture_native_window(arguments, runtime),
         COMPUTER_LIST_NATIVE_WINDOWS_TOOL => handle_list_native_windows(arguments, runtime),
         COMPUTER_GET_NATIVE_WINDOW_TOOL => handle_get_native_window(arguments, runtime),
         COMPUTER_GET_APP_WINDOW_TOOL => handle_get_app_window(arguments, runtime),
@@ -1514,6 +1522,72 @@ fn handle_get_app_window(
     }
 }
 
+fn handle_capture_native_window(
+    arguments: &Value,
+    runtime: Option<&dyn ComputerUseRuntimeBridge>,
+) -> ToolResult {
+    let args: ComputerUseCaptureNativeWindowArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let Some(runtime) = runtime else {
+        return error_result(
+            "runtime_unavailable",
+            "computer/capture_native_window requires the live GPUI runtime bridge to revalidate and capture native windows safely",
+        );
+    };
+
+    let correlation_id = format!(
+        "mcp-computer-capture-native-window:{}",
+        uuid::Uuid::new_v4()
+    );
+    tracing::info!(
+        target: "script_kit::automation",
+        correlation_id = %correlation_id,
+        pid = args.pid,
+        native_window_id = args.native_window_id,
+        expected_bundle_id = ?args.expected_bundle_id,
+        hi_dpi = args.hi_dpi,
+        include_image = args.include_image,
+        "computer.capture_native_window.request"
+    );
+
+    let request = ComputerUseCaptureNativeWindowRequest {
+        pid: args.pid,
+        native_window_id: args.native_window_id,
+        hi_dpi: args.hi_dpi,
+        include_image: args.include_image,
+        expected_bundle_id: args.expected_bundle_id,
+        correlation_id: correlation_id.clone(),
+    };
+
+    match runtime.capture_native_window(request) {
+        Ok(snapshot) => {
+            tracing::info!(
+                target: "script_kit::automation",
+                correlation_id = %snapshot.correlation_id,
+                status = ?snapshot.status,
+                error_code = ?snapshot.error.as_ref().map(|error| error.code),
+                pid = args.pid,
+                native_window_id = args.native_window_id,
+                byte_length = ?snapshot.capture.as_ref().map(|capture| capture.byte_length),
+                sha256 = ?snapshot.capture.as_ref().map(|capture| capture.sha256.as_str()),
+                width = ?snapshot.capture.as_ref().map(|capture| capture.width),
+                height = ?snapshot.capture.as_ref().map(|capture| capture.height),
+                returned_image = snapshot
+                    .capture
+                    .as_ref()
+                    .and_then(|capture| capture.png_base64.as_ref())
+                    .is_some(),
+                "computer.capture_native_window.result"
+            );
+            json_tool_result(&snapshot)
+        }
+        Err(error) => error_result(error.error_code(), &error.message()),
+    }
+}
+
 fn handle_get_frontmost_native_window(
     arguments: &Value,
     runtime: Option<&dyn ComputerUseRuntimeBridge>,
@@ -2547,6 +2621,40 @@ fn computer_get_app_window_by_bundle_id_input_schema() -> Value {
             }
         },
         "required": ["bundleId", "nativeWindowId"]
+    })
+}
+
+fn computer_capture_native_window_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "pid": {
+                "type": "integer",
+                "description": "Owner process id from computer/list_app_windows or computer/list_native_windows."
+            },
+            "nativeWindowId": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 4_294_967_295u64,
+                "description": "Moment-in-time CoreGraphics native window id to capture."
+            },
+            "hiDpi": {
+                "type": "boolean",
+                "default": false,
+                "description": "Return native Retina pixels when true; otherwise downscale through the existing screenshot path."
+            },
+            "includeImage": {
+                "type": "boolean",
+                "default": false,
+                "description": "Include pngBase64 in the JSON receipt. When false, return only dimensions, SHA-256, and pixel audit."
+            },
+            "expectedBundleId": {
+                "type": "string",
+                "description": "Optional exact bundle-id guard. Capture is refused if pid no longer belongs to this bundle."
+            }
+        },
+        "required": ["pid", "nativeWindowId"]
     })
 }
 
@@ -3593,6 +3701,7 @@ mod tests {
                 COMPUTER_LIST_APP_WINDOWS_TOOL.to_string(),
                 COMPUTER_LIST_APP_WINDOWS_BY_BUNDLE_ID_TOOL.to_string(),
                 COMPUTER_GET_APP_WINDOW_BY_BUNDLE_ID_TOOL.to_string(),
+                COMPUTER_CAPTURE_NATIVE_WINDOW_TOOL.to_string(),
                 COMPUTER_LIST_NATIVE_WINDOWS_TOOL.to_string(),
                 COMPUTER_GET_NATIVE_WINDOW_TOOL.to_string(),
                 COMPUTER_GET_APP_WINDOW_TOOL.to_string(),

@@ -5,6 +5,7 @@
 //! introducing a second targeting or screenshot model.
 
 pub mod gpui_runtime_bridge;
+pub mod native_window_capture;
 pub mod runtime_bridge;
 pub mod see;
 pub mod types;

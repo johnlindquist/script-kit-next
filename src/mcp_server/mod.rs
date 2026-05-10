@@ -19,7 +19,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use tracing::{debug, error, info, warn};
 /// Default port for the MCP server
@@ -298,6 +298,16 @@ pub struct ServerHandle {
     running: Arc<AtomicBool>,
     thread: Option<thread::JoinHandle<()>>,
 }
+
+static RETAINED_SERVER_HANDLE: OnceLock<Mutex<Option<ServerHandle>>> = OnceLock::new();
+
+pub fn retain_server_handle(handle: ServerHandle) {
+    let slot = RETAINED_SERVER_HANDLE.get_or_init(|| Mutex::new(None));
+    if let Ok(mut guard) = slot.lock() {
+        *guard = Some(handle);
+    }
+}
+
 impl ServerHandle {
     /// Stop the server and wait for it to finish
     pub fn stop(mut self) {
@@ -324,6 +334,9 @@ fn handle_connection(
     expected_token: &str,
     computer_runtime: Option<SharedComputerRuntime>,
 ) -> Result<()> {
+    stream
+        .set_nonblocking(false)
+        .context("Failed to set accepted MCP connection to blocking mode")?;
     let mut reader = BufReader::new(stream.try_clone()?);
 
     // Read request line
