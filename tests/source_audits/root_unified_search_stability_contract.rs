@@ -79,3 +79,30 @@ fn main_window_preflight_exposes_selection_key_and_frame_fingerprint() {
     assert!(build.contains("visible_result_keys(app).join(\"|\")"));
     assert!(build.contains("selected_result_key = ?receipt.selected_result_key"));
 }
+
+#[test]
+fn script_list_typing_does_not_notify_before_computed_query_catches_up() {
+    let source = fs::read_to_string("src/app_impl/filter_input_change.rs")
+        .expect("read filter_input_change.rs");
+    let body_start = source
+        .find("pub(crate) fn handle_filter_input_change(")
+        .expect("handle_filter_input_change should exist");
+    let body_end = source[body_start..]
+        .find("/// Describes the source of a file search stream.")
+        .map(|offset| body_start + offset)
+        .expect("file search stream marker should follow handler");
+    let body = &source[body_start..body_end];
+
+    let script_list_tail_start = body
+        .find("let previous_text = std::mem::replace(&mut self.filter_text, new_text.clone());")
+        .expect("ScriptList free-text tail should update canonical filter");
+    let script_list_tail = &body[script_list_tail_start..];
+    let queue_index = script_list_tail
+        .find("self.queue_filter_compute(new_text.clone(), cx);")
+        .expect("ScriptList typing should queue computed filter update");
+
+    assert!(
+        !script_list_tail[..queue_index].contains("cx.notify();"),
+        "ScriptList typing must not render after filter_text changes but before computed_filter_text/grouped rows catch up"
+    );
+}
