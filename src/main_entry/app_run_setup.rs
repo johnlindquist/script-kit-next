@@ -187,7 +187,7 @@
 
     let mcp_computer_runtime = std::sync::Arc::new(
         crate::computer_use::gpui_runtime_bridge::GpuiComputerUseRuntimeBridge::new(
-            std::time::Duration::from_millis(1500),
+            std::time::Duration::from_secs(10),
         ),
     );
     let mcp_computer_runtime_for_server: std::sync::Arc<
@@ -197,7 +197,7 @@
     // Start MCP server for AI agent integration
     // Server runs on localhost:43210 with Bearer token authentication
     // Discovery file written to ~/.scriptkit/server.json
-    let _mcp_handle = match mcp_server::McpServer::with_defaults() {
+    match mcp_server::McpServer::with_defaults() {
         Ok(server) => {
             let server = server.with_computer_runtime(mcp_computer_runtime_for_server);
             let server_url = server.url();
@@ -211,17 +211,15 @@
                             server_url
                         ),
                     );
-                    Some(handle)
+                    mcp_server::retain_server_handle(handle);
                 }
                 Err(e) => {
                     logging::log("MCP", &format!("Failed to start MCP server: {}", e));
-                    None
                 }
             }
         }
         Err(e) => {
             logging::log("MCP", &format!("Failed to create MCP server: {}", e));
-            None
         }
     };
 
@@ -557,6 +555,18 @@ app.run(move |cx: &mut App| {
                     } => {
                         let result = cx.update(|_| {
                             crate::computer_use::gpui_runtime_bridge::list_app_windows_on_gpui_thread(
+                                &request,
+                            )
+                        });
+                        let _ = response_tx.send(result);
+                    }
+                    crate::computer_use::gpui_runtime_bridge::GpuiComputerUseRequest::CaptureNativeWindow {
+                        request,
+                        response_tx,
+                        ..
+                    } => {
+                        let result = cx.update(|_| {
+                            crate::computer_use::gpui_runtime_bridge::capture_native_window_on_gpui_thread(
                                 &request,
                             )
                         });

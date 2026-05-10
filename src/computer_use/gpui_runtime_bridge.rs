@@ -1,6 +1,9 @@
 use crate::computer_use::runtime_bridge::{
-    ComputerUseAppWindowInfo, ComputerUseInspectRequest, ComputerUseListAppWindowsRequest,
-    ComputerUseListAppWindowsSnapshot, ComputerUseListAppsRequest, ComputerUseListAppsSnapshot,
+    ComputerUseAppWindowInfo, ComputerUseCaptureNativeWindowError,
+    ComputerUseCaptureNativeWindowRequest, ComputerUseCaptureNativeWindowSnapshot,
+    ComputerUseCaptureNativeWindowStatus, ComputerUseCapturePixelAudit, ComputerUseInspectRequest,
+    ComputerUseListAppWindowsRequest, ComputerUseListAppWindowsSnapshot,
+    ComputerUseListAppsRequest, ComputerUseListAppsSnapshot, ComputerUseNativeWindowCaptureInfo,
     ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
 use crate::computer_use::window_observation::{
@@ -35,6 +38,12 @@ pub enum GpuiComputerUseRequest {
         request_id: String,
         request: ComputerUseListAppWindowsRequest,
         response_tx: SyncSender<Result<ComputerUseListAppWindowsSnapshot, ComputerUseRuntimeError>>,
+    },
+    CaptureNativeWindow {
+        request_id: String,
+        request: ComputerUseCaptureNativeWindowRequest,
+        response_tx:
+            SyncSender<Result<ComputerUseCaptureNativeWindowSnapshot, ComputerUseRuntimeError>>,
     },
 }
 
@@ -83,6 +92,15 @@ impl GpuiComputerUseRequest {
         result: Result<ComputerUseListAppWindowsSnapshot, ComputerUseRuntimeError>,
     ) {
         if let Self::ListAppWindows { response_tx, .. } = self {
+            let _ = response_tx.send(result);
+        }
+    }
+
+    pub fn respond_capture_native_window(
+        self,
+        result: Result<ComputerUseCaptureNativeWindowSnapshot, ComputerUseRuntimeError>,
+    ) {
+        if let Self::CaptureNativeWindow { response_tx, .. } = self {
             let _ = response_tx.send(result);
         }
     }
@@ -156,6 +174,32 @@ impl ComputerUseRuntimeBridge for GpuiComputerUseRuntimeBridge {
         let (response_tx, response_rx) = mpsc::sync_channel(1);
         sender
             .try_send(GpuiComputerUseRequest::ListAppWindows {
+                request_id,
+                request,
+                response_tx,
+            })
+            .map_err(|_| ComputerUseRuntimeError::Unavailable)?;
+
+        response_rx
+            .recv_timeout(self.timeout)
+            .map_err(|_| ComputerUseRuntimeError::Timeout)?
+    }
+
+    fn capture_native_window(
+        &self,
+        request: ComputerUseCaptureNativeWindowRequest,
+    ) -> Result<ComputerUseCaptureNativeWindowSnapshot, ComputerUseRuntimeError> {
+        let sender = self
+            .sender
+            .read()
+            .ok()
+            .and_then(|guard| guard.clone())
+            .ok_or(ComputerUseRuntimeError::Unavailable)?;
+
+        let request_id = request.correlation_id.clone();
+        let (response_tx, response_rx) = mpsc::sync_channel(1);
+        sender
+            .try_send(GpuiComputerUseRequest::CaptureNativeWindow {
                 request_id,
                 request,
                 response_tx,
@@ -475,6 +519,383 @@ fn core_graphics_windows_for_pid(
 }
 
 #[cfg(target_os = "macos")]
+pub fn capture_native_window_on_gpui_thread(
+    request: &ComputerUseCaptureNativeWindowRequest,
+) -> Result<ComputerUseCaptureNativeWindowSnapshot, ComputerUseRuntimeError> {
+    use crate::computer_use::native_window_capture::{
+        select_capture_candidate_for_native_window, NativeWindowCaptureSelectionError,
+    };
+    use base64::Engine as _;
+    use sha2::{Digest, Sha256};
+
+    tracing::info!(
+        target: "script_kit::automation",
+        correlation_id = %request.correlation_id,
+        pid = request.pid,
+        native_window_id = request.native_window_id,
+        expected_bundle_id = ?request.expected_bundle_id,
+        hi_dpi = request.hi_dpi,
+        include_image = request.include_image,
+        "automation.native_window_capture.request"
+    );
+
+    let snapshot = match list_app_windows_on_gpui_thread(&ComputerUseListAppWindowsRequest {
+        pid: request.pid,
+    }) {
+        Ok(snapshot) => snapshot,
+        Err(error) => {
+            tracing::warn!(
+                target: "script_kit::automation",
+                correlation_id = %request.correlation_id,
+                pid = request.pid,
+                native_window_id = request.native_window_id,
+                error_code = error.error_code(),
+                error = %error.message(),
+                "automation.native_window_capture.inventory_failed"
+            );
+            return Ok(capture_native_window_receipt(
+                request,
+                ComputerUseCaptureNativeWindowStatus::CaptureFailed,
+                None,
+                None,
+                Some(capture_error(
+                    "inventory_failed",
+                    error.message(),
+                    None,
+                    None,
+                )),
+                vec!["nativeWindowInventoryFailed".to_string()],
+            ));
+        }
+    };
+    let app = snapshot.app.clone();
+    let mut warnings = snapshot.warnings.clone();
+
+    let Some(app_info) = app.clone() else {
+        tracing::info!(
+            target: "script_kit::automation",
+            correlation_id = %request.correlation_id,
+            pid = request.pid,
+            native_window_id = request.native_window_id,
+            status = ?ComputerUseCaptureNativeWindowStatus::AppNotFound,
+            error_code = "app_not_found",
+            "automation.native_window_capture.target_rejected"
+        );
+        return Ok(capture_native_window_receipt(
+            request,
+            ComputerUseCaptureNativeWindowStatus::AppNotFound,
+            None,
+            None,
+            Some(capture_error(
+                "app_not_found",
+                format!("No running GUI application found for pid {}", request.pid),
+                None,
+                None,
+            )),
+            warnings,
+        ));
+    };
+
+    if let Some(expected_bundle_id) = request.expected_bundle_id.as_deref() {
+        if app_info.bundle_id.as_deref() != Some(expected_bundle_id) {
+            tracing::info!(
+                target: "script_kit::automation",
+                correlation_id = %request.correlation_id,
+                pid = request.pid,
+                native_window_id = request.native_window_id,
+                app_bundle_id = ?app_info.bundle_id,
+                expected_bundle_id = expected_bundle_id,
+                status = ?ComputerUseCaptureNativeWindowStatus::OwnershipMismatch,
+                error_code = "ownership_mismatch",
+                "automation.native_window_capture.target_rejected"
+            );
+            return Ok(capture_native_window_receipt(
+                request,
+                ComputerUseCaptureNativeWindowStatus::OwnershipMismatch,
+                Some(app_info.clone()),
+                None,
+                Some(capture_error(
+                    "ownership_mismatch",
+                    format!(
+                        "PID {} belongs to bundle {:?}, not expected bundle {}",
+                        request.pid, app_info.bundle_id, expected_bundle_id
+                    ),
+                    None,
+                    None,
+                )),
+                warnings,
+            ));
+        }
+    }
+
+    let window = match select_capture_candidate_for_native_window(
+        &snapshot.windows,
+        request.native_window_id,
+    ) {
+        Ok(window) => window,
+        Err(error) => {
+            let (status, code, reason, message) = match error {
+                NativeWindowCaptureSelectionError::WindowNotFound => (
+                    ComputerUseCaptureNativeWindowStatus::WindowNotFound,
+                    "window_not_found",
+                    None,
+                    format!(
+                        "Native window {} was not found for pid {}",
+                        request.native_window_id, request.pid
+                    ),
+                ),
+                NativeWindowCaptureSelectionError::AmbiguousNativeWindowRows {
+                    candidate_count,
+                } => (
+                    ComputerUseCaptureNativeWindowStatus::AmbiguousNativeWindowRows,
+                    "ambiguous_native_window_rows",
+                    Some(candidate_count.to_string()),
+                    format!(
+                        "Native window {} matched {candidate_count} capture candidates; refusing to guess",
+                        request.native_window_id
+                    ),
+                ),
+                NativeWindowCaptureSelectionError::NotCaptureCandidate { status, reason } => (
+                    ComputerUseCaptureNativeWindowStatus::NotCaptureCandidate,
+                    "not_capture_candidate",
+                    reason,
+                    format!(
+                        "Native window {} is not capture-ready; selection status {status}",
+                        request.native_window_id
+                    ),
+                ),
+                NativeWindowCaptureSelectionError::MissingObservation => (
+                    ComputerUseCaptureNativeWindowStatus::NotCaptureCandidate,
+                    "missing_observation",
+                    None,
+                    format!(
+                        "Native window {} has no observation metadata",
+                        request.native_window_id
+                    ),
+                ),
+                NativeWindowCaptureSelectionError::MissingCaptureSelectionCandidate => (
+                    ComputerUseCaptureNativeWindowStatus::NotCaptureCandidate,
+                    "missing_capture_selection_candidate",
+                    None,
+                    format!(
+                        "Native window {} has no capture selection metadata",
+                        request.native_window_id
+                    ),
+                ),
+            };
+
+            tracing::info!(
+                target: "script_kit::automation",
+                correlation_id = %request.correlation_id,
+                pid = request.pid,
+                native_window_id = request.native_window_id,
+                status = ?status,
+                error_code = code,
+                reason = ?reason,
+                "automation.native_window_capture.target_rejected"
+            );
+            return Ok(capture_native_window_receipt(
+                request,
+                status,
+                Some(app_info),
+                None,
+                Some(capture_error(code, message, reason, None)),
+                warnings,
+            ));
+        }
+    };
+
+    let selection_status = window
+        .observation
+        .as_ref()
+        .and_then(|observation| observation.capture_selection_candidate.as_ref())
+        .map(|candidate| format!("{:?}", candidate.status));
+    let selection_reason = window
+        .observation
+        .as_ref()
+        .and_then(|observation| observation.capture_selection_candidate.as_ref())
+        .and_then(|candidate| candidate.reason.as_ref())
+        .map(|reason| format!("{reason:?}"));
+
+    tracing::info!(
+        target: "script_kit::automation",
+        correlation_id = %request.correlation_id,
+        pid = request.pid,
+        native_window_id = request.native_window_id,
+        title = ?window.title,
+        bounds = ?window.bounds,
+        layer = window.layer,
+        z_order = window.z_order,
+        capture_selection_candidate_status = ?selection_status,
+        capture_selection_candidate_reason = ?selection_reason,
+        "automation.native_window_capture.target_resolved"
+    );
+
+    let captured = match crate::platform::capture_native_window_id_screenshot(
+        request.native_window_id,
+        request.pid,
+        request.hi_dpi,
+        &request.correlation_id,
+    ) {
+        Ok(captured) => captured,
+        Err(error) => {
+            let (status, code, pixel_audit) = match &error {
+                crate::platform::NativeWindowCaptureError::PermissionDenied { .. } => (
+                    ComputerUseCaptureNativeWindowStatus::PermissionDenied,
+                    "permission_denied",
+                    None,
+                ),
+                crate::platform::NativeWindowCaptureError::BlankImageRejected { audit, .. } => (
+                    ComputerUseCaptureNativeWindowStatus::BlankImageRejected,
+                    "blank_image_rejected",
+                    Some(pixel_audit_from_platform(audit)),
+                ),
+                crate::platform::NativeWindowCaptureError::NativeWindowNotFound { .. } => (
+                    ComputerUseCaptureNativeWindowStatus::WindowNotFound,
+                    "window_not_found",
+                    None,
+                ),
+                crate::platform::NativeWindowCaptureError::OwnershipMismatch { .. } => (
+                    ComputerUseCaptureNativeWindowStatus::OwnershipMismatch,
+                    "ownership_mismatch",
+                    None,
+                ),
+                crate::platform::NativeWindowCaptureError::AmbiguousNativeWindowId { .. } => (
+                    ComputerUseCaptureNativeWindowStatus::AmbiguousNativeWindowId,
+                    "ambiguous_native_window_id",
+                    None,
+                ),
+                crate::platform::NativeWindowCaptureError::CaptureFailed { .. } => (
+                    ComputerUseCaptureNativeWindowStatus::CaptureFailed,
+                    "capture_failed",
+                    None,
+                ),
+            };
+
+            tracing::warn!(
+                target: "script_kit::automation",
+                correlation_id = %request.correlation_id,
+                pid = request.pid,
+                native_window_id = request.native_window_id,
+                status = ?status,
+                error_code = code,
+                error = %error,
+                "automation.native_window_capture.capture_failed"
+            );
+            return Ok(capture_native_window_receipt(
+                request,
+                status,
+                Some(app_info),
+                Some(window),
+                Some(capture_error(code, error.to_string(), None, pixel_audit)),
+                warnings,
+            ));
+        }
+    };
+
+    let mut hasher = Sha256::new();
+    hasher.update(&captured.png_data);
+    let sha256 = format!("{:x}", hasher.finalize());
+    let png_base64 = request
+        .include_image
+        .then(|| base64::engine::general_purpose::STANDARD.encode(&captured.png_data));
+    let capture = ComputerUseNativeWindowCaptureInfo {
+        mime_type: "image/png",
+        width: captured.width,
+        height: captured.height,
+        byte_length: captured.png_data.len(),
+        sha256,
+        hi_dpi: request.hi_dpi,
+        pixel_audit: pixel_audit_from_platform(&captured.pixel_audit),
+        png_base64,
+    };
+
+    tracing::info!(
+        target: "script_kit::automation",
+        correlation_id = %request.correlation_id,
+        pid = request.pid,
+        native_window_id = request.native_window_id,
+        width = capture.width,
+        height = capture.height,
+        byte_length = capture.byte_length,
+        sha256 = %capture.sha256,
+        returned_image = capture.png_base64.is_some(),
+        "automation.native_window_capture.image_captured"
+    );
+
+    Ok(capture_native_window_receipt(
+        request,
+        ComputerUseCaptureNativeWindowStatus::Captured,
+        Some(app_info),
+        Some(window),
+        None,
+        {
+            warnings.shrink_to_fit();
+            warnings
+        },
+    )
+    .with_capture(capture))
+}
+
+fn capture_native_window_receipt(
+    request: &ComputerUseCaptureNativeWindowRequest,
+    status: ComputerUseCaptureNativeWindowStatus,
+    app: Option<ComputerUseRunningAppInfo>,
+    window: Option<ComputerUseAppWindowInfo>,
+    error: Option<ComputerUseCaptureNativeWindowError>,
+    warnings: Vec<String>,
+) -> ComputerUseCaptureNativeWindowSnapshot {
+    ComputerUseCaptureNativeWindowSnapshot {
+        schema_version: 1,
+        source: "coreGraphicsWindowList+xcap",
+        scope: "runningAppPidNativeWindowIdCapture",
+        status,
+        correlation_id: request.correlation_id.clone(),
+        app,
+        window,
+        capture: None,
+        error,
+        warnings,
+    }
+}
+
+trait CaptureReceiptExt {
+    fn with_capture(self, capture: ComputerUseNativeWindowCaptureInfo) -> Self;
+}
+
+impl CaptureReceiptExt for ComputerUseCaptureNativeWindowSnapshot {
+    fn with_capture(mut self, capture: ComputerUseNativeWindowCaptureInfo) -> Self {
+        self.capture = Some(capture);
+        self
+    }
+}
+
+fn capture_error(
+    code: &'static str,
+    message: String,
+    reason: Option<String>,
+    pixel_audit: Option<ComputerUseCapturePixelAudit>,
+) -> ComputerUseCaptureNativeWindowError {
+    ComputerUseCaptureNativeWindowError {
+        code,
+        message,
+        reason,
+        pixel_audit,
+    }
+}
+
+fn pixel_audit_from_platform(audit: &crate::platform::PixelAudit) -> ComputerUseCapturePixelAudit {
+    ComputerUseCapturePixelAudit {
+        sampled: audit.sampled,
+        non_black: audit.non_black,
+        non_transparent: audit.non_transparent,
+        unique_bucket_count: audit.unique_bucket_count,
+        mean_luma: audit.mean_luma,
+        blank_like: audit.is_blank_like(),
+    }
+}
+
+#[cfg(target_os = "macos")]
 fn ns_window_is_excluded_from_windows_menu(native_window_id: u32) -> Option<bool> {
     use objc::runtime::Object;
     use objc::{class, msg_send, sel, sel_impl};
@@ -643,6 +1064,29 @@ pub fn list_app_windows_on_gpui_thread(
     Ok(ComputerUseListAppWindowsSnapshot {
         app: None,
         windows: Vec::new(),
+        warnings: Vec::new(),
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn capture_native_window_on_gpui_thread(
+    request: &ComputerUseCaptureNativeWindowRequest,
+) -> Result<ComputerUseCaptureNativeWindowSnapshot, ComputerUseRuntimeError> {
+    Ok(ComputerUseCaptureNativeWindowSnapshot {
+        schema_version: 1,
+        source: "coreGraphicsWindowList+xcap",
+        scope: "runningAppPidNativeWindowIdCapture",
+        status: ComputerUseCaptureNativeWindowStatus::CaptureFailed,
+        correlation_id: request.correlation_id.clone(),
+        app: None,
+        window: None,
+        capture: None,
+        error: Some(ComputerUseCaptureNativeWindowError {
+            code: "unsupported_platform",
+            message: "computer/capture_native_window is only supported on macOS".to_string(),
+            reason: None,
+            pixel_audit: None,
+        }),
         warnings: Vec::new(),
     })
 }
