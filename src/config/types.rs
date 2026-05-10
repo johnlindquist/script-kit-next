@@ -56,6 +56,7 @@ impl Default for BuiltInConfig {
 pub struct UnifiedSearchConfig {
     pub enabled: bool,
     pub files: UnifiedSearchFilesConfig,
+    pub acp_history: UnifiedSearchAcpHistoryConfig,
 }
 
 impl Default for UnifiedSearchConfig {
@@ -63,6 +64,7 @@ impl Default for UnifiedSearchConfig {
         Self {
             enabled: DEFAULT_UNIFIED_SEARCH_ENABLED,
             files: UnifiedSearchFilesConfig::default(),
+            acp_history: UnifiedSearchAcpHistoryConfig::default(),
         }
     }
 }
@@ -85,6 +87,24 @@ impl Default for UnifiedSearchFilesConfig {
             recent_files: DEFAULT_UNIFIED_SEARCH_FILES_RECENT_FILES,
             directory_browse: DEFAULT_UNIFIED_SEARCH_FILES_DIRECTORY_BROWSE,
             promotion: RootFilePromotionConfig::Never,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchAcpHistoryConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+}
+
+impl Default for UnifiedSearchAcpHistoryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_ENABLED,
+            max_results: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MAX_RESULTS,
+            min_query_chars: DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MIN_QUERY_CHARS,
         }
     }
 }
@@ -121,6 +141,17 @@ impl UnifiedSearchConfig {
                 && self.files.enabled
                 && self.files.directory_browse,
             promotion_policy: self.files.promotion.into(),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn acp_history_section_options(
+        &self,
+    ) -> crate::ai::acp::history::RootAcpHistorySectionOptions {
+        crate::ai::acp::history::RootAcpHistorySectionOptions {
+            enabled: self.enabled && self.acp_history.enabled,
+            max_results: self.acp_history.max_results.clamp(1, 5),
+            min_query_chars: self.acp_history.min_query_chars.clamp(2, 32),
         }
     }
 }

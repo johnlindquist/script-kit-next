@@ -389,6 +389,11 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         root_file_results,
         root_recent_file_results,
         crate::file_search::RootFileSectionOptions::default(),
+        &[],
+        crate::ai::acp::history::RootAcpHistorySectionOptions {
+            enabled: false,
+            ..Default::default()
+        },
     )
 }
 
@@ -413,6 +418,8 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
     root_file_results: &[crate::file_search::FileResult],
     root_recent_file_results: &[crate::file_search::FileResult],
     root_file_options: crate::file_search::RootFileSectionOptions,
+    root_acp_history_hits: &[crate::ai::acp::history::AcpHistorySearchHit],
+    root_acp_history_options: crate::ai::acp::history::RootAcpHistorySectionOptions,
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     let (mut grouped, mut flat_results) = get_grouped_results_with_validation_and_query(
         scripts,
@@ -450,8 +457,74 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files_with_opti
         advanced_query,
         root_file_options,
     );
+    append_root_acp_history_section(
+        &mut grouped,
+        &mut flat_results,
+        filter_text,
+        advanced_query,
+        root_acp_history_hits,
+        root_acp_history_options,
+    );
 
     (grouped, flat_results)
+}
+
+fn append_root_passive_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    label: &'static str,
+    rows: Vec<SearchResult>,
+) {
+    if rows.is_empty() {
+        return;
+    }
+
+    let insertion_index = root_file_passive_insertion_index(grouped, flat_results);
+    let mut grouped_rows = Vec::with_capacity(rows.len() + 1);
+    grouped_rows.push(GroupedListItem::SectionHeader(label.to_string(), None));
+    for row in rows {
+        let idx = flat_results.len();
+        flat_results.push(row);
+        grouped_rows.push(GroupedListItem::Item(idx));
+    }
+    grouped.splice(insertion_index..insertion_index, grouped_rows);
+}
+
+fn append_root_acp_history_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    filter_text: &str,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+    hits: &[crate::ai::acp::history::AcpHistorySearchHit],
+    options: crate::ai::acp::history::RootAcpHistorySectionOptions,
+) {
+    if advanced_query.is_some()
+        || !crate::ai::acp::history::root_acp_history_query_is_eligible(filter_text, options)
+    {
+        return;
+    }
+
+    let rows = hits
+        .iter()
+        .take(options.max_results)
+        .map(|hit| {
+            let entry = hit.entry.clone();
+            let subtitle = format!(
+                "{} · {} message{}",
+                entry.preview_display(),
+                entry.message_count,
+                if entry.message_count == 1 { "" } else { "s" }
+            );
+            SearchResult::AcpHistory(crate::scripts::AcpHistoryMatch {
+                entry,
+                score: hit.score.min(i32::MAX as u32) as i32,
+                matched_field: hit.matched_field,
+                subtitle,
+            })
+        })
+        .collect::<Vec<_>>();
+
+    append_root_passive_section(grouped, flat_results, "AI Conversations", rows);
 }
 
 fn append_recent_root_file_section(
@@ -660,15 +733,12 @@ fn root_file_section_insertion_index(
 
 fn root_file_passive_insertion_index(
     grouped: &[GroupedListItem],
-    flat_results: &[SearchResult],
+    _flat_results: &[SearchResult],
 ) -> usize {
     grouped
         .iter()
         .position(|item| match item {
-            GroupedListItem::Item(result_idx) => matches!(
-                flat_results.get(*result_idx),
-                Some(SearchResult::Fallback(_))
-            ),
+            GroupedListItem::Item(_) => false,
             GroupedListItem::SectionHeader(label, None) => {
                 label.starts_with("Use \"") && label.ends_with("\" with...")
             }
@@ -1012,6 +1082,25 @@ mod advanced_query_tests {
         })
     }
 
+    fn acp_history_hit(
+        session_id: &str,
+        title: &str,
+    ) -> crate::ai::acp::history::AcpHistorySearchHit {
+        crate::ai::acp::history::AcpHistorySearchHit {
+            entry: crate::ai::acp::history::AcpHistoryEntry {
+                timestamp: "2026-05-10T17:13:06Z".to_string(),
+                first_message: title.to_string(),
+                message_count: 3,
+                session_id: session_id.to_string(),
+                title: title.to_string(),
+                preview: "Prior assistant reply".to_string(),
+                search_text: title.to_lowercase(),
+            },
+            score: 100,
+            matched_field: crate::ai::acp::history::AcpHistorySearchField::Title,
+        }
+    }
+
     #[test]
     fn root_file_rows_append_files_section_for_eligible_search() {
         let frecency_store = FrecencyStore::new();
@@ -1052,6 +1141,145 @@ mod advanced_query_tests {
                 SearchResult::File(file) if file.file.path == "/Users/example/Desktop/fix spelling.png"
             )),
             "Files section should point at the ranked root file row"
+        );
+    }
+
+    #[test]
+    fn root_acp_history_rows_insert_after_primary_rows_before_fallbacks() {
+        let mut grouped = vec![
+            GroupedListItem::Item(0),
+            GroupedListItem::SectionHeader("Use \"search\" with...".to_string(), None),
+            GroupedListItem::Item(1),
+        ];
+        let mut flat = vec![
+            builtin_result("Search Files"),
+            root_file_search_handoff_result(
+                "search",
+                crate::file_search::RootFileSectionMode::GlobalQuery,
+            )
+            .unwrap(),
+        ];
+        let hits = vec![acp_history_hit("session-1", "search design notes")];
+
+        append_root_acp_history_section(
+            &mut grouped,
+            &mut flat,
+            "search",
+            None,
+            &hits,
+            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+        );
+
+        assert!(
+            matches!(&grouped[1], GroupedListItem::SectionHeader(label, None) if label == "AI Conversations")
+        );
+        assert!(matches!(
+            flat.get(2),
+            Some(SearchResult::AcpHistory(hit)) if hit.entry.session_id == "session-1"
+        ));
+        assert!(
+            matches!(&grouped[3], GroupedListItem::SectionHeader(label, None) if label.starts_with("Use \""))
+        );
+    }
+
+    #[test]
+    fn root_acp_history_rows_do_not_append_for_short_or_advanced_query() {
+        let hits = vec![acp_history_hit("session-1", "search design notes")];
+
+        let mut grouped = Vec::new();
+        let mut flat = Vec::new();
+        append_root_acp_history_section(
+            &mut grouped,
+            &mut flat,
+            "ai",
+            None,
+            &hits,
+            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+        );
+        assert!(grouped.is_empty());
+        assert!(flat.is_empty());
+
+        let query = advanced_query_from(":type:acp-history search");
+        append_root_acp_history_section(
+            &mut grouped,
+            &mut flat,
+            "search",
+            Some(&query),
+            &hits,
+            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+        );
+        assert!(grouped.is_empty());
+        assert!(flat.is_empty());
+    }
+
+    #[test]
+    fn root_acp_history_rows_do_not_append_when_disabled() {
+        let hits = vec![acp_history_hit("session-1", "search design notes")];
+        let mut grouped = Vec::new();
+        let mut flat = Vec::new();
+
+        append_root_acp_history_section(
+            &mut grouped,
+            &mut flat,
+            "search",
+            None,
+            &hits,
+            crate::ai::acp::history::RootAcpHistorySectionOptions {
+                enabled: false,
+                ..Default::default()
+            },
+        );
+
+        assert!(grouped.is_empty());
+        assert!(flat.is_empty());
+    }
+
+    #[test]
+    fn root_acp_history_rows_do_not_split_files_section_or_file_handoff() {
+        let mut grouped = vec![
+            GroupedListItem::Item(0),
+            GroupedListItem::SectionHeader("Files".to_string(), None),
+            GroupedListItem::Item(1),
+            GroupedListItem::Item(2),
+            GroupedListItem::SectionHeader("Use \"design\" with...".to_string(), None),
+            GroupedListItem::Item(3),
+        ];
+        let mut flat = vec![
+            builtin_result("Open Notes"),
+            SearchResult::File(crate::scripts::FileMatch {
+                file: root_file("/Users/example/Desktop/design.md", "design.md"),
+                score: 50,
+            }),
+            root_file_search_handoff_result(
+                "design",
+                crate::file_search::RootFileSectionMode::GlobalQuery,
+            )
+            .unwrap(),
+            root_file_search_handoff_result(
+                "design",
+                crate::file_search::RootFileSectionMode::GlobalQuery,
+            )
+            .unwrap(),
+        ];
+        let hits = vec![acp_history_hit("session-1", "design notes")];
+
+        append_root_acp_history_section(
+            &mut grouped,
+            &mut flat,
+            "design",
+            None,
+            &hits,
+            crate::ai::acp::history::RootAcpHistorySectionOptions::default(),
+        );
+
+        assert!(
+            matches!(&grouped[1], GroupedListItem::SectionHeader(label, None) if label == "Files")
+        );
+        assert!(matches!(&grouped[2], GroupedListItem::Item(1)));
+        assert!(matches!(&grouped[3], GroupedListItem::Item(2)));
+        assert!(
+            matches!(&grouped[4], GroupedListItem::SectionHeader(label, None) if label == "AI Conversations"),
+            "AI Conversations should insert after the Files handoff, not between file rows"
         );
     }
 

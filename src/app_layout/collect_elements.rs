@@ -1340,6 +1340,7 @@ impl ScriptListApp {
             scripts::SearchResult::App(m) => m.app.name.clone(),
             scripts::SearchResult::Window(m) => m.window.title.clone(),
             scripts::SearchResult::File(m) => m.file.name.clone(),
+            scripts::SearchResult::AcpHistory(m) => m.entry.title_display().to_string(),
             scripts::SearchResult::Agent(m) => m.agent.name.clone(),
             scripts::SearchResult::Skill(m) => m.skill.title.clone(),
             scripts::SearchResult::Fallback(m) => m.display_label(),

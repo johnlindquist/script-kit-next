@@ -228,7 +228,6 @@ impl ScriptListApp {
                             this.resume_acp_conversation_from_history(
                                 &session_id,
                                 &title,
-                                window,
                                 cx,
                             );
                         }
@@ -452,11 +451,10 @@ impl ScriptListApp {
 
     /// Resume an ACP conversation from history by opening ACP chat with
     /// the saved messages loaded.
-    fn resume_acp_conversation_from_history(
+    pub(crate) fn resume_acp_conversation_from_history(
         &mut self,
         session_id: &str,
         first_message: &str,
-        _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         if let Some(chat_entity) = crate::ai::acp::chat_window::get_detached_acp_view_entity() {

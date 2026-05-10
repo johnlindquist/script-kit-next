@@ -34,8 +34,8 @@ pub use types::{
     AcpProfile, AiPreferences, BuiltInConfig, ClaudeCodeConfig, Config, DictationPreferences,
     HotkeyConfig, LayoutConfig, McpConfig, McpHttpServerConfig, McpServerConfig,
     McpStdioServerConfig, RootFilePromotionConfig, ScriptKitUserPreferences, SuggestedConfig,
-    ThemeSelectionPreferences, UnifiedSearchConfig, UnifiedSearchFilesConfig, WatcherConfig,
-    WindowManagementPreferences,
+    ThemeSelectionPreferences, UnifiedSearchAcpHistoryConfig, UnifiedSearchConfig,
+    UnifiedSearchFilesConfig, WatcherConfig, WindowManagementPreferences,
 };
 
 // Re-export loader

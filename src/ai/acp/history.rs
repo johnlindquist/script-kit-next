@@ -41,6 +41,30 @@ pub(crate) struct AcpHistorySearchHit {
     pub matched_field: AcpHistorySearchField,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RootAcpHistorySectionOptions {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+}
+
+impl Default for RootAcpHistorySectionOptions {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_results: 3,
+            min_query_chars: 3,
+        }
+    }
+}
+
+pub(crate) fn root_acp_history_query_is_eligible(
+    query: &str,
+    options: RootAcpHistorySectionOptions,
+) -> bool {
+    options.enabled && query.trim().chars().count() >= options.min_query_chars
+}
+
 impl AcpHistoryEntry {
     /// Returns `title` if populated, otherwise falls back to `first_message`.
     pub(crate) fn title_display(&self) -> &str {

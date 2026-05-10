@@ -42,6 +42,9 @@ pub(super) fn build_search_mode_results(
                     Some(format!("window:{}:{}", wm.window.app, wm.window.title))
                 }
                 SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
+                SearchResult::AcpHistory(am) => {
+                    Some(format!("acp-history/{}", am.entry.session_id))
+                }
                 // Suppressed: agents don't participate in search-mode frecency
                 SearchResult::Agent(_) => None,
                 SearchResult::Fallback(_) => None,

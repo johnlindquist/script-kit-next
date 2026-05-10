@@ -33,6 +33,9 @@ pub const DEFAULT_UNIFIED_SEARCH_FILES_ENABLED: bool = true;
 pub const DEFAULT_UNIFIED_SEARCH_FILES_GLOBAL_SEARCH: bool = true;
 pub const DEFAULT_UNIFIED_SEARCH_FILES_RECENT_FILES: bool = true;
 pub const DEFAULT_UNIFIED_SEARCH_FILES_DIRECTORY_BROWSE: bool = true;
+pub const DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_ENABLED: bool = true;
+pub const DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MAX_RESULTS: usize = 3;
+pub const DEFAULT_UNIFIED_SEARCH_ACP_HISTORY_MIN_QUERY_CHARS: usize = 3;
 
 /// Default max text length for clipboard history entries (bytes)
 pub const DEFAULT_CLIPBOARD_HISTORY_MAX_TEXT_LENGTH: usize = 100_000;

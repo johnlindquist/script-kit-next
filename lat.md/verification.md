@@ -46,6 +46,10 @@ Files must remain passive by default: they can beat fallback handoff rows, but n
 
 Use `cargo test --test source_audits root_file_search_contract -- --nocapture`, `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. If `cargo test --lib root_file` hits the known local SIGBUS before tests execute, keep the failure log and rely on the focused source-audit proof plus `cargo check --lib`.
 
+ACP history root rows are verified with grouping, config, type metadata, execution wiring, and source-audit tests. The critical regression guard is that adding a second passive source cannot split the Files section or its Search Files continuation row.
+
+Use `cargo test --test source_audits root_unified_acp_history_contract -- --nocapture` with the root file source audit, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`.
+
 ## Computer-use native-window capture
 
 Native-window capture proof goes through the real MCP path and treats the JSON receipt as the primary oracle.

@@ -356,7 +356,21 @@ impl ScriptListApp {
             let search_text =
                 crate::menu_syntax::free_text_for_search(&self.menu_syntax_mode, raw_filter_text);
             let advanced_query = self.menu_syntax_mode.advanced_query_for(raw_filter_text);
-            let root_file_options = self.config.get_unified_search().root_file_section_options();
+            let unified_search = self.config.get_unified_search();
+            let root_file_options = unified_search.root_file_section_options();
+            let acp_history_options = unified_search.acp_history_section_options();
+            let root_acp_history_hits = if advanced_query.is_none()
+                && crate::ai::acp::history::root_acp_history_query_is_eligible(
+                    search_text,
+                    acp_history_options,
+                ) {
+                crate::ai::acp::history::search_history(
+                    search_text,
+                    acp_history_options.max_results,
+                )
+            } else {
+                Vec::new()
+            };
             crate::scripts::get_grouped_results_with_validation_query_and_root_files_with_options(
                 &self.scripts,
                 &self.scriptlets,
@@ -376,6 +390,8 @@ impl ScriptListApp {
                 &self.root_file_results,
                 &self.root_recent_file_results,
                 root_file_options,
+                &root_acp_history_hits,
+                acp_history_options,
             )
         };
         let (grouped_items, flat_results) = if menu_syntax_owns_main_list {

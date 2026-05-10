@@ -59,10 +59,10 @@ pub use self::search::{
 };
 #[allow(unused_imports)]
 pub use self::types::{
-    preview_cache_is_valid, preview_match_signature, AgentMatch, AppMatch, BuiltInMatch,
-    FallbackConfig, FallbackMatch, FileMatch, MatchIndices, Script, ScriptContentMatch,
-    ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch, SearchResult,
-    SkillMatch, WindowMatch,
+    preview_cache_is_valid, preview_match_signature, AcpHistoryMatch, AgentMatch, AppMatch,
+    BuiltInMatch, FallbackConfig, FallbackMatch, FileMatch, MatchIndices, Script,
+    ScriptContentMatch, ScriptIssueMatch, ScriptMatch, ScriptMatchKind, Scriptlet, ScriptletMatch,
+    SearchResult, SkillMatch, WindowMatch,
 };
 #[allow(unused_imports)]
 pub use self::validation::{
