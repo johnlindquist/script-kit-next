@@ -4,9 +4,10 @@ use crate::computer_use::runtime_bridge::{
     ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
 use crate::computer_use::window_observation::{
-    computer_use_window_observation_v1, window_duplicate_groups_v1, window_list_candidate_v1,
-    window_own_process_policy_v1, window_title_fallbacks_v1, WindowDuplicateObservationInputV1,
-    WindowTitleFallbackObservationInputV1,
+    computer_use_window_observation_v1, window_capture_selection_candidates_v1,
+    window_duplicate_groups_v1, window_list_candidate_v1, window_own_process_policy_v1,
+    window_title_fallbacks_v1, WindowCaptureSelectionObservationInputV1,
+    WindowDuplicateObservationInputV1, WindowTitleFallbackObservationInputV1,
 };
 use crate::protocol::{AutomationInspectSnapshot, TargetWindowBounds};
 use std::sync::mpsc::{self, SyncSender};
@@ -421,6 +422,43 @@ fn core_graphics_windows_for_pid(
     for (window, title_fallback) in windows.iter_mut().zip(title_fallbacks) {
         if let Some(observation) = &mut window.observation {
             observation.title_fallback = title_fallback;
+        }
+    }
+
+    let capture_selection_candidates = window_capture_selection_candidates_v1(
+        &windows
+            .iter()
+            .map(|window| {
+                let observation = window
+                    .observation
+                    .as_ref()
+                    .expect("CoreGraphics windows are annotated before capture selection");
+
+                WindowCaptureSelectionObservationInputV1 {
+                    capture_candidate_status: observation.capture_candidate.status.clone(),
+                    capture_candidate_reason: observation.capture_candidate.reason.clone(),
+                    duplicate_group_status: observation
+                        .duplicate_group
+                        .as_ref()
+                        .map(|group| group.status.clone()),
+                    title_fallback_status: observation
+                        .title_fallback
+                        .as_ref()
+                        .map(|fallback| fallback.status.clone()),
+                    own_process_window_policy_status: observation
+                        .own_process_window_policy
+                        .as_ref()
+                        .map(|policy| policy.status.clone()),
+                }
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    for (window, capture_selection_candidate) in
+        windows.iter_mut().zip(capture_selection_candidates)
+    {
+        if let Some(observation) = &mut window.observation {
+            observation.capture_selection_candidate = Some(capture_selection_candidate);
         }
     }
 

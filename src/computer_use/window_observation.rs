@@ -28,6 +28,8 @@ pub struct ComputerUseWindowObservationV1 {
     pub own_process_window_policy: Option<WindowOwnProcessPolicyV1>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub list_candidate: Option<WindowListCandidateV1>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capture_selection_candidate: Option<WindowCaptureSelectionCandidateV1>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -110,6 +112,44 @@ pub struct WindowListThresholdsV1 {
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct WindowCaptureSelectionCandidateV1 {
+    pub status: WindowCaptureSelectionCandidateStatus,
+    pub reason: Option<WindowCaptureSelectionDisqualificationReason>,
+    pub selection_basis: WindowCaptureSelectionBasis,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowCaptureSelectionCandidateStatus {
+    Candidate,
+    Disqualified,
+    Unknown,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowCaptureSelectionDisqualificationReason {
+    LayerNonZero,
+    AlphaTooLow,
+    SharingStateNone,
+    NotOnScreen,
+    TooSmall,
+    MetadataIncomplete,
+    DuplicateWindow,
+    EmptyTitleAmongMultipleCandidates,
+    OwnProcessExcludedFromWindowsMenu,
+    OwnProcessPolicyUnknown,
+    SelectionMetadataIncomplete,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowCaptureSelectionBasis {
+    CaptureCandidateThenPreferredDuplicateThenTitleFallbackThenOwnProcessPolicy,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WindowDuplicateGroupV1 {
     pub status: WindowDuplicateGroupStatus,
     pub group_count: usize,
@@ -167,6 +207,15 @@ pub struct WindowTitleFallbackObservationInputV1 {
     pub duplicate_group_status: Option<WindowDuplicateGroupStatus>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct WindowCaptureSelectionObservationInputV1 {
+    pub capture_candidate_status: WindowCaptureCandidateStatus,
+    pub capture_candidate_reason: Option<WindowDisqualificationReason>,
+    pub duplicate_group_status: Option<WindowDuplicateGroupStatus>,
+    pub title_fallback_status: Option<WindowTitleFallbackStatus>,
+    pub own_process_window_policy_status: Option<WindowOwnProcessPolicyStatus>,
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowOwnProcessPolicyV1 {
@@ -213,6 +262,7 @@ pub fn computer_use_window_observation_v1(
         title_fallback: None,
         own_process_window_policy: None,
         list_candidate: None,
+        capture_selection_candidate: None,
     }
 }
 
@@ -298,6 +348,99 @@ pub fn window_list_candidate_v1(
             min_width: WINDOW_LIST_MIN_WIDTH,
             min_height: WINDOW_LIST_MIN_HEIGHT,
         },
+    }
+}
+
+pub fn window_capture_selection_candidates_v1(
+    windows: &[WindowCaptureSelectionObservationInputV1],
+) -> Vec<WindowCaptureSelectionCandidateV1> {
+    windows
+        .iter()
+        .map(|window| window_capture_selection_candidate_v1(window))
+        .collect()
+}
+
+fn window_capture_selection_candidate_v1(
+    window: &WindowCaptureSelectionObservationInputV1,
+) -> WindowCaptureSelectionCandidateV1 {
+    let reason = match window.capture_candidate_status {
+        WindowCaptureCandidateStatus::Disqualified => window
+            .capture_candidate_reason
+            .clone()
+            .map(window_capture_selection_reason_from_capture_reason)
+            .or(Some(
+                WindowCaptureSelectionDisqualificationReason::SelectionMetadataIncomplete,
+            )),
+        WindowCaptureCandidateStatus::Unknown => {
+            Some(WindowCaptureSelectionDisqualificationReason::MetadataIncomplete)
+        }
+        WindowCaptureCandidateStatus::Candidate => {
+            if window.duplicate_group_status == Some(WindowDuplicateGroupStatus::Duplicate) {
+                Some(WindowCaptureSelectionDisqualificationReason::DuplicateWindow)
+            } else if window.title_fallback_status
+                == Some(WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates)
+            {
+                Some(
+                    WindowCaptureSelectionDisqualificationReason::EmptyTitleAmongMultipleCandidates,
+                )
+            } else if window.own_process_window_policy_status
+                == Some(WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu)
+            {
+                Some(
+                    WindowCaptureSelectionDisqualificationReason::OwnProcessExcludedFromWindowsMenu,
+                )
+            } else if window.own_process_window_policy_status
+                == Some(WindowOwnProcessPolicyStatus::Unknown)
+            {
+                Some(WindowCaptureSelectionDisqualificationReason::OwnProcessPolicyUnknown)
+            } else if window.title_fallback_status.is_none() {
+                Some(WindowCaptureSelectionDisqualificationReason::SelectionMetadataIncomplete)
+            } else {
+                None
+            }
+        }
+    };
+
+    let status = match &reason {
+        None => WindowCaptureSelectionCandidateStatus::Candidate,
+        Some(WindowCaptureSelectionDisqualificationReason::MetadataIncomplete)
+        | Some(WindowCaptureSelectionDisqualificationReason::OwnProcessPolicyUnknown)
+        | Some(WindowCaptureSelectionDisqualificationReason::SelectionMetadataIncomplete) => {
+            WindowCaptureSelectionCandidateStatus::Unknown
+        }
+        Some(_) => WindowCaptureSelectionCandidateStatus::Disqualified,
+    };
+
+    WindowCaptureSelectionCandidateV1 {
+        status,
+        reason,
+        selection_basis:
+            WindowCaptureSelectionBasis::CaptureCandidateThenPreferredDuplicateThenTitleFallbackThenOwnProcessPolicy,
+    }
+}
+
+fn window_capture_selection_reason_from_capture_reason(
+    reason: WindowDisqualificationReason,
+) -> WindowCaptureSelectionDisqualificationReason {
+    match reason {
+        WindowDisqualificationReason::LayerNonZero => {
+            WindowCaptureSelectionDisqualificationReason::LayerNonZero
+        }
+        WindowDisqualificationReason::AlphaTooLow => {
+            WindowCaptureSelectionDisqualificationReason::AlphaTooLow
+        }
+        WindowDisqualificationReason::SharingStateNone => {
+            WindowCaptureSelectionDisqualificationReason::SharingStateNone
+        }
+        WindowDisqualificationReason::NotOnScreen => {
+            WindowCaptureSelectionDisqualificationReason::NotOnScreen
+        }
+        WindowDisqualificationReason::TooSmall => {
+            WindowCaptureSelectionDisqualificationReason::TooSmall
+        }
+        WindowDisqualificationReason::MetadataIncomplete => {
+            WindowCaptureSelectionDisqualificationReason::MetadataIncomplete
+        }
     }
 }
 
@@ -566,6 +709,233 @@ mod tests {
         assert_eq!(serialized["thresholds"]["minAlpha"], 0.0);
         assert_eq!(serialized["thresholds"]["minWidth"], 60);
         assert_eq!(serialized["thresholds"]["minHeight"], 60);
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_passes_clean_candidate() {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Candidate,
+            None,
+            None,
+            Some(WindowTitleFallbackStatus::NonEmptyTitle),
+            None,
+        )]);
+
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Candidate
+        );
+        assert_eq!(candidates[0].reason, None);
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_maps_base_disqualification_reasons() {
+        for (capture_reason, selection_reason) in [
+            (
+                WindowDisqualificationReason::LayerNonZero,
+                WindowCaptureSelectionDisqualificationReason::LayerNonZero,
+            ),
+            (
+                WindowDisqualificationReason::AlphaTooLow,
+                WindowCaptureSelectionDisqualificationReason::AlphaTooLow,
+            ),
+            (
+                WindowDisqualificationReason::SharingStateNone,
+                WindowCaptureSelectionDisqualificationReason::SharingStateNone,
+            ),
+            (
+                WindowDisqualificationReason::NotOnScreen,
+                WindowCaptureSelectionDisqualificationReason::NotOnScreen,
+            ),
+            (
+                WindowDisqualificationReason::TooSmall,
+                WindowCaptureSelectionDisqualificationReason::TooSmall,
+            ),
+        ] {
+            let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+                WindowCaptureCandidateStatus::Disqualified,
+                Some(capture_reason),
+                None,
+                None,
+                None,
+            )]);
+
+            assert_eq!(
+                candidates[0].status,
+                WindowCaptureSelectionCandidateStatus::Disqualified
+            );
+            assert_eq!(candidates[0].reason, Some(selection_reason));
+        }
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_keeps_metadata_incomplete_unknown() {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Unknown,
+            Some(WindowDisqualificationReason::MetadataIncomplete),
+            None,
+            None,
+            None,
+        )]);
+
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Unknown
+        );
+        assert_eq!(
+            candidates[0].reason,
+            Some(WindowCaptureSelectionDisqualificationReason::MetadataIncomplete)
+        );
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_rejects_duplicate_rows() {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Candidate,
+            None,
+            Some(WindowDuplicateGroupStatus::Duplicate),
+            Some(WindowTitleFallbackStatus::NonEmptyTitle),
+            None,
+        )]);
+
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Disqualified
+        );
+        assert_eq!(
+            candidates[0].reason,
+            Some(WindowCaptureSelectionDisqualificationReason::DuplicateWindow)
+        );
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_rejects_empty_title_among_multiple_candidates() {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Candidate,
+            None,
+            Some(WindowDuplicateGroupStatus::Preferred),
+            Some(WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates),
+            None,
+        )]);
+
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Disqualified
+        );
+        assert_eq!(
+            candidates[0].reason,
+            Some(WindowCaptureSelectionDisqualificationReason::EmptyTitleAmongMultipleCandidates)
+        );
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_rejects_own_process_excluded_window() {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Candidate,
+            None,
+            None,
+            Some(WindowTitleFallbackStatus::NonEmptyTitle),
+            Some(WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu),
+        )]);
+
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Disqualified
+        );
+        assert_eq!(
+            candidates[0].reason,
+            Some(WindowCaptureSelectionDisqualificationReason::OwnProcessExcludedFromWindowsMenu)
+        );
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_marks_own_process_policy_unknown() {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Candidate,
+            None,
+            None,
+            Some(WindowTitleFallbackStatus::NonEmptyTitle),
+            Some(WindowOwnProcessPolicyStatus::Unknown),
+        )]);
+
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Unknown
+        );
+        assert_eq!(
+            candidates[0].reason,
+            Some(WindowCaptureSelectionDisqualificationReason::OwnProcessPolicyUnknown)
+        );
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_marks_missing_title_fallback_unknown_for_base_candidate()
+    {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Candidate,
+            None,
+            None,
+            None,
+            None,
+        )]);
+
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Unknown
+        );
+        assert_eq!(
+            candidates[0].reason,
+            Some(WindowCaptureSelectionDisqualificationReason::SelectionMetadataIncomplete)
+        );
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_preserves_input_length_and_order() {
+        let candidates = window_capture_selection_candidates_v1(&[
+            capture_selection_input(
+                WindowCaptureCandidateStatus::Candidate,
+                None,
+                None,
+                Some(WindowTitleFallbackStatus::NonEmptyTitle),
+                None,
+            ),
+            capture_selection_input(
+                WindowCaptureCandidateStatus::Candidate,
+                None,
+                Some(WindowDuplicateGroupStatus::Duplicate),
+                Some(WindowTitleFallbackStatus::NonEmptyTitle),
+                None,
+            ),
+        ]);
+
+        assert_eq!(candidates.len(), 2);
+        assert_eq!(
+            candidates[0].status,
+            WindowCaptureSelectionCandidateStatus::Candidate
+        );
+        assert_eq!(
+            candidates[1].reason,
+            Some(WindowCaptureSelectionDisqualificationReason::DuplicateWindow)
+        );
+    }
+
+    #[test]
+    fn window_capture_selection_candidate_serializes_camel_case_contract() {
+        let candidates = window_capture_selection_candidates_v1(&[capture_selection_input(
+            WindowCaptureCandidateStatus::Candidate,
+            None,
+            None,
+            Some(WindowTitleFallbackStatus::NonEmptyTitle),
+            Some(WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu),
+        )]);
+        let serialized = serde_json::to_value(&candidates[0]).expect("serialize candidate");
+
+        assert_eq!(serialized["status"], "disqualified");
+        assert_eq!(serialized["reason"], "ownProcessExcludedFromWindowsMenu");
+        assert_eq!(
+            serialized["selectionBasis"],
+            "captureCandidateThenPreferredDuplicateThenTitleFallbackThenOwnProcessPolicy"
+        );
     }
 
     #[test]
@@ -865,6 +1235,15 @@ mod tests {
     }
 
     #[test]
+    fn window_observation_initializes_capture_selection_candidate_as_none() {
+        assert_eq!(
+            computer_use_window_observation_v1(&bounds(120, 90), true, 0, Some(1.0), Some(1))
+                .capture_selection_candidate,
+            None
+        );
+    }
+
+    #[test]
     fn own_process_window_policy_serializes_camel_case_contract() {
         let policy = window_own_process_policy_v1(true, Some(true)).expect("policy");
         let serialized = serde_json::to_value(policy).expect("serialize policy");
@@ -898,6 +1277,22 @@ mod tests {
             title,
             capture_candidate_status,
             duplicate_group_status,
+        }
+    }
+
+    fn capture_selection_input(
+        capture_candidate_status: WindowCaptureCandidateStatus,
+        capture_candidate_reason: Option<WindowDisqualificationReason>,
+        duplicate_group_status: Option<WindowDuplicateGroupStatus>,
+        title_fallback_status: Option<WindowTitleFallbackStatus>,
+        own_process_window_policy_status: Option<WindowOwnProcessPolicyStatus>,
+    ) -> WindowCaptureSelectionObservationInputV1 {
+        WindowCaptureSelectionObservationInputV1 {
+            capture_candidate_status,
+            capture_candidate_reason,
+            duplicate_group_status,
+            title_fallback_status,
+            own_process_window_policy_status,
         }
     }
 }

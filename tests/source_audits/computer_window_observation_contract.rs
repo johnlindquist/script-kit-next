@@ -33,6 +33,7 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "pub title_fallback: Option<WindowTitleFallbackV1>,",
         "pub own_process_window_policy: Option<WindowOwnProcessPolicyV1>,",
         "pub list_candidate: Option<WindowListCandidateV1>,",
+        "pub capture_selection_candidate: Option<WindowCaptureSelectionCandidateV1>,",
         "pub enum WindowObservationMetadataQuality",
         "pub struct WindowCaptureCandidateV1",
         "pub enum WindowCaptureCandidateStatus",
@@ -43,6 +44,12 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "pub enum WindowListDisqualificationReason",
         "pub struct WindowListThresholdsV1",
         "pub fn window_list_candidate_v1(",
+        "pub struct WindowCaptureSelectionCandidateV1",
+        "pub enum WindowCaptureSelectionCandidateStatus",
+        "pub enum WindowCaptureSelectionDisqualificationReason",
+        "pub enum WindowCaptureSelectionBasis",
+        "pub struct WindowCaptureSelectionObservationInputV1",
+        "pub fn window_capture_selection_candidates_v1(",
         "pub struct WindowDuplicateGroupV1",
         "pub enum WindowDuplicateGroupStatus",
         "pub enum WindowDuplicateSelectionBasis",
@@ -169,6 +176,66 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         assert!(
             !list_helper_body.contains(forbidden),
             "list candidate helper must stay metadata-only; found {forbidden}"
+        );
+    }
+
+    let selection_helper_body =
+        extract_function_body(&module, "pub fn window_capture_selection_candidates_v1(");
+    let selection_item_helper_body =
+        extract_function_body(&module, "fn window_capture_selection_candidate_v1(");
+    let selection_combined_body = format!("{selection_helper_body}\n{selection_item_helper_body}");
+    for needle in [
+        "WindowCaptureCandidateStatus::Disqualified",
+        "window_capture_selection_reason_from_capture_reason",
+        "WindowCaptureCandidateStatus::Unknown",
+        "WindowCaptureSelectionDisqualificationReason::MetadataIncomplete",
+        "WindowDuplicateGroupStatus::Duplicate",
+        "WindowCaptureSelectionDisqualificationReason::DuplicateWindow",
+        "WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates",
+        "WindowCaptureSelectionDisqualificationReason::EmptyTitleAmongMultipleCandidates",
+        "WindowOwnProcessPolicyStatus::ExcludedFromWindowsMenu",
+        "WindowCaptureSelectionDisqualificationReason::OwnProcessExcludedFromWindowsMenu",
+        "WindowOwnProcessPolicyStatus::Unknown",
+        "WindowCaptureSelectionDisqualificationReason::OwnProcessPolicyUnknown",
+        "window.title_fallback_status.is_none()",
+        "WindowCaptureSelectionDisqualificationReason::SelectionMetadataIncomplete",
+        "WindowCaptureSelectionCandidateStatus::Candidate",
+        "WindowCaptureSelectionCandidateStatus::Disqualified",
+        "WindowCaptureSelectionCandidateStatus::Unknown",
+        "WindowCaptureSelectionBasis::CaptureCandidateThenPreferredDuplicateThenTitleFallbackThenOwnProcessPolicy",
+    ] {
+        assert!(
+            selection_combined_body.contains(needle),
+            "capture selection helper must pin {needle}"
+        );
+    }
+    for forbidden in [
+        "CoreGraphics",
+        "CGWindowListCopyWindowInfo",
+        "CGWindowListCreateImage",
+        "ScreenCaptureKit",
+        "NSWorkspace",
+        "AppKit",
+        "objc::",
+        "request_accessibility_permission",
+        "capture_targeted_screenshot",
+        "focus",
+        "activate",
+        "launch",
+        "quit",
+        "hide",
+        "move",
+        "resize",
+        "click",
+        "press",
+        "execute",
+        "dedup",
+        "remove(",
+        "sort",
+    ] {
+        assert!(
+            !selection_combined_body.contains(forbidden),
+            "capture selection helper must stay metadata-only; found {forbidden}"
         );
     }
 
@@ -351,6 +418,32 @@ fn computer_window_observation_is_additive_read_only_metadata() {
     );
 
     for needle in [
+        "let capture_selection_candidates = window_capture_selection_candidates_v1(",
+        "WindowCaptureSelectionObservationInputV1",
+        "capture_candidate_status: observation.capture_candidate.status.clone()",
+        "capture_candidate_reason: observation.capture_candidate.reason.clone()",
+        ".map(|group| group.status.clone())",
+        ".map(|fallback| fallback.status.clone())",
+        ".map(|policy| policy.status.clone())",
+        "observation.capture_selection_candidate = Some(capture_selection_candidate);",
+        "Ok(windows)",
+    ] {
+        assert!(
+            bridge.contains(needle),
+            "CoreGraphics bridge must annotate capture selection without changing returned rows: {needle}"
+        );
+    }
+    assert!(
+        bridge
+            .find("observation.title_fallback = title_fallback;")
+            .expect("title fallback assignment")
+            < bridge
+                .find("let capture_selection_candidates = window_capture_selection_candidates_v1(")
+                .expect("capture selection assignment"),
+        "capture selection must be computed after title fallback annotation"
+    );
+
+    for needle in [
         "let is_current_process_window = u32::try_from(pid).ok() == Some(std::process::id());",
         "let own_process_window_policy = window_own_process_policy_v1(",
         "if is_current_process_window",
@@ -386,6 +479,23 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         !bridge.contains("K_CG_WINDOW_LIST_OPTION_ALL"),
         "list candidate metadata must not widen CoreGraphics enumeration"
     );
+    let core_graphics_windows_body =
+        extract_function_body(&bridge, "fn core_graphics_windows_for_pid(");
+    for forbidden in [
+        "windows.sort",
+        "windows.retain",
+        "windows.dedup",
+        ".dedup",
+        "remove(",
+        "CGWindowListCreateImage",
+        "ScreenCaptureKit",
+        "capture_targeted_screenshot",
+    ] {
+        assert!(
+            !core_graphics_windows_body.contains(forbidden),
+            "CoreGraphics observation must not mutate rows or capture images; found {forbidden}"
+        );
+    }
     let ns_policy_helper_body =
         extract_function_body(&bridge, "fn ns_window_is_excluded_from_windows_menu(");
     for forbidden in [
@@ -419,6 +529,10 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "own-process policy must not add a ComputerUseRuntimeBridge trait method"
     );
     assert!(
+        !runtime.contains("capture_selection_candidate"),
+        "capture selection must not add a ComputerUseRuntimeBridge trait method"
+    );
+    assert!(
         mcp_tools.contains("bundleIdChanged for pid"),
         "bundle-id stale ownership revalidation must remain intact"
     );
@@ -441,6 +555,12 @@ fn computer_window_observation_is_additive_read_only_metadata() {
         "includedInWindowsMenu",
         "excludedFromWindowsMenu",
         "listCandidate",
+        "captureSelectionCandidate",
+        "captureCandidateThenPreferredDuplicateThenTitleFallbackThenOwnProcessPolicy",
+        "duplicateWindow",
+        "emptyTitleAmongMultipleCandidates",
+        "ownProcessPolicyUnknown",
+        "selectionMetadataIncomplete",
         "ownProcessExcludedFromWindowsMenu",
         "requiredLayer:0",
         "minAlpha:0.0",
