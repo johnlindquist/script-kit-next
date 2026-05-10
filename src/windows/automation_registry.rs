@@ -274,6 +274,16 @@ pub fn focused_automation_window_id() -> Option<String> {
     AUTOMATION_WINDOWS.lock().focused_id.clone()
 }
 
+/// Return a snapshot of whichever automation window is currently marked focused.
+pub fn focused_automation_window() -> Option<AutomationWindowInfo> {
+    let state = AUTOMATION_WINDOWS.lock();
+    state
+        .focused_id
+        .as_ref()
+        .and_then(|id| state.windows.get(id))
+        .cloned()
+}
+
 /// Update focus so exactly one registered window is focused.
 ///
 /// Returns `true` if `new_focused_id` was found in the registry.
