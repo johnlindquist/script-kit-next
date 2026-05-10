@@ -27,8 +27,8 @@
 //!    | string` is enough.
 //!
 //! 2. `Message::state_result` constructor accepts `screenshot_identity:
-//!    Option<String>` as the 12th positional parameter. Making it the
-//!    trailing parameter (rather than interspersed) lets future
+//!    Option<String>` as a trailing positional parameter. Keeping it near
+//!    the end of the constructor lets future
 //!    refactors introduce more state-snapshot fields in the same
 //!    trailing slot without reshuffling the whole signature.
 //!
