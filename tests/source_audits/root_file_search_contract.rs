@@ -383,6 +383,59 @@ mod tests {
     }
 
     #[test]
+    fn root_file_token_gate_supports_developer_filename_boundaries() {
+        let file_search_source =
+            fs::read_to_string("src/file_search/mod.rs").expect("read src/file_search/mod.rs");
+        let file_search_production = production_source(&file_search_source);
+        let token_helper = file_search_production
+            .split("fn contains_at_root_file_token_boundary(")
+            .nth(1)
+            .and_then(|section| section.split("fn is_root_file_boundary_char(").next())
+            .expect("root filename token-boundary helper should be present");
+        let boundary_helper = file_search_production
+            .split("fn is_root_file_token_boundary_at(")
+            .nth(1)
+            .and_then(|section| section.split("fn is_root_file_boundary_char(").next())
+            .expect("root token boundary classifier should be present");
+
+        assert!(
+            file_search_production.contains("contains_at_root_file_token_boundary(name, query)")
+                && file_search_production.contains("contains_at_root_file_token_boundary(name, &query)")
+                && file_search_production
+                    .contains("root_file_name_token_matches_query(name, query)"),
+            "ranking, promotion, and recent seed gates should all share the developer filename token helper"
+        );
+        assert!(
+            token_helper.contains("haystack.to_lowercase()")
+                && token_helper.contains("needle.to_lowercase()")
+                && token_helper.contains("is_root_file_token_boundary_at(haystack, idx)"),
+            "token matching should stay case-insensitive while preserving original casing for boundary classification"
+        );
+        assert!(
+            boundary_helper.contains("previous.is_ascii_lowercase() && current.is_ascii_uppercase()")
+                && boundary_helper.contains("previous.is_ascii_digit() && current.is_ascii_alphabetic()")
+                && boundary_helper
+                    .contains("previous.is_ascii_uppercase()")
+                && boundary_helper
+                    .contains("next.is_some_and(|ch| ch.is_ascii_lowercase())"),
+            "root file token boundaries should include camel-case, digit-to-word, and acronym-to-word filename transitions"
+        );
+        for forbidden in [
+            "mdfind",
+            "search_files(",
+            "search_files_streaming",
+            "std::process::Command",
+            "std::fs::read_dir",
+            "list_directory",
+        ] {
+            assert!(
+                !token_helper.contains(forbidden) && !boundary_helper.contains(forbidden),
+                "developer filename token matching must not start providers: {forbidden}"
+            );
+        }
+    }
+
+    #[test]
     fn root_global_file_promotion_respects_strong_launcher_winner() {
         let grouping_source =
             fs::read_to_string("src/scripts/grouping.rs").expect("read src/scripts/grouping.rs");
