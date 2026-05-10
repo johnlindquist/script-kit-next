@@ -116,6 +116,21 @@ pub(crate) fn screen_capture_access_preflight() -> Option<bool> {
     None
 }
 
+#[cfg(target_os = "macos")]
+pub(crate) fn event_synthesizing_access_preflight() -> Option<bool> {
+    #[link(name = "CoreGraphics", kind = "framework")]
+    extern "C" {
+        fn CGPreflightPostEventAccess() -> bool;
+    }
+
+    Some(unsafe { CGPreflightPostEventAccess() })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn event_synthesizing_access_preflight() -> Option<bool> {
+    None
+}
+
 fn capture_and_encode_png(
     window: &xcap::Window,
     hi_dpi: bool,
