@@ -49,6 +49,16 @@ fn computer_get_window_reads_automation_registry_only() {
         args_struct.contains("id: String"),
         "computer/get_window input must be exactly a stable window id"
     );
+    let arg_fields: Vec<&str> = args_struct
+        .lines()
+        .map(str::trim)
+        .filter(|line| line.ends_with(',') || *line == "id: String")
+        .collect();
+    assert_eq!(
+        arg_fields,
+        vec!["id: String,"],
+        "computer/get_window args must expose exactly one id field"
+    );
 
     let input_schema_body =
         extract_function_body(&mcp_tools, "fn computer_get_window_input_schema()");
@@ -63,6 +73,12 @@ fn computer_get_window_reads_automation_registry_only() {
     assert!(
         input_schema_body.contains("\"required\": [\"id\"]"),
         "computer/get_window must require id"
+    );
+    let properties_block = extract_json_object_block(input_schema_body, "\"properties\":");
+    let property_count = properties_block.matches("\": {").count();
+    assert_eq!(
+        property_count, 1,
+        "computer/get_window schema properties must contain exactly one field"
     );
     for needle in [
         "\"target\"",
@@ -254,6 +270,27 @@ fn extract_struct_block<'a>(source: &'a str, signature: &str) -> &'a str {
 
 fn extract_function_body<'a>(source: &'a str, signature: &str) -> &'a str {
     extract_braced_block(source, signature)
+}
+
+fn extract_json_object_block<'a>(source: &'a str, marker: &str) -> &'a str {
+    let start = source.find(marker).expect("json object marker");
+    let open = source[start..].find('{').expect("json object open brace") + start;
+    let mut depth = 0usize;
+
+    for (offset, ch) in source[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return &source[open..=open + offset];
+                }
+            }
+            _ => {}
+        }
+    }
+
+    panic!("json object block for {} did not close", marker)
 }
 
 fn extract_braced_block<'a>(source: &'a str, signature: &str) -> &'a str {
