@@ -268,6 +268,10 @@ impl ScriptListApp {
             );
         }
 
+        if self.computed_filter_text.is_empty() {
+            self.refresh_root_recent_file_results();
+        }
+
         // P3: Key off computed_filter_text for two-stage filtering
         if self
             .main_menu_result_caches
@@ -362,6 +366,7 @@ impl ScriptListApp {
                 self.script_validation_report.as_deref(),
                 advanced_query,
                 &self.root_file_results,
+                &self.root_recent_file_results,
             )
         };
         let (grouped_items, flat_results) = if menu_syntax_owns_main_list {

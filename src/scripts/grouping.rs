@@ -366,6 +366,7 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
     validation: Option<&ValidationReport>,
     advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
     root_file_results: &[crate::file_search::FileResult],
+    root_recent_file_results: &[crate::file_search::FileResult],
 ) -> (Vec<GroupedListItem>, Vec<SearchResult>) {
     let (mut grouped, mut flat_results) = get_grouped_results_with_validation_and_query(
         scripts,
@@ -391,8 +392,66 @@ pub(crate) fn get_grouped_results_with_validation_query_and_root_files(
         frecency_store,
         advanced_query,
     );
+    append_recent_root_file_section(
+        &mut grouped,
+        &mut flat_results,
+        root_recent_file_results,
+        filter_text,
+        advanced_query,
+    );
 
     (grouped, flat_results)
+}
+
+fn append_recent_root_file_section(
+    grouped: &mut Vec<GroupedListItem>,
+    flat_results: &mut Vec<SearchResult>,
+    recent_file_results: &[crate::file_search::FileResult],
+    filter_text: &str,
+    advanced_query: Option<&crate::menu_syntax::AdvancedQuery>,
+) {
+    if advanced_query.is_some() || !filter_text.trim().is_empty() || recent_file_results.is_empty()
+    {
+        return;
+    }
+
+    let insertion_index = grouped
+        .iter()
+        .position(
+            |item| matches!(item, GroupedListItem::SectionHeader(label, _) if label == "Suggested"),
+        )
+        .and_then(|suggested_index| {
+            grouped
+                .iter()
+                .enumerate()
+                .skip(suggested_index + 1)
+                .find_map(|(index, item)| {
+                    matches!(item, GroupedListItem::SectionHeader(label, _) if label != "Suggested")
+                        .then_some(index)
+                })
+        })
+        .or_else(|| {
+            grouped
+                .iter()
+                .position(|item| matches!(item, GroupedListItem::SectionHeader(_, _)))
+        })
+        .unwrap_or(grouped.len());
+
+    let mut recent_group = Vec::with_capacity(recent_file_results.len() + 1);
+    recent_group.push(GroupedListItem::SectionHeader(
+        "Recent Files".to_string(),
+        None,
+    ));
+    for (rank, file) in recent_file_results.iter().enumerate() {
+        let idx = flat_results.len();
+        flat_results.push(SearchResult::File(crate::scripts::FileMatch {
+            file: file.clone(),
+            score: i32::MAX.saturating_sub(rank as i32),
+        }));
+        recent_group.push(GroupedListItem::Item(idx));
+    }
+
+    grouped.splice(insertion_index..insertion_index, recent_group);
 }
 
 fn append_root_file_section(
@@ -722,6 +781,7 @@ mod advanced_query_tests {
             None,
             None,
             &root_files,
+            &[],
         );
 
         assert!(
@@ -762,6 +822,7 @@ mod advanced_query_tests {
             None,
             None,
             &root_files,
+            &[],
         );
 
         let file_grouped_index = grouped
@@ -815,6 +876,7 @@ mod advanced_query_tests {
             None,
             Some(&query),
             &root_files,
+            &[],
         );
 
         assert!(
@@ -827,6 +889,192 @@ mod advanced_query_tests {
             flat.iter()
                 .all(|result| !matches!(result, SearchResult::File(_))),
             "advanced query mode should not append file results"
+        );
+    }
+
+    #[test]
+    fn empty_root_appends_recent_files_section() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/Desktop/recent design notes.md",
+            "recent design notes.md",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            grouped
+                .iter()
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Recent Files")),
+            "empty root should append a Recent Files section"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::File(file) if file.file.path == "/Users/example/Desktop/recent design notes.md"
+            )),
+            "Recent Files should render real SearchResult::File rows"
+        );
+    }
+
+    #[test]
+    fn recent_files_insert_after_icon_suggested_section() {
+        let mut grouped = vec![
+            GroupedListItem::SectionHeader("Suggested".to_string(), Some("StarFilled".to_string())),
+            GroupedListItem::Item(0),
+            GroupedListItem::SectionHeader("Commands".to_string(), Some("Terminal".to_string())),
+            GroupedListItem::Item(1),
+        ];
+        let mut flat = vec![
+            SearchResult::File(crate::scripts::FileMatch {
+                file: root_file("/Users/example/Desktop/suggested.txt", "suggested.txt"),
+                score: 10,
+            }),
+            SearchResult::File(crate::scripts::FileMatch {
+                file: root_file("/Users/example/Desktop/command.txt", "command.txt"),
+                score: 9,
+            }),
+        ];
+        let recent_files = vec![root_file(
+            "/Users/example/Desktop/recent design notes.md",
+            "recent design notes.md",
+        )];
+
+        append_recent_root_file_section(&mut grouped, &mut flat, &recent_files, "", None);
+
+        assert!(
+            matches!(&grouped[2], GroupedListItem::SectionHeader(label, None) if label == "Recent Files"),
+            "Recent Files should insert after Suggested items and before Commands"
+        );
+    }
+
+    #[test]
+    fn non_empty_search_does_not_append_recent_files_section() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/Desktop/recent design notes.md",
+            "recent design notes.md",
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "recent",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            !grouped
+                .iter()
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Recent Files")),
+            "non-empty root search should use Files, not Recent Files"
+        );
+        assert!(
+            flat.iter()
+                .all(|result| !matches!(result, SearchResult::File(_))),
+            "recent files should not leak into non-empty root search"
+        );
+    }
+
+    #[test]
+    fn advanced_query_does_not_append_recent_files_section() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/Desktop/recent design notes.md",
+            "recent design notes.md",
+        )];
+        let query = advanced_query_from(":type:file");
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            Some(&query),
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            !grouped
+                .iter()
+                .any(|item| matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Recent Files")),
+            "advanced query mode should not mix in recent root files"
+        );
+        assert!(
+            flat.iter()
+                .all(|result| !matches!(result, SearchResult::File(_))),
+            "advanced query mode should not append recent file rows"
+        );
+    }
+
+    #[test]
+    fn recent_files_do_not_create_search_files_handoff_row() {
+        let frecency_store = FrecencyStore::new();
+        let recent_files = vec![root_file(
+            "/Users/example/Desktop/recent design notes.md",
+            "recent design notes.md",
+        )];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            &[],
+            &recent_files,
+        );
+
+        assert!(
+            flat.iter().all(|result| !matches!(
+                result,
+                SearchResult::Fallback(fallback) if fallback.display_label().starts_with("Search Files for")
+            )),
+            "empty recent file rows should not create a Search Files continuation row"
         );
     }
 }

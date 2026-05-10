@@ -130,6 +130,8 @@ pub const DEFAULT_CACHE_LIMIT: usize = 2000;
 pub const ROOT_FILE_SOURCE_LIMIT: usize = 24;
 /// Maximum root launcher file rows rendered under the Files section.
 pub const ROOT_FILE_RENDER_LIMIT: usize = 6;
+/// Maximum frecency-backed recent file rows rendered on the empty root launcher.
+pub const ROOT_FILE_RECENT_LIMIT: usize = ROOT_FILE_RENDER_LIMIT;
 /// Minimum visible query length before root launcher file search starts.
 pub const ROOT_FILE_MIN_QUERY_CHARS: usize = 3;
 /// Check if the query looks like an advanced mdfind query (with operators)
@@ -260,6 +262,25 @@ pub fn parent_folder_search_query(path: &str) -> Option<String> {
     }
     let parent = parent.to_str()?;
     Some(ensure_trailing_slash(parent))
+}
+
+/// Build a root-launcher file result from live metadata for a previously seen path.
+///
+/// Recent root files are frecency-backed, not search-backed, so this helper only
+/// hydrates known paths and filters out app bundles that belong to app search.
+pub fn file_result_from_existing_path(path: &str) -> Option<FileResult> {
+    let metadata = get_file_metadata(path)?;
+    if metadata.file_type == FileType::Application {
+        return None;
+    }
+
+    Some(FileResult {
+        path: metadata.path,
+        name: metadata.name,
+        size: metadata.size,
+        modified: metadata.modified,
+        file_type: metadata.file_type,
+    })
 }
 
 const ROOT_FILE_TEXT_TIER_MULTIPLIER: i32 = 20_000;
@@ -634,6 +655,42 @@ mod tests {
     #[test]
     fn test_escape_md_string_mixed() {
         assert_eq!(escape_md_string(r#"file\"name"#), r#"file\\\"name"#);
+    }
+    #[test]
+    fn recent_file_hydration_skips_missing_paths() {
+        let path = std::env::temp_dir()
+            .join(format!("sk-missing-recent-file-{}", std::process::id()))
+            .to_string_lossy()
+            .into_owned();
+        assert!(file_result_from_existing_path(&path).is_none());
+    }
+    #[test]
+    fn recent_file_hydration_skips_app_bundles() {
+        let app_dir = std::env::temp_dir().join(format!(
+            "sk-recent-file-hydration-{}.app",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&app_dir).expect("create temporary app bundle directory");
+        let result = file_result_from_existing_path(&app_dir.to_string_lossy());
+        let _ = std::fs::remove_dir_all(&app_dir);
+        assert!(result.is_none(), "app bundles should stay in app search");
+    }
+    #[test]
+    fn recent_file_hydration_returns_file_result_for_existing_file() {
+        let file_path = std::env::temp_dir().join(format!(
+            "sk-recent-file-hydration-{}.txt",
+            std::process::id()
+        ));
+        std::fs::write(&file_path, "recent file proof").expect("write temp file");
+        let result = file_result_from_existing_path(&file_path.to_string_lossy())
+            .expect("hydrate existing file");
+        let _ = std::fs::remove_file(&file_path);
+
+        assert_eq!(
+            result.name,
+            file_path.file_name().unwrap().to_string_lossy()
+        );
+        assert_eq!(result.file_type, FileType::Document);
     }
     #[test]
     fn test_build_mdquery_simple_query() {
