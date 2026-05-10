@@ -131,6 +131,12 @@ mod computer_get_tray_menu_item_contract;
 #[path = "source_audits/computer_get_tray_menu_item_by_id_contract.rs"]
 mod computer_get_tray_menu_item_by_id_contract;
 
+#[path = "source_audits/computer_get_menu_item_contract.rs"]
+mod computer_get_menu_item_contract;
+
+#[path = "source_audits/computer_get_menu_item_by_index_path_contract.rs"]
+mod computer_get_menu_item_by_index_path_contract;
+
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old
 /// monolith path. This prevents accidental resurrection of the pre-split handler.
