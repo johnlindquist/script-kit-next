@@ -1,5 +1,7 @@
 use super::*;
 
+const ROOT_FILE_RESULT_CACHE_LIMIT: usize = 24;
+
 #[derive(Clone)]
 enum RootFileSearchRequest {
     GlobalQuery {
@@ -25,6 +27,17 @@ impl RootFileSearchRequest {
             Self::DirectoryBrowse { .. } => {
                 crate::file_search::RootFileSectionMode::DirectoryBrowse
             }
+        }
+    }
+
+    fn cache_key(&self) -> String {
+        match self {
+            Self::GlobalQuery { query } => format!("global:{query}"),
+            Self::DirectoryBrowse {
+                query,
+                directory,
+                show_hidden,
+            } => format!("dir:{directory}:{show_hidden}:{query}"),
         }
     }
 }
@@ -68,13 +81,18 @@ impl ScriptListApp {
                 .then_with(|| a.path.cmp(&b.path))
         });
 
-        self.root_recent_file_results = hydrated
+        let next_results: Vec<_> = hydrated
             .into_iter()
             .take(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT)
             .map(|(file, _)| file)
             .collect();
+        let changed = root_file_result_fingerprint(&self.root_recent_file_results)
+            != root_file_result_fingerprint(&next_results);
+        self.root_recent_file_results = next_results;
         self.root_recent_file_revision = revision;
-        self.invalidate_grouped_cache();
+        if changed {
+            self.invalidate_grouped_cache();
+        }
     }
 
     fn cancel_root_file_search(&mut self) {
@@ -144,6 +162,53 @@ impl ScriptListApp {
             self.rebuild_main_window_preflight_if_needed();
         }
         cx.notify();
+    }
+
+    fn cached_root_file_results_for_request(
+        &self,
+        request: &RootFileSearchRequest,
+    ) -> Vec<crate::file_search::FileResult> {
+        let cache_key = request.cache_key();
+        self.root_file_result_cache
+            .iter()
+            .find_map(|(key, results)| {
+                if key == &cache_key {
+                    Some(results.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    fn cache_root_file_search_results_for_generation(
+        &mut self,
+        generation: u64,
+        cache_key: String,
+        results: Vec<crate::file_search::FileResult>,
+        clear_cancel: bool,
+    ) {
+        if self.root_file_search_generation != generation {
+            return;
+        }
+
+        if let Some(index) = self
+            .root_file_result_cache
+            .iter()
+            .position(|(key, _)| key == &cache_key)
+        {
+            self.root_file_result_cache.remove(index);
+        }
+        self.root_file_result_cache
+            .push_front((cache_key, dedupe_root_file_results(results)));
+        while self.root_file_result_cache.len() > ROOT_FILE_RESULT_CACHE_LIMIT {
+            self.root_file_result_cache.pop_back();
+        }
+
+        if clear_cancel {
+            self.root_file_search_cancel = None;
+        }
+        self.root_file_search_loading = false;
     }
 
     pub(crate) fn maybe_start_root_file_search(&mut self, query: &str, cx: &mut Context<Self>) {
@@ -247,13 +312,16 @@ impl ScriptListApp {
         let generation = self.root_file_search_generation;
         self.root_file_search_query = request.query().to_string();
         self.root_file_search_mode = Some(mode);
-        self.root_file_results.clear();
-        self.root_file_search_loading = true;
+        let cached_results = self.cached_root_file_results_for_request(&request);
+        self.root_file_results = cached_results;
+        self.root_file_search_loading = self.root_file_results.is_empty();
         self.invalidate_grouped_cache();
 
         let cancel = crate::file_search::new_cancel_token();
         self.root_file_search_cancel = Some(cancel.clone());
-        let publish_partial_results = matches!(&request, RootFileSearchRequest::GlobalQuery { .. });
+        let publish_active_results =
+            matches!(&request, RootFileSearchRequest::DirectoryBrowse { .. });
+        let request_cache_key = request.cache_key();
 
         cx.spawn(async move |this, cx| {
             cx.background_executor()
@@ -304,7 +372,6 @@ impl ScriptListApp {
             });
 
             let mut batch = Vec::new();
-            let mut published_len = 0usize;
             loop {
                 if cancel.load(std::sync::atomic::Ordering::Relaxed) {
                     return;
@@ -313,21 +380,6 @@ impl ScriptListApp {
                 match rx.try_recv() {
                     Ok(crate::file_search::SearchEvent::Result(result)) => {
                         batch.push(result);
-                        let should_publish_partial = publish_partial_results
-                            && (published_len == 0
-                                || (batch.len() >= crate::file_search::ROOT_FILE_RENDER_LIMIT
-                                    && published_len < crate::file_search::ROOT_FILE_RENDER_LIMIT));
-                        if should_publish_partial {
-                            published_len = batch.len();
-                            let snapshot = batch.clone();
-                            let _ = cx.update(|cx| {
-                                this.update(cx, |app, cx| {
-                                    app.apply_root_file_search_results_for_generation(
-                                        generation, snapshot, true, false, cx,
-                                    );
-                                })
-                            });
-                        }
                     }
                     Ok(crate::file_search::SearchEvent::Done) => break,
                     Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -341,12 +393,35 @@ impl ScriptListApp {
 
             let _ = cx.update(|cx| {
                 this.update(cx, |app, cx| {
-                    app.apply_root_file_search_results_for_generation(
-                        generation, batch, false, true, cx,
-                    );
+                    if publish_active_results {
+                        app.apply_root_file_search_results_for_generation(
+                            generation, batch, false, true, cx,
+                        );
+                    } else {
+                        app.cache_root_file_search_results_for_generation(
+                            generation,
+                            request_cache_key,
+                            batch,
+                            true,
+                        );
+                    }
                 })
             });
         })
         .detach();
     }
+}
+
+fn root_file_result_fingerprint(files: &[crate::file_search::FileResult]) -> Vec<&str> {
+    files.iter().map(|file| file.path.as_str()).collect()
+}
+
+fn dedupe_root_file_results(
+    results: Vec<crate::file_search::FileResult>,
+) -> Vec<crate::file_search::FileResult> {
+    let mut seen = std::collections::HashSet::new();
+    results
+        .into_iter()
+        .filter(|file| seen.insert(file.path.clone()))
+        .collect()
 }

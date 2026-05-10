@@ -125,6 +125,9 @@ mod acp_session_update_span;
 #[path = "source_audits/root_file_search_contract.rs"]
 mod root_file_search_contract;
 
+#[path = "source_audits/root_unified_search_stability_contract.rs"]
+mod root_unified_search_stability_contract;
+
 #[path = "source_audits/root_unified_browser_history_contract.rs"]
 mod root_unified_browser_history_contract;
 

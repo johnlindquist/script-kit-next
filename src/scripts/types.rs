@@ -517,6 +517,26 @@ impl SearchResult {
         }
     }
 
+    /// Returns the stable identity used to preserve and execute a visible
+    /// launcher selection across passive root-search updates.
+    ///
+    /// This is intentionally separate from `history_result_key()`: selection
+    /// stability must cover rows such as fallbacks and agents without teaching
+    /// input history to promote those rows on future exact-query recall.
+    pub fn stable_selection_key(&self) -> Option<String> {
+        match self {
+            SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
+            SearchResult::Agent(am) => Some(format!("agent/{}", am.agent.path.display())),
+            SearchResult::ScriptIssue(issue) => Some(format!(
+                "script-issue/{}:{}:{}:{}",
+                issue.title, issue.failed_count, issue.fatal_count, issue.warning_count
+            )),
+            _ => self
+                .history_result_key()
+                .or_else(|| self.launcher_command_id()),
+        }
+    }
+
     /// Returns the display name for this result, used alongside `launcher_command_id`
     /// for shortcut recorder / alias input labels.
     pub fn launcher_command_name(&self) -> String {
@@ -753,9 +773,11 @@ impl FallbackConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{AcpHistoryMatch, ClipboardHistoryMatch, FileMatch, SearchResult};
+    use super::{AcpHistoryMatch, ClipboardHistoryMatch, FallbackMatch, FileMatch, SearchResult};
     use crate::ai::acp::history::{AcpHistoryEntry, AcpHistorySearchField};
     use crate::clipboard_history::{ClipboardEntryMeta, ContentType};
+    use crate::fallbacks::builtins::{BuiltinFallback, FallbackAction, FallbackCondition};
+    use crate::fallbacks::collector::FallbackItem;
     use crate::file_search::{FileResult, FileType};
 
     fn file_result(file_type: FileType) -> FileResult {
@@ -867,5 +889,39 @@ mod tests {
         assert_eq!(result.type_tag_info(), ("Clipboard", 0xA78BFA));
         assert_eq!(result.source_name(), Some("Clipboard History"));
         assert_eq!(result.get_default_action_text(), "Paste Clipboard");
+    }
+
+    #[test]
+    fn fallback_result_has_stable_selection_key_but_no_history_key() {
+        let result = SearchResult::Fallback(FallbackMatch::new(
+            FallbackItem::Builtin(BuiltinFallback::new(
+                "search-test",
+                "Search Test",
+                "Search a test engine",
+                "Search",
+                FallbackAction::SearchUrl {
+                    template: "https://example.com/?q={query}".to_string(),
+                },
+                FallbackCondition::Always,
+                20,
+            )),
+            0,
+        ));
+
+        assert_eq!(result.history_result_key(), None);
+        assert_eq!(
+            result.stable_selection_key(),
+            Some("fallback/Search Test".to_string())
+        );
+    }
+
+    #[test]
+    fn file_result_stable_selection_key_matches_history_key() {
+        let result = SearchResult::File(FileMatch {
+            file: file_result(FileType::Image),
+            score: 42,
+        });
+
+        assert_eq!(result.stable_selection_key(), result.history_result_key());
     }
 }

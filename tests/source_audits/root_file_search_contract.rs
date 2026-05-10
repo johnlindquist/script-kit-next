@@ -153,8 +153,8 @@ mod tests {
             state_source.contains("struct MainMenuSelectionSnapshot")
                 && state_source.contains("main_menu_selection_snapshot")
                 && state_source.contains("restore_main_menu_selection_from_snapshot")
-                && state_source.contains("history_result_key()")
-                && state_source.contains("grouped_index_for_history_result_key"),
+                && state_source.contains("stable_selection_key()")
+                && state_source.contains("grouped_index_for_stable_selection_key"),
             "main menu selection preservation should snapshot and restore stable result keys, not grouped indexes"
         );
         assert!(
@@ -168,29 +168,32 @@ mod tests {
     }
 
     #[test]
-    fn root_global_file_search_publishes_partial_batches_before_done() {
+    fn root_global_file_search_caches_results_without_active_frame_publish() {
         let source = fs::read_to_string("src/app_impl/root_file_search.rs")
             .expect("read src/app_impl/root_file_search.rs");
         let normalized = source.split_whitespace().collect::<Vec<_>>().join(" ");
 
         assert!(
-            normalized.contains("let publish_partial_results = matches!(&request, RootFileSearchRequest::GlobalQuery { .. });"),
-            "root global file search should opt into partial publishing explicitly"
+            !normalized.contains("publish_partial_results"),
+            "root global file search should not stream partial batches into the active root frame"
         );
         assert!(
             normalized.contains("Ok(crate::file_search::SearchEvent::Result(result)) =>")
-                && normalized.contains("app.apply_root_file_search_results_for_generation( generation, snapshot, true, false, cx, );"),
-            "global root file results should publish a loading=true partial batch before Done"
+                && !normalized.contains("app.apply_root_file_search_results_for_generation( generation, snapshot, true, false, cx, );"),
+            "SearchEvent::Result should collect into the batch without publishing a visible partial frame"
         );
         assert!(
             normalized.contains("Ok(crate::file_search::SearchEvent::Done) => break")
-                && normalized.contains("app.apply_root_file_search_results_for_generation( generation, batch, false, true, cx, );"),
-            "final root file update should mark loading=false and clear the cancel token"
+                && normalized.contains("app.cache_root_file_search_results_for_generation( generation, request_cache_key, batch, true, );"),
+            "final global root file update should warm the cache instead of mutating the active frame"
         );
         assert!(
-            normalized.contains("publish_partial_results &&")
-                && normalized.contains("RootFileSearchRequest::DirectoryBrowse"),
-            "partial publishing should stay gated to GlobalQuery so directory browsing remains final-only"
+            normalized.contains("let publish_active_results =")
+                && normalized.contains(
+                    "matches!(&request, RootFileSearchRequest::DirectoryBrowse { .. })"
+                )
+                && normalized.contains("if publish_active_results"),
+            "only explicit directory browse may publish its final collected rows into the active frame"
         );
     }
 
@@ -1493,7 +1496,7 @@ mod tests {
                 .contains("top_file_paths(crate::file_search::ROOT_FILE_RECENT_HYDRATE_LIMIT)")
                 && root_normalized.contains("file_result_from_existing_path(&path)")
                 && root_normalized.contains("take(crate::file_search::ROOT_FILE_RECENT_SEED_LIMIT)")
-                && root_normalized.contains("self.root_recent_file_results = hydrated"),
+                && root_normalized.contains("self.root_recent_file_results = next_results"),
             "recent root files should hydrate known frecency paths into a deeper seed pool in the app layer"
         );
         assert!(

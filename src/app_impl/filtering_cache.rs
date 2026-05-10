@@ -268,15 +268,6 @@ impl ScriptListApp {
             );
         }
 
-        let should_refresh_root_recent_files = self.computed_filter_text.is_empty()
-            || matches!(
-                self.root_file_search_mode,
-                Some(crate::file_search::RootFileSectionMode::GlobalQuery)
-            );
-        if should_refresh_root_recent_files {
-            self.refresh_root_recent_file_results();
-        }
-
         // P3: Key off computed_filter_text for two-stage filtering
         if self
             .main_menu_result_caches
@@ -285,6 +276,15 @@ impl ScriptListApp {
             // NOTE: Removed cache HIT log - fires every render frame, causing log spam.
             // Cache hits are normal operation. Only log cache MISS (below) for diagnostics.
             return self.main_menu_result_caches.clone_grouped_results();
+        }
+
+        let should_refresh_root_recent_files = self.computed_filter_text.is_empty()
+            || matches!(
+                self.root_file_search_mode,
+                Some(crate::file_search::RootFileSectionMode::GlobalQuery)
+            );
+        if should_refresh_root_recent_files {
+            self.refresh_root_recent_file_results();
         }
 
         // Cache miss - need to recompute

@@ -596,6 +596,7 @@ impl ScriptListApp {
             cached_browser_history: Vec::new(),
             cached_file_results: Vec::new(),
             root_file_results: Vec::new(),
+            root_file_result_cache: std::collections::VecDeque::new(),
             root_file_search_mode: None,
             root_recent_file_results: Vec::new(),
             root_recent_file_revision: u64::MAX,
