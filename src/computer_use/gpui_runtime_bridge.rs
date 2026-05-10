@@ -4,8 +4,8 @@ use crate::computer_use::runtime_bridge::{
     ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
 use crate::computer_use::window_observation::{
-    computer_use_window_observation_v1, window_duplicate_groups_v1,
-    WindowDuplicateObservationInputV1,
+    computer_use_window_observation_v1, window_duplicate_groups_v1, window_title_fallbacks_v1,
+    WindowDuplicateObservationInputV1, WindowTitleFallbackObservationInputV1,
 };
 use crate::protocol::{AutomationInspectSnapshot, TargetWindowBounds};
 use std::sync::mpsc::{self, SyncSender};
@@ -373,6 +373,33 @@ fn core_graphics_windows_for_pid(
     for (window, duplicate_group) in windows.iter_mut().zip(duplicate_groups) {
         if let Some(observation) = &mut window.observation {
             observation.duplicate_group = duplicate_group;
+        }
+    }
+
+    let title_fallbacks = window_title_fallbacks_v1(
+        &windows
+            .iter()
+            .map(|window| {
+                let observation = window
+                    .observation
+                    .as_ref()
+                    .expect("CoreGraphics windows are annotated before title fallback");
+
+                WindowTitleFallbackObservationInputV1 {
+                    title: window.title.clone(),
+                    capture_candidate_status: observation.capture_candidate.status.clone(),
+                    duplicate_group_status: observation
+                        .duplicate_group
+                        .as_ref()
+                        .map(|group| group.status.clone()),
+                }
+            })
+            .collect::<Vec<_>>(),
+    );
+
+    for (window, title_fallback) in windows.iter_mut().zip(title_fallbacks) {
+        if let Some(observation) = &mut window.observation {
+            observation.title_fallback = title_fallback;
         }
     }
 

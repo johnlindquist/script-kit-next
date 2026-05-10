@@ -18,6 +18,8 @@ pub struct ComputerUseWindowObservationV1 {
     pub capture_candidate: WindowCaptureCandidateV1,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub duplicate_group: Option<WindowDuplicateGroupV1>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title_fallback: Option<WindowTitleFallbackV1>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
@@ -93,6 +95,35 @@ pub struct WindowDuplicateObservationInputV1 {
     pub z_order: u32,
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowTitleFallbackV1 {
+    pub status: WindowTitleFallbackStatus,
+    pub eligible_candidate_count: usize,
+    pub selection_basis: WindowTitleFallbackSelectionBasis,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowTitleFallbackStatus {
+    NonEmptyTitle,
+    EmptyTitleSoleCandidate,
+    EmptyTitleAmongMultipleCandidates,
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WindowTitleFallbackSelectionBasis {
+    PreferNonEmptyTitleThenAllowEmptyOnlyIfSoleCandidate,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct WindowTitleFallbackObservationInputV1 {
+    pub title: Option<String>,
+    pub capture_candidate_status: WindowCaptureCandidateStatus,
+    pub duplicate_group_status: Option<WindowDuplicateGroupStatus>,
+}
+
 pub fn computer_use_window_observation_v1(
     bounds: &TargetWindowBounds,
     is_on_screen: bool,
@@ -120,6 +151,7 @@ pub fn computer_use_window_observation_v1(
             sharing_state,
         ),
         duplicate_group: None,
+        title_fallback: None,
     }
 }
 
@@ -210,6 +242,47 @@ pub fn window_duplicate_groups_v1(
 
 fn window_area(bounds: &TargetWindowBounds) -> u64 {
     bounds.width as u64 * bounds.height as u64
+}
+
+pub fn window_title_fallbacks_v1(
+    windows: &[WindowTitleFallbackObservationInputV1],
+) -> Vec<Option<WindowTitleFallbackV1>> {
+    let eligible_candidate_count = windows.iter().filter(|window| window.is_eligible()).count();
+
+    windows
+        .iter()
+        .map(|window| {
+            if !window.is_eligible() {
+                return None;
+            }
+
+            let status = if window
+                .title
+                .as_deref()
+                .is_some_and(|title| !title.trim().is_empty())
+            {
+                WindowTitleFallbackStatus::NonEmptyTitle
+            } else if eligible_candidate_count == 1 {
+                WindowTitleFallbackStatus::EmptyTitleSoleCandidate
+            } else {
+                WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates
+            };
+
+            Some(WindowTitleFallbackV1 {
+                status,
+                eligible_candidate_count,
+                selection_basis:
+                    WindowTitleFallbackSelectionBasis::PreferNonEmptyTitleThenAllowEmptyOnlyIfSoleCandidate,
+            })
+        })
+        .collect()
+}
+
+impl WindowTitleFallbackObservationInputV1 {
+    fn is_eligible(&self) -> bool {
+        self.capture_candidate_status == WindowCaptureCandidateStatus::Candidate
+            && self.duplicate_group_status != Some(WindowDuplicateGroupStatus::Duplicate)
+    }
 }
 
 #[cfg(test)]
@@ -395,6 +468,146 @@ mod tests {
         assert_eq!(preferred_count, 1);
     }
 
+    #[test]
+    fn window_title_fallback_marks_non_empty_title() {
+        let fallbacks = window_title_fallbacks_v1(&[title_input(
+            Some("Console".to_string()),
+            WindowCaptureCandidateStatus::Candidate,
+            None,
+        )]);
+
+        assert_eq!(
+            fallbacks[0].as_ref().map(|fallback| &fallback.status),
+            Some(&WindowTitleFallbackStatus::NonEmptyTitle)
+        );
+    }
+
+    #[test]
+    fn window_title_fallback_allows_empty_title_when_sole_candidate() {
+        let fallbacks = window_title_fallbacks_v1(&[title_input(
+            None,
+            WindowCaptureCandidateStatus::Candidate,
+            None,
+        )]);
+
+        assert_eq!(
+            fallbacks[0].as_ref().map(|fallback| &fallback.status),
+            Some(&WindowTitleFallbackStatus::EmptyTitleSoleCandidate)
+        );
+        assert_eq!(
+            fallbacks[0]
+                .as_ref()
+                .map(|fallback| fallback.eligible_candidate_count),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn window_title_fallback_discourages_empty_title_among_multiple_candidates() {
+        let fallbacks = window_title_fallbacks_v1(&[
+            title_input(None, WindowCaptureCandidateStatus::Candidate, None),
+            title_input(
+                Some("Editor".to_string()),
+                WindowCaptureCandidateStatus::Candidate,
+                None,
+            ),
+        ]);
+
+        assert_eq!(
+            fallbacks[0].as_ref().map(|fallback| &fallback.status),
+            Some(&WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates)
+        );
+        assert_eq!(
+            fallbacks[0]
+                .as_ref()
+                .map(|fallback| fallback.eligible_candidate_count),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn window_title_fallback_treats_whitespace_title_as_empty() {
+        let fallbacks = window_title_fallbacks_v1(&[
+            title_input(
+                Some("   ".to_string()),
+                WindowCaptureCandidateStatus::Candidate,
+                None,
+            ),
+            title_input(
+                Some("Terminal".to_string()),
+                WindowCaptureCandidateStatus::Candidate,
+                None,
+            ),
+        ]);
+
+        assert_eq!(
+            fallbacks[0].as_ref().map(|fallback| &fallback.status),
+            Some(&WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates)
+        );
+    }
+
+    #[test]
+    fn window_title_fallback_ignores_capture_disqualified_and_unknown_rows() {
+        let fallbacks = window_title_fallbacks_v1(&[
+            title_input(None, WindowCaptureCandidateStatus::Disqualified, None),
+            title_input(None, WindowCaptureCandidateStatus::Unknown, None),
+            title_input(None, WindowCaptureCandidateStatus::Candidate, None),
+        ]);
+
+        assert!(fallbacks[0].is_none());
+        assert!(fallbacks[1].is_none());
+        assert_eq!(
+            fallbacks[2].as_ref().map(|fallback| &fallback.status),
+            Some(&WindowTitleFallbackStatus::EmptyTitleSoleCandidate)
+        );
+    }
+
+    #[test]
+    fn window_title_fallback_ignores_duplicate_rows() {
+        let fallbacks = window_title_fallbacks_v1(&[
+            title_input(
+                None,
+                WindowCaptureCandidateStatus::Candidate,
+                Some(WindowDuplicateGroupStatus::Duplicate),
+            ),
+            title_input(
+                None,
+                WindowCaptureCandidateStatus::Candidate,
+                Some(WindowDuplicateGroupStatus::Preferred),
+            ),
+        ]);
+
+        assert!(fallbacks[0].is_none());
+        assert_eq!(
+            fallbacks[1].as_ref().map(|fallback| &fallback.status),
+            Some(&WindowTitleFallbackStatus::EmptyTitleSoleCandidate)
+        );
+    }
+
+    #[test]
+    fn window_title_fallback_preserves_input_length_and_order() {
+        let fallbacks = window_title_fallbacks_v1(&[
+            title_input(
+                Some("A".to_string()),
+                WindowCaptureCandidateStatus::Candidate,
+                None,
+            ),
+            title_input(None, WindowCaptureCandidateStatus::Disqualified, None),
+            title_input(None, WindowCaptureCandidateStatus::Candidate, None),
+        ]);
+
+        assert_eq!(fallbacks.len(), 3);
+        assert_eq!(
+            fallbacks[0].as_ref().map(|fallback| &fallback.status),
+            Some(&WindowTitleFallbackStatus::NonEmptyTitle)
+        );
+        assert!(fallbacks[1].is_none());
+        assert_eq!(
+            fallbacks[2].as_ref().map(|fallback| &fallback.status),
+            Some(&WindowTitleFallbackStatus::EmptyTitleAmongMultipleCandidates)
+        );
+    }
+
     fn duplicate_input(
         native_window_id: u32,
         width: u32,
@@ -407,6 +620,18 @@ mod tests {
             bounds: bounds(width, height),
             is_on_screen,
             z_order,
+        }
+    }
+
+    fn title_input(
+        title: Option<String>,
+        capture_candidate_status: WindowCaptureCandidateStatus,
+        duplicate_group_status: Option<WindowDuplicateGroupStatus>,
+    ) -> WindowTitleFallbackObservationInputV1 {
+        WindowTitleFallbackObservationInputV1 {
+            title,
+            capture_candidate_status,
+            duplicate_group_status,
         }
     }
 }
