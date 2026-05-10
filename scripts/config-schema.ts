@@ -1299,7 +1299,7 @@ export interface Config extends BaseConfig {
    * handoff rows, but they do not promote above commands, scripts, apps, or
    * skills unless an explicit promotion policy is configured.
    *
-   * @default { enabled: true, files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" } }
+   * @default { enabled: true, files: { enabled: true, globalSearch: true, recentFiles: true, directoryBrowse: true, promotion: "never" }, acpHistory: { enabled: true, maxResults: 3, minQueryChars: 3 } }
    * @example
    * ```typescript
    * unifiedSearch: {
@@ -1494,6 +1494,8 @@ export interface UnifiedSearchConfig {
   enabled?: boolean;
   /** Controls for root file rows backed by recent files, Spotlight, and folder browsing. */
   files?: UnifiedSearchFilesConfig;
+  /** Controls for passive root AI conversation rows backed by saved ACP history. */
+  acpHistory?: UnifiedSearchAcpHistoryConfig;
 }
 
 export interface UnifiedSearchFilesConfig {
@@ -1512,6 +1514,15 @@ export interface UnifiedSearchFilesConfig {
    * allows exact filename/stem matches when no primary launcher row exists.
    */
   promotion?: "never" | "exactFilenameOnly";
+}
+
+export interface UnifiedSearchAcpHistoryConfig {
+  /** Enable saved ACP conversation rows in root launcher search. */
+  enabled?: boolean;
+  /** Maximum number of AI conversation rows to append. Clamped to 1-5. */
+  maxResults?: number;
+  /** Minimum query length before AI conversation rows appear. Clamped to 2-32. */
+  minQueryChars?: number;
 }
 
 // =============================================================================

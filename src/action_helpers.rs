@@ -58,6 +58,9 @@ pub fn extract_path_for_reveal(
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot reveal fallback commands in Finder"),
         )),
+        Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("AI Conversations row has no filesystem path"),
+        )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row has no path"),
         )),
@@ -86,6 +89,9 @@ pub fn extract_path_for_copy(
         )),
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot copy fallback command path"),
+        )),
+        Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("AI Conversations row has no filesystem path"),
         )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row has no path"),
@@ -125,6 +131,9 @@ pub fn extract_path_for_quick_terminal(
         )),
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot open fallback commands in Quick Terminal"),
+        )),
+        Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot open AI conversations in Quick Terminal"),
         )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row has no path"),
@@ -183,6 +192,9 @@ pub fn extract_path_for_edit(
         )),
         Some(SearchResult::Fallback(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Cannot edit fallback commands"),
+        )),
+        Some(SearchResult::AcpHistory(_)) => Err(PathExtractionError::UnsupportedType(
+            SharedString::from("Cannot edit AI conversations"),
         )),
         Some(SearchResult::ScriptIssue(_)) => Err(PathExtractionError::UnsupportedType(
             SharedString::from("Script Issues row cannot be edited"),

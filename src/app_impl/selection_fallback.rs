@@ -329,6 +329,7 @@ impl ScriptListApp {
                     // Root file opens record frecency only after the OS open succeeds;
                     // execute_root_file_open is shared by Enter and the root-file Open action.
                     scripts::SearchResult::File(_) => None,
+                    scripts::SearchResult::AcpHistory(_) => None,
                     // Suppressed: agents don't track frecency in the launcher
                     scripts::SearchResult::Agent(_) => None,
                     // Fallbacks don't track frecency - they're utility commands
@@ -439,6 +440,13 @@ impl ScriptListApp {
                     }
                     scripts::SearchResult::File(file_match) => {
                         self.execute_root_file_open(&file_match.file, cx);
+                    }
+                    scripts::SearchResult::AcpHistory(acp_history_match) => {
+                        self.resume_acp_conversation_from_history(
+                            &acp_history_match.entry.session_id,
+                            acp_history_match.entry.first_message.as_str(),
+                            cx,
+                        );
                     }
                     scripts::SearchResult::Skill(skill_match) => {
                         // Skills always open Agent Chat with the selected skill staged

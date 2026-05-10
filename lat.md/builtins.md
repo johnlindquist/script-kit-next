@@ -122,6 +122,14 @@ Root Files and empty-root Recent Files render after primary launcher rows such a
 
 Async root file provider updates snapshot the current launcher selection by `[[src/scripts/types.rs#SearchResult#history_result_key]]`, rebuild grouped rows, then restore the matching stable key before validating bounds. This prevents late file results from turning the same numeric row index into a different command.
 
+## Root Unified Search ACP History
+
+ACP conversation rows are a passive launcher source backed by saved conversation history.
+
+Eligible non-empty root queries append an AI Conversations section using the existing ACP history search index. Rows render after primary launcher intent and root file rows, before fallback handoff rows. They never promote above commands, scripts, apps, skills, windows, or actions.
+
+`config.ts` exposes `unifiedSearch.acpHistory` only for the implemented ACP history source. Selecting a row resumes the saved conversation through the shared `[[src/render_builtins/acp_history.rs#ScriptListApp#resume_acp_conversation_from_history]]` path; root search does not expose attach-summary actions in this first pass.
+
 ## Dictation model download prompt
 
 The Parakeet model prompt is a stateful MiniPrompt that must not reinterpret a repeated submit as a destructive action after its choices change.

@@ -292,6 +292,15 @@ pub struct FileMatch {
     pub score: i32,
 }
 
+/// Represents a passive root-search match for a saved ACP conversation.
+#[derive(Clone, Debug)]
+pub struct AcpHistoryMatch {
+    pub(crate) entry: crate::ai::acp::history::AcpHistoryEntry,
+    pub(crate) score: i32,
+    pub(crate) matched_field: crate::ai::acp::history::AcpHistorySearchField,
+    pub(crate) subtitle: String,
+}
+
 /// Unified search result that can be a Script, Scriptlet, Skill, BuiltIn, App, Window, File, Agent, or Fallback
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -305,6 +314,8 @@ pub enum SearchResult {
     Window(WindowMatch),
     /// Local file result appended from the root launcher file-search source.
     File(FileMatch),
+    /// Saved ACP conversation surfaced as a passive root-search source.
+    AcpHistory(AcpHistoryMatch),
     /// Legacy agent artifact — suppressed from the launcher pipeline.
     /// Agent results are actively filtered out of search/grouping/selection.
     /// ACP agent catalog and provider selection remain intact in `src/ai/acp/`.
@@ -336,6 +347,7 @@ impl SearchResult {
             SearchResult::App(am) => &am.app.name,
             SearchResult::Window(wm) => &wm.window.title,
             SearchResult::File(fm) => &fm.file.name,
+            SearchResult::AcpHistory(am) => am.entry.title_display(),
             SearchResult::Agent(am) => &am.agent.name,
             SearchResult::Fallback(fm) => fm
                 .title_override
@@ -361,6 +373,7 @@ impl SearchResult {
             SearchResult::App(am) => am.app.path.to_str(),
             SearchResult::Window(wm) => Some(&wm.window.app),
             SearchResult::File(fm) => Some(fm.file.path.as_str()),
+            SearchResult::AcpHistory(am) => Some(am.subtitle.as_str()),
             SearchResult::Agent(am) => am.agent.description.as_deref(),
             SearchResult::Fallback(fm) => fm
                 .description_override
@@ -380,6 +393,7 @@ impl SearchResult {
             SearchResult::App(am) => am.score,
             SearchResult::Window(wm) => wm.score,
             SearchResult::File(fm) => fm.score,
+            SearchResult::AcpHistory(am) => am.score,
             SearchResult::Agent(am) => am.score,
             SearchResult::Fallback(fm) => fm.score,
             SearchResult::ScriptIssue(issue) => issue.score,
@@ -396,6 +410,7 @@ impl SearchResult {
             SearchResult::App(_) => "App",
             SearchResult::Window(_) => "Window",
             SearchResult::File(_) => "File",
+            SearchResult::AcpHistory(_) => "AI Conversation",
             SearchResult::Agent(_) => "Agent",
             SearchResult::Fallback(_) => "Fallback",
             SearchResult::ScriptIssue(_) => "Issues",
@@ -423,6 +438,7 @@ impl SearchResult {
                     }),
             ),
             SearchResult::File(fm) => Some(format!("file/{}", fm.file.path)),
+            SearchResult::AcpHistory(_) => None,
             SearchResult::Window(_) | SearchResult::Skill(_) | SearchResult::Agent(_) => None,
             SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
             SearchResult::ScriptIssue(_) => None,
@@ -442,6 +458,7 @@ impl SearchResult {
             SearchResult::Window(wm) => {
                 Some(format!("window:{}:{}", wm.window.app, wm.window.title))
             }
+            SearchResult::AcpHistory(am) => Some(format!("acp-history/{}", am.entry.session_id)),
             SearchResult::Fallback(_) | SearchResult::Agent(_) => None,
             SearchResult::ScriptIssue(_) => None,
             _ => self.launcher_command_id(),
@@ -466,6 +483,7 @@ impl SearchResult {
             SearchResult::App(_) => ("App", 0xF59E0B),       // Amber-500
             SearchResult::Window(_) => ("Window", 0xEC4899), // Pink-500
             SearchResult::File(_) => ("File", 0x60A5FA),     // Blue-400
+            SearchResult::AcpHistory(_) => ("AI Chat", 0x22C55E), // Green-500
             SearchResult::Agent(_) => ("Agent", 0x0EA5E9),   // Sky-500
             SearchResult::Fallback(_) => ("Fallback", 0x6B7280), // Gray-500
             SearchResult::ScriptIssue(_) => ("Issues", 0xEF4444), // Red-500
@@ -507,6 +525,7 @@ impl SearchResult {
             }
             SearchResult::Agent(am) => am.agent.kit.as_deref(),
             SearchResult::File(_) => Some("Files"),
+            SearchResult::AcpHistory(_) => Some("AI Conversations"),
             SearchResult::ScriptIssue(_) => None,
             _ => None,
         }
@@ -558,6 +577,7 @@ impl SearchResult {
                     "Open File"
                 }
             }
+            SearchResult::AcpHistory(_) => "Resume Conversation",
             SearchResult::Agent(_) => {
                 // Suppressed: agents are not launchable from the main menu
                 "Agent (suppressed)"
@@ -672,7 +692,8 @@ impl FallbackConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{FileMatch, SearchResult};
+    use super::{AcpHistoryMatch, FileMatch, SearchResult};
+    use crate::ai::acp::history::{AcpHistoryEntry, AcpHistorySearchField};
     use crate::file_search::{FileResult, FileType};
 
     fn file_result(file_type: FileType) -> FileResult {
@@ -717,5 +738,39 @@ mod tests {
         });
 
         assert_eq!(result.get_default_action_text(), "Open Folder");
+    }
+
+    #[test]
+    fn acp_history_result_exposes_launcher_metadata() {
+        let result = SearchResult::AcpHistory(AcpHistoryMatch {
+            entry: AcpHistoryEntry {
+                timestamp: "2026-05-10T17:13:06Z".to_string(),
+                first_message: "How do I search files?".to_string(),
+                message_count: 4,
+                session_id: "session-123".to_string(),
+                title: "How do I search files?".to_string(),
+                preview: "Use the root launcher".to_string(),
+                search_text: "how do i search files use the root launcher".to_string(),
+            },
+            score: 80,
+            matched_field: AcpHistorySearchField::Title,
+            subtitle: "Use the root launcher · 4 messages".to_string(),
+        });
+
+        assert_eq!(result.name(), "How do I search files?");
+        assert_eq!(
+            result.description(),
+            Some("Use the root launcher · 4 messages")
+        );
+        assert_eq!(result.score(), 80);
+        assert_eq!(result.type_label(), "AI Conversation");
+        assert_eq!(result.launcher_command_id(), None);
+        assert_eq!(
+            result.history_result_key(),
+            Some("acp-history/session-123".to_string())
+        );
+        assert_eq!(result.type_tag_info(), ("AI Chat", 0x22C55E));
+        assert_eq!(result.source_name(), Some("AI Conversations"));
+        assert_eq!(result.get_default_action_text(), "Resume Conversation");
     }
 }

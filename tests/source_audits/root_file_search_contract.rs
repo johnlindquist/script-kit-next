@@ -126,8 +126,8 @@ mod tests {
             "root provider startup and recent hydration should honor unifiedSearch.files gates before launching work"
         );
         assert!(
-            filtering_source
-                .contains("self.config.get_unified_search().root_file_section_options()")
+            filtering_source.contains("let unified_search = self.config.get_unified_search();")
+                && filtering_source.contains("unified_search.root_file_section_options()")
                 && filtering_source.contains(
                     "get_grouped_results_with_validation_query_and_root_files_with_options"
                 ),

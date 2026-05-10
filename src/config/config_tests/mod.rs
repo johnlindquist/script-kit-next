@@ -1213,6 +1213,9 @@ fn unified_search_defaults_enable_files_but_disable_promotion() {
     assert!(unified.files.recent_files);
     assert!(unified.files.directory_browse);
     assert_eq!(unified.files.promotion, RootFilePromotionConfig::Never);
+    assert!(unified.acp_history.enabled);
+    assert_eq!(unified.acp_history.max_results, 3);
+    assert_eq!(unified.acp_history.min_query_chars, 3);
 }
 
 #[test]
@@ -1241,6 +1244,40 @@ fn unified_search_files_disabled_loads() {
 
     assert!(unified.enabled);
     assert!(!unified.files.enabled);
+}
+
+#[test]
+fn unified_search_acp_history_disabled_loads() {
+    let json = r#"{
+        "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
+        "unifiedSearch": { "acpHistory": { "enabled": false } }
+    }"#;
+
+    let config: Config = serde_json::from_str(json).unwrap();
+    let unified = config.get_unified_search();
+
+    assert!(unified.enabled);
+    assert!(!unified.acp_history.enabled);
+    assert!(!unified.acp_history_section_options().enabled);
+}
+
+#[test]
+fn unified_search_acp_history_options_are_sanitized() {
+    let json = r#"{
+        "hotkey": { "modifiers": ["meta"], "key": "Semicolon" },
+        "unifiedSearch": {
+            "acpHistory": {
+                "maxResults": 99,
+                "minQueryChars": 1
+            }
+        }
+    }"#;
+
+    let config: Config = serde_json::from_str(json).unwrap();
+    let options = config.get_unified_search().acp_history_section_options();
+
+    assert_eq!(options.max_results, 5);
+    assert_eq!(options.min_query_chars, 2);
 }
 
 #[test]

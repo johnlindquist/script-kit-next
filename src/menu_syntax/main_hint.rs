@@ -1508,6 +1508,7 @@ fn predicate_user_label(predicate: &Predicate) -> String {
             ArtifactKind::App => "apps only".to_string(),
             ArtifactKind::Window => "windows only".to_string(),
             ArtifactKind::File => "files only".to_string(),
+            ArtifactKind::AcpHistory => "AI conversations only".to_string(),
             ArtifactKind::Fallback => "fallbacks only".to_string(),
             ArtifactKind::Issue => "issues only".to_string(),
         },

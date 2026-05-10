@@ -226,6 +226,12 @@ pub fn render_design_item(
                         root_file_type_svg_icon(fm.file.file_type).to_string(),
                     )),
                 ),
+                SearchResult::AcpHistory(am) => (
+                    am.entry.title_display().to_string(),
+                    Some(am.subtitle.clone()),
+                    None,
+                    Some(IconKind::Svg("MessageCircle".to_string())),
+                ),
                 SearchResult::Skill(sm) => {
                     // Skills use a star icon (gold accent theme)
                     let description = if sm.skill.description.is_empty() {

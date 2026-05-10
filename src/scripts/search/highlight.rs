@@ -217,6 +217,24 @@ pub fn compute_match_indices_for_result(result: &SearchResult, query: &str) -> M
 
             indices
         }
+        SearchResult::AcpHistory(am) => {
+            let mut indices = MatchIndices::default();
+
+            let (name_matched, name_indices) = highlight_ctx.indices_for(am.entry.title_display());
+            if name_matched {
+                indices.name_indices = name_indices;
+            }
+
+            if indices.name_indices.is_empty() {
+                let (preview_matched, preview_indices) =
+                    highlight_ctx.indices_for(am.entry.preview_display());
+                if preview_matched {
+                    indices.description_indices = preview_indices;
+                }
+            }
+
+            indices
+        }
         SearchResult::Skill(sm) => {
             let mut indices = MatchIndices::default();
 

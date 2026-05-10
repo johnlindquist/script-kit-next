@@ -170,6 +170,9 @@ mod computer_list_frontmost_app_windows_contract;
 #[path = "source_audits/computer_get_frontmost_app_window_contract.rs"]
 mod computer_get_frontmost_app_window_contract;
 
+#[path = "source_audits/root_unified_acp_history_contract.rs"]
+mod root_unified_acp_history_contract;
+
 /// Regression guard: fails if the deleted monolithic `handle_action.rs` file
 /// reappears or if any `.rs` file under `src/` or `tests/` references the old
 /// monolith path. This prevents accidental resurrection of the pre-split handler.
