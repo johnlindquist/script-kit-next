@@ -609,13 +609,17 @@ fn merge_root_global_file_results_with_recent(
     let mut seen = std::collections::HashSet::new();
     let mut merged = Vec::with_capacity(provider_results.len() + recent_results.len());
 
-    for file in provider_results {
+    for file in provider_results
+        .iter()
+        .filter(|file| crate::file_search::root_global_file_result_is_eligible(file))
+    {
         if seen.insert(file.path.clone()) {
             merged.push(file.clone());
         }
     }
     for file in recent_results.iter().filter(|file| {
-        crate::file_search::root_file_name_seed_matches_query(&file.name, filter_text)
+        crate::file_search::root_global_file_result_is_eligible(file)
+            && crate::file_search::root_file_name_seed_matches_query(&file.name, filter_text)
     }) {
         if seen.insert(file.path.clone()) {
             merged.push(file.clone());
@@ -1586,6 +1590,104 @@ mod advanced_query_tests {
             flat.iter()
                 .all(|result| !matches!(result, SearchResult::File(_))),
             "advanced query mode should not append file results"
+        );
+    }
+
+    #[test]
+    fn root_global_file_rows_exclude_application_bundles() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![
+            root_file_with_type("/Applications/Zed.app", "Zed.app", FileType::Application),
+            root_file_with_type(
+                "/Users/example/Desktop/zed-notes.md",
+                "zed-notes.md",
+                FileType::Document,
+            ),
+        ];
+
+        let (_grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "zed",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            false,
+            &root_files,
+            &[],
+        );
+
+        let rendered_files = flat
+            .iter()
+            .filter_map(|result| match result {
+                SearchResult::File(file) => Some(file.file.name.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            rendered_files,
+            vec!["zed-notes.md"],
+            "global root Files should not duplicate app launcher results as .app file rows"
+        );
+    }
+
+    #[test]
+    fn root_global_app_bundle_filter_keeps_search_files_handoff() {
+        let frecency_store = FrecencyStore::new();
+        let root_files = vec![root_file_with_type(
+            "/Applications/Zed.app",
+            "Zed.app",
+            FileType::Application,
+        )];
+
+        let (grouped, flat) = get_grouped_results_with_validation_query_and_root_files(
+            &[],
+            &[],
+            &[],
+            &[],
+            &[],
+            &frecency_store,
+            "zed",
+            &SuggestedConfig::default(),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(crate::file_search::RootFileSectionMode::GlobalQuery),
+            false,
+            &root_files,
+            &[],
+        );
+
+        assert!(
+            flat.iter().all(|result| !matches!(
+                result,
+                SearchResult::File(file) if file.file.name == "Zed.app"
+            )),
+            "filtered application bundles should not render as root global file rows"
+        );
+        assert!(
+            grouped.iter().any(|item| {
+                matches!(item, GroupedListItem::SectionHeader(label, None) if label == "Files")
+            }),
+            "the Files section should still be allowed to show the handoff row"
+        );
+        assert!(
+            flat.iter().any(|result| matches!(
+                result,
+                SearchResult::Fallback(fallback) if fallback.display_label() == "Search Files for \"zed\""
+            )),
+            "app-bundle filtering should not remove the full File Search handoff"
         );
     }
 

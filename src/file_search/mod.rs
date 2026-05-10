@@ -230,6 +230,14 @@ pub fn should_search_root_files(query: &str) -> bool {
     root_file_global_query_is_eligible(query)
 }
 
+/// Returns true when a file row belongs in the root launcher's global Files section.
+///
+/// App bundles stay owned by launcher app results for global queries, while
+/// directory browsing and dedicated File Search can still render them.
+pub fn root_global_file_result_is_eligible(file: &FileResult) -> bool {
+    file.file_type != FileType::Application
+}
+
 /// Returns true when the root launcher query is syntactically a directory browse.
 ///
 /// This is intentionally syntax-only so grouping/ranking code can decide layout
