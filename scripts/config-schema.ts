@@ -1306,6 +1306,7 @@ export interface Config extends BaseConfig {
    *   acpHistory: { enabled: true, maxResults: 3, minQueryChars: 3 },
    *   clipboardHistory: { enabled: false, maxResults: 3, minQueryChars: 3, scanLimit: 200 },
    *   browserHistory: { enabled: false, maxResults: 3, minQueryChars: 4, maxAgeDays: 90, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true }
+   *   browserTabs: { enabled: false, maxResults: 3, minQueryChars: 3, scanLimit: 80, providers: ["arc", "chrome", "brave", "edge"], searchUrls: true, cacheTtlMs: 10000 }
    * }
    * @example
    * ```typescript
@@ -1507,6 +1508,8 @@ export interface UnifiedSearchConfig {
   acpHistory?: UnifiedSearchAcpHistoryConfig;
   /** Controls for opt-in passive root clipboard history rows. */
   clipboardHistory?: UnifiedSearchClipboardHistoryConfig;
+  /** Controls for opt-in passive root open-browser-tab rows. */
+  browserTabs?: UnifiedSearchBrowserTabsConfig;
   /** Controls for opt-in passive root browser history rows. */
   browserHistory?: UnifiedSearchBrowserHistoryConfig;
 }
@@ -1561,6 +1564,24 @@ export interface UnifiedSearchClipboardHistoryConfig {
 }
 
 export type BrowserHistoryProvider = "arc" | "chrome" | "brave" | "edge";
+export type BrowserTabProvider = "arc" | "chrome" | "brave" | "edge";
+
+export interface UnifiedSearchBrowserTabsConfig {
+  /** Enable currently open browser tab rows in root launcher search. Disabled by default. */
+  enabled?: boolean;
+  /** Maximum number of browser tab rows to append. Clamped to 1-5. */
+  maxResults?: number;
+  /** Minimum query length before browser tab rows appear. Clamped to 2-32. */
+  minQueryChars?: number;
+  /** Current open-tab metadata rows to scan. Clamped to 10-250. */
+  scanLimit?: number;
+  /** Chromium-family providers to query. Safari is intentionally excluded from root search. */
+  providers?: BrowserTabProvider[];
+  /** Match URLs in addition to tab titles/domains/browser names. Page content is never searched. */
+  searchUrls?: boolean;
+  /** Milliseconds to reuse the open-tab metadata snapshot. Clamped to 1000-60000. */
+  cacheTtlMs?: number;
+}
 
 export interface UnifiedSearchBrowserHistoryConfig {
   /** Enable browser history rows in root launcher search. Disabled by default. */

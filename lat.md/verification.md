@@ -72,15 +72,23 @@ Use `cargo test --test source_audits root_unified_clipboard_history_contract -- 
 
 Notes root rows are verified with metadata-only storage tests, passive grouping, stable-key, config, and non-toggle open wiring.
 
-Checks must prove that root Notes search excludes empty, short, newline, disabled, and advanced queries; searches active notes only; returns metadata without note bodies; inserts after Files and before Clipboard History and AI Conversations; keys rows by `note/{id}`; and opens Notes through the non-toggle helper.
+Checks must prove that root Notes search excludes empty, short, newline, disabled, and advanced queries; searches active notes only; returns metadata without note bodies; inserts after Browser Tabs and before Clipboard History and AI Conversations; keys rows by `note/{id}`; and opens Notes through the non-toggle helper.
 
 Use `cargo test --test source_audits root_unified_notes_contract -- --nocapture` with the existing root file, ACP history, and clipboard history audits, plus `cargo check --lib`, `cargo fmt --check`, `git diff --check`, and `lat check`. Because Enter crosses from the launcher to a separate Notes window, add a narrow state-first runtime proof when validating the live surface.
+
+## Root Unified Search Browser Tabs
+
+Browser Tabs root rows are verified as opt-in, metadata-only, cached, and passive.
+
+Checks must prove that root Browser Tabs search is disabled by default; excludes empty, short, newline, disabled, and advanced queries; reads only current tab title, URL, browser, and tab-location metadata from a TTL-bound snapshot; performs no favicon, page-content, cookie, download, or network reads; inserts after Files/Recent Files and before Notes; uses the shared capped passive-score helper; keys rows by `browser-tab/...` for selection only; and switches the existing tab through `activate_tab`.
+
+Use `cargo test --test source_audits root_unified_browser_tabs_contract -- --nocapture` with the existing root stability, file, notes, clipboard history, ACP history, and browser history audits, plus `cargo check --lib`, `cargo build`, `cargo fmt --check`, `git diff --check`, and `lat check`. Add a state-first runtime proof when a supported browser is open and `unifiedSearch.browserTabs.enabled` is true.
 
 ## Root Unified Search Browser History
 
 Browser History root rows are verified as opt-in, metadata-only, and passive.
 
-Checks must prove that root Browser History search is disabled by default; excludes empty, short, newline, disabled, and advanced queries; reads only local URL/title/visit metadata from bounded copied Chromium history DBs; rejects non-HTTP(S) schemes; performs no favicon, cookie, download, content, or network reads; inserts after AI Conversations and before fallback handoff rows; keys rows by `browser-history/...`; and opens through the safe URL helper.
+Checks must prove that root Browser History search is disabled by default; excludes empty, short, newline, disabled, and advanced queries; reads only local URL/title/visit metadata from bounded copied Chromium history DBs; rejects non-HTTP(S) schemes; performs no favicon, cookie, download, content, or network reads; inserts after Browser Tabs, Notes, Clipboard History, and AI Conversations and before fallback handoff rows; keys rows by `browser-history/...`; and opens through the safe URL helper.
 
 Use `cargo test --test source_audits root_unified_browser_history_contract -- --nocapture` with the existing root file, notes, clipboard history, and ACP history audits, plus `cargo check --lib`, `cargo build`, `cargo fmt --check`, `git diff --check`, and `lat check`.
 

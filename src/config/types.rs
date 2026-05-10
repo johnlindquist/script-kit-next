@@ -59,6 +59,7 @@ pub struct UnifiedSearchConfig {
     pub notes: UnifiedSearchNotesConfig,
     pub acp_history: UnifiedSearchAcpHistoryConfig,
     pub clipboard_history: UnifiedSearchClipboardHistoryConfig,
+    pub browser_tabs: UnifiedSearchBrowserTabsConfig,
     pub browser_history: UnifiedSearchBrowserHistoryConfig,
 }
 
@@ -70,6 +71,7 @@ impl Default for UnifiedSearchConfig {
             notes: UnifiedSearchNotesConfig::default(),
             acp_history: UnifiedSearchAcpHistoryConfig::default(),
             clipboard_history: UnifiedSearchClipboardHistoryConfig::default(),
+            browser_tabs: UnifiedSearchBrowserTabsConfig::default(),
             browser_history: UnifiedSearchBrowserHistoryConfig::default(),
         }
     }
@@ -157,6 +159,32 @@ impl Default for UnifiedSearchClipboardHistoryConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
+pub struct UnifiedSearchBrowserTabsConfig {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub scan_limit: usize,
+    pub search_urls: bool,
+    pub providers: Vec<BrowserTabProvider>,
+    pub cache_ttl_ms: u64,
+}
+
+impl Default for UnifiedSearchBrowserTabsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_ENABLED,
+            max_results: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_MAX_RESULTS,
+            min_query_chars: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_MIN_QUERY_CHARS,
+            scan_limit: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_SCAN_LIMIT,
+            search_urls: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_SEARCH_URLS,
+            providers: BrowserTabProvider::default_root_providers(),
+            cache_ttl_ms: DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_CACHE_TTL_MS,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
 pub struct UnifiedSearchBrowserHistoryConfig {
     pub enabled: bool,
     pub max_results: usize,
@@ -176,6 +204,21 @@ impl Default for UnifiedSearchBrowserHistoryConfig {
             providers: BrowserHistoryProvider::default_root_providers(),
             search_urls: DEFAULT_UNIFIED_SEARCH_BROWSER_HISTORY_SEARCH_URLS,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, std::hash::Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum BrowserTabProvider {
+    Arc,
+    Chrome,
+    Brave,
+    Edge,
+}
+
+impl BrowserTabProvider {
+    pub(crate) fn default_root_providers() -> Vec<Self> {
+        vec![Self::Arc, Self::Chrome, Self::Brave, Self::Edge]
     }
 }
 
@@ -261,6 +304,21 @@ impl UnifiedSearchConfig {
             max_age_days: self.browser_history.max_age_days.clamp(1, 365),
             providers: self.browser_history.providers.clone(),
             search_urls: self.browser_history.search_urls,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn browser_tabs_section_options(
+        &self,
+    ) -> crate::browser_tabs::RootBrowserTabsSectionOptions {
+        crate::browser_tabs::RootBrowserTabsSectionOptions {
+            enabled: self.enabled && self.browser_tabs.enabled,
+            max_results: self.browser_tabs.max_results.clamp(1, 5),
+            min_query_chars: self.browser_tabs.min_query_chars.clamp(2, 32),
+            scan_limit: self.browser_tabs.scan_limit.clamp(10, 250),
+            search_urls: self.browser_tabs.search_urls,
+            providers: self.browser_tabs.providers.clone(),
+            cache_ttl_ms: self.browser_tabs.cache_ttl_ms.clamp(1_000, 60_000),
         }
     }
 }

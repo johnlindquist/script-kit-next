@@ -13,7 +13,7 @@ These facts describe how built-ins are identified, surfaced, and executed.
 - Direct-provider API key setup commands are no longer exposed as built-ins or Settings actions; agent setup is driven by the Agent Catalog and `config.ts` preferences instead.
 - The launcher now includes a browser-tabs builtin that enumerates tabs from running Safari and Chromium-family browsers, filters them with the shared fuzzy-ranking model, and activates the chosen tab on `Enter`.
 - ACP attachment portals also include a browser-history picker that snapshots recent history from supported browsers, caches that snapshot briefly for reopen speed, collapses duplicate rows by normalized page identity before ranking matches, and drives wheel scrolling through the shared selected-row path so large history sets stay responsive.
-- Root launcher search can also opt into passive Browser History rows backed by local Chromium-family history metadata. This source is disabled by default and never reads page content, favicons, cookies, downloads, or network data.
+- Root launcher search can also opt into passive Browser Tabs and Browser History rows backed by local browser metadata. These sources are disabled by default and never read page content, favicons, cookies, downloads, or network data.
 - Hidden internal built-ins can still resolve by canonical command ID when hotkeys or other programmatic callers need them without exposing them in launcher search.
 - `config.ts` supports a top-level `hiddenCommands: string[]` array of canonical command IDs (e.g. `"builtin/clipboard-history"`, `"script/foo"`). Hidden commands are filtered out of launcher materialization at startup but stay resolvable via `triggerBuiltin` and hotkeys. The older per-command `commands.*.hidden` override continues to work and is OR'd with `hiddenCommands`.
 - User-facing command IDs are canonicalized through the built-in config path instead of being treated as free-form labels.
@@ -135,17 +135,27 @@ Eligible non-empty root queries append an AI Conversations section using the exi
 
 Notes rows are a passive launcher source backed by local Notes metadata search.
 
-Eligible non-empty root queries append a Notes section after root Files and before Clipboard History, AI Conversations, and fallback rows. The rows are not part of primary fuzzy sorting and never promote above commands, scripts, apps, skills, windows, or actions.
+Eligible non-empty root queries append a Notes section after root Files and Browser Tabs, before Clipboard History, AI Conversations, and fallback rows. The rows are not part of primary fuzzy sorting and never promote above commands, scripts, apps, skills, windows, or actions.
 
 `config.ts` exposes `unifiedSearch.notes` for the implemented source: `enabled`, `maxResults`, `minQueryChars`, and `searchContent`. The storage search may use Notes FTS over title and content, but root rows only carry note id, title, updated time, pinned state, character count, and score.
 
 Selecting a root Note row opens or focuses the floating Notes window through `[[src/notes/window/window_ops.rs#open_note_in_notes_window]]`, then selects the note in the editor. Root search must not call the toggle-style `[[src/notes/window/window_ops.rs#open_notes_window]]` helper, because that helper closes an already-open Notes window.
 
+## Root Unified Search Browser Tabs
+
+Browser tab rows are an opt-in passive launcher source backed by currently open tab metadata.
+
+Eligible root queries append a Browser Tabs section after root Files and Recent Files, before Notes, Clipboard History, AI Conversations, Browser History, and fallback rows. Rows are capped through the shared passive-score helper so they never outrank commands, scripts, apps, skills, windows, or actions.
+
+`config.ts` exposes `unifiedSearch.browserTabs`, disabled by default, with controls for `maxResults`, `minQueryChars`, `scanLimit`, `providers`, `searchUrls`, and `cacheTtlMs`. The root source reuses a short-lived open-tab metadata snapshot from Arc, Chrome, Brave, and Edge without fetching favicons or page content.
+
+Root Browser Tabs rows carry title, URL, domain, provider label, tab location, and a stable `browser-tab/...` key. Selecting a row switches the existing tab through `[[src/browser_tabs.rs#activate_tab]]` via the root focus helper rather than opening a duplicate URL.
+
 ## Root Unified Search Clipboard History
 
 Clipboard history rows are an opt-in passive launcher source for non-empty root queries.
 
-Root Clipboard History scans bounded recent clipboard metadata only, never raw clipboard content during grouping. Rows render after Files and before AI Conversations and fallback rows. Enter reuses the existing clipboard copy plus simulated paste contract.
+Root Clipboard History scans bounded recent clipboard metadata only, never raw clipboard content during grouping. Rows render after Files, Browser Tabs, and Notes, before AI Conversations and fallback rows. Enter reuses the existing clipboard copy plus simulated paste contract.
 
 `config.ts` exposes `unifiedSearch.clipboardHistory`, disabled by default and additionally gated by `builtIns.clipboardHistory`. This source excludes empty-root recents, images, OCR, pin/delete actions, and attach-to-AI actions in its first pass.
 
@@ -153,7 +163,7 @@ Root Clipboard History scans bounded recent clipboard metadata only, never raw c
 
 Browser history rows are an opt-in passive launcher source backed by local browser URL metadata.
 
-Eligible root queries append a Browser History section after Files, Notes, Clipboard History, and AI Conversations, before fallback handoff rows. The rows are not part of primary fuzzy sorting and never promote above commands, scripts, apps, skills, windows, or actions.
+Eligible root queries append a Browser History section after Files, Browser Tabs, Notes, Clipboard History, and AI Conversations, before fallback handoff rows. The rows are not part of primary fuzzy sorting and never promote above commands, scripts, apps, skills, windows, or actions.
 
 `config.ts` exposes `unifiedSearch.browserHistory`, disabled by default, with controls for `maxResults`, `minQueryChars`, `maxAgeDays`, `providers`, and `searchUrls`. The root source is intentionally narrower than the dedicated browser-history picker: it only scans copied SQLite snapshots from Arc, Chrome, Brave, and Edge Chromium history databases.
 

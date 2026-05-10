@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -90,6 +91,56 @@ pub struct BrowserTabMatch {
     pub tab: BrowserTabInfo,
     pub score: i32,
 }
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub(crate) struct RootBrowserTabsSectionOptions {
+    pub enabled: bool,
+    pub max_results: usize,
+    pub min_query_chars: usize,
+    pub scan_limit: usize,
+    pub search_urls: bool,
+    pub providers: Vec<crate::config::BrowserTabProvider>,
+    pub cache_ttl_ms: u64,
+}
+
+impl Default for RootBrowserTabsSectionOptions {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_results: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_MAX_RESULTS,
+            min_query_chars:
+                crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_MIN_QUERY_CHARS,
+            scan_limit: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_SCAN_LIMIT,
+            search_urls: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_SEARCH_URLS,
+            providers: crate::config::BrowserTabProvider::default_root_providers(),
+            cache_ttl_ms: crate::config::defaults::DEFAULT_UNIFIED_SEARCH_BROWSER_TABS_CACHE_TTL_MS,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub(crate) struct RootBrowserTabSearchHit {
+    pub stable_key: String,
+    pub tab: BrowserTabInfo,
+    pub title: String,
+    pub url: String,
+    pub domain: String,
+    pub provider_label: String,
+    pub score: i32,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+struct RootBrowserTabSnapshot {
+    captured_at: Instant,
+    tabs: Vec<BrowserTabInfo>,
+}
+
+#[allow(dead_code)]
+static ROOT_BROWSER_TAB_SNAPSHOT: LazyLock<Mutex<Option<RootBrowserTabSnapshot>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 pub fn list_open_tabs() -> Result<Vec<BrowserTabInfo>> {
     let mut tabs = Vec::new();
@@ -227,6 +278,226 @@ pub fn fuzzy_search_browser_tabs(tabs: &[BrowserTabInfo], query: &str) -> Vec<Br
     });
 
     matches
+}
+
+pub(crate) fn root_browser_tabs_query_is_eligible(
+    query: &str,
+    options: RootBrowserTabsSectionOptions,
+) -> bool {
+    let query = query.trim();
+    options.enabled
+        && query.len() >= options.min_query_chars
+        && !query.contains('\n')
+        && !query.contains('\r')
+}
+
+#[allow(dead_code)]
+pub(crate) fn search_root_browser_tabs_meta(
+    query: &str,
+    options: RootBrowserTabsSectionOptions,
+) -> Vec<RootBrowserTabSearchHit> {
+    if !root_browser_tabs_query_is_eligible(query, options.clone()) {
+        return Vec::new();
+    }
+
+    let tabs = cached_root_browser_tabs(options.cache_ttl_ms)
+        .into_iter()
+        .filter(|tab| root_tab_provider_is_enabled(tab, &options.providers))
+        .take(options.scan_limit)
+        .collect::<Vec<_>>();
+
+    root_fuzzy_search_browser_tabs(&tabs, query, options.search_urls)
+        .into_iter()
+        .take(options.max_results)
+        .map(|tab_match| {
+            let title = root_tab_title(&tab_match.tab);
+            let domain = domain_from_url(&tab_match.tab.url)
+                .unwrap_or("")
+                .to_string();
+            RootBrowserTabSearchHit {
+                stable_key: root_browser_tab_stable_key(&tab_match.tab),
+                url: tab_match.tab.url.clone(),
+                provider_label: tab_match.tab.browser_name.clone(),
+                tab: tab_match.tab,
+                title,
+                domain,
+                score: tab_match.score,
+            }
+        })
+        .collect()
+}
+
+#[allow(dead_code)]
+pub(crate) fn focus_root_browser_tab(hit: &RootBrowserTabSearchHit) -> Result<()> {
+    activate_tab(&hit.tab)
+}
+
+#[allow(dead_code)]
+fn cached_root_browser_tabs(cache_ttl_ms: u64) -> Vec<BrowserTabInfo> {
+    let ttl = Duration::from_millis(cache_ttl_ms);
+    if let Ok(cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() {
+        if let Some(snapshot) = cache.as_ref() {
+            if snapshot.captured_at.elapsed() <= ttl {
+                return snapshot.tabs.clone();
+            }
+        }
+    }
+
+    let tabs = match list_open_tabs() {
+        Ok(tabs) => tabs,
+        Err(error) => {
+            tracing::warn!(
+                error = %error,
+                "root_browser_tabs_snapshot_failed"
+            );
+            Vec::new()
+        }
+    };
+
+    if let Ok(mut cache) = ROOT_BROWSER_TAB_SNAPSHOT.lock() {
+        *cache = Some(RootBrowserTabSnapshot {
+            captured_at: Instant::now(),
+            tabs: tabs.clone(),
+        });
+    }
+
+    tabs
+}
+
+#[allow(dead_code)]
+fn root_fuzzy_search_browser_tabs(
+    tabs: &[BrowserTabInfo],
+    query: &str,
+    search_urls: bool,
+) -> Vec<BrowserTabMatch> {
+    if query.trim().is_empty() {
+        return Vec::new();
+    }
+
+    let query_lower = query.trim().to_lowercase();
+    let query_is_ascii = query_lower.is_ascii();
+    let use_nucleo = query_lower.len() >= crate::scripts::search::MIN_FUZZY_QUERY_LEN;
+    let mut nucleo = crate::scripts::NucleoCtx::new(&query_lower);
+    let mut matches = Vec::with_capacity(tabs.len());
+
+    for tab in tabs {
+        let mut score = 0i32;
+        let host = host_from_url(&tab.url);
+
+        if query_is_ascii && tab.title.is_ascii() {
+            if let Some(pos) =
+                crate::scripts::search::find_ignore_ascii_case(&tab.title, &query_lower)
+            {
+                score += if pos == 0 { 240 } else { 190 };
+            }
+        }
+
+        if query_is_ascii && host.is_ascii() {
+            if let Some(pos) = crate::scripts::search::find_ignore_ascii_case(host, &query_lower) {
+                score += if pos == 0 { 180 } else { 135 };
+            }
+        }
+
+        if search_urls && query_is_ascii && tab.url.is_ascii() {
+            if let Some(pos) =
+                crate::scripts::search::find_ignore_ascii_case(&tab.url, &query_lower)
+            {
+                score += if pos == 0 { 120 } else { 90 };
+            }
+        }
+
+        if query_is_ascii && tab.browser_name.is_ascii() {
+            if let Some(pos) =
+                crate::scripts::search::find_ignore_ascii_case(&tab.browser_name, &query_lower)
+            {
+                score += if pos == 0 { 80 } else { 55 };
+            }
+        }
+
+        if use_nucleo {
+            if let Some(nucleo_score) = nucleo.score(&tab.title) {
+                score += 110 + (nucleo_score / 20) as i32;
+            }
+            if !host.is_empty() {
+                if let Some(nucleo_score) = nucleo.score(host) {
+                    score += 70 + (nucleo_score / 28) as i32;
+                }
+            }
+            if search_urls {
+                if let Some(nucleo_score) = nucleo.score(&tab.url) {
+                    score += 55 + (nucleo_score / 35) as i32;
+                }
+            }
+            if let Some(nucleo_score) = nucleo.score(&tab.browser_name) {
+                score += 35 + (nucleo_score / 40) as i32;
+            }
+        }
+
+        if score > 0 {
+            matches.push(BrowserTabMatch {
+                tab: tab.clone(),
+                score,
+            });
+        }
+    }
+
+    matches.sort_by(|a, b| match b.score.cmp(&a.score) {
+        Ordering::Equal => match a.tab.browser_name.cmp(&b.tab.browser_name) {
+            Ordering::Equal => match a.tab.display_title().cmp(b.tab.display_title()) {
+                Ordering::Equal => a.tab.url.cmp(&b.tab.url),
+                other => other,
+            },
+            other => other,
+        },
+        other => other,
+    });
+
+    matches
+}
+
+#[allow(dead_code)]
+fn root_tab_provider_is_enabled(
+    tab: &BrowserTabInfo,
+    providers: &[crate::config::BrowserTabProvider],
+) -> bool {
+    let Some(provider) = browser_tab_provider_for_bundle_id(&tab.browser_bundle_id) else {
+        return false;
+    };
+    providers.is_empty() || providers.contains(&provider)
+}
+
+#[allow(dead_code)]
+fn browser_tab_provider_for_bundle_id(
+    bundle_id: &str,
+) -> Option<crate::config::BrowserTabProvider> {
+    match bundle_id {
+        "company.thebrowser.Browser" => Some(crate::config::BrowserTabProvider::Arc),
+        "com.google.Chrome" => Some(crate::config::BrowserTabProvider::Chrome),
+        "com.brave.Browser" => Some(crate::config::BrowserTabProvider::Brave),
+        "com.microsoft.edgemac" => Some(crate::config::BrowserTabProvider::Edge),
+        _ => None,
+    }
+}
+
+#[allow(dead_code)]
+fn root_tab_title(tab: &BrowserTabInfo) -> String {
+    let title = tab.display_title().trim();
+    if title.is_empty() {
+        domain_from_url(&tab.url)
+            .filter(|domain| !domain.is_empty())
+            .unwrap_or("Untitled Tab")
+            .to_string()
+    } else {
+        title.to_string()
+    }
+}
+
+#[allow(dead_code)]
+fn root_browser_tab_stable_key(tab: &BrowserTabInfo) -> String {
+    format!(
+        "browser-tab/{}/{}/{}/{}",
+        tab.browser_bundle_id, tab.window_index, tab.tab_index, tab.url
+    )
 }
 
 fn list_tabs_for_browser(browser: &SupportedBrowser) -> Result<Vec<BrowserTabInfo>> {

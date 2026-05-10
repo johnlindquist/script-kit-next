@@ -134,6 +134,7 @@ pub(super) fn build_grouped_view_results(
             SearchResult::ClipboardHistory(cm) => {
                 Some(format!("clipboard-history/{}", cm.entry.id))
             }
+            SearchResult::BrowserTab(_) => None,
             SearchResult::BrowserHistory(bm) => Some(bm.hit.stable_key.clone()),
             // Suppressed: agents are not top-level launcher artifacts
             SearchResult::Agent(_) => None,
@@ -193,6 +194,7 @@ pub(super) fn build_grouped_view_results(
                     SearchResult::Note(_) => {}
                     SearchResult::AcpHistory(_) => {}
                     SearchResult::ClipboardHistory(_) => {}
+                    SearchResult::BrowserTab(_) => {}
                     SearchResult::BrowserHistory(_) => {}
                     SearchResult::App(_) => apps_indices.push(idx),
                     // Suppressed: agents are not top-level launcher artifacts
@@ -229,6 +231,7 @@ pub(super) fn build_grouped_view_results(
                 SearchResult::Note(_) => {}
                 SearchResult::AcpHistory(_) => {}
                 SearchResult::ClipboardHistory(_) => {}
+                SearchResult::BrowserTab(_) => {}
                 SearchResult::BrowserHistory(_) => {}
                 SearchResult::App(_) => apps_indices.push(idx),
                 // Suppressed: agents are not top-level launcher artifacts

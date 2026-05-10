@@ -361,6 +361,7 @@ impl ScriptListApp {
             let notes_options = unified_search.notes_section_options();
             let acp_history_options = unified_search.acp_history_section_options();
             let clipboard_history_options = self.config.root_clipboard_history_section_options();
+            let browser_tabs_options = unified_search.browser_tabs_section_options();
             let browser_history_options = unified_search.browser_history_section_options();
             let root_note_hits = if advanced_query.is_none()
                 && crate::notes::root_notes_query_is_eligible(search_text, notes_options)
@@ -389,6 +390,18 @@ impl ScriptListApp {
                 crate::ai::acp::history::search_history(
                     search_text,
                     acp_history_options.max_results,
+                )
+            } else {
+                Vec::new()
+            };
+            let root_browser_tab_hits = if advanced_query.is_none()
+                && crate::browser_tabs::root_browser_tabs_query_is_eligible(
+                    search_text,
+                    browser_tabs_options.clone(),
+                ) {
+                crate::browser_tabs::search_root_browser_tabs_meta(
+                    search_text,
+                    browser_tabs_options.clone(),
                 )
             } else {
                 Vec::new()
@@ -430,6 +443,8 @@ impl ScriptListApp {
                 clipboard_history_options,
                 &root_acp_history_hits,
                 acp_history_options,
+                &root_browser_tab_hits,
+                browser_tabs_options,
                 &root_browser_history_hits,
                 browser_history_options,
             )

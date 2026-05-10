@@ -327,6 +327,14 @@ pub struct BrowserHistoryMatch {
     pub(crate) score: i32,
 }
 
+/// Represents a passive root-search match for an already open browser tab.
+#[derive(Clone, Debug)]
+pub struct BrowserTabMatch {
+    pub(crate) hit: crate::browser_tabs::RootBrowserTabSearchHit,
+    pub(crate) subtitle: String,
+    pub(crate) score: i32,
+}
+
 /// Unified search result that can be a Script, Scriptlet, Skill, BuiltIn, App, Window, File, Agent, or Fallback
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
@@ -346,6 +354,8 @@ pub enum SearchResult {
     AcpHistory(AcpHistoryMatch),
     /// Recent clipboard metadata surfaced as an opt-in passive root-search source.
     ClipboardHistory(ClipboardHistoryMatch),
+    /// Open browser tab metadata surfaced as an opt-in passive root-search source.
+    BrowserTab(BrowserTabMatch),
     /// Local browser history metadata surfaced as an opt-in passive root-search source.
     BrowserHistory(BrowserHistoryMatch),
     /// Legacy agent artifact — suppressed from the launcher pipeline.
@@ -382,6 +392,7 @@ impl SearchResult {
             SearchResult::Note(nm) => &nm.title,
             SearchResult::AcpHistory(am) => am.entry.title_display(),
             SearchResult::ClipboardHistory(cm) => &cm.title,
+            SearchResult::BrowserTab(bm) => &bm.hit.title,
             SearchResult::BrowserHistory(bm) => &bm.hit.title,
             SearchResult::Agent(am) => &am.agent.name,
             SearchResult::Fallback(fm) => fm
@@ -411,6 +422,7 @@ impl SearchResult {
             SearchResult::Note(nm) => Some(nm.subtitle.as_str()),
             SearchResult::AcpHistory(am) => Some(am.subtitle.as_str()),
             SearchResult::ClipboardHistory(cm) => Some(cm.subtitle.as_str()),
+            SearchResult::BrowserTab(bm) => Some(bm.subtitle.as_str()),
             SearchResult::BrowserHistory(bm) => Some(bm.subtitle.as_str()),
             SearchResult::Agent(am) => am.agent.description.as_deref(),
             SearchResult::Fallback(fm) => fm
@@ -434,6 +446,7 @@ impl SearchResult {
             SearchResult::Note(nm) => nm.score,
             SearchResult::AcpHistory(am) => am.score,
             SearchResult::ClipboardHistory(cm) => cm.score,
+            SearchResult::BrowserTab(bm) => bm.score,
             SearchResult::BrowserHistory(bm) => bm.score,
             SearchResult::Agent(am) => am.score,
             SearchResult::Fallback(fm) => fm.score,
@@ -454,6 +467,7 @@ impl SearchResult {
             SearchResult::Note(_) => "Note",
             SearchResult::AcpHistory(_) => "AI Conversation",
             SearchResult::ClipboardHistory(_) => "Clipboard",
+            SearchResult::BrowserTab(_) => "Browser Tab",
             SearchResult::BrowserHistory(_) => "Browser History",
             SearchResult::Agent(_) => "Agent",
             SearchResult::Fallback(_) => "Fallback",
@@ -485,6 +499,7 @@ impl SearchResult {
             SearchResult::Note(_) => None,
             SearchResult::AcpHistory(_) => None,
             SearchResult::ClipboardHistory(_) => None,
+            SearchResult::BrowserTab(_) => None,
             SearchResult::BrowserHistory(_) => None,
             SearchResult::Window(_) | SearchResult::Skill(_) | SearchResult::Agent(_) => None,
             SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
@@ -510,6 +525,7 @@ impl SearchResult {
             SearchResult::ClipboardHistory(cm) => {
                 Some(format!("clipboard-history/{}", cm.entry.id))
             }
+            SearchResult::BrowserTab(_) => None,
             SearchResult::BrowserHistory(bm) => Some(bm.hit.stable_key.clone()),
             SearchResult::Fallback(_) | SearchResult::Agent(_) => None,
             SearchResult::ScriptIssue(_) => None,
@@ -527,6 +543,7 @@ impl SearchResult {
         match self {
             SearchResult::Fallback(fm) => Some(format!("fallback/{}", fm.fallback.name())),
             SearchResult::Agent(am) => Some(format!("agent/{}", am.agent.path.display())),
+            SearchResult::BrowserTab(bm) => Some(bm.hit.stable_key.clone()),
             SearchResult::ScriptIssue(issue) => Some(format!(
                 "script-issue/{}:{}:{}:{}",
                 issue.title, issue.failed_count, issue.fatal_count, issue.warning_count
@@ -558,6 +575,7 @@ impl SearchResult {
             SearchResult::Note(_) => ("Note", 0xFBBF24),     // Gold-400
             SearchResult::AcpHistory(_) => ("AI Chat", 0x22C55E), // Green-500
             SearchResult::ClipboardHistory(_) => ("Clipboard", 0xA78BFA), // Violet-400
+            SearchResult::BrowserTab(_) => ("Tab", 0x06B6D4), // Cyan-500
             SearchResult::BrowserHistory(_) => ("Web", 0x38BDF8), // Sky-400
             SearchResult::Agent(_) => ("Agent", 0x0EA5E9),   // Sky-500
             SearchResult::Fallback(_) => ("Fallback", 0x6B7280), // Gray-500
@@ -603,6 +621,7 @@ impl SearchResult {
             SearchResult::Note(_) => Some("Notes"),
             SearchResult::AcpHistory(_) => Some("AI Conversations"),
             SearchResult::ClipboardHistory(_) => Some("Clipboard History"),
+            SearchResult::BrowserTab(_) => Some("Browser Tabs"),
             SearchResult::BrowserHistory(_) => Some("Browser History"),
             SearchResult::ScriptIssue(_) => None,
             _ => None,
@@ -658,6 +677,7 @@ impl SearchResult {
             SearchResult::Note(_) => "Open Note",
             SearchResult::AcpHistory(_) => "Resume Conversation",
             SearchResult::ClipboardHistory(_) => "Paste Clipboard",
+            SearchResult::BrowserTab(_) => "Switch to Tab",
             SearchResult::BrowserHistory(_) => "Open Page",
             SearchResult::Agent(_) => {
                 // Suppressed: agents are not launchable from the main menu

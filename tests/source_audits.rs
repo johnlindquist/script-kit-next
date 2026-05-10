@@ -131,6 +131,9 @@ mod root_unified_search_stability_contract;
 #[path = "source_audits/root_unified_browser_history_contract.rs"]
 mod root_unified_browser_history_contract;
 
+#[path = "source_audits/root_unified_browser_tabs_contract.rs"]
+mod root_unified_browser_tabs_contract;
+
 #[path = "source_audits/computer_get_tray_menu_item_contract.rs"]
 mod computer_get_tray_menu_item_contract;
 

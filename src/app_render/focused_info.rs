@@ -669,6 +669,31 @@ fn render_focused_info_for_result(
                 .child(focused_info_type_indicator("Clipboard", style));
         }
 
+        scripts::SearchResult::BrowserTab(browser_match) => {
+            let hit = &browser_match.hit;
+
+            content = content.child(
+                div()
+                    .text_lg()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(rgb(style.text_primary))
+                    .pb(px(s.padding_sm))
+                    .child(hit.title.clone()),
+            );
+
+            content = content.child(focused_info_labeled_section("DOMAIN", &hit.domain, style));
+            content = content.child(focused_info_labeled_section("URL", &hit.url, style));
+            content = content.child(focused_info_labeled_section(
+                "SOURCE",
+                &hit.provider_label,
+                style,
+            ));
+
+            content = content
+                .child(focused_info_divider(style))
+                .child(focused_info_type_indicator("Browser Tab", style));
+        }
+
         scripts::SearchResult::BrowserHistory(browser_match) => {
             let hit = &browser_match.hit;
 
@@ -1076,6 +1101,7 @@ impl ScriptListApp {
                     scripts::SearchResult::Note(_) => None,
                     scripts::SearchResult::AcpHistory(_) => None,
                     scripts::SearchResult::ClipboardHistory(_) => None,
+                    scripts::SearchResult::BrowserTab(_) => None,
                     scripts::SearchResult::BrowserHistory(_) => None,
                     scripts::SearchResult::Agent(m) => {
                         Some(format!("agent:{}", m.agent.path.to_string_lossy()))
@@ -1219,6 +1245,12 @@ impl ScriptListApp {
                             "Paste",
                         ),
                     ),
+                    scripts::SearchResult::BrowserTab(m) => Some(ScriptInfo::with_action_verb(
+                        &m.hit.title,
+                        m.hit.url.clone(),
+                        false,
+                        "Switch to",
+                    )),
                     scripts::SearchResult::BrowserHistory(m) => Some(
                         ScriptInfo::with_action_verb(
                             &m.hit.title,

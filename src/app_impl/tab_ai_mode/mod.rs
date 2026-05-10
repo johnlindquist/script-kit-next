@@ -2979,6 +2979,7 @@ impl ScriptListApp {
             scripts::SearchResult::Note(_) => "note",
             scripts::SearchResult::AcpHistory(_) => "acpHistory",
             scripts::SearchResult::ClipboardHistory(_) => "clipboardHistory",
+            scripts::SearchResult::BrowserTab(_) => "browserTab",
             scripts::SearchResult::BrowserHistory(_) => "browserHistory",
             scripts::SearchResult::Agent(_) => "agent",
             scripts::SearchResult::Skill(_) => "skill",
@@ -3037,6 +3038,15 @@ impl ScriptListApp {
                 "preview": m.title,
                 "pinned": m.entry.pinned,
                 "timestamp": m.entry.timestamp,
+            }),
+            scripts::SearchResult::BrowserTab(m) => serde_json::json!({
+                "stableKey": m.hit.stable_key,
+                "title": m.hit.title,
+                "url": m.hit.url,
+                "domain": m.hit.domain,
+                "provider": m.hit.provider_label,
+                "windowIndex": m.hit.tab.window_index,
+                "tabIndex": m.hit.tab.tab_index,
             }),
             scripts::SearchResult::BrowserHistory(m) => serde_json::json!({
                 "stableKey": m.hit.stable_key,
