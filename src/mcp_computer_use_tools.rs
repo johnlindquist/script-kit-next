@@ -5,8 +5,9 @@
 //! remain deferred until they can cite stable inspection receipts.
 
 use crate::computer_use::runtime_bridge::{
-    ComputerUseInspectRequest, ComputerUseListAppsRequest, ComputerUseRunningAppInfo,
-    ComputerUseRuntimeBridge, ComputerUseRuntimeError,
+    ComputerUseAppWindowInfo, ComputerUseInspectRequest, ComputerUseListAppWindowsRequest,
+    ComputerUseListAppsRequest, ComputerUseRunningAppInfo, ComputerUseRuntimeBridge,
+    ComputerUseRuntimeError,
 };
 use crate::computer_use::types::ComputerUseSeeArgs;
 use crate::frontmost_app_tracker::{get_cached_menu_snapshot, get_last_real_app};
@@ -23,12 +24,14 @@ pub const COMPUTER_LIST_WINDOWS_TOOL: &str = "computer/list_windows";
 pub const COMPUTER_GET_WINDOW_TOOL: &str = "computer/get_window";
 pub const COMPUTER_GET_FOCUSED_WINDOW_TOOL: &str = "computer/get_focused_window";
 pub const COMPUTER_LIST_APPS_TOOL: &str = "computer/list_apps";
+pub const COMPUTER_LIST_APP_WINDOWS_TOOL: &str = "computer/list_app_windows";
 pub const COMPUTER_GET_FRONTMOST_APP_TOOL: &str = "computer/get_frontmost_app";
 pub const COMPUTER_LIST_MENUS_TOOL: &str = "computer/list_menus";
 pub const COMPUTER_LIST_TRAY_MENU_TOOL: &str = "computer/list_tray_menu";
 pub const COMPUTER_LIST_SCREENS_TOOL: &str = "computer/list_screens";
 pub const COMPUTER_LIST_PERMISSIONS_TOOL: &str = "computer/list_permissions";
 const COMPUTER_APPS_SCHEMA_VERSION: u32 = 1;
+const COMPUTER_APP_WINDOWS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_FRONTMOST_APP_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_MENUS_SCHEMA_VERSION: u32 = 1;
 const COMPUTER_SCREENS_SCHEMA_VERSION: u32 = 1;
@@ -66,6 +69,12 @@ pub fn get_computer_use_tool_definitions() -> Vec<ToolDefinition> {
             description: "List running GUI applications without launching, quitting, focusing, hiding, or sending input."
                 .to_string(),
             input_schema: computer_list_apps_input_schema(),
+        },
+        ToolDefinition {
+            name: COMPUTER_LIST_APP_WINDOWS_TOOL.to_string(),
+            description: "List native windows for one running GUI application by PID without focusing, moving, resizing, or capturing screenshots."
+                .to_string(),
+            input_schema: computer_list_app_windows_input_schema(),
         },
         ToolDefinition {
             name: COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
@@ -115,6 +124,7 @@ pub fn handle_computer_use_tool_call(
         COMPUTER_GET_WINDOW_TOOL => handle_get_window(arguments),
         COMPUTER_GET_FOCUSED_WINDOW_TOOL => handle_get_focused_window(arguments),
         COMPUTER_LIST_APPS_TOOL => handle_list_apps(arguments, runtime),
+        COMPUTER_LIST_APP_WINDOWS_TOOL => handle_list_app_windows(arguments, runtime),
         COMPUTER_GET_FRONTMOST_APP_TOOL => handle_get_frontmost_app(arguments),
         COMPUTER_LIST_MENUS_TOOL => handle_list_menus(arguments),
         COMPUTER_LIST_TRAY_MENU_TOOL => handle_list_tray_menu(arguments),
@@ -187,6 +197,24 @@ struct ComputerUseListAppsResult {
     apps: Vec<ComputerUseRunningAppInfo>,
     #[serde(skip_serializing_if = "Option::is_none")]
     frontmost_pid: Option<i32>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ComputerUseListAppWindowsArgs {
+    pid: i32,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ComputerUseListAppWindowsResult {
+    schema_version: u32,
+    source: &'static str,
+    scope: &'static str,
+    status: &'static str,
+    app: Option<ComputerUseRunningAppInfo>,
+    windows: Vec<ComputerUseAppWindowInfo>,
+    warnings: Vec<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -397,6 +425,42 @@ fn handle_list_apps(
             schema_version: COMPUTER_APPS_SCHEMA_VERSION,
             apps: snapshot.apps,
             frontmost_pid: snapshot.frontmost_pid,
+        }),
+        Err(error) => error_result(error.error_code(), &error.message()),
+    }
+}
+
+fn handle_list_app_windows(
+    arguments: &Value,
+    runtime: Option<&dyn ComputerUseRuntimeBridge>,
+) -> ToolResult {
+    let args: ComputerUseListAppWindowsArgs = match serde_json::from_value(arguments.clone()) {
+        Ok(args) => args,
+        Err(error) => return error_result("invalid_arguments", &error.to_string()),
+    };
+
+    let Some(runtime) = runtime else {
+        return error_result(
+            "runtime_unavailable",
+            "computer/list_app_windows requires the live GPUI runtime bridge to enumerate app windows safely",
+        );
+    };
+
+    let request = ComputerUseListAppWindowsRequest { pid: args.pid };
+
+    match runtime.list_app_windows(request) {
+        Ok(snapshot) => json_tool_result(&ComputerUseListAppWindowsResult {
+            schema_version: COMPUTER_APP_WINDOWS_SCHEMA_VERSION,
+            source: "coreGraphicsWindowList",
+            scope: "runningAppPid",
+            status: if snapshot.app.is_some() {
+                "found"
+            } else {
+                "notFound"
+            },
+            app: snapshot.app,
+            windows: snapshot.windows,
+            warnings: snapshot.warnings,
         }),
         Err(error) => error_result(error.error_code(), &error.message()),
     }
@@ -763,6 +827,17 @@ fn computer_list_apps_input_schema() -> Value {
     })
 }
 
+fn computer_list_app_windows_input_schema() -> Value {
+    serde_json::json!({
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+            "pid": { "type": "integer" }
+        },
+        "required": ["pid"]
+    })
+}
+
 fn computer_get_frontmost_app_input_schema() -> Value {
     serde_json::json!({
         "type": "object",
@@ -808,7 +883,7 @@ mod tests {
     use super::*;
     use crate::protocol::{
         AutomationInspectSnapshot, AutomationWindowBounds, AutomationWindowInfo,
-        AutomationWindowKind, AutomationWindowTarget, SemanticQuality,
+        AutomationWindowKind, AutomationWindowTarget, SemanticQuality, TargetWindowBounds,
         AUTOMATION_INSPECT_SCHEMA_VERSION, AUTOMATION_WINDOW_SCHEMA_VERSION,
     };
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -886,6 +961,43 @@ mod tests {
                 },
             )
         }
+
+        fn list_app_windows(
+            &self,
+            request: ComputerUseListAppWindowsRequest,
+        ) -> Result<
+            crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot,
+            ComputerUseRuntimeError,
+        > {
+            assert_eq!(request.pid, 101);
+
+            Ok(
+                crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot {
+                    app: Some(ComputerUseRunningAppInfo {
+                        pid: 101,
+                        bundle_id: Some("com.apple.Terminal".to_string()),
+                        name: "Terminal".to_string(),
+                        is_active: true,
+                        is_hidden: false,
+                        activation_policy: "regular".to_string(),
+                    }),
+                    windows: vec![ComputerUseAppWindowInfo {
+                        native_window_id: 98765,
+                        title: Some("Terminal".to_string()),
+                        bounds: TargetWindowBounds {
+                            x: 10,
+                            y: 20,
+                            width: 300,
+                            height: 200,
+                        },
+                        is_on_screen: true,
+                        layer: 0,
+                        z_order: 0,
+                    }],
+                    warnings: Vec::new(),
+                },
+            )
+        }
     }
 
     struct PanickingComputerUseRuntime;
@@ -907,6 +1019,16 @@ mod tests {
         > {
             panic!("computer/list_tray_menu must not list running apps")
         }
+
+        fn list_app_windows(
+            &self,
+            _request: ComputerUseListAppWindowsRequest,
+        ) -> Result<
+            crate::computer_use::runtime_bridge::ComputerUseListAppWindowsSnapshot,
+            ComputerUseRuntimeError,
+        > {
+            panic!("computer/list_tray_menu must not list app windows")
+        }
     }
 
     #[test]
@@ -924,6 +1046,7 @@ mod tests {
                 COMPUTER_GET_WINDOW_TOOL.to_string(),
                 COMPUTER_GET_FOCUSED_WINDOW_TOOL.to_string(),
                 COMPUTER_LIST_APPS_TOOL.to_string(),
+                COMPUTER_LIST_APP_WINDOWS_TOOL.to_string(),
                 COMPUTER_GET_FRONTMOST_APP_TOOL.to_string(),
                 COMPUTER_LIST_MENUS_TOOL.to_string(),
                 COMPUTER_LIST_TRAY_MENU_TOOL.to_string(),
@@ -1043,6 +1166,38 @@ mod tests {
             .expect("properties");
         assert!(properties.contains_key("includeHidden"));
         assert!(properties.contains_key("includeBackground"));
+    }
+
+    #[test]
+    fn computer_list_app_windows_tool_definition_has_closed_schema() {
+        let tool = get_computer_use_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == COMPUTER_LIST_APP_WINDOWS_TOOL)
+            .expect("computer/list_app_windows tool");
+
+        assert_eq!(
+            tool.input_schema
+                .get("additionalProperties")
+                .and_then(Value::as_bool),
+            Some(false)
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+        assert_eq!(properties.len(), 1);
+        assert_eq!(
+            properties
+                .get("pid")
+                .and_then(|value| value.get("type"))
+                .and_then(Value::as_str),
+            Some("integer")
+        );
+        assert_eq!(
+            tool.input_schema.get("required"),
+            Some(&serde_json::json!(["pid"]))
+        );
     }
 
     #[test]
@@ -1364,6 +1519,27 @@ mod tests {
     }
 
     #[test]
+    fn computer_list_app_windows_rejects_bad_arguments() {
+        for arguments in [
+            serde_json::json!(null),
+            serde_json::json!([]),
+            serde_json::json!({}),
+            serde_json::json!({ "pid": "101" }),
+            serde_json::json!({ "pid": 101, "focus": true }),
+            serde_json::json!({ "pid": 101, "activate": true }),
+            serde_json::json!({ "pid": 101, "move": true }),
+            serde_json::json!({ "pid": 101, "resize": true }),
+            serde_json::json!({ "pid": 101, "screenshot": true }),
+        ] {
+            let result =
+                handle_computer_use_tool_call(COMPUTER_LIST_APP_WINDOWS_TOOL, &arguments, None);
+
+            assert_eq!(result.is_error, Some(true));
+            assert!(result.content[0].text.contains("invalid_arguments"));
+        }
+    }
+
+    #[test]
     fn computer_get_frontmost_app_rejects_bad_arguments() {
         for arguments in [
             serde_json::json!({ "refresh": true }),
@@ -1678,6 +1854,67 @@ mod tests {
                 "computer/get_frontmost_app result must not expose executable fields; found {forbidden}"
             );
         }
+    }
+
+    #[test]
+    fn computer_list_app_windows_returns_runtime_snapshot() {
+        let runtime = FakeComputerUseRuntime;
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_APP_WINDOWS_TOOL,
+            &serde_json::json!({ "pid": 101 }),
+            Some(&runtime),
+        );
+
+        assert_eq!(result.is_error, None);
+        let value: serde_json::Value =
+            serde_json::from_str(&result.content[0].text).expect("valid list_app_windows json");
+        assert_eq!(
+            value["schemaVersion"],
+            serde_json::json!(COMPUTER_APP_WINDOWS_SCHEMA_VERSION)
+        );
+        assert_eq!(value["source"], "coreGraphicsWindowList");
+        assert_eq!(value["scope"], "runningAppPid");
+        assert_eq!(value["status"], "found");
+        assert_eq!(value["app"]["pid"], 101);
+        assert_eq!(value["windows"][0]["nativeWindowId"], 98765);
+        assert_eq!(value["windows"][0]["title"], "Terminal");
+        assert_eq!(value["windows"][0]["bounds"]["width"], 300);
+        assert_eq!(value["windows"][0]["isOnScreen"], true);
+        assert_eq!(value["windows"][0]["layer"], 0);
+        assert_eq!(value["windows"][0]["zOrder"], 0);
+        assert!(value["warnings"].is_array());
+
+        for forbidden in [
+            "\"action\"",
+            "\"click\"",
+            "\"execute\"",
+            "\"focus\"",
+            "\"activate\"",
+            "\"launch\"",
+            "\"quit\"",
+            "\"move\"",
+            "\"resize\"",
+            "\"setBounds\"",
+            "\"axElementPath\"",
+            "\"AXPress\"",
+        ] {
+            assert!(
+                !result.content[0].text.contains(forbidden),
+                "computer/list_app_windows result must not expose executable fields; found {forbidden}"
+            );
+        }
+    }
+
+    #[test]
+    fn computer_list_app_windows_requires_runtime() {
+        let result = handle_computer_use_tool_call(
+            COMPUTER_LIST_APP_WINDOWS_TOOL,
+            &serde_json::json!({ "pid": 101 }),
+            None,
+        );
+
+        assert_eq!(result.is_error, Some(true));
+        assert!(result.content[0].text.contains("runtime_unavailable"));
     }
 
     #[test]

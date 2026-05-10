@@ -1,8 +1,9 @@
 use crate::computer_use::runtime_bridge::{
-    ComputerUseInspectRequest, ComputerUseListAppsRequest, ComputerUseListAppsSnapshot,
+    ComputerUseAppWindowInfo, ComputerUseInspectRequest, ComputerUseListAppWindowsRequest,
+    ComputerUseListAppWindowsSnapshot, ComputerUseListAppsRequest, ComputerUseListAppsSnapshot,
     ComputerUseRunningAppInfo, ComputerUseRuntimeBridge, ComputerUseRuntimeError,
 };
-use crate::protocol::AutomationInspectSnapshot;
+use crate::protocol::{AutomationInspectSnapshot, TargetWindowBounds};
 use std::sync::mpsc::{self, SyncSender};
 use std::sync::RwLock;
 use std::time::Duration;
@@ -22,6 +23,11 @@ pub enum GpuiComputerUseRequest {
         request_id: String,
         request: ComputerUseListAppsRequest,
         response_tx: SyncSender<Result<ComputerUseListAppsSnapshot, ComputerUseRuntimeError>>,
+    },
+    ListAppWindows {
+        request_id: String,
+        request: ComputerUseListAppWindowsRequest,
+        response_tx: SyncSender<Result<ComputerUseListAppWindowsSnapshot, ComputerUseRuntimeError>>,
     },
 }
 
@@ -61,6 +67,15 @@ impl GpuiComputerUseRequest {
         result: Result<ComputerUseListAppsSnapshot, ComputerUseRuntimeError>,
     ) {
         if let Self::ListRunningApps { response_tx, .. } = self {
+            let _ = response_tx.send(result);
+        }
+    }
+
+    pub fn respond_list_app_windows(
+        self,
+        result: Result<ComputerUseListAppWindowsSnapshot, ComputerUseRuntimeError>,
+    ) {
+        if let Self::ListAppWindows { response_tx, .. } = self {
             let _ = response_tx.send(result);
         }
     }
@@ -108,6 +123,32 @@ impl ComputerUseRuntimeBridge for GpuiComputerUseRuntimeBridge {
         let (response_tx, response_rx) = mpsc::sync_channel(1);
         sender
             .try_send(GpuiComputerUseRequest::ListRunningApps {
+                request_id,
+                request,
+                response_tx,
+            })
+            .map_err(|_| ComputerUseRuntimeError::Unavailable)?;
+
+        response_rx
+            .recv_timeout(self.timeout)
+            .map_err(|_| ComputerUseRuntimeError::Timeout)?
+    }
+
+    fn list_app_windows(
+        &self,
+        request: ComputerUseListAppWindowsRequest,
+    ) -> Result<ComputerUseListAppWindowsSnapshot, ComputerUseRuntimeError> {
+        let sender = self
+            .sender
+            .read()
+            .ok()
+            .and_then(|guard| guard.clone())
+            .ok_or(ComputerUseRuntimeError::Unavailable)?;
+
+        let request_id = format!("mcp-computer-list-app-windows:{}", uuid::Uuid::new_v4());
+        let (response_tx, response_rx) = mpsc::sync_channel(1);
+        sender
+            .try_send(GpuiComputerUseRequest::ListAppWindows {
                 request_id,
                 request,
                 response_tx,
@@ -203,6 +244,197 @@ pub fn list_running_apps_on_gpui_thread(
     }
 }
 
+#[cfg(target_os = "macos")]
+pub fn list_app_windows_on_gpui_thread(
+    request: &ComputerUseListAppWindowsRequest,
+) -> Result<ComputerUseListAppWindowsSnapshot, ComputerUseRuntimeError> {
+    let apps = list_running_apps_on_gpui_thread(&ComputerUseListAppsRequest {
+        include_hidden: true,
+        include_background: true,
+    })?;
+    let app = apps.apps.into_iter().find(|app| app.pid == request.pid);
+
+    let Some(app) = app else {
+        return Ok(ComputerUseListAppWindowsSnapshot {
+            app: None,
+            windows: Vec::new(),
+            warnings: Vec::new(),
+        });
+    };
+
+    let mut warnings = Vec::new();
+    if crate::platform::screen_capture_access_preflight() == Some(false) {
+        warnings.push("screenRecordingNotGrantedWindowTitlesMayBeRedacted".to_string());
+    }
+
+    let windows = core_graphics_windows_for_pid(request.pid)?;
+    Ok(ComputerUseListAppWindowsSnapshot {
+        app: Some(app),
+        windows,
+        warnings,
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn core_graphics_windows_for_pid(
+    pid: i32,
+) -> Result<Vec<ComputerUseAppWindowInfo>, ComputerUseRuntimeError> {
+    use core_foundation::array::CFArray;
+    use core_foundation::base::TCFType;
+    use core_foundation::dictionary::CFDictionaryRef;
+    use core_foundation::string::CFString;
+
+    const K_CG_NULL_WINDOW_ID: u32 = 0;
+    const K_CG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY: u32 = 1;
+
+    #[link(name = "CoreGraphics", kind = "framework")]
+    unsafe extern "C" {
+        fn CGWindowListCopyWindowInfo(
+            option: u32,
+            relative_to_window: u32,
+        ) -> core_foundation::array::CFArrayRef;
+    }
+
+    let window_info_list = unsafe {
+        CGWindowListCopyWindowInfo(K_CG_WINDOW_LIST_OPTION_ON_SCREEN_ONLY, K_CG_NULL_WINDOW_ID)
+    };
+    if window_info_list.is_null() {
+        return Err(ComputerUseRuntimeError::Failed(
+            "CGWindowListCopyWindowInfo returned null".to_string(),
+        ));
+    }
+
+    let info_array: CFArray = unsafe { CFArray::wrap_under_create_rule(window_info_list) };
+    let k_owner_pid = CFString::new("kCGWindowOwnerPID");
+    let k_window_number = CFString::new("kCGWindowNumber");
+    let k_window_name = CFString::new("kCGWindowName");
+    let k_window_bounds = CFString::new("kCGWindowBounds");
+    let k_window_is_on_screen = CFString::new("kCGWindowIsOnscreen");
+    let k_window_layer = CFString::new("kCGWindowLayer");
+
+    let mut windows = Vec::new();
+    for index in 0..info_array.len() {
+        let Some(item_ref) = info_array.get(index) else {
+            continue;
+        };
+        let dict_ref = *item_ref as CFDictionaryRef;
+        if dict_ref.is_null() {
+            continue;
+        }
+
+        if cf_number_i64(dict_ref, &k_owner_pid) != Some(pid as i64) {
+            continue;
+        }
+
+        let native_window_id = match cf_number_i64(dict_ref, &k_window_number) {
+            Some(value) if value >= 0 => value as u32,
+            _ => continue,
+        };
+        let Some(bounds) = cf_bounds(dict_ref, &k_window_bounds) else {
+            continue;
+        };
+
+        windows.push(ComputerUseAppWindowInfo {
+            native_window_id,
+            title: cf_string(dict_ref, &k_window_name),
+            bounds,
+            is_on_screen: cf_bool(dict_ref, &k_window_is_on_screen).unwrap_or(true),
+            layer: cf_number_i64(dict_ref, &k_window_layer).unwrap_or(0),
+            z_order: windows.len() as u32,
+        });
+    }
+
+    Ok(windows)
+}
+
+#[cfg(target_os = "macos")]
+fn cf_dictionary_value(
+    dict_ref: core_foundation::dictionary::CFDictionaryRef,
+    key: &core_foundation::string::CFString,
+) -> Option<core_foundation::base::CFTypeRef> {
+    use core_foundation::base::TCFType;
+    use std::ffi::c_void;
+
+    let mut value: *const c_void = std::ptr::null();
+    let found = unsafe {
+        core_foundation::dictionary::CFDictionaryGetValueIfPresent(
+            dict_ref,
+            key.as_concrete_TypeRef() as *const c_void,
+            &mut value,
+        )
+    };
+    (found != 0 && !value.is_null()).then_some(value as core_foundation::base::CFTypeRef)
+}
+
+#[cfg(target_os = "macos")]
+fn cf_number_i64(
+    dict_ref: core_foundation::dictionary::CFDictionaryRef,
+    key: &core_foundation::string::CFString,
+) -> Option<i64> {
+    use core_foundation::base::TCFType;
+    use core_foundation::number::CFNumber;
+
+    let value = cf_dictionary_value(dict_ref, key)?;
+    let number = unsafe { CFNumber::wrap_under_get_rule(value as *const _) };
+    number.to_i64()
+}
+
+#[cfg(target_os = "macos")]
+fn cf_string(
+    dict_ref: core_foundation::dictionary::CFDictionaryRef,
+    key: &core_foundation::string::CFString,
+) -> Option<String> {
+    use core_foundation::base::TCFType;
+
+    let value = cf_dictionary_value(dict_ref, key)?;
+    let string =
+        unsafe { core_foundation::string::CFString::wrap_under_get_rule(value as *const _) };
+    Some(string.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn cf_bool(
+    dict_ref: core_foundation::dictionary::CFDictionaryRef,
+    key: &core_foundation::string::CFString,
+) -> Option<bool> {
+    use core_foundation::base::CFTypeRef;
+
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFBooleanGetValue(boolean: CFTypeRef) -> bool;
+    }
+
+    let value = cf_dictionary_value(dict_ref, key)?;
+    Some(unsafe { CFBooleanGetValue(value) })
+}
+
+#[cfg(target_os = "macos")]
+fn cf_bounds(
+    dict_ref: core_foundation::dictionary::CFDictionaryRef,
+    key: &core_foundation::string::CFString,
+) -> Option<TargetWindowBounds> {
+    let value = cf_dictionary_value(dict_ref, key)?;
+    let bounds_ref = value as core_foundation::dictionary::CFDictionaryRef;
+    if bounds_ref.is_null() {
+        return None;
+    }
+
+    let x = cf_number_i64(bounds_ref, &core_foundation::string::CFString::new("X"))? as i32;
+    let y = cf_number_i64(bounds_ref, &core_foundation::string::CFString::new("Y"))? as i32;
+    let width = cf_number_i64(bounds_ref, &core_foundation::string::CFString::new("Width"))?;
+    let height = cf_number_i64(
+        bounds_ref,
+        &core_foundation::string::CFString::new("Height"),
+    )?;
+
+    Some(TargetWindowBounds {
+        x,
+        y,
+        width: width.max(0) as u32,
+        height: height.max(0) as u32,
+    })
+}
+
 #[cfg(not(target_os = "macos"))]
 pub fn list_running_apps_on_gpui_thread(
     _request: &ComputerUseListAppsRequest,
@@ -210,6 +442,17 @@ pub fn list_running_apps_on_gpui_thread(
     Ok(ComputerUseListAppsSnapshot {
         apps: Vec::new(),
         frontmost_pid: None,
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn list_app_windows_on_gpui_thread(
+    _request: &ComputerUseListAppWindowsRequest,
+) -> Result<ComputerUseListAppWindowsSnapshot, ComputerUseRuntimeError> {
+    Ok(ComputerUseListAppWindowsSnapshot {
+        app: None,
+        windows: Vec::new(),
+        warnings: Vec::new(),
     })
 }
 

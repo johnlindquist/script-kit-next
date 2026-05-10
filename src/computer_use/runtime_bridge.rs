@@ -1,4 +1,6 @@
-use crate::protocol::{AutomationInspectSnapshot, AutomationWindowTarget, PixelProbe};
+use crate::protocol::{
+    AutomationInspectSnapshot, AutomationWindowTarget, PixelProbe, TargetWindowBounds,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputerUseInspectRequest {
@@ -13,6 +15,11 @@ pub struct ComputerUseListAppsRequest {
     pub include_background: bool,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct ComputerUseListAppWindowsRequest {
+    pub pid: i32,
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ComputerUseRunningAppInfo {
@@ -24,10 +31,28 @@ pub struct ComputerUseRunningAppInfo {
     pub activation_policy: String,
 }
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComputerUseAppWindowInfo {
+    pub native_window_id: u32,
+    pub title: Option<String>,
+    pub bounds: TargetWindowBounds,
+    pub is_on_screen: bool,
+    pub layer: i64,
+    pub z_order: u32,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ComputerUseListAppsSnapshot {
     pub apps: Vec<ComputerUseRunningAppInfo>,
     pub frontmost_pid: Option<i32>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ComputerUseListAppWindowsSnapshot {
+    pub app: Option<ComputerUseRunningAppInfo>,
+    pub windows: Vec<ComputerUseAppWindowInfo>,
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,4 +96,9 @@ pub trait ComputerUseRuntimeBridge: Send + Sync {
         &self,
         request: ComputerUseListAppsRequest,
     ) -> Result<ComputerUseListAppsSnapshot, ComputerUseRuntimeError>;
+
+    fn list_app_windows(
+        &self,
+        request: ComputerUseListAppWindowsRequest,
+    ) -> Result<ComputerUseListAppWindowsSnapshot, ComputerUseRuntimeError>;
 }

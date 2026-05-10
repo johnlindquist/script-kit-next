@@ -548,6 +548,18 @@ app.run(move |cx: &mut App| {
                         });
                         let _ = response_tx.send(result);
                     }
+                    crate::computer_use::gpui_runtime_bridge::GpuiComputerUseRequest::ListAppWindows {
+                        request,
+                        response_tx,
+                        ..
+                    } => {
+                        let result = cx.update(|_| {
+                            crate::computer_use::gpui_runtime_bridge::list_app_windows_on_gpui_thread(
+                                &request,
+                            )
+                        });
+                        let _ = response_tx.send(result);
+                    }
                 }
             }
         })
