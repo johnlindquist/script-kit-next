@@ -31,18 +31,22 @@
                 }
 
                 let key = event.keystroke.key.as_str();
+                let key_lower = key.to_ascii_lowercase();
                 let is_tab_key = key.eq_ignore_ascii_case("tab");
                 let has_shift = event.keystroke.modifiers.shift;
+                let has_cmd = event.keystroke.modifiers.platform;
+                let has_alt = event.keystroke.modifiers.alt;
+                let has_ctrl = event.keystroke.modifiers.control;
                 let is_plain_enter = crate::ui_foundation::is_key_enter(key)
-                    && !event.keystroke.modifiers.platform
+                    && !has_cmd
                     && !has_shift
-                    && !event.keystroke.modifiers.alt
-                    && !event.keystroke.modifiers.control;
+                    && !has_alt
+                    && !has_ctrl;
                 let is_global_ai_chord = crate::ui_foundation::is_key_enter(key)
-                    && event.keystroke.modifiers.platform
+                    && has_cmd
                     && !has_shift
-                    && !event.keystroke.modifiers.alt
-                    && !event.keystroke.modifiers.control;
+                    && !has_alt
+                    && !has_ctrl;
 
                 if confirm::consume_main_window_key_while_confirm_open(
                     key,
@@ -51,6 +55,21 @@
                 ) {
                     cx.stop_propagation();
                     return;
+                }
+
+                if let Some(app) = app_entity.upgrade() {
+                    let mut handled = false;
+                    app.update(cx, |this, cx| {
+                        handled = this.try_execute_root_file_action_shortcut(
+                            &key_lower, has_cmd, has_shift, has_alt, has_ctrl, window, cx,
+                        );
+                        if handled {
+                            cx.stop_propagation();
+                        }
+                    });
+                    if handled {
+                        return;
+                    }
                 }
 
                 if is_global_ai_chord {
@@ -66,9 +85,9 @@
 
                 // Check for Tab key (no cmd/alt/ctrl modifiers, but shift is allowed)
                 if is_tab_key
-                    && !event.keystroke.modifiers.platform
-                    && !event.keystroke.modifiers.alt
-                    && !event.keystroke.modifiers.control
+                    && !has_cmd
+                    && !has_alt
+                    && !has_ctrl
                 {
                     if let Some(app) = app_entity.upgrade() {
                         app.update(cx, |this, cx| {

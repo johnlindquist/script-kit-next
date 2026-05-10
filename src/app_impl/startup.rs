@@ -1990,8 +1990,11 @@ impl ScriptListApp {
                 let is_actions = crate::actions::is_actions_window(window);
 
                 let key = event.keystroke.key.as_str();
+                let key_lower = key.to_ascii_lowercase();
                 let has_cmd = event.keystroke.modifiers.platform;
                 let has_shift = event.keystroke.modifiers.shift;
+                let has_alt = event.keystroke.modifiers.alt;
+                let has_ctrl = event.keystroke.modifiers.control;
                 let key_char = event.keystroke.key_char.as_deref();
                 let is_actions_close_key = crate::ui_foundation::is_key_escape(key)
                     || (has_cmd && key.eq_ignore_ascii_case("k") && !has_shift);
@@ -2129,6 +2132,13 @@ impl ScriptListApp {
                                     return;
                                 }
                             }
+                        }
+
+                        if this.try_execute_root_file_action_shortcut(
+                            &key_lower, has_cmd, has_shift, has_alt, has_ctrl, window, cx,
+                        ) {
+                            cx.stop_propagation();
+                            return;
                         }
 
                         if let Some(intent) =
